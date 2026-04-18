@@ -1,0 +1,42 @@
+version: "3.9"
+
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: hertz-track:latest
+    container_name: hertz-track-api
+    env_file:
+      - .env
+    environment:
+      # Ensure the application sees a Mongo URI inside the container
+      - MONGO_URI=${MONGO_URI:-mongodb://mongo:27017/trackapp}
+      # Map BIND_ADDR (e.g. :8080) to the app's SERVER_ADDR config
+      - SERVER_ADDR=${BIND_ADDR:-:8080}
+    depends_on:
+      - mongo
+    ports:
+      # Expose APP_PORT on the host, default 8080
+      - "${APP_PORT:-8080}:8080"
+    restart: unless-stopped
+    networks:
+      - backend
+
+  mongo:
+    image: mongo:7.0
+    container_name: hertz-track-mongo
+    volumes:
+      - mongo_data:/data/db
+    environment:
+      - MONGO_INITDB_DATABASE=trackapp
+    restart: unless-stopped
+    networks:
+      - backend
+
+volumes:
+  mongo_data:
+
+networks:
+  backend:
+    driver: bridge

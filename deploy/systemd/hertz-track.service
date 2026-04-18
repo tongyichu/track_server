@@ -1,0 +1,21 @@
+[Unit]
+Description=Hertz Track HTTP API Service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/opt/hertz-track
+# The -config flag is a placeholder; the current server reads configuration
+# from environment variables provided via EnvironmentFile.
+ExecStart=/opt/hertz-track/hertz-track -config /opt/hertz-track/.env
+Restart=always
+RestartSec=5
+EnvironmentFile=/etc/hertz-track.env
+
+# Optionally tighten resource limits here (example values, adjust as needed)
+#LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

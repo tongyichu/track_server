@@ -1,0 +1,189 @@
+package handler
+
+import (
+	"context"
+	"net/http"
+
+	"github.com/cloudwego/hertz/pkg/app"
+	"github.com/cloudwego/hertz/pkg/common/utils"
+
+	"trackapp-server/internal/middleware"
+	"trackapp-server/internal/repository"
+	"trackapp-server/internal/service"
+)
+
+// Ping handles GET /api/ping
+func Ping(ctx context.Context, c *app.RequestContext) {
+	c.String(http.StatusOK, "hello track app")
+}
+
+// TrackHandler handles HTTP requests related to tracks.
+type TrackHandler struct {
+	trackSvc *service.TrackService
+}
+
+// NewTrackHandler creates a new TrackHandler.
+func NewTrackHandler(trackSvc *service.TrackService) *TrackHandler {
+	return &TrackHandler{trackSvc: trackSvc}
+}
+
+// CreateTrack handles POST /api/track/create
+func (h *TrackHandler) CreateTrack(ctx context.Context, c *app.RequestContext) {
+	meta := middleware.GetRequestMeta(c)
+	if meta == nil || meta.UserID == "" {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "missing X-User-ID header"})
+		return
+	}
+
+	track, err := h.trackSvc.CreateTrack(ctx, meta.UserID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, track)
+}
+
+// ListRecommend handles GET /api/track/recommend/list
+func (h *TrackHandler) ListRecommend(ctx context.Context, c *app.RequestContext) {
+	meta := middleware.GetRequestMeta(c)
+	userID := ""
+	if meta != nil {
+		userID = meta.UserID
+	}
+	tracks, err := h.trackSvc.ListRecommend(ctx, userID, 50)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, tracks)
+}
+
+// SearchTracks handles GET /api/track/search/list
+func (h *TrackHandler) SearchTracks(ctx context.Context, c *app.RequestContext) {
+	keyword := string(c.Query("keyword"))
+	tracks, err := h.trackSvc.SearchTracks(ctx, keyword, 50)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, tracks)
+}
+
+// GetTrackMap handles GET /api/track/:track_id/map
+func (h *TrackHandler) GetTrackMap(ctx context.Context, c *app.RequestContext) {
+	trackID := c.Param("track_id")
+	m, err := h.trackSvc.GetTrackMap(ctx, trackID)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if err.Error() == repository.ErrNotFound.Error() {
+			status = http.StatusNotFound
+		}
+		c.JSON(status, utils.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, m)
+}
+
+// GetTrackDetail handles GET /api/track/:track_id/detail
+func (h *TrackHandler) GetTrackDetail(ctx context.Context, c *app.RequestContext) {
+	trackID := c.Param("track_id")
+	track, err := h.trackSvc.GetTrackDetail(ctx, trackID)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if err.Error() == repository.ErrNotFound.Error() {
+			status = http.StatusNotFound
+		}
+		c.JSON(status, utils.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, track)
+}
+
+// UploadTrackCloud handles POST /api/track/:track_id/upload_cloud
+func (h *TrackHandler) UploadTrackCloud(ctx context.Context, c *app.RequestContext) {
+	trackID := c.Param("track_id")
+	if err := h.trackSvc.MarkUploadedToCloud(ctx, trackID); err != nil {
+		status := http.StatusInternalServerError
+		if err.Error() == repository.ErrNotFound.Error() {
+			status = http.StatusNotFound
+		}
+		c.JSON(status, utils.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, utils.H{"status": "ok"})
+}
+
+// GetRunningTrack handles GET /api/track/running
+func (h *TrackHandler) GetRunningTrack(ctx context.Context, c *app.RequestContext) {
+	userID := string(c.Query("user_id"))
+	if userID == "" {
+		meta := middleware.GetRequestMeta(c)
+		if meta != nil {
+			userID = meta.UserID
+		}
+	}
+	if userID == "" {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "user_id is required"})
+		return
+	}
+	track, err := h.trackSvc.GetRunningTrack(ctx, userID)
+	if err != nil {
+		if err.Error() == repository.ErrNotFound.Error() {
+			c.JSON(http.StatusOK, utils.H{"running": false})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, utils.H{"running": true, "track": track})
+}
+
+// GetCollectStatus handles GET /api/user/:user_id/collect
+func (h *TrackHandler) GetCollectStatus(ctx context.Context, c *app.RequestContext) {
+	userID := c.Param("user_id")
+	trackID := string(c.Query("track_id"))
+	if userID == "" || trackID == "" {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "user_id and track_id are required"})
+		return
+	}
+	collected, err := h.trackSvc.IsCollected(ctx, userID, trackID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, utils.H{"collected": collected})
+}
+
+// CollectTrack handles POST /api/track_collect
+func (h *TrackHandler) CollectTrack(ctx context.Context, c *app.RequestContext) {
+	trackID := string(c.Query("track_id"))
+	userID := string(c.Query("user_id"))
+	if userID == "" || trackID == "" {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "user_id and track_id are required"})
+		return
+	}
+	if err := h.trackSvc.CollectTrack(ctx, userID, trackID); err != nil {
+		status := http.StatusInternalServerError
+		if err.Error() == repository.ErrNotFound.Error() {
+			status = http.StatusNotFound
+		}
+		c.JSON(status, utils.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, utils.H{"status": "ok"})
+}
+
+// UncollectTrack handles DELETE /api/track_collect
+func (h *TrackHandler) UncollectTrack(ctx context.Context, c *app.RequestContext) {
+	trackID := string(c.Query("track_id"))
+	userID := string(c.Query("user_id"))
+	if userID == "" || trackID == "" {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "user_id and track_id are required"})
+		return
+	}
+	if err := h.trackSvc.UncollectTrack(ctx, userID, trackID); err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, utils.H{"status": "ok"})
+}
