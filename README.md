@@ -15,7 +15,7 @@
 
 ---
 
-## 方式一：单架构构建（适用于当前平台）
+## 方式一：单架构构建（适用于mac本地）
 
 ### 1. 构建镜像
 ```bash
@@ -47,7 +47,7 @@ docker push crpi-p78v4agazv8zn80d.cn-beijing.personal.cr.aliyuncs.com/track_serv
 
 ---
 
-## 方式二：跨平台构建（推荐）
+## 方式二：跨平台构建（linux服务器）
 
 使用 Docker Buildx 构建 linux/amd64 镜像（适用于在 Mac M1/M2/M3 上构建 Linux 服务器可用的镜像）。
 
@@ -60,15 +60,12 @@ docker buildx create --use --name multiarch-builder
 ```bash
 # 格式：docker buildx build --platform <目标平台> -t <完整镜像名> -f <Dockerfile> . --push
 
-docker buildx build --platform linux/amd64 \
-  -t crpi-p78v4agazv8zn80d.cn-beijing.personal.cr.aliyuncs.com/track_server/track_server_go:latest \
-  -f deploy/Dockerfile . \
-  --push
+docker buildx build --platform linux/amd64 -t crpi-p78v4agazv8zn80d.cn-beijing.personal.cr.aliyuncs.com/track_server/track_server_go:latest -f deploy/Dockerfile . --push
 ```
 
 ---
 
-## 拉取与运行
+## 服务器上拉取与运行
 
 ### 拉取镜像
 ```bash
@@ -77,11 +74,9 @@ docker pull crpi-p78v4agazv8zn80d.cn-beijing.personal.cr.aliyuncs.com/track_serv
 
 ### 运行单个容器
 ```bash
-# 使用 Makefile
-make docker-run
 
-# 或直接使用 docker
-docker run --rm --name hertz-track-api --env-file deploy/.env -p 8080:8080 hertz-track:latest
+# 或直接使用 docker，宿主机端口80，容器端口8080，docker image id = bff41b6252de
+docker run -d --name track_server_go -p 80:8080 bff41b6252de
 ```
 
 ### 使用 docker-compose 运行完整栈（API + MongoDB）

@@ -23,6 +23,10 @@ FROM debian:12-slim
 
 WORKDIR /app
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl procps \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY --from=builder /out/hertz-track /app/hertz-track
 
 # Default listening port
