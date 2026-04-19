@@ -72,6 +72,9 @@ docker buildx build --platform linux/amd64 -t crpi-p78v4agazv8zn80d.cn-beijing.p
 docker pull crpi-p78v4agazv8zn80d.cn-beijing.personal.cr.aliyuncs.com/track_server/track_server_go:latest
 ```
 
+### 停止旧进程->删除旧的本地镜像
+
+
 ### 运行单个容器
 ```bash
 
