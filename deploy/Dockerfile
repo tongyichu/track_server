@@ -25,12 +25,14 @@ WORKDIR /app
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl procps \
+    && mkdir -p /var/log/track_server \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /out/hertz-track /app/hertz-track
 
 # Default listening port
 ENV SERVER_ADDR=:8080
+ENV LOG_DIR=/var/log/track_server
 
 EXPOSE 8080 8443
 

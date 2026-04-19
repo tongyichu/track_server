@@ -3,9 +3,13 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"io"
 	"log"
+	"os"
+	"path/filepath"
 
 	"github.com/cloudwego/hertz/pkg/app/server"
+	"github.com/cloudwego/hertz/pkg/common/hlog"
 
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -19,6 +23,16 @@ import (
 // main is the entrypoint of the Hertz HTTP server.
 func main() {
 	cfg := config.Load()
+
+	logFile, err := setupLogging(cfg.LogDir)
+	if err != nil {
+		log.Printf("failed to initialize file logging in %s, fallback to stdout/stderr only: %v", cfg.LogDir, err)
+	} else {
+		defer func() {
+			_ = logFile.Close()
+		}()
+		log.Printf("file logging enabled: %s", logFile.Name())
+	}
 
 	ctx := context.Background()
 
@@ -94,4 +108,22 @@ func main() {
 	handler.RegisterRoutes(h, handler.Deps{TrackService: trackSvc, UserService: userSvc, LoginService: loginSvc})
 
 	h.Spin()
+}
+
+func setupLogging(logDir string) (*os.File, error) {
+	if err := os.MkdirAll(logDir, 0o755); err != nil {
+		return nil, err
+	}
+
+	logPath := filepath.Join(logDir, "server.log")
+	file, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return nil, err
+	}
+
+	writer := io.MultiWriter(os.Stdout, file)
+	log.SetOutput(writer)
+	hlog.SetOutput(writer)
+
+	return file, nil
 }

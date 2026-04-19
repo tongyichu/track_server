@@ -13,6 +13,7 @@ services:
       - MONGO_URI=${MONGO_URI:-mongodb://mongo:27017/trackapp}
       - MYSQL_DSN=${MYSQL_DSN:-}
       - SERVER_ADDR=${BIND_ADDR:-:8080}
+      - LOG_DIR=${LOG_DIR:-/var/log/track_server}
       - TLS_CERT_FILE=${TLS_CERT_FILE:-}
       - TLS_KEY_FILE=${TLS_KEY_FILE:-}
     depends_on:
@@ -20,8 +21,9 @@ services:
     ports:
       - "${APP_PORT:-8080}:8080"
       # - "${APP_TLS_PORT:-8443}:8443"  # uncomment when TLS is enabled
-    # volumes:
-    #   - ./certs:/app/certs:ro  # uncomment when TLS is enabled
+    volumes:
+      - /var/log/track_server:/var/log/track_server
+      # - ./certs:/app/certs:ro  # uncomment when TLS is enabled
     restart: unless-stopped
     networks:
       - backend

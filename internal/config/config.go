@@ -10,6 +10,7 @@ type Config struct {
 	MongoDBName     string
 	MySQLDSN        string
 	ServerAddr      string
+	LogDir          string
 	UseInMemory     bool
 	UseMySQL        bool
 	WechatAppID     string
@@ -31,6 +32,7 @@ func Load() *Config {
 		MongoDBName:     getEnv("MONGO_DB_NAME", "trackapp"),
 		MySQLDSN:        getEnv("MYSQL_DSN", ""),
 		ServerAddr:      getEnv("SERVER_ADDR", ":8080"),
+		LogDir:          getEnv("LOG_DIR", "/var/log/track_server"),
 		WechatAppID:     os.Getenv("WECHAT_APP_ID"),
 		WechatAppSecret: os.Getenv("WECHAT_APP_SECRET"),
 		AMapWebKey:      os.Getenv("AMAP_WEB_KEY"),
