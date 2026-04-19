@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/tongyichu/track_server/internal/handler"
 	"github.com/tongyichu/track_server/internal/models"
 	"github.com/tongyichu/track_server/internal/service"
 )
@@ -44,12 +45,18 @@ func TestGetCaptcha_Success(t *testing.T) {
 	if resp.StatusCode() != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", resp.StatusCode())
 	}
-	var result service.CaptchaResult
+	var result handler.StandardResponse[*service.CaptchaResult]
 	decodeJSON(t, resp.Body(), &result)
-	if result.CaptchaID == "" {
+	if result.Code != 0 {
+		t.Fatalf("expected code 0, got %d", result.Code)
+	}
+	if result.Data == nil {
+		t.Fatalf("expected non-nil data")
+	}
+	if result.Data.CaptchaID == "" {
 		t.Fatalf("expected non-empty captcha_id")
 	}
-	if result.CaptchaImg == "" {
+	if result.Data.CaptchaImg == "" {
 		t.Fatalf("expected non-empty captcha_img")
 	}
 }
@@ -71,9 +78,12 @@ func TestSendSMSCode_Success(t *testing.T) {
 	if resp.StatusCode() != http.StatusOK {
 		t.Fatalf("expected status 200, got %d, body: %s", resp.StatusCode(), string(resp.Body()))
 	}
-	var result map[string]string
+	var result handler.StandardResponse[handler.SendSMSCodeResult]
 	decodeJSON(t, resp.Body(), &result)
-	if result["code"] == "" {
+	if result.Code != 0 {
+		t.Fatalf("expected code 0, got %d", result.Code)
+	}
+	if result.Data.Code == "" {
 		t.Fatalf("expected non-empty sms code")
 	}
 }
@@ -116,12 +126,18 @@ func TestLoginBySMS_Success(t *testing.T) {
 		t.Fatalf("expected status 200, got %d, body: %s", resp.StatusCode(), string(resp.Body()))
 	}
 
-	var result service.LoginResult
+	var result handler.StandardResponse[*service.LoginResult]
 	decodeJSON(t, resp.Body(), &result)
-	if result.UserID <= 0 {
-		t.Fatalf("expected positive user_id, got %d", result.UserID)
+	if result.Code != 0 {
+		t.Fatalf("expected code 0, got %d", result.Code)
 	}
-	if result.User == nil {
+	if result.Data == nil {
+		t.Fatalf("expected non-nil data")
+	}
+	if result.Data.UserID <= 0 {
+		t.Fatalf("expected positive user_id, got %d", result.Data.UserID)
+	}
+	if result.Data.User == nil {
 		t.Fatalf("expected non-nil user")
 	}
 }
@@ -244,10 +260,16 @@ func TestLoginBySMS_CreatesLoginLog(t *testing.T) {
 		t.Fatalf("login should succeed")
 	}
 
-	var result service.LoginResult
+	var result handler.StandardResponse[*service.LoginResult]
 	decodeJSON(t, w.Result().Body(), &result)
+	if result.Code != 0 {
+		t.Fatalf("expected code 0, got %d", result.Code)
+	}
+	if result.Data == nil {
+		t.Fatalf("expected non-nil data")
+	}
 
-	logs, err := e.loginLogRepo.ListByUserID(ctx, result.UserID, 10)
+	logs, err := e.loginLogRepo.ListByUserID(ctx, result.Data.UserID, 10)
 	if err != nil {
 		t.Fatalf("list login logs failed: %v", err)
 	}

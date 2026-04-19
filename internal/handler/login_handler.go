@@ -15,6 +15,22 @@ type LoginHandler struct {
 	loginSvc *service.LoginService
 }
 
+type StandardResponse[T any] struct {
+	Code int `json:"code"`
+	Data T   `json:"data"`
+}
+
+type SendSMSCodeResult struct {
+	Code string `json:"code"`
+}
+
+func successResponse[T any](data T) StandardResponse[T] {
+	return StandardResponse[T]{
+		Code: 0,
+		Data: data,
+	}
+}
+
 func NewLoginHandler(loginSvc *service.LoginService) *LoginHandler {
 	return &LoginHandler{loginSvc: loginSvc}
 }
@@ -25,7 +41,7 @@ func (h *LoginHandler) GetCaptcha(ctx context.Context, c *app.RequestContext) {
 		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, result)
+	c.JSON(http.StatusOK, successResponse(result))
 }
 
 func (h *LoginHandler) SendSMSCode(ctx context.Context, c *app.RequestContext) {
@@ -47,7 +63,7 @@ func (h *LoginHandler) SendSMSCode(ctx context.Context, c *app.RequestContext) {
 	}
 	// TODO: 接入真实短信服务后，此处不应将验证码明文返回给客户端。
 	// 应改为返回发送成功状态，例如：c.JSON(http.StatusOK, utils.H{"message": "sms sent"})
-	c.JSON(http.StatusOK, utils.H{"code": code})
+	c.JSON(http.StatusOK, successResponse(SendSMSCodeResult{Code: code}))
 }
 
 func (h *LoginHandler) LoginBySMS(ctx context.Context, c *app.RequestContext) {
@@ -70,7 +86,7 @@ func (h *LoginHandler) LoginBySMS(ctx context.Context, c *app.RequestContext) {
 		c.JSON(http.StatusUnauthorized, utils.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, result)
+	c.JSON(http.StatusOK, successResponse(result))
 }
 
 func (h *LoginHandler) LoginByWechat(ctx context.Context, c *app.RequestContext) {

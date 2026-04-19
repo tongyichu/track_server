@@ -28,21 +28,21 @@
   │                                               │
   │  1. GET /api/v1/captcha                        │
   │ ────────────────────────────────────────────►   │
-  │   ◄──── 返回 captcha_id + captcha_img (base64) │
+  │   ◄──── 返回 code=0, data={captcha_id, captcha_img} │
   │                                               │
   │  用户输入图形验证码                              │
   │                                               │
   │  2. POST /api/v1/sms/send                      │
   │     { phone, captcha_id, captcha_code }        │
   │ ────────────────────────────────────────────►   │
-  │   ◄──── 返回短信验证码 code（仅开发环境返回）     │
+  │   ◄──── 返回 code=0, data={code}（仅开发环境返回） │
   │                                               │
   │  用户收到短信并输入验证码                         │
   │                                               │
   │  3. POST /api/v1/login/sms                     │
   │     { phone, code }                            │
   │ ────────────────────────────────────────────►   │
-  │   ◄──── 返回 user_id + user 信息               │
+  │   ◄──── 返回 code=0, data={user_id, user}      │
   │                                               │
 ```
 
@@ -70,7 +70,6 @@
 |-------------|------|------|------|
 | `X-Device-ID` | string | 否 | 设备唯一标识，用于判断新设备登录、设备维度限流和风控 |
 | `X-Platform` | string | 否 | 客户端平台，取值：`ios` / `android` |
-| `X-Client-Type` | string | 否 | 客户端类型 |
 | `X-Client-Version` | string | 否 | 客户端版本号，如 `1.0.0` |
 | `X-Client-Language` | string | 否 | 客户端语言，如 `zh-CN`、`en-US` |
 
@@ -112,15 +111,19 @@ GET /api/v1/captcha
 
 ```json
 {
-  "captcha_id": "cap_1713520800123456789_42135",
-  "captcha_img": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0i..."
+  "code": 0,
+  "data": {
+    "captcha_id": "cap_1713520800123456789_42135",
+    "captcha_img": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0i..."
+  }
 }
 ```
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `captcha_id` | string | 验证码唯一标识，发送短信时需回传此值 |
-| `captcha_img` | string | 验证码图片，base64 编码的 SVG Data URI，可直接赋值给 `<img src="">` 或 Image 组件 |
+| `code` | int | 业务状态码，`0` 表示成功 |
+| `data.captcha_id` | string | 验证码唯一标识，发送短信时需回传此值 |
+| `data.captcha_img` | string | 验证码图片，base64 编码的 SVG Data URI，可直接赋值给 `<img src="">` 或 Image 组件 |
 
 ### 注意事项
 
@@ -177,13 +180,17 @@ Content-Type: application/json
 
 ```json
 {
-  "code": "385021"
+  "code": 0,
+  "data": {
+    "code": "385021"
+  }
 }
 ```
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `code` | string | 6 位短信验证码。**注意：生产环境中此字段不应返回给客户端，验证码应通过短信通道下发；当前为开发/测试环境便于调试直接返回** |
+| `code` | int | 业务状态码，`0` 表示成功 |
+| `data.code` | string | 6 位短信验证码。**注意：生产环境中此字段不应返回给客户端，验证码应通过短信通道下发；当前为开发/测试环境便于调试直接返回** |
 
 ### 错误响应
 
@@ -239,24 +246,28 @@ Content-Type: application/json
 
 ```json
 {
-  "user_id": 7264917263840,
-  "user": {
-    "id": 7264917263840,
-    "nickname": "",
-    "avatar_url": "",
-    "signature": "",
-    "phone": "13800001111",
-    "client_language": "",
-    "created_at": "2026-04-19T10:30:00.000000Z",
-    "updated_at": "2026-04-19T10:30:00.000000Z"
+  "code": 0,
+  "data": {
+    "user_id": 7264917263840,
+    "user": {
+      "id": 7264917263840,
+      "nickname": "",
+      "avatar_url": "",
+      "signature": "",
+      "phone": "13800001111",
+      "client_language": "",
+      "created_at": "2026-04-19T10:30:00.000000Z",
+      "updated_at": "2026-04-19T10:30:00.000000Z"
+    }
   }
 }
 ```
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `user_id` | int64 | 用户唯一 ID |
-| `user` | object | 用户详情对象，结构见 [User 对象](#user-对象) |
+| `code` | int | 业务状态码，`0` 表示成功 |
+| `data.user_id` | int64 | 用户唯一 ID |
+| `data.user` | object | 用户详情对象，结构见 [User 对象](#user-对象) |
 
 ### 错误响应
 
