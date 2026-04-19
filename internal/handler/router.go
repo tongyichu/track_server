@@ -11,6 +11,7 @@ import (
 type Deps struct {
 	TrackService *service.TrackService
 	UserService  *service.UserService
+	LoginService *service.LoginService
 }
 
 // RegisterRoutes registers all HTTP routes on the given Hertz server.
@@ -20,11 +21,20 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 
 	trackHandler := NewTrackHandler(deps.TrackService)
 	userHandler := NewUserHandler(deps.UserService)
+	loginHandler := NewLoginHandler(deps.LoginService)
 
 	api := h.Group("/api/v1")
 
 	// ping
 	api.GET("/ping", Ping)
+
+	// login
+	api.GET("/captcha", loginHandler.GetCaptcha)
+	api.POST("/sms/send", loginHandler.SendSMSCode)
+	api.POST("/login/sms", loginHandler.LoginBySMS)
+	api.POST("/login/wechat", loginHandler.LoginByWechat)
+	api.POST("/login/apple", loginHandler.LoginByApple)
+	api.GET("/login/log", loginHandler.GetLoginLog)
 
 	// track related
 	api.POST("/track/create", trackHandler.CreateTrack)                      // 创建轨迹

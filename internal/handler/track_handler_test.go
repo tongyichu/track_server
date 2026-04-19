@@ -24,6 +24,7 @@ type testEnv struct {
 	userRepo     repository.UserRepository
 	collectRepo  repository.CollectRepository
 	loginLogRepo repository.LoginLogRepository
+	loginSvc     *service.LoginService
 }
 
 // newTestEnv creates a fresh Hertz server wired with in-memory repositories.
@@ -31,11 +32,12 @@ func newTestEnv() *testEnv {
 	trackRepo, userRepo, collectRepo, loginLogRepo := repository.NewInMemoryRepositories()
 	trackSvc := service.NewTrackService(trackRepo, collectRepo)
 	userSvc := service.NewUserService(userRepo)
+	loginSvc := service.NewLoginService(userRepo, loginLogRepo, "", "")
 
 	h := server.Default()
-	handler.RegisterRoutes(h, handler.Deps{TrackService: trackSvc, UserService: userSvc})
+	handler.RegisterRoutes(h, handler.Deps{TrackService: trackSvc, UserService: userSvc, LoginService: loginSvc})
 
-	return &testEnv{h: h, trackRepo: trackRepo, userRepo: userRepo, collectRepo: collectRepo, loginLogRepo: loginLogRepo}
+	return &testEnv{h: h, trackRepo: trackRepo, userRepo: userRepo, collectRepo: collectRepo, loginLogRepo: loginLogRepo, loginSvc: loginSvc}
 }
 
 // perform performs an HTTP request against the Hertz engine with common headers.

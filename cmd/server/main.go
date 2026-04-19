@@ -68,11 +68,11 @@ func main() {
 
 	trackSvc := service.NewTrackService(trackRepo, collectRepo)
 	userSvc := service.NewUserService(userRepo)
-	_ = loginLogRepo
+	loginSvc := service.NewLoginService(userRepo, loginLogRepo, cfg.WechatAppID, cfg.WechatAppSecret)
 
 	h := server.Default(server.WithHostPorts(cfg.ServerAddr))
 
-	handler.RegisterRoutes(h, handler.Deps{TrackService: trackSvc, UserService: userSvc})
+	handler.RegisterRoutes(h, handler.Deps{TrackService: trackSvc, UserService: userSvc, LoginService: loginSvc})
 
 	log.Printf("server listening on %s", cfg.ServerAddr)
 	h.Spin()

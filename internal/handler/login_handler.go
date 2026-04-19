@@ -1,0 +1,134 @@
+package handler
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+
+	"github.com/cloudwego/hertz/pkg/app"
+	"github.com/cloudwego/hertz/pkg/common/utils"
+
+	"github.com/tongyichu/track_server/internal/service"
+)
+
+type LoginHandler struct {
+	loginSvc *service.LoginService
+}
+
+func NewLoginHandler(loginSvc *service.LoginService) *LoginHandler {
+	return &LoginHandler{loginSvc: loginSvc}
+}
+
+func (h *LoginHandler) GetCaptcha(ctx context.Context, c *app.RequestContext) {
+	result, err := h.loginSvc.GenerateCaptcha(ctx)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, result)
+}
+
+func (h *LoginHandler) SendSMSCode(ctx context.Context, c *app.RequestContext) {
+	var body struct {
+		Phone       string `json:"phone"`
+		CaptchaID   string `json:"captcha_id"`
+		CaptchaCode string `json:"captcha_code"`
+	}
+	data, err := c.Body()
+	if err != nil || json.Unmarshal(data, &body) != nil || body.Phone == "" {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid phone payload"})
+		return
+	}
+
+	code, err := h.loginSvc.SendSMSCode(ctx, body.Phone, body.CaptchaID, body.CaptchaCode)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": err.Error()})
+		return
+	}
+	// TODO: 接入真实短信服务后，此处不应将验证码明文返回给客户端。
+	// 应改为返回发送成功状态，例如：c.JSON(http.StatusOK, utils.H{"message": "sms sent"})
+	c.JSON(http.StatusOK, utils.H{"code": code})
+}
+
+func (h *LoginHandler) LoginBySMS(ctx context.Context, c *app.RequestContext) {
+	var body struct {
+		Phone string `json:"phone"`
+		Code  string `json:"code"`
+	}
+	data, err := c.Body()
+	if err != nil || json.Unmarshal(data, &body) != nil || body.Phone == "" || body.Code == "" {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "phone and code are required"})
+		return
+	}
+
+	ip := c.ClientIP()
+	deviceID := string(c.Request.Header.Peek("X-Device-ID"))
+	platform := string(c.Request.Header.Peek("X-Platform"))
+
+	result, err := h.loginSvc.LoginBySMS(ctx, body.Phone, body.Code, ip, deviceID, platform)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, utils.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, result)
+}
+
+func (h *LoginHandler) LoginByWechat(ctx context.Context, c *app.RequestContext) {
+	var body struct {
+		Code string `json:"code"`
+	}
+	data, err := c.Body()
+	if err != nil || json.Unmarshal(data, &body) != nil || body.Code == "" {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "code is required"})
+		return
+	}
+
+	ip := c.ClientIP()
+	deviceID := string(c.Request.Header.Peek("X-Device-ID"))
+	platform := string(c.Request.Header.Peek("X-Platform"))
+
+	result, err := h.loginSvc.LoginByWechat(ctx, body.Code, ip, deviceID, platform)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, utils.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, result)
+}
+
+func (h *LoginHandler) LoginByApple(ctx context.Context, c *app.RequestContext) {
+	var body struct {
+		AppleUserID   string `json:"apple_user_id"`
+		IdentityToken string `json:"identity_token"`
+	}
+	data, err := c.Body()
+	if err != nil || json.Unmarshal(data, &body) != nil || body.AppleUserID == "" {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "apple_user_id is required"})
+		return
+	}
+
+	ip := c.ClientIP()
+	deviceID := string(c.Request.Header.Peek("X-Device-ID"))
+	platform := string(c.Request.Header.Peek("X-Platform"))
+
+	result, err := h.loginSvc.LoginByApple(ctx, body.AppleUserID, body.IdentityToken, ip, deviceID, platform)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, utils.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, result)
+}
+
+func (h *LoginHandler) GetLoginLog(ctx context.Context, c *app.RequestContext) {
+	userID, err := parseRequiredUserID(string(c.Query("user_id")))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": err.Error()})
+		return
+	}
+
+	logs, err := h.loginSvc.GetLoginLog(ctx, userID, 20)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, logs)
+}
