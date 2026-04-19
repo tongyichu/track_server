@@ -26,7 +26,7 @@ type TrackPoint struct {
 // Track aggregates points and statistics of a single outdoor activity.
 type Track struct {
 	ID             string       `json:"id" bson:"_id,omitempty"`
-	UserID         string       `json:"user_id" bson:"user_id"`
+	UserID         int64        `json:"user_id" bson:"user_id"`
 	Name           string       `json:"name" bson:"name"`
 	Status         TrackStatus  `json:"status" bson:"status"`
 	Points         []TrackPoint `json:"points" bson:"points"`
@@ -43,7 +43,7 @@ type Track struct {
 // TrackSummary is a lightweight view used for recommend/search lists.
 type TrackSummary struct {
 	ID             string  `json:"id"`
-	UserID         string  `json:"user_id"`
+	UserID         int64   `json:"user_id"`
 	Name           string  `json:"name"`
 	DistanceMeters float64 `json:"distance_meters"`
 	DurationSec    int64   `json:"duration_sec"`
@@ -53,6 +53,6 @@ type TrackSummary struct {
 
 // TrackMap represents data needed for rendering a track polyline on map.
 type TrackMap struct {
-	TrackID string        `json:"track_id"`
-	Points  []TrackPoint  `json:"points"`
+	TrackID string       `json:"track_id"`
+	Points  []TrackPoint `json:"points"`
 }

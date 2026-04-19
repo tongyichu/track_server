@@ -5,8 +5,8 @@ import (
 
 	"errors"
 
+	"github.com/tongyichu/track_server/internal/models"
 	"go.mongodb.org/mongo-driver/mongo"
-	"trackapp-server/internal/models"
 )
 
 // MongoTrackRepository is a stub of TrackRepository backed by MongoDB.
@@ -35,12 +35,12 @@ func (r *MongoTrackRepository) FindByID(context.Context, string) (*models.Track,
 }
 
 // FindRunningByUserID is not implemented in this demo and returns an error.
-func (r *MongoTrackRepository) FindRunningByUserID(context.Context, string) (*models.Track, error) {
+func (r *MongoTrackRepository) FindRunningByUserID(context.Context, int64) (*models.Track, error) {
 	return nil, errors.New("MongoTrackRepository.FindRunningByUserID not implemented")
 }
 
 // ListRecommend is not implemented in this demo and returns an error.
-func (r *MongoTrackRepository) ListRecommend(context.Context, string, int) ([]*models.Track, error) {
+func (r *MongoTrackRepository) ListRecommend(context.Context, int64, int) ([]*models.Track, error) {
 	return nil, errors.New("MongoTrackRepository.ListRecommend not implemented")
 }
 
@@ -65,7 +65,7 @@ func (r *MongoUserRepository) CreateIfNotExists(context.Context, *models.User) (
 }
 
 // FindByID is not implemented in this demo and returns an error.
-func (r *MongoUserRepository) FindByID(context.Context, string) (*models.User, error) {
+func (r *MongoUserRepository) FindByID(context.Context, int64) (*models.User, error) {
 	return nil, errors.New("MongoUserRepository.FindByID not implemented")
 }
 
@@ -85,16 +85,36 @@ func NewMongoCollectRepository(collection *mongo.Collection) *MongoCollectReposi
 }
 
 // IsCollected is not implemented in this demo and returns an error.
-func (r *MongoCollectRepository) IsCollected(context.Context, string, string) (bool, error) {
+func (r *MongoCollectRepository) IsCollected(context.Context, int64, string) (bool, error) {
 	return false, errors.New("MongoCollectRepository.IsCollected not implemented")
 }
 
 // AddCollect is not implemented in this demo and returns an error.
-func (r *MongoCollectRepository) AddCollect(context.Context, string, string) error {
+func (r *MongoCollectRepository) AddCollect(context.Context, int64, string) error {
 	return errors.New("MongoCollectRepository.AddCollect not implemented")
 }
 
 // RemoveCollect is not implemented in this demo and returns an error.
-func (r *MongoCollectRepository) RemoveCollect(context.Context, string, string) error {
+func (r *MongoCollectRepository) RemoveCollect(context.Context, int64, string) error {
 	return errors.New("MongoCollectRepository.RemoveCollect not implemented")
+}
+
+// MongoLoginLogRepository is a stub of LoginLogRepository backed by MongoDB.
+type MongoLoginLogRepository struct {
+	collection *mongo.Collection
+}
+
+// NewMongoLoginLogRepository constructs a Mongo-backed LoginLogRepository.
+func NewMongoLoginLogRepository(collection *mongo.Collection) *MongoLoginLogRepository {
+	return &MongoLoginLogRepository{collection: collection}
+}
+
+// Create is not implemented in this demo and returns an error.
+func (r *MongoLoginLogRepository) Create(context.Context, *models.LoginLog) error {
+	return errors.New("MongoLoginLogRepository.Create not implemented")
+}
+
+// ListByUserID is not implemented in this demo and returns an error.
+func (r *MongoLoginLogRepository) ListByUserID(context.Context, int64, int) ([]*models.LoginLog, error) {
+	return nil, errors.New("MongoLoginLogRepository.ListByUserID not implemented")
 }

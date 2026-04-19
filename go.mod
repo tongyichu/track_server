@@ -1,13 +1,15 @@
-module trackapp-server
+module github.com/tongyichu/track_server
 
 go 1.21
 
 require (
 	github.com/cloudwego/hertz v0.10.4
+	github.com/go-sql-driver/mysql v1.8.1
 	go.mongodb.org/mongo-driver v1.17.9
 )
 
 require (
+	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/bytedance/gopkg v0.1.3 // indirect
 	github.com/bytedance/sonic v1.15.0 // indirect
 	github.com/bytedance/sonic/loader v0.5.0 // indirect

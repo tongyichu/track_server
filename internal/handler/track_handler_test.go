@@ -10,31 +10,32 @@ import (
 	"github.com/cloudwego/hertz/pkg/app/server"
 	"github.com/cloudwego/hertz/pkg/common/ut"
 
-	"trackapp-server/internal/handler"
-	"trackapp-server/internal/middleware"
-	"trackapp-server/internal/models"
-	"trackapp-server/internal/repository"
-	"trackapp-server/internal/service"
+	"github.com/tongyichu/track_server/internal/handler"
+	"github.com/tongyichu/track_server/internal/middleware"
+	"github.com/tongyichu/track_server/internal/models"
+	"github.com/tongyichu/track_server/internal/repository"
+	"github.com/tongyichu/track_server/internal/service"
 )
 
 // testEnv bundles server and in-memory dependencies for HTTP tests.
 type testEnv struct {
-	h           *server.Hertz
-	trackRepo   repository.TrackRepository
-	userRepo    repository.UserRepository
-	collectRepo repository.CollectRepository
+	h            *server.Hertz
+	trackRepo    repository.TrackRepository
+	userRepo     repository.UserRepository
+	collectRepo  repository.CollectRepository
+	loginLogRepo repository.LoginLogRepository
 }
 
 // newTestEnv creates a fresh Hertz server wired with in-memory repositories.
 func newTestEnv() *testEnv {
-	trackRepo, userRepo, collectRepo := repository.NewInMemoryRepositories()
+	trackRepo, userRepo, collectRepo, loginLogRepo := repository.NewInMemoryRepositories()
 	trackSvc := service.NewTrackService(trackRepo, collectRepo)
 	userSvc := service.NewUserService(userRepo)
 
 	h := server.Default()
 	handler.RegisterRoutes(h, handler.Deps{TrackService: trackSvc, UserService: userSvc})
 
-	return &testEnv{h: h, trackRepo: trackRepo, userRepo: userRepo, collectRepo: collectRepo}
+	return &testEnv{h: h, trackRepo: trackRepo, userRepo: userRepo, collectRepo: collectRepo, loginLogRepo: loginLogRepo}
 }
 
 // perform performs an HTTP request against the Hertz engine with common headers.
@@ -64,15 +65,15 @@ func decodeJSON(t *testing.T, respBody []byte, v interface{}) {
 // TestCreateTrack_Success verifies POST /api/track/create succeeds with valid headers.
 func TestCreateTrack_Success(t *testing.T) {
 	e := newTestEnv()
-	w := e.perform(http.MethodPost, "/api/track/create", nil, ut.Header{Key: middleware.HeaderUserID, Value: "u1"})
+	w := e.perform(http.MethodPost, "/api/v1/track/create", nil, ut.Header{Key: middleware.HeaderUserID, Value: "1001"})
 	resp := w.Result()
 	if resp.StatusCode() != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", resp.StatusCode())
 	}
 	var track models.Track
 	decodeJSON(t, resp.Body(), &track)
-	if track.UserID != "u1" {
-		t.Fatalf("expected user_id u1, got %s", track.UserID)
+	if track.UserID != 1001 {
+		t.Fatalf("expected user_id 1001, got %d", track.UserID)
 	}
 	if track.Status != models.TrackStatusRunning {
 		t.Fatalf("expected status running, got %s", track.Status)
@@ -82,7 +83,7 @@ func TestCreateTrack_Success(t *testing.T) {
 // TestCreateTrack_MissingHeader verifies 400 is returned when user header is missing.
 func TestCreateTrack_MissingHeader(t *testing.T) {
 	e := newTestEnv()
-	w := e.perform(http.MethodPost, "/api/track/create", nil)
+	w := e.perform(http.MethodPost, "/api/v1/track/create", nil)
 	resp := w.Result()
 	if resp.StatusCode() != http.StatusBadRequest {
 		t.Fatalf("expected status 400, got %d", resp.StatusCode())
@@ -92,7 +93,7 @@ func TestCreateTrack_MissingHeader(t *testing.T) {
 // TestGetRunningTrack_Empty verifies when no running track exists, running=false is returned.
 func TestGetRunningTrack_Empty(t *testing.T) {
 	e := newTestEnv()
-	w := e.perform(http.MethodGet, "/api/track/running?user_id=u1", nil)
+	w := e.perform(http.MethodGet, "/api/v1/track/running?user_id=1001", nil)
 	resp := w.Result()
 	if resp.StatusCode() != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", resp.StatusCode())
@@ -109,7 +110,7 @@ func TestGetRunningTrack_Empty(t *testing.T) {
 // TestGetTrackMap_NotFound verifies map endpoint returns 404 when track not exists.
 func TestGetTrackMap_NotFound(t *testing.T) {
 	e := newTestEnv()
-	w := e.perform(http.MethodGet, "/api/track/nonexist/map", nil)
+	w := e.perform(http.MethodGet, "/api/v1/track/nonexist/map", nil)
 	resp := w.Result()
 	if resp.StatusCode() != http.StatusNotFound {
 		t.Fatalf("expected status 404, got %d", resp.StatusCode())
@@ -121,9 +122,9 @@ func TestRecommendAndSearch(t *testing.T) {
 	e := newTestEnv()
 	ctx := context.Background()
 	// seed one track
-	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk1", UserID: "u1", Name: "西湖徒步"})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk1", UserID: 1001, Name: "西湖徒步"})
 
-	w1 := e.perform(http.MethodGet, "/api/track/recommend/list", nil, ut.Header{Key: middleware.HeaderUserID, Value: "u1"})
+	w1 := e.perform(http.MethodGet, "/api/v1/track/recommend/list", nil, ut.Header{Key: middleware.HeaderUserID, Value: "1001"})
 	resp1 := w1.Result()
 	if resp1.StatusCode() != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", resp1.StatusCode())
@@ -134,7 +135,7 @@ func TestRecommendAndSearch(t *testing.T) {
 		t.Fatalf("expected non-empty recommend list")
 	}
 
-	w2 := e.perform(http.MethodGet, "/api/track/search/list?keyword=西湖", nil)
+	w2 := e.perform(http.MethodGet, "/api/v1/track/search/list?keyword=西湖", nil)
 	resp2 := w2.Result()
 	if resp2.StatusCode() != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", resp2.StatusCode())
@@ -150,10 +151,10 @@ func TestRecommendAndSearch(t *testing.T) {
 func TestCollectAndUncollect(t *testing.T) {
 	e := newTestEnv()
 	ctx := context.Background()
-	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk2", UserID: "u2", Name: "黄山登顶"})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk2", UserID: 1002, Name: "黄山登顶"})
 
 	// initial collect status
-	w0 := e.perform(http.MethodGet, "/api/user/u1/collect?track_id=trk2", nil)
+	w0 := e.perform(http.MethodGet, "/api/v1/user/1001/collect?track_id=trk2", nil)
 	resp0 := w0.Result()
 	if resp0.StatusCode() != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", resp0.StatusCode())
@@ -167,13 +168,13 @@ func TestCollectAndUncollect(t *testing.T) {
 	}
 
 	// collect
-	w1 := e.perform(http.MethodPost, "/api/track_collect?user_id=u1&track_id=trk2", nil)
+	w1 := e.perform(http.MethodPost, "/api/v1/track_collect?user_id=1001&track_id=trk2", nil)
 	if w1.Result().StatusCode() != http.StatusOK {
 		t.Fatalf("collect should succeed")
 	}
 
 	// status should be true
-	w2 := e.perform(http.MethodGet, "/api/user/u1/collect?track_id=trk2", nil)
+	w2 := e.perform(http.MethodGet, "/api/v1/user/1001/collect?track_id=trk2", nil)
 	var status2 struct {
 		Collected bool `json:"collected"`
 	}
@@ -183,8 +184,32 @@ func TestCollectAndUncollect(t *testing.T) {
 	}
 
 	// uncollect
-	w3 := e.perform(http.MethodDelete, "/api/track_collect?user_id=u1&track_id=trk2", nil)
+	w3 := e.perform(http.MethodDelete, "/api/v1/track_collect?user_id=1001&track_id=trk2", nil)
 	if w3.Result().StatusCode() != http.StatusOK {
 		t.Fatalf("uncollect should succeed")
+	}
+}
+
+// TestCreateTrack_InvalidHeader verifies invalid numeric header is rejected.
+func TestCreateTrack_InvalidHeader(t *testing.T) {
+	e := newTestEnv()
+	w := e.perform(http.MethodPost, "/api/v1/track/create", nil, ut.Header{Key: middleware.HeaderUserID, Value: "u1"})
+	if w.Result().StatusCode() != http.StatusBadRequest {
+		t.Fatalf("invalid X-User-ID header should return 400")
+	}
+}
+
+// TestTrackHandlers_InvalidUserID verifies invalid user_id query/path values are rejected.
+func TestTrackHandlers_InvalidUserID(t *testing.T) {
+	e := newTestEnv()
+
+	w1 := e.perform(http.MethodGet, "/api/v1/track/running?user_id=bad", nil)
+	if w1.Result().StatusCode() != http.StatusBadRequest {
+		t.Fatalf("invalid running query user_id should return 400")
+	}
+
+	w2 := e.perform(http.MethodGet, "/api/v1/user/bad/collect?track_id=trk2", nil)
+	if w2.Result().StatusCode() != http.StatusBadRequest {
+		t.Fatalf("invalid collect path user_id should return 400")
 	}
 }

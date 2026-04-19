@@ -7,9 +7,9 @@ import (
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/common/utils"
 
-	"trackapp-server/internal/middleware"
-	"trackapp-server/internal/repository"
-	"trackapp-server/internal/service"
+	"github.com/tongyichu/track_server/internal/middleware"
+	"github.com/tongyichu/track_server/internal/repository"
+	"github.com/tongyichu/track_server/internal/service"
 )
 
 // Ping handles GET /api/ping
@@ -30,8 +30,12 @@ func NewTrackHandler(trackSvc *service.TrackService) *TrackHandler {
 // CreateTrack handles POST /api/track/create
 func (h *TrackHandler) CreateTrack(ctx context.Context, c *app.RequestContext) {
 	meta := middleware.GetRequestMeta(c)
-	if meta == nil || meta.UserID == "" {
+	if meta == nil || meta.RawUserID == "" {
 		c.JSON(http.StatusBadRequest, utils.H{"error": "missing X-User-ID header"})
+		return
+	}
+	if meta.UserID <= 0 {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid X-User-ID header"})
 		return
 	}
 
@@ -46,8 +50,12 @@ func (h *TrackHandler) CreateTrack(ctx context.Context, c *app.RequestContext) {
 // ListRecommend handles GET /api/track/recommend/list
 func (h *TrackHandler) ListRecommend(ctx context.Context, c *app.RequestContext) {
 	meta := middleware.GetRequestMeta(c)
-	userID := ""
+	var userID int64
 	if meta != nil {
+		if meta.RawUserID != "" && meta.UserID <= 0 {
+			c.JSON(http.StatusBadRequest, utils.H{"error": "invalid X-User-ID header"})
+			return
+		}
 		userID = meta.UserID
 	}
 	tracks, err := h.trackSvc.ListRecommend(ctx, userID, 50)
@@ -115,18 +123,36 @@ func (h *TrackHandler) UploadTrackCloud(ctx context.Context, c *app.RequestConte
 
 // GetRunningTrack handles GET /api/track/running
 func (h *TrackHandler) GetRunningTrack(ctx context.Context, c *app.RequestContext) {
-	userID := string(c.Query("user_id"))
-	if userID == "" {
-		meta := middleware.GetRequestMeta(c)
-		if meta != nil {
-			userID = meta.UserID
+	rawUserID := string(c.Query("user_id"))
+	if rawUserID != "" {
+		userID, err := parseRequiredUserID(rawUserID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, utils.H{"error": err.Error()})
+			return
 		}
+		track, err := h.trackSvc.GetRunningTrack(ctx, userID)
+		if err != nil {
+			if err.Error() == repository.ErrNotFound.Error() {
+				c.JSON(http.StatusOK, utils.H{"running": false})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, utils.H{"running": true, "track": track})
+		return
 	}
-	if userID == "" {
+
+	meta := middleware.GetRequestMeta(c)
+	if meta == nil || meta.RawUserID == "" {
 		c.JSON(http.StatusBadRequest, utils.H{"error": "user_id is required"})
 		return
 	}
-	track, err := h.trackSvc.GetRunningTrack(ctx, userID)
+	if meta.UserID <= 0 {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid X-User-ID header"})
+		return
+	}
+	track, err := h.trackSvc.GetRunningTrack(ctx, meta.UserID)
 	if err != nil {
 		if err.Error() == repository.ErrNotFound.Error() {
 			c.JSON(http.StatusOK, utils.H{"running": false})
@@ -140,9 +166,13 @@ func (h *TrackHandler) GetRunningTrack(ctx context.Context, c *app.RequestContex
 
 // GetCollectStatus handles GET /api/user/:user_id/collect
 func (h *TrackHandler) GetCollectStatus(ctx context.Context, c *app.RequestContext) {
-	userID := c.Param("user_id")
+	userID, err := parseRequiredUserID(c.Param("user_id"))
 	trackID := string(c.Query("track_id"))
-	if userID == "" || trackID == "" {
+	if err != nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": err.Error()})
+		return
+	}
+	if trackID == "" {
 		c.JSON(http.StatusBadRequest, utils.H{"error": "user_id and track_id are required"})
 		return
 	}
@@ -157,8 +187,12 @@ func (h *TrackHandler) GetCollectStatus(ctx context.Context, c *app.RequestConte
 // CollectTrack handles POST /api/track_collect
 func (h *TrackHandler) CollectTrack(ctx context.Context, c *app.RequestContext) {
 	trackID := string(c.Query("track_id"))
-	userID := string(c.Query("user_id"))
-	if userID == "" || trackID == "" {
+	userID, err := parseRequiredUserID(string(c.Query("user_id")))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": err.Error()})
+		return
+	}
+	if trackID == "" {
 		c.JSON(http.StatusBadRequest, utils.H{"error": "user_id and track_id are required"})
 		return
 	}
@@ -176,8 +210,12 @@ func (h *TrackHandler) CollectTrack(ctx context.Context, c *app.RequestContext) 
 // UncollectTrack handles DELETE /api/track_collect
 func (h *TrackHandler) UncollectTrack(ctx context.Context, c *app.RequestContext) {
 	trackID := string(c.Query("track_id"))
-	userID := string(c.Query("user_id"))
-	if userID == "" || trackID == "" {
+	userID, err := parseRequiredUserID(string(c.Query("user_id")))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": err.Error()})
+		return
+	}
+	if trackID == "" {
 		c.JSON(http.StatusBadRequest, utils.H{"error": "user_id and track_id are required"})
 		return
 	}

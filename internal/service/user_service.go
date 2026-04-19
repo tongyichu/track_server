@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 
-	"trackapp-server/internal/models"
-	"trackapp-server/internal/repository"
+	"github.com/tongyichu/track_server/internal/models"
+	"github.com/tongyichu/track_server/internal/repository"
 )
 
 // UserService provides business logic related to user profile and settings.
@@ -19,8 +19,8 @@ func NewUserService(users repository.UserRepository) *UserService {
 }
 
 // EnsureUser makes sure the user exists in persistence layer.
-func (s *UserService) EnsureUser(ctx context.Context, userID string, language string) (*models.User, error) {
-	if userID == "" {
+func (s *UserService) EnsureUser(ctx context.Context, userID int64, language string) (*models.User, error) {
+	if userID <= 0 {
 		return nil, errors.New("userID is required")
 	}
 	user := &models.User{ID: userID, ClientLanguage: language}
@@ -28,15 +28,15 @@ func (s *UserService) EnsureUser(ctx context.Context, userID string, language st
 }
 
 // GetUserProfile returns the detail of a user.
-func (s *UserService) GetUserProfile(ctx context.Context, userID string) (*models.User, error) {
-	if userID == "" {
+func (s *UserService) GetUserProfile(ctx context.Context, userID int64) (*models.User, error) {
+	if userID <= 0 {
 		return nil, errors.New("userID is required")
 	}
 	return s.users.FindByID(ctx, userID)
 }
 
 // UpdateAvatar updates user's avatar URL.
-func (s *UserService) UpdateAvatar(ctx context.Context, userID, avatarURL string) (*models.User, error) {
+func (s *UserService) UpdateAvatar(ctx context.Context, userID int64, avatarURL string) (*models.User, error) {
 	user, err := s.users.FindByID(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -46,7 +46,7 @@ func (s *UserService) UpdateAvatar(ctx context.Context, userID, avatarURL string
 }
 
 // UpdateName updates user's nickname.
-func (s *UserService) UpdateName(ctx context.Context, userID, name string) (*models.User, error) {
+func (s *UserService) UpdateName(ctx context.Context, userID int64, name string) (*models.User, error) {
 	user, err := s.users.FindByID(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -56,7 +56,7 @@ func (s *UserService) UpdateName(ctx context.Context, userID, name string) (*mod
 }
 
 // UpdateSignature updates user's signature.
-func (s *UserService) UpdateSignature(ctx context.Context, userID, sig string) (*models.User, error) {
+func (s *UserService) UpdateSignature(ctx context.Context, userID int64, sig string) (*models.User, error) {
 	user, err := s.users.FindByID(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -65,8 +65,18 @@ func (s *UserService) UpdateSignature(ctx context.Context, userID, sig string) (
 	return user, s.users.Update(ctx, user)
 }
 
+// UpdatePhone updates user's phone.
+func (s *UserService) UpdatePhone(ctx context.Context, userID int64, phone string) (*models.User, error) {
+	user, err := s.users.FindByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	user.Phone = phone
+	return user, s.users.Update(ctx, user)
+}
+
 // UpdateClientLanguage updates user's client language.
-func (s *UserService) UpdateClientLanguage(ctx context.Context, userID, lang string) (*models.User, error) {
+func (s *UserService) UpdateClientLanguage(ctx context.Context, userID int64, lang string) (*models.User, error) {
 	user, err := s.users.FindByID(ctx, userID)
 	if err != nil {
 		return nil, err

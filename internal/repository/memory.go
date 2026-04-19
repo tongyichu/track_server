@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"trackapp-server/internal/models"
+	"github.com/tongyichu/track_server/internal/models"
 )
 
 // InMemoryTrackRepository is an in-memory implementation of TrackRepository for tests and development.
@@ -55,7 +55,7 @@ func (r *InMemoryTrackRepository) FindByID(_ context.Context, id string) (*model
 }
 
 // FindRunningByUserID finds the running track of a user.
-func (r *InMemoryTrackRepository) FindRunningByUserID(_ context.Context, userID string) (*models.Track, error) {
+func (r *InMemoryTrackRepository) FindRunningByUserID(_ context.Context, userID int64) (*models.Track, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	for _, t := range r.tracks {
@@ -67,7 +67,7 @@ func (r *InMemoryTrackRepository) FindRunningByUserID(_ context.Context, userID 
 }
 
 // ListRecommend returns a simple slice of tracks as recommendation.
-func (r *InMemoryTrackRepository) ListRecommend(_ context.Context, _ string, limit int) ([]*models.Track, error) {
+func (r *InMemoryTrackRepository) ListRecommend(_ context.Context, _ int64, limit int) ([]*models.Track, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -101,12 +101,12 @@ func (r *InMemoryTrackRepository) Search(_ context.Context, keyword string, limi
 // InMemoryUserRepository is an in-memory implementation of UserRepository.
 type InMemoryUserRepository struct {
 	mu    sync.RWMutex
-	users map[string]*models.User
+	users map[int64]*models.User
 }
 
 // NewInMemoryUserRepository creates an in-memory user repository.
 func NewInMemoryUserRepository() *InMemoryUserRepository {
-	return &InMemoryUserRepository{users: make(map[string]*models.User)}
+	return &InMemoryUserRepository{users: make(map[int64]*models.User)}
 }
 
 // CreateIfNotExists creates the user if it does not exist.
@@ -125,7 +125,7 @@ func (r *InMemoryUserRepository) CreateIfNotExists(_ context.Context, u *models.
 }
 
 // FindByID finds a user by id.
-func (r *InMemoryUserRepository) FindByID(_ context.Context, id string) (*models.User, error) {
+func (r *InMemoryUserRepository) FindByID(_ context.Context, id int64) (*models.User, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	u, ok := r.users[id]
@@ -150,16 +150,16 @@ func (r *InMemoryUserRepository) Update(_ context.Context, u *models.User) error
 // InMemoryCollectRepository is an in-memory implementation of CollectRepository.
 type InMemoryCollectRepository struct {
 	mu       sync.RWMutex
-	collects map[string]map[string]*models.TrackCollect // userID -> trackID -> collect
+	collects map[int64]map[string]*models.TrackCollect // userID -> trackID -> collect
 }
 
 // NewInMemoryCollectRepository creates an in-memory collect repository.
 func NewInMemoryCollectRepository() *InMemoryCollectRepository {
-	return &InMemoryCollectRepository{collects: make(map[string]map[string]*models.TrackCollect)}
+	return &InMemoryCollectRepository{collects: make(map[int64]map[string]*models.TrackCollect)}
 }
 
 // IsCollected returns whether the track is collected by user.
-func (r *InMemoryCollectRepository) IsCollected(_ context.Context, userID, trackID string) (bool, error) {
+func (r *InMemoryCollectRepository) IsCollected(_ context.Context, userID int64, trackID string) (bool, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	tracks, ok := r.collects[userID]
@@ -171,7 +171,7 @@ func (r *InMemoryCollectRepository) IsCollected(_ context.Context, userID, track
 }
 
 // AddCollect adds a collect record.
-func (r *InMemoryCollectRepository) AddCollect(_ context.Context, userID, trackID string) error {
+func (r *InMemoryCollectRepository) AddCollect(_ context.Context, userID int64, trackID string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if _, ok := r.collects[userID]; !ok {
@@ -186,7 +186,7 @@ func (r *InMemoryCollectRepository) AddCollect(_ context.Context, userID, trackI
 }
 
 // RemoveCollect removes a collect record.
-func (r *InMemoryCollectRepository) RemoveCollect(_ context.Context, userID, trackID string) error {
+func (r *InMemoryCollectRepository) RemoveCollect(_ context.Context, userID int64, trackID string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	tracks, ok := r.collects[userID]
@@ -197,9 +197,60 @@ func (r *InMemoryCollectRepository) RemoveCollect(_ context.Context, userID, tra
 	return nil
 }
 
+// InMemoryLoginLogRepository is an in-memory implementation of LoginLogRepository.
+type InMemoryLoginLogRepository struct {
+	mu      sync.RWMutex
+	nextID  int64
+	byUser  map[int64][]*models.LoginLog
+	ordered []*models.LoginLog
+}
+
+// NewInMemoryLoginLogRepository creates an in-memory login log repository.
+func NewInMemoryLoginLogRepository() *InMemoryLoginLogRepository {
+	return &InMemoryLoginLogRepository{
+		nextID: 1,
+		byUser: make(map[int64][]*models.LoginLog),
+	}
+}
+
+// Create stores a new login log record.
+func (r *InMemoryLoginLogRepository) Create(_ context.Context, log *models.LoginLog) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	clone := *log
+	if clone.ID == 0 {
+		clone.ID = r.nextID
+		r.nextID++
+	}
+	if clone.CreatedAt.IsZero() {
+		clone.CreatedAt = time.Now()
+	}
+	r.byUser[clone.UserID] = append(r.byUser[clone.UserID], &clone)
+	r.ordered = append(r.ordered, &clone)
+	log.ID = clone.ID
+	log.CreatedAt = clone.CreatedAt
+	return nil
+}
+
+// ListByUserID lists login logs of a user in reverse chronological order.
+func (r *InMemoryLoginLogRepository) ListByUserID(_ context.Context, userID int64, limit int) ([]*models.LoginLog, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	logs := r.byUser[userID]
+	if limit <= 0 || limit > len(logs) {
+		limit = len(logs)
+	}
+	res := make([]*models.LoginLog, 0, limit)
+	for i := len(logs) - 1; i >= 0 && len(res) < limit; i-- {
+		clone := *logs[i]
+		res = append(res, &clone)
+	}
+	return res, nil
+}
+
 // NewInMemoryRepositories is a helper to create a full set of in-memory repositories.
-func NewInMemoryRepositories() (TrackRepository, UserRepository, CollectRepository) {
-	return NewInMemoryTrackRepository(), NewInMemoryUserRepository(), NewInMemoryCollectRepository()
+func NewInMemoryRepositories() (TrackRepository, UserRepository, CollectRepository, LoginLogRepository) {
+	return NewInMemoryTrackRepository(), NewInMemoryUserRepository(), NewInMemoryCollectRepository(), NewInMemoryLoginLogRepository()
 }
 
 func containsIgnoreCase(s, sub string) bool {

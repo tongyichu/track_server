@@ -6,8 +6,8 @@ import (
 	"math"
 	"time"
 
-	"trackapp-server/internal/models"
-	"trackapp-server/internal/repository"
+	"github.com/tongyichu/track_server/internal/models"
+	"github.com/tongyichu/track_server/internal/repository"
 )
 
 // TrackService provides business logic around track lifecycle and statistics.
@@ -22,8 +22,8 @@ func NewTrackService(tracks repository.TrackRepository, collects repository.Coll
 }
 
 // CreateTrack creates a new running track for a user.
-func (s *TrackService) CreateTrack(ctx context.Context, userID string) (*models.Track, error) {
-	if userID == "" {
+func (s *TrackService) CreateTrack(ctx context.Context, userID int64) (*models.Track, error) {
+	if userID <= 0 {
 		return nil, errors.New("userID is required")
 	}
 	now := time.Now()
@@ -66,12 +66,12 @@ func (s *TrackService) GetTrackMap(ctx context.Context, trackID string) (*models
 }
 
 // GetRunningTrack returns currently running track of the user if exists.
-func (s *TrackService) GetRunningTrack(ctx context.Context, userID string) (*models.Track, error) {
+func (s *TrackService) GetRunningTrack(ctx context.Context, userID int64) (*models.Track, error) {
 	return s.tracks.FindRunningByUserID(ctx, userID)
 }
 
 // ListRecommend returns recommended tracks for the user.
-func (s *TrackService) ListRecommend(ctx context.Context, userID string, limit int) ([]*models.TrackSummary, error) {
+func (s *TrackService) ListRecommend(ctx context.Context, userID int64, limit int) ([]*models.TrackSummary, error) {
 	tracks, err := s.tracks.ListRecommend(ctx, userID, limit)
 	if err != nil {
 		return nil, err
@@ -102,12 +102,12 @@ func (s *TrackService) MarkUploadedToCloud(ctx context.Context, trackID string) 
 }
 
 // IsCollected reports whether a track is collected by user.
-func (s *TrackService) IsCollected(ctx context.Context, userID, trackID string) (bool, error) {
+func (s *TrackService) IsCollected(ctx context.Context, userID int64, trackID string) (bool, error) {
 	return s.collects.IsCollected(ctx, userID, trackID)
 }
 
 // CollectTrack adds a collection for user-track pair.
-func (s *TrackService) CollectTrack(ctx context.Context, userID, trackID string) error {
+func (s *TrackService) CollectTrack(ctx context.Context, userID int64, trackID string) error {
 	// Check track existence.
 	if _, err := s.tracks.FindByID(ctx, trackID); err != nil {
 		return err
@@ -116,7 +116,7 @@ func (s *TrackService) CollectTrack(ctx context.Context, userID, trackID string)
 }
 
 // UncollectTrack removes a collection for user-track pair.
-func (s *TrackService) UncollectTrack(ctx context.Context, userID, trackID string) error {
+func (s *TrackService) UncollectTrack(ctx context.Context, userID int64, trackID string) error {
 	return s.collects.RemoveCollect(ctx, userID, trackID)
 }
 

@@ -1,0 +1,9 @@
+.DS_Store
+.idea/
+
+# Local environment / secrets (do NOT commit)
+.env
+deploy/.env
+
+# Build outputs
+build/

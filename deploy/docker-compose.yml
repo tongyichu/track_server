@@ -12,6 +12,8 @@ services:
     environment:
       # Ensure the application sees a Mongo URI inside the container
       - MONGO_URI=${MONGO_URI:-mongodb://mongo:27017/trackapp}
+      # If MYSQL_DSN is set, the server will prefer MySQL and ignore MONGO_URI
+      - MYSQL_DSN=${MYSQL_DSN:-}
       # Map BIND_ADDR (e.g. :8080) to the app's SERVER_ADDR config
       - SERVER_ADDR=${BIND_ADDR:-:8080}
     depends_on:

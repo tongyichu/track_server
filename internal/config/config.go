@@ -8,8 +8,10 @@ import (
 type Config struct {
 	MongoURI       string
 	MongoDBName    string
+	MySQLDSN       string
 	ServerAddr     string
 	UseInMemory    bool
+	UseMySQL       bool
 	WechatAppID    string
 	WechatAppSecret string
 	AMapWebKey     string
@@ -21,6 +23,7 @@ func Load() *Config {
 	cfg := &Config{
 		MongoURI:       getEnv("MONGO_URI", ""),
 		MongoDBName:    getEnv("MONGO_DB_NAME", "trackapp"),
+		MySQLDSN:       getEnv("MYSQL_DSN", ""),
 		ServerAddr:     getEnv("SERVER_ADDR", ":8080"),
 		WechatAppID:    os.Getenv("WECHAT_APP_ID"),
 		WechatAppSecret: os.Getenv("WECHAT_APP_SECRET"),
@@ -28,8 +31,20 @@ func Load() *Config {
 		AMapRESTKey:    os.Getenv("AMAP_REST_KEY"),
 	}
 
-	// When Mongo URI is empty or USE_IN_MEMORY_STORE=true, use in-memory repositories.
-	if cfg.MongoURI == "" || os.Getenv("USE_IN_MEMORY_STORE") == "true" {
+	// Priority:
+	// 1) USE_IN_MEMORY_STORE=true
+	// 2) MYSQL_DSN is set
+	// 3) MONGO_URI is set
+	// 4) fallback to in-memory
+	if os.Getenv("USE_IN_MEMORY_STORE") == "true" {
+		cfg.UseInMemory = true
+		return cfg
+	}
+	if cfg.MySQLDSN != "" {
+		cfg.UseMySQL = true
+		return cfg
+	}
+	if cfg.MongoURI == "" {
 		cfg.UseInMemory = true
 	}
 
