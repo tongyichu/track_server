@@ -10,17 +10,18 @@ services:
     env_file:
       - .env
     environment:
-      # Ensure the application sees a Mongo URI inside the container
       - MONGO_URI=${MONGO_URI:-mongodb://mongo:27017/trackapp}
-      # If MYSQL_DSN is set, the server will prefer MySQL and ignore MONGO_URI
       - MYSQL_DSN=${MYSQL_DSN:-}
-      # Map BIND_ADDR (e.g. :8080) to the app's SERVER_ADDR config
       - SERVER_ADDR=${BIND_ADDR:-:8080}
+      - TLS_CERT_FILE=${TLS_CERT_FILE:-}
+      - TLS_KEY_FILE=${TLS_KEY_FILE:-}
     depends_on:
       - mongo
     ports:
-      # Expose APP_PORT on the host, default 8080
       - "${APP_PORT:-8080}:8080"
+      # - "${APP_TLS_PORT:-8443}:8443"  # uncomment when TLS is enabled
+    # volumes:
+    #   - ./certs:/app/certs:ro  # uncomment when TLS is enabled
     restart: unless-stopped
     networks:
       - backend

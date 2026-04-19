@@ -32,6 +32,6 @@ COPY --from=builder /out/hertz-track /app/hertz-track
 # Default listening port
 ENV SERVER_ADDR=:8080
 
-EXPOSE 8080
+EXPOSE 8080 8443
 
 ENTRYPOINT ["/app/hertz-track"]

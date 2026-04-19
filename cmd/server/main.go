@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"log"
 
 	"github.com/cloudwego/hertz/pkg/app/server"
@@ -70,10 +71,27 @@ func main() {
 	userSvc := service.NewUserService(userRepo)
 	loginSvc := service.NewLoginService(userRepo, loginLogRepo, cfg.WechatAppID, cfg.WechatAppSecret)
 
-	h := server.Default(server.WithHostPorts(cfg.ServerAddr))
+	var h *server.Hertz
+	if cfg.EnableTLS {
+		cert, err := tls.LoadX509KeyPair(cfg.TLSCertFile, cfg.TLSKeyFile)
+		if err != nil {
+			log.Fatalf("failed to load TLS certificate: %v", err)
+		}
+		tlsCfg := &tls.Config{
+			Certificates: []tls.Certificate{cert},
+			MinVersion:   tls.VersionTLS12,
+		}
+		h = server.Default(
+			server.WithHostPorts(cfg.ServerAddr),
+			server.WithTLS(tlsCfg),
+		)
+		log.Printf("server listening on %s (HTTPS)", cfg.ServerAddr)
+	} else {
+		h = server.Default(server.WithHostPorts(cfg.ServerAddr))
+		log.Printf("server listening on %s (HTTP)", cfg.ServerAddr)
+	}
 
 	handler.RegisterRoutes(h, handler.Deps{TrackService: trackSvc, UserService: userSvc, LoginService: loginSvc})
 
-	log.Printf("server listening on %s", cfg.ServerAddr)
 	h.Spin()
 }
