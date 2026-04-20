@@ -30,4 +30,7 @@ func TestCreateTrackAssignsRecordFields(t *testing.T) {
 	if track.Status != models.TrackStatusNormal {
 		t.Fatalf("expected status normal, got %d", track.Status)
 	}
+	if !track.IsRunning {
+		t.Fatalf("expected created track to be running")
+	}
 }

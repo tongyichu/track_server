@@ -69,6 +69,7 @@ func main() {
 			}
 		}
 	} else {
+		log.Println("using mongo repositories")
 		client, err := mongo.Connect(ctx, options.Client().ApplyURI(cfg.MongoURI))
 		if err != nil {
 			log.Printf("failed to connect mongo, fallback to memory: %v", err)
@@ -79,6 +80,7 @@ func main() {
 			userRepo = repository.NewMongoUserRepository(db.Collection("users"))
 			collectRepo = repository.NewMongoCollectRepository(db.Collection("track_collects"))
 			loginLogRepo = repository.NewMongoLoginLogRepository(db.Collection("login_log"))
+			log.Println("mongo repositories initialized")
 		}
 	}
 

@@ -33,7 +33,7 @@ func (s *TrackService) CreateTrack(ctx context.Context, userID int64) (*models.T
 		UserID:    userID,
 		Title:     "新的轨迹",
 		StartTime: now,
-		EndTime:   now,
+		IsRunning: true,
 		Status:    models.TrackStatusNormal,
 		CreatedAt: now,
 		UpdatedAt: now,
@@ -100,6 +100,7 @@ func (s *TrackService) MarkUploadedToCloud(ctx context.Context, trackID string) 
 	if track.Status != models.TrackStatusNormal {
 		track.Status = models.TrackStatusNormal
 	}
+	track.IsRunning = false
 	if track.EndTime.Before(track.StartTime) {
 		track.EndTime = time.Now()
 	}

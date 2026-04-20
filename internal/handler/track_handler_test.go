@@ -108,6 +108,9 @@ func TestCreateTrack_Success(t *testing.T) {
 	if track.Status != models.TrackStatusNormal {
 		t.Fatalf("expected status normal, got %d", track.Status)
 	}
+	if !track.IsRunning {
+		t.Fatalf("expected created track to be running")
+	}
 }
 
 // TestCreateTrack_NoAuth verifies 401 is returned when no JWT token is provided.
@@ -135,6 +138,31 @@ func TestGetRunningTrack_Empty(t *testing.T) {
 	decodeJSON(t, resp.Body(), &payload)
 	if payload.Running {
 		t.Fatalf("expected running=false, got true")
+	}
+}
+
+// TestGetRunningTrack_Success verifies running track can be queried by explicit running flag.
+func TestGetRunningTrack_Success(t *testing.T) {
+	e := newTestEnv()
+	ctx := context.Background()
+	token := e.generateTestToken(1001)
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-running", UserID: 1001, Title: "进行中的轨迹", IsRunning: true, Status: models.TrackStatusNormal})
+
+	w := e.perform(http.MethodGet, "/api/v1/track/running?user_id=1001", nil, authHeader(token))
+	resp := w.Result()
+	if resp.StatusCode() != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", resp.StatusCode())
+	}
+	var payload struct {
+		Running bool         `json:"running"`
+		Track   models.Track `json:"track"`
+	}
+	decodeJSON(t, resp.Body(), &payload)
+	if !payload.Running {
+		t.Fatalf("expected running=true, got false")
+	}
+	if payload.Track.ID != "trk-running" {
+		t.Fatalf("expected running track id trk-running, got %q", payload.Track.ID)
 	}
 }
 
@@ -221,6 +249,30 @@ func TestCollectAndUncollect(t *testing.T) {
 	w3 := e.perform(http.MethodDelete, "/api/v1/track_collect?user_id=1001&track_id=trk2", nil, authHeader(token))
 	if w3.Result().StatusCode() != http.StatusOK {
 		t.Fatalf("uncollect should succeed")
+	}
+}
+
+// TestUploadTrackCloud_ClearsRunning verifies upload_cloud marks running track as finished.
+func TestUploadTrackCloud_ClearsRunning(t *testing.T) {
+	e := newTestEnv()
+	ctx := context.Background()
+	token := e.generateTestToken(1001)
+	track := &models.Track{ID: "trk-upload", UserID: 1001, Title: "待上传轨迹", IsRunning: true, Status: models.TrackStatusNormal}
+	if err := e.trackRepo.Create(ctx, track); err != nil {
+		t.Fatalf("seed track failed: %v", err)
+	}
+
+	w := e.perform(http.MethodPost, "/api/v1/track/trk-upload/upload_cloud", nil, authHeader(token))
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Result().StatusCode())
+	}
+
+	updated, err := e.trackRepo.FindByID(ctx, "trk-upload")
+	if err != nil {
+		t.Fatalf("find updated track failed: %v", err)
+	}
+	if updated.IsRunning {
+		t.Fatalf("expected uploaded track to be non-running")
 	}
 }
 

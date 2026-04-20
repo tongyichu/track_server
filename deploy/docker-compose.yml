@@ -41,6 +41,7 @@ services:
 
 volumes:
   mongo_data:
+    name: hertz-track-mongo-data
 
 networks:
   backend:

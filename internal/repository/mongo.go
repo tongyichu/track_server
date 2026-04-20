@@ -4,11 +4,13 @@ import (
 	"context"
 
 	"errors"
+	"regexp"
 	"sync"
 	"time"
 
 	"github.com/tongyichu/track_server/internal/models"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -35,34 +37,134 @@ func NewMongoTrackWaypointRepository(collection *mongo.Collection) *MongoTrackWa
 	return &MongoTrackWaypointRepository{collection: collection, nextID: uint64(time.Now().UnixNano())}
 }
 
-// Create is not implemented in this demo and returns an error.
-func (r *MongoTrackRepository) Create(context.Context, *models.Track) error {
-	return errors.New("MongoTrackRepository.Create not implemented")
+// Create stores a new track in MongoDB.
+func (r *MongoTrackRepository) Create(ctx context.Context, t *models.Track) error {
+	if t.ID == "" {
+		return errors.New("track id is required")
+	}
+	if t.CreatedAt.IsZero() {
+		t.CreatedAt = time.Now()
+	}
+	if t.StartTime.IsZero() {
+		t.StartTime = t.CreatedAt
+	}
+	if t.EndTime.IsZero() {
+		t.EndTime = t.StartTime
+	}
+	t.UpdatedAt = t.CreatedAt
+
+	_, err := r.collection.InsertOne(ctx, t)
+	return err
 }
 
-// Update is not implemented in this demo and returns an error.
-func (r *MongoTrackRepository) Update(context.Context, *models.Track) error {
-	return errors.New("MongoTrackRepository.Update not implemented")
+// Update updates an existing track in MongoDB.
+func (r *MongoTrackRepository) Update(ctx context.Context, t *models.Track) error {
+	t.UpdatedAt = time.Now()
+	if t.EndTime.IsZero() {
+		t.EndTime = t.StartTime
+	}
+
+	res, err := r.collection.UpdateOne(ctx,
+		bson.M{"_id": t.ID},
+		bson.M{"$set": bson.M{
+			"user_id":        t.UserID,
+			"title":          t.Title,
+			"start_time":     t.StartTime,
+			"end_time":       t.EndTime,
+			"distance":       t.Distance,
+			"duration":       t.Duration,
+			"elevation_gain": t.ElevationGain,
+			"raw_track_url":  t.RawTrackURL,
+			"screenshot_url": t.TrackScreenshotURL,
+			"is_running":     t.IsRunning,
+			"status":         t.Status,
+			"updated_at":     t.UpdatedAt,
+		}},
+	)
+	if err != nil {
+		return err
+	}
+	if res.MatchedCount == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
-// FindByID is not implemented in this demo and returns an error.
-func (r *MongoTrackRepository) FindByID(context.Context, string) (*models.Track, error) {
-	return nil, errors.New("MongoTrackRepository.FindByID not implemented")
+// FindByID finds a track by id.
+func (r *MongoTrackRepository) FindByID(ctx context.Context, id string) (*models.Track, error) {
+	var track models.Track
+	err := r.collection.FindOne(ctx, bson.M{"_id": id}).Decode(&track)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return &track, nil
 }
 
-// FindRunningByUserID is not implemented in this demo and returns an error.
-func (r *MongoTrackRepository) FindRunningByUserID(context.Context, int64) (*models.Track, error) {
-	return nil, errors.New("MongoTrackRepository.FindRunningByUserID not implemented")
+// FindRunningByUserID finds the latest running track of a user.
+func (r *MongoTrackRepository) FindRunningByUserID(ctx context.Context, userID int64) (*models.Track, error) {
+	var track models.Track
+	err := r.collection.FindOne(
+		ctx,
+		bson.M{"user_id": userID, "is_running": true},
+		options.FindOne().SetSort(bson.D{{Key: "start_time", Value: -1}}),
+	).Decode(&track)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return &track, nil
 }
 
-// ListRecommend is not implemented in this demo and returns an error.
-func (r *MongoTrackRepository) ListRecommend(context.Context, int64, int) ([]*models.Track, error) {
-	return nil, errors.New("MongoTrackRepository.ListRecommend not implemented")
+// ListRecommend lists normal-status tracks ordered by start time desc.
+func (r *MongoTrackRepository) ListRecommend(ctx context.Context, _ int64, limit int) ([]*models.Track, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	return r.listTracks(ctx,
+		bson.M{"status": models.TrackStatusNormal},
+		options.Find().SetSort(bson.D{{Key: "start_time", Value: -1}}).SetLimit(int64(limit)),
+	)
 }
 
-// Search is not implemented in this demo and returns an error.
-func (r *MongoTrackRepository) Search(context.Context, string, int) ([]*models.Track, error) {
-	return nil, errors.New("MongoTrackRepository.Search not implemented")
+// Search performs case-insensitive title search on normal-status tracks.
+func (r *MongoTrackRepository) Search(ctx context.Context, keyword string, limit int) ([]*models.Track, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	filter := bson.M{"status": models.TrackStatusNormal}
+	if keyword != "" {
+		filter["title"] = primitive.Regex{Pattern: regexp.QuoteMeta(keyword), Options: "i"}
+	}
+	return r.listTracks(ctx,
+		filter,
+		options.Find().SetSort(bson.D{{Key: "start_time", Value: -1}}).SetLimit(int64(limit)),
+	)
+}
+
+func (r *MongoTrackRepository) listTracks(ctx context.Context, filter interface{}, opts ...*options.FindOptions) ([]*models.Track, error) {
+	cur, err := r.collection.Find(ctx, filter, opts...)
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+
+	res := make([]*models.Track, 0)
+	for cur.Next(ctx) {
+		var track models.Track
+		if err := cur.Decode(&track); err != nil {
+			return nil, err
+		}
+		res = append(res, &track)
+	}
+	if err := cur.Err(); err != nil {
+		return nil, err
+	}
+	return res, nil
 }
 
 func (r *MongoTrackWaypointRepository) Create(ctx context.Context, waypoint *models.TrackWaypoint) error {

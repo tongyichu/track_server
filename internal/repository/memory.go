@@ -87,7 +87,7 @@ func (r *InMemoryTrackRepository) FindRunningByUserID(_ context.Context, userID 
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	for _, t := range r.tracks {
-		if t.UserID == userID && t.Status == models.TrackStatusNormal {
+		if t.UserID == userID && t.IsRunning {
 			return t, nil
 		}
 	}
