@@ -56,6 +56,7 @@ func Load() *Config {
 		return cfg
 	}
 	if cfg.MongoURI == "" {
+		// 内存兜底
 		cfg.UseInMemory = true
 	}
 
