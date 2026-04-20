@@ -167,7 +167,7 @@ func toSummaries(tracks []*models.Track) []*models.TrackSummary {
 // generateTrackID generates a simple unique track id.
 func generateTrackID() string {
 	// Use timestamp-based id to avoid external dependencies.
-	return "No." + time.Now().Format("20060102150405.000000000")
+	return "No." + time.Now().Format("20060102150405.000")
 }
 
 // haversineDistance computes distance between two lat/lng points in meters.

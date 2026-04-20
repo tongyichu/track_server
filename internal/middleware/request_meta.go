@@ -11,14 +11,15 @@ import (
 
 // Header keys expected from client.
 const (
-	HeaderUserID         = "X-User-ID"
-	HeaderClientType     = "X-Client-Type"
-	HeaderClientVersion  = "X-Client-Version"
-	HeaderClientLanguage = "X-Client-Language"
-	HeaderLocation       = "X-User-Location"
+	HeaderUserID         = "X-User-ID"         //用户ID
+	HeaderClientVersion  = "X-Client-Version"  // 客户端版本
+	HeaderClientLanguage = "X-Client-Language" // 客户端语言
+	HeaderLocation       = "X-User-Location"   // 地理位置
+	HeaderPlatform       = "X-Platform"        // ios or android
+	HeaderDeviceID       = "X-Device-ID"       // 设备ID
 
-	// CtxRequestMetaKey is the context key used to store RequestMeta on RequestContext.
-	CtxRequestMetaKey = "request_meta"
+	// CtxRequestHeaderMetaKey is the context key used to store RequestMeta on RequestContext.
+	CtxRequestHeaderMetaKey = "request_header_meta"
 )
 
 // RequestMetaMiddleware extracts required header fields and stores them into RequestContext.
@@ -27,23 +28,24 @@ func RequestMetaMiddleware() app.HandlerFunc {
 		rawUserID := string(c.Request.Header.Peek(HeaderUserID))
 		meta := &models.RequestMeta{
 			RawUserID:      rawUserID,
-			ClientType:     string(c.Request.Header.Peek(HeaderClientType)),
 			ClientVersion:  string(c.Request.Header.Peek(HeaderClientVersion)),
 			ClientLanguage: string(c.Request.Header.Peek(HeaderClientLanguage)),
 			Location:       string(c.Request.Header.Peek(HeaderLocation)),
+			Platform:       string(c.Request.Header.Peek(HeaderPlatform)),
+			DeviceID:       string(c.Request.Header.Peek(HeaderDeviceID)),
 		}
 		if rawUserID != "" {
 			if userID, err := strconv.ParseInt(rawUserID, 10, 64); err == nil && userID > 0 {
 				meta.UserID = userID
 			}
 		}
-		c.Set(CtxRequestMetaKey, meta)
+		c.Set(CtxRequestHeaderMetaKey, meta)
 	}
 }
 
 // GetRequestMeta retrieves RequestMeta from RequestContext if present.
 func GetRequestMeta(c *app.RequestContext) *models.RequestMeta {
-	v, ok := c.Get(CtxRequestMetaKey)
+	v, ok := c.Get(CtxRequestHeaderMetaKey)
 	if !ok {
 		return nil
 	}

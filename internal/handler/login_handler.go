@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"github.com/tongyichu/track_server/internal/middleware"
 	"net/http"
 
 	"github.com/cloudwego/hertz/pkg/app"
@@ -76,12 +77,10 @@ func (h *LoginHandler) LoginBySMS(ctx context.Context, c *app.RequestContext) {
 		c.JSON(http.StatusBadRequest, utils.H{"error": "phone and code are required"})
 		return
 	}
-
+	meta := middleware.GetRequestMeta(c)
 	ip := c.ClientIP()
-	deviceID := string(c.Request.Header.Peek("X-Device-ID"))
-	platform := string(c.Request.Header.Peek("X-Platform"))
 
-	result, err := h.loginSvc.LoginBySMS(ctx, body.Phone, body.Code, ip, deviceID, platform)
+	result, err := h.loginSvc.LoginBySMS(ctx, body.Phone, body.Code, ip, meta.DeviceID, meta.Platform)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, utils.H{"error": err.Error()})
 		return

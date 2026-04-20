@@ -36,8 +36,9 @@ type LoginLog struct {
 type RequestMeta struct {
 	UserID         int64
 	RawUserID      string
-	ClientType     string
-	ClientVersion  string
-	ClientLanguage string
-	Location       string
+	ClientVersion  string // 客户端版本
+	ClientLanguage string // 客户端语言
+	Location       string // 地理位置
+	Platform       string // ios or android
+	DeviceID       string // 设备ID
 }

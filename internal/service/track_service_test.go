@@ -19,17 +19,17 @@ func TestGenerateTrackID(t *testing.T) {
 	}
 
 	suffix := strings.TrimPrefix(trackID, "No.")
-	if wantLen := len("No.") + len("20060102150405.000000000"); len(trackID) != wantLen {
+	if wantLen := len("No.") + len("20060102150405.000"); len(trackID) != wantLen {
 		t.Fatalf("expected track id length to be %d, got %d (%q)", wantLen, len(trackID), trackID)
 	}
-	if !regexp.MustCompile(`^\d{14}\.\d{9}$`).MatchString(suffix) {
-		t.Fatalf("expected suffix to be timestamp like YYYYMMDDhhmmss.nnnnnnnnn, got %q", suffix)
+	if !regexp.MustCompile(`^\d{14}\.\d{3}$`).MatchString(suffix) {
+		t.Fatalf("expected suffix to be timestamp like YYYYMMDDhhmmss.nnn, got %q", suffix)
 	}
 
 	seen := map[string]struct{}{trackID: {}}
 	for i := 0; i < 200; i++ {
 		// Avoid flakiness on platforms with coarse time resolution.
-		time.Sleep(time.Microsecond)
+		time.Sleep(time.Millisecond)
 		id := generateTrackID()
 		if _, ok := seen[id]; ok {
 			t.Fatalf("expected generated ids to be unique, got duplicate %q", id)
