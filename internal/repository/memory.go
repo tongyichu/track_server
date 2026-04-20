@@ -101,6 +101,9 @@ func (r *InMemoryTrackRepository) ListRecommend(_ context.Context, _ int64, limi
 
 	res := make([]*models.Track, 0, limit)
 	for _, t := range r.tracks {
+		if t == nil || t.IsRunning {
+			continue
+		}
 		res = append(res, t)
 		if limit > 0 && len(res) >= limit {
 			break

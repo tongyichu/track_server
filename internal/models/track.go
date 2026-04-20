@@ -24,7 +24,7 @@ type TrackPoint struct {
 }
 
 // Track aggregates persisted fields of track_records.
-// Points and AvgSpeedKmh are transient fields kept for existing service logic.
+// Points is transient field kept for existing service logic.
 type Track struct {
 	ID                 string       `json:"id" bson:"_id,omitempty"`              // ID 是轨迹记录唯一标识，由 generateTrackID 生成。
 	UserID             int64        `json:"user_id" bson:"user_id"`               // UserID 是轨迹所属用户 ID。
@@ -41,7 +41,7 @@ type Track struct {
 	CreatedAt          time.Time    `json:"created_at" bson:"created_at"`         // CreatedAt 是记录创建时间。
 	UpdatedAt          time.Time    `json:"updated_at" bson:"updated_at"`         // UpdatedAt 是记录更新时间。
 	Points             []TrackPoint `json:"points,omitempty" bson:"-"`            // Points 是内存中的轨迹点集合，不直接持久化到 track_records。
-	AvgSpeedKmh        float64      `json:"avg_speed_kmh,omitempty" bson:"-"`     // AvgSpeedKmh 是基于轨迹点计算出的平均速度，单位 km/h，不直接持久化。
+	AvgSpeedKmh        float64      `json:"avg_speed_kmh,omitempty" bson:"avg_speed_kmh"` // AvgSpeedKmh 是平均速度，单位 km/h。
 }
 
 // TrackSummary is a lightweight view used for recommend/search lists.

@@ -100,15 +100,21 @@ func TestCreateTrack_Success(t *testing.T) {
 	if resp.StatusCode() != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", resp.StatusCode())
 	}
-	var track models.Track
-	decodeJSON(t, resp.Body(), &track)
-	if track.UserID != 1001 {
-		t.Fatalf("expected user_id 1001, got %d", track.UserID)
+	var result handler.StandardResponse[*models.Track]
+	decodeJSON(t, resp.Body(), &result)
+	if result.Code != 0 {
+		t.Fatalf("expected code 0, got %d", result.Code)
 	}
-	if track.Status != models.TrackStatusNormal {
-		t.Fatalf("expected status normal, got %d", track.Status)
+	if result.Data == nil {
+		t.Fatalf("expected non-nil data")
 	}
-	if !track.IsRunning {
+	if result.Data.UserID != 1001 {
+		t.Fatalf("expected user_id 1001, got %d", result.Data.UserID)
+	}
+	if result.Data.Status != models.TrackStatusNormal {
+		t.Fatalf("expected status normal, got %d", result.Data.Status)
+	}
+	if !result.Data.IsRunning {
 		t.Fatalf("expected created track to be running")
 	}
 }
@@ -177,23 +183,52 @@ func TestGetTrackMap_NotFound(t *testing.T) {
 	}
 }
 
+func TestGetTrackDetail_Success(t *testing.T) {
+	e := newTestEnv()
+	ctx := context.Background()
+	token := e.generateTestToken(1001)
+
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-detail", UserID: 1001, Title: "详情轨迹", IsRunning: false, Status: models.TrackStatusNormal})
+
+	w := e.perform(http.MethodGet, "/api/v1/track/trk-detail/detail", nil, authHeader(token))
+	resp := w.Result()
+	if resp.StatusCode() != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", resp.StatusCode())
+	}
+	var result handler.StandardResponse[*models.Track]
+	decodeJSON(t, resp.Body(), &result)
+	if result.Code != 0 {
+		t.Fatalf("expected code 0, got %d", result.Code)
+	}
+	if result.Data == nil || result.Data.ID != "trk-detail" {
+		t.Fatalf("unexpected data: %+v", result.Data)
+	}
+}
+
 // TestRecommendAndSearch verifies recommend and search endpoints work with simple data.
 func TestRecommendAndSearch(t *testing.T) {
 	e := newTestEnv()
 	ctx := context.Background()
 	token := e.generateTestToken(1001)
-	// seed one track
-	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk1", UserID: 1001, Title: "西湖徒步"})
+	// seed one normal track and one running track (running should be excluded from recommend list)
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk1", UserID: 1001, Title: "西湖徒步", IsRunning: false})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-running", UserID: 1001, Title: "进行中跑步", IsRunning: true})
 
 	w1 := e.perform(http.MethodGet, "/api/v1/track/recommend/list", nil, authHeader(token), ut.Header{Key: middleware.HeaderUserID, Value: "1001"})
 	resp1 := w1.Result()
 	if resp1.StatusCode() != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", resp1.StatusCode())
 	}
-	var recs []models.TrackSummary
-	decodeJSON(t, resp1.Body(), &recs)
-	if len(recs) == 0 {
-		t.Fatalf("expected non-empty recommend list")
+	var result handler.StandardResponse[[]models.TrackSummary]
+	decodeJSON(t, resp1.Body(), &result)
+	if result.Code != 0 {
+		t.Fatalf("expected code 0, got %d", result.Code)
+	}
+	if len(result.Data) != 1 {
+		t.Fatalf("expected recommend list size 1 (exclude running), got %d", len(result.Data))
+	}
+	if result.Data[0].ID != "trk1" {
+		t.Fatalf("expected recommend track id trk1, got %q", result.Data[0].ID)
 	}
 
 	w2 := e.perform(http.MethodGet, "/api/v1/track/search/list?keyword=西湖", nil, authHeader(token))
@@ -252,6 +287,88 @@ func TestCollectAndUncollect(t *testing.T) {
 	}
 }
 
+func TestUpdateTrackInfo_Success(t *testing.T) {
+	e := newTestEnv()
+	ctx := context.Background()
+	token := e.generateTestToken(1001)
+
+	_ = e.trackRepo.Create(ctx, &models.Track{
+		ID:                 "trk-upd",
+		UserID:             1001,
+		Title:              "轨迹",
+		Distance:           100,
+		Duration:           10,
+		ElevationGain:      1,
+		RawTrackURL:        "old-url",
+		TrackScreenshotURL: "old-ss",
+		IsRunning:          true,
+		AvgSpeedKmh:        1.2,
+		Status:             models.TrackStatusNormal,
+	})
+
+	body, _ := json.Marshal(map[string]interface{}{
+		"distance":        200.5,
+		"is_running":      false,
+		"avg_speed_kmh":   12.3,
+		"raw_track_url":   "new-url",
+		"screenshot_url":  "new-ss",
+		"elevation_gain":  23,
+		"duration":        99,
+	})
+
+	w := e.perform(http.MethodPut, "/api/v1/track/trk-upd/update", body, authHeader(token), ut.Header{Key: middleware.HeaderUserID, Value: "1001"})
+	resp := w.Result()
+	if resp.StatusCode() != http.StatusOK {
+		t.Fatalf("expected status 200, got %d, body=%s", resp.StatusCode(), string(resp.Body()))
+	}
+	var result handler.StandardResponse[*models.Track]
+	decodeJSON(t, resp.Body(), &result)
+	if result.Code != 0 {
+		t.Fatalf("expected code 0, got %d", result.Code)
+	}
+	if result.Data == nil {
+		t.Fatalf("expected non-nil data")
+	}
+	if result.Data.ID != "trk-upd" {
+		t.Fatalf("expected id trk-upd, got %q", result.Data.ID)
+	}
+	if result.Data.Distance != 200.5 {
+		t.Fatalf("expected distance 200.5, got %v", result.Data.Distance)
+	}
+	if result.Data.Duration != 99 {
+		t.Fatalf("expected duration 99, got %v", result.Data.Duration)
+	}
+	if result.Data.ElevationGain != 23 {
+		t.Fatalf("expected elevation_gain 23, got %v", result.Data.ElevationGain)
+	}
+	if result.Data.RawTrackURL != "new-url" {
+		t.Fatalf("expected raw_track_url new-url, got %q", result.Data.RawTrackURL)
+	}
+	if result.Data.TrackScreenshotURL != "new-ss" {
+		t.Fatalf("expected screenshot_url new-ss, got %q", result.Data.TrackScreenshotURL)
+	}
+	if result.Data.IsRunning {
+		t.Fatalf("expected is_running false")
+	}
+	if result.Data.AvgSpeedKmh != 12.3 {
+		t.Fatalf("expected avg_speed_kmh 12.3, got %v", result.Data.AvgSpeedKmh)
+	}
+}
+
+func TestUpdateTrackInfo_Forbidden(t *testing.T) {
+	e := newTestEnv()
+	ctx := context.Background()
+	token := e.generateTestToken(1001)
+
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-other", UserID: 1002, Title: "他人的轨迹"})
+	body, _ := json.Marshal(map[string]interface{}{"distance": 1})
+
+	w := e.perform(http.MethodPut, "/api/v1/track/trk-other/update", body, authHeader(token), ut.Header{Key: middleware.HeaderUserID, Value: "1001"})
+	if w.Result().StatusCode() != http.StatusForbidden {
+		t.Fatalf("expected status 403, got %d", w.Result().StatusCode())
+	}
+}
+
 // TestUploadTrackCloud_ClearsRunning verifies upload_cloud marks running track as finished.
 func TestUploadTrackCloud_ClearsRunning(t *testing.T) {
 	e := newTestEnv()
@@ -285,10 +402,16 @@ func TestCreateTrack_JWTOverridesHeader(t *testing.T) {
 	if resp.StatusCode() != http.StatusOK {
 		t.Fatalf("expected status 200 (JWT overrides invalid header), got %d", resp.StatusCode())
 	}
-	var track models.Track
-	decodeJSON(t, resp.Body(), &track)
-	if track.UserID != 1001 {
-		t.Fatalf("expected user_id 1001 from JWT, got %d", track.UserID)
+	var result handler.StandardResponse[*models.Track]
+	decodeJSON(t, resp.Body(), &result)
+	if result.Code != 0 {
+		t.Fatalf("expected code 0, got %d", result.Code)
+	}
+	if result.Data == nil {
+		t.Fatalf("expected non-nil data")
+	}
+	if result.Data.UserID != 1001 {
+		t.Fatalf("expected user_id 1001 from JWT, got %d", result.Data.UserID)
 	}
 }
 

@@ -42,6 +42,7 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 			end_time DATETIME NOT NULL,
 			distance DECIMAL(10,2) NOT NULL DEFAULT 0.00,
 			duration INT UNSIGNED NOT NULL DEFAULT 0,
+			avg_speed_kmh DECIMAL(10,2) NOT NULL DEFAULT 0.00,
 			elevation_gain INT NOT NULL DEFAULT 0,
 			raw_track_url VARCHAR(255) NOT NULL,
 			screenshot_url VARCHAR(255) NOT NULL DEFAULT '',
@@ -98,6 +99,9 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 	if err := ensureMySQLTrackIsRunningColumn(ctx, db); err != nil {
+		return err
+	}
+	if err := ensureMySQLTrackAvgSpeedKmhColumn(ctx, db); err != nil {
 		return err
 	}
 	if err := ensureMySQLUserIDColumnsBigint(ctx, db); err != nil {
@@ -162,6 +166,26 @@ func ensureMySQLTrackIsRunningColumn(ctx context.Context, db *sql.DB) error {
 	_, err = db.ExecContext(ctx, `ALTER TABLE track_records ADD COLUMN is_running TINYINT(1) NOT NULL DEFAULT 0 AFTER screenshot_url`)
 	if err != nil {
 		return fmt.Errorf("add track_records.is_running column: %w", err)
+	}
+	return nil
+}
+
+func ensureMySQLTrackAvgSpeedKmhColumn(ctx context.Context, db *sql.DB) error {
+	var count int
+	err := db.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM information_schema.COLUMNS
+		WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'track_records' AND COLUMN_NAME = 'avg_speed_kmh'`,
+	).Scan(&count)
+	if err != nil {
+		return fmt.Errorf("check track_records.avg_speed_kmh column: %w", err)
+	}
+	if count > 0 {
+		return nil
+	}
+	_, err = db.ExecContext(ctx, `ALTER TABLE track_records ADD COLUMN avg_speed_kmh DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER duration`)
+	if err != nil {
+		return fmt.Errorf("add track_records.avg_speed_kmh column: %w", err)
 	}
 	return nil
 }
@@ -256,11 +280,11 @@ func (r *MySQLTrackRepository) Create(ctx context.Context, t *models.Track) erro
 	_, err := r.db.ExecContext(ctx,
 		`INSERT INTO track_records (
 			id, user_id, title, start_time, end_time,
-			distance, duration, elevation_gain, raw_track_url, screenshot_url, is_running, status,
+			distance, duration, avg_speed_kmh, elevation_gain, raw_track_url, screenshot_url, is_running, status,
 			created_at, updated_at
-		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		t.ID, t.UserID, t.Title, t.StartTime, t.EndTime,
-		t.Distance, t.Duration, t.ElevationGain, t.RawTrackURL, t.TrackScreenshotURL, t.IsRunning, t.Status,
+		t.Distance, t.Duration, t.AvgSpeedKmh, t.ElevationGain, t.RawTrackURL, t.TrackScreenshotURL, t.IsRunning, t.Status,
 		t.CreatedAt, t.UpdatedAt,
 	)
 	if err != nil {
@@ -278,10 +302,10 @@ func (r *MySQLTrackRepository) Update(ctx context.Context, t *models.Track) erro
 	res, err := r.db.ExecContext(ctx,
 		`UPDATE track_records SET
 			user_id=?, title=?, start_time=?, end_time=?,
-			distance=?, duration=?, elevation_gain=?, raw_track_url=?, screenshot_url=?, is_running=?, status=?, updated_at=?
+			distance=?, duration=?, avg_speed_kmh=?, elevation_gain=?, raw_track_url=?, screenshot_url=?, is_running=?, status=?, updated_at=?
 		WHERE id=?`,
 		t.UserID, t.Title, t.StartTime, t.EndTime,
-		t.Distance, t.Duration, t.ElevationGain, t.RawTrackURL, t.TrackScreenshotURL, t.IsRunning, t.Status, t.UpdatedAt,
+		t.Distance, t.Duration, t.AvgSpeedKmh, t.ElevationGain, t.RawTrackURL, t.TrackScreenshotURL, t.IsRunning, t.Status, t.UpdatedAt,
 		t.ID,
 	)
 	if err != nil {
@@ -297,14 +321,14 @@ func (r *MySQLTrackRepository) Update(ctx context.Context, t *models.Track) erro
 func (r *MySQLTrackRepository) FindByID(ctx context.Context, id string) (*models.Track, error) {
 	row := r.db.QueryRowContext(ctx,
 		`SELECT id, user_id, title, start_time, end_time,
-			distance, duration, elevation_gain, raw_track_url, screenshot_url, is_running, status,
+			distance, duration, avg_speed_kmh, elevation_gain, raw_track_url, screenshot_url, is_running, status,
 			created_at, updated_at
 		FROM track_records WHERE id=?`, id)
 
 	var t models.Track
 	if err := row.Scan(
 		&t.ID, &t.UserID, &t.Title, &t.StartTime, &t.EndTime,
-		&t.Distance, &t.Duration, &t.ElevationGain, &t.RawTrackURL, &t.TrackScreenshotURL, &t.IsRunning, &t.Status,
+		&t.Distance, &t.Duration, &t.AvgSpeedKmh, &t.ElevationGain, &t.RawTrackURL, &t.TrackScreenshotURL, &t.IsRunning, &t.Status,
 		&t.CreatedAt, &t.UpdatedAt,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -335,7 +359,7 @@ func (r *MySQLTrackRepository) ListRecommend(ctx context.Context, _ int64, limit
 		limit = 20
 	}
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT id FROM track_records WHERE status=? ORDER BY start_time DESC LIMIT ?`,
+		`SELECT id FROM track_records WHERE status=? AND is_running=0 ORDER BY start_time DESC LIMIT ?`,
 		models.TrackStatusNormal, limit,
 	)
 	if err != nil {

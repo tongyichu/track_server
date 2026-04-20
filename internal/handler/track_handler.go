@@ -2,6 +2,8 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/cloudwego/hertz/pkg/app"
@@ -44,7 +46,55 @@ func (h *TrackHandler) CreateTrack(ctx context.Context, c *app.RequestContext) {
 		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, track)
+	c.JSON(http.StatusOK, successResponse(track))
+}
+
+// UpdateTrackInfo handles PUT /api/v1/track/:track_id/update
+// It supports partial update of: Distance, Duration, ElevationGain, RawTrackURL,
+// TrackScreenshotURL, IsRunning, AvgSpeedKmh.
+func (h *TrackHandler) UpdateTrackInfo(ctx context.Context, c *app.RequestContext) {
+	meta := middleware.GetRequestMeta(c)
+	if meta == nil || meta.RawUserID == "" {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "missing X-User-ID header"})
+		return
+	}
+	if meta.UserID <= 0 {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid X-User-ID header"})
+		return
+	}
+
+	trackID := c.Param("track_id")
+	var patch service.TrackInfoPatch
+	data, err := c.Body()
+	if err != nil || json.Unmarshal(data, &patch) != nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid payload"})
+		return
+	}
+
+	track, err := h.trackSvc.UpdateTrackInfo(ctx, meta.UserID, trackID, patch)
+	if err != nil {
+		switch {
+		case errors.Is(err, repository.ErrNotFound):
+			c.JSON(http.StatusNotFound, utils.H{"error": err.Error()})
+			return
+		case errors.Is(err, service.ErrForbidden):
+			c.JSON(http.StatusForbidden, utils.H{"error": "forbidden"})
+			return
+		default:
+			var iae *service.InvalidArgumentError
+			if errors.As(err, &iae) {
+				c.JSON(http.StatusBadRequest, utils.H{"error": iae.Error()})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+			return
+		}
+	}
+	if track == nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "unexpected nil track"})
+		return
+	}
+	c.JSON(http.StatusOK, successResponse(track))
 }
 
 // ListRecommend handles GET /api/track/recommend/list
@@ -63,7 +113,7 @@ func (h *TrackHandler) ListRecommend(ctx context.Context, c *app.RequestContext)
 		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, tracks)
+	c.JSON(http.StatusOK, successResponse(tracks))
 }
 
 // SearchTracks handles GET /api/track/search/list
@@ -104,7 +154,7 @@ func (h *TrackHandler) GetTrackDetail(ctx context.Context, c *app.RequestContext
 		c.JSON(status, utils.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, track)
+	c.JSON(http.StatusOK, successResponse(track))
 }
 
 // UploadTrackCloud handles POST /api/track/:track_id/upload_cloud

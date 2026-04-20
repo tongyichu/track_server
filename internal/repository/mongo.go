@@ -73,6 +73,7 @@ func (r *MongoTrackRepository) Update(ctx context.Context, t *models.Track) erro
 			"end_time":       t.EndTime,
 			"distance":       t.Distance,
 			"duration":       t.Duration,
+			"avg_speed_kmh":  t.AvgSpeedKmh,
 			"elevation_gain": t.ElevationGain,
 			"raw_track_url":  t.RawTrackURL,
 			"screenshot_url": t.TrackScreenshotURL,
@@ -126,7 +127,7 @@ func (r *MongoTrackRepository) ListRecommend(ctx context.Context, _ int64, limit
 		limit = 20
 	}
 	return r.listTracks(ctx,
-		bson.M{"status": models.TrackStatusNormal},
+		bson.M{"status": models.TrackStatusNormal, "is_running": false},
 		options.Find().SetSort(bson.D{{Key: "start_time", Value: -1}}).SetLimit(int64(limit)),
 	)
 }

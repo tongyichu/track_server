@@ -17,6 +17,38 @@ type TrackService struct {
 	collects repository.CollectRepository
 }
 
+// ErrForbidden indicates current user has no permission to operate the resource.
+var ErrForbidden = errors.New("forbidden")
+
+// InvalidArgumentError represents a client-side request error.
+type InvalidArgumentError struct{ Msg string }
+
+func (e *InvalidArgumentError) Error() string { return e.Msg }
+
+func invalidArg(msg string) error { return &InvalidArgumentError{Msg: msg} }
+
+// TrackInfoPatch describes which track summary fields should be updated.
+// Nil means the field is not provided and should remain unchanged.
+type TrackInfoPatch struct {
+	Distance           *float64 `json:"distance"`
+	Duration           *uint32  `json:"duration"`
+	ElevationGain      *int     `json:"elevation_gain"`
+	RawTrackURL        *string  `json:"raw_track_url"`
+	TrackScreenshotURL *string  `json:"screenshot_url"`
+	IsRunning          *bool    `json:"is_running"`
+	AvgSpeedKmh        *float64 `json:"avg_speed_kmh"`
+}
+
+func (p TrackInfoPatch) empty() bool {
+	return p.Distance == nil &&
+		p.Duration == nil &&
+		p.ElevationGain == nil &&
+		p.RawTrackURL == nil &&
+		p.TrackScreenshotURL == nil &&
+		p.IsRunning == nil &&
+		p.AvgSpeedKmh == nil
+}
+
 // NewTrackService constructs a new TrackService instance.
 func NewTrackService(tracks repository.TrackRepository, collects repository.CollectRepository) *TrackService {
 	return &TrackService{tracks: tracks, collects: collects}
@@ -105,6 +137,63 @@ func (s *TrackService) MarkUploadedToCloud(ctx context.Context, trackID string) 
 		track.EndTime = time.Now()
 	}
 	return s.tracks.Update(ctx, track)
+}
+
+// UpdateTrackInfo updates a track with partially provided fields.
+func (s *TrackService) UpdateTrackInfo(ctx context.Context, userID int64, trackID string, patch TrackInfoPatch) (*models.Track, error) {
+	if userID <= 0 {
+		return nil, invalidArg("userID is required")
+	}
+	if trackID == "" {
+		return nil, invalidArg("trackID is required")
+	}
+	if patch.empty() {
+		return nil, invalidArg("no fields to update")
+	}
+	if patch.Distance != nil && *patch.Distance < 0 {
+		return nil, invalidArg("distance must be >= 0")
+	}
+	if patch.ElevationGain != nil && *patch.ElevationGain < 0 {
+		return nil, invalidArg("elevation_gain must be >= 0")
+	}
+	if patch.AvgSpeedKmh != nil && *patch.AvgSpeedKmh < 0 {
+		return nil, invalidArg("avg_speed_kmh must be >= 0")
+	}
+
+	track, err := s.tracks.FindByID(ctx, trackID)
+	if err != nil {
+		return nil, err
+	}
+	if track.UserID != userID {
+		return nil, ErrForbidden
+	}
+
+	if patch.Distance != nil {
+		track.Distance = *patch.Distance
+	}
+	if patch.Duration != nil {
+		track.Duration = *patch.Duration
+	}
+	if patch.ElevationGain != nil {
+		track.ElevationGain = *patch.ElevationGain
+	}
+	if patch.RawTrackURL != nil {
+		track.RawTrackURL = *patch.RawTrackURL
+	}
+	if patch.TrackScreenshotURL != nil {
+		track.TrackScreenshotURL = *patch.TrackScreenshotURL
+	}
+	if patch.IsRunning != nil {
+		track.IsRunning = *patch.IsRunning
+	}
+	if patch.AvgSpeedKmh != nil {
+		track.AvgSpeedKmh = *patch.AvgSpeedKmh
+	}
+
+	if err := s.tracks.Update(ctx, track); err != nil {
+		return nil, err
+	}
+	return track, nil
 }
 
 // IsCollected reports whether a track is collected by user.

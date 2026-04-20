@@ -1,0 +1,337 @@
+# 轨迹接口文档（创建/更新）
+
+> Base URL: `http://<host>:<port>/api/v1`
+>
+> 所有请求和响应均使用 **JSON** 格式，`Content-Type` 统一为 `application/json`。
+
+---
+
+## 目录
+
+| 序号 | 接口 | 方法 | 路径 | 需要认证 |
+|------|------|------|------|---------|
+| 1 | [创建轨迹](#1-创建轨迹) | POST | `/track/create` | ✅ |
+| 2 | [更新轨迹信息（部分字段）](#2-更新轨迹信息部分字段) | PUT | `/track/:track_id/update` | ✅ |
+| 3 | [推荐轨迹列表](#3-推荐轨迹列表) | GET | `/track/recommend/list` | ✅ |
+| 4 | [轨迹详情](#4-轨迹详情) | GET | `/track/:track_id/detail` | ✅ |
+
+---
+
+## 认证机制（JWT Token）
+
+轨迹接口为 **认证接口**，需要在请求头携带：
+
+```
+Authorization: Bearer <token>
+```
+
+Token 的获取与说明参考 `login.md`。
+
+---
+
+## 公共请求头
+
+| Header 名称 | 类型 | 必填 | 说明 |
+|-------------|------|------|------|
+| `Authorization` | string | 是 | `Bearer <token>` |
+| `Content-Type` | string | 是 | 固定 `application/json` |
+| `X-User-ID` | string | 否（建议携带） | 用户 ID（部分接口历史上依赖该 header，建议统一携带以兼容客户端实现） |
+| `X-Device-ID` | string | 否 | 设备唯一标识 |
+| `X-Platform` | string | 否 | 客户端平台：`ios` / `android` |
+| `X-Client-Version` | string | 否 | 客户端版本号，如 `1.0.0` |
+| `X-Client-Language` | string | 否 | 客户端语言，如 `zh-CN` |
+
+---
+
+## 公共错误响应
+
+```json
+{
+  "error": "错误描述信息"
+}
+```
+
+| HTTP 状态码 | 含义 |
+|------------|------|
+| 400 | 请求参数缺失或格式错误 |
+| 401 | 认证失败（Token 无效/过期） |
+| 403 | 无权限（操作他人的轨迹） |
+| 404 | 资源不存在（轨迹不存在） |
+| 500 | 服务端内部错误 |
+
+---
+
+## 轨迹对象（Track）字段说明
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | string | 轨迹 ID |
+| `user_id` | int64 | 用户 ID |
+| `title` | string | 轨迹标题 |
+| `start_time` | string | 开始时间（RFC3339/ISO8601，服务端序列化时间格式） |
+| `end_time` | string | 结束时间（RFC3339/ISO8601，服务端序列化时间格式） |
+| `distance` | number | 距离（米） |
+| `duration` | int | 时长（秒） |
+| `avg_speed_kmh` | number | 平均速度（km/h） |
+| `elevation_gain` | int | 累计爬升（米） |
+| `raw_track_url` | string | 原始轨迹文件地址 |
+| `screenshot_url` | string | 轨迹截图地址 |
+| `is_running` | bool | 是否进行中 |
+| `status` | int | 轨迹状态：`0` 删除，`1` 正常，`2` 私密 |
+| `created_at` | string | 创建时间 |
+| `updated_at` | string | 更新时间 |
+
+---
+
+## 1. 创建轨迹
+
+创建一个新的轨迹记录，默认处于进行中。
+
+**需要认证**
+
+### 请求
+
+```
+POST /api/v1/track/create
+Content-Type: application/json
+Authorization: Bearer <token>
+```
+
+**请求体：** 无
+
+### 响应
+
+**状态码：** `200 OK`
+
+返回创建后的 `Track` 对象，使用统一响应格式 `StandardResponse`：
+
+```json
+{
+  "code": 0,
+  "data": {
+    "id": "No.1713520800123456789",
+    "user_id": 1001,
+    "title": "新的轨迹",
+    "start_time": "2026-04-20T12:00:00Z",
+    "end_time": "2026-04-20T12:00:00Z",
+    "distance": 0,
+    "duration": 0,
+    "avg_speed_kmh": 0,
+    "elevation_gain": 0,
+    "raw_track_url": "",
+    "screenshot_url": "",
+    "is_running": true,
+    "status": 1,
+    "created_at": "2026-04-20T12:00:00Z",
+    "updated_at": "2026-04-20T12:00:00Z"
+  }
+}
+```
+
+### 示例（curl）
+
+```bash
+curl -X POST "http://<host>:<port>/api/v1/track/create" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -H "X-User-ID: 1001"
+```
+
+---
+
+## 2. 更新轨迹信息（部分字段）
+
+对指定轨迹做 **部分字段更新**，允许只更新一个字段或多个字段组合更新：
+
+- `distance`
+- `duration`
+- `elevation_gain`
+- `raw_track_url`
+- `screenshot_url`
+- `is_running`
+- `avg_speed_kmh`
+
+**需要认证**
+
+### 请求
+
+```
+PUT /api/v1/track/:track_id/update
+Content-Type: application/json
+Authorization: Bearer <token>
+```
+
+**Path 参数：**
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `track_id` | string | 是 | 轨迹 ID |
+
+**请求体：**（至少传一个字段；未传的字段保持不变）
+
+```json
+{
+  "distance": 1200.5,
+  "duration": 360,
+  "elevation_gain": 80,
+  "raw_track_url": "https://example.com/raw/xxx.json",
+  "screenshot_url": "https://example.com/ss/xxx.png",
+  "is_running": false,
+  "avg_speed_kmh": 12.3
+}
+```
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `distance` | number | 否 | 距离（米），必须 `>= 0` |
+| `duration` | int | 否 | 时长（秒），必须 `>= 0` |
+| `elevation_gain` | int | 否 | 累计爬升（米），必须 `>= 0` |
+| `raw_track_url` | string | 否 | 原始轨迹文件地址 |
+| `screenshot_url` | string | 否 | 轨迹截图地址 |
+| `is_running` | bool | 否 | 是否进行中 |
+| `avg_speed_kmh` | number | 否 | 平均速度（km/h），必须 `>= 0` |
+
+### 响应
+
+**状态码：** `200 OK`
+
+返回更新后的 `Track` 对象，使用统一响应格式 `StandardResponse`（`code=0`，`data` 为 Track）。
+
+### 常见错误
+
+- `400 Bad Request`
+  - body 不是合法 JSON
+  - 未提供任何可更新字段（返回 `{"error":"no fields to update"}`）
+  - `distance / elevation_gain / avg_speed_kmh` 为负数
+- `403 Forbidden`
+  - 当前用户无权更新该轨迹（该轨迹不属于当前用户）
+- `404 Not Found`
+  - `track_id` 不存在
+
+### 示例（curl）
+
+```bash
+curl -X PUT "http://<host>:<port>/api/v1/track/trk-upd/update" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -H "X-User-ID: 1001" \
+  -d '{
+    "distance": 200.5,
+    "duration": 99,
+    "elevation_gain": 23,
+    "raw_track_url": "new-url",
+    "screenshot_url": "new-ss",
+    "is_running": false,
+    "avg_speed_kmh": 12.3
+  }'
+```
+
+---
+
+## 3. 推荐轨迹列表
+
+获取推荐轨迹列表。
+
+**需要认证**
+
+### 说明
+
+- 该接口 **不会返回** `is_running=true` 的轨迹（进行中的轨迹会被过滤）。
+- 返回的是 `TrackSummary` 列表（轻量字段），而不是完整的 `Track`。
+
+### 请求
+
+```
+GET /api/v1/track/recommend/list
+Authorization: Bearer <token>
+```
+
+**请求参数：** 无
+
+### 响应
+
+**状态码：** `200 OK`
+
+返回 `StandardResponse`，`data` 为 `TrackSummary[]`：
+
+```json
+{
+  "code": 0,
+  "data": [
+    {
+      "id": "trk1",
+      "user_id": 1001,
+      "title": "西湖徒步",
+      "distance": 1200.5,
+      "duration": 360,
+      "elevation_gain": 80
+    }
+  ]
+}
+```
+
+### 示例（curl）
+
+```bash
+curl -X GET "http://<host>:<port>/api/v1/track/recommend/list" \
+  -H "Authorization: Bearer <token>" \
+  -H "X-User-ID: 1001"
+```
+
+---
+
+## 4. 轨迹详情
+
+获取指定轨迹的详情信息。
+
+**需要认证**
+
+### 请求
+
+```
+GET /api/v1/track/:track_id/detail
+Authorization: Bearer <token>
+```
+
+**Path 参数：**
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `track_id` | string | 是 | 轨迹 ID |
+
+### 响应
+
+**状态码：** `200 OK`
+
+返回 `StandardResponse`，`data` 为 `Track`：
+
+```json
+{
+  "code": 0,
+  "data": {
+    "id": "trk-detail",
+    "user_id": 1001,
+    "title": "详情轨迹",
+    "start_time": "2026-04-20T12:00:00Z",
+    "end_time": "2026-04-20T12:10:00Z",
+    "distance": 1200.5,
+    "duration": 600,
+    "avg_speed_kmh": 7.2,
+    "elevation_gain": 80,
+    "raw_track_url": "https://example.com/raw/xxx.json",
+    "screenshot_url": "https://example.com/ss/xxx.png",
+    "is_running": false,
+    "status": 1,
+    "created_at": "2026-04-20T12:00:00Z",
+    "updated_at": "2026-04-20T12:10:00Z"
+  }
+}
+```
+
+### 示例（curl）
+
+```bash
+curl -X GET "http://<host>:<port>/api/v1/track/trk-detail/detail" \
+  -H "Authorization: Bearer <token>" \
+  -H "X-User-ID: 1001"
+```
