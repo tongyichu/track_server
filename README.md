@@ -75,11 +75,29 @@ docker pull crpi-p78v4agazv8zn80d.cn-beijing.personal.cr.aliyuncs.com/track_serv
 ### 停止旧进程->删除旧的本地镜像
 
 
-### 运行单个容器
-```bash
+### 方式 A：只用 `docker run`（服务器无需拷贝仓库文件）
 
-# 或直接使用 docker，宿主机端口80，容器端口8080，docker image id = bff41b6252de
-docker run -d --name track_server_go -p 80:8080 bff41b6252de
+说明：该服务默认依赖 MongoDB。下面用两条 `docker run` 在同一网络内启动 `mongo` + `api`。
+
+```bash
+# 1) 启动 MongoDB（先拉取mongo镜像：docker pull crpi-p78v4agazv8zn80d.cn-beijing.personal.cr.aliyuncs.com/track_server/mongo7）
+docker network create track-net || true
+docker volume create track-mongo-data || true
+docker run -d --name track-mongo --network track-net -v track-mongo-data:/data/db -e MONGO_INITDB_DATABASE=trackapp $mongo_IMAGE_ID
+
+# 2) 启动 API（只需拉取你的业务镜像）
+docker run -d --name track_server_go --network track-net \
+  -p 80:8080 \
+  -e MONGO_URI=mongodb://track-mongo:27017/trackapp \
+  -e MONGO_DB_NAME=trackapp \
+  -e SERVER_ADDR=:8080 \
+  -e JWT_SECRET=CHANGE_ME_IN_PROD \
+  -e LOG_DIR=/var/log/track_server \
+  -v /var/log/track_server:/var/log/track_server \
+  crpi-p78v4agazv8zn80d.cn-beijing.personal.cr.aliyuncs.com/track_server/track_server_go:latest
+
+# （可选）如果你更习惯 .env 文件，也可以把它放在服务器任意路径：
+# docker run ... --env-file /opt/track_server/track_server.env <image>
 ```
 
 ### 使用 docker-compose 运行完整栈（API + MongoDB）
@@ -95,11 +113,13 @@ make compose-down
 
 ## 镜像说明
 
-- **基础镜像**: gcr.io/distroless/static-debian12（极小镜像，仅约20MB）
+- **基础镜像**: debian:12-slim（运行时）
 - **暴露端口**: 8080
 - **环境变量**:
   - `SERVER_ADDR`: 服务监听地址，默认 `:8080`
   - `MONGO_URI`: MongoDB 连接地址
+  - `MYSQL_DSN`: MySQL DSN（设置后优先使用 MySQL）
+  - `JWT_SECRET`: JWT 签名密钥（生产务必修改）
 
 ---
 

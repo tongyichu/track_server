@@ -1,21 +1,22 @@
-version: "3.9"
-
 services:
   api:
-    build:
-      context: ..
-      dockerfile: deploy/Dockerfile
-    image: hertz-track:latest
+    image: crpi-p78v4agazv8zn80d.cn-beijing.personal.cr.aliyuncs.com/track_server/track_server_go:latest
     container_name: hertz-track-api
-    env_file:
-      - .env
     environment:
       - MONGO_URI=${MONGO_URI:-mongodb://mongo:27017/trackapp}
+      - MONGO_DB_NAME=${MONGO_DB_NAME:-trackapp}
       - MYSQL_DSN=${MYSQL_DSN:-}
-      - SERVER_ADDR=${BIND_ADDR:-:8080}
+      # Backward compatible with older env files that used BIND_ADDR
+      - SERVER_ADDR=${SERVER_ADDR:-${BIND_ADDR:-:8080}}
       - LOG_DIR=${LOG_DIR:-/var/log/track_server}
+      - JWT_SECRET=${JWT_SECRET:-track_server_default_jwt_secret}
       - TLS_CERT_FILE=${TLS_CERT_FILE:-}
       - TLS_KEY_FILE=${TLS_KEY_FILE:-}
+      - USE_IN_MEMORY_STORE=${USE_IN_MEMORY_STORE:-}
+      - WECHAT_APP_ID=${WECHAT_APP_ID:-}
+      - WECHAT_APP_SECRET=${WECHAT_APP_SECRET:-}
+      - AMAP_WEB_KEY=${AMAP_WEB_KEY:-${AMAP_KEY:-}}
+      - AMAP_REST_KEY=${AMAP_REST_KEY:-}
     depends_on:
       - mongo
     ports:

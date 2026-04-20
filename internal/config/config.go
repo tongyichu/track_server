@@ -28,16 +28,31 @@ func Load() *Config {
 	tlsCert := os.Getenv("TLS_CERT_FILE")
 	tlsKey := os.Getenv("TLS_KEY_FILE")
 
+	// Backward compatibility:
+	// - Some deployment examples used BIND_ADDR instead of SERVER_ADDR
+	serverAddr := os.Getenv("SERVER_ADDR")
+	if serverAddr == "" {
+		serverAddr = getEnv("BIND_ADDR", ":8080")
+	}
+
+	// Backward compatibility:
+	// - Some env files used AMAP_KEY instead of AMAP_WEB_KEY / AMAP_REST_KEY
+	aMapWebKey := os.Getenv("AMAP_WEB_KEY")
+	if aMapWebKey == "" {
+		aMapWebKey = os.Getenv("AMAP_KEY")
+	}
+	aMapRestKey := os.Getenv("AMAP_REST_KEY")
+
 	cfg := &Config{
 		MongoURI:        getEnv("MONGO_URI", ""),
 		MongoDBName:     getEnv("MONGO_DB_NAME", "trackapp"),
 		MySQLDSN:        getEnv("MYSQL_DSN", ""),
-		ServerAddr:      getEnv("SERVER_ADDR", ":8080"),
+		ServerAddr:      serverAddr,
 		LogDir:          getEnv("LOG_DIR", "/var/log/track_server"),
 		WechatAppID:     os.Getenv("WECHAT_APP_ID"),
 		WechatAppSecret: os.Getenv("WECHAT_APP_SECRET"),
-		AMapWebKey:      os.Getenv("AMAP_WEB_KEY"),
-		AMapRESTKey:     os.Getenv("AMAP_REST_KEY"),
+		AMapWebKey:      aMapWebKey,
+		AMapRESTKey:     aMapRestKey,
 		TLSCertFile:     tlsCert,
 		TLSKeyFile:      tlsKey,
 		EnableTLS:       tlsCert != "" && tlsKey != "",

@@ -15,9 +15,10 @@ docker-build:
 	docker build -t hertz-track:latest -f deploy/Dockerfile .
 
 # docker-run runs a single hertz-track container using the image built above.
-# It expects a deploy/.env file based on deploy/.env.example.
+# For local development without external DB, it can run with in-memory storage.
+# If you need Mongo/MySQL, pass env vars via -e or --env-file.
 docker-run:
-	docker run --rm --name hertz-track-api --env-file deploy/.env -p $${APP_PORT:-8080}:8080 hertz-track:latest
+	docker run --rm --name hertz-track-api -p $${APP_PORT:-8080}:8080 hertz-track:latest
 
 # compose-up starts the API and Mongo stack using docker-compose.
 compose-up:
