@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"math"
+	"strconv"
 	"time"
 
 	"github.com/tongyichu/track_server/internal/models"
@@ -30,9 +31,10 @@ func (s *TrackService) CreateTrack(ctx context.Context, userID int64) (*models.T
 	track := &models.Track{
 		ID:        generateTrackID(),
 		UserID:    userID,
-		Name:      "新的轨迹",
-		Status:    models.TrackStatusRunning,
-		StartedAt: now,
+		Title:     "新的轨迹",
+		StartTime: now,
+		EndTime:   now,
+		Status:    models.TrackStatusNormal,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
@@ -94,9 +96,12 @@ func (s *TrackService) MarkUploadedToCloud(ctx context.Context, trackID string) 
 	if err != nil {
 		return err
 	}
-	// For demo purposes we just ensure it is finished; no extra field persisted.
-	if track.Status != models.TrackStatusFinished {
-		track.Status = models.TrackStatusFinished
+	// For demo purposes we only normalize record status and end time.
+	if track.Status != models.TrackStatusNormal {
+		track.Status = models.TrackStatusNormal
+	}
+	if track.EndTime.Before(track.StartTime) {
+		track.EndTime = time.Now()
 	}
 	return s.tracks.Update(ctx, track)
 }
@@ -139,9 +144,13 @@ func updateTrackMetrics(t *models.Track) {
 	if duration < 0 {
 		duration = 0
 	}
-	t.DistanceMeters = distance
-	t.AscentMeters = ascent
-	t.DurationSec = int64(duration)
+	t.Distance = distance
+	t.ElevationGain = int(math.Round(ascent))
+	t.Duration = uint32(duration)
+	if t.StartTime.IsZero() {
+		t.StartTime = t.Points[0].Timestamp
+	}
+	t.EndTime = t.Points[len(t.Points)-1].Timestamp
 	if duration > 0 {
 		// m/s to km/h
 		t.AvgSpeedKmh = (distance / duration) * 3.6
@@ -152,13 +161,12 @@ func toSummaries(tracks []*models.Track) []*models.TrackSummary {
 	res := make([]*models.TrackSummary, 0, len(tracks))
 	for _, t := range tracks {
 		res = append(res, &models.TrackSummary{
-			ID:             t.ID,
-			UserID:         t.UserID,
-			Name:           t.Name,
-			DistanceMeters: t.DistanceMeters,
-			DurationSec:    t.DurationSec,
-			AscentMeters:   t.AscentMeters,
-			AvgSpeedKmh:    t.AvgSpeedKmh,
+			ID:            t.ID,
+			UserID:        t.UserID,
+			Title:         t.Title,
+			Distance:      t.Distance,
+			Duration:      t.Duration,
+			ElevationGain: t.ElevationGain,
 		})
 	}
 	return res
@@ -167,7 +175,7 @@ func toSummaries(tracks []*models.Track) []*models.TrackSummary {
 // generateTrackID generates a simple unique track id.
 func generateTrackID() string {
 	// Use timestamp-based id to avoid external dependencies.
-	return "No." + time.Now().Format("20060102150405.000")
+	return "No." + strconv.FormatInt(time.Now().UnixNano(), 10)
 }
 
 // haversineDistance computes distance between two lat/lng points in meters.

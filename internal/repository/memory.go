@@ -2,6 +2,8 @@ package repository
 
 import (
 	"context"
+	"errors"
+	"sort"
 	"sync"
 	"time"
 
@@ -14,17 +16,43 @@ type InMemoryTrackRepository struct {
 	tracks map[string]*models.Track
 }
 
+// InMemoryTrackWaypointRepository is an in-memory implementation of TrackWaypointRepository.
+type InMemoryTrackWaypointRepository struct {
+	mu          sync.RWMutex
+	nextID      uint64
+	waypoints   map[uint64]*models.TrackWaypoint
+	waypointIDs map[string][]uint64
+}
+
 // NewInMemoryTrackRepository creates a new in-memory track repository.
 func NewInMemoryTrackRepository() *InMemoryTrackRepository {
 	return &InMemoryTrackRepository{tracks: make(map[string]*models.Track)}
+}
+
+// NewInMemoryTrackWaypointRepository creates a new in-memory track waypoint repository.
+func NewInMemoryTrackWaypointRepository() *InMemoryTrackWaypointRepository {
+	return &InMemoryTrackWaypointRepository{
+		nextID:      1,
+		waypoints:   make(map[uint64]*models.TrackWaypoint),
+		waypointIDs: make(map[string][]uint64),
+	}
 }
 
 // Create stores a new track.
 func (r *InMemoryTrackRepository) Create(_ context.Context, t *models.Track) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if t.ID == "" {
+		return errors.New("track id is required")
+	}
 	if t.CreatedAt.IsZero() {
 		t.CreatedAt = time.Now()
+	}
+	if t.StartTime.IsZero() {
+		t.StartTime = t.CreatedAt
+	}
+	if t.EndTime.IsZero() {
+		t.EndTime = t.StartTime
 	}
 	t.UpdatedAt = t.CreatedAt
 	r.tracks[t.ID] = t
@@ -59,7 +87,7 @@ func (r *InMemoryTrackRepository) FindRunningByUserID(_ context.Context, userID 
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	for _, t := range r.tracks {
-		if t.UserID == userID && t.Status == models.TrackStatusRunning {
+		if t.UserID == userID && t.Status == models.TrackStatusNormal {
 			return t, nil
 		}
 	}
@@ -88,13 +116,56 @@ func (r *InMemoryTrackRepository) Search(_ context.Context, keyword string, limi
 
 	res := make([]*models.Track, 0, limit)
 	for _, t := range r.tracks {
-		if keyword == "" || containsIgnoreCase(t.Name, keyword) {
+		if keyword == "" || containsIgnoreCase(t.Title, keyword) {
 			res = append(res, t)
 			if limit > 0 && len(res) >= limit {
 				break
 			}
 		}
 	}
+	return res, nil
+}
+
+// Create stores a new waypoint.
+func (r *InMemoryTrackWaypointRepository) Create(_ context.Context, waypoint *models.TrackWaypoint) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if waypoint.TrackID == "" {
+		return errors.New("track waypoint track_id is required")
+	}
+	if waypoint.ID == 0 {
+		waypoint.ID = r.nextID
+		r.nextID++
+	}
+	if waypoint.CreatedAt.IsZero() {
+		waypoint.CreatedAt = time.Now()
+	}
+	clone := *waypoint
+	r.waypoints[clone.ID] = &clone
+	r.waypointIDs[clone.TrackID] = append(r.waypointIDs[clone.TrackID], clone.ID)
+	return nil
+}
+
+// ListByTrackID lists all multimedia waypoints of a track ordered by node time.
+func (r *InMemoryTrackWaypointRepository) ListByTrackID(_ context.Context, trackID string) ([]*models.TrackWaypoint, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	ids := r.waypointIDs[trackID]
+	res := make([]*models.TrackWaypoint, 0, len(ids))
+	for _, id := range ids {
+		waypoint, ok := r.waypoints[id]
+		if !ok {
+			continue
+		}
+		clone := *waypoint
+		res = append(res, &clone)
+	}
+	sort.SliceStable(res, func(i, j int) bool {
+		if res[i].NodeTime.Equal(res[j].NodeTime) {
+			return res[i].ID < res[j].ID
+		}
+		return res[i].NodeTime.Before(res[j].NodeTime)
+	})
 	return res, nil
 }
 

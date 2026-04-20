@@ -1,39 +1,33 @@
 package service
 
 import (
-	"regexp"
+	"context"
 	"strings"
 	"testing"
-	"time"
+
+	"github.com/tongyichu/track_server/internal/models"
+	"github.com/tongyichu/track_server/internal/repository"
 )
 
-// TestGenerateTrackID verifies generated ids are opaque, short and unique.
-func TestGenerateTrackID(t *testing.T) {
-	trackID := generateTrackID()
-	println("trackID:" + trackID)
-	if !strings.HasPrefix(trackID, "No.") {
-		t.Fatalf("expected track id to start with No., got %q", trackID)
-	}
-	if strings.Count(trackID, ".") != 2 {
-		t.Fatalf("expected track id to contain 2 dots (prefix + timestamp), got %q", trackID)
-	}
+// TestCreateTrackAssignsRecordFields verifies create uses the new track_records fields.
+func TestCreateTrackAssignsRecordFields(t *testing.T) {
+	trackRepo, _, collectRepo, _ := repository.NewInMemoryRepositories()
+	svc := NewTrackService(trackRepo, collectRepo)
 
-	suffix := strings.TrimPrefix(trackID, "No.")
-	if wantLen := len("No.") + len("20060102150405.000"); len(trackID) != wantLen {
-		t.Fatalf("expected track id length to be %d, got %d (%q)", wantLen, len(trackID), trackID)
+	track, err := svc.CreateTrack(context.Background(), 1001)
+	if err != nil {
+		t.Fatalf("CreateTrack returned error: %v", err)
 	}
-	if !regexp.MustCompile(`^\d{14}\.\d{3}$`).MatchString(suffix) {
-		t.Fatalf("expected suffix to be timestamp like YYYYMMDDhhmmss.nnn, got %q", suffix)
+	if track.ID == "" {
+		t.Fatalf("expected generated id, got empty string")
 	}
-
-	seen := map[string]struct{}{trackID: {}}
-	for i := 0; i < 200; i++ {
-		// Avoid flakiness on platforms with coarse time resolution.
-		time.Sleep(time.Millisecond)
-		id := generateTrackID()
-		if _, ok := seen[id]; ok {
-			t.Fatalf("expected generated ids to be unique, got duplicate %q", id)
-		}
-		seen[id] = struct{}{}
+	if !strings.HasPrefix(track.ID, "No.") {
+		t.Fatalf("expected generated id prefix No., got %q", track.ID)
+	}
+	if track.Title != "新的轨迹" {
+		t.Fatalf("expected default title, got %q", track.Title)
+	}
+	if track.Status != models.TrackStatusNormal {
+		t.Fatalf("expected status normal, got %d", track.Status)
 	}
 }

@@ -47,7 +47,7 @@ func (e *testEnv) perform(method, url string, body []byte, extraHeaders ...ut.He
 		b = &ut.Body{Body: bytes.NewBuffer(body), Len: len(body)}
 	}
 	headers := []ut.Header{
-		{Key: middleware.HeaderClientType, Value: "android"},
+		{Key: middleware.HeaderPlatform, Value: "android"},
 		{Key: middleware.HeaderClientVersion, Value: "1.0.0"},
 		{Key: middleware.HeaderClientLanguage, Value: "zh-CN"},
 		{Key: middleware.HeaderLocation, Value: "30.0,120.0"},
@@ -77,8 +77,8 @@ func TestCreateTrack_Success(t *testing.T) {
 	if track.UserID != 1001 {
 		t.Fatalf("expected user_id 1001, got %d", track.UserID)
 	}
-	if track.Status != models.TrackStatusRunning {
-		t.Fatalf("expected status running, got %s", track.Status)
+	if track.Status != models.TrackStatusNormal {
+		t.Fatalf("expected status normal, got %d", track.Status)
 	}
 }
 
@@ -124,7 +124,7 @@ func TestRecommendAndSearch(t *testing.T) {
 	e := newTestEnv()
 	ctx := context.Background()
 	// seed one track
-	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk1", UserID: 1001, Name: "西湖徒步"})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk1", UserID: 1001, Title: "西湖徒步"})
 
 	w1 := e.perform(http.MethodGet, "/api/v1/track/recommend/list", nil, ut.Header{Key: middleware.HeaderUserID, Value: "1001"})
 	resp1 := w1.Result()
@@ -153,7 +153,7 @@ func TestRecommendAndSearch(t *testing.T) {
 func TestCollectAndUncollect(t *testing.T) {
 	e := newTestEnv()
 	ctx := context.Background()
-	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk2", UserID: 1002, Name: "黄山登顶"})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk2", UserID: 1002, Title: "黄山登顶"})
 
 	// initial collect status
 	w0 := e.perform(http.MethodGet, "/api/v1/user/1001/collect?track_id=trk2", nil)

@@ -4,9 +4,13 @@ import (
 	"context"
 
 	"errors"
+	"sync"
+	"time"
 
 	"github.com/tongyichu/track_server/internal/models"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 // MongoTrackRepository is a stub of TrackRepository backed by MongoDB.
@@ -14,9 +18,21 @@ type MongoTrackRepository struct {
 	collection *mongo.Collection
 }
 
+// MongoTrackWaypointRepository implements TrackWaypointRepository backed by MongoDB.
+type MongoTrackWaypointRepository struct {
+	mu         sync.Mutex
+	nextID     uint64
+	collection *mongo.Collection
+}
+
 // NewMongoTrackRepository constructs a Mongo-backed TrackRepository.
 func NewMongoTrackRepository(collection *mongo.Collection) *MongoTrackRepository {
 	return &MongoTrackRepository{collection: collection}
+}
+
+// NewMongoTrackWaypointRepository constructs a Mongo-backed TrackWaypointRepository.
+func NewMongoTrackWaypointRepository(collection *mongo.Collection) *MongoTrackWaypointRepository {
+	return &MongoTrackWaypointRepository{collection: collection, nextID: uint64(time.Now().UnixNano())}
 }
 
 // Create is not implemented in this demo and returns an error.
@@ -47,6 +63,47 @@ func (r *MongoTrackRepository) ListRecommend(context.Context, int64, int) ([]*mo
 // Search is not implemented in this demo and returns an error.
 func (r *MongoTrackRepository) Search(context.Context, string, int) ([]*models.Track, error) {
 	return nil, errors.New("MongoTrackRepository.Search not implemented")
+}
+
+func (r *MongoTrackWaypointRepository) Create(ctx context.Context, waypoint *models.TrackWaypoint) error {
+	if waypoint.TrackID == "" {
+		return errors.New("track waypoint track_id is required")
+	}
+	if waypoint.CreatedAt.IsZero() {
+		waypoint.CreatedAt = time.Now()
+	}
+	if waypoint.ID == 0 {
+		r.mu.Lock()
+		r.nextID++
+		waypoint.ID = r.nextID
+		r.mu.Unlock()
+	}
+	_, err := r.collection.InsertOne(ctx, waypoint)
+	return err
+}
+
+func (r *MongoTrackWaypointRepository) ListByTrackID(ctx context.Context, trackID string) ([]*models.TrackWaypoint, error) {
+	cur, err := r.collection.Find(ctx,
+		bson.M{"track_id": trackID},
+		options.Find().SetSort(bson.D{{Key: "node_time", Value: 1}, {Key: "id", Value: 1}}),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+
+	res := make([]*models.TrackWaypoint, 0)
+	for cur.Next(ctx) {
+		var waypoint models.TrackWaypoint
+		if err := cur.Decode(&waypoint); err != nil {
+			return nil, err
+		}
+		res = append(res, &waypoint)
+	}
+	if err := cur.Err(); err != nil {
+		return nil, err
+	}
+	return res, nil
 }
 
 // MongoUserRepository is a stub of UserRepository backed by MongoDB.

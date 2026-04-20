@@ -24,6 +24,12 @@ type TrackRepository interface {
 	Search(ctx context.Context, keyword string, limit int) ([]*models.Track, error)
 }
 
+// TrackWaypointRepository defines persistence operations for track multimedia waypoints.
+type TrackWaypointRepository interface {
+	Create(ctx context.Context, waypoint *models.TrackWaypoint) error
+	ListByTrackID(ctx context.Context, trackID string) ([]*models.TrackWaypoint, error)
+}
+
 // UserRepository defines persistence operations for User entities.
 type UserRepository interface {
 	CreateIfNotExists(ctx context.Context, u *models.User) (*models.User, error)

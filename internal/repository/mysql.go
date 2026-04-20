@@ -34,22 +34,37 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 			updated_at DATETIME(6) NOT NULL,
 			INDEX idx_users_updated_at (updated_at)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
-		`CREATE TABLE IF NOT EXISTS tracks (
-			id VARCHAR(64) PRIMARY KEY,
-			user_id BIGINT NOT NULL,
-			name VARCHAR(255) NOT NULL,
-			status VARCHAR(16) NOT NULL,
-			points_json LONGTEXT NOT NULL,
-			distance_meters DOUBLE NOT NULL,
-			duration_sec BIGINT NOT NULL,
-			ascent_meters DOUBLE NOT NULL,
-			avg_speed_kmh DOUBLE NOT NULL,
-			started_at DATETIME(6) NOT NULL,
-			ended_at DATETIME(6) NULL,
-			created_at DATETIME(6) NOT NULL,
-			updated_at DATETIME(6) NOT NULL,
-			INDEX idx_tracks_user_status_created (user_id, status, created_at),
-			INDEX idx_tracks_name_created (name, created_at)
+		`CREATE TABLE IF NOT EXISTS track_records (
+			id VARCHAR(64) NOT NULL,
+			user_id BIGINT UNSIGNED NOT NULL,
+			title VARCHAR(128) NOT NULL DEFAULT '',
+			start_time DATETIME NOT NULL,
+			end_time DATETIME NOT NULL,
+			distance DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+			duration INT UNSIGNED NOT NULL DEFAULT 0,
+			elevation_gain INT NOT NULL DEFAULT 0,
+			raw_track_url VARCHAR(255) NOT NULL,
+			screenshot_url VARCHAR(255) NOT NULL DEFAULT '',
+			status TINYINT NOT NULL DEFAULT 1,
+			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+			PRIMARY KEY (id),
+			KEY idx_user_time (user_id, start_time)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
+		`CREATE TABLE IF NOT EXISTS track_waypoints (
+			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+			track_id VARCHAR(128) NOT NULL,
+			user_id BIGINT UNSIGNED NOT NULL,
+			lat DECIMAL(10,7) NOT NULL,
+			lng DECIMAL(10,7) NOT NULL,
+			elevation INT NOT NULL DEFAULT 0,
+			node_time DATETIME NOT NULL,
+			media_type TINYINT NOT NULL,
+			content TEXT,
+			media_urls JSON,
+			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (id),
+			KEY idx_track_id (track_id)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
 		`CREATE TABLE IF NOT EXISTS track_collects (
 			user_id BIGINT NOT NULL,
@@ -75,6 +90,9 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 		}
 	}
 	if err := ensureMySQLUsersPhoneColumn(ctx, db); err != nil {
+		return err
+	}
+	if err := ensureMySQLTrackScreenshotURLColumn(ctx, db); err != nil {
 		return err
 	}
 	if err := ensureMySQLUserIDColumnsBigint(ctx, db); err != nil {
@@ -103,13 +121,34 @@ func ensureMySQLUsersPhoneColumn(ctx context.Context, db *sql.DB) error {
 	return nil
 }
 
+func ensureMySQLTrackScreenshotURLColumn(ctx context.Context, db *sql.DB) error {
+	var count int
+	err := db.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM information_schema.COLUMNS
+		WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'track_records' AND COLUMN_NAME = 'screenshot_url'`,
+	).Scan(&count)
+	if err != nil {
+		return fmt.Errorf("check track_records.screenshot_url column: %w", err)
+	}
+	if count > 0 {
+		return nil
+	}
+	_, err = db.ExecContext(ctx, `ALTER TABLE track_records ADD COLUMN screenshot_url VARCHAR(255) NOT NULL DEFAULT '' AFTER raw_track_url`)
+	if err != nil {
+		return fmt.Errorf("add track_records.screenshot_url column: %w", err)
+	}
+	return nil
+}
+
 func ensureMySQLUserIDColumnsBigint(ctx context.Context, db *sql.DB) error {
 	columns := []struct {
 		table  string
 		column string
 	}{
 		{table: "users", column: "id"},
-		{table: "tracks", column: "user_id"},
+		{table: "track_records", column: "user_id"},
+		{table: "track_waypoints", column: "user_id"},
 		{table: "track_collects", column: "user_id"},
 	}
 	for _, item := range columns {
@@ -165,28 +204,39 @@ func ensureMySQLColumnConvertibleToBigint(ctx context.Context, db *sql.DB, table
 // MySQLTrackRepository implements TrackRepository on top of MySQL.
 type MySQLTrackRepository struct{ db *sql.DB }
 
+// MySQLTrackWaypointRepository implements TrackWaypointRepository on top of MySQL.
+type MySQLTrackWaypointRepository struct{ db *sql.DB }
+
 func NewMySQLTrackRepository(db *sql.DB) *MySQLTrackRepository { return &MySQLTrackRepository{db: db} }
 
+func NewMySQLTrackWaypointRepository(db *sql.DB) *MySQLTrackWaypointRepository {
+	return &MySQLTrackWaypointRepository{db: db}
+}
+
 func (r *MySQLTrackRepository) Create(ctx context.Context, t *models.Track) error {
+	if t.ID == "" {
+		return errors.New("track id is required")
+	}
 	if t.CreatedAt.IsZero() {
 		t.CreatedAt = time.Now()
 	}
+	if t.StartTime.IsZero() {
+		t.StartTime = t.CreatedAt
+	}
+	if t.EndTime.IsZero() {
+		t.EndTime = t.StartTime
+	}
 	t.UpdatedAt = t.CreatedAt
 
-	pointsJSON, err := json.Marshal(t.Points)
-	if err != nil {
-		return err
-	}
-
-	_, err = r.db.ExecContext(ctx,
-		`INSERT INTO tracks (
-			id, user_id, name, status, points_json,
-			distance_meters, duration_sec, ascent_meters, avg_speed_kmh,
-			started_at, ended_at, created_at, updated_at
+	_, err := r.db.ExecContext(ctx,
+		`INSERT INTO track_records (
+			id, user_id, title, start_time, end_time,
+			distance, duration, elevation_gain, raw_track_url, screenshot_url, status,
+			created_at, updated_at
 		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-		t.ID, t.UserID, t.Name, string(t.Status), string(pointsJSON),
-		t.DistanceMeters, t.DurationSec, t.AscentMeters, t.AvgSpeedKmh,
-		t.StartedAt, t.EndedAt, t.CreatedAt, t.UpdatedAt,
+		t.ID, t.UserID, t.Title, t.StartTime, t.EndTime,
+		t.Distance, t.Duration, t.ElevationGain, t.RawTrackURL, t.TrackScreenshotURL, t.Status,
+		t.CreatedAt, t.UpdatedAt,
 	)
 	if err != nil {
 		return err
@@ -196,20 +246,17 @@ func (r *MySQLTrackRepository) Create(ctx context.Context, t *models.Track) erro
 
 func (r *MySQLTrackRepository) Update(ctx context.Context, t *models.Track) error {
 	t.UpdatedAt = time.Now()
-	pointsJSON, err := json.Marshal(t.Points)
-	if err != nil {
-		return err
+	if t.EndTime.IsZero() {
+		t.EndTime = t.StartTime
 	}
 
 	res, err := r.db.ExecContext(ctx,
-		`UPDATE tracks SET
-			user_id=?, name=?, status=?, points_json=?,
-			distance_meters=?, duration_sec=?, ascent_meters=?, avg_speed_kmh=?,
-			started_at=?, ended_at=?, updated_at=?
+		`UPDATE track_records SET
+			user_id=?, title=?, start_time=?, end_time=?,
+			distance=?, duration=?, elevation_gain=?, raw_track_url=?, screenshot_url=?, status=?, updated_at=?
 		WHERE id=?`,
-		t.UserID, t.Name, string(t.Status), string(pointsJSON),
-		t.DistanceMeters, t.DurationSec, t.AscentMeters, t.AvgSpeedKmh,
-		t.StartedAt, t.EndedAt, t.UpdatedAt,
+		t.UserID, t.Title, t.StartTime, t.EndTime,
+		t.Distance, t.Duration, t.ElevationGain, t.RawTrackURL, t.TrackScreenshotURL, t.Status, t.UpdatedAt,
 		t.ID,
 	)
 	if err != nil {
@@ -224,32 +271,20 @@ func (r *MySQLTrackRepository) Update(ctx context.Context, t *models.Track) erro
 
 func (r *MySQLTrackRepository) FindByID(ctx context.Context, id string) (*models.Track, error) {
 	row := r.db.QueryRowContext(ctx,
-		`SELECT id, user_id, name, status, points_json,
-			distance_meters, duration_sec, ascent_meters, avg_speed_kmh,
-			started_at, ended_at, created_at, updated_at
-		FROM tracks WHERE id=?`, id)
+		`SELECT id, user_id, title, start_time, end_time,
+			distance, duration, elevation_gain, raw_track_url, screenshot_url, status,
+			created_at, updated_at
+		FROM track_records WHERE id=?`, id)
 
-	var (
-		t         models.Track
-		statusStr string
-		pointsStr string
-		endedAt   sql.NullTime
-	)
+	var t models.Track
 	if err := row.Scan(
-		&t.ID, &t.UserID, &t.Name, &statusStr, &pointsStr,
-		&t.DistanceMeters, &t.DurationSec, &t.AscentMeters, &t.AvgSpeedKmh,
-		&t.StartedAt, &endedAt, &t.CreatedAt, &t.UpdatedAt,
+		&t.ID, &t.UserID, &t.Title, &t.StartTime, &t.EndTime,
+		&t.Distance, &t.Duration, &t.ElevationGain, &t.RawTrackURL, &t.TrackScreenshotURL, &t.Status,
+		&t.CreatedAt, &t.UpdatedAt,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
-		return nil, err
-	}
-	t.Status = models.TrackStatus(statusStr)
-	if endedAt.Valid {
-		t.EndedAt = &endedAt.Time
-	}
-	if err := json.Unmarshal([]byte(pointsStr), &t.Points); err != nil {
 		return nil, err
 	}
 	return &t, nil
@@ -257,8 +292,8 @@ func (r *MySQLTrackRepository) FindByID(ctx context.Context, id string) (*models
 
 func (r *MySQLTrackRepository) FindRunningByUserID(ctx context.Context, userID int64) (*models.Track, error) {
 	row := r.db.QueryRowContext(ctx,
-		`SELECT id FROM tracks WHERE user_id=? AND status=? ORDER BY created_at DESC LIMIT 1`,
-		userID, string(models.TrackStatusRunning),
+		`SELECT id FROM track_records WHERE user_id=? AND status=? ORDER BY start_time DESC LIMIT 1`,
+		userID, models.TrackStatusNormal,
 	)
 	var id string
 	if err := row.Scan(&id); err != nil {
@@ -274,7 +309,10 @@ func (r *MySQLTrackRepository) ListRecommend(ctx context.Context, _ int64, limit
 	if limit <= 0 {
 		limit = 20
 	}
-	rows, err := r.db.QueryContext(ctx, `SELECT id FROM tracks ORDER BY created_at DESC LIMIT ?`, limit)
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT id FROM track_records WHERE status=? ORDER BY start_time DESC LIMIT ?`,
+		models.TrackStatusNormal, limit,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -312,8 +350,10 @@ func (r *MySQLTrackRepository) Search(ctx context.Context, keyword string, limit
 	}
 	like := "%" + keyword + "%"
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT id FROM tracks WHERE ? = '' OR name LIKE ? ORDER BY created_at DESC LIMIT ?`,
-		keyword, like, limit,
+		`SELECT id FROM track_records
+		 WHERE status=? AND (? = '' OR title LIKE ?)
+		 ORDER BY start_time DESC LIMIT ?`,
+		models.TrackStatusNormal, keyword, like, limit,
 	)
 	if err != nil {
 		return nil, err
@@ -342,6 +382,83 @@ func (r *MySQLTrackRepository) Search(ctx context.Context, keyword string, limit
 			return nil, err
 		}
 		res = append(res, t)
+	}
+	return res, nil
+}
+
+func (r *MySQLTrackWaypointRepository) Create(ctx context.Context, waypoint *models.TrackWaypoint) error {
+	if waypoint.TrackID == "" {
+		return errors.New("track waypoint track_id is required")
+	}
+	if waypoint.CreatedAt.IsZero() {
+		waypoint.CreatedAt = time.Now()
+	}
+	var mediaURLsJSON interface{}
+	if waypoint.MediaURLs != nil {
+		buf, err := json.Marshal(waypoint.MediaURLs)
+		if err != nil {
+			return err
+		}
+		mediaURLsJSON = string(buf)
+	}
+	res, err := r.db.ExecContext(ctx,
+		`INSERT INTO track_waypoints (
+			track_id, user_id, lat, lng, elevation,
+			node_time, media_type, content, media_urls, created_at
+		) VALUES (?,?,?,?,?,?,?,?,?,?)`,
+		waypoint.TrackID, waypoint.UserID, waypoint.Lat, waypoint.Lng, waypoint.Elevation,
+		waypoint.NodeTime, waypoint.MediaType, waypoint.Content, mediaURLsJSON, waypoint.CreatedAt,
+	)
+	if err != nil {
+		return err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return err
+	}
+	waypoint.ID = uint64(id)
+	return nil
+}
+
+func (r *MySQLTrackWaypointRepository) ListByTrackID(ctx context.Context, trackID string) ([]*models.TrackWaypoint, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT id, track_id, user_id, lat, lng, elevation,
+			node_time, media_type, content, media_urls, created_at
+		FROM track_waypoints
+		WHERE track_id=?
+		ORDER BY node_time ASC, id ASC`,
+		trackID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	res := make([]*models.TrackWaypoint, 0)
+	for rows.Next() {
+		var (
+			waypoint     models.TrackWaypoint
+			content      sql.NullString
+			mediaURLsRaw sql.NullString
+		)
+		if err := rows.Scan(
+			&waypoint.ID, &waypoint.TrackID, &waypoint.UserID, &waypoint.Lat, &waypoint.Lng, &waypoint.Elevation,
+			&waypoint.NodeTime, &waypoint.MediaType, &content, &mediaURLsRaw, &waypoint.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		if content.Valid {
+			waypoint.Content = content.String
+		}
+		if mediaURLsRaw.Valid && mediaURLsRaw.String != "" {
+			if err := json.Unmarshal([]byte(mediaURLsRaw.String), &waypoint.MediaURLs); err != nil {
+				return nil, err
+			}
+		}
+		res = append(res, &waypoint)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 	return res, nil
 }
