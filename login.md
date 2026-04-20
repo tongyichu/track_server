@@ -8,14 +8,15 @@
 
 ## 目录
 
-| 序号 | 接口 | 方法 | 路径 |
-|------|------|------|------|
-| 1 | [获取图形验证码](#1-获取图形验证码) | GET | `/captcha` |
-| 2 | [发送短信验证码](#2-发送短信验证码) | POST | `/sms/send` |
-| 3 | [短信验证码登录](#3-短信验证码登录) | POST | `/login/sms` |
-| 4 | [微信登录](#4-微信登录) | POST | `/login/wechat` |
-| 5 | [Apple 登录](#5-apple-登录) | POST | `/login/apple` |
-| 6 | [查询登录日志](#6-查询登录日志) | GET | `/login/log` |
+| 序号 | 接口 | 方法 | 路径 | 需要认证 |
+|------|------|------|------|---------|
+| 1 | [获取图形验证码](#1-获取图形验证码) | GET | `/captcha` | ❌ |
+| 2 | [发送短信验证码](#2-发送短信验证码) | POST | `/sms/send` | ❌ |
+| 3 | [短信验证码登录](#3-短信验证码登录) | POST | `/login/sms` | ❌ |
+| 4 | [微信登录](#4-微信登录) | POST | `/login/wechat` | ❌ |
+| 5 | [Apple 登录](#5-apple-登录) | POST | `/login/apple` | ❌ |
+| 6 | [登出](#6-登出) | POST | `/logout` | ✅ |
+| 7 | [查询登录日志](#7-查询登录日志) | GET | `/login/log` | ✅ |
 
 ---
 
@@ -28,21 +29,24 @@
   │                                               │
   │  1. GET /api/v1/captcha                        │
   │ ────────────────────────────────────────────►   │
-  │   ◄──── 返回 code=0, data={captcha_id, captcha_img} │
+  │   ◄──── 返回 captcha_id + captcha_img          │
   │                                               │
   │  用户输入图形验证码                              │
   │                                               │
   │  2. POST /api/v1/sms/send                      │
   │     { phone, captcha_id, captcha_code }        │
   │ ────────────────────────────────────────────►   │
-  │   ◄──── 返回 code=0, data={code}（仅开发环境返回） │
+  │   ◄──── 返回短信验证码 code（仅开发环境返回）     │
   │                                               │
   │  用户收到短信并输入验证码                         │
   │                                               │
   │  3. POST /api/v1/login/sms                     │
   │     { phone, code }                            │
   │ ────────────────────────────────────────────►   │
-  │   ◄──── 返回 code=0, data={user_id, user}      │
+  │   ◄──── 返回 user_id + user + token            │
+  │                                               │
+  │  客户端保存 token，后续所有请求携带               │
+  │  Authorization: Bearer <token>                 │
   │                                               │
 ```
 
@@ -56,9 +60,62 @@
   │  POST /api/v1/login/wechat 或 /login/apple     │
   │     { code } 或 { apple_user_id, ... }         │
   │ ────────────────────────────────────────────►   │
-  │   ◄──── 返回 user_id + user 信息               │
+  │   ◄──── 返回 user_id + user + token            │
+  │                                               │
+  │  客户端保存 token，后续所有请求携带               │
+  │  Authorization: Bearer <token>                 │
   │                                               │
 ```
+
+### 登出流程
+
+```
+客户端                                          服务端
+  │                                               │
+  │  POST /api/v1/logout                           │
+  │  Authorization: Bearer <token>                 │
+  │ ────────────────────────────────────────────►   │
+  │   ◄──── 返回登出成功                            │
+  │                                               │
+  │  客户端清除本地保存的 token                      │
+  │                                               │
+```
+
+---
+
+## 认证机制（JWT Token）
+
+登录成功后，服务端会返回一个 JWT Token。客户端需要在后续所有**需要认证的接口**中携带此 Token。
+
+### Token 使用方式
+
+在 HTTP 请求头中添加：
+
+```
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+### Token 说明
+
+| 属性 | 说明 |
+|------|------|
+| 签名算法 | HS256 |
+| 有效期 | **7 天** |
+| Payload 字段 | `user_id`（int64）、`exp`（过期时间戳）、`iat`（签发时间戳） |
+
+### Token 过期处理
+
+当 Token 过期或无效时，服务端返回：
+
+```
+HTTP/1.1 401 Unauthorized
+
+{
+  "error": "invalid or expired token"
+}
+```
+
+客户端收到 `401` 后应引导用户重新登录获取新的 Token。
 
 ---
 
@@ -68,6 +125,7 @@
 
 | Header 名称 | 类型 | 必填 | 说明 |
 |-------------|------|------|------|
+| `Authorization` | string | 认证接口必填 | `Bearer <token>`，登录接口不需要，登出和其他业务接口必须携带 |
 | `X-Device-ID` | string | 否 | 设备唯一标识，用于判断新设备登录、设备维度限流和风控 |
 | `X-Platform` | string | 否 | 客户端平台，取值：`ios` / `android` |
 | `X-Client-Version` | string | 否 | 客户端版本号，如 `1.0.0` |
@@ -75,9 +133,23 @@
 
 ---
 
-## 公共错误响应格式
+## 公共响应格式
 
-所有接口在发生错误时统一返回以下 JSON 格式：
+### 成功响应
+
+```json
+{
+  "code": 0,
+  "data": { ... }
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `code` | int | 业务状态码，`0` 表示成功 |
+| `data` | object | 业务数据 |
+
+### 错误响应
 
 ```json
 {
@@ -88,7 +160,7 @@
 | HTTP 状态码 | 含义 |
 |------------|------|
 | 400 | 请求参数缺失或格式错误 |
-| 401 | 认证失败（验证码错误、过期等） |
+| 401 | 认证失败（Token 无效/过期、验证码错误等） |
 | 500 | 服务端内部错误 |
 
 ---
@@ -96,6 +168,8 @@
 ## 1. 获取图形验证码
 
 获取一张图形验证码图片，用于在发送短信验证码前进行人机校验。
+
+**无需认证**
 
 ### 请求
 
@@ -150,6 +224,8 @@ Glide.with(context).load(captchaImg).into(imageView)
 ## 2. 发送短信验证码
 
 校验图形验证码后，向指定手机号发送短信验证码。
+
+**无需认证**
 
 ### 请求
 
@@ -212,80 +288,12 @@ Content-Type: application/json
 
 使用手机号和短信验证码完成登录。若用户不存在将自动注册。
 
+**无需认证**
+
 ### 请求
 
 ```
 POST /api/v1/login/sms
-Content-Type: application/json
-```
-
-**请求头（建议携带）：**
-
-| Header | 说明 |
-|--------|------|
-| `X-Device-ID` | 设备唯一标识 |
-| `X-Platform` | `ios` 或 `android` |
-
-**请求体：**
-
-```json
-{
-  "phone": "13800001111",
-  "code": "385021"
-}
-```
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `phone` | string | 是 | 手机号码，需与发送验证码时一致 |
-| `code` | string | 是 | 6 位短信验证码 |
-
-### 响应
-
-**状态码：** `200 OK`
-
-```json
-{
-  "code": 0,
-  "data": {
-    "user_id": 7264917263840,
-    "user": {
-      "id": 7264917263840,
-      "nickname": "",
-      "avatar_url": "",
-      "signature": "",
-      "phone": "13800001111",
-      "client_language": "",
-      "created_at": "2026-04-19T10:30:00.000000Z",
-      "updated_at": "2026-04-19T10:30:00.000000Z"
-    }
-  }
-}
-```
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `code` | int | 业务状态码，`0` 表示成功 |
-| `data.user_id` | int64 | 用户唯一 ID |
-| `data.user` | object | 用户详情对象，结构见 [User 对象](#user-对象) |
-
-### 错误响应
-
-| 状态码 | error 示例 | 原因 |
-|--------|-----------|------|
-| 400 | `"phone and code are required"` | 缺少必填字段 |
-| 401 | `"invalid or expired verification code"` | 验证码错误或已过期 |
-
----
-
-## 4. 微信登录
-
-使用微信授权 code 完成登录。服务端会调用微信 `jscode2session` 接口换取 OpenID，若用户不存在将自动注册。
-
-### 请求
-
-```
-POST /api/v1/login/wechat
 Content-Type: application/json
 ```
 
@@ -314,21 +322,30 @@ Content-Type: application/json
 
 ```json
 {
-  "user_id": 5839201746382,
-  "user": {
-    "id": 5839201746382,
-    "nickname": "",
-    "avatar_url": "",
-    "signature": "",
-    "phone": "",
-    "client_language": "",
-    "created_at": "2026-04-19T10:30:00.000000Z",
-    "updated_at": "2026-04-19T10:30:00.000000Z"
+  "code": 0,
+  "data": {
+    "user_id": 5839201746382,
+    "user": {
+      "id": 5839201746382,
+      "nickname": "",
+      "avatar_url": "",
+      "signature": "",
+      "phone": "",
+      "client_language": "",
+      "created_at": "2026-04-19T10:30:00.000000Z",
+      "updated_at": "2026-04-19T10:30:00.000000Z"
+    },
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
   }
 }
 ```
 
-响应结构同短信登录，字段说明见 [User 对象](#user-对象)。
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `code` | int | 业务状态码，`0` 表示成功 |
+| `data.user_id` | int64 | 用户唯一 ID |
+| `data.user` | object | 用户详情对象，结构见 [User 对象](#user-对象) |
+| `data.token` | string | JWT 认证令牌，有效期 7 天 |
 
 ### 错误响应
 
@@ -342,12 +359,15 @@ Content-Type: application/json
 1. 调用微信 SDK 拉起授权（`wx.login()` 或原生 SDK）
 2. 获取返回的临时 `code`
 3. 将 `code` 传给本接口完成登录
+4. 保存返回的 `token`，后续请求携带 `Authorization: Bearer <token>`
 
 ---
 
 ## 5. Apple 登录
 
 使用 Apple Sign In 的用户标识完成登录。若用户不存在将自动注册。
+
+**无需认证**
 
 ### 请求
 
@@ -383,21 +403,30 @@ Content-Type: application/json
 
 ```json
 {
-  "user_id": 4120398571629,
-  "user": {
-    "id": 4120398571629,
-    "nickname": "",
-    "avatar_url": "",
-    "signature": "",
-    "phone": "",
-    "client_language": "",
-    "created_at": "2026-04-19T10:30:00.000000Z",
-    "updated_at": "2026-04-19T10:30:00.000000Z"
+  "code": 0,
+  "data": {
+    "user_id": 4120398571629,
+    "user": {
+      "id": 4120398571629,
+      "nickname": "",
+      "avatar_url": "",
+      "signature": "",
+      "phone": "",
+      "client_language": "",
+      "created_at": "2026-04-19T10:30:00.000000Z",
+      "updated_at": "2026-04-19T10:30:00.000000Z"
+    },
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
   }
 }
 ```
 
-响应结构同短信登录，字段说明见 [User 对象](#user-对象)。
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `code` | int | 业务状态码，`0` 表示成功 |
+| `data.user_id` | int64 | 用户唯一 ID |
+| `data.user` | object | 用户详情对象，结构见 [User 对象](#user-对象) |
+| `data.token` | string | JWT 认证令牌，有效期 7 天 |
 
 ### 错误响应
 
@@ -411,17 +440,64 @@ Content-Type: application/json
 1. 使用 `ASAuthorizationAppleIDProvider` 发起 Apple 登录
 2. 在回调中获取 `appleIDCredential.user`（即 `apple_user_id`）和 `identityToken`
 3. 将两者传给本接口完成登录
+4. 保存返回的 `token`，后续请求携带 `Authorization: Bearer <token>`
 
 ---
 
-## 6. 查询登录日志
+## 6. 登出
 
-查询指定用户的登录历史记录，按时间倒序排列，最多返回 20 条。
+记录用户登出日志。客户端在调用此接口后应清除本地保存的 Token。
+
+**需要认证** 🔒
+
+### 请求
+
+```
+POST /api/v1/logout
+Authorization: Bearer <token>
+```
+
+**请求体：** 无（用户身份从 JWT Token 中自动解析）
+
+### 响应
+
+**状态码：** `200 OK`
+
+```json
+{
+  "code": 0,
+  "data": {
+    "message": "logged out"
+  }
+}
+```
+
+### 错误响应
+
+| 状态码 | error 示例 | 原因 |
+|--------|-----------|------|
+| 401 | `"missing authorization header"` | 未携带 Authorization Header |
+| 401 | `"invalid or expired token"` | Token 无效或已过期 |
+
+### 客户端处理
+
+1. 调用登出接口
+2. 无论成功或失败，客户端均应清除本地 Token
+3. 引导用户返回登录页
+
+---
+
+## 7. 查询登录日志
+
+查询指定用户的登录/登出历史记录，按时间倒序排列，最多返回 20 条。
+
+**需要认证** 🔒
 
 ### 请求
 
 ```
 GET /api/v1/login/log?user_id=7264917263840
+Authorization: Bearer <token>
 ```
 
 **Query 参数：**
@@ -448,11 +524,11 @@ GET /api/v1/login/log?user_id=7264917263840
   {
     "id": 2,
     "user_id": 7264917263840,
-    "login_type": "apple",
+    "login_type": "logout",
     "ip": "223.104.3.56",
     "device_id": "A1B2C3D4-E5F6-7890-ABCD-EF1234567890",
     "platform": "ios",
-    "created_at": "2026-04-18T08:15:00.000000Z"
+    "created_at": "2026-04-19T18:00:00.000000Z"
   }
 ]
 ```
@@ -463,7 +539,7 @@ GET /api/v1/login/log?user_id=7264917263840
 |------|------|------|
 | `id` | int64 | 日志记录唯一 ID |
 | `user_id` | int64 | 用户 ID |
-| `login_type` | string | 登录方式：`sms` / `wechat` / `apple` |
+| `login_type` | string | 登录方式：`sms` / `wechat` / `apple` / `logout` |
 | `ip` | string | 登录时的客户端 IP 地址（可能为空） |
 | `device_id` | string | 客户端上报的设备标识（可能为空） |
 | `platform` | string | 客户端平台：`ios` / `android`（可能为空） |
@@ -475,6 +551,7 @@ GET /api/v1/login/log?user_id=7264917263840
 |--------|-----------|------|
 | 400 | `"user_id is required"` | 未提供 user_id |
 | 400 | `"user_id must be int64"` | user_id 格式不正确 |
+| 401 | `"missing authorization header"` | 未携带 Token |
 
 ---
 
@@ -553,8 +630,16 @@ curl -X POST http://localhost:8080/api/v1/login/apple \
   }'
 ```
 
-### 查询登录日志
+### 登出（需要认证）
 
 ```bash
-curl -X GET "http://localhost:8080/api/v1/login/log?user_id=7264917263840"
+curl -X POST http://localhost:8080/api/v1/logout \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+```
+
+### 查询登录日志（需要认证）
+
+```bash
+curl -X GET "http://localhost:8080/api/v1/login/log?user_id=7264917263840" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 ```

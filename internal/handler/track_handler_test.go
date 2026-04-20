@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/cloudwego/hertz/pkg/app/server"
 	"github.com/cloudwego/hertz/pkg/common/ut"
+	jwtlib "github.com/golang-jwt/jwt/v5"
 
 	"github.com/tongyichu/track_server/internal/handler"
 	"github.com/tongyichu/track_server/internal/middleware"
@@ -17,14 +19,17 @@ import (
 	"github.com/tongyichu/track_server/internal/service"
 )
 
+const testJWTSecret = "test_jwt_secret"
+
 // testEnv bundles server and in-memory dependencies for HTTP tests.
 type testEnv struct {
-	h            *server.Hertz
-	trackRepo    repository.TrackRepository
-	userRepo     repository.UserRepository
-	collectRepo  repository.CollectRepository
-	loginLogRepo repository.LoginLogRepository
-	loginSvc     *service.LoginService
+	h              *server.Hertz
+	trackRepo      repository.TrackRepository
+	userRepo       repository.UserRepository
+	collectRepo    repository.CollectRepository
+	loginLogRepo   repository.LoginLogRepository
+	loginSvc       *service.LoginService
+	tokenBlacklist *middleware.TokenBlacklist
 }
 
 // newTestEnv creates a fresh Hertz server wired with in-memory repositories.
@@ -32,12 +37,34 @@ func newTestEnv() *testEnv {
 	trackRepo, userRepo, collectRepo, loginLogRepo := repository.NewInMemoryRepositories()
 	trackSvc := service.NewTrackService(trackRepo, collectRepo)
 	userSvc := service.NewUserService(userRepo)
-	loginSvc := service.NewLoginService(userRepo, loginLogRepo, "", "")
+	loginSvc := service.NewLoginService(userRepo, loginLogRepo, "", "", testJWTSecret)
+	tokenBlacklist := middleware.NewTokenBlacklist()
 
 	h := server.Default()
-	handler.RegisterRoutes(h, handler.Deps{TrackService: trackSvc, UserService: userSvc, LoginService: loginSvc})
+	handler.RegisterRoutes(h, handler.Deps{
+		TrackService:   trackSvc,
+		UserService:    userSvc,
+		LoginService:   loginSvc,
+		JWTSecret:      testJWTSecret,
+		TokenBlacklist: tokenBlacklist,
+	})
 
-	return &testEnv{h: h, trackRepo: trackRepo, userRepo: userRepo, collectRepo: collectRepo, loginLogRepo: loginLogRepo, loginSvc: loginSvc}
+	return &testEnv{h: h, trackRepo: trackRepo, userRepo: userRepo, collectRepo: collectRepo, loginLogRepo: loginLogRepo, loginSvc: loginSvc, tokenBlacklist: tokenBlacklist}
+}
+
+func (e *testEnv) generateTestToken(userID int64) string {
+	claims := jwtlib.MapClaims{
+		"user_id": userID,
+		"exp":     time.Now().Add(time.Hour).Unix(),
+		"iat":     time.Now().Unix(),
+	}
+	token := jwtlib.NewWithClaims(jwtlib.SigningMethodHS256, claims)
+	tokenStr, _ := token.SignedString([]byte(testJWTSecret))
+	return tokenStr
+}
+
+func authHeader(token string) ut.Header {
+	return ut.Header{Key: "Authorization", Value: "Bearer " + token}
 }
 
 // perform performs an HTTP request against the Hertz engine with common headers.
@@ -67,7 +94,8 @@ func decodeJSON(t *testing.T, respBody []byte, v interface{}) {
 // TestCreateTrack_Success verifies POST /api/track/create succeeds with valid headers.
 func TestCreateTrack_Success(t *testing.T) {
 	e := newTestEnv()
-	w := e.perform(http.MethodPost, "/api/v1/track/create", nil, ut.Header{Key: middleware.HeaderUserID, Value: "1001"})
+	token := e.generateTestToken(1001)
+	w := e.perform(http.MethodPost, "/api/v1/track/create", nil, authHeader(token), ut.Header{Key: middleware.HeaderUserID, Value: "1001"})
 	resp := w.Result()
 	if resp.StatusCode() != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", resp.StatusCode())
@@ -82,20 +110,21 @@ func TestCreateTrack_Success(t *testing.T) {
 	}
 }
 
-// TestCreateTrack_MissingHeader verifies 400 is returned when user header is missing.
-func TestCreateTrack_MissingHeader(t *testing.T) {
+// TestCreateTrack_NoAuth verifies 401 is returned when no JWT token is provided.
+func TestCreateTrack_NoAuth(t *testing.T) {
 	e := newTestEnv()
 	w := e.perform(http.MethodPost, "/api/v1/track/create", nil)
 	resp := w.Result()
-	if resp.StatusCode() != http.StatusBadRequest {
-		t.Fatalf("expected status 400, got %d", resp.StatusCode())
+	if resp.StatusCode() != http.StatusUnauthorized {
+		t.Fatalf("expected status 401, got %d", resp.StatusCode())
 	}
 }
 
 // TestGetRunningTrack_Empty verifies when no running track exists, running=false is returned.
 func TestGetRunningTrack_Empty(t *testing.T) {
 	e := newTestEnv()
-	w := e.perform(http.MethodGet, "/api/v1/track/running?user_id=1001", nil)
+	token := e.generateTestToken(1001)
+	w := e.perform(http.MethodGet, "/api/v1/track/running?user_id=1001", nil, authHeader(token))
 	resp := w.Result()
 	if resp.StatusCode() != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", resp.StatusCode())
@@ -112,7 +141,8 @@ func TestGetRunningTrack_Empty(t *testing.T) {
 // TestGetTrackMap_NotFound verifies map endpoint returns 404 when track not exists.
 func TestGetTrackMap_NotFound(t *testing.T) {
 	e := newTestEnv()
-	w := e.perform(http.MethodGet, "/api/v1/track/nonexist/map", nil)
+	token := e.generateTestToken(1001)
+	w := e.perform(http.MethodGet, "/api/v1/track/nonexist/map", nil, authHeader(token))
 	resp := w.Result()
 	if resp.StatusCode() != http.StatusNotFound {
 		t.Fatalf("expected status 404, got %d", resp.StatusCode())
@@ -123,10 +153,11 @@ func TestGetTrackMap_NotFound(t *testing.T) {
 func TestRecommendAndSearch(t *testing.T) {
 	e := newTestEnv()
 	ctx := context.Background()
+	token := e.generateTestToken(1001)
 	// seed one track
 	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk1", UserID: 1001, Title: "西湖徒步"})
 
-	w1 := e.perform(http.MethodGet, "/api/v1/track/recommend/list", nil, ut.Header{Key: middleware.HeaderUserID, Value: "1001"})
+	w1 := e.perform(http.MethodGet, "/api/v1/track/recommend/list", nil, authHeader(token), ut.Header{Key: middleware.HeaderUserID, Value: "1001"})
 	resp1 := w1.Result()
 	if resp1.StatusCode() != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", resp1.StatusCode())
@@ -137,7 +168,7 @@ func TestRecommendAndSearch(t *testing.T) {
 		t.Fatalf("expected non-empty recommend list")
 	}
 
-	w2 := e.perform(http.MethodGet, "/api/v1/track/search/list?keyword=西湖", nil)
+	w2 := e.perform(http.MethodGet, "/api/v1/track/search/list?keyword=西湖", nil, authHeader(token))
 	resp2 := w2.Result()
 	if resp2.StatusCode() != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", resp2.StatusCode())
@@ -153,10 +184,11 @@ func TestRecommendAndSearch(t *testing.T) {
 func TestCollectAndUncollect(t *testing.T) {
 	e := newTestEnv()
 	ctx := context.Background()
+	token := e.generateTestToken(1001)
 	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk2", UserID: 1002, Title: "黄山登顶"})
 
 	// initial collect status
-	w0 := e.perform(http.MethodGet, "/api/v1/user/1001/collect?track_id=trk2", nil)
+	w0 := e.perform(http.MethodGet, "/api/v1/user/1001/collect?track_id=trk2", nil, authHeader(token))
 	resp0 := w0.Result()
 	if resp0.StatusCode() != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", resp0.StatusCode())
@@ -170,13 +202,13 @@ func TestCollectAndUncollect(t *testing.T) {
 	}
 
 	// collect
-	w1 := e.perform(http.MethodPost, "/api/v1/track_collect?user_id=1001&track_id=trk2", nil)
+	w1 := e.perform(http.MethodPost, "/api/v1/track_collect?user_id=1001&track_id=trk2", nil, authHeader(token))
 	if w1.Result().StatusCode() != http.StatusOK {
 		t.Fatalf("collect should succeed")
 	}
 
 	// status should be true
-	w2 := e.perform(http.MethodGet, "/api/v1/user/1001/collect?track_id=trk2", nil)
+	w2 := e.perform(http.MethodGet, "/api/v1/user/1001/collect?track_id=trk2", nil, authHeader(token))
 	var status2 struct {
 		Collected bool `json:"collected"`
 	}
@@ -186,31 +218,39 @@ func TestCollectAndUncollect(t *testing.T) {
 	}
 
 	// uncollect
-	w3 := e.perform(http.MethodDelete, "/api/v1/track_collect?user_id=1001&track_id=trk2", nil)
+	w3 := e.perform(http.MethodDelete, "/api/v1/track_collect?user_id=1001&track_id=trk2", nil, authHeader(token))
 	if w3.Result().StatusCode() != http.StatusOK {
 		t.Fatalf("uncollect should succeed")
 	}
 }
 
-// TestCreateTrack_InvalidHeader verifies invalid numeric header is rejected.
-func TestCreateTrack_InvalidHeader(t *testing.T) {
+// TestCreateTrack_JWTOverridesHeader verifies JWT token user_id takes precedence over X-User-ID header.
+func TestCreateTrack_JWTOverridesHeader(t *testing.T) {
 	e := newTestEnv()
-	w := e.perform(http.MethodPost, "/api/v1/track/create", nil, ut.Header{Key: middleware.HeaderUserID, Value: "u1"})
-	if w.Result().StatusCode() != http.StatusBadRequest {
-		t.Fatalf("invalid X-User-ID header should return 400")
+	token := e.generateTestToken(1001)
+	w := e.perform(http.MethodPost, "/api/v1/track/create", nil, authHeader(token), ut.Header{Key: middleware.HeaderUserID, Value: "u1"})
+	resp := w.Result()
+	if resp.StatusCode() != http.StatusOK {
+		t.Fatalf("expected status 200 (JWT overrides invalid header), got %d", resp.StatusCode())
+	}
+	var track models.Track
+	decodeJSON(t, resp.Body(), &track)
+	if track.UserID != 1001 {
+		t.Fatalf("expected user_id 1001 from JWT, got %d", track.UserID)
 	}
 }
 
 // TestTrackHandlers_InvalidUserID verifies invalid user_id query/path values are rejected.
 func TestTrackHandlers_InvalidUserID(t *testing.T) {
 	e := newTestEnv()
+	token := e.generateTestToken(1001)
 
-	w1 := e.perform(http.MethodGet, "/api/v1/track/running?user_id=bad", nil)
+	w1 := e.perform(http.MethodGet, "/api/v1/track/running?user_id=bad", nil, authHeader(token))
 	if w1.Result().StatusCode() != http.StatusBadRequest {
 		t.Fatalf("invalid running query user_id should return 400")
 	}
 
-	w2 := e.perform(http.MethodGet, "/api/v1/user/bad/collect?track_id=trk2", nil)
+	w2 := e.perform(http.MethodGet, "/api/v1/user/bad/collect?track_id=trk2", nil, authHeader(token))
 	if w2.Result().StatusCode() != http.StatusBadRequest {
 		t.Fatalf("invalid collect path user_id should return 400")
 	}

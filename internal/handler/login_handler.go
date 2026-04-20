@@ -3,17 +3,19 @@ package handler
 import (
 	"context"
 	"encoding/json"
-	"github.com/tongyichu/track_server/internal/middleware"
 	"net/http"
+	"strings"
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/common/utils"
 
+	"github.com/tongyichu/track_server/internal/middleware"
 	"github.com/tongyichu/track_server/internal/service"
 )
 
 type LoginHandler struct {
-	loginSvc *service.LoginService
+	loginSvc   *service.LoginService
+	blacklist  *middleware.TokenBlacklist
 }
 
 type StandardResponse[T any] struct {
@@ -32,8 +34,8 @@ func successResponse[T any](data T) StandardResponse[T] {
 	}
 }
 
-func NewLoginHandler(loginSvc *service.LoginService) *LoginHandler {
-	return &LoginHandler{loginSvc: loginSvc}
+func NewLoginHandler(loginSvc *service.LoginService, blacklist *middleware.TokenBlacklist) *LoginHandler {
+	return &LoginHandler{loginSvc: loginSvc, blacklist: blacklist}
 }
 
 func (h *LoginHandler) GetCaptcha(ctx context.Context, c *app.RequestContext) {
@@ -131,6 +133,29 @@ func (h *LoginHandler) LoginByApple(ctx context.Context, c *app.RequestContext) 
 		return
 	}
 	c.JSON(http.StatusOK, result)
+}
+
+func (h *LoginHandler) Logout(ctx context.Context, c *app.RequestContext) {
+	meta := middleware.GetRequestMeta(c)
+	if meta == nil || meta.UserID <= 0 {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "user_id is required (via X-User-ID header)"})
+		return
+	}
+
+	ip := c.ClientIP()
+	err := h.loginSvc.Logout(ctx, meta.UserID, ip, meta.DeviceID, meta.Platform)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+
+	if h.blacklist != nil {
+		tokenStr := strings.TrimPrefix(string(c.Request.Header.Peek("Authorization")), "Bearer ")
+		exp := h.loginSvc.ParseTokenExpiry(tokenStr)
+		h.blacklist.Add(tokenStr, exp)
+	}
+
+	c.JSON(http.StatusOK, successResponse(utils.H{"message": "logged out"}))
 }
 
 func (h *LoginHandler) GetLoginLog(ctx context.Context, c *app.RequestContext) {

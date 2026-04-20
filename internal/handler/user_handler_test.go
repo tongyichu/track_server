@@ -12,7 +12,8 @@ import (
 // TestGetUserDetail_NotFound verifies 404 is returned when user does not exist.
 func TestGetUserDetail_NotFound(t *testing.T) {
 	e := newTestEnv()
-	w := e.perform(http.MethodGet, "/api/v1/user/9999/detail", nil)
+	token := e.generateTestToken(9999)
+	w := e.perform(http.MethodGet, "/api/v1/user/9999/detail", nil, authHeader(token))
 	resp := w.Result()
 	if resp.StatusCode() != http.StatusNotFound {
 		t.Fatalf("expected status 404, got %d", resp.StatusCode())
@@ -23,9 +24,10 @@ func TestGetUserDetail_NotFound(t *testing.T) {
 func TestGetUserDetail_Success(t *testing.T) {
 	e := newTestEnv()
 	ctx := context.Background()
+	token := e.generateTestToken(1001)
 	_, _ = e.userRepo.CreateIfNotExists(ctx, &models.User{ID: 1001, Nickname: "Alice", Phone: "13800000000"})
 
-	w := e.perform(http.MethodGet, "/api/v1/user/1001/detail", nil)
+	w := e.perform(http.MethodGet, "/api/v1/user/1001/detail", nil, authHeader(token))
 	resp := w.Result()
 	if resp.StatusCode() != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", resp.StatusCode())
@@ -47,24 +49,25 @@ func TestGetUserDetail_Success(t *testing.T) {
 func TestUpdateNameAndAvatar(t *testing.T) {
 	e := newTestEnv()
 	ctx := context.Background()
+	token := e.generateTestToken(1002)
 	_, _ = e.userRepo.CreateIfNotExists(ctx, &models.User{ID: 1002})
 
 	// update name
 	namePayload, _ := json.Marshal(map[string]string{"name": "Bob"})
-	w1 := e.perform(http.MethodPut, "/api/v1/user/profile/name?user_id=1002", namePayload)
+	w1 := e.perform(http.MethodPut, "/api/v1/user/profile/name?user_id=1002", namePayload, authHeader(token))
 	if w1.Result().StatusCode() != http.StatusOK {
 		t.Fatalf("update name should succeed")
 	}
 
 	// update avatar with invalid payload
-	w2 := e.perform(http.MethodPut, "/api/v1/user/profile/photo?user_id=1002", []byte(`{}`))
+	w2 := e.perform(http.MethodPut, "/api/v1/user/profile/photo?user_id=1002", []byte(`{}`), authHeader(token))
 	if w2.Result().StatusCode() != http.StatusBadRequest {
 		t.Fatalf("invalid avatar payload should return 400")
 	}
 
 	// update avatar with valid payload
 	avatarPayload, _ := json.Marshal(map[string]string{"avatar_url": "https://example.com/a.png"})
-	w3 := e.perform(http.MethodPut, "/api/v1/user/profile/photo?user_id=1002", avatarPayload)
+	w3 := e.perform(http.MethodPut, "/api/v1/user/profile/photo?user_id=1002", avatarPayload, authHeader(token))
 	if w3.Result().StatusCode() != http.StatusOK {
 		t.Fatalf("update avatar should succeed")
 	}
@@ -74,16 +77,17 @@ func TestUpdateNameAndAvatar(t *testing.T) {
 func TestUpdateSignatureAndLanguage(t *testing.T) {
 	e := newTestEnv()
 	ctx := context.Background()
+	token := e.generateTestToken(1003)
 	_, _ = e.userRepo.CreateIfNotExists(ctx, &models.User{ID: 1003})
 
 	sigPayload, _ := json.Marshal(map[string]string{"signature": "hello world"})
-	w1 := e.perform(http.MethodPut, "/api/v1/user/profile/signature?user_id=1003", sigPayload)
+	w1 := e.perform(http.MethodPut, "/api/v1/user/profile/signature?user_id=1003", sigPayload, authHeader(token))
 	if w1.Result().StatusCode() != http.StatusOK {
 		t.Fatalf("update signature should succeed")
 	}
 
 	langPayload, _ := json.Marshal(map[string]string{"client_language": "en-US"})
-	w2 := e.perform(http.MethodPut, "/api/v1/user/profile/client_language?user_id=1003", langPayload)
+	w2 := e.perform(http.MethodPut, "/api/v1/user/profile/client_language?user_id=1003", langPayload, authHeader(token))
 	if w2.Result().StatusCode() != http.StatusOK {
 		t.Fatalf("update language should succeed")
 	}
@@ -93,15 +97,16 @@ func TestUpdateSignatureAndLanguage(t *testing.T) {
 func TestUpdatePhone(t *testing.T) {
 	e := newTestEnv()
 	ctx := context.Background()
+	token := e.generateTestToken(1004)
 	_, _ = e.userRepo.CreateIfNotExists(ctx, &models.User{ID: 1004})
 
-	w1 := e.perform(http.MethodPut, "/api/v1/user/profile/phone?user_id=1004", []byte(`{}`))
+	w1 := e.perform(http.MethodPut, "/api/v1/user/profile/phone?user_id=1004", []byte(`{}`), authHeader(token))
 	if w1.Result().StatusCode() != http.StatusBadRequest {
 		t.Fatalf("invalid phone payload should return 400")
 	}
 
 	phonePayload, _ := json.Marshal(map[string]string{"phone": "13900000000"})
-	w2 := e.perform(http.MethodPut, "/api/v1/user/profile/phone?user_id=1004", phonePayload)
+	w2 := e.perform(http.MethodPut, "/api/v1/user/profile/phone?user_id=1004", phonePayload, authHeader(token))
 	if w2.Result().StatusCode() != http.StatusOK {
 		t.Fatalf("update phone should succeed")
 	}
@@ -118,14 +123,15 @@ func TestUpdatePhone(t *testing.T) {
 // TestUserHandlers_InvalidUserID verifies invalid numeric user IDs are rejected.
 func TestUserHandlers_InvalidUserID(t *testing.T) {
 	e := newTestEnv()
+	token := e.generateTestToken(1001)
 
-	w1 := e.perform(http.MethodGet, "/api/v1/user/not-a-number/detail", nil)
+	w1 := e.perform(http.MethodGet, "/api/v1/user/not-a-number/detail", nil, authHeader(token))
 	if w1.Result().StatusCode() != http.StatusBadRequest {
 		t.Fatalf("invalid path user_id should return 400")
 	}
 
 	namePayload, _ := json.Marshal(map[string]string{"name": "Bob"})
-	w2 := e.perform(http.MethodPut, "/api/v1/user/profile/name?user_id=bad", namePayload)
+	w2 := e.perform(http.MethodPut, "/api/v1/user/profile/name?user_id=bad", namePayload, authHeader(token))
 	if w2.Result().StatusCode() != http.StatusBadRequest {
 		t.Fatalf("invalid query user_id should return 400")
 	}

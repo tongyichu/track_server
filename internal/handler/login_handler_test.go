@@ -140,6 +140,9 @@ func TestLoginBySMS_Success(t *testing.T) {
 	if result.Data.User == nil {
 		t.Fatalf("expected non-nil user")
 	}
+	if result.Data.Token == "" {
+		t.Fatalf("expected non-empty token")
+	}
 }
 
 func TestLoginBySMS_InvalidCode(t *testing.T) {
@@ -208,6 +211,7 @@ func TestLoginByWechat_MissingCode(t *testing.T) {
 func TestGetLoginLog_Success(t *testing.T) {
 	e := newTestEnv()
 	ctx := context.Background()
+	token := e.generateTestToken(2001)
 
 	_, _ = e.userRepo.CreateIfNotExists(ctx, &models.User{ID: 2001, Phone: "13900002001"})
 	_ = e.loginLogRepo.Create(ctx, &models.LoginLog{
@@ -221,7 +225,7 @@ func TestGetLoginLog_Success(t *testing.T) {
 		IP:        "127.0.0.2",
 	})
 
-	w := e.perform(http.MethodGet, "/api/v1/login/log?user_id=2001", nil)
+	w := e.perform(http.MethodGet, "/api/v1/login/log?user_id=2001", nil, authHeader(token))
 	resp := w.Result()
 	if resp.StatusCode() != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", resp.StatusCode())
@@ -235,15 +239,67 @@ func TestGetLoginLog_Success(t *testing.T) {
 
 func TestGetLoginLog_InvalidUserID(t *testing.T) {
 	e := newTestEnv()
+	token := e.generateTestToken(1001)
 
-	w := e.perform(http.MethodGet, "/api/v1/login/log?user_id=bad", nil)
+	w := e.perform(http.MethodGet, "/api/v1/login/log?user_id=bad", nil, authHeader(token))
 	if w.Result().StatusCode() != http.StatusBadRequest {
 		t.Fatalf("invalid user_id should return 400")
 	}
 
-	w2 := e.perform(http.MethodGet, "/api/v1/login/log", nil)
+	w2 := e.perform(http.MethodGet, "/api/v1/login/log", nil, authHeader(token))
 	if w2.Result().StatusCode() != http.StatusBadRequest {
 		t.Fatalf("missing user_id should return 400")
+	}
+}
+
+func TestLogout_Success(t *testing.T) {
+	e := newTestEnv()
+	ctx := context.Background()
+	token := e.generateTestToken(3001)
+
+	_, _ = e.userRepo.CreateIfNotExists(ctx, &models.User{ID: 3001, Phone: "13900003001"})
+
+	w := e.perform(http.MethodPost, "/api/v1/logout", nil, authHeader(token))
+	resp := w.Result()
+	if resp.StatusCode() != http.StatusOK {
+		t.Fatalf("expected status 200, got %d, body: %s", resp.StatusCode(), string(resp.Body()))
+	}
+
+	logs, err := e.loginLogRepo.ListByUserID(ctx, 3001, 10)
+	if err != nil {
+		t.Fatalf("list login logs failed: %v", err)
+	}
+	if len(logs) < 1 {
+		t.Fatalf("expected at least 1 log, got %d", len(logs))
+	}
+	if logs[0].LoginType != "logout" {
+		t.Fatalf("expected login_type logout, got %s", logs[0].LoginType)
+	}
+}
+
+func TestLogout_TokenRevoked(t *testing.T) {
+	e := newTestEnv()
+	ctx := context.Background()
+	token := e.generateTestToken(3002)
+	_, _ = e.userRepo.CreateIfNotExists(ctx, &models.User{ID: 3002, Phone: "13900003002"})
+
+	w1 := e.perform(http.MethodPost, "/api/v1/logout", nil, authHeader(token))
+	if w1.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("logout should succeed, got %d", w1.Result().StatusCode())
+	}
+
+	w2 := e.perform(http.MethodGet, "/api/v1/login/log?user_id=3002", nil, authHeader(token))
+	if w2.Result().StatusCode() != http.StatusUnauthorized {
+		t.Fatalf("revoked token should return 401, got %d", w2.Result().StatusCode())
+	}
+}
+
+func TestLogout_NoAuth(t *testing.T) {
+	e := newTestEnv()
+
+	w := e.perform(http.MethodPost, "/api/v1/logout", nil)
+	if w.Result().StatusCode() != http.StatusUnauthorized {
+		t.Fatalf("missing token should return 401")
 	}
 }
 

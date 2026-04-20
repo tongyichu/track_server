@@ -16,6 +16,7 @@ import (
 
 	"github.com/tongyichu/track_server/internal/config"
 	"github.com/tongyichu/track_server/internal/handler"
+	"github.com/tongyichu/track_server/internal/middleware"
 	"github.com/tongyichu/track_server/internal/repository"
 	"github.com/tongyichu/track_server/internal/service"
 )
@@ -83,7 +84,7 @@ func main() {
 
 	trackSvc := service.NewTrackService(trackRepo, collectRepo)
 	userSvc := service.NewUserService(userRepo)
-	loginSvc := service.NewLoginService(userRepo, loginLogRepo, cfg.WechatAppID, cfg.WechatAppSecret)
+	loginSvc := service.NewLoginService(userRepo, loginLogRepo, cfg.WechatAppID, cfg.WechatAppSecret, cfg.JWTSecret)
 
 	var h *server.Hertz
 	if cfg.EnableTLS {
@@ -105,7 +106,16 @@ func main() {
 		log.Printf("server listening on %s (HTTP)", cfg.ServerAddr)
 	}
 
-	handler.RegisterRoutes(h, handler.Deps{TrackService: trackSvc, UserService: userSvc, LoginService: loginSvc})
+	tokenBlacklist := middleware.NewTokenBlacklist()
+	defer tokenBlacklist.Close()
+
+	handler.RegisterRoutes(h, handler.Deps{
+		TrackService:   trackSvc,
+		UserService:    userSvc,
+		LoginService:   loginSvc,
+		JWTSecret:      cfg.JWTSecret,
+		TokenBlacklist: tokenBlacklist,
+	})
 
 	h.Spin()
 }

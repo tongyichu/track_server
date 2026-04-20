@@ -12,6 +12,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
+
 	"github.com/tongyichu/track_server/internal/models"
 	"github.com/tongyichu/track_server/internal/repository"
 )
@@ -21,6 +23,7 @@ type LoginService struct {
 	loginLogs       repository.LoginLogRepository
 	wechatAppID     string
 	wechatAppSecret string
+	jwtSecret       string
 	mu              sync.RWMutex
 	smsCodes        map[string]smsCodeEntry
 	captchas        map[string]CaptchaEntry
@@ -37,7 +40,7 @@ type CaptchaEntry struct {
 }
 
 type CaptchaResult struct {
-	CaptchaID string `json:"captcha_id"`
+	CaptchaID  string `json:"captcha_id"`
 	CaptchaImg string `json:"captcha_img"`
 }
 
@@ -52,17 +55,52 @@ type WechatSessionResponse struct {
 type LoginResult struct {
 	UserID int64        `json:"user_id"`
 	User   *models.User `json:"user"`
+	Token  string       `json:"token"`
 }
 
-func NewLoginService(users repository.UserRepository, loginLogs repository.LoginLogRepository, wechatAppID, wechatAppSecret string) *LoginService {
+func NewLoginService(users repository.UserRepository, loginLogs repository.LoginLogRepository, wechatAppID, wechatAppSecret, jwtSecret string) *LoginService {
 	return &LoginService{
 		users:           users,
 		loginLogs:       loginLogs,
 		wechatAppID:     wechatAppID,
 		wechatAppSecret: wechatAppSecret,
+		jwtSecret:       jwtSecret,
 		smsCodes:        make(map[string]smsCodeEntry),
 		captchas:        make(map[string]CaptchaEntry),
 	}
+}
+
+const jwtTokenExpiry = 7 * 24 * time.Hour
+
+func (s *LoginService) generateToken(userID int64) (string, error) {
+	claims := jwt.MapClaims{
+		"user_id": userID,
+		"exp":     time.Now().Add(jwtTokenExpiry).Unix(),
+		"iat":     time.Now().Unix(),
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString([]byte(s.jwtSecret))
+}
+
+func (s *LoginService) JWTSecret() string {
+	return s.jwtSecret
+}
+
+func (s *LoginService) ParseTokenExpiry(tokenStr string) time.Time {
+	token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
+		return []byte(s.jwtSecret), nil
+	})
+	if err != nil || !token.Valid {
+		return time.Now().Add(jwtTokenExpiry)
+	}
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return time.Now().Add(jwtTokenExpiry)
+	}
+	if exp, ok := claims["exp"].(float64); ok {
+		return time.Unix(int64(exp), 0)
+	}
+	return time.Now().Add(jwtTokenExpiry)
 }
 
 func (s *LoginService) CaptchaMu() *sync.RWMutex {
@@ -174,7 +212,12 @@ func (s *LoginService) LoginBySMS(ctx context.Context, phone, code, ip, deviceID
 		Platform:  platform,
 	})
 
-	return &LoginResult{UserID: user.ID, User: user}, nil
+	token, err := s.generateToken(user.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate token: %w", err)
+	}
+
+	return &LoginResult{UserID: user.ID, User: user, Token: token}, nil
 }
 
 func (s *LoginService) LoginByWechat(ctx context.Context, code, ip, deviceID, platform string) (*LoginResult, error) {
@@ -206,7 +249,12 @@ func (s *LoginService) LoginByWechat(ctx context.Context, code, ip, deviceID, pl
 		Platform:  platform,
 	})
 
-	return &LoginResult{UserID: user.ID, User: user}, nil
+	token, err := s.generateToken(user.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate token: %w", err)
+	}
+
+	return &LoginResult{UserID: user.ID, User: user, Token: token}, nil
 }
 
 func (s *LoginService) LoginByApple(ctx context.Context, appleUserID, identityToken, ip, deviceID, platform string) (*LoginResult, error) {
@@ -230,7 +278,25 @@ func (s *LoginService) LoginByApple(ctx context.Context, appleUserID, identityTo
 		Platform:  platform,
 	})
 
-	return &LoginResult{UserID: user.ID, User: user}, nil
+	token, err := s.generateToken(user.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate token: %w", err)
+	}
+
+	return &LoginResult{UserID: user.ID, User: user, Token: token}, nil
+}
+
+func (s *LoginService) Logout(ctx context.Context, userID int64, ip, deviceID, platform string) error {
+	if userID <= 0 {
+		return errors.New("user_id is required")
+	}
+	return s.loginLogs.Create(ctx, &models.LoginLog{
+		UserID:    userID,
+		LoginType: "logout",
+		IP:        ip,
+		DeviceID:  deviceID,
+		Platform:  platform,
+	})
 }
 
 func (s *LoginService) GetLoginLog(ctx context.Context, userID int64, limit int) ([]*models.LoginLog, error) {

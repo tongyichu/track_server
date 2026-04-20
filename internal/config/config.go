@@ -20,6 +20,7 @@ type Config struct {
 	TLSCertFile     string
 	TLSKeyFile      string
 	EnableTLS       bool
+	JWTSecret       string
 }
 
 // Load reads configuration from environment variables with sensible defaults.
@@ -40,6 +41,7 @@ func Load() *Config {
 		TLSCertFile:     tlsCert,
 		TLSKeyFile:      tlsKey,
 		EnableTLS:       tlsCert != "" && tlsKey != "",
+		JWTSecret:       getEnv("JWT_SECRET", "track_server_default_jwt_secret"),
 	}
 
 	// Priority:
