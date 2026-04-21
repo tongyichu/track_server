@@ -2,17 +2,18 @@ package config
 
 import (
 	"os"
+	"strconv"
 )
 
 // Config holds server configuration loaded from environment variables.
 type Config struct {
 	MongoURI        string
 	MongoDBName     string
-	MySQLDSN        string
+	MySQLDSN        string // mysql数据库连接，示例 root:$密码@tcp(172.18.0.1:3306)/track_db?charset=utf8mb4&parseTime=True
 	ServerAddr      string
 	LogDir          string
 	UseInMemory     bool
-	UseMySQL        bool
+	UseMySQL        bool // 存储是否使用mysql
 	WechatAppID     string
 	WechatAppSecret string
 	AMapWebKey      string
@@ -21,6 +22,19 @@ type Config struct {
 	TLSKeyFile      string
 	EnableTLS       bool
 	JWTSecret       string
+
+	// Aliyun OSS STS (temporary credentials for direct upload)
+	AliyunAccessKeyID     string
+	AliyunAccessKeySecret string
+	AliyunRoleARN         string
+	AliyunSTSRegion       string
+	AliyunSTSDurationSec  int64
+	AliyunRoleSessionPref string
+
+	OSSBucket       string
+	OSSRegion       string
+	OSSEndpoint     string
+	OSSUploadPrefix string
 }
 
 // Load reads configuration from environment variables with sensible defaults.
@@ -57,6 +71,18 @@ func Load() *Config {
 		TLSKeyFile:      tlsKey,
 		EnableTLS:       tlsCert != "" && tlsKey != "",
 		JWTSecret:       getEnv("JWT_SECRET", "track_server_default_jwt_secret"),
+
+		AliyunAccessKeyID:     os.Getenv("ALIYUN_ACCESS_KEY_ID"),
+		AliyunAccessKeySecret: os.Getenv("ALIYUN_ACCESS_KEY_SECRET"),
+		AliyunRoleARN:         os.Getenv("ALIYUN_ROLE_ARN"),
+		AliyunSTSRegion:       getEnv("ALIYUN_STS_REGION", "cn-hangzhou"),
+		AliyunSTSDurationSec:  getEnvInt64("ALIYUN_STS_DURATION_SECONDS", 900),
+		AliyunRoleSessionPref: getEnv("ALIYUN_ROLE_SESSION_NAME_PREFIX", "trackapp-"),
+
+		OSSBucket:       os.Getenv("OSS_BUCKET"),
+		OSSRegion:       getEnv("OSS_REGION", ""),
+		OSSEndpoint:     getEnv("OSS_ENDPOINT", ""),
+		OSSUploadPrefix: getEnv("OSS_UPLOAD_PREFIX", "user"),
 	}
 
 	// Priority:
@@ -83,6 +109,18 @@ func Load() *Config {
 func getEnv(key, def string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
+	}
+	return def
+}
+
+func getEnvInt64(key string, def int64) int64 {
+	v := os.Getenv(key)
+	if v == "" {
+		return def
+	}
+	// strconv.ParseInt treats leading/trailing spaces as invalid; keep strict.
+	if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+		return n
 	}
 	return def
 }

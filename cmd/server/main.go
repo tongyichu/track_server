@@ -88,6 +88,23 @@ func main() {
 	userSvc := service.NewUserService(userRepo)
 	loginSvc := service.NewLoginService(userRepo, loginLogRepo, cfg.WechatAppID, cfg.WechatAppSecret, cfg.JWTSecret)
 
+	ossTokenSvc, err := service.NewOSSTokenService(
+		cfg.AliyunSTSRegion,
+		cfg.AliyunAccessKeyID,
+		cfg.AliyunAccessKeySecret,
+		cfg.AliyunRoleARN,
+		cfg.AliyunSTSDurationSec,
+		cfg.AliyunRoleSessionPref,
+		cfg.OSSBucket,
+		cfg.OSSRegion,
+		cfg.OSSEndpoint,
+		cfg.OSSUploadPrefix,
+	)
+	if err != nil {
+		log.Printf("oss sts disabled: %v", err)
+		ossTokenSvc = nil
+	}
+
 	var h *server.Hertz
 	if cfg.EnableTLS {
 		cert, err := tls.LoadX509KeyPair(cfg.TLSCertFile, cfg.TLSKeyFile)
@@ -115,6 +132,7 @@ func main() {
 		TrackService:   trackSvc,
 		UserService:    userSvc,
 		LoginService:   loginSvc,
+		OSSTokenService: ossTokenSvc,
 		JWTSecret:      cfg.JWTSecret,
 		TokenBlacklist: tokenBlacklist,
 	})

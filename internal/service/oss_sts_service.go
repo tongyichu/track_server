@@ -1,0 +1,221 @@
+package service
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/requests"
+	"github.com/aliyun/alibaba-cloud-sdk-go/services/sts"
+)
+
+// OSSTemporaryCredential 表示服务端向客户端返回的 OSS 临时凭证。
+//
+// 背景：客户端希望“直传 OSS”（而不是先把文件上传到业务服务器再转存）。
+// 为了避免把长期 AK/SK 暴露给客户端，服务端会通过阿里云 STS 申请一个短时有效的临时凭证。
+//
+// 关键点：
+// 1) 该临时凭证本质上是 STS 返回的三元组：AccessKeyId/AccessKeySecret/SecurityToken。
+// 2) 临时凭证权限 = 角色(Role)权限 ∩ AssumeRole 的 Policy 权限（交集）。
+// 3) 我们在 Policy 中将 Resource 限制到“用户专属目录前缀”，实现按用户隔离。
+//
+// 说明：Bucket/Region/Endpoint/Dir 这些字段是“客户端直传”时常见的必要上下文信息，
+// 便于前端拼装上传 URL 与 object key。
+type OSSTemporaryCredential struct {
+	AccessKeyID     string `json:"access_key_id"`
+	AccessKeySecret string `json:"access_key_secret"`
+	SecurityToken   string `json:"security_token"`
+	Expiration      string `json:"expiration"`
+
+	Bucket   string `json:"bucket"`
+	Region   string `json:"region"`
+	Endpoint string `json:"endpoint"`
+	Dir      string `json:"dir"`
+}
+
+// OSSTokenService 负责向阿里云 STS 申请“仅允许上传到指定前缀”的临时凭证。
+//
+// 设计取舍：
+// - 本服务只做“发放上传凭证”，不参与实际上传，也不生成 postPolicy 表单。
+// - 权限上目前最小化到 `oss:PutObject`，即“仅允许上传对象”。
+//   如需支持分片上传/列举/删除等，应在 Policy 的 Action 中显式加上对应权限。
+type OSSTokenService struct {
+	// stsClient 是阿里云 STS SDK 客户端，使用长期 AK/SK 初始化，仅在服务端持有。
+	stsClient *sts.Client
+
+	// roleARN 是用于 AssumeRole 的 RAM 角色 ARN。
+	roleARN           string
+	// durationSeconds 是临时凭证有效期（秒）。
+	// 为减少风险，应尽量短（例如 15 分钟或 1 小时），并符合阿里云侧允许范围。
+	durationSeconds   int64
+	// roleSessionPrefix 用于拼接 RoleSessionName（便于审计与排障）。
+	roleSessionPrefix string
+
+	// ossBucket 是 OSS Bucket 名称。
+	ossBucket       string
+	// ossRegion/ossEndpoint 是给客户端上传使用的区域/Endpoint 信息（可选）。
+	ossRegion       string
+	ossEndpoint     string
+	// ossUploadPrefix 控制用户目录的一级前缀，例如 "user"；最终目录为 <prefix>/<userID>/。
+	ossUploadPrefix string
+}
+
+// NewOSSTokenService 创建 STS Token Service。
+//
+// 必填参数（建议通过环境变量注入）：
+// - accessKeyID/accessKeySecret：服务端长期 AK/SK（严禁下发给客户端）
+// - roleARN：用于 AssumeRole 的 RAM 角色 ARN
+// - stsRegion：STS 的 region（例如 cn-hangzhou）
+// - ossBucket：要允许上传的 bucket
+//
+// durationSeconds：临时凭证有效期；这里会做 900~3600 的钳制，避免配置过小/过大导致 AssumeRole 失败。
+// roleSessionPrefix：会与 userID/timestamp 组合形成 RoleSessionName，便于云侧审计。
+// ossUploadPrefix：用于生成用户隔离目录，默认 "user"。
+func NewOSSTokenService(stsRegion, accessKeyID, accessKeySecret, roleARN string, durationSeconds int64, roleSessionPrefix string,
+	ossBucket, ossRegion, ossEndpoint, ossUploadPrefix string,
+) (*OSSTokenService, error) {
+	if accessKeyID == "" || accessKeySecret == "" || roleARN == "" {
+		return nil, errors.New("missing ALIYUN_ACCESS_KEY_ID/ALIYUN_ACCESS_KEY_SECRET/ALIYUN_ROLE_ARN")
+	}
+	if stsRegion == "" {
+		return nil, errors.New("missing ALIYUN_STS_REGION")
+	}
+	if ossBucket == "" {
+		return nil, errors.New("missing OSS_BUCKET")
+	}
+	if durationSeconds <= 0 {
+		durationSeconds = 3600
+	}
+	// 注意：阿里云 STS 的 AssumeRole 对 DurationSeconds 通常有范围限制。
+	// 常见限制为 900~3600 秒（15 分钟到 1 小时）。这里做钳制：
+	// - 小于 900：提升到 900，避免请求失败
+	// - 大于 3600：降低到 3600，避免请求失败
+	if durationSeconds < 900 {
+		durationSeconds = 900
+	}
+	if durationSeconds > 3600 {
+		durationSeconds = 3600
+	}
+
+	cli, err := sts.NewClientWithAccessKey(stsRegion, accessKeyID, accessKeySecret)
+	if err != nil {
+		return nil, err
+	}
+
+	if roleSessionPrefix == "" {
+		roleSessionPrefix = "trackapp-"
+	}
+	if ossUploadPrefix == "" {
+		ossUploadPrefix = "user"
+	}
+
+	return &OSSTokenService{
+		stsClient:         cli,
+		roleARN:           roleARN,
+		durationSeconds:   durationSeconds,
+		roleSessionPrefix: roleSessionPrefix,
+		ossBucket:         ossBucket,
+		ossRegion:         ossRegion,
+		ossEndpoint:       ossEndpoint,
+		ossUploadPrefix:   ossUploadPrefix,
+	}, nil
+}
+
+// GetUploadCredential 为指定 userID 申请一份“仅允许上传到该用户目录”的临时凭证。
+//
+// 目录隔离：最终 dir 形如：<OSSUploadPrefix>/<userID>/，例如 "user/123/"。
+// 然后把 policy Resource 限制为：acs:oss:*:*:<bucket>/<dir>*，从而只允许写入该前缀。
+//
+// 安全提示：
+// - 该临时凭证可被拿到的人在有效期内向该目录写入对象；服务端应确保接口受登录态保护。
+// - 若希望进一步约束 object key（例如只能上传某个固定文件名），可以把 dir 细化到更具体的前缀。
+func (s *OSSTokenService) GetUploadCredential(userID int64) (*OSSTemporaryCredential, error) {
+	if userID <= 0 {
+		return nil, invalidArg("user_id must be > 0")
+	}
+
+	// 强制生成稳定的用户目录：<prefix>/<userID>/
+	// - prefix 从配置读取，但会去掉左右斜杠，避免出现 // 或空前缀
+	// - 目录统一以 / 结尾，便于拼接 object key（dir + filename）
+	base := strings.Trim(s.ossUploadPrefix, "/")
+	if base == "" {
+		base = "user"
+	}
+	dir := fmt.Sprintf("%s/%d/", base, userID)
+
+	policyJSON, err := buildOSSPutObjectPolicy(s.ossBucket, dir)
+	if err != nil {
+		return nil, err
+	}
+
+	// RoleSessionName 是云侧审计日志里可见的 session 标识。
+	// 这里带上 userID 与时间戳，既能排障也能避免冲突。
+	// 阿里云对长度存在限制（常见 64），因此超长会截断。
+	roleSessionName := fmt.Sprintf("%s%d-%d", s.roleSessionPrefix, userID, time.Now().Unix())
+	if len(roleSessionName) > 64 {
+		roleSessionName = roleSessionName[:64]
+	}
+
+	req := sts.CreateAssumeRoleRequest()
+	// 强制 https，避免明文传输。
+	req.Scheme = "https"
+	req.RoleArn = s.roleARN
+	req.RoleSessionName = roleSessionName
+	// SDK 的 Integer 类型要求 int，这里做显式转换。
+	req.DurationSeconds = requests.NewInteger(int(s.durationSeconds))
+	// Policy 是 JSON 字符串。STS 最终权限取 Role 权限与该 Policy 的交集。
+	req.Policy = policyJSON
+
+	resp, err := s.stsClient.AssumeRole(req)
+	if err != nil {
+		return nil, err
+	}
+	cred := resp.Credentials
+	// Credentials 为空通常意味着 STS 侧返回异常；这里做防御性校验。
+	if cred.AccessKeyId == "" || cred.AccessKeySecret == "" || cred.SecurityToken == "" {
+		return nil, errors.New("sts returned empty credentials")
+	}
+
+	return &OSSTemporaryCredential{
+		AccessKeyID:     cred.AccessKeyId,
+		AccessKeySecret: cred.AccessKeySecret,
+		SecurityToken:   cred.SecurityToken,
+		Expiration:      cred.Expiration,
+		Bucket:          s.ossBucket,
+		Region:          s.ossRegion,
+		Endpoint:        s.ossEndpoint,
+		Dir:             dir,
+	}, nil
+}
+
+// buildOSSPutObjectPolicy 生成 AssumeRole 使用的最小权限 Policy。
+//
+// 目前策略：只允许对指定 bucket + 指定 dir 前缀执行 PutObject。
+// - Action: oss:PutObject
+// - Resource: acs:oss:*:*:<bucket>/<dir>*
+//
+// 说明：
+// - 这里没有加 Condition（例如 IP 限制、UA 限制），仅按 Resource 做前缀隔离。
+// - 若要支持分片上传（MultipartUpload），需要额外授权相关 Action。
+func buildOSSPutObjectPolicy(bucket, dir string) (string, error) {
+	// Resource 示例：acs:oss:*:*:examplebucket/src/*
+	// 我们这里 dir 结尾是 /，因此拼接成 <dir>* 后等价于允许该目录下的任意对象。
+	resource := fmt.Sprintf("acs:oss:*:*:%s/%s*", bucket, dir)
+	policy := map[string]any{
+		"Version": "1",
+		"Statement": []map[string]any{
+			{
+				"Action":   []string{"oss:PutObject"},
+				"Effect":   "Allow",
+				"Resource": []string{resource},
+			},
+		},
+	}
+	b, err := json.Marshal(policy)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}

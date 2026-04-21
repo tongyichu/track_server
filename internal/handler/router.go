@@ -12,6 +12,7 @@ type Deps struct {
 	TrackService   *service.TrackService
 	UserService    *service.UserService
 	LoginService   *service.LoginService
+	OSSTokenService *service.OSSTokenService
 	JWTSecret      string
 	TokenBlacklist *middleware.TokenBlacklist
 }
@@ -24,6 +25,7 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 	trackHandler := NewTrackHandler(deps.TrackService)
 	userHandler := NewUserHandler(deps.UserService)
 	loginHandler := NewLoginHandler(deps.LoginService, deps.TokenBlacklist)
+	ossHandler := NewOSSHandler(deps.OSSTokenService)
 
 	api := h.Group("/api/v1")
 
@@ -42,6 +44,9 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 
 	auth.POST("/logout", loginHandler.Logout)
 	auth.GET("/login/log", loginHandler.GetLoginLog)
+
+	// oss upload
+	auth.GET("/oss/sts-token", ossHandler.GetSTSToken)
 
 	// track related
 	auth.POST("/track/create", trackHandler.CreateTrack)
