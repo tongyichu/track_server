@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/go-sql-driver/mysql"
@@ -26,8 +27,8 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 		`CREATE TABLE IF NOT EXISTS users (
 			id BIGINT PRIMARY KEY,
 			nickname VARCHAR(255) NOT NULL DEFAULT '',
-			avatar_url TEXT NOT NULL,
-			signature TEXT NOT NULL,
+			avatar_url VARCHAR(255) COMMENT '用户头像URI',
+			signature TEXT,
 			phone VARCHAR(32) NOT NULL DEFAULT '',
 			client_language VARCHAR(64) NOT NULL DEFAULT '',
 			created_at DATETIME(6) NOT NULL,
@@ -39,15 +40,15 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 			user_id BIGINT UNSIGNED NOT NULL,
 			title VARCHAR(128) NOT NULL DEFAULT '',
 			start_time DATETIME NOT NULL,
-			end_time DATETIME NOT NULL,
-			distance DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-			duration INT UNSIGNED NOT NULL DEFAULT 0,
-			avg_speed_kmh DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-			elevation_gain INT NOT NULL DEFAULT 0,
-			raw_track_url VARCHAR(255) NOT NULL,
-			screenshot_url VARCHAR(255) NOT NULL DEFAULT '',
-			is_running TINYINT(1) NOT NULL DEFAULT 0,
+			end_time DATETIME,
+			distance DECIMAL(10,2) DEFAULT 0.00,
+			duration INT UNSIGNED DEFAULT 0,
+			elevation_gain INT DEFAULT 0,
+			raw_track_url VARCHAR(255),
+			track_screenshot_url VARCHAR(255),
+			is_running TINYINT(1) NOT NULL DEFAULT 1,
 			status TINYINT NOT NULL DEFAULT 1,
+			avg_speed_kmh DOUBLE NOT NULL DEFAULT 1,
 			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 			PRIMARY KEY (id),
@@ -107,6 +108,9 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 	if err := ensureMySQLUserIDColumnsBigint(ctx, db); err != nil {
 		return err
 	}
+	if err := ensureMySQLTrackWaypointTrackIDColumn(ctx, db); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -135,17 +139,32 @@ func ensureMySQLTrackScreenshotURLColumn(ctx context.Context, db *sql.DB) error 
 	err := db.QueryRowContext(ctx, `
 		SELECT COUNT(*)
 		FROM information_schema.COLUMNS
+		WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'track_records' AND COLUMN_NAME = 'track_screenshot_url'`,
+	).Scan(&count)
+	if err != nil {
+		return fmt.Errorf("check track_records.track_screenshot_url column: %w", err)
+	}
+	if count > 0 {
+		return nil
+	}
+	err = db.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM information_schema.COLUMNS
 		WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'track_records' AND COLUMN_NAME = 'screenshot_url'`,
 	).Scan(&count)
 	if err != nil {
 		return fmt.Errorf("check track_records.screenshot_url column: %w", err)
 	}
 	if count > 0 {
+		_, err = db.ExecContext(ctx, `ALTER TABLE track_records CHANGE COLUMN screenshot_url track_screenshot_url VARCHAR(255) COMMENT '轨迹截图文件在对象存储中的地址'`)
+		if err != nil {
+			return fmt.Errorf("rename track_records.screenshot_url column: %w", err)
+		}
 		return nil
 	}
-	_, err = db.ExecContext(ctx, `ALTER TABLE track_records ADD COLUMN screenshot_url VARCHAR(255) NOT NULL DEFAULT '' AFTER raw_track_url`)
+	_, err = db.ExecContext(ctx, `ALTER TABLE track_records ADD COLUMN track_screenshot_url VARCHAR(255) COMMENT '轨迹截图文件在对象存储中的地址' AFTER raw_track_url`)
 	if err != nil {
-		return fmt.Errorf("add track_records.screenshot_url column: %w", err)
+		return fmt.Errorf("add track_records.track_screenshot_url column: %w", err)
 	}
 	return nil
 }
@@ -161,9 +180,13 @@ func ensureMySQLTrackIsRunningColumn(ctx context.Context, db *sql.DB) error {
 		return fmt.Errorf("check track_records.is_running column: %w", err)
 	}
 	if count > 0 {
+		_, err = db.ExecContext(ctx, `ALTER TABLE track_records MODIFY COLUMN is_running TINYINT(1) NOT NULL DEFAULT 1`)
+		if err != nil {
+			return fmt.Errorf("modify track_records.is_running column: %w", err)
+		}
 		return nil
 	}
-	_, err = db.ExecContext(ctx, `ALTER TABLE track_records ADD COLUMN is_running TINYINT(1) NOT NULL DEFAULT 0 AFTER screenshot_url`)
+	_, err = db.ExecContext(ctx, `ALTER TABLE track_records ADD COLUMN is_running TINYINT(1) NOT NULL DEFAULT 1 AFTER track_screenshot_url`)
 	if err != nil {
 		return fmt.Errorf("add track_records.is_running column: %w", err)
 	}
@@ -181,9 +204,13 @@ func ensureMySQLTrackAvgSpeedKmhColumn(ctx context.Context, db *sql.DB) error {
 		return fmt.Errorf("check track_records.avg_speed_kmh column: %w", err)
 	}
 	if count > 0 {
+		_, err = db.ExecContext(ctx, `ALTER TABLE track_records MODIFY COLUMN avg_speed_kmh DOUBLE NOT NULL DEFAULT 1`)
+		if err != nil {
+			return fmt.Errorf("modify track_records.avg_speed_kmh column: %w", err)
+		}
 		return nil
 	}
-	_, err = db.ExecContext(ctx, `ALTER TABLE track_records ADD COLUMN avg_speed_kmh DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER duration`)
+	_, err = db.ExecContext(ctx, `ALTER TABLE track_records ADD COLUMN avg_speed_kmh DOUBLE NOT NULL DEFAULT 1 AFTER status`)
 	if err != nil {
 		return fmt.Errorf("add track_records.avg_speed_kmh column: %w", err)
 	}
@@ -192,45 +219,70 @@ func ensureMySQLTrackAvgSpeedKmhColumn(ctx context.Context, db *sql.DB) error {
 
 func ensureMySQLUserIDColumnsBigint(ctx context.Context, db *sql.DB) error {
 	columns := []struct {
-		table  string
-		column string
+		table      string
+		column     string
+		columnType string
+		definition string
 	}{
-		{table: "users", column: "id"},
-		{table: "track_records", column: "user_id"},
-		{table: "track_waypoints", column: "user_id"},
-		{table: "track_collects", column: "user_id"},
+		{table: "users", column: "id", columnType: "bigint", definition: "BIGINT NOT NULL"},
+		{table: "track_records", column: "user_id", columnType: "bigint unsigned", definition: "BIGINT UNSIGNED NOT NULL"},
+		{table: "track_waypoints", column: "user_id", columnType: "bigint unsigned", definition: "BIGINT UNSIGNED NOT NULL"},
+		{table: "track_collects", column: "user_id", columnType: "bigint", definition: "BIGINT NOT NULL"},
 	}
 	for _, item := range columns {
-		if err := ensureMySQLBigintColumn(ctx, db, item.table, item.column); err != nil {
+		if err := ensureMySQLBigintColumn(ctx, db, item.table, item.column, item.columnType, item.definition); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func ensureMySQLBigintColumn(ctx context.Context, db *sql.DB, tableName, columnName string) error {
-	var dataType string
+func ensureMySQLTrackWaypointTrackIDColumn(ctx context.Context, db *sql.DB) error {
+	var columnType string
 	err := db.QueryRowContext(ctx, `
-		SELECT DATA_TYPE
+		SELECT COLUMN_TYPE
+		FROM information_schema.COLUMNS
+		WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'track_waypoints' AND COLUMN_NAME = 'track_id'`,
+	).Scan(&columnType)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
+		return fmt.Errorf("check track_waypoints.track_id type: %w", err)
+	}
+	if strings.EqualFold(columnType, "varchar(128)") {
+		return nil
+	}
+	_, err = db.ExecContext(ctx, `ALTER TABLE track_waypoints MODIFY COLUMN track_id VARCHAR(128) NOT NULL COMMENT '关联的轨迹主表ID'`)
+	if err != nil {
+		return fmt.Errorf("alter track_waypoints.track_id to VARCHAR(128): %w", err)
+	}
+	return nil
+}
+
+func ensureMySQLBigintColumn(ctx context.Context, db *sql.DB, tableName, columnName, expectedColumnType, definition string) error {
+	var dataType, columnType string
+	err := db.QueryRowContext(ctx, `
+		SELECT DATA_TYPE, COLUMN_TYPE
 		FROM information_schema.COLUMNS
 		WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
 		tableName, columnName,
-	).Scan(&dataType)
+	).Scan(&dataType, &columnType)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil
 		}
 		return fmt.Errorf("check %s.%s type: %w", tableName, columnName, err)
 	}
-	if dataType == "bigint" {
+	if strings.EqualFold(columnType, expectedColumnType) {
 		return nil
 	}
 	if err := ensureMySQLColumnConvertibleToBigint(ctx, db, tableName, columnName, dataType); err != nil {
 		return err
 	}
-	_, err = db.ExecContext(ctx, fmt.Sprintf("ALTER TABLE %s MODIFY COLUMN %s BIGINT NOT NULL", tableName, columnName))
+	_, err = db.ExecContext(ctx, fmt.Sprintf("ALTER TABLE %s MODIFY COLUMN %s %s", tableName, columnName, definition))
 	if err != nil {
-		return fmt.Errorf("alter %s.%s to BIGINT: %w", tableName, columnName, err)
+		return fmt.Errorf("alter %s.%s to %s: %w", tableName, columnName, expectedColumnType, err)
 	}
 	return nil
 }
@@ -248,6 +300,20 @@ func ensureMySQLColumnConvertibleToBigint(ctx context.Context, db *sql.DB, table
 		}
 	}
 	return nil
+}
+
+func nullableStringValue(value string) interface{} {
+	if value == "" {
+		return nil
+	}
+	return value
+}
+
+func nullableTimeValue(value time.Time) interface{} {
+	if value.IsZero() {
+		return nil
+	}
+	return value
 }
 
 // MySQLTrackRepository implements TrackRepository on top of MySQL.
@@ -272,19 +338,16 @@ func (r *MySQLTrackRepository) Create(ctx context.Context, t *models.Track) erro
 	if t.StartTime.IsZero() {
 		t.StartTime = t.CreatedAt
 	}
-	if t.EndTime.IsZero() {
-		t.EndTime = t.StartTime
-	}
 	t.UpdatedAt = t.CreatedAt
 
 	_, err := r.db.ExecContext(ctx,
 		`INSERT INTO track_records (
 			id, user_id, title, start_time, end_time,
-			distance, duration, avg_speed_kmh, elevation_gain, raw_track_url, screenshot_url, is_running, status,
+			distance, duration, elevation_gain, raw_track_url, track_screenshot_url, is_running, status, avg_speed_kmh,
 			created_at, updated_at
 		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-		t.ID, t.UserID, t.Title, t.StartTime, t.EndTime,
-		t.Distance, t.Duration, t.AvgSpeedKmh, t.ElevationGain, t.RawTrackURL, t.TrackScreenshotURL, t.IsRunning, t.Status,
+		t.ID, t.UserID, t.Title, t.StartTime, nullableTimeValue(t.EndTime),
+		t.Distance, t.Duration, t.ElevationGain, nullableStringValue(t.RawTrackURL), nullableStringValue(t.TrackScreenshotURL), t.IsRunning, t.Status, t.AvgSpeedKmh,
 		t.CreatedAt, t.UpdatedAt,
 	)
 	if err != nil {
@@ -295,17 +358,14 @@ func (r *MySQLTrackRepository) Create(ctx context.Context, t *models.Track) erro
 
 func (r *MySQLTrackRepository) Update(ctx context.Context, t *models.Track) error {
 	t.UpdatedAt = time.Now()
-	if t.EndTime.IsZero() {
-		t.EndTime = t.StartTime
-	}
 
 	res, err := r.db.ExecContext(ctx,
 		`UPDATE track_records SET
 			user_id=?, title=?, start_time=?, end_time=?,
-			distance=?, duration=?, avg_speed_kmh=?, elevation_gain=?, raw_track_url=?, screenshot_url=?, is_running=?, status=?, updated_at=?
+			distance=?, duration=?, elevation_gain=?, raw_track_url=?, track_screenshot_url=?, is_running=?, status=?, avg_speed_kmh=?, updated_at=?
 		WHERE id=?`,
-		t.UserID, t.Title, t.StartTime, t.EndTime,
-		t.Distance, t.Duration, t.AvgSpeedKmh, t.ElevationGain, t.RawTrackURL, t.TrackScreenshotURL, t.IsRunning, t.Status, t.UpdatedAt,
+		t.UserID, t.Title, t.StartTime, nullableTimeValue(t.EndTime),
+		t.Distance, t.Duration, t.ElevationGain, nullableStringValue(t.RawTrackURL), nullableStringValue(t.TrackScreenshotURL), t.IsRunning, t.Status, t.AvgSpeedKmh, t.UpdatedAt,
 		t.ID,
 	)
 	if err != nil {
@@ -321,20 +381,46 @@ func (r *MySQLTrackRepository) Update(ctx context.Context, t *models.Track) erro
 func (r *MySQLTrackRepository) FindByID(ctx context.Context, id string) (*models.Track, error) {
 	row := r.db.QueryRowContext(ctx,
 		`SELECT id, user_id, title, start_time, end_time,
-			distance, duration, avg_speed_kmh, elevation_gain, raw_track_url, screenshot_url, is_running, status,
+			distance, duration, elevation_gain, raw_track_url, track_screenshot_url, is_running, status, avg_speed_kmh,
 			created_at, updated_at
 		FROM track_records WHERE id=?`, id)
 
-	var t models.Track
+	var (
+		t               models.Track
+		endTime         sql.NullTime
+		distance        sql.NullFloat64
+		duration        sql.NullInt64
+		elevationGain   sql.NullInt64
+		rawTrackURL     sql.NullString
+		trackScreenshot sql.NullString
+	)
 	if err := row.Scan(
-		&t.ID, &t.UserID, &t.Title, &t.StartTime, &t.EndTime,
-		&t.Distance, &t.Duration, &t.AvgSpeedKmh, &t.ElevationGain, &t.RawTrackURL, &t.TrackScreenshotURL, &t.IsRunning, &t.Status,
+		&t.ID, &t.UserID, &t.Title, &t.StartTime, &endTime,
+		&distance, &duration, &elevationGain, &rawTrackURL, &trackScreenshot, &t.IsRunning, &t.Status, &t.AvgSpeedKmh,
 		&t.CreatedAt, &t.UpdatedAt,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
 		return nil, err
+	}
+	if endTime.Valid {
+		t.EndTime = endTime.Time
+	}
+	if distance.Valid {
+		t.Distance = distance.Float64
+	}
+	if duration.Valid {
+		t.Duration = uint32(duration.Int64)
+	}
+	if elevationGain.Valid {
+		t.ElevationGain = int(elevationGain.Int64)
+	}
+	if rawTrackURL.Valid {
+		t.RawTrackURL = rawTrackURL.String
+	}
+	if trackScreenshot.Valid {
+		t.TrackScreenshotURL = trackScreenshot.String
 	}
 	return &t, nil
 }
@@ -456,7 +542,7 @@ func (r *MySQLTrackWaypointRepository) Create(ctx context.Context, waypoint *mod
 			node_time, media_type, content, media_urls, created_at
 		) VALUES (?,?,?,?,?,?,?,?,?,?)`,
 		waypoint.TrackID, waypoint.UserID, waypoint.Lat, waypoint.Lng, waypoint.Elevation,
-		waypoint.NodeTime, waypoint.MediaType, waypoint.Content, mediaURLsJSON, waypoint.CreatedAt,
+		waypoint.NodeTime, waypoint.MediaType, nullableStringValue(waypoint.Content), mediaURLsJSON, waypoint.CreatedAt,
 	)
 	if err != nil {
 		return err
@@ -535,7 +621,7 @@ func (r *MySQLUserRepository) CreateIfNotExists(ctx context.Context, u *models.U
 		`INSERT INTO users (id, nickname, avatar_url, signature, phone, client_language, created_at, updated_at)
 			 VALUES (?,?,?,?,?,?,?,?)
 			 ON DUPLICATE KEY UPDATE id=id`,
-		u.ID, u.Nickname, u.AvatarURL, u.Signature, u.Phone, u.ClientLanguage, u.CreatedAt, u.UpdatedAt,
+		u.ID, u.Nickname, nullableStringValue(u.AvatarURL), nullableStringValue(u.Signature), u.Phone, u.ClientLanguage, u.CreatedAt, u.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -548,12 +634,22 @@ func (r *MySQLUserRepository) FindByID(ctx context.Context, id int64) (*models.U
 		`SELECT id, nickname, avatar_url, signature, phone, client_language, created_at, updated_at FROM users WHERE id=?`,
 		id,
 	)
-	var u models.User
-	if err := row.Scan(&u.ID, &u.Nickname, &u.AvatarURL, &u.Signature, &u.Phone, &u.ClientLanguage, &u.CreatedAt, &u.UpdatedAt); err != nil {
+	var (
+		u         models.User
+		avatarURL sql.NullString
+		signature sql.NullString
+	)
+	if err := row.Scan(&u.ID, &u.Nickname, &avatarURL, &signature, &u.Phone, &u.ClientLanguage, &u.CreatedAt, &u.UpdatedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
 		return nil, err
+	}
+	if avatarURL.Valid {
+		u.AvatarURL = avatarURL.String
+	}
+	if signature.Valid {
+		u.Signature = signature.String
 	}
 	return &u, nil
 }
@@ -562,7 +658,7 @@ func (r *MySQLUserRepository) Update(ctx context.Context, u *models.User) error 
 	u.UpdatedAt = time.Now()
 	res, err := r.db.ExecContext(ctx,
 		`UPDATE users SET nickname=?, avatar_url=?, signature=?, phone=?, client_language=?, updated_at=? WHERE id=?`,
-		u.Nickname, u.AvatarURL, u.Signature, u.Phone, u.ClientLanguage, u.UpdatedAt, u.ID,
+		u.Nickname, nullableStringValue(u.AvatarURL), nullableStringValue(u.Signature), u.Phone, u.ClientLanguage, u.UpdatedAt, u.ID,
 	)
 	if err != nil {
 		return err
@@ -631,7 +727,7 @@ func (r *MySQLLoginLogRepository) Create(ctx context.Context, log *models.LoginL
 	res, err := r.db.ExecContext(ctx,
 		`INSERT INTO login_log (user_id, login_type, ip, device_id, platform, created_at)
 		 VALUES (?,?,?,?,?,?)`,
-		log.UserID, log.LoginType, log.IP, log.DeviceID, log.Platform, log.CreatedAt,
+		log.UserID, log.LoginType, nullableStringValue(log.IP), nullableStringValue(log.DeviceID), nullableStringValue(log.Platform), log.CreatedAt,
 	)
 	if err != nil {
 		return err
@@ -660,9 +756,23 @@ func (r *MySQLLoginLogRepository) ListByUserID(ctx context.Context, userID int64
 
 	logs := make([]*models.LoginLog, 0, limit)
 	for rows.Next() {
-		var item models.LoginLog
-		if err := rows.Scan(&item.ID, &item.UserID, &item.LoginType, &item.IP, &item.DeviceID, &item.Platform, &item.CreatedAt); err != nil {
+		var (
+			item     models.LoginLog
+			ip       sql.NullString
+			deviceID sql.NullString
+			platform sql.NullString
+		)
+		if err := rows.Scan(&item.ID, &item.UserID, &item.LoginType, &ip, &deviceID, &platform, &item.CreatedAt); err != nil {
 			return nil, err
+		}
+		if ip.Valid {
+			item.IP = ip.String
+		}
+		if deviceID.Valid {
+			item.DeviceID = deviceID.String
+		}
+		if platform.Valid {
+			item.Platform = platform.String
 		}
 		logs = append(logs, &item)
 	}

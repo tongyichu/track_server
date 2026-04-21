@@ -26,22 +26,22 @@ type TrackPoint struct {
 // Track aggregates persisted fields of track_records.
 // Points is transient field kept for existing service logic.
 type Track struct {
-	ID                 string       `json:"id" bson:"_id,omitempty"`              // ID 是轨迹记录唯一标识，由 generateTrackID 生成。
-	UserID             int64        `json:"user_id" bson:"user_id"`               // UserID 是轨迹所属用户 ID。
-	Title              string       `json:"title" bson:"title"`                   // Title 是轨迹名称。
-	StartTime          time.Time    `json:"start_time" bson:"start_time"`         // StartTime 是运动开始时间。
-	EndTime            time.Time    `json:"end_time" bson:"end_time"`             // EndTime 是运动结束时间。
-	Distance           float64      `json:"distance" bson:"distance"`             // Distance 是总距离，单位米。
-	Duration           uint32       `json:"duration" bson:"duration"`             // Duration 是运动耗时，单位秒。
-	ElevationGain      int          `json:"elevation_gain" bson:"elevation_gain"` // ElevationGain 是累计爬升，单位米。
-	RawTrackURL        string       `json:"raw_track_url" bson:"raw_track_url"`   // RawTrackURL 是原始轨迹点文件在对象存储中的地址。
-	TrackScreenshotURL string       `json:"screenshot_url" bson:"screenshot_url"` // TrackScreenshotURL 是轨迹截图文件在对象存储中的地址。
-	IsRunning          bool         `json:"is_running" bson:"is_running"`         // IsRunning 表示轨迹是否仍处于进行中。
-	Status             TrackStatus  `json:"status" bson:"status"`                 // Status 是轨迹状态：0-删除，1-正常，2-私密。
-	CreatedAt          time.Time    `json:"created_at" bson:"created_at"`         // CreatedAt 是记录创建时间。
-	UpdatedAt          time.Time    `json:"updated_at" bson:"updated_at"`         // UpdatedAt 是记录更新时间。
-	Points             []TrackPoint `json:"points,omitempty" bson:"-"`            // Points 是内存中的轨迹点集合，不直接持久化到 track_records。
-	AvgSpeedKmh        float64      `json:"avg_speed_kmh,omitempty" bson:"avg_speed_kmh"` // AvgSpeedKmh 是平均速度，单位 km/h。
+	ID                 string       `json:"id" bson:"_id,omitempty"`                          // ID 是轨迹记录唯一标识，由 generateTrackID 生成。
+	UserID             int64        `json:"user_id" bson:"user_id"`                           // UserID 是轨迹所属用户 ID。
+	Title              string       `json:"title" bson:"title"`                               // Title 是轨迹名称。
+	StartTime          time.Time    `json:"start_time" bson:"start_time"`                     // StartTime 是运动开始时间。
+	EndTime            time.Time    `json:"end_time" bson:"end_time"`                         // EndTime 是运动结束时间。
+	Distance           float64      `json:"distance" bson:"distance"`                         // Distance 是总距离，单位米。
+	Duration           uint32       `json:"duration" bson:"duration"`                         // Duration 是运动耗时，单位秒。
+	ElevationGain      int          `json:"elevation_gain" bson:"elevation_gain"`             // ElevationGain 是累计爬升，单位米。
+	RawTrackURL        string       `json:"raw_track_url" bson:"raw_track_url"`               // RawTrackURL 是原始轨迹点文件在对象存储中的地址。
+	TrackScreenshotURL string       `json:"track_screenshot_url" bson:"track_screenshot_url"` // TrackScreenshotURL 是轨迹截图文件在对象存储中的地址。
+	IsRunning          bool         `json:"is_running" bson:"is_running"`                     // IsRunning 表示轨迹是否仍处于进行中。
+	Status             TrackStatus  `json:"status" bson:"status"`                             // Status 是轨迹状态：0-删除，1-正常，2-私密。
+	CreatedAt          time.Time    `json:"created_at" bson:"created_at"`                     // CreatedAt 是记录创建时间。
+	UpdatedAt          time.Time    `json:"updated_at" bson:"updated_at"`                     // UpdatedAt 是记录更新时间。
+	Points             []TrackPoint `json:"points,omitempty" bson:"-"`                        // Points 是内存中的轨迹点集合，不直接持久化到 track_records。
+	AvgSpeedKmh        float64      `json:"avg_speed_kmh,omitempty" bson:"avg_speed_kmh"`     // AvgSpeedKmh 是平均速度，单位 km/h。
 }
 
 // TrackSummary is a lightweight view used for recommend/search lists.
