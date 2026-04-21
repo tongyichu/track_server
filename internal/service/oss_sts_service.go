@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/tongyichu/track_server/internal/config"
 	"strings"
 	"time"
 
@@ -38,26 +39,26 @@ type OSSTemporaryCredential struct {
 // OSSTokenService 负责向阿里云 STS 申请“仅允许上传到指定前缀”的临时凭证。
 //
 // 设计取舍：
-// - 本服务只做“发放上传凭证”，不参与实际上传，也不生成 postPolicy 表单。
-// - 权限上目前最小化到 `oss:PutObject`，即“仅允许上传对象”。
-//   如需支持分片上传/列举/删除等，应在 Policy 的 Action 中显式加上对应权限。
+//   - 本服务只做“发放上传凭证”，不参与实际上传，也不生成 postPolicy 表单。
+//   - 权限上目前最小化到 `oss:PutObject`，即“仅允许上传对象”。
+//     如需支持分片上传/列举/删除等，应在 Policy 的 Action 中显式加上对应权限。
 type OSSTokenService struct {
 	// stsClient 是阿里云 STS SDK 客户端，使用长期 AK/SK 初始化，仅在服务端持有。
 	stsClient *sts.Client
 
 	// roleARN 是用于 AssumeRole 的 RAM 角色 ARN。
-	roleARN           string
+	roleARN string
 	// durationSeconds 是临时凭证有效期（秒）。
 	// 为减少风险，应尽量短（例如 15 分钟或 1 小时），并符合阿里云侧允许范围。
-	durationSeconds   int64
+	durationSeconds int64
 	// roleSessionPrefix 用于拼接 RoleSessionName（便于审计与排障）。
 	roleSessionPrefix string
 
 	// ossBucket 是 OSS Bucket 名称。
-	ossBucket       string
+	ossBucket string
 	// ossRegion/ossEndpoint 是给客户端上传使用的区域/Endpoint 信息（可选）。
-	ossRegion       string
-	ossEndpoint     string
+	ossRegion   string
+	ossEndpoint string
 	// ossUploadPrefix 控制用户目录的一级前缀，例如 "user"；最终目录为 <prefix>/<userID>/。
 	ossUploadPrefix string
 }
@@ -141,9 +142,9 @@ func (s *OSSTokenService) GetUploadCredential(userID int64) (*OSSTemporaryCreden
 	// - 目录统一以 / 结尾，便于拼接 object key（dir + filename）
 	base := strings.Trim(s.ossUploadPrefix, "/")
 	if base == "" {
-		base = "user"
+		base = config.DefaultOSSPathPrefix
 	}
-	dir := fmt.Sprintf("%s/%d/", base, userID)
+	dir := fmt.Sprintf("%s/%d/", base, GetBucketID(userID))
 
 	policyJSON, err := buildOSSPutObjectPolicy(s.ossBucket, dir)
 	if err != nil {
@@ -190,6 +191,10 @@ func (s *OSSTokenService) GetUploadCredential(userID int64) (*OSSTemporaryCreden
 	}, nil
 }
 
+func GetBucketID(uid int64) int64 {
+	return uid % config.OSSFileBucketSize
+}
+
 // buildOSSPutObjectPolicy 生成 AssumeRole 使用的最小权限 Policy。
 //
 // 目前策略：只允许对指定 bucket + 指定 dir 前缀执行 PutObject。
@@ -200,7 +205,7 @@ func (s *OSSTokenService) GetUploadCredential(userID int64) (*OSSTemporaryCreden
 // - 这里没有加 Condition（例如 IP 限制、UA 限制），仅按 Resource 做前缀隔离。
 // - 若要支持分片上传（MultipartUpload），需要额外授权相关 Action。
 func buildOSSPutObjectPolicy(bucket, dir string) (string, error) {
-	// Resource 示例：acs:oss:*:*:examplebucket/src/*
+	// Resource 示例：acs:oss:*:*:examplebucket/prod/track/*
 	// 我们这里 dir 结尾是 /，因此拼接成 <dir>* 后等价于允许该目录下的任意对象。
 	resource := fmt.Sprintf("acs:oss:*:*:%s/%s*", bucket, dir)
 	policy := map[string]any{
