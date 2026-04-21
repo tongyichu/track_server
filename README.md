@@ -80,8 +80,10 @@ docker pull crpi-p78v4agazv8zn80d.cn-beijing.personal.cr.aliyuncs.com/track_serv
 说明：该服务默认依赖 mysql。mysql提前安装好，或者购买云数据库。登录mysql: mysql -u root -p
 
 ```bash
-# 启动 API（只需拉取你的业务镜像）
-docker run -d --name track_server_go -p 80:8080 -e 'MYSQL_DSN=root:track_server_6509HbK@tcp(172.18.0.1:3306)/track_db?charset=utf8mb4&parseTime=True' -e SERVER_ADDR=:8080 -e LOG_DIR=/var/log/track_server -v /var/log/track_server:/var/log/track_server 47947fd68507 
+# 启动业务镜像服务(方式一：直接写环境变量)
+docker run -d --name track_server_go -p 80:8080 -e 'MYSQL_DSN=root:track_server_6509HbK@tcp(172.18.0.1:3306)/track_db?charset=utf8mb4&parseTime=True' -e SERVER_ADDR=:8080 -e LOG_DIR=/var/log/track_server -v /var/log/track_server:/var/log/track_server 47947fd68507
+# 启动业务镜像服务(方式二：环境变量写入 本地 .env 文件)
+docker run -d --name track_server_go -p 80:8080 --env-file .env -v /var/log/track_server:/var/log/track_server 47947fd68507 
 
 # 进入docker容器
 docker exec -it track_server_go /bin/bash
@@ -243,9 +245,8 @@ docker compose up -d --build
 #### 1. 安装 Certbot
 
 ```bash
-# Ubuntu / Debian
-sudo apt update
-sudo apt install -y certbot
+# aliyunos
+sudo dnf -y install certbot
 
 # CentOS / RHEL
 sudo yum install -y epel-release

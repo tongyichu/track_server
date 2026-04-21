@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/tongyichu/track_server/internal/config"
+	"log"
 	"strings"
 	"time"
 
@@ -148,6 +149,7 @@ func (s *OSSTokenService) GetUploadCredential(userID int64) (*OSSTemporaryCreden
 
 	policyJSON, err := buildOSSPutObjectPolicy(s.ossBucket, dir)
 	if err != nil {
+		log.Printf("debug info failed to build policy JSON: %v", err)
 		return nil, err
 	}
 
@@ -171,11 +173,13 @@ func (s *OSSTokenService) GetUploadCredential(userID int64) (*OSSTemporaryCreden
 
 	resp, err := s.stsClient.AssumeRole(req)
 	if err != nil {
+		log.Printf("debug info sts AssumeRole error [req=%v]: %v", req, err)
 		return nil, err
 	}
 	cred := resp.Credentials
 	// Credentials 为空通常意味着 STS 侧返回异常；这里做防御性校验。
 	if cred.AccessKeyId == "" || cred.AccessKeySecret == "" || cred.SecurityToken == "" {
+		log.Printf("debug info sts returned empty credentials")
 		return nil, errors.New("sts returned empty credentials")
 	}
 

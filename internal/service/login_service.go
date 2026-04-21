@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"math/rand"
 	"net/http"
 	"sync"
@@ -114,7 +115,7 @@ func (s *LoginService) CaptchaStore() map[string]CaptchaEntry {
 func (s *LoginService) GenerateCaptcha(ctx context.Context) (*CaptchaResult, error) {
 	captchaID := fmt.Sprintf("cap_%d_%d", time.Now().UnixNano(), rand.Intn(100000))
 	code := fmt.Sprintf("%04d", rand.Intn(10000))
-
+	log.Printf("debug info generate captcha [code: %s, id=%s]", code, captchaID)
 	s.mu.Lock()
 	s.captchas[captchaID] = CaptchaEntry{
 		Code:      code,
@@ -134,6 +135,7 @@ func (s *LoginService) ValidateCaptcha(captchaID, captchaCode string) bool {
 	entry, ok := s.captchas[captchaID]
 	s.mu.RUnlock()
 	if !ok || time.Now().After(entry.ExpiresAt) {
+		log.Printf("debug info captcha code expired %s", entry.Code)
 		return false
 	}
 	if entry.Code != captchaCode {
