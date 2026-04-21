@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -41,8 +42,26 @@ func (h *TrackHandler) CreateTrack(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	track, err := h.trackSvc.CreateTrack(ctx, meta.UserID)
+	var req service.CreateTrackInput
+	data, err := c.Body()
 	if err != nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid payload"})
+		return
+	}
+	if len(bytes.TrimSpace(data)) > 0 {
+		if err := json.Unmarshal(data, &req); err != nil {
+			c.JSON(http.StatusBadRequest, utils.H{"error": "invalid payload"})
+			return
+		}
+	}
+
+	track, err := h.trackSvc.CreateTrack(ctx, meta.UserID, req)
+	if err != nil {
+		var iae *service.InvalidArgumentError
+		if errors.As(err, &iae) {
+			c.JSON(http.StatusBadRequest, utils.H{"error": iae.Error()})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
 		return
 	}

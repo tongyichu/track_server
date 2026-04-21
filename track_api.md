@@ -75,7 +75,7 @@ Token 的获取与说明参考 `login.md`。
 | `avg_speed_kmh` | number | 平均速度（km/h） |
 | `elevation_gain` | int | 累计爬升（米） |
 | `raw_track_url` | string | 原始轨迹文件地址 |
-| `screenshot_url` | string | 轨迹截图地址 |
+| `track_screenshot_url` | string | 轨迹截图地址 |
 | `is_running` | bool | 是否进行中 |
 | `status` | int | 轨迹状态：`0` 删除，`1` 正常，`2` 私密 |
 | `created_at` | string | 创建时间 |
@@ -85,7 +85,7 @@ Token 的获取与说明参考 `login.md`。
 
 ## 1. 创建轨迹
 
-创建一个新的轨迹记录，默认处于进行中。
+创建一个新的轨迹记录；支持在请求体中直接传入轨迹摘要字段。未传的字段会使用默认值。
 
 **需要认证**
 
@@ -97,7 +97,35 @@ Content-Type: application/json
 Authorization: Bearer <token>
 ```
 
-**请求体：** 无
+**请求体：**（所有字段均为可选）
+
+```json
+{
+  "title": "傍晚夜跑",
+  "start_time": "2026-04-20T12:00:00Z",
+  "end_time": "2026-04-20T12:30:00Z",
+  "distance": 1200.5,
+  "duration": 1800,
+  "elevation_gain": 80,
+  "raw_track_url": "https://example.com/raw/xxx.json",
+  "track_screenshot_url": "https://example.com/ss/xxx.png",
+  "is_running": false,
+  "avg_speed_kmh": 12.3
+}
+```
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `title` | string | 否 | 轨迹标题，默认 `新的轨迹` |
+| `start_time` | string | 否 | 开始时间，RFC3339/ISO8601 格式 |
+| `end_time` | string | 否 | 结束时间，RFC3339/ISO8601 格式，必须 `>= start_time` |
+| `distance` | number | 否 | 距离（米），必须 `>= 0` |
+| `duration` | int | 否 | 时长（秒），必须 `>= 0` |
+| `elevation_gain` | int | 否 | 累计爬升（米），必须 `>= 0` |
+| `raw_track_url` | string | 否 | 原始轨迹文件地址 |
+| `track_screenshot_url` | string | 否 | 轨迹截图地址 |
+| `is_running` | bool | 否 | 是否进行中，默认 `true` |
+| `avg_speed_kmh` | number | 否 | 平均速度（km/h），必须 `>= 0` |
 
 ### 响应
 
@@ -111,7 +139,7 @@ Authorization: Bearer <token>
   "data": {
     "id": "No.1713520800123456789",
     "user_id": 1001,
-    "title": "新的轨迹",
+    "title": "傍晚夜跑",
     "start_time": "2026-04-20T12:00:00Z",
     "end_time": "2026-04-20T12:00:00Z",
     "distance": 0,
@@ -119,7 +147,7 @@ Authorization: Bearer <token>
     "avg_speed_kmh": 0,
     "elevation_gain": 0,
     "raw_track_url": "",
-    "screenshot_url": "",
+    "track_screenshot_url": "",
     "is_running": true,
     "status": 1,
     "created_at": "2026-04-20T12:00:00Z",
@@ -134,10 +162,22 @@ Authorization: Bearer <token>
 curl -X POST "http://<host>:<port>/api/v1/track/create" \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
-  -H "X-User-ID: 1001"
+  -H "X-User-ID: 1001" \
+  -d '{
+    "title": "傍晚夜跑",
+    "start_time": "2026-04-20T12:00:00Z",
+    "end_time": "2026-04-20T12:30:00Z",
+    "distance": 1200.5,
+    "duration": 1800,
+    "elevation_gain": 80,
+    "raw_track_url": "https://example.com/raw/xxx.json",
+    "track_screenshot_url": "https://example.com/ss/xxx.png",
+    "is_running": false,
+    "avg_speed_kmh": 12.3
+  }'
 ```
 
----
+---ti'ji
 
 ## 2. 更新轨迹信息（部分字段）
 

@@ -119,6 +119,81 @@ func TestCreateTrack_Success(t *testing.T) {
 	}
 }
 
+func TestCreateTrack_WithBody(t *testing.T) {
+	e := newTestEnv()
+	token := e.generateTestToken(1001)
+	body, _ := json.Marshal(map[string]interface{}{
+		"title":                "傍晚夜跑",
+		"start_time":           "2026-04-20T12:00:00Z",
+		"end_time":             "2026-04-20T12:30:00Z",
+		"distance":             1500.5,
+		"duration":             1800,
+		"elevation_gain":       66,
+		"raw_track_url":        "https://example.com/raw/track.json",
+		"track_screenshot_url": "https://example.com/track.png",
+		"is_running":           false,
+		"avg_speed_kmh":        3.0,
+	})
+
+	w := e.perform(http.MethodPost, "/api/v1/track/create", body, authHeader(token), ut.Header{Key: middleware.HeaderUserID, Value: "1001"})
+	resp := w.Result()
+	if resp.StatusCode() != http.StatusOK {
+		t.Fatalf("expected status 200, got %d, body=%s", resp.StatusCode(), string(resp.Body()))
+	}
+	var result handler.StandardResponse[*models.Track]
+	decodeJSON(t, resp.Body(), &result)
+	if result.Code != 0 {
+		t.Fatalf("expected code 0, got %d", result.Code)
+	}
+	if result.Data == nil {
+		t.Fatalf("expected non-nil data")
+	}
+	if result.Data.Distance != 1500.5 {
+		t.Fatalf("expected distance 1500.5, got %v", result.Data.Distance)
+	}
+	if result.Data.Title != "傍晚夜跑" {
+		t.Fatalf("expected title 傍晚夜跑, got %q", result.Data.Title)
+	}
+	if result.Data.Duration != 1800 {
+		t.Fatalf("expected duration 1800, got %v", result.Data.Duration)
+	}
+	if result.Data.ElevationGain != 66 {
+		t.Fatalf("expected elevation_gain 66, got %v", result.Data.ElevationGain)
+	}
+	if result.Data.RawTrackURL != "https://example.com/raw/track.json" {
+		t.Fatalf("unexpected raw_track_url: %q", result.Data.RawTrackURL)
+	}
+	if result.Data.TrackScreenshotURL != "https://example.com/track.png" {
+		t.Fatalf("unexpected track_screenshot_url: %q", result.Data.TrackScreenshotURL)
+	}
+	if result.Data.IsRunning {
+		t.Fatalf("expected is_running false")
+	}
+	if result.Data.AvgSpeedKmh != 3.0 {
+		t.Fatalf("expected avg_speed_kmh 3.0, got %v", result.Data.AvgSpeedKmh)
+	}
+	if got := result.Data.StartTime.Format(time.RFC3339); got != "2026-04-20T12:00:00Z" {
+		t.Fatalf("expected start_time 2026-04-20T12:00:00Z, got %s", got)
+	}
+	if got := result.Data.EndTime.Format(time.RFC3339); got != "2026-04-20T12:30:00Z" {
+		t.Fatalf("expected end_time 2026-04-20T12:30:00Z, got %s", got)
+	}
+}
+
+func TestCreateTrack_InvalidTimeRange(t *testing.T) {
+	e := newTestEnv()
+	token := e.generateTestToken(1001)
+	body, _ := json.Marshal(map[string]interface{}{
+		"start_time": "2026-04-20T12:30:00Z",
+		"end_time":   "2026-04-20T12:00:00Z",
+	})
+
+	w := e.perform(http.MethodPost, "/api/v1/track/create", body, authHeader(token), ut.Header{Key: middleware.HeaderUserID, Value: "1001"})
+	if w.Result().StatusCode() != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d", w.Result().StatusCode())
+	}
+}
+
 // TestCreateTrack_NoAuth verifies 401 is returned when no JWT token is provided.
 func TestCreateTrack_NoAuth(t *testing.T) {
 	e := newTestEnv()
@@ -307,13 +382,13 @@ func TestUpdateTrackInfo_Success(t *testing.T) {
 	})
 
 	body, _ := json.Marshal(map[string]interface{}{
-		"distance":        200.5,
-		"is_running":      false,
-		"avg_speed_kmh":   12.3,
-		"raw_track_url":   "new-url",
-		"screenshot_url":  "new-ss",
-		"elevation_gain":  23,
-		"duration":        99,
+		"distance":       200.5,
+		"is_running":     false,
+		"avg_speed_kmh":  12.3,
+		"raw_track_url":  "new-url",
+		"screenshot_url": "new-ss",
+		"elevation_gain": 23,
+		"duration":       99,
 	})
 
 	w := e.perform(http.MethodPut, "/api/v1/track/trk-upd/update", body, authHeader(token), ut.Header{Key: middleware.HeaderUserID, Value: "1001"})

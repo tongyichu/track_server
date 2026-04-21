@@ -27,6 +27,43 @@ func (e *InvalidArgumentError) Error() string { return e.Msg }
 
 func invalidArg(msg string) error { return &InvalidArgumentError{Msg: msg} }
 
+// CreateTrackInput describes optional fields accepted by track creation.
+type CreateTrackInput struct {
+	Title               *string    `json:"title"`
+	StartTime           *time.Time `json:"start_time"`
+	EndTime             *time.Time `json:"end_time"`
+	Distance            *float64   `json:"distance"`
+	Duration            *uint32    `json:"duration"`
+	ElevationGain       *int       `json:"elevation_gain"`
+	RawTrackURL         *string    `json:"raw_track_url"`
+	TrackScreenshotURL  *string    `json:"track_screenshot_url"`
+	LegacyScreenshotURL *string    `json:"screenshot_url,omitempty"`
+	IsRunning           *bool      `json:"is_running"`
+	AvgSpeedKmh         *float64   `json:"avg_speed_kmh"`
+}
+
+func (in *CreateTrackInput) normalize() {
+	if in.TrackScreenshotURL == nil && in.LegacyScreenshotURL != nil {
+		in.TrackScreenshotURL = in.LegacyScreenshotURL
+	}
+}
+
+func (in CreateTrackInput) validate() error {
+	if in.Distance != nil && *in.Distance < 0 {
+		return invalidArg("distance must be >= 0")
+	}
+	if in.ElevationGain != nil && *in.ElevationGain < 0 {
+		return invalidArg("elevation_gain must be >= 0")
+	}
+	if in.AvgSpeedKmh != nil && *in.AvgSpeedKmh < 0 {
+		return invalidArg("avg_speed_kmh must be >= 0")
+	}
+	if in.StartTime != nil && in.EndTime != nil && in.EndTime.Before(*in.StartTime) {
+		return invalidArg("end_time must be >= start_time")
+	}
+	return nil
+}
+
 // TrackInfoPatch describes which track summary fields should be updated.
 // Nil means the field is not provided and should remain unchanged.
 type TrackInfoPatch struct {
@@ -54,21 +91,57 @@ func NewTrackService(tracks repository.TrackRepository, collects repository.Coll
 	return &TrackService{tracks: tracks, collects: collects}
 }
 
-// CreateTrack creates a new running track for a user.
-func (s *TrackService) CreateTrack(ctx context.Context, userID int64) (*models.Track, error) {
+// CreateTrack creates a new track for a user.
+func (s *TrackService) CreateTrack(ctx context.Context, userID int64, input CreateTrackInput) (*models.Track, error) {
 	if userID <= 0 {
 		return nil, errors.New("userID is required")
 	}
+	input.normalize()
+	if err := input.validate(); err != nil {
+		return nil, err
+	}
 	now := time.Now()
+	startTime := now
+	if input.StartTime != nil {
+		startTime = *input.StartTime
+	}
+	isRunning := true
+	if input.IsRunning != nil {
+		isRunning = *input.IsRunning
+	}
 	track := &models.Track{
 		ID:        generateTrackID(),
 		UserID:    userID,
 		Title:     "新的轨迹",
-		StartTime: now,
-		IsRunning: true,
+		StartTime: startTime,
+		IsRunning: isRunning,
 		Status:    models.TrackStatusNormal,
 		CreatedAt: now,
 		UpdatedAt: now,
+	}
+	if input.Title != nil {
+		track.Title = *input.Title
+	}
+	if input.EndTime != nil {
+		track.EndTime = *input.EndTime
+	}
+	if input.Distance != nil {
+		track.Distance = *input.Distance
+	}
+	if input.Duration != nil {
+		track.Duration = *input.Duration
+	}
+	if input.ElevationGain != nil {
+		track.ElevationGain = *input.ElevationGain
+	}
+	if input.RawTrackURL != nil {
+		track.RawTrackURL = *input.RawTrackURL
+	}
+	if input.TrackScreenshotURL != nil {
+		track.TrackScreenshotURL = *input.TrackScreenshotURL
+	}
+	if input.AvgSpeedKmh != nil {
+		track.AvgSpeedKmh = *input.AvgSpeedKmh
 	}
 	if err := s.tracks.Create(ctx, track); err != nil {
 		return nil, err

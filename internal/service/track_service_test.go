@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/tongyichu/track_server/internal/models"
 	"github.com/tongyichu/track_server/internal/repository"
@@ -14,7 +15,7 @@ func TestCreateTrackAssignsRecordFields(t *testing.T) {
 	trackRepo, _, collectRepo, _ := repository.NewInMemoryRepositories()
 	svc := NewTrackService(trackRepo, collectRepo)
 
-	track, err := svc.CreateTrack(context.Background(), 1001)
+	track, err := svc.CreateTrack(context.Background(), 1001, CreateTrackInput{})
 	if err != nil {
 		t.Fatalf("CreateTrack returned error: %v", err)
 	}
@@ -32,6 +33,84 @@ func TestCreateTrackAssignsRecordFields(t *testing.T) {
 	}
 	if !track.IsRunning {
 		t.Fatalf("expected created track to be running")
+	}
+}
+
+func TestCreateTrack_UsesProvidedFields(t *testing.T) {
+	trackRepo, _, collectRepo, _ := repository.NewInMemoryRepositories()
+	svc := NewTrackService(trackRepo, collectRepo)
+
+	start := time.Date(2026, 4, 20, 12, 0, 0, 0, time.UTC)
+	end := start.Add(30 * time.Minute)
+	title := "傍晚夜跑"
+	distance := 5200.5
+	duration := uint32(1800)
+	elevationGain := 120
+	rawURL := "https://example.com/raw/track.json"
+	screenshotURL := "https://example.com/track.png"
+	isRunning := false
+	avgSpeed := 10.4
+
+	track, err := svc.CreateTrack(context.Background(), 1001, CreateTrackInput{
+		Title:              &title,
+		StartTime:          &start,
+		EndTime:            &end,
+		Distance:           &distance,
+		Duration:           &duration,
+		ElevationGain:      &elevationGain,
+		RawTrackURL:        &rawURL,
+		TrackScreenshotURL: &screenshotURL,
+		IsRunning:          &isRunning,
+		AvgSpeedKmh:        &avgSpeed,
+	})
+	if err != nil {
+		t.Fatalf("CreateTrack returned error: %v", err)
+	}
+	if !track.StartTime.Equal(start) {
+		t.Fatalf("expected start_time %v, got %v", start, track.StartTime)
+	}
+	if track.Title != title {
+		t.Fatalf("expected title %q, got %q", title, track.Title)
+	}
+	if !track.EndTime.Equal(end) {
+		t.Fatalf("expected end_time %v, got %v", end, track.EndTime)
+	}
+	if track.Distance != distance {
+		t.Fatalf("expected distance %v, got %v", distance, track.Distance)
+	}
+	if track.Duration != duration {
+		t.Fatalf("expected duration %v, got %v", duration, track.Duration)
+	}
+	if track.ElevationGain != elevationGain {
+		t.Fatalf("expected elevation_gain %v, got %v", elevationGain, track.ElevationGain)
+	}
+	if track.RawTrackURL != rawURL {
+		t.Fatalf("expected raw_track_url %q, got %q", rawURL, track.RawTrackURL)
+	}
+	if track.TrackScreenshotURL != screenshotURL {
+		t.Fatalf("expected track_screenshot_url %q, got %q", screenshotURL, track.TrackScreenshotURL)
+	}
+	if track.IsRunning != isRunning {
+		t.Fatalf("expected is_running %v, got %v", isRunning, track.IsRunning)
+	}
+	if track.AvgSpeedKmh != avgSpeed {
+		t.Fatalf("expected avg_speed_kmh %v, got %v", avgSpeed, track.AvgSpeedKmh)
+	}
+}
+
+func TestCreateTrack_InvalidTimeRange(t *testing.T) {
+	trackRepo, _, collectRepo, _ := repository.NewInMemoryRepositories()
+	svc := NewTrackService(trackRepo, collectRepo)
+
+	start := time.Date(2026, 4, 20, 12, 0, 0, 0, time.UTC)
+	end := start.Add(-time.Minute)
+
+	_, err := svc.CreateTrack(context.Background(), 1001, CreateTrackInput{StartTime: &start, EndTime: &end})
+	if err == nil {
+		t.Fatalf("expected invalid time range error")
+	}
+	if _, ok := err.(*InvalidArgumentError); !ok {
+		t.Fatalf("expected InvalidArgumentError, got %T: %v", err, err)
 	}
 }
 
