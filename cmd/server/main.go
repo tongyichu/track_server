@@ -88,6 +88,12 @@ func main() {
 	userSvc := service.NewUserService(userRepo)
 	loginSvc := service.NewLoginService(userRepo, loginLogRepo, cfg.WechatAppID, cfg.WechatAppSecret, cfg.JWTSecret)
 
+	// Aliyun OSS STS（用于客户端直传）
+	// 相关启动参数在 internal/config/config.go 中通过环境变量加载：
+	// - ALIYUN_ACCESS_KEY_ID / ALIYUN_ACCESS_KEY_SECRET / ALIYUN_ROLE_ARN / ALIYUN_STS_REGION
+	// - ALIYUN_STS_DURATION_SECONDS / ALIYUN_ROLE_SESSION_NAME_PREFIX
+	// - OSS_BUCKET / OSS_REGION / OSS_ENDPOINT / OSS_UPLOAD_PREFIX
+	// 若缺少关键配置，服务会降级为“禁用 STS”，对应接口会返回 "oss sts not configured"。
 	ossTokenSvc, err := service.NewOSSTokenService(
 		cfg.AliyunSTSRegion,
 		cfg.AliyunAccessKeyID,

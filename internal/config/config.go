@@ -23,18 +23,16 @@ type Config struct {
 	EnableTLS       bool
 	JWTSecret       string
 
-	// Aliyun OSS STS (temporary credentials for direct upload)
-	AliyunAccessKeyID     string
-	AliyunAccessKeySecret string
-	AliyunRoleARN         string
-	AliyunSTSRegion       string
-	AliyunSTSDurationSec  int64
-	AliyunRoleSessionPref string
-
-	OSSBucket       string
-	OSSRegion       string
-	OSSEndpoint     string
-	OSSUploadPrefix string
+	AliyunAccessKeyID     string // 服务端长期 AK（仅在服务端保存）。
+	AliyunAccessKeySecret string // 服务端长期 SK（仅在服务端保存）。
+	AliyunRoleARN         string // 用于 STS AssumeRole 的 RAM 角色 ARN，例如：acs:ram::xxxxxxxxx:role/oss-rw，该角色需要具备 OSS 写入权限（且建议在角色侧也限制到对应 bucket/前缀），与服务端下发的 policy 取交集
+	AliyunSTSRegion       string // STS 服务所在地域（用于拼接 STS endpoint，通常为 cn-hangzhou）。
+	AliyunSTSDurationSec  int64  // 临时凭证有效期（秒），服务端会在创建 STS Service 时把该值钳制到 900~3600 秒，避免请求失败。
+	AliyunRoleSessionPref string // RoleSessionName 前缀（云侧审计可见）。
+	OSSBucket             string //允许上传的目标 Bucket。该值会写入 STS policy 的 Resource（acs:oss:*:*:<bucket>/<prefix>*），必须与实际 bucket 一致。
+	OSSRegion             string // Bucket 所在地域（主要用于客户端直传时选择配置，服务端申请 STS 不依赖该字段）。
+	OSSEndpoint           string //Bucket 的访问 Endpoint（主要用于客户端直传拼装上传地址）。示例：https://oss-cn-hangzhou.aliyuncs.com
+	OSSUploadPrefix       string //服务端为“每个用户”分配的上传目录前缀。会在服务端生成最终目录：<prefix>/<userID>/，示例 OSS_UPLOAD_PREFIX=/prod/track/user  => dir=prod/track/user/1001/
 }
 
 // Load reads configuration from environment variables with sensible defaults.
@@ -72,6 +70,12 @@ func Load() *Config {
 		EnableTLS:       tlsCert != "" && tlsKey != "",
 		JWTSecret:       getEnv("JWT_SECRET", "track_server_default_jwt_secret"),
 
+		// Aliyun OSS STS（客户端直传上传凭证）
+		// - ALIYUN_ACCESS_KEY_ID / ALIYUN_ACCESS_KEY_SECRET：服务端长期 AK/SK
+		// - ALIYUN_ROLE_ARN：AssumeRole 的目标角色
+		// - ALIYUN_STS_REGION：STS 服务地域
+		// - ALIYUN_STS_DURATION_SECONDS：临时凭证时长（秒，最终会被钳制到 900~3600）
+		// - ALIYUN_ROLE_SESSION_NAME_PREFIX：RoleSessionName 前缀
 		AliyunAccessKeyID:     os.Getenv("ALIYUN_ACCESS_KEY_ID"),
 		AliyunAccessKeySecret: os.Getenv("ALIYUN_ACCESS_KEY_SECRET"),
 		AliyunRoleARN:         os.Getenv("ALIYUN_ROLE_ARN"),
@@ -79,10 +83,14 @@ func Load() *Config {
 		AliyunSTSDurationSec:  getEnvInt64("ALIYUN_STS_DURATION_SECONDS", 900),
 		AliyunRoleSessionPref: getEnv("ALIYUN_ROLE_SESSION_NAME_PREFIX", "trackapp-"),
 
-		OSSBucket:       os.Getenv("OSS_BUCKET"),
+		// OSS 侧直传上下文
+		// - OSS_BUCKET：目标 bucket（会进入 STS policy 的 Resource）
+		// - OSS_REGION/OSS_ENDPOINT：客户端直传时常用的区域/Endpoint 信息
+		// - OSS_UPLOAD_PREFIX：用户目录前缀（最终为 <prefix>/<userID>/）
+		OSSBucket:       getEnv("OSS_BUCKET", "track-resource"),
 		OSSRegion:       getEnv("OSS_REGION", ""),
 		OSSEndpoint:     getEnv("OSS_ENDPOINT", ""),
-		OSSUploadPrefix: getEnv("OSS_UPLOAD_PREFIX", "user"),
+		OSSUploadPrefix: getEnv("OSS_UPLOAD_PREFIX", "/prod/track/"),
 	}
 
 	// Priority:
