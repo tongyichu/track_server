@@ -3,9 +3,9 @@ services:
     image: crpi-p78v4agazv8zn80d.cn-beijing.personal.cr.aliyuncs.com/track_server/track_server_go:latest
     container_name: hertz-track-api
     environment:
-      - MONGO_URI=${MONGO_URI:-mongodb://mongo:27017/trackapp}
-      - MONGO_DB_NAME=${MONGO_DB_NAME:-trackapp}
-      - MYSQL_DSN=${MYSQL_DSN:-}
+#      - MONGO_URI=${MONGO_URI:-mongodb://mongo:27017/trackapp}
+#      - MONGO_DB_NAME=${MONGO_DB_NAME:-trackapp}
+      - MYSQL_DSN=root:track_server_6509HbK@tcp(172.18.0.1:3306)/track_db?charset=utf8mb4&parseTime=True
       # Backward compatible with older env files that used BIND_ADDR
       - SERVER_ADDR=${SERVER_ADDR:-${BIND_ADDR:-:8080}}
       - LOG_DIR=${LOG_DIR:-/var/log/track_server}

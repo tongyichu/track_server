@@ -77,24 +77,14 @@ docker pull crpi-p78v4agazv8zn80d.cn-beijing.personal.cr.aliyuncs.com/track_serv
 
 ### 方式 A：只用 `docker run`（服务器无需拷贝仓库文件）
 
-说明：该服务默认依赖 MongoDB。下面用两条 `docker run` 在同一网络内启动 `mongo` + `api`。
+说明：该服务默认依赖 mysql。mysql提前安装好，或者购买云数据库。登录mysql: mysql -u root -p
 
 ```bash
-# 1) 启动 MongoDB（先拉取mongo镜像：docker pull crpi-p78v4agazv8zn80d.cn-beijing.personal.cr.aliyuncs.com/track_server/mongo7）
-docker network create track-net || true
-docker volume create track-mongo-data || true
-docker run -d --name track-mongo --network track-net -v track-mongo-data:/data/db -e MONGO_INITDB_DATABASE=trackapp $mongo_IMAGE_ID
+# 启动 API（只需拉取你的业务镜像）
+docker run -d --name track_server_go -p 80:8080 -e 'MYSQL_DSN=root:track_server_6509HbK@tcp(172.18.0.1:3306)/track_db?charset=utf8mb4&parseTime=True' -e SERVER_ADDR=:8080 -e LOG_DIR=/var/log/track_server -v /var/log/track_server:/var/log/track_server 47947fd68507 
 
-# 2) 启动 API（只需拉取你的业务镜像）
-docker run -d --name track_server_go --network track-net \
-  -p 80:8080 \
-  -e MONGO_URI=mongodb://track-mongo:27017/trackapp \
-  -e MONGO_DB_NAME=trackapp \
-  -e SERVER_ADDR=:8080 \
-  -e JWT_SECRET=CHANGE_ME_IN_PROD \
-  -e LOG_DIR=/var/log/track_server \
-  -v /var/log/track_server:/var/log/track_server \
-  crpi-p78v4agazv8zn80d.cn-beijing.personal.cr.aliyuncs.com/track_server/track_server_go:latest
+# 进入docker容器
+docker exec -it track_server_go /bin/bash
 
 # （可选）如果你更习惯 .env 文件，也可以把它放在服务器任意路径：
 # docker run ... --env-file /opt/track_server/track_server.env <image>
