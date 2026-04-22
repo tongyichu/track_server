@@ -11,13 +11,11 @@
 | 序号 | 接口 | 方法 | 路径 | 需要认证 |
 |------|------|------|------|---------|
 | 1 | [创建轨迹](#1-创建轨迹) | POST | `/track/create` | ✅ |
-| 2 | [更新轨迹信息（部分字段）](#2-更新轨迹信息部分字段) | PUT | `/track/:track_id/update` | ✅ |
-| 3 | [推荐轨迹列表](#3-推荐轨迹列表) | GET | `/track/recommend/list` | ✅ |
-| 4 | [轨迹详情](#4-轨迹详情) | GET | `/track/:track_id/detail` | ✅ |
-| 5 | [获取 OSS STS 临时凭证（直传上传）](#5-获取-oss-sts-临时凭证直传上传) | GET | `/oss/sts-token` | ✅ |
-| 6 | [获取进行中的轨迹](#6-获取进行中的轨迹) | GET | `/track/running` | ✅ |
-| 7 | [收藏轨迹](#7-收藏轨迹) | POST | `/track_collect` | ✅ |
-| 8 | [取消收藏轨迹](#8-取消收藏轨迹) | DELETE | `/track_collect` | ✅ |
+| 2 | [推荐轨迹列表](#2-推荐轨迹列表) | GET | `/track/recommend/list` | ✅ |
+| 3 | [轨迹详情](#3-轨迹详情) | GET | `/track/:track_id/detail` | ✅ |
+| 4 | [获取 OSS STS 临时凭证（直传上传）](#4-获取-oss-sts-临时凭证直传上传) | GET | `/oss/sts-token` | ✅ |
+| 5 | [收藏轨迹](#5-收藏轨迹) | POST | `/track_collect` | ✅ |
+| 6 | [取消收藏轨迹](#6-取消收藏轨迹) | DELETE | `/track_collect` | ✅ |
 
 ---
 
@@ -181,98 +179,9 @@ curl -X POST "http://<host>:<port>/api/v1/track/create" \
   }'
 ```
 
----ti'ji
-
-## 2. 更新轨迹信息（部分字段）
-
-对指定轨迹做 **部分字段更新**，允许只更新一个字段或多个字段组合更新：
-
-- `distance`
-- `duration`
-- `elevation_gain`
-- `raw_track_url`
-- `screenshot_url`
-- `is_running`
-- `avg_speed_kmh`
-
-**需要认证**
-
-### 请求
-
-```
-PUT /api/v1/track/:track_id/update
-Content-Type: application/json
-Authorization: Bearer <token>
-```
-
-**Path 参数：**
-
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `track_id` | string | 是 | 轨迹 ID |
-
-**请求体：**（至少传一个字段；未传的字段保持不变）
-
-```json
-{
-  "distance": 1200.5,
-  "duration": 360,
-  "elevation_gain": 80,
-  "raw_track_url": "https://example.com/raw/xxx.json",
-  "screenshot_url": "https://example.com/ss/xxx.png",
-  "is_running": false,
-  "avg_speed_kmh": 12.3
-}
-```
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `distance` | number | 否 | 距离（米），必须 `>= 0` |
-| `duration` | int | 否 | 时长（秒），必须 `>= 0` |
-| `elevation_gain` | int | 否 | 累计爬升（米），必须 `>= 0` |
-| `raw_track_url` | string | 否 | 原始轨迹文件地址 |
-| `screenshot_url` | string | 否 | 轨迹截图地址 |
-| `is_running` | bool | 否 | 是否进行中 |
-| `avg_speed_kmh` | number | 否 | 平均速度（km/h），必须 `>= 0` |
-
-### 响应
-
-**状态码：** `200 OK`
-
-返回更新后的 `Track` 对象，使用统一响应格式 `StandardResponse`（`code=0`，`data` 为 Track）。
-
-### 常见错误
-
-- `400 Bad Request`
-  - body 不是合法 JSON
-  - 未提供任何可更新字段（返回 `{"error":"no fields to update"}`）
-  - `distance / elevation_gain / avg_speed_kmh` 为负数
-- `403 Forbidden`
-  - 当前用户无权更新该轨迹（该轨迹不属于当前用户）
-- `404 Not Found`
-  - `track_id` 不存在
-
-### 示例（curl）
-
-```bash
-curl -X PUT "http://<host>:<port>/api/v1/track/trk-upd/update" \
-  -H "Authorization: Bearer <token>" \
-  -H "Content-Type: application/json" \
-  -H "X-User-ID: 1001" \
-  -d '{
-    "distance": 200.5,
-    "duration": 99,
-    "elevation_gain": 23,
-    "raw_track_url": "new-url",
-    "screenshot_url": "new-ss",
-    "is_running": false,
-    "avg_speed_kmh": 12.3
-  }'
-```
-
 ---
 
-## 3. 推荐轨迹列表
+## 2. 推荐轨迹列表
 
 获取推荐轨迹列表。
 
@@ -326,7 +235,7 @@ curl -X GET "http://<host>:<port>/api/v1/track/recommend/list" \
 
 ---
 
-## 4. 轨迹详情
+## 3. 轨迹详情
 
 获取指定轨迹的详情信息。
 
@@ -384,7 +293,7 @@ curl -X GET "http://<host>:<port>/api/v1/track/trk-detail/detail" \
 
 ---
 
-## 5. 获取 OSS STS 临时凭证（直传上传）
+## 4. 获取 OSS STS 临时凭证（直传上传）
 
 用于客户端“直传 OSS”场景：客户端向服务端申请短时有效的临时凭证（STS），然后使用该凭证直接上传到 OSS。
 
@@ -449,107 +358,7 @@ curl -X GET "http://<host>:<port>/api/v1/oss/sts-token" \
 
 ---
 
-## 6. 获取进行中的轨迹
-
-获取指定用户当前正在进行中的轨迹。
-
-- 返回统一响应格式 `StandardResponse`，其中 `data.running` 表示是否存在进行中的轨迹。
-- 当存在进行中的轨迹时，返回 `data.running=true` 与 `data.track`。
-- 当不存在进行中的轨迹时，返回 `data.running=false`，HTTP 状态码仍为 `200 OK`。
-- 无论 `user_id` 从 Query 还是 `X-User-ID` Header 传入，都必须与当前 JWT 鉴权用户一致，否则返回 `403 Forbidden`。
-
-**需要认证**
-
-### 请求
-
-```
-GET /api/v1/track/running
-Authorization: Bearer <token>
-```
-
-**Query 参数：**
-
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `user_id` | int64 | 否 | 要查询的用户 ID。若传入，必须与当前 JWT 鉴权用户 ID 一致；若不传，服务端使用当前鉴权用户 ID |
-
-### 响应
-
-**状态码：** `200 OK`
-
-**存在进行中轨迹：**
-
-```json
-{
-  "code": 0,
-  "data": {
-    "running": true,
-    "track": {
-      "id": "No.1713520800123456789",
-      "user_id": 1001,
-      "title": "傍晚夜跑",
-      "start_time": "2026-04-20T12:00:00Z",
-      "end_time": "2026-04-20T12:30:00Z",
-      "distance": 1200.5,
-      "duration": 1800,
-      "avg_speed_kmh": 12.3,
-      "elevation_gain": 80,
-      "raw_track_url": "https://example.com/raw/xxx.json",
-      "track_screenshot_url": "https://example.com/ss/xxx.png",
-      "is_running": true,
-      "status": 1,
-      "created_at": "2026-04-20T12:00:00Z",
-      "updated_at": "2026-04-20T12:10:00Z"
-    }
-  }
-}
-```
-
-`track` 字段内容可参考上文 [轨迹对象（Track）字段说明](#轨迹对象track字段说明)。
-
-**当前没有进行中的轨迹：**
-
-```json
-{
-  "code": 0,
-  "data": {
-    "running": false
-  }
-}
-```
-
-### 常见错误
-
-- `400 Bad Request`
-  - `user_id` 不是合法的正整数
-- `403 Forbidden`
-  - Query 中的 `user_id` 与 JWT 鉴权用户 ID 不一致
-  - `X-User-ID` Header 与 JWT 鉴权用户 ID 不一致
-- `401 Unauthorized`
-  - 缺少/无效/过期的 Token
-- `500 Internal Server Error`
-  - 服务端查询进行中轨迹失败
-
-### 示例（curl）
-
-按当前登录用户查询：
-
-```bash
-curl -X GET "http://<host>:<port>/api/v1/track/running" \
-  -H "Authorization: Bearer <token>" \
-  -H "X-User-ID: 1001"
-```
-
-按指定用户 ID 查询：
-
-```bash
-curl -X GET "http://<host>:<port>/api/v1/track/running?user_id=1001" \
-  -H "Authorization: Bearer <token>"
-```
-
----
-
-## 7. 收藏轨迹
+## 5. 收藏轨迹
 
 将指定轨迹加入当前用户的收藏列表。
 
@@ -605,7 +414,7 @@ curl -X POST "http://<host>:<port>/api/v1/track_collect?track_id=trk2" \
 
 ---
 
-## 8. 取消收藏轨迹
+## 6. 取消收藏轨迹
 
 将指定轨迹从当前用户的收藏列表中移除。
 
