@@ -10,6 +10,7 @@ import (
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/common/utils"
 
+	"github.com/tongyichu/track_server/internal/models"
 	"github.com/tongyichu/track_server/internal/middleware"
 	"github.com/tongyichu/track_server/internal/repository"
 	"github.com/tongyichu/track_server/internal/service"
@@ -23,6 +24,11 @@ func Ping(ctx context.Context, c *app.RequestContext) {
 // TrackHandler handles HTTP requests related to tracks.
 type TrackHandler struct {
 	trackSvc *service.TrackService
+}
+
+type RunningTrackResult struct {
+	Running bool          `json:"running"`
+	Track   *models.Track `json:"track,omitempty"`
 }
 
 // NewTrackHandler creates a new TrackHandler.
@@ -192,45 +198,51 @@ func (h *TrackHandler) UploadTrackCloud(ctx context.Context, c *app.RequestConte
 
 // GetRunningTrack handles GET /api/track/running
 func (h *TrackHandler) GetRunningTrack(ctx context.Context, c *app.RequestContext) {
+	meta := middleware.GetRequestMeta(c)
+	if meta == nil || meta.UserID <= 0 {
+		c.JSON(http.StatusUnauthorized, utils.H{"error": "unauthorized"})
+		return
+	}
+	authUserID := meta.UserID
+
+	rawHeaderUserID := string(c.Request.Header.Peek(middleware.HeaderUserID))
+	if rawHeaderUserID != "" {
+		headerUserID, err := parseRequiredUserID(rawHeaderUserID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, utils.H{"error": "invalid X-User-ID header"})
+			return
+		}
+		if headerUserID != authUserID {
+			c.JSON(http.StatusForbidden, utils.H{"error": "forbidden"})
+			return
+		}
+	}
+
 	rawUserID := string(c.Query("user_id"))
+	userID := authUserID
 	if rawUserID != "" {
-		userID, err := parseRequiredUserID(rawUserID)
+		parsedUserID, err := parseRequiredUserID(rawUserID)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, utils.H{"error": err.Error()})
 			return
 		}
-		track, err := h.trackSvc.GetRunningTrack(ctx, userID)
-		if err != nil {
-			if err.Error() == repository.ErrNotFound.Error() {
-				c.JSON(http.StatusOK, utils.H{"running": false})
-				return
-			}
-			c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		if parsedUserID != authUserID {
+			c.JSON(http.StatusForbidden, utils.H{"error": "forbidden"})
 			return
 		}
-		c.JSON(http.StatusOK, utils.H{"running": true, "track": track})
-		return
+		userID = parsedUserID
 	}
 
-	meta := middleware.GetRequestMeta(c)
-	if meta == nil || meta.RawUserID == "" {
-		c.JSON(http.StatusBadRequest, utils.H{"error": "user_id is required"})
-		return
-	}
-	if meta.UserID <= 0 {
-		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid X-User-ID header"})
-		return
-	}
-	track, err := h.trackSvc.GetRunningTrack(ctx, meta.UserID)
+	track, err := h.trackSvc.GetRunningTrack(ctx, userID)
 	if err != nil {
 		if err.Error() == repository.ErrNotFound.Error() {
-			c.JSON(http.StatusOK, utils.H{"running": false})
+			c.JSON(http.StatusOK, successResponse(RunningTrackResult{Running: false}))
 			return
 		}
 		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, utils.H{"running": true, "track": track})
+	c.JSON(http.StatusOK, successResponse(RunningTrackResult{Running: true, Track: track}))
 }
 
 // GetCollectStatus handles GET /api/user/:user_id/collect

@@ -15,6 +15,7 @@
 | 3 | [推荐轨迹列表](#3-推荐轨迹列表) | GET | `/track/recommend/list` | ✅ |
 | 4 | [轨迹详情](#4-轨迹详情) | GET | `/track/:track_id/detail` | ✅ |
 | 5 | [获取 OSS STS 临时凭证（直传上传）](#5-获取-oss-sts-临时凭证直传上传) | GET | `/oss/sts-token` | ✅ |
+| 6 | [获取进行中的轨迹](#6-获取进行中的轨迹) | GET | `/track/running` | ✅ |
 
 ---
 
@@ -440,4 +441,104 @@ Authorization: Bearer <token>
 curl -X GET "http://<host>:<port>/api/v1/oss/sts-token" \
   -H "Authorization: Bearer <token>" \
   -H "X-User-ID: 1001"
+```
+
+---
+
+## 6. 获取进行中的轨迹
+
+获取指定用户当前正在进行中的轨迹。
+
+- 返回统一响应格式 `StandardResponse`，其中 `data.running` 表示是否存在进行中的轨迹。
+- 当存在进行中的轨迹时，返回 `data.running=true` 与 `data.track`。
+- 当不存在进行中的轨迹时，返回 `data.running=false`，HTTP 状态码仍为 `200 OK`。
+- 无论 `user_id` 从 Query 还是 `X-User-ID` Header 传入，都必须与当前 JWT 鉴权用户一致，否则返回 `403 Forbidden`。
+
+**需要认证**
+
+### 请求
+
+```
+GET /api/v1/track/running
+Authorization: Bearer <token>
+```
+
+**Query 参数：**
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `user_id` | int64 | 否 | 要查询的用户 ID。若传入，必须与当前 JWT 鉴权用户 ID 一致；若不传，服务端使用当前鉴权用户 ID |
+
+### 响应
+
+**状态码：** `200 OK`
+
+**存在进行中轨迹：**
+
+```json
+{
+  "code": 0,
+  "data": {
+    "running": true,
+    "track": {
+      "id": "No.1713520800123456789",
+      "user_id": 1001,
+      "title": "傍晚夜跑",
+      "start_time": "2026-04-20T12:00:00Z",
+      "end_time": "2026-04-20T12:30:00Z",
+      "distance": 1200.5,
+      "duration": 1800,
+      "avg_speed_kmh": 12.3,
+      "elevation_gain": 80,
+      "raw_track_url": "https://example.com/raw/xxx.json",
+      "track_screenshot_url": "https://example.com/ss/xxx.png",
+      "is_running": true,
+      "status": 1,
+      "created_at": "2026-04-20T12:00:00Z",
+      "updated_at": "2026-04-20T12:10:00Z"
+    }
+  }
+}
+```
+
+`track` 字段内容可参考上文 [轨迹对象（Track）字段说明](#轨迹对象track字段说明)。
+
+**当前没有进行中的轨迹：**
+
+```json
+{
+  "code": 0,
+  "data": {
+    "running": false
+  }
+}
+```
+
+### 常见错误
+
+- `400 Bad Request`
+  - `user_id` 不是合法的正整数
+- `403 Forbidden`
+  - Query 中的 `user_id` 与 JWT 鉴权用户 ID 不一致
+  - `X-User-ID` Header 与 JWT 鉴权用户 ID 不一致
+- `401 Unauthorized`
+  - 缺少/无效/过期的 Token
+- `500 Internal Server Error`
+  - 服务端查询进行中轨迹失败
+
+### 示例（curl）
+
+按当前登录用户查询：
+
+```bash
+curl -X GET "http://<host>:<port>/api/v1/track/running" \
+  -H "Authorization: Bearer <token>" \
+  -H "X-User-ID: 1001"
+```
+
+按指定用户 ID 查询：
+
+```bash
+curl -X GET "http://<host>:<port>/api/v1/track/running?user_id=1001" \
+  -H "Authorization: Bearer <token>"
 ```

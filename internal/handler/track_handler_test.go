@@ -213,11 +213,12 @@ func TestGetRunningTrack_Empty(t *testing.T) {
 	if resp.StatusCode() != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", resp.StatusCode())
 	}
-	var payload struct {
-		Running bool `json:"running"`
-	}
+	var payload handler.StandardResponse[handler.RunningTrackResult]
 	decodeJSON(t, resp.Body(), &payload)
-	if payload.Running {
+	if payload.Code != 0 {
+		t.Fatalf("expected code 0, got %d", payload.Code)
+	}
+	if payload.Data.Running {
 		t.Fatalf("expected running=false, got true")
 	}
 }
@@ -234,16 +235,34 @@ func TestGetRunningTrack_Success(t *testing.T) {
 	if resp.StatusCode() != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", resp.StatusCode())
 	}
-	var payload struct {
-		Running bool         `json:"running"`
-		Track   models.Track `json:"track"`
-	}
+	var payload handler.StandardResponse[handler.RunningTrackResult]
 	decodeJSON(t, resp.Body(), &payload)
-	if !payload.Running {
+	if payload.Code != 0 {
+		t.Fatalf("expected code 0, got %d", payload.Code)
+	}
+	if !payload.Data.Running {
 		t.Fatalf("expected running=true, got false")
 	}
-	if payload.Track.ID != "trk-running" {
-		t.Fatalf("expected running track id trk-running, got %q", payload.Track.ID)
+	if payload.Data.Track == nil || payload.Data.Track.ID != "trk-running" {
+		t.Fatalf("expected running track id trk-running, got %+v", payload.Data.Track)
+	}
+}
+
+func TestGetRunningTrack_QueryUserIDMismatch(t *testing.T) {
+	e := newTestEnv()
+	token := e.generateTestToken(1001)
+	w := e.perform(http.MethodGet, "/api/v1/track/running?user_id=1002", nil, authHeader(token))
+	if w.Result().StatusCode() != http.StatusForbidden {
+		t.Fatalf("expected status 403, got %d", w.Result().StatusCode())
+	}
+}
+
+func TestGetRunningTrack_HeaderUserIDMismatch(t *testing.T) {
+	e := newTestEnv()
+	token := e.generateTestToken(1001)
+	w := e.perform(http.MethodGet, "/api/v1/track/running", nil, authHeader(token), ut.Header{Key: middleware.HeaderUserID, Value: "1002"})
+	if w.Result().StatusCode() != http.StatusForbidden {
+		t.Fatalf("expected status 403, got %d", w.Result().StatusCode())
 	}
 }
 
