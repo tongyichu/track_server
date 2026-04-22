@@ -10,6 +10,7 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
@@ -193,7 +194,10 @@ func (s *LoginService) LoginBySMS(ctx context.Context, phone, code, ip, deviceID
 	delete(s.smsCodes, phone)
 	s.mu.Unlock()
 
-	userID := phoneToUserID(phone)
+	userID, err := phoneToUserID(phone)
+	if err != nil {
+		return nil, err
+	}
 	user, err := s.users.CreateIfNotExists(ctx, &models.User{
 		ID:    userID,
 		Phone: phone,
@@ -335,18 +339,36 @@ func (s *LoginService) fetchWechatSession(code string) (*WechatSessionResponse, 
 	return &session, nil
 }
 
-func phoneToUserID(phone string) int64 {
-	var id int64
-	for _, c := range phone {
-		id = id*31 + int64(c)
+// 自定义起始时间戳（2025-01-01 00:00:00 UTC+8）
+const epoch int64 = 1735689600
+
+func phoneToUserID(phone string) (int64, error) {
+	// 1. 基础校验：手机号必须是11位纯数字
+	if len(phone) != 11 {
+		return 0, fmt.Errorf("invalid phone number length: must be 11 digits")
 	}
-	if id < 0 {
-		id = -id
+	phoneNum, err := strconv.ParseInt(phone, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("phone number contains non-digit characters: %w", err)
 	}
-	if id == 0 {
-		id = 1
+	// 2. 生成时间戳差值（秒级，32bit存储）
+	now := time.Now().Unix()
+	timeDiff := now - epoch
+	if timeDiff < 0 || timeDiff > (1<<32)-1 {
+		return 0, fmt.Errorf("timestamp out of valid range")
 	}
-	return id
+	// 3. 提取脱敏手机号段：前3位 + 最后4位，共7位数字压缩到20bit
+	// 手机号：13800138000 → 提取138（前3位）+8000（后4位）=1388000
+	first3 := phoneNum / 10000000        // 取前3位（除以10^8，11位手机号÷1亿得到前3位）
+	last4 := phoneNum % 10000            // 取最后4位
+	phoneSegment := first3*10000 + last4 // 合并为7位数字，最大值1999999 < 2^20=1048576? 不，199万实际用21bit，这里调整为先存数值，位运算时截断
+	// 修正：2^21=2097152刚好覆盖199万，调整位分配时将预留位借1bit给phoneSegment，不影响核心逻辑
+	// 4. 位拼接生成最终ID
+	var userID int64
+	userID |= (timeDiff << 32)     // 时间戳左移32位
+	userID |= (phoneSegment << 11) // 脱敏手机号段左移11位
+	userID |= 0                    // 预留位暂时填0
+	return userID, nil
 }
 
 func wechatOpenIDToUserID(openID string) int64 {
