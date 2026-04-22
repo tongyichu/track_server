@@ -307,6 +307,7 @@ func TestRecommendAndSearch(t *testing.T) {
 	// seed one normal track and one running track (running should be excluded from recommend list)
 	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk1", UserID: 1001, Title: "西湖徒步", IsRunning: false})
 	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-running", UserID: 1001, Title: "进行中跑步", IsRunning: true})
+	_ = e.collectRepo.AddCollect(ctx, 1001, "trk1")
 
 	w1 := e.perform(http.MethodGet, "/api/v1/track/recommend/list", nil, authHeader(token), ut.Header{Key: middleware.HeaderUserID, Value: "1001"})
 	resp1 := w1.Result()
@@ -323,6 +324,9 @@ func TestRecommendAndSearch(t *testing.T) {
 	}
 	if result.Data[0].ID != "trk1" {
 		t.Fatalf("expected recommend track id trk1, got %q", result.Data[0].ID)
+	}
+	if !result.Data[0].Collected {
+		t.Fatalf("expected recommend track trk1 collected=true")
 	}
 
 	w2 := e.perform(http.MethodGet, "/api/v1/track/search/list?keyword=西湖", nil, authHeader(token))
@@ -359,9 +363,17 @@ func TestCollectAndUncollect(t *testing.T) {
 	}
 
 	// collect
-	w1 := e.perform(http.MethodPost, "/api/v1/track_collect?user_id=1001&track_id=trk2", nil, authHeader(token))
+	w1 := e.perform(http.MethodPost, "/api/v1/track_collect?track_id=trk2", nil, authHeader(token))
 	if w1.Result().StatusCode() != http.StatusOK {
 		t.Fatalf("collect should succeed")
+	}
+	var collectResult handler.StandardResponse[handler.StatusResult]
+	decodeJSON(t, w1.Result().Body(), &collectResult)
+	if collectResult.Code != 0 {
+		t.Fatalf("expected collect code 0, got %d", collectResult.Code)
+	}
+	if collectResult.Data.Status != "ok" {
+		t.Fatalf("expected collect status ok, got %q", collectResult.Data.Status)
 	}
 
 	// status should be true
@@ -375,9 +387,17 @@ func TestCollectAndUncollect(t *testing.T) {
 	}
 
 	// uncollect
-	w3 := e.perform(http.MethodDelete, "/api/v1/track_collect?user_id=1001&track_id=trk2", nil, authHeader(token))
+	w3 := e.perform(http.MethodDelete, "/api/v1/track_collect?track_id=trk2", nil, authHeader(token))
 	if w3.Result().StatusCode() != http.StatusOK {
 		t.Fatalf("uncollect should succeed")
+	}
+	var uncollectResult handler.StandardResponse[handler.StatusResult]
+	decodeJSON(t, w3.Result().Body(), &uncollectResult)
+	if uncollectResult.Code != 0 {
+		t.Fatalf("expected uncollect code 0, got %d", uncollectResult.Code)
+	}
+	if uncollectResult.Data.Status != "ok" {
+		t.Fatalf("expected uncollect status ok, got %q", uncollectResult.Data.Status)
 	}
 }
 
@@ -522,5 +542,25 @@ func TestTrackHandlers_InvalidUserID(t *testing.T) {
 	w2 := e.perform(http.MethodGet, "/api/v1/user/bad/collect?track_id=trk2", nil, authHeader(token))
 	if w2.Result().StatusCode() != http.StatusBadRequest {
 		t.Fatalf("invalid collect path user_id should return 400")
+	}
+}
+
+func TestCollectTrack_UsesJWTUserID(t *testing.T) {
+	e := newTestEnv()
+	ctx := context.Background()
+	token := e.generateTestToken(1001)
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-jwt-user", UserID: 1002, Title: "可收藏轨迹"})
+
+	w := e.perform(http.MethodPost, "/api/v1/track_collect?track_id=trk-jwt-user", nil, authHeader(token))
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Result().StatusCode())
+	}
+
+	collected, err := e.collectRepo.IsCollected(ctx, 1001, "trk-jwt-user")
+	if err != nil {
+		t.Fatalf("check collect status failed: %v", err)
+	}
+	if !collected {
+		t.Fatalf("expected track to be collected by JWT user")
 	}
 }

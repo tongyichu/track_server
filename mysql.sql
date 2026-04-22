@@ -56,6 +56,15 @@ CREATE TABLE `track_waypoints` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='轨迹媒体节点/航点表';
 
 
+CREATE TABLE `track_collects` (
+                                  `user_id` BIGINT NOT NULL COMMENT '收藏用户ID',
+                                  `track_id` VARCHAR(64) NOT NULL COMMENT '轨迹ID',
+                                  `created_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT '收藏时间',
+                                  PRIMARY KEY (`user_id`, `track_id`),
+                                  KEY `idx_collects_track` (`track_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户收藏轨迹关系表';
+
+
 CREATE TABLE `login_log` (
                              `id` BIGINT NOT NULL AUTO_INCREMENT,
                              `user_id` BIGINT NOT NULL COMMENT '用户ID',

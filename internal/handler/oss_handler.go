@@ -22,7 +22,7 @@ func NewOSSHandler(stsSvc *service.OSSTokenService) *OSSHandler {
 // GetSTSToken handles GET /api/v1/oss/sts-token
 func (h *OSSHandler) GetSTSToken(ctx context.Context, c *app.RequestContext) {
 	meta := middleware.GetRequestMeta(c)
-	if meta == nil || meta.UserID <= 0 {
+	if meta == nil || meta.AuthUserID <= 0 {
 		c.JSON(http.StatusUnauthorized, utils.H{"error": "unauthorized"})
 		return
 	}
@@ -31,7 +31,7 @@ func (h *OSSHandler) GetSTSToken(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	cred, err := h.stsSvc.GetUploadCredential(meta.UserID)
+	cred, err := h.stsSvc.GetUploadCredential(meta.AuthUserID)
 	if err != nil {
 		switch err.(type) {
 		case *service.InvalidArgumentError:
@@ -44,4 +44,3 @@ func (h *OSSHandler) GetSTSToken(ctx context.Context, c *app.RequestContext) {
 
 	c.JSON(http.StatusOK, successResponse(cred))
 }
-

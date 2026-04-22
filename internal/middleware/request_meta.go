@@ -2,8 +2,6 @@ package middleware
 
 import (
 	"context"
-	"strconv"
-
 	"github.com/cloudwego/hertz/pkg/app"
 
 	"github.com/tongyichu/track_server/internal/models"
@@ -25,19 +23,14 @@ const (
 // RequestMetaMiddleware extracts required header fields and stores them into RequestContext.
 func RequestMetaMiddleware() app.HandlerFunc {
 	return func(ctx context.Context, c *app.RequestContext) {
-		rawUserID := string(c.Request.Header.Peek(HeaderUserID))
+		headerUserID := string(c.Request.Header.Peek(HeaderUserID))
 		meta := &models.RequestMeta{
-			RawUserID:      rawUserID,
+			UserID:         headerUserID,
 			ClientVersion:  string(c.Request.Header.Peek(HeaderClientVersion)),
 			ClientLanguage: string(c.Request.Header.Peek(HeaderClientLanguage)),
 			Location:       string(c.Request.Header.Peek(HeaderLocation)),
 			Platform:       string(c.Request.Header.Peek(HeaderPlatform)),
 			DeviceID:       string(c.Request.Header.Peek(HeaderDeviceID)),
-		}
-		if rawUserID != "" {
-			if userID, err := strconv.ParseInt(rawUserID, 10, 64); err == nil && userID > 0 {
-				meta.UserID = userID
-			}
 		}
 		c.Set(CtxRequestHeaderMetaKey, meta)
 	}

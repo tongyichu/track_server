@@ -191,7 +191,18 @@ func (s *TrackService) ListRecommend(ctx context.Context, userID int64, limit in
 	if err != nil {
 		return nil, err
 	}
-	return toSummaries(tracks), nil
+	summaries := toSummaries(tracks)
+	if userID <= 0 || s.collects == nil {
+		return summaries, nil
+	}
+	for _, summary := range summaries {
+		collected, err := s.collects.IsCollected(ctx, userID, summary.ID)
+		if err != nil {
+			return nil, err
+		}
+		summary.Collected = collected
+	}
+	return summaries, nil
 }
 
 // SearchTracks searches tracks globally by keyword.

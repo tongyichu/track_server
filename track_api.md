@@ -16,6 +16,8 @@
 | 4 | [轨迹详情](#4-轨迹详情) | GET | `/track/:track_id/detail` | ✅ |
 | 5 | [获取 OSS STS 临时凭证（直传上传）](#5-获取-oss-sts-临时凭证直传上传) | GET | `/oss/sts-token` | ✅ |
 | 6 | [获取进行中的轨迹](#6-获取进行中的轨迹) | GET | `/track/running` | ✅ |
+| 7 | [收藏轨迹](#7-收藏轨迹) | POST | `/track_collect` | ✅ |
+| 8 | [取消收藏轨迹](#8-取消收藏轨迹) | DELETE | `/track_collect` | ✅ |
 
 ---
 
@@ -280,6 +282,7 @@ curl -X PUT "http://<host>:<port>/api/v1/track/trk-upd/update" \
 
 - 该接口 **不会返回** `is_running=true` 的轨迹（进行中的轨迹会被过滤）。
 - 返回的是 `TrackSummary` 列表（轻量字段），而不是完整的 `Track`。
+- 返回结果中 `collected` 表示当前鉴权用户是否已收藏该轨迹。
 
 ### 请求
 
@@ -306,7 +309,8 @@ Authorization: Bearer <token>
       "title": "西湖徒步",
       "distance": 1200.5,
       "duration": 360,
-      "elevation_gain": 80
+      "elevation_gain": 80,
+      "collected": true
     }
   ]
 }
@@ -540,5 +544,115 @@ curl -X GET "http://<host>:<port>/api/v1/track/running" \
 
 ```bash
 curl -X GET "http://<host>:<port>/api/v1/track/running?user_id=1001" \
+  -H "Authorization: Bearer <token>"
+```
+
+---
+
+## 7. 收藏轨迹
+
+将指定轨迹加入当前用户的收藏列表。
+
+- 返回统一响应格式 `StandardResponse`。
+- 用户身份仅通过 `Authorization` 中的 JWT 解析，不需要也不应传递 `user_id`。
+- 当前实现通过 Query 参数接收 `track_id`。
+
+**需要认证**
+
+### 请求
+
+```
+POST /api/v1/track_collect?track_id=:track_id
+Authorization: Bearer <token>
+```
+
+**Query 参数：**
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `track_id` | string | 是 | 要收藏的轨迹 ID |
+
+### 响应
+
+**状态码：** `200 OK`
+
+```json
+{
+  "code": 0,
+  "data": {
+    "status": "ok"
+  }
+}
+```
+
+### 常见错误
+
+- `400 Bad Request`
+  - `track_id` 缺失
+- `401 Unauthorized`
+  - 缺少/无效/过期的 Token
+- `404 Not Found`
+  - `track_id` 对应轨迹不存在
+- `500 Internal Server Error`
+  - 服务端执行收藏失败
+
+### 示例（curl）
+
+```bash
+curl -X POST "http://<host>:<port>/api/v1/track_collect?track_id=trk2" \
+  -H "Authorization: Bearer <token>"
+```
+
+---
+
+## 8. 取消收藏轨迹
+
+将指定轨迹从当前用户的收藏列表中移除。
+
+- 返回统一响应格式 `StandardResponse`。
+- 用户身份仅通过 `Authorization` 中的 JWT 解析，不需要也不应传递 `user_id`。
+- 当前实现通过 Query 参数接收 `track_id`。
+
+**需要认证**
+
+### 请求
+
+```
+DELETE /api/v1/track_collect?track_id=:track_id
+Authorization: Bearer <token>
+```
+
+**Query 参数：**
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `track_id` | string | 是 | 要取消收藏的轨迹 ID |
+
+### 响应
+
+**状态码：** `200 OK`
+
+```json
+{
+  "code": 0,
+  "data": {
+    "status": "ok"
+  }
+}
+```
+
+### 常见错误
+
+- `400 Bad Request`
+  - `track_id` 缺失
+- `401 Unauthorized`
+  - 缺少/无效/过期的 Token
+- `500 Internal Server Error`
+  - 服务端执行取消收藏失败
+
+### 示例（curl）
+
+```bash
+curl -X DELETE "http://<host>:<port>/api/v1/track_collect?track_id=trk2" \
   -H "Authorization: Bearer <token>"
 ```

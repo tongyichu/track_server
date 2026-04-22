@@ -68,7 +68,7 @@ func JWTAuthMiddleware(secret string, blacklist *TokenBlacklist) app.HandlerFunc
 
 		meta := GetRequestMeta(c)
 		if meta != nil {
-			meta.UserID = userID
+			meta.AuthUserID = userID
 			meta.RawUserID = strconv.FormatInt(userID, 10)
 		}
 

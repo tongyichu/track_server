@@ -137,13 +137,13 @@ func (h *LoginHandler) LoginByApple(ctx context.Context, c *app.RequestContext) 
 
 func (h *LoginHandler) Logout(ctx context.Context, c *app.RequestContext) {
 	meta := middleware.GetRequestMeta(c)
-	if meta == nil || meta.UserID <= 0 {
-		c.JSON(http.StatusBadRequest, utils.H{"error": "user_id is required (via X-User-ID header)"})
+	if meta == nil || meta.AuthUserID <= 0 {
+		c.JSON(http.StatusUnauthorized, utils.H{"error": "unauthorized"})
 		return
 	}
 
 	ip := c.ClientIP()
-	err := h.loginSvc.Logout(ctx, meta.UserID, ip, meta.DeviceID, meta.Platform)
+	err := h.loginSvc.Logout(ctx, meta.AuthUserID, ip, meta.DeviceID, meta.Platform)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
 		return

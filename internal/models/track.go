@@ -52,6 +52,7 @@ type TrackSummary struct {
 	Distance      float64 `json:"distance"`       // Distance 是总距离，单位米。
 	Duration      uint32  `json:"duration"`       // Duration 是运动耗时，单位秒。
 	ElevationGain int     `json:"elevation_gain"` // ElevationGain 是累计爬升，单位米。
+	Collected     bool    `json:"collected"`      // Collected 表示当前鉴权用户是否已收藏该轨迹。
 }
 
 // TrackMap represents data needed for rendering a track polyline on map.

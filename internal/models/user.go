@@ -34,8 +34,9 @@ type LoginLog struct {
 
 // RequestMeta keeps normalized header information from client.
 type RequestMeta struct {
-	UserID         int64
-	RawUserID      string
+	UserID         string // header中 X-User-ID 的值
+	RawUserID      string // 权限token对应的user_id转为string的值
+	AuthUserID     int64  // 权限token对应的user_id值
 	ClientVersion  string // 客户端版本
 	ClientLanguage string // 客户端语言
 	Location       string // 地理位置

@@ -10,8 +10,8 @@ import (
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/common/utils"
 
-	"github.com/tongyichu/track_server/internal/models"
 	"github.com/tongyichu/track_server/internal/middleware"
+	"github.com/tongyichu/track_server/internal/models"
 	"github.com/tongyichu/track_server/internal/repository"
 	"github.com/tongyichu/track_server/internal/service"
 )
@@ -31,6 +31,10 @@ type RunningTrackResult struct {
 	Track   *models.Track `json:"track,omitempty"`
 }
 
+type StatusResult struct {
+	Status string `json:"status"`
+}
+
 // NewTrackHandler creates a new TrackHandler.
 func NewTrackHandler(trackSvc *service.TrackService) *TrackHandler {
 	return &TrackHandler{trackSvc: trackSvc}
@@ -39,12 +43,8 @@ func NewTrackHandler(trackSvc *service.TrackService) *TrackHandler {
 // CreateTrack handles POST /api/track/create
 func (h *TrackHandler) CreateTrack(ctx context.Context, c *app.RequestContext) {
 	meta := middleware.GetRequestMeta(c)
-	if meta == nil || meta.RawUserID == "" {
-		c.JSON(http.StatusBadRequest, utils.H{"error": "missing X-User-ID header"})
-		return
-	}
-	if meta.UserID <= 0 {
-		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid X-User-ID header"})
+	if meta == nil || meta.AuthUserID <= 0 {
+		c.JSON(http.StatusUnauthorized, utils.H{"error": "unauthorized"})
 		return
 	}
 
@@ -61,7 +61,7 @@ func (h *TrackHandler) CreateTrack(ctx context.Context, c *app.RequestContext) {
 		}
 	}
 
-	track, err := h.trackSvc.CreateTrack(ctx, meta.UserID, req)
+	track, err := h.trackSvc.CreateTrack(ctx, meta.AuthUserID, req)
 	if err != nil {
 		var iae *service.InvalidArgumentError
 		if errors.As(err, &iae) {
@@ -79,12 +79,8 @@ func (h *TrackHandler) CreateTrack(ctx context.Context, c *app.RequestContext) {
 // TrackScreenshotURL, IsRunning, AvgSpeedKmh.
 func (h *TrackHandler) UpdateTrackInfo(ctx context.Context, c *app.RequestContext) {
 	meta := middleware.GetRequestMeta(c)
-	if meta == nil || meta.RawUserID == "" {
-		c.JSON(http.StatusBadRequest, utils.H{"error": "missing X-User-ID header"})
-		return
-	}
-	if meta.UserID <= 0 {
-		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid X-User-ID header"})
+	if meta == nil || meta.AuthUserID <= 0 {
+		c.JSON(http.StatusUnauthorized, utils.H{"error": "unauthorized"})
 		return
 	}
 
@@ -96,7 +92,7 @@ func (h *TrackHandler) UpdateTrackInfo(ctx context.Context, c *app.RequestContex
 		return
 	}
 
-	track, err := h.trackSvc.UpdateTrackInfo(ctx, meta.UserID, trackID, patch)
+	track, err := h.trackSvc.UpdateTrackInfo(ctx, meta.AuthUserID, trackID, patch)
 	if err != nil {
 		switch {
 		case errors.Is(err, repository.ErrNotFound):
@@ -127,11 +123,11 @@ func (h *TrackHandler) ListRecommend(ctx context.Context, c *app.RequestContext)
 	meta := middleware.GetRequestMeta(c)
 	var userID int64
 	if meta != nil {
-		if meta.RawUserID != "" && meta.UserID <= 0 {
-			c.JSON(http.StatusBadRequest, utils.H{"error": "invalid X-User-ID header"})
+		if meta.RawUserID != "" && meta.AuthUserID <= 0 {
+			c.JSON(http.StatusUnauthorized, utils.H{"error": "unauthorized"})
 			return
 		}
-		userID = meta.UserID
+		userID = meta.AuthUserID
 	}
 	tracks, err := h.trackSvc.ListRecommend(ctx, userID, 50)
 	if err != nil {
@@ -199,11 +195,11 @@ func (h *TrackHandler) UploadTrackCloud(ctx context.Context, c *app.RequestConte
 // GetRunningTrack handles GET /api/track/running
 func (h *TrackHandler) GetRunningTrack(ctx context.Context, c *app.RequestContext) {
 	meta := middleware.GetRequestMeta(c)
-	if meta == nil || meta.UserID <= 0 {
+	if meta == nil || meta.AuthUserID <= 0 {
 		c.JSON(http.StatusUnauthorized, utils.H{"error": "unauthorized"})
 		return
 	}
-	authUserID := meta.UserID
+	authUserID := meta.AuthUserID
 
 	rawHeaderUserID := string(c.Request.Header.Peek(middleware.HeaderUserID))
 	if rawHeaderUserID != "" {
@@ -267,14 +263,15 @@ func (h *TrackHandler) GetCollectStatus(ctx context.Context, c *app.RequestConte
 
 // CollectTrack handles POST /api/track_collect
 func (h *TrackHandler) CollectTrack(ctx context.Context, c *app.RequestContext) {
-	trackID := string(c.Query("track_id"))
-	userID, err := parseRequiredUserID(string(c.Query("user_id")))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, utils.H{"error": err.Error()})
+	meta := middleware.GetRequestMeta(c)
+	if meta == nil || meta.AuthUserID <= 0 {
+		c.JSON(http.StatusUnauthorized, utils.H{"error": "unauthorized"})
 		return
 	}
+	userID := meta.AuthUserID
+	trackID := string(c.Query("track_id"))
 	if trackID == "" {
-		c.JSON(http.StatusBadRequest, utils.H{"error": "user_id and track_id are required"})
+		c.JSON(http.StatusBadRequest, utils.H{"error": "track_id is required"})
 		return
 	}
 	if err := h.trackSvc.CollectTrack(ctx, userID, trackID); err != nil {
@@ -285,24 +282,25 @@ func (h *TrackHandler) CollectTrack(ctx context.Context, c *app.RequestContext) 
 		c.JSON(status, utils.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, utils.H{"status": "ok"})
+	c.JSON(http.StatusOK, successResponse(StatusResult{Status: "ok"}))
 }
 
 // UncollectTrack handles DELETE /api/track_collect
 func (h *TrackHandler) UncollectTrack(ctx context.Context, c *app.RequestContext) {
-	trackID := string(c.Query("track_id"))
-	userID, err := parseRequiredUserID(string(c.Query("user_id")))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, utils.H{"error": err.Error()})
+	meta := middleware.GetRequestMeta(c)
+	if meta == nil || meta.AuthUserID <= 0 {
+		c.JSON(http.StatusUnauthorized, utils.H{"error": "unauthorized"})
 		return
 	}
+	userID := meta.AuthUserID
+	trackID := string(c.Query("track_id"))
 	if trackID == "" {
-		c.JSON(http.StatusBadRequest, utils.H{"error": "user_id and track_id are required"})
+		c.JSON(http.StatusBadRequest, utils.H{"error": "track_id is required"})
 		return
 	}
 	if err := h.trackSvc.UncollectTrack(ctx, userID, trackID); err != nil {
 		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, utils.H{"status": "ok"})
+	c.JSON(http.StatusOK, successResponse(StatusResult{Status: "ok"}))
 }
