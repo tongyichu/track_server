@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"math"
-	"strconv"
 	"time"
 
 	"github.com/tongyichu/track_server/internal/models"
@@ -100,6 +99,13 @@ func (s *TrackService) CreateTrack(ctx context.Context, userID int64, input Crea
 	if err := input.validate(); err != nil {
 		return nil, err
 	}
+	// 轨迹 ID 在创建轨迹之前先由仓储层统一分配。
+	// 这样 service 只负责组装业务对象，不关心底层是 MySQL 自增序列、Mongo 兼容实现，
+	// 还是内存仓储中的测试序列，避免把 ID 生成细节散落在业务层。
+	trackID, err := s.tracks.NextTrackID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	now := time.Now()
 	startTime := now
 	if input.StartTime != nil {
@@ -110,7 +116,7 @@ func (s *TrackService) CreateTrack(ctx context.Context, userID int64, input Crea
 		isRunning = *input.IsRunning
 	}
 	track := &models.Track{
-		ID:        generateTrackID(),
+		ID:        trackID,
 		UserID:    userID,
 		Title:     "新的轨迹",
 		StartTime: startTime,
@@ -143,6 +149,8 @@ func (s *TrackService) CreateTrack(ctx context.Context, userID int64, input Crea
 	if input.AvgSpeedKmh != nil {
 		track.AvgSpeedKmh = *input.AvgSpeedKmh
 	}
+	// 到这里 track.ID 已经是最终可落库的业务 ID，格式固定为 `NO.` + 8 位 base36 编码。
+	// Create 只负责持久化，不再承担“冲突重试生成 ID”的职责，唯一性保证前移到 NextTrackID。
 	if err := s.tracks.Create(ctx, track); err != nil {
 		return nil, err
 	}
@@ -333,12 +341,6 @@ func toSummaries(tracks []*models.Track) []*models.TrackSummary {
 		})
 	}
 	return res
-}
-
-// generateTrackID generates a simple unique track id.
-func generateTrackID() string {
-	// Use timestamp-based id to avoid external dependencies.
-	return "No." + strconv.FormatInt(time.Now().UnixNano(), 10)
 }
 
 // haversineDistance computes distance between two lat/lng points in meters.

@@ -2,13 +2,16 @@ package service
 
 import (
 	"context"
-	"strings"
+	"regexp"
 	"testing"
 	"time"
 
 	"github.com/tongyichu/track_server/internal/models"
 	"github.com/tongyichu/track_server/internal/repository"
 )
+
+// trackIDPattern 校验新的轨迹 ID 规则：固定前缀 `NO.` + 8 位大写 base36 编码。
+var trackIDPattern = regexp.MustCompile(`^NO\.[0-9A-Z]{8}$`)
 
 // TestCreateTrackAssignsRecordFields verifies create uses the new track_records fields.
 func TestCreateTrackAssignsRecordFields(t *testing.T) {
@@ -22,8 +25,8 @@ func TestCreateTrackAssignsRecordFields(t *testing.T) {
 	if track.ID == "" {
 		t.Fatalf("expected generated id, got empty string")
 	}
-	if !strings.HasPrefix(track.ID, "No.") {
-		t.Fatalf("expected generated id prefix No., got %q", track.ID)
+	if !trackIDPattern.MatchString(track.ID) {
+		t.Fatalf("expected generated id to match %s, got %q", trackIDPattern.String(), track.ID)
 	}
 	if track.Title != "新的轨迹" {
 		t.Fatalf("expected default title, got %q", track.Title)
@@ -33,6 +36,27 @@ func TestCreateTrackAssignsRecordFields(t *testing.T) {
 	}
 	if !track.IsRunning {
 		t.Fatalf("expected created track to be running")
+	}
+}
+
+func TestGenerateTrackID_FormatAndUniqueness(t *testing.T) {
+	const total = 10
+	// 使用内存仓储的本地序列模拟连续发号，验证编码格式和短序列范围内的不重复性。
+	seen := make(map[string]struct{}, total)
+	trackRepo, _, _, _ := repository.NewInMemoryRepositories()
+
+	for i := 0; i < total; i++ {
+		id, err := trackRepo.NextTrackID(context.Background())
+		if err != nil {
+			t.Fatalf("NextTrackID returned error: %v", err)
+		}
+		if !trackIDPattern.MatchString(id) {
+			t.Fatalf("expected generated id to match %s, got %q", trackIDPattern.String(), id)
+		}
+		if _, exists := seen[id]; exists {
+			t.Fatalf("generated duplicate track id %q", id)
+		}
+		seen[id] = struct{}{}
 	}
 }
 

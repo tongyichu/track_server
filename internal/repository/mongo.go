@@ -17,7 +17,9 @@ import (
 
 // MongoTrackRepository is a stub of TrackRepository backed by MongoDB.
 type MongoTrackRepository struct {
-	collection *mongo.Collection
+	collection   *mongo.Collection
+	mu           sync.Mutex
+	nextTrackSeq uint64
 }
 
 // MongoTrackWaypointRepository implements TrackWaypointRepository backed by MongoDB.
@@ -29,7 +31,22 @@ type MongoTrackWaypointRepository struct {
 
 // NewMongoTrackRepository constructs a Mongo-backed TrackRepository.
 func NewMongoTrackRepository(collection *mongo.Collection) *MongoTrackRepository {
-	return &MongoTrackRepository{collection: collection}
+	return &MongoTrackRepository{
+		collection:   collection,
+		nextTrackSeq: uint64(time.Now().UnixNano()%int64(trackIDSequenceLimit-1)) + 1,
+	}
+}
+
+func (r *MongoTrackRepository) NextTrackID(_ context.Context) (string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	id, err := encodeTrackID(r.nextTrackSeq)
+	if err != nil {
+		return "", err
+	}
+	r.nextTrackSeq++
+	return id, nil
 }
 
 // NewMongoTrackWaypointRepository constructs a Mongo-backed TrackWaypointRepository.
@@ -54,6 +71,9 @@ func (r *MongoTrackRepository) Create(ctx context.Context, t *models.Track) erro
 	t.UpdatedAt = t.CreatedAt
 
 	_, err := r.collection.InsertOne(ctx, t)
+	if mongo.IsDuplicateKeyError(err) {
+		return ErrAlreadyExists
+	}
 	return err
 }
 

@@ -12,8 +12,9 @@ import (
 
 // InMemoryTrackRepository is an in-memory implementation of TrackRepository for tests and development.
 type InMemoryTrackRepository struct {
-	mu     sync.RWMutex
-	tracks map[string]*models.Track
+	mu           sync.RWMutex
+	tracks       map[string]*models.Track
+	nextTrackSeq uint64
 }
 
 // InMemoryTrackWaypointRepository is an in-memory implementation of TrackWaypointRepository.
@@ -26,7 +27,20 @@ type InMemoryTrackWaypointRepository struct {
 
 // NewInMemoryTrackRepository creates a new in-memory track repository.
 func NewInMemoryTrackRepository() *InMemoryTrackRepository {
-	return &InMemoryTrackRepository{tracks: make(map[string]*models.Track)}
+	return &InMemoryTrackRepository{tracks: make(map[string]*models.Track), nextTrackSeq: 1}
+}
+
+// NextTrackID allocates the next track id from the in-memory sequence.
+func (r *InMemoryTrackRepository) NextTrackID(_ context.Context) (string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	id, err := encodeTrackID(r.nextTrackSeq)
+	if err != nil {
+		return "", err
+	}
+	r.nextTrackSeq++
+	return id, nil
 }
 
 // NewInMemoryTrackWaypointRepository creates a new in-memory track waypoint repository.
@@ -44,6 +58,9 @@ func (r *InMemoryTrackRepository) Create(_ context.Context, t *models.Track) err
 	defer r.mu.Unlock()
 	if t.ID == "" {
 		return errors.New("track id is required")
+	}
+	if _, exists := r.tracks[t.ID]; exists {
+		return ErrAlreadyExists
 	}
 	if t.CreatedAt.IsZero() {
 		t.CreatedAt = time.Now()

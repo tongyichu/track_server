@@ -33,9 +33,15 @@ CREATE TABLE `track_records` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='轨迹概要信息表';
 
 
+CREATE TABLE `track_id_sequences` (
+                                     `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                                     PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='轨迹ID全局序列表';
+
+
 CREATE TABLE `track_waypoints` (
                                    `id` bigint unsigned NOT NULL AUTO_INCREMENT,
-                                   `track_id` bigint unsigned NOT NULL COMMENT '关联的轨迹主表ID',
+                                   `track_id` varchar(128) NOT NULL COMMENT '关联的轨迹主表ID',
                                    `user_id` bigint unsigned NOT NULL COMMENT '用户ID(冗余字段方便权限控制)',
                                    `lat` decimal(10,7) NOT NULL COMMENT '纬度',
                                    `lng` decimal(10,7) NOT NULL COMMENT '经度',

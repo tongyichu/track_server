@@ -55,6 +55,13 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 			KEY idx_user_running (user_id, is_running, start_time),
 			KEY idx_user_time (user_id, start_time)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
+		// `track_id_sequences` 是轨迹 ID 的全局发号表。
+		// 每插入一行就能拿到一个新的自增 id，再由业务层编码成 `NO.` + 8 位 base36 的轨迹 ID。
+		// 表结构保持极简，只保留自增主键，减少额外约束对发号性能和稳定性的影响。
+		`CREATE TABLE IF NOT EXISTS track_id_sequences (
+			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+			PRIMARY KEY (id)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
 		`CREATE TABLE IF NOT EXISTS track_waypoints (
 			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
 			track_id VARCHAR(128) NOT NULL,
@@ -324,6 +331,25 @@ type MySQLTrackWaypointRepository struct{ db *sql.DB }
 
 func NewMySQLTrackRepository(db *sql.DB) *MySQLTrackRepository { return &MySQLTrackRepository{db: db} }
 
+// NextTrackID 使用独立的 MySQL 自增序列表分配全局唯一序列号，再编码为业务轨迹 ID。
+// 这样做有两个好处：
+//  1. 唯一性由数据库自增机制保证，不依赖进程内计数器或时间戳；
+//  2. 轨迹主表 `track_records` 不需要承担“生成序列”的职责，职责更清晰。
+//
+// 这里故意使用单独的 `track_id_sequences` 表，而不是复用 `track_records` 主键，
+// 是因为轨迹记录可能受事务、重试、软删除等业务流程影响；独立序列表更适合作为稳定的全局发号器。
+func (r *MySQLTrackRepository) NextTrackID(ctx context.Context) (string, error) {
+	res, err := r.db.ExecContext(ctx, `INSERT INTO track_id_sequences (id) VALUES (NULL)`)
+	if err != nil {
+		return "", err
+	}
+	sequence, err := res.LastInsertId()
+	if err != nil {
+		return "", err
+	}
+	return encodeTrackID(uint64(sequence))
+}
+
 func NewMySQLTrackWaypointRepository(db *sql.DB) *MySQLTrackWaypointRepository {
 	return &MySQLTrackWaypointRepository{db: db}
 }
@@ -351,6 +377,10 @@ func (r *MySQLTrackRepository) Create(ctx context.Context, t *models.Track) erro
 		t.CreatedAt, t.UpdatedAt,
 	)
 	if err != nil {
+		var mysqlErr *mysql.MySQLError
+		if errors.As(err, &mysqlErr) && mysqlErr.Number == 1062 {
+			return ErrAlreadyExists
+		}
 		return err
 	}
 	return nil
