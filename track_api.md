@@ -14,8 +14,9 @@
 | 2 | [推荐轨迹列表](#2-推荐轨迹列表) | GET | `/track/recommend/list` | ✅ |
 | 3 | [轨迹详情](#3-轨迹详情) | GET | `/track/:track_id/detail` | ✅ |
 | 4 | [获取 OSS STS 临时凭证（直传上传）](#4-获取-oss-sts-临时凭证直传上传) | GET | `/oss/sts-token` | ✅ |
-| 5 | [收藏轨迹](#5-收藏轨迹) | POST | `/track_collect` | ✅ |
-| 6 | [取消收藏轨迹](#6-取消收藏轨迹) | DELETE | `/track_collect` | ✅ |
+| 5 | [获取 OSS STS 读权限临时凭证](#5-获取-oss-sts-读权限临时凭证) | GET | `/oss/sts-token/read` | ✅ |
+| 6 | [收藏轨迹](#6-收藏轨迹) | POST | `/track_collect` | ✅ |
+| 7 | [取消收藏轨迹](#7-取消收藏轨迹) | DELETE | `/track_collect` | ✅ |
 
 ---
 
@@ -358,7 +359,102 @@ curl -X GET "http://<host>:<port>/api/v1/oss/sts-token" \
 
 ---
 
-## 5. 收藏轨迹
+## 5. 获取 OSS STS 读权限临时凭证
+
+用于客户端需要从 OSS 直接**读取**资源的场景（例如浏览他人公开的轨迹文件、预加载图片等）。服务端会向阿里云 STS 申请一份短时有效的**只读**临时凭证。
+
+与“直传上传”接口（`/oss/sts-token`）的区别：
+
+- **权限类型不同**：此接口只授予 `oss:GetObject` 与 `oss:ListObjects`，不能写入或删除。
+- **目录范围不同**：权限目录放宽到**用户目录的上一层**，即 `<OSSUploadPrefix>/`（例如 `user/`），而不是具体的 `user/<bucketID>/`。这样可用于跨用户读取该前缀下的对象。
+
+**需要认证**
+
+### 请求
+
+```
+GET /api/v1/oss/sts-token/read
+Authorization: Bearer <token>
+```
+
+无查询参数，当前用户身份从 JWT 中解析。
+
+### 响应
+
+**状态码：** `200 OK`
+
+返回 `StandardResponse`，`data` 为临时凭证与读取上下文信息：
+
+```json
+{
+  "code": 0,
+  "data": {
+    "access_key_id": "STS.NNNNN",
+    "access_key_secret": "NNNNN",
+    "security_token": "CAIS...",
+    "expiration": "2026-04-24T12:34:56Z",
+    "bucket": "example-bucket",
+    "region": "cn-hangzhou",
+    "endpoint": "https://oss-cn-hangzhou.aliyuncs.com",
+    "dir": "user/"
+  }
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `access_key_id` | string | STS 临时 AccessKeyId |
+| `access_key_secret` | string | STS 临时 AccessKeySecret |
+| `security_token` | string | STS SecurityToken（使用 OSS SDK/签名请求时需要携带） |
+| `expiration` | string | 过期时间（服务端透传 STS 返回值） |
+| `bucket` | string | Bucket 名称 |
+| `region` | string | Bucket 所在 Region |
+| `endpoint` | string | OSS Endpoint（可用于客户端直连） |
+| `dir` | string | 允许读取的目录前缀（用户目录上一层，例如 `user/`） |
+
+### 权限说明
+
+服务端在申请 STS 凭证时下发的最小 Policy 大致如下：
+
+```json
+{
+  "Version": "1",
+  "Statement": [
+    {
+      "Action": ["oss:GetObject"],
+      "Effect": "Allow",
+      "Resource": ["acs:oss:*:*:<bucket>/<dir>*"]
+    },
+    {
+      "Action": ["oss:ListObjects"],
+      "Effect": "Allow",
+      "Resource": ["acs:oss:*:*:<bucket>"]
+    }
+  ]
+}
+```
+
+- 仅可读取 `<bucket>/<dir>` 前缀下的对象。
+- `ListObjects` 需要作用于 bucket 级资源，客户端若执行列举时请结合 `prefix=<dir>` 参数使用。
+- 无写入/删除权限；任何 `PutObject`、`DeleteObject` 等操作都会被 STS/OSS 拒绝。
+
+### 常见错误
+
+- `401 Unauthorized`：缺少/无效/过期的 Token
+- `500 Internal Server Error`
+  - 服务端未配置 STS（返回 `{"error":"oss sts not configured"}`）
+  - 调用阿里云 STS 失败（返回 `{"error":"..."}`）
+
+### 示例（curl）
+
+```bash
+curl -X GET "http://<host>:<port>/api/v1/oss/sts-token/read" \
+  -H "Authorization: Bearer <token>"
+```
+
+---
+
+## 6. 收藏轨迹
 
 将指定轨迹加入当前用户的收藏列表。
 
@@ -414,7 +510,7 @@ curl -X POST "http://<host>:<port>/api/v1/track_collect?track_id=trk2" \
 
 ---
 
-## 6. 取消收藏轨迹
+## 7. 取消收藏轨迹
 
 将指定轨迹从当前用户的收藏列表中移除。
 

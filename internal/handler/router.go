@@ -47,6 +47,7 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 
 	// oss upload
 	auth.GET("/oss/sts-token", ossHandler.GetSTSToken)
+	auth.GET("/oss/sts-token/read", ossHandler.GetSTSReadToken)
 
 	// track related
 	auth.POST("/track/create", trackHandler.CreateTrack)

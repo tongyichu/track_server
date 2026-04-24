@@ -199,6 +199,97 @@ func GetBucketID(uid int64) int64 {
 	return uid % config.OSSFileBucketSize
 }
 
+// GetReadCredential 为指定 userID 申请一份“仅允许读取”的临时凭证。
+//
+// 目录隔离：相比 GetUploadCredential，读权限放宽到“用户目录的上一层”，
+// 最终 dir 形如：<OSSUploadPrefix>/，例如 "user/"。
+// 这样客户端可以读取该前缀下任意用户的对象（例如浏览他人公开的轨迹资源）。
+//
+// 安全提示：
+//   - 此凭证只能读取，不能写入/删除。
+//   - 调用方需自行确保业务层面允许跨用户读取；若需更严格隔离，应改用 GetUploadCredential 同级的用户目录前缀。
+func (s *OSSTokenService) GetReadCredential(userID int64) (*OSSTemporaryCredential, error) {
+	if userID <= 0 {
+		return nil, invalidArg("user_id must be > 0")
+	}
+
+	// 读权限放宽到用户目录上一层：<prefix>/
+	base := strings.Trim(s.ossUploadPrefix, "/")
+	if base == "" {
+		base = config.DefaultOSSPathPrefix
+	}
+	dir := fmt.Sprintf("%s/", base)
+
+	policyJSON, err := buildOSSReadObjectPolicy(s.ossBucket, dir)
+	if err != nil {
+		log.Printf("debug info failed to build read policy JSON: %v", err)
+		return nil, err
+	}
+
+	roleSessionName := fmt.Sprintf("%sread-%d-%d", s.roleSessionPrefix, userID, time.Now().Unix())
+	if len(roleSessionName) > 64 {
+		roleSessionName = roleSessionName[:64]
+	}
+
+	req := sts.CreateAssumeRoleRequest()
+	req.Scheme = "https"
+	req.RoleArn = s.roleARN
+	req.RoleSessionName = roleSessionName
+	req.DurationSeconds = requests.NewInteger(int(s.durationSeconds))
+	req.Policy = policyJSON
+
+	resp, err := s.stsClient.AssumeRole(req)
+	if err != nil {
+		log.Printf("debug info sts AssumeRole(read) error [req=%v]: %v", req, err)
+		return nil, err
+	}
+	cred := resp.Credentials
+	if cred.AccessKeyId == "" || cred.AccessKeySecret == "" || cred.SecurityToken == "" {
+		log.Printf("debug info sts returned empty credentials(read)")
+		return nil, errors.New("sts returned empty credentials")
+	}
+
+	return &OSSTemporaryCredential{
+		AccessKeyID:     cred.AccessKeyId,
+		AccessKeySecret: cred.AccessKeySecret,
+		SecurityToken:   cred.SecurityToken,
+		Expiration:      cred.Expiration,
+		Bucket:          s.ossBucket,
+		Region:          s.ossRegion,
+		Endpoint:        s.ossEndpoint,
+		Dir:             dir,
+	}, nil
+}
+
+// buildOSSReadObjectPolicy 生成仅允许读取的 Policy。
+// - Action: oss:GetObject, oss:ListObjects
+// - Resource: acs:oss:*:*:<bucket>/<dir>*  以及  acs:oss:*:*:<bucket>
+//   （ListObjects 需要作用于 bucket 级资源）
+func buildOSSReadObjectPolicy(bucket, dir string) (string, error) {
+	objectResource := fmt.Sprintf("acs:oss:*:*:%s/%s*", bucket, dir)
+	bucketResource := fmt.Sprintf("acs:oss:*:*:%s", bucket)
+	policy := map[string]any{
+		"Version": "1",
+		"Statement": []map[string]any{
+			{
+				"Action":   []string{"oss:GetObject"},
+				"Effect":   "Allow",
+				"Resource": []string{objectResource},
+			},
+			{
+				"Action":   []string{"oss:ListObjects"},
+				"Effect":   "Allow",
+				"Resource": []string{bucketResource},
+			},
+		},
+	}
+	b, err := json.Marshal(policy)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}
+
 // buildOSSPutObjectPolicy 生成 AssumeRole 使用的最小权限 Policy。
 //
 // 目前策略：只允许对指定 bucket + 指定 dir 前缀执行 PutObject。

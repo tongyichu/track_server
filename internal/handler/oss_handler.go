@@ -44,3 +44,30 @@ func (h *OSSHandler) GetSTSToken(ctx context.Context, c *app.RequestContext) {
 
 	c.JSON(http.StatusOK, successResponse(cred))
 }
+
+// GetSTSReadToken handles GET /api/v1/oss/sts-token/read
+// 返回仅允许读取的 OSS 临时凭证；目录权限放宽到用户目录的上一层（<prefix>/）。
+func (h *OSSHandler) GetSTSReadToken(ctx context.Context, c *app.RequestContext) {
+	meta := middleware.GetRequestMeta(c)
+	if meta == nil || meta.AuthUserID <= 0 {
+		c.JSON(http.StatusUnauthorized, utils.H{"error": "unauthorized"})
+		return
+	}
+	if h.stsSvc == nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "oss sts not configured"})
+		return
+	}
+
+	cred, err := h.stsSvc.GetReadCredential(meta.AuthUserID)
+	if err != nil {
+		switch err.(type) {
+		case *service.InvalidArgumentError:
+			c.JSON(http.StatusBadRequest, utils.H{"error": err.Error()})
+		default:
+			c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, successResponse(cred))
+}
