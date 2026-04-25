@@ -513,7 +513,7 @@ func TestRecommendAndSearchUseDefaultAvatarWhenMissing(t *testing.T) {
 	if recommend.Data == nil || len(recommend.Data.Items) != 1 {
 		t.Fatalf("unexpected recommend result: %+v", recommend)
 	}
-	if recommend.Data.Items[0].UserAvatarURL != "/api/v1/static/default/girl_01.png" {
+	if recommend.Data.Items[0].UserAvatarURL != "/api/v1/static/default_avatars/girl_01.png" {
 		t.Fatalf("expected recommend default user_avatar_url, got %q", recommend.Data.Items[0].UserAvatarURL)
 	}
 
@@ -526,7 +526,7 @@ func TestRecommendAndSearchUseDefaultAvatarWhenMissing(t *testing.T) {
 	if search.Data == nil || len(search.Data.Items) != 1 {
 		t.Fatalf("unexpected search result: %+v", search)
 	}
-	if search.Data.Items[0].UserAvatarURL != "/api/v1/static/default/girl_01.png" {
+	if search.Data.Items[0].UserAvatarURL != "/api/v1/static/default_avatars/girl_01.png" {
 		t.Fatalf("expected search default user_avatar_url, got %q", search.Data.Items[0].UserAvatarURL)
 	}
 }

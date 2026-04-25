@@ -250,6 +250,9 @@ func (s *LoginService) LoginBySMS(ctx context.Context, phone, code, ip, deviceID
 		return nil, fmt.Errorf("failed to generate token: %w", err)
 	}
 
+	// 登录接口返回头像时，统一做兜底：若为空则返回默认头像。
+	user.AvatarURL = fallbackAvatarURL(user.ID, user.AvatarURL)
+
 	return &LoginResult{UserID: user.ID, User: user, Token: token}, nil
 }
 
