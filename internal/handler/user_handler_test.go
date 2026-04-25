@@ -7,7 +7,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
+	"github.com/tongyichu/track_server/internal/handler"
 	"github.com/tongyichu/track_server/internal/models"
 )
 
@@ -19,6 +21,19 @@ func TestGetUserDetail_NotFound(t *testing.T) {
 	resp := w.Result()
 	if resp.StatusCode() != http.StatusNotFound {
 		t.Fatalf("expected status 404, got %d", resp.StatusCode())
+	}
+}
+
+func TestGetUserDetail_ForbiddenWhenUserIDMismatch(t *testing.T) {
+	e := newTestEnv()
+	ctx := context.Background()
+	token := e.generateTestToken(1001)
+	_, _ = e.userRepo.CreateIfNotExists(ctx, &models.User{ID: 1002, Nickname: "Bob"})
+
+	w := e.perform(http.MethodGet, "/api/v1/user/1002/detail", nil, authHeader(token))
+	resp := w.Result()
+	if resp.StatusCode() != http.StatusForbidden {
+		t.Fatalf("expected status 403, got %d", resp.StatusCode())
 	}
 }
 
@@ -34,19 +49,84 @@ func TestGetUserDetail_Success(t *testing.T) {
 	if resp.StatusCode() != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", resp.StatusCode())
 	}
-	var u models.User
-	decodeJSON(t, resp.Body(), &u)
-	if u.Nickname != "Alice" {
-		t.Fatalf("expected nickname Alice, got %s", u.Nickname)
+	var out handler.StandardResponse[struct {
+		models.User
+		TotalDistance  float64 `json:"total_distance"`
+		TrackCount     int64   `json:"track_count"`
+		TrackUsedCount int64   `json:"track_used_count"`
+	}]
+	decodeJSON(t, resp.Body(), &out)
+	if out.Code != 0 {
+		t.Fatalf("expected code 0, got %d", out.Code)
 	}
-	if u.Phone != "13800000000" {
-		t.Fatalf("expected phone 13800000000, got %s", u.Phone)
+	data := out.Data
+	if data.Nickname != "Alice" {
+		t.Fatalf("expected nickname Alice, got %s", data.Nickname)
 	}
-	if u.ID != 1001 {
-		t.Fatalf("expected user id 1001, got %d", u.ID)
+	if data.Phone != "13800000000" {
+		t.Fatalf("expected phone 13800000000, got %s", data.Phone)
 	}
-	if u.AvatarURL != "/api/v1/static/default_avatars/girl_01.png" {
-		t.Fatalf("expected default avatar_url, got %q", u.AvatarURL)
+	if data.ID != 1001 {
+		t.Fatalf("expected user id 1001, got %d", data.ID)
+	}
+	if data.AvatarURL != "/api/v1/static/default_avatars/girl_01.png" {
+		t.Fatalf("expected default avatar_url, got %q", data.AvatarURL)
+	}
+	if data.TotalDistance != 0 {
+		t.Fatalf("expected total_distance 0, got %v", data.TotalDistance)
+	}
+	if data.TrackCount != 0 {
+		t.Fatalf("expected track_count 0, got %d", data.TrackCount)
+	}
+	if data.TrackUsedCount != 0 {
+		t.Fatalf("expected track_used_count 0, got %d", data.TrackUsedCount)
+	}
+}
+
+func TestGetUserDetail_Stats(t *testing.T) {
+	e := newTestEnv()
+	ctx := context.Background()
+	token := e.generateTestToken(1001)
+	_, _ = e.userRepo.CreateIfNotExists(ctx, &models.User{ID: 1001, Nickname: "Alice"})
+
+	start := time.Date(2026, 4, 24, 8, 0, 0, 0, time.UTC)
+	// 计入统计：2 条已完成轨迹（normal/private）
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-a", UserID: 1001, Title: "A", StartTime: start, IsRunning: false, Status: models.TrackStatusNormal, Distance: 1200})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-b", UserID: 1001, Title: "B", StartTime: start.Add(-time.Hour), IsRunning: false, Status: models.TrackStatusPrivate, Distance: 800})
+	// 不计入：进行中/删除
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-running", UserID: 1001, Title: "R", StartTime: start.Add(-2 * time.Hour), IsRunning: true, Status: models.TrackStatusNormal, Distance: 999})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-deleted", UserID: 1001, Title: "D", StartTime: start.Add(-3 * time.Hour), IsRunning: false, Status: models.TrackStatusDeleted, Distance: 999})
+
+	// 导航使用次数：只会统计到 trk-a/trk-b（因为统计口径来自“我的轨迹”集合）
+	_ = e.navigationRepo.AddNavigation(ctx, 2001, "trk-a")
+	_ = e.navigationRepo.AddNavigation(ctx, 2002, "trk-a")
+	_ = e.navigationRepo.AddNavigation(ctx, 2003, "trk-b")
+	_ = e.navigationRepo.AddNavigation(ctx, 2004, "trk-deleted")
+
+	w := e.perform(http.MethodGet, "/api/v1/user/1001/detail", nil, authHeader(token))
+	resp := w.Result()
+	if resp.StatusCode() != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", resp.StatusCode())
+	}
+	var out handler.StandardResponse[struct {
+		models.User
+		TotalDistance  float64 `json:"total_distance"`
+		TrackCount     int64   `json:"track_count"`
+		TrackUsedCount int64   `json:"track_used_count"`
+	}]
+	decodeJSON(t, resp.Body(), &out)
+	if out.Code != 0 {
+		t.Fatalf("expected code 0, got %d", out.Code)
+	}
+	data := out.Data
+	if data.TrackCount != 2 {
+		t.Fatalf("expected track_count 2, got %d", data.TrackCount)
+	}
+	if data.TotalDistance != 2000 {
+		t.Fatalf("expected total_distance 2000, got %v", data.TotalDistance)
+	}
+	if data.TrackUsedCount != 3 {
+		t.Fatalf("expected track_used_count 3, got %d", data.TrackUsedCount)
 	}
 }
 
@@ -66,10 +146,18 @@ func TestGetUserDetail_AvatarURLUsesStaticAsset(t *testing.T) {
 	if resp.StatusCode() != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", resp.StatusCode())
 	}
-	var u models.User
-	decodeJSON(t, resp.Body(), &u)
-	if u.AvatarURL != "/api/v1/static/avatars/1005.png" {
-		t.Fatalf("expected static avatar_url, got %q", u.AvatarURL)
+	var out handler.StandardResponse[struct {
+		models.User
+		TotalDistance  float64 `json:"total_distance"`
+		TrackCount     int64   `json:"track_count"`
+		TrackUsedCount int64   `json:"track_used_count"`
+	}]
+	decodeJSON(t, resp.Body(), &out)
+	if out.Code != 0 {
+		t.Fatalf("expected code 0, got %d", out.Code)
+	}
+	if out.Data.AvatarURL != "/api/v1/static/avatars/1005.png" {
+		t.Fatalf("expected static avatar_url, got %q", out.Data.AvatarURL)
 	}
 }
 

@@ -17,12 +17,134 @@ var defaultAvatarFiles = [...]string{"girl_01.png", "girl_2.png", "boy_01.png", 
 // UserService provides business logic related to user profile and settings.
 type UserService struct {
 	users       repository.UserRepository
+	tracks      repository.TrackRepository
+	navigations repository.NavigationRepository
 	avatarCache *AssetCacheService
 }
 
 // NewUserService constructs a new UserService.
 func NewUserService(users repository.UserRepository) *UserService {
 	return &UserService{users: users}
+}
+
+// SetTrackRepository 设置轨迹仓储，用于用户统计信息（里程/轨迹数等）。
+func (s *UserService) SetTrackRepository(repo repository.TrackRepository) {
+	s.tracks = repo
+}
+
+// SetNavigationRepository 设置导航记录仓储，用于用户统计信息（轨迹被使用次数等）。
+func (s *UserService) SetNavigationRepository(repo repository.NavigationRepository) {
+	s.navigations = repo
+}
+
+type userTrackStatsProvider interface {
+	StatsByUserID(ctx context.Context, userID int64) (trackCount int64, totalDistance float64, err error)
+}
+
+type userTrackUsedCounter interface {
+	CountByTrackOwnerUserID(ctx context.Context, ownerUserID int64) (int64, error)
+}
+
+// UserStats 是 GetUserDetail 额外返回的统计信息。
+type UserStats struct {
+	TotalDistance  float64 `json:"total_distance"`
+	TrackCount     int64   `json:"track_count"`
+	TrackUsedCount int64   `json:"track_used_count"`
+}
+
+// GetUserStats 返回用户维度的统计信息。
+// - 总里程/轨迹总数：来自 track_records（按“我的轨迹”口径：排除删除与进行中）。
+// - 轨迹被使用总次数：来自 track_navigations（统计该用户轨迹被导航使用的记录数）。
+func (s *UserService) GetUserStats(ctx context.Context, userID int64) (*UserStats, error) {
+	stats := &UserStats{}
+	if userID <= 0 {
+		return stats, errors.New("userID is required")
+	}
+
+	// track_records 聚合
+	if s.tracks != nil {
+		if p, ok := s.tracks.(userTrackStatsProvider); ok {
+			cnt, dist, err := p.StatsByUserID(ctx, userID)
+			if err != nil {
+				return nil, err
+			}
+			stats.TrackCount = cnt
+			stats.TotalDistance = dist
+		} else {
+			// fallback：逐页扫描（用于非 SQL/测试实现）。
+			var (
+				cursor *models.TrackListCursor
+				limit  = 200
+			)
+			for page := 0; page < 1000; page++ { // guard: 避免异常实现导致死循环
+				items, err := s.tracks.ListByUserID(ctx, userID, cursor, limit)
+				if err != nil {
+					return nil, err
+				}
+				if len(items) == 0 {
+					break
+				}
+				for _, t := range items {
+					if t == nil {
+						continue
+					}
+					stats.TrackCount++
+					stats.TotalDistance += t.Distance
+				}
+				last := items[len(items)-1]
+				cursor = &models.TrackListCursor{StartTime: last.StartTime, ID: last.ID}
+				if len(items) < limit {
+					break
+				}
+			}
+		}
+	}
+
+	// track_navigations 统计：优先走仓储侧聚合（MySQL join），否则 fallback 为基于 trackIDs 的累加。
+	if s.navigations != nil {
+		if c, ok := s.navigations.(userTrackUsedCounter); ok {
+			used, err := c.CountByTrackOwnerUserID(ctx, userID)
+			if err != nil {
+				return nil, err
+			}
+			stats.TrackUsedCount = used
+		} else if s.tracks != nil {
+			// fallback：先拿到该用户所有轨迹 ID，再按 track_id 统计并求和。
+			trackIDs := make([]string, 0, 64)
+			var cursor *models.TrackListCursor
+			limit := 200
+			for page := 0; page < 1000; page++ {
+				items, err := s.tracks.ListByUserID(ctx, userID, cursor, limit)
+				if err != nil {
+					return nil, err
+				}
+				if len(items) == 0 {
+					break
+				}
+				for _, t := range items {
+					if t != nil && t.ID != "" {
+						trackIDs = append(trackIDs, t.ID)
+					}
+				}
+				last := items[len(items)-1]
+				cursor = &models.TrackListCursor{StartTime: last.StartTime, ID: last.ID}
+				if len(items) < limit {
+					break
+				}
+			}
+			m, err := s.navigations.CountByTrackIDs(ctx, trackIDs)
+			if err != nil {
+				return nil, err
+			}
+			var total int64
+			for _, v := range m {
+				total += v
+			}
+			stats.TrackUsedCount = total
+		}
+	}
+
+	return stats, nil
 }
 
 // SetAvatarCache 设置用户头像本地缓存服务。

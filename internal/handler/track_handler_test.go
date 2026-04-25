@@ -30,6 +30,7 @@ type testEnv struct {
 	userRepo       repository.UserRepository
 	collectRepo    repository.CollectRepository
 	loginLogRepo   repository.LoginLogRepository
+	navigationRepo repository.NavigationRepository
 	loginSvc       *service.LoginService
 	tokenBlacklist *middleware.TokenBlacklist
 	staticRoot     string
@@ -43,6 +44,8 @@ func newTestEnv() *testEnv {
 	trackSvc.SetUserRepository(userRepo)
 	trackSvc.SetNavigationRepository(navigationRepo)
 	userSvc := service.NewUserService(userRepo)
+	userSvc.SetTrackRepository(trackRepo)
+	userSvc.SetNavigationRepository(navigationRepo)
 	loginSvc := service.NewLoginService(userRepo, loginLogRepo, "", "", testJWTSecret)
 	tokenBlacklist := middleware.NewTokenBlacklist()
 	staticRoot, _ := os.MkdirTemp("", "track_server_test_static_")
@@ -67,7 +70,7 @@ func newTestEnv() *testEnv {
 		StaticRoot:     staticRoot,
 	})
 
-	return &testEnv{h: h, trackRepo: trackRepo, userRepo: userRepo, collectRepo: collectRepo, loginLogRepo: loginLogRepo, loginSvc: loginSvc, tokenBlacklist: tokenBlacklist, staticRoot: staticRoot, avatarCacheDir: avatarCacheDir}
+	return &testEnv{h: h, trackRepo: trackRepo, userRepo: userRepo, collectRepo: collectRepo, loginLogRepo: loginLogRepo, navigationRepo: navigationRepo, loginSvc: loginSvc, tokenBlacklist: tokenBlacklist, staticRoot: staticRoot, avatarCacheDir: avatarCacheDir}
 }
 
 func (e *testEnv) generateTestToken(userID int64) string {

@@ -10,6 +10,8 @@ import (
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/common/utils"
 
+	"github.com/tongyichu/track_server/internal/middleware"
+	"github.com/tongyichu/track_server/internal/models"
 	"github.com/tongyichu/track_server/internal/service"
 )
 
@@ -25,9 +27,20 @@ func NewUserHandler(userSvc *service.UserService) *UserHandler {
 
 // GetUserDetail handles GET /api/user/:user_id/detail
 func (h *UserHandler) GetUserDetail(ctx context.Context, c *app.RequestContext) {
+	meta := middleware.GetRequestMeta(c)
+	if meta == nil || meta.AuthUserID <= 0 {
+		c.JSON(http.StatusUnauthorized, utils.H{"error": "unauthorized"})
+		return
+	}
+	authUserID := meta.AuthUserID
+
 	userID, err := parseRequiredUserID(c.Param("user_id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, utils.H{"error": err.Error()})
+		return
+	}
+	if userID != authUserID {
+		c.JSON(http.StatusForbidden, utils.H{"error": "forbidden"})
 		return
 	}
 	user, err := h.userSvc.GetUserProfile(ctx, userID)
@@ -35,7 +48,23 @@ func (h *UserHandler) GetUserDetail(ctx context.Context, c *app.RequestContext) 
 		c.JSON(http.StatusNotFound, utils.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, user)
+	stats, err := h.userSvc.GetUserStats(ctx, userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	data := struct {
+		*models.User
+		TotalDistance  float64 `json:"total_distance"`
+		TrackCount     int64   `json:"track_count"`
+		TrackUsedCount int64   `json:"track_used_count"`
+	}{
+		User:           user,
+		TotalDistance:  stats.TotalDistance,
+		TrackCount:     stats.TrackCount,
+		TrackUsedCount: stats.TrackUsedCount,
+	}
+	c.JSON(http.StatusOK, successResponse(data))
 }
 
 // UpdateAvatar handles PUT /api/user/profile/photo

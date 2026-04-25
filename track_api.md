@@ -19,6 +19,7 @@
 | 7 | [轨迹搜索列表](#7-轨迹搜索列表) | GET | `/track/search/list` | ✅ |
 | 8 | [导航使用上报](#8-导航使用上报) | POST | `/track/:track_id/navigation/report` | ✅ |
 | 9 | [我的轨迹列表](#9-我的轨迹列表) | GET | `/track/my/list` | ✅ |
+| 10 | [获取用户详情](#10-获取用户详情) | GET | `/user/:user_id/detail` | ✅ |
 
 ---
 
@@ -841,4 +842,90 @@ curl -X GET "http://<host>:<port>/api/v1/track/my/list?limit=20" \
 ```bash
 curl -X GET "http://<host>:<port>/api/v1/track/my/list?limit=20&cursor=<next_cursor>" \
   -H "Authorization: Bearer <token>"
+```
+
+---
+
+## 10. 获取用户详情
+
+获取指定用户的详细信息，并返回用户轨迹相关的统计数据。
+
+**需要认证**
+
+### 请求
+
+```
+GET /api/v1/user/:user_id/detail
+Authorization: Bearer <token>
+```
+
+#### Path 参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `user_id` | int64 | 是 | 用户 ID。 |
+
+#### Body
+
+无
+
+### 响应
+
+**状态码：** `200 OK`
+
+返回 `StandardResponse`，`data` 为用户信息 + 统计字段：
+
+```json
+{
+  "code": 0,
+  "data": {
+    "id": 1001,
+    "nickname": "Alice",
+    "avatar_url": "/api/v1/static/default_avatars/girl_01.png",
+    "signature": "",
+    "phone": "13800000000",
+    "client_language": "zh-CN",
+    "created_at": "2026-04-20T12:00:00Z",
+    "updated_at": "2026-04-20T12:00:00Z",
+
+    "total_distance": 2000,
+    "track_count": 2,
+    "track_used_count": 3
+  }
+}
+```
+
+**字段说明：**
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `data.id` | int64 | 用户 ID。 |
+| `data.nickname` | string | 用户昵称。 |
+| `data.avatar_url` | string | 用户头像 URL（为空时服务端会返回默认头像；若启用头像缓存，可能返回服务端本地静态下载地址 `/api/v1/static/avatars/...`）。 |
+| `data.signature` | string | 个性签名。 |
+| `data.phone` | string | 手机号（可能为空）。 |
+| `data.client_language` | string | 客户端语言。 |
+| `data.created_at` | string | 创建时间。 |
+| `data.updated_at` | string | 更新时间。 |
+| `data.total_distance` | number | 总里程（米）：该用户在 `track_records` 中的轨迹 `distance` 加和（按“我的轨迹”口径：排除删除与进行中）。 |
+| `data.track_count` | int64 | 轨迹总数：该用户在 `track_records` 中的轨迹数量（同口径）。 |
+| `data.track_used_count` | int64 | 轨迹被使用总次数：该用户轨迹在 `track_navigations` 中产生的使用记录数总和（同口径过滤）。 |
+
+### 错误响应
+
+- `400 Bad Request`
+  - `user_id` 非法
+- `401 Unauthorized`
+  - 缺少/无效/过期的 Token
+- `404 Not Found`
+  - 用户不存在
+- `500 Internal Server Error`
+  - 服务端统计计算失败
+
+错误响应格式示例：
+
+```json
+{
+  "error": "..."
+}
 ```

@@ -556,6 +556,26 @@ func (r *MySQLTrackRepository) FindRunningByUserID(ctx context.Context, userID i
 	return r.FindByID(ctx, id)
 }
 
+// StatsByUserID returns (trackCount, totalDistance) for a user.
+// 口径与 ListByUserID 保持一致：排除删除与进行中轨迹。
+func (r *MySQLTrackRepository) StatsByUserID(ctx context.Context, userID int64) (int64, float64, error) {
+	row := r.db.QueryRowContext(
+		ctx,
+		`SELECT COUNT(*) AS cnt, COALESCE(SUM(distance), 0) AS total_distance
+		 FROM track_records
+		 WHERE user_id=? AND is_running=0 AND status IN (?, ?)` ,
+		userID, models.TrackStatusNormal, models.TrackStatusPrivate,
+	)
+	var (
+		cnt  int64
+		dist float64
+	)
+	if err := row.Scan(&cnt, &dist); err != nil {
+		return 0, 0, err
+	}
+	return cnt, dist, nil
+}
+
 func (r *MySQLTrackRepository) ListByUserID(ctx context.Context, userID int64, cursor *models.TrackListCursor, limit int) ([]*models.Track, error) {
 	if limit <= 0 {
 		limit = 20
@@ -1039,6 +1059,24 @@ func (r *MySQLNavigationRepository) CountByTrackIDs(ctx context.Context, trackID
 		return nil, err
 	}
 	return res, nil
+}
+
+// CountByTrackOwnerUserID returns total navigation usage count for tracks owned by the user.
+// 口径与 TrackRepository.ListByUserID 保持一致：排除删除与进行中轨迹。
+func (r *MySQLNavigationRepository) CountByTrackOwnerUserID(ctx context.Context, ownerUserID int64) (int64, error) {
+	row := r.db.QueryRowContext(
+		ctx,
+		`SELECT COUNT(*)
+		 FROM track_navigations n
+		 JOIN track_records t ON n.track_id = t.id
+		 WHERE t.user_id=? AND t.is_running=0 AND t.status IN (?, ?)` ,
+		ownerUserID, models.TrackStatusNormal, models.TrackStatusPrivate,
+	)
+	var cnt int64
+	if err := row.Scan(&cnt); err != nil {
+		return 0, err
+	}
+	return cnt, nil
 }
 
 // MySQLLoginLogRepository implements LoginLogRepository on top of MySQL.

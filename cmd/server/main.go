@@ -90,6 +90,8 @@ func main() {
 	trackSvc.SetUserRepository(userRepo)
 	trackSvc.SetNavigationRepository(navigationRepo)
 	userSvc := service.NewUserService(userRepo)
+	userSvc.SetTrackRepository(trackRepo)
+	userSvc.SetNavigationRepository(navigationRepo)
 	loginSvc := service.NewLoginService(userRepo, loginLogRepo, cfg.WechatAppID, cfg.WechatAppSecret, cfg.JWTSecret)
 
 	// 初始化本地资源缓存服务：把客户端上传到 OSS 的轨迹截图 / 原始轨迹文件，按需同步到服务器本地，

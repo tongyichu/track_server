@@ -122,6 +122,34 @@ func (r *InMemoryTrackRepository) FindRunningByUserID(_ context.Context, userID 
 	return nil, ErrNotFound
 }
 
+// StatsByUserID returns (trackCount, totalDistance) for tracks owned by user.
+// 口径与 ListByUserID 保持一致：排除删除与进行中轨迹。
+func (r *InMemoryTrackRepository) StatsByUserID(_ context.Context, userID int64) (int64, float64, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var (
+		cnt  int64
+		dist float64
+	)
+	for _, t := range r.tracks {
+		if t == nil {
+			continue
+		}
+		if t.UserID != userID {
+			continue
+		}
+		if t.IsRunning {
+			continue
+		}
+		if t.Status != models.TrackStatusNormal && t.Status != models.TrackStatusPrivate {
+			continue
+		}
+		cnt++
+		dist += t.Distance
+	}
+	return cnt, dist, nil
+}
+
 // ListByUserID returns tracks of the given user ordered by start time desc.
 // It excludes deleted tracks and running tracks by default.
 func (r *InMemoryTrackRepository) ListByUserID(_ context.Context, userID int64, cursor *models.TrackListCursor, limit int) ([]*models.Track, error) {

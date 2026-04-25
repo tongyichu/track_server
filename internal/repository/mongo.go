@@ -144,6 +144,43 @@ func (r *MongoTrackRepository) FindRunningByUserID(ctx context.Context, userID i
 	return &track, nil
 }
 
+// StatsByUserID returns (trackCount, totalDistance) for tracks owned by user.
+// 口径与 ListByUserID 保持一致：排除删除与进行中轨迹。
+func (r *MongoTrackRepository) StatsByUserID(ctx context.Context, userID int64) (int64, float64, error) {
+	pipeline := mongo.Pipeline{
+		bson.D{{Key: "$match", Value: bson.M{
+			"user_id":    userID,
+			"is_running": false,
+			"status": bson.M{"$in": []models.TrackStatus{models.TrackStatusNormal, models.TrackStatusPrivate}},
+		}}},
+		bson.D{{Key: "$group", Value: bson.M{
+			"_id":  nil,
+			"cnt":  bson.M{"$sum": 1},
+			"dist": bson.M{"$sum": "$distance"},
+		}}},
+	}
+	cur, err := r.collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer cur.Close(ctx)
+
+	var out struct {
+		Cnt  int64   `bson:"cnt"`
+		Dist float64 `bson:"dist"`
+	}
+	if cur.Next(ctx) {
+		if err := cur.Decode(&out); err != nil {
+			return 0, 0, err
+		}
+		return out.Cnt, out.Dist, nil
+	}
+	if err := cur.Err(); err != nil {
+		return 0, 0, err
+	}
+	return 0, 0, nil
+}
+
 // ListByUserID lists tracks of a user ordered by start time desc.
 // It excludes deleted tracks and running tracks by default.
 func (r *MongoTrackRepository) ListByUserID(ctx context.Context, userID int64, cursor *models.TrackListCursor, limit int) ([]*models.Track, error) {
