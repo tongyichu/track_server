@@ -39,6 +39,7 @@ Token 的获取与说明参考 `login.md`。
 |-------------|------|------|------|
 | `Authorization` | string | 是 | `Bearer <token>` |
 | `Content-Type` | string | 是 | 固定 `application/json` |
+| `X-City-Code` | string | 否 | 城市 Code |
 | `X-User-ID` | string | 否（建议携带） | 用户 ID（部分接口历史上依赖该 header，建议统一携带以兼容客户端实现） |
 | `X-Device-ID` | string | 否 | 设备唯一标识 |
 | `X-Platform` | string | 否 | 客户端平台：`ios` / `android` |
