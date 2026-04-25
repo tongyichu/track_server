@@ -18,6 +18,7 @@
 | 6 | [取消收藏轨迹](#6-取消收藏轨迹) | DELETE | `/track_collect` | ✅ |
 | 7 | [轨迹搜索列表](#7-轨迹搜索列表) | GET | `/track/search/list` | ✅ |
 | 8 | [导航使用上报](#8-导航使用上报) | POST | `/track/:track_id/navigation/report` | ✅ |
+| 9 | [我的轨迹列表](#9-我的轨迹列表) | GET | `/track/my/list` | ✅ |
 
 ---
 
@@ -699,4 +700,117 @@ Authorization: Bearer <token>
 {
   "error": "..."
 }
+```
+
+---
+
+## 9. 我的轨迹列表
+
+获取当前登录用户自己发布的轨迹列表。
+
+**需要认证**
+
+### 说明
+
+- 仅返回当前鉴权用户自己的轨迹，不支持查看其他用户的数据。
+- 返回的是 `MyTrackSummary[]`，而不是完整的 `Track`。
+- 仅返回已结束的轨迹；进行中的轨迹（`is_running=true`）不会出现在结果中。
+- 返回轨迹状态为 `正常` 和 `私密` 的记录，不返回已删除记录。
+- 排序规则为 `start_time DESC`；当时间相同时，具体稳定顺序由底层存储实现决定。
+- 返回结果**不包含** `nickname`、`user_avatar_url`、`collected` 字段。
+- 返回结果**包含** `collect_count`、`navigate_count` 统计字段，便于客户端直接展示。
+- `raw_track_url` / `track_screenshot_url` 为服务端本地可下载链接（不是 OSS 地址）。
+- 当前服务端固定最多返回 `50` 条数据，暂不支持分页参数。
+
+### 请求
+
+```
+GET /api/v1/track/my/list
+Authorization: Bearer <token>
+```
+
+#### Headers
+
+| Header | 必填 | 说明 |
+|--------|------|------|
+| `Authorization` | 是 | `Bearer <token>`（从 Token 中解析当前用户身份） |
+
+#### Query 参数
+
+无
+
+#### Body
+
+无
+
+### 响应
+
+**状态码：** `200 OK`
+
+返回 `StandardResponse`，`data` 为 `MyTrackSummary[]`：
+
+```json
+{
+  "code": 0,
+  "data": [
+    {
+      "id": "trk1",
+      "user_id": 1001,
+      "city_code": "330100",
+      "track_type": "徒步",
+      "start_time": "2026-04-20T12:00:00Z",
+      "city_name": "杭州市",
+      "title": "西湖徒步",
+      "distance": 1200.5,
+      "duration": 360,
+      "elevation_gain": 80,
+      "collect_count": 12,
+      "navigate_count": 3,
+      "track_screenshot_url": "/api/v1/static/screenshots/trk1.jpg",
+      "raw_track_url": "/api/v1/static/raw_tracks/trk1.dat"
+    }
+  ]
+}
+```
+
+**字段说明：**
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `data` | `MyTrackSummary[]` | 当前用户自己的轨迹列表。 |
+| `data[].id` | string | 轨迹 ID。 |
+| `data[].user_id` | int64 | 当前轨迹所属用户 ID。 |
+| `data[].city_code` | string | 城市 Code。 |
+| `data[].track_type` | string | 轨迹类型，例如 `徒步` / `跑步` / `骑车` / `自驾`。 |
+| `data[].start_time` | string | 运动开始时间。 |
+| `data[].city_name` | string | 城市名称，由 `city_code` 映射得到。 |
+| `data[].title` | string | 轨迹标题。 |
+| `data[].distance` | number | 距离，单位米。 |
+| `data[].duration` | int | 时长，单位秒。 |
+| `data[].elevation_gain` | int | 累计爬升，单位米。 |
+| `data[].collect_count` | int64 | 该轨迹被收藏的总数。 |
+| `data[].navigate_count` | int64 | 该轨迹被其他用户用于导航的次数。 |
+| `data[].track_screenshot_url` | string | 服务端本地缓存的轨迹截图可下载 URL。 |
+| `data[].raw_track_url` | string | 服务端本地缓存的原始轨迹文件可下载 URL。 |
+
+### 错误响应
+
+- `401 Unauthorized`
+  - 缺少/无效/过期的 Token
+- `500 Internal Server Error`
+  - 服务端查询我的轨迹列表失败
+
+错误响应格式示例：
+
+```json
+{
+  "error": "..."
+}
+```
+
+### 示例（curl）
+
+```bash
+curl -X GET "http://<host>:<port>/api/v1/track/my/list" \
+  -H "Authorization: Bearer <token>"
 ```
