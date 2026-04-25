@@ -175,6 +175,28 @@ func (h *TrackHandler) GetTrackMap(ctx context.Context, c *app.RequestContext) {
 	c.JSON(http.StatusOK, m)
 }
 
+// ReportTrackNavigation handles POST /api/track/:track_id/navigation/report
+func (h *TrackHandler) ReportTrackNavigation(ctx context.Context, c *app.RequestContext) {
+	meta := middleware.GetRequestMeta(c)
+	if meta == nil || meta.AuthUserID <= 0 {
+		c.JSON(http.StatusUnauthorized, utils.H{"error": "unauthorized"})
+		return
+	}
+	trackID := c.Param("track_id")
+	if err := h.trackSvc.ReportTrackNavigation(ctx, meta.AuthUserID, trackID); err != nil {
+		status := http.StatusInternalServerError
+		switch {
+		case err.Error() == repository.ErrNotFound.Error():
+			status = http.StatusNotFound
+		case errors.As(err, new(*service.InvalidArgumentError)):
+			status = http.StatusBadRequest
+		}
+		c.JSON(status, utils.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, successResponse(utils.H{"status": "ok"}))
+}
+
 // GetTrackDetail handles GET /api/track/:track_id/detail
 func (h *TrackHandler) GetTrackDetail(ctx context.Context, c *app.RequestContext) {
 	trackID := c.Param("track_id")

@@ -18,6 +18,7 @@
 | 6 | [收藏轨迹](#6-收藏轨迹) | POST | `/track_collect` | ✅ |
 | 7 | [取消收藏轨迹](#7-取消收藏轨迹) | DELETE | `/track_collect` | ✅ |
 | 8 | [轨迹搜索列表](#8-轨迹搜索列表) | GET | `/track/search/list` | ✅ |
+| 9 | [导航使用上报](#9-导航使用上报) | POST | `/track/:track_id/navigation/report` | ✅ |
 
 ---
 
@@ -208,6 +209,7 @@ curl -X POST "http://<host>:<port>/api/v1/track/create" \
 - 返回的是 `TrackSummary` 列表（轻量字段），而不是完整的 `Track`。
 - 返回结果中 `collected` 表示当前鉴权用户是否已收藏该轨迹。
 - 返回结果中的 `collect_count` 表示该轨迹被收藏的总数。
+- 返回结果中的 `navigate_count` 表示该轨迹被其他用户用于导航的次数。
 - 返回结果中的 `nickname` / `user_avatar_url` 为轨迹所属用户的昵称/头像 URI。
 - 返回结果中的 `city_code` / `city_name` 为轨迹所属城市 Code 及其对应的城市名称。
 - 返回结果中的 `track_type` 为轨迹类型，例如 `徒步` / `跑步` / `骑车` / `自驾`。
@@ -249,7 +251,8 @@ Authorization: Bearer <token>
       "raw_track_url": "/api/v1/static/raw_tracks/trk1.dat",
       "track_screenshot_url": "/api/v1/static/screenshots/trk1.jpg",
       "collected": true,
-      "collect_count": 12
+      "collect_count": 12,
+      "navigate_count": 3
     }
   ]
 }
@@ -603,6 +606,56 @@ curl -X DELETE "http://<host>:<port>/api/v1/track_collect?track_id=trk2" \
 ### 请求
 
 ```
+
+---
+
+## 9. 导航使用上报
+
+客户端在“使用别人的轨迹进行导航”后上报一次使用记录，服务端将据此统计 `navigate_count`。
+
+**需要认证**
+
+### 请求
+
+```
+POST /api/v1/track/:track_id/navigation/report
+Authorization: Bearer <token>
+```
+
+**Path 参数：**
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `track_id` | string | 是 | 轨迹 ID |
+
+### 响应
+
+**状态码：** `200 OK`
+
+```json
+{
+  "code": 0,
+  "data": {
+    "status": "ok"
+  }
+}
+```
+
+### 说明
+
+- 仅统计“其他用户”使用该轨迹导航的次数（自己导航自己的轨迹不会计入）。
+
+### 错误响应
+
+- `400 Bad Request`
+  - 上报了自己创建的轨迹（不允许计入导航次数）
+
+### 示例（curl）
+
+```bash
+curl -X POST "http://<host>:<port>/api/v1/track/trk1/navigation/report" \
+  -H "Authorization: Bearer <token>"
+```
 GET /api/v1/track/search/list?keyword=:keyword
 Authorization: Bearer <token>
 ```
@@ -637,7 +690,8 @@ Authorization: Bearer <token>
     "raw_track_url": "/api/v1/static/raw_tracks/trk1.dat",
     "track_screenshot_url": "/api/v1/static/screenshots/trk1.jpg",
     "collected": true,
-    "collect_count": 12
+    "collect_count": 12,
+    "navigate_count": 3
   }
 ]
 ```

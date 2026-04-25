@@ -17,7 +17,7 @@ var trackIDPattern = regexp.MustCompile(`^NO\.[0-9A-Z]{8}$`)
 
 // TestCreateTrackAssignsRecordFields verifies create uses the new track_records fields.
 func TestCreateTrackAssignsRecordFields(t *testing.T) {
-	trackRepo, _, collectRepo, _ := repository.NewInMemoryRepositories()
+	trackRepo, _, collectRepo, _, _ := repository.NewInMemoryRepositories()
 	svc := NewTrackService(trackRepo, collectRepo)
 
 	track, err := svc.CreateTrack(context.Background(), 1001, CreateTrackInput{})
@@ -48,7 +48,7 @@ func TestGenerateTrackID_FormatAndUniqueness(t *testing.T) {
 	const total = 10
 	// 使用内存仓储的本地序列模拟连续发号，验证编码格式和短序列范围内的不重复性。
 	seen := make(map[string]struct{}, total)
-	trackRepo, _, _, _ := repository.NewInMemoryRepositories()
+	trackRepo, _, _, _, _ := repository.NewInMemoryRepositories()
 
 	for i := 0; i < total; i++ {
 		id, err := trackRepo.NextTrackID(context.Background())
@@ -66,7 +66,7 @@ func TestGenerateTrackID_FormatAndUniqueness(t *testing.T) {
 }
 
 func TestCreateTrack_UsesProvidedFields(t *testing.T) {
-	trackRepo, _, collectRepo, _ := repository.NewInMemoryRepositories()
+	trackRepo, _, collectRepo, _, _ := repository.NewInMemoryRepositories()
 	svc := NewTrackService(trackRepo, collectRepo)
 
 	start := time.Date(2026, 4, 20, 12, 0, 0, 0, time.UTC)
@@ -133,7 +133,7 @@ func TestCreateTrack_UsesProvidedFields(t *testing.T) {
 }
 
 func TestCreateTrack_CleansTempAssetCacheOnly(t *testing.T) {
-	trackRepo, _, collectRepo, _ := repository.NewInMemoryRepositories()
+	trackRepo, _, collectRepo, _, _ := repository.NewInMemoryRepositories()
 	svc := NewTrackService(trackRepo, collectRepo)
 
 	staticRoot := t.TempDir()
@@ -209,7 +209,7 @@ func TestCreateTrack_CleansTempAssetCacheOnly(t *testing.T) {
 }
 
 func TestCreateTrack_InvalidTimeRange(t *testing.T) {
-	trackRepo, _, collectRepo, _ := repository.NewInMemoryRepositories()
+	trackRepo, _, collectRepo, _, _ := repository.NewInMemoryRepositories()
 	svc := NewTrackService(trackRepo, collectRepo)
 
 	start := time.Date(2026, 4, 20, 12, 0, 0, 0, time.UTC)
@@ -225,7 +225,7 @@ func TestCreateTrack_InvalidTimeRange(t *testing.T) {
 }
 
 func TestUpdateTrackInfo_PartialUpdate(t *testing.T) {
-	trackRepo, _, collectRepo, _ := repository.NewInMemoryRepositories()
+	trackRepo, _, collectRepo, _, _ := repository.NewInMemoryRepositories()
 	svc := NewTrackService(trackRepo, collectRepo)
 	ctx := context.Background()
 
@@ -255,7 +255,7 @@ func TestUpdateTrackInfo_PartialUpdate(t *testing.T) {
 }
 
 func TestUpdateTrackInfo_EmptyPatch(t *testing.T) {
-	trackRepo, _, collectRepo, _ := repository.NewInMemoryRepositories()
+	trackRepo, _, collectRepo, _, _ := repository.NewInMemoryRepositories()
 	svc := NewTrackService(trackRepo, collectRepo)
 	ctx := context.Background()
 	_ = trackRepo.Create(ctx, &models.Track{ID: "trk1", UserID: 1001, Title: "t"})

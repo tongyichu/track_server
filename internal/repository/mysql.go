@@ -15,11 +15,11 @@ import (
 )
 
 // NewMySQLRepositories wires MySQL-backed repositories and ensures schema exists.
-func NewMySQLRepositories(ctx context.Context, db *sql.DB) (TrackRepository, UserRepository, CollectRepository, LoginLogRepository, error) {
+func NewMySQLRepositories(ctx context.Context, db *sql.DB) (TrackRepository, UserRepository, CollectRepository, LoginLogRepository, NavigationRepository, error) {
 	if err := ensureMySQLSchema(ctx, db); err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
-	return NewMySQLTrackRepository(db), NewMySQLUserRepository(db), NewMySQLCollectRepository(db), NewMySQLLoginLogRepository(db), nil
+	return NewMySQLTrackRepository(db), NewMySQLUserRepository(db), NewMySQLCollectRepository(db), NewMySQLLoginLogRepository(db), NewMySQLNavigationRepository(db), nil
 }
 
 func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
@@ -86,6 +86,15 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 			PRIMARY KEY (user_id, track_id),
 			INDEX idx_collects_track (track_id)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
+		`CREATE TABLE IF NOT EXISTS track_navigations (
+			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+			track_id VARCHAR(64) NOT NULL COMMENT '轨迹ID',
+			navigator_user_id BIGINT NOT NULL COMMENT '导航使用者用户ID',
+			created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT '使用时间',
+			PRIMARY KEY (id),
+			INDEX idx_nav_track (track_id),
+			INDEX idx_nav_user (navigator_user_id)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='轨迹导航使用记录表';`,
 		`CREATE TABLE IF NOT EXISTS login_log (
 			id BIGINT PRIMARY KEY AUTO_INCREMENT,
 			user_id BIGINT NOT NULL,
@@ -850,6 +859,78 @@ func (r *MySQLCollectRepository) RemoveCollect(ctx context.Context, userID int64
 		return err
 	}
 	return nil
+}
+
+// MySQLNavigationRepository implements NavigationRepository on top of MySQL.
+type MySQLNavigationRepository struct{ db *sql.DB }
+
+func NewMySQLNavigationRepository(db *sql.DB) *MySQLNavigationRepository {
+	return &MySQLNavigationRepository{db: db}
+}
+
+func (r *MySQLNavigationRepository) AddNavigation(ctx context.Context, navigatorUserID int64, trackID string) error {
+	if navigatorUserID <= 0 || trackID == "" {
+		return nil
+	}
+	_, err := r.db.ExecContext(ctx,
+		`INSERT INTO track_navigations (track_id, navigator_user_id, created_at) VALUES (?,?,?)`,
+		trackID, navigatorUserID, time.Now(),
+	)
+	return err
+}
+
+func (r *MySQLNavigationRepository) CountByTrackIDs(ctx context.Context, trackIDs []string) (map[string]int64, error) {
+	res := make(map[string]int64, len(trackIDs))
+	if len(trackIDs) == 0 {
+		return res, nil
+	}
+
+	uniq := make(map[string]struct{}, len(trackIDs))
+	uniqIDs := make([]string, 0, len(trackIDs))
+	for _, id := range trackIDs {
+		if id == "" {
+			continue
+		}
+		if _, ok := uniq[id]; ok {
+			continue
+		}
+		uniq[id] = struct{}{}
+		uniqIDs = append(uniqIDs, id)
+		res[id] = 0
+	}
+	if len(uniqIDs) == 0 {
+		return res, nil
+	}
+
+	placeholders := strings.TrimRight(strings.Repeat("?,", len(uniqIDs)), ",")
+	query := fmt.Sprintf(
+		`SELECT track_id, COUNT(*) AS cnt FROM track_navigations WHERE track_id IN (%s) GROUP BY track_id`,
+		placeholders,
+	)
+	args := make([]any, 0, len(uniqIDs))
+	for _, id := range uniqIDs {
+		args = append(args, id)
+	}
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var (
+			trackID string
+			cnt     int64
+		)
+		if err := rows.Scan(&trackID, &cnt); err != nil {
+			return nil, err
+		}
+		res[trackID] = cnt
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return res, nil
 }
 
 // MySQLLoginLogRepository implements LoginLogRepository on top of MySQL.

@@ -41,30 +41,31 @@ func main() {
 	var userRepo repository.UserRepository
 	var collectRepo repository.CollectRepository
 	var loginLogRepo repository.LoginLogRepository
+	var navigationRepo repository.NavigationRepository
 
 	if cfg.UseInMemory {
-		trackRepo, userRepo, collectRepo, loginLogRepo = repository.NewInMemoryRepositories()
+		trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo = repository.NewInMemoryRepositories()
 		log.Println("using in-memory repositories")
 	} else if cfg.UseMySQL {
 		db, err := repository.OpenMySQL(cfg.MySQLDSN)
 		if err != nil {
 			log.Printf("failed to open mysql, fallback to memory: %v", err)
-			trackRepo, userRepo, collectRepo, loginLogRepo = repository.NewInMemoryRepositories()
+			trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo = repository.NewInMemoryRepositories()
 		} else if err := db.PingContext(ctx); err != nil {
 			log.Printf("failed to ping mysql, fallback to memory: %v", err)
 			_ = db.Close()
-			trackRepo, userRepo, collectRepo, loginLogRepo = repository.NewInMemoryRepositories()
+			trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo = repository.NewInMemoryRepositories()
 		} else {
-			tr, ur, cr, lr, err := repository.NewMySQLRepositories(ctx, db)
+			tr, ur, cr, lr, nr, err := repository.NewMySQLRepositories(ctx, db)
 			if err != nil {
 				log.Printf("failed to init mysql schema, fallback to memory: %v", err)
 				_ = db.Close()
-				trackRepo, userRepo, collectRepo, loginLogRepo = repository.NewInMemoryRepositories()
+				trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo = repository.NewInMemoryRepositories()
 			} else {
 				defer func() {
 					_ = db.Close()
 				}()
-				trackRepo, userRepo, collectRepo, loginLogRepo = tr, ur, cr, lr
+				trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo = tr, ur, cr, lr, nr
 				log.Println("using mysql repositories")
 			}
 		}
@@ -73,19 +74,21 @@ func main() {
 		client, err := mongo.Connect(ctx, options.Client().ApplyURI(cfg.MongoURI))
 		if err != nil {
 			log.Printf("failed to connect mongo, fallback to memory: %v", err)
-			trackRepo, userRepo, collectRepo, loginLogRepo = repository.NewInMemoryRepositories()
+			trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo = repository.NewInMemoryRepositories()
 		} else {
 			db := client.Database(cfg.MongoDBName)
 			trackRepo = repository.NewMongoTrackRepository(db.Collection("tracks"))
 			userRepo = repository.NewMongoUserRepository(db.Collection("users"))
 			collectRepo = repository.NewMongoCollectRepository(db.Collection("track_collects"))
 			loginLogRepo = repository.NewMongoLoginLogRepository(db.Collection("login_log"))
+			navigationRepo = repository.NewMongoNavigationRepository(db.Collection("track_navigations"))
 			log.Println("mongo repositories initialized")
 		}
 	}
 
 	trackSvc := service.NewTrackService(trackRepo, collectRepo)
 	trackSvc.SetUserRepository(userRepo)
+	trackSvc.SetNavigationRepository(navigationRepo)
 	userSvc := service.NewUserService(userRepo)
 	loginSvc := service.NewLoginService(userRepo, loginLogRepo, cfg.WechatAppID, cfg.WechatAppSecret, cfg.JWTSecret)
 

@@ -15,6 +15,7 @@ import (
 type TrackService struct {
 	tracks          repository.TrackRepository
 	collects        repository.CollectRepository
+	navigations     repository.NavigationRepository
 	users           repository.UserRepository
 	screenshotCache *AssetCacheService
 	rawTrackCache   *AssetCacheService
@@ -119,6 +120,12 @@ func NewTrackService(tracks repository.TrackRepository, collects repository.Coll
 // 独立于构造函数以避免破坏既有调用方/单测。
 func (s *TrackService) SetUserRepository(users repository.UserRepository) {
 	s.users = users
+}
+
+// SetNavigationRepository 注入轨迹导航使用记录仓储，用于统计 navigate_count。
+// 独立于构造函数以避免破坏既有调用方/单测。
+func (s *TrackService) SetNavigationRepository(navigations repository.NavigationRepository) {
+	s.navigations = navigations
 }
 
 // SetScreenshotCache 设置截图本地缓存服务。
@@ -250,6 +257,28 @@ func (s *TrackService) GetTrackMap(ctx context.Context, trackID string) (*models
 		return nil, err
 	}
 	return &models.TrackMap{TrackID: track.ID, Points: track.Points}, nil
+}
+
+// ReportTrackNavigation records one navigation usage for a track.
+// 仅统计“其他用户”使用该轨迹导航的次数（自己导航自己的轨迹不计入）。
+func (s *TrackService) ReportTrackNavigation(ctx context.Context, navigatorUserID int64, trackID string) error {
+	if navigatorUserID <= 0 {
+		return invalidArg("userID is required")
+	}
+	if trackID == "" {
+		return invalidArg("trackID is required")
+	}
+	if s.navigations == nil {
+		return nil
+	}
+	track, err := s.tracks.FindByID(ctx, trackID)
+	if err != nil {
+		return err
+	}
+	if track.UserID == navigatorUserID {
+		return invalidArg("cannot report navigation for your own track")
+	}
+	return s.navigations.AddNavigation(ctx, navigatorUserID, track.ID)
 }
 
 // GetRunningTrack returns currently running track of the user if exists.
@@ -523,6 +552,15 @@ func (s *TrackService) fillTrackSummaryExtras(ctx context.Context, userID int64,
 		counts = m
 	}
 
+	navCounts := map[string]int64{}
+	if s.navigations != nil {
+		m, err := s.navigations.CountByTrackIDs(ctx, trackIDs)
+		if err != nil {
+			return err
+		}
+		navCounts = m
+	}
+
 	type userBrief struct {
 		avatar string
 		nick   string
@@ -544,6 +582,11 @@ func (s *TrackService) fillTrackSummaryExtras(ctx context.Context, userID int64,
 
 	// 3) 最后一轮遍历：把准备好的扩展字段写回到每个 summary。
 	for _, summary := range summaries {
+		// 导航使用次数
+		if s.navigations != nil {
+			summary.NavigateCount = navCounts[summary.ID]
+		}
+
 		// 收藏总数
 		if s.collects != nil {
 			summary.CollectCount = counts[summary.ID]

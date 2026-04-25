@@ -67,6 +67,17 @@ CREATE TABLE `track_collects` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户收藏轨迹关系表';
 
 
+CREATE TABLE `track_navigations` (
+                                     `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                                     `track_id` VARCHAR(64) NOT NULL COMMENT '轨迹ID',
+                                     `navigator_user_id` BIGINT NOT NULL COMMENT '导航使用者用户ID',
+                                     `created_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT '使用时间',
+                                     PRIMARY KEY (`id`),
+                                     KEY `idx_nav_track` (`track_id`),
+                                     KEY `idx_nav_user` (`navigator_user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='轨迹导航使用记录表';
+
+
 CREATE TABLE `login_log` (
                              `id` BIGINT NOT NULL AUTO_INCREMENT,
                              `user_id` BIGINT NOT NULL COMMENT '用户ID',

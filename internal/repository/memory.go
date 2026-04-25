@@ -25,6 +25,17 @@ type InMemoryTrackWaypointRepository struct {
 	waypointIDs map[string][]uint64
 }
 
+// InMemoryNavigationRepository is an in-memory implementation of NavigationRepository.
+// It stores navigation usage as append-only records.
+type InMemoryNavigationRepository struct {
+	mu      sync.RWMutex
+	byTrack map[string][]int64
+}
+
+func NewInMemoryNavigationRepository() *InMemoryNavigationRepository {
+	return &InMemoryNavigationRepository{byTrack: make(map[string][]int64)}
+}
+
 // NewInMemoryTrackRepository creates a new in-memory track repository.
 func NewInMemoryTrackRepository() *InMemoryTrackRepository {
 	return &InMemoryTrackRepository{tracks: make(map[string]*models.Track), nextTrackSeq: 1}
@@ -374,8 +385,48 @@ func (r *InMemoryLoginLogRepository) ListByUserID(_ context.Context, userID int6
 }
 
 // NewInMemoryRepositories is a helper to create a full set of in-memory repositories.
-func NewInMemoryRepositories() (TrackRepository, UserRepository, CollectRepository, LoginLogRepository) {
-	return NewInMemoryTrackRepository(), NewInMemoryUserRepository(), NewInMemoryCollectRepository(), NewInMemoryLoginLogRepository()
+func NewInMemoryRepositories() (TrackRepository, UserRepository, CollectRepository, LoginLogRepository, NavigationRepository) {
+	return NewInMemoryTrackRepository(), NewInMemoryUserRepository(), NewInMemoryCollectRepository(), NewInMemoryLoginLogRepository(), NewInMemoryNavigationRepository()
+}
+
+func (r *InMemoryNavigationRepository) AddNavigation(_ context.Context, navigatorUserID int64, trackID string) error {
+	if trackID == "" || navigatorUserID <= 0 {
+		return nil
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.byTrack[trackID] = append(r.byTrack[trackID], navigatorUserID)
+	return nil
+}
+
+func (r *InMemoryNavigationRepository) CountByTrackIDs(_ context.Context, trackIDs []string) (map[string]int64, error) {
+	res := make(map[string]int64, len(trackIDs))
+	if len(trackIDs) == 0 {
+		return res, nil
+	}
+	uniq := make(map[string]struct{}, len(trackIDs))
+	uniqIDs := make([]string, 0, len(trackIDs))
+	for _, id := range trackIDs {
+		if id == "" {
+			continue
+		}
+		if _, ok := uniq[id]; ok {
+			continue
+		}
+		uniq[id] = struct{}{}
+		uniqIDs = append(uniqIDs, id)
+		res[id] = 0
+	}
+	if len(uniqIDs) == 0 {
+		return res, nil
+	}
+
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, id := range uniqIDs {
+		res[id] = int64(len(r.byTrack[id]))
+	}
+	return res, nil
 }
 
 func containsIgnoreCase(s, sub string) bool {

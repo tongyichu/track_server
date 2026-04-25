@@ -38,9 +38,10 @@ type testEnv struct {
 
 // newTestEnv creates a fresh Hertz server wired with in-memory repositories.
 func newTestEnv() *testEnv {
-	trackRepo, userRepo, collectRepo, loginLogRepo := repository.NewInMemoryRepositories()
+	trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo := repository.NewInMemoryRepositories()
 	trackSvc := service.NewTrackService(trackRepo, collectRepo)
 	trackSvc.SetUserRepository(userRepo)
+	trackSvc.SetNavigationRepository(navigationRepo)
 	userSvc := service.NewUserService(userRepo)
 	loginSvc := service.NewLoginService(userRepo, loginLogRepo, "", "", testJWTSecret)
 	tokenBlacklist := middleware.NewTokenBlacklist()
@@ -329,12 +330,24 @@ func TestRecommendAndSearch(t *testing.T) {
 	e := newTestEnv()
 	ctx := context.Background()
 	token := e.generateTestToken(1001)
+	otherToken := e.generateTestToken(2002)
 	startTime := time.Date(2026, 4, 20, 12, 0, 0, 0, time.UTC)
 	_, _ = e.userRepo.CreateIfNotExists(ctx, &models.User{ID: 1001, Nickname: "Alice", AvatarURL: "https://example.com/avatar.png"})
 	// seed one normal track and one running track (running should be excluded from recommend list)
 	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk1", UserID: 1001, CityCode: "330100", TrackType: "徒步", Title: "西湖徒步", StartTime: startTime, IsRunning: false})
 	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-running", UserID: 1001, Title: "进行中跑步", IsRunning: true})
 	_ = e.collectRepo.AddCollect(ctx, 1001, "trk1")
+
+	// other user reports one navigation usage
+	wNav := e.perform(http.MethodPost, "/api/v1/track/trk1/navigation/report", nil, authHeader(otherToken))
+	if wNav.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected navigation report status 200, got %d", wNav.Result().StatusCode())
+	}
+	// owner reports should be rejected
+	wNavSelf := e.perform(http.MethodPost, "/api/v1/track/trk1/navigation/report", nil, authHeader(token))
+	if wNavSelf.Result().StatusCode() != http.StatusBadRequest {
+		t.Fatalf("expected navigation report self status 400, got %d", wNavSelf.Result().StatusCode())
+	}
 
 	w1 := e.perform(http.MethodGet, "/api/v1/track/recommend/list", nil, authHeader(token), ut.Header{Key: middleware.HeaderUserID, Value: "1001"})
 	resp1 := w1.Result()
@@ -376,6 +389,9 @@ func TestRecommendAndSearch(t *testing.T) {
 	if got := result.Data[0].StartTime.Format(time.RFC3339); got != "2026-04-20T12:00:00Z" {
 		t.Fatalf("expected recommend track trk1 start_time=2026-04-20T12:00:00Z, got %s", got)
 	}
+	if result.Data[0].NavigateCount != 1 {
+		t.Fatalf("expected recommend track trk1 navigate_count=1, got %d", result.Data[0].NavigateCount)
+	}
 
 	w2 := e.perform(http.MethodGet, "/api/v1/track/search/list?keyword=西湖", nil, authHeader(token))
 	resp2 := w2.Result()
@@ -392,6 +408,9 @@ func TestRecommendAndSearch(t *testing.T) {
 	}
 	if got := search[0].StartTime.Format(time.RFC3339); got != "2026-04-20T12:00:00Z" {
 		t.Fatalf("expected search track trk1 start_time=2026-04-20T12:00:00Z, got %s", got)
+	}
+	if search[0].NavigateCount != 1 {
+		t.Fatalf("expected search track trk1 navigate_count=1, got %d", search[0].NavigateCount)
 	}
 }
 

@@ -101,6 +101,22 @@ type CollectRepository interface {
 	RemoveCollect(ctx context.Context, userID int64, trackID string) error
 }
 
+// NavigationRepository defines persistence operations for track navigation usage records.
+//
+// 设计说明：
+// - “导航使用次数”按记录数统计（一次使用写一条记录），用于在列表接口展示轨迹被其他用户使用的次数。
+// - 该统计与当前鉴权用户无关，只表示全量使用次数；服务层会在写入时避免记录“自己导航自己的轨迹”。
+type NavigationRepository interface {
+	// AddNavigation records one navigation usage for a track.
+	AddNavigation(ctx context.Context, navigatorUserID int64, trackID string) error
+	// CountByTrackIDs returns navigation usage count of each track.
+	//
+	// 约定与 CollectRepository.CountByTrackIDs 保持一致：
+	// - 入参允许重复/包含空串，实现应自行去重并忽略空串；
+	// - 返回 map 中未出现的 track_id 视为 0。
+	CountByTrackIDs(ctx context.Context, trackIDs []string) (map[string]int64, error)
+}
+
 // LoginLogRepository defines persistence operations for login logs.
 type LoginLogRepository interface {
 	Create(ctx context.Context, log *models.LoginLog) error

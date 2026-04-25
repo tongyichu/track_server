@@ -285,6 +285,24 @@ func (r *MongoCollectRepository) RemoveCollect(context.Context, int64, string) e
 	return errors.New("MongoCollectRepository.RemoveCollect not implemented")
 }
 
+// MongoNavigationRepository is a stub of NavigationRepository backed by MongoDB.
+type MongoNavigationRepository struct {
+	collection *mongo.Collection
+}
+
+// NewMongoNavigationRepository constructs a Mongo-backed NavigationRepository.
+func NewMongoNavigationRepository(collection *mongo.Collection) *MongoNavigationRepository {
+	return &MongoNavigationRepository{collection: collection}
+}
+
+func (r *MongoNavigationRepository) AddNavigation(context.Context, int64, string) error {
+	return errors.New("MongoNavigationRepository.AddNavigation not implemented")
+}
+
+func (r *MongoNavigationRepository) CountByTrackIDs(context.Context, []string) (map[string]int64, error) {
+	return nil, errors.New("MongoNavigationRepository.CountByTrackIDs not implemented")
+}
+
 // MongoLoginLogRepository is a stub of LoginLogRepository backed by MongoDB.
 type MongoLoginLogRepository struct {
 	collection *mongo.Collection

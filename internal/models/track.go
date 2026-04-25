@@ -69,6 +69,7 @@ type TrackSummary struct {
 	ElevationGain      int       `json:"elevation_gain"`       // ElevationGain 是累计爬升，单位米。
 	Collected          bool      `json:"collected"`            // Collected 表示当前鉴权用户是否已收藏该轨迹。
 	CollectCount       int64     `json:"collect_count"`        // CollectCount 是轨迹被收藏的总数。
+	NavigateCount      int64     `json:"navigate_count"`       // NavigateCount 是该轨迹被其他用户用于导航的次数。
 	TrackScreenshotURL string    `json:"track_screenshot_url"` // TrackScreenshotURL 是服务器本地缓存的轨迹截图可下载 URL。
 	RawTrackURL        string    `json:"raw_track_url"`        // RawTrackURL 是服务器本地缓存的原始轨迹文件可下载 URL。
 }
