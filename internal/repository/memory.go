@@ -157,37 +157,75 @@ func (r *InMemoryTrackRepository) ListByUserID(_ context.Context, userID int64, 
 	return res, nil
 }
 
-// ListRecommend returns a simple slice of tracks as recommendation.
-func (r *InMemoryTrackRepository) ListRecommend(_ context.Context, _ int64, limit int) ([]*models.Track, error) {
+// ListRecommend returns normal completed tracks ordered by start_time desc, id desc.
+func (r *InMemoryTrackRepository) ListRecommend(_ context.Context, _ int64, cursor *models.TrackListCursor, limit int) ([]*models.Track, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	res := make([]*models.Track, 0, limit)
+	res := make([]*models.Track, 0)
 	for _, t := range r.tracks {
 		if t == nil || t.IsRunning {
 			continue
 		}
-		res = append(res, t)
-		if limit > 0 && len(res) >= limit {
-			break
+		if t.Status != models.TrackStatusNormal {
+			continue
 		}
+		if cursor != nil {
+			if t.StartTime.After(cursor.StartTime) {
+				continue
+			}
+			if t.StartTime.Equal(cursor.StartTime) && t.ID >= cursor.ID {
+				continue
+			}
+		}
+		res = append(res, t)
+	}
+	sort.SliceStable(res, func(i, j int) bool {
+		if res[i].StartTime.Equal(res[j].StartTime) {
+			return res[i].ID > res[j].ID
+		}
+		return res[i].StartTime.After(res[j].StartTime)
+	})
+	if limit > 0 && len(res) > limit {
+		res = res[:limit]
 	}
 	return res, nil
 }
 
 // Search performs a naive keyword search based on track name.
-func (r *InMemoryTrackRepository) Search(_ context.Context, keyword string, limit int) ([]*models.Track, error) {
+func (r *InMemoryTrackRepository) Search(_ context.Context, keyword string, cursor *models.TrackListCursor, limit int) ([]*models.Track, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	res := make([]*models.Track, 0, limit)
+	res := make([]*models.Track, 0)
 	for _, t := range r.tracks {
-		if keyword == "" || containsIgnoreCase(t.Title, keyword) {
-			res = append(res, t)
-			if limit > 0 && len(res) >= limit {
-				break
+		if t == nil {
+			continue
+		}
+		if t.Status != models.TrackStatusNormal {
+			continue
+		}
+		if keyword != "" && !containsIgnoreCase(t.Title, keyword) {
+			continue
+		}
+		if cursor != nil {
+			if t.StartTime.After(cursor.StartTime) {
+				continue
+			}
+			if t.StartTime.Equal(cursor.StartTime) && t.ID >= cursor.ID {
+				continue
 			}
 		}
+		res = append(res, t)
+	}
+	sort.SliceStable(res, func(i, j int) bool {
+		if res[i].StartTime.Equal(res[j].StartTime) {
+			return res[i].ID > res[j].ID
+		}
+		return res[i].StartTime.After(res[j].StartTime)
+	})
+	if limit > 0 && len(res) > limit {
+		res = res[:limit]
 	}
 	return res, nil
 }

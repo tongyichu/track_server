@@ -214,53 +214,82 @@ curl -X POST "http://<host>:<port>/api/v1/track/create" \
 - 返回结果中的 `track_type` 为轨迹类型，例如 `徒步` / `跑步` / `骑车` / `自驾`。
 - 返回结果中的 `start_time` 为运动开始时间。
 - 返回结果中的 `raw_track_url` / `track_screenshot_url` 为服务端本地可下载链接（不是 OSS 地址）。
+- 接口已支持基于 `cursor` 的瀑布流分页，排序规则为 `start_time DESC, id DESC`。
+- 首次请求不传 `cursor`；继续翻页时透传上一次返回的 `next_cursor`。
+- `limit` 为可选参数，默认 `20`，最大 `50`；超出最大值时服务端会自动截断到 `50`。
+- 响应中的 `has_more` 表示是否还有下一页；仅当 `has_more=true` 时才会返回 `next_cursor`。
 
 ### 请求
 
 ```
-GET /api/v1/track/recommend/list
+GET /api/v1/track/recommend/list?limit=20&cursor=<next_cursor>
 Authorization: Bearer <token>
 ```
 
-**请求参数：** 无
+**Query 参数：**
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `limit` | int | 否 | 每页返回条数，默认 `20`，最大 `50`。 |
+| `cursor` | string | 否 | 分页游标。首屏不传，翻页时透传上一次响应里的 `next_cursor`。 |
 
 ### 响应
 
 **状态码：** `200 OK`
 
-返回 `StandardResponse`，`data` 为 `TrackSummary[]`：
+返回 `StandardResponse`，`data` 为分页对象：
 
 ```json
 {
   "code": 0,
-  "data": [
-    {
-      "id": "trk1",
-      "user_id": 1001,
-      "city_code": "330100",
-      "track_type": "徒步",
-      "start_time": "2026-04-20T12:00:00Z",
-      "city_name": "杭州市",
-      "nickname": "Alice",
-      "user_avatar_url": "https://example.com/avatar.png",
-      "title": "西湖徒步",
-      "distance": 1200.5,
-      "duration": 360,
-      "elevation_gain": 80,
-      "raw_track_url": "/api/v1/static/raw_tracks/trk1.dat",
-      "track_screenshot_url": "/api/v1/static/screenshots/trk1.jpg",
-      "collected": true,
-      "collect_count": 12,
-      "navigate_count": 3
-    }
-  ]
+  "data": {
+    "items": [
+      {
+        "id": "trk1",
+        "user_id": 1001,
+        "city_code": "330100",
+        "track_type": "徒步",
+        "start_time": "2026-04-20T12:00:00Z",
+        "city_name": "杭州市",
+        "nickname": "Alice",
+        "user_avatar_url": "https://example.com/avatar.png",
+        "title": "西湖徒步",
+        "distance": 1200.5,
+        "duration": 360,
+        "elevation_gain": 80,
+        "raw_track_url": "/api/v1/static/raw_tracks/trk1.dat",
+        "track_screenshot_url": "/api/v1/static/screenshots/trk1.jpg",
+        "collected": true,
+        "collect_count": 12,
+        "navigate_count": 3
+      }
+    ],
+    "next_cursor": "eyJzdGFydF90aW1lIjoiMjAyNi0wNC0yMFQxMjowMDowMFoiLCJpZCI6InRyazEifQ",
+    "has_more": true
+  }
 }
 ```
+
+**字段说明：**
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `data.items` | `TrackSummary[]` | 当前页轨迹列表。 |
+| `data.next_cursor` | string | 下一页游标；当 `has_more=false` 时为空或不返回。 |
+| `data.has_more` | bool | 是否还有下一页数据。 |
 
 ### 示例（curl）
 
 ```bash
-curl -X GET "http://<host>:<port>/api/v1/track/recommend/list" \
+curl -X GET "http://<host>:<port>/api/v1/track/recommend/list?limit=20" \
+  -H "Authorization: Bearer <token>" \
+  -H "X-User-ID: 1001"
+```
+
+翻下一页：
+
+```bash
+curl -X GET "http://<host>:<port>/api/v1/track/recommend/list?limit=20&cursor=<next_cursor>" \
   -H "Authorization: Bearer <token>" \
   -H "X-User-ID: 1001"
 ```
@@ -507,10 +536,26 @@ curl -X DELETE "http://<host>:<port>/api/v1/track_collect?track_id=trk2" \
 
 **需要认证**
 
+### 说明
+
+- 返回的是 `TrackSummary` 分页结果（轻量字段），而不是完整的 `Track`。
+- 返回结果中 `collected` 表示当前鉴权用户是否已收藏该轨迹。
+- 返回结果中的 `collect_count` 表示该轨迹被收藏的总数。
+- 返回结果中的 `navigate_count` 表示该轨迹被其他用户用于导航的次数。
+- 返回结果中的 `nickname` / `user_avatar_url` 为轨迹所属用户的昵称/头像 URI。
+- 返回结果中的 `city_code` / `city_name` 为轨迹所属城市 Code 及其对应的城市名称。
+- 返回结果中的 `track_type` 为轨迹类型，例如 `徒步` / `跑步` / `骑车` / `自驾`。
+- 返回结果中的 `start_time` 为运动开始时间。
+- 返回结果中的 `raw_track_url` / `track_screenshot_url` 为服务端本地可下载链接（不是 OSS 地址）。
+- 接口已支持基于 `cursor` 的瀑布流分页，排序规则为 `start_time DESC, id DESC`。
+- 首次请求不传 `cursor`；继续翻页时透传上一次返回的 `next_cursor`。
+- `limit` 为可选参数，默认 `20`，最大 `50`；超出最大值时服务端会自动截断到 `50`。
+- 响应中的 `has_more` 表示是否还有下一页；仅当 `has_more=true` 时才会返回 `next_cursor`。
+
 ### 请求
 
 ```
-GET /api/v1/track/search/list?keyword=:keyword
+GET /api/v1/track/search/list?keyword=:keyword&limit=20&cursor=<next_cursor>
 Authorization: Bearer <token>
 ```
 
@@ -518,42 +563,67 @@ Authorization: Bearer <token>
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `keyword` | string | 否 | 搜索关键字；为空时返回最近的部分轨迹（最多 50 条） |
+| `keyword` | string | 否 | 搜索关键字；为空时返回最近轨迹列表。 |
+| `limit` | int | 否 | 每页返回条数，默认 `20`，最大 `50`。 |
+| `cursor` | string | 否 | 分页游标。首屏不传，翻页时透传上一次响应里的 `next_cursor`。 |
 
 ### 响应
 
 **状态码：** `200 OK`
 
-直接返回 `TrackSummary[]`（非 `StandardResponse`）：
+返回 `StandardResponse`，`data` 为分页对象：
 
 ```json
-[
-  {
-    "id": "trk1",
-    "user_id": 1001,
-    "city_code": "330100",
-    "track_type": "徒步",
-    "start_time": "2026-04-20T12:00:00Z",
-    "city_name": "杭州市",
-    "nickname": "Alice",
-    "user_avatar_url": "https://example.com/avatar.png",
-    "title": "西湖徒步",
-    "distance": 1200.5,
-    "duration": 360,
-    "elevation_gain": 80,
-    "raw_track_url": "/api/v1/static/raw_tracks/trk1.dat",
-    "track_screenshot_url": "/api/v1/static/screenshots/trk1.jpg",
-    "collected": true,
-    "collect_count": 12,
-    "navigate_count": 3
+{
+  "code": 0,
+  "data": {
+    "items": [
+      {
+        "id": "trk1",
+        "user_id": 1001,
+        "city_code": "330100",
+        "track_type": "徒步",
+        "start_time": "2026-04-20T12:00:00Z",
+        "city_name": "杭州市",
+        "nickname": "Alice",
+        "user_avatar_url": "https://example.com/avatar.png",
+        "title": "西湖徒步",
+        "distance": 1200.5,
+        "duration": 360,
+        "elevation_gain": 80,
+        "raw_track_url": "/api/v1/static/raw_tracks/trk1.dat",
+        "track_screenshot_url": "/api/v1/static/screenshots/trk1.jpg",
+        "collected": true,
+        "collect_count": 12,
+        "navigate_count": 3
+      }
+    ],
+    "next_cursor": "eyJzdGFydF90aW1lIjoiMjAyNi0wNC0yMFQxMjowMDowMFoiLCJpZCI6InRyazEifQ",
+    "has_more": true
   }
-]
+}
 ```
+
+**字段说明：**
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `data.items` | `TrackSummary[]` | 当前页轨迹列表。 |
+| `data.next_cursor` | string | 下一页游标；当 `has_more=false` 时为空或不返回。 |
+| `data.has_more` | bool | 是否还有下一页数据。 |
 
 ### 示例（curl）
 
 ```bash
-curl -X GET "http://<host>:<port>/api/v1/track/search/list?keyword=西湖" \
+curl -X GET "http://<host>:<port>/api/v1/track/search/list?keyword=西湖&limit=20" \
+  -H "Authorization: Bearer <token>" \
+  -H "X-User-ID: 1001"
+```
+
+翻下一页：
+
+```bash
+curl -X GET "http://<host>:<port>/api/v1/track/search/list?keyword=西湖&limit=20&cursor=<next_cursor>" \
   -H "Authorization: Bearer <token>" \
   -H "X-User-ID: 1001"
 ```

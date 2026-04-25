@@ -569,14 +569,20 @@ func (r *MySQLTrackRepository) ListByUserID(ctx context.Context, userID int64, l
 	return res, nil
 }
 
-func (r *MySQLTrackRepository) ListRecommend(ctx context.Context, _ int64, limit int) ([]*models.Track, error) {
+func (r *MySQLTrackRepository) ListRecommend(ctx context.Context, _ int64, cursor *models.TrackListCursor, limit int) ([]*models.Track, error) {
 	if limit <= 0 {
 		limit = 20
 	}
-	rows, err := r.db.QueryContext(ctx,
-		`SELECT id FROM track_records WHERE status=? AND is_running=0 ORDER BY start_time DESC LIMIT ?`,
-		models.TrackStatusNormal, limit,
-	)
+	query := `SELECT id FROM track_records WHERE status=? AND is_running=0`
+	args := make([]interface{}, 0, 4)
+	args = append(args, models.TrackStatusNormal)
+	if cursor != nil {
+		query += ` AND (start_time < ? OR (start_time = ? AND id < ?))`
+		args = append(args, cursor.StartTime, cursor.StartTime, cursor.ID)
+	}
+	query += ` ORDER BY start_time DESC, id DESC LIMIT ?`
+	args = append(args, limit)
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -608,17 +614,21 @@ func (r *MySQLTrackRepository) ListRecommend(ctx context.Context, _ int64, limit
 	return res, nil
 }
 
-func (r *MySQLTrackRepository) Search(ctx context.Context, keyword string, limit int) ([]*models.Track, error) {
+func (r *MySQLTrackRepository) Search(ctx context.Context, keyword string, cursor *models.TrackListCursor, limit int) ([]*models.Track, error) {
 	if limit <= 0 {
 		limit = 20
 	}
 	like := "%" + keyword + "%"
-	rows, err := r.db.QueryContext(ctx,
-		`SELECT id FROM track_records
-		 WHERE status=? AND (? = '' OR title LIKE ?)
-		 ORDER BY start_time DESC LIMIT ?`,
-		models.TrackStatusNormal, keyword, like, limit,
-	)
+	query := `SELECT id FROM track_records WHERE status=? AND (? = '' OR title LIKE ?)`
+	args := make([]interface{}, 0, 6)
+	args = append(args, models.TrackStatusNormal, keyword, like)
+	if cursor != nil {
+		query += ` AND (start_time < ? OR (start_time = ? AND id < ?))`
+		args = append(args, cursor.StartTime, cursor.StartTime, cursor.ID)
+	}
+	query += ` ORDER BY start_time DESC, id DESC LIMIT ?`
+	args = append(args, limit)
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}

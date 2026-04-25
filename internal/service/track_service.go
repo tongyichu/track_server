@@ -2,9 +2,12 @@ package service
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"log"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/tongyichu/track_server/internal/config"
@@ -20,6 +23,22 @@ type TrackService struct {
 	users           repository.UserRepository
 	screenshotCache *AssetCacheService
 	rawTrackCache   *AssetCacheService
+}
+
+const (
+	defaultTrackPageSize = 20
+	maxTrackPageSize     = 50
+)
+
+type ListRecommendInput struct {
+	Cursor string
+	Limit  int
+}
+
+type SearchTracksInput struct {
+	Keyword string
+	Cursor  string
+	Limit   int
 }
 
 func (s *TrackService) decorateTrackAssets(ctx context.Context, track *models.Track) {
@@ -292,11 +311,69 @@ func (s *TrackService) GetRunningTrack(ctx context.Context, userID int64) (*mode
 	return track, nil
 }
 
+func normalizeTrackPageLimit(limit int) int {
+	if limit <= 0 {
+		return defaultTrackPageSize
+	}
+	if limit > maxTrackPageSize {
+		return maxTrackPageSize
+	}
+	return limit
+}
+
+func decodeTrackListCursor(raw string) (*models.TrackListCursor, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, nil
+	}
+	buf, err := base64.RawURLEncoding.DecodeString(raw)
+	if err != nil {
+		return nil, invalidArg("invalid cursor")
+	}
+	var cursor models.TrackListCursor
+	if err := json.Unmarshal(buf, &cursor); err != nil {
+		return nil, invalidArg("invalid cursor")
+	}
+	if cursor.ID == "" || cursor.StartTime.IsZero() {
+		return nil, invalidArg("invalid cursor")
+	}
+	return &cursor, nil
+}
+
+func encodeTrackListCursor(startTime time.Time, id string) (string, error) {
+	buf, err := json.Marshal(models.TrackListCursor{StartTime: startTime, ID: id})
+	if err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(buf), nil
+}
+
+func buildTrackSummaryPage(summaries []*models.TrackSummary, hasMore bool) (*models.TrackSummaryPage, error) {
+	page := &models.TrackSummaryPage{Items: summaries, HasMore: hasMore}
+	if hasMore && len(summaries) > 0 {
+		nextCursor, err := encodeTrackListCursor(summaries[len(summaries)-1].StartTime, summaries[len(summaries)-1].ID)
+		if err != nil {
+			return nil, err
+		}
+		page.NextCursor = nextCursor
+	}
+	return page, nil
+}
+
 // ListRecommend returns recommended tracks for the user.
-func (s *TrackService) ListRecommend(ctx context.Context, userID int64, limit int) ([]*models.TrackSummary, error) {
-	tracks, err := s.tracks.ListRecommend(ctx, userID, limit)
+func (s *TrackService) ListRecommend(ctx context.Context, userID int64, input ListRecommendInput) (*models.TrackSummaryPage, error) {
+	limit := normalizeTrackPageLimit(input.Limit)
+	cursor, err := decodeTrackListCursor(input.Cursor)
 	if err != nil {
 		return nil, err
+	}
+	tracks, err := s.tracks.ListRecommend(ctx, userID, cursor, limit+1)
+	if err != nil {
+		return nil, err
+	}
+	hasMore := len(tracks) > limit
+	if hasMore {
+		tracks = tracks[:limit]
 	}
 	summaries := toSummaries(tracks)
 	// 填充服务器本地可下载截图 URL：
@@ -349,7 +426,7 @@ func (s *TrackService) ListRecommend(ctx context.Context, userID int64, limit in
 	if err := s.fillTrackSummaryExtras(ctx, userID, summaries); err != nil {
 		return nil, err
 	}
-	return summaries, nil
+	return buildTrackSummaryPage(summaries, hasMore)
 }
 
 // ListMyTracks returns tracks that belong to the given user.
@@ -386,10 +463,19 @@ func (s *TrackService) ListMyTracks(ctx context.Context, userID int64, limit int
 }
 
 // SearchTracks searches tracks globally by keyword.
-func (s *TrackService) SearchTracks(ctx context.Context, userID int64, keyword string, limit int) ([]*models.TrackSummary, error) {
-	tracks, err := s.tracks.Search(ctx, keyword, limit)
+func (s *TrackService) SearchTracks(ctx context.Context, userID int64, input SearchTracksInput) (*models.TrackSummaryPage, error) {
+	limit := normalizeTrackPageLimit(input.Limit)
+	cursor, err := decodeTrackListCursor(input.Cursor)
 	if err != nil {
 		return nil, err
+	}
+	tracks, err := s.tracks.Search(ctx, input.Keyword, cursor, limit+1)
+	if err != nil {
+		return nil, err
+	}
+	hasMore := len(tracks) > limit
+	if hasMore {
+		tracks = tracks[:limit]
 	}
 	summaries := toSummaries(tracks)
 	// 与推荐列表保持一致：填充资源本地 URL / 收藏状态与总数 / 用户昵称和头像。
@@ -408,7 +494,7 @@ func (s *TrackService) SearchTracks(ctx context.Context, userID int64, keyword s
 	if err := s.fillTrackSummaryExtras(ctx, userID, summaries); err != nil {
 		return nil, err
 	}
-	return summaries, nil
+	return buildTrackSummaryPage(summaries, hasMore)
 }
 
 // MarkUploadedToCloud marks a finished track as uploaded to cloud.

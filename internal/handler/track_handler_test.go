@@ -334,7 +334,7 @@ func TestRecommendAndSearch(t *testing.T) {
 	startTime := time.Date(2026, 4, 20, 12, 0, 0, 0, time.UTC)
 	_, _ = e.userRepo.CreateIfNotExists(ctx, &models.User{ID: 1001, Nickname: "Alice", AvatarURL: "https://example.com/avatar.png"})
 	// seed one normal track and one running track (running should be excluded from recommend list)
-	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk1", UserID: 1001, CityCode: "330100", TrackType: "徒步", Title: "西湖徒步", StartTime: startTime, IsRunning: false})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk1", UserID: 1001, CityCode: "330100", TrackType: "徒步", Title: "西湖徒步", StartTime: startTime, IsRunning: false, Status: models.TrackStatusNormal})
 	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-running", UserID: 1001, Title: "进行中跑步", IsRunning: true})
 	_ = e.collectRepo.AddCollect(ctx, 1001, "trk1")
 
@@ -354,43 +354,52 @@ func TestRecommendAndSearch(t *testing.T) {
 	if resp1.StatusCode() != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", resp1.StatusCode())
 	}
-	var result handler.StandardResponse[[]models.TrackSummary]
+	var result handler.StandardResponse[*models.TrackSummaryPage]
 	decodeJSON(t, resp1.Body(), &result)
 	if result.Code != 0 {
 		t.Fatalf("expected code 0, got %d", result.Code)
 	}
-	if len(result.Data) != 1 {
-		t.Fatalf("expected recommend list size 1 (exclude running), got %d", len(result.Data))
+	if result.Data == nil {
+		t.Fatalf("expected recommend page data")
 	}
-	if result.Data[0].ID != "trk1" {
-		t.Fatalf("expected recommend track id trk1, got %q", result.Data[0].ID)
+	if len(result.Data.Items) != 1 {
+		t.Fatalf("expected recommend list size 1 (exclude running), got %d", len(result.Data.Items))
 	}
-	if !result.Data[0].Collected {
+	if result.Data.HasMore {
+		t.Fatalf("expected recommend has_more=false")
+	}
+	if result.Data.NextCursor != "" {
+		t.Fatalf("expected recommend next_cursor empty, got %q", result.Data.NextCursor)
+	}
+	if result.Data.Items[0].ID != "trk1" {
+		t.Fatalf("expected recommend track id trk1, got %q", result.Data.Items[0].ID)
+	}
+	if !result.Data.Items[0].Collected {
 		t.Fatalf("expected recommend track trk1 collected=true")
 	}
-	if result.Data[0].CollectCount != 1 {
-		t.Fatalf("expected recommend track trk1 collect_count=1, got %d", result.Data[0].CollectCount)
+	if result.Data.Items[0].CollectCount != 1 {
+		t.Fatalf("expected recommend track trk1 collect_count=1, got %d", result.Data.Items[0].CollectCount)
 	}
-	if result.Data[0].UserAvatarURL != "https://example.com/avatar.png" {
-		t.Fatalf("expected recommend track trk1 user_avatar_url set, got %q", result.Data[0].UserAvatarURL)
+	if result.Data.Items[0].UserAvatarURL != "https://example.com/avatar.png" {
+		t.Fatalf("expected recommend track trk1 user_avatar_url set, got %q", result.Data.Items[0].UserAvatarURL)
 	}
-	if result.Data[0].Nickname != "Alice" {
-		t.Fatalf("expected recommend track trk1 nickname=Alice, got %q", result.Data[0].Nickname)
+	if result.Data.Items[0].Nickname != "Alice" {
+		t.Fatalf("expected recommend track trk1 nickname=Alice, got %q", result.Data.Items[0].Nickname)
 	}
-	if result.Data[0].CityCode != "330100" {
-		t.Fatalf("expected recommend track trk1 city_code=330100, got %q", result.Data[0].CityCode)
+	if result.Data.Items[0].CityCode != "330100" {
+		t.Fatalf("expected recommend track trk1 city_code=330100, got %q", result.Data.Items[0].CityCode)
 	}
-	if result.Data[0].CityName != "杭州市" {
-		t.Fatalf("expected recommend track trk1 city_name=杭州市, got %q", result.Data[0].CityName)
+	if result.Data.Items[0].CityName != "杭州市" {
+		t.Fatalf("expected recommend track trk1 city_name=杭州市, got %q", result.Data.Items[0].CityName)
 	}
-	if result.Data[0].TrackType != "徒步" {
-		t.Fatalf("expected recommend track trk1 track_type=徒步, got %q", result.Data[0].TrackType)
+	if result.Data.Items[0].TrackType != "徒步" {
+		t.Fatalf("expected recommend track trk1 track_type=徒步, got %q", result.Data.Items[0].TrackType)
 	}
-	if got := result.Data[0].StartTime.Format(time.RFC3339); got != "2026-04-20T12:00:00Z" {
+	if got := result.Data.Items[0].StartTime.Format(time.RFC3339); got != "2026-04-20T12:00:00Z" {
 		t.Fatalf("expected recommend track trk1 start_time=2026-04-20T12:00:00Z, got %s", got)
 	}
-	if result.Data[0].NavigateCount != 1 {
-		t.Fatalf("expected recommend track trk1 navigate_count=1, got %d", result.Data[0].NavigateCount)
+	if result.Data.Items[0].NavigateCount != 1 {
+		t.Fatalf("expected recommend track trk1 navigate_count=1, got %d", result.Data.Items[0].NavigateCount)
 	}
 
 	w2 := e.perform(http.MethodGet, "/api/v1/track/search/list?keyword=西湖", nil, authHeader(token))
@@ -398,19 +407,146 @@ func TestRecommendAndSearch(t *testing.T) {
 	if resp2.StatusCode() != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", resp2.StatusCode())
 	}
-	var search []models.TrackSummary
+	var search handler.StandardResponse[*models.TrackSummaryPage]
 	decodeJSON(t, resp2.Body(), &search)
-	if len(search) != 1 || search[0].ID != "trk1" {
+	if search.Code != 0 {
+		t.Fatalf("expected search code 0, got %d", search.Code)
+	}
+	if search.Data == nil {
+		t.Fatalf("expected search page data")
+	}
+	if len(search.Data.Items) != 1 || search.Data.Items[0].ID != "trk1" {
 		t.Fatalf("unexpected search result: %+v", search)
 	}
-	if search[0].TrackType != "徒步" {
-		t.Fatalf("expected search track trk1 track_type=徒步, got %q", search[0].TrackType)
+	if search.Data.HasMore {
+		t.Fatalf("expected search has_more=false")
 	}
-	if got := search[0].StartTime.Format(time.RFC3339); got != "2026-04-20T12:00:00Z" {
+	if search.Data.NextCursor != "" {
+		t.Fatalf("expected search next_cursor empty, got %q", search.Data.NextCursor)
+	}
+	if search.Data.Items[0].TrackType != "徒步" {
+		t.Fatalf("expected search track trk1 track_type=徒步, got %q", search.Data.Items[0].TrackType)
+	}
+	if got := search.Data.Items[0].StartTime.Format(time.RFC3339); got != "2026-04-20T12:00:00Z" {
 		t.Fatalf("expected search track trk1 start_time=2026-04-20T12:00:00Z, got %s", got)
 	}
-	if search[0].NavigateCount != 1 {
-		t.Fatalf("expected search track trk1 navigate_count=1, got %d", search[0].NavigateCount)
+	if search.Data.Items[0].NavigateCount != 1 {
+		t.Fatalf("expected search track trk1 navigate_count=1, got %d", search.Data.Items[0].NavigateCount)
+	}
+}
+
+func TestRecommendCursorPagination(t *testing.T) {
+	e := newTestEnv()
+	ctx := context.Background()
+	token := e.generateTestToken(1001)
+
+	start1 := time.Date(2026, 4, 23, 12, 0, 0, 0, time.UTC)
+	start2 := time.Date(2026, 4, 22, 12, 0, 0, 0, time.UTC)
+	start3 := time.Date(2026, 4, 21, 12, 0, 0, 0, time.UTC)
+
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-c", UserID: 1001, Title: "第三条", StartTime: start3, IsRunning: false, Status: models.TrackStatusNormal})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-a", UserID: 1001, Title: "第一条", StartTime: start1, IsRunning: false, Status: models.TrackStatusNormal})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-b", UserID: 1002, Title: "第二条", StartTime: start2, IsRunning: false, Status: models.TrackStatusNormal})
+
+	w1 := e.perform(http.MethodGet, "/api/v1/track/recommend/list?limit=2", nil, authHeader(token), ut.Header{Key: middleware.HeaderUserID, Value: "1001"})
+	if w1.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected first page status 200, got %d", w1.Result().StatusCode())
+	}
+	var page1 handler.StandardResponse[*models.TrackSummaryPage]
+	decodeJSON(t, w1.Result().Body(), &page1)
+	if page1.Data == nil {
+		t.Fatalf("expected first page data")
+	}
+	if len(page1.Data.Items) != 2 {
+		t.Fatalf("expected first page size 2, got %d", len(page1.Data.Items))
+	}
+	if page1.Data.Items[0].ID != "trk-a" || page1.Data.Items[1].ID != "trk-b" {
+		t.Fatalf("unexpected first page order: %+v", page1.Data.Items)
+	}
+	if !page1.Data.HasMore {
+		t.Fatalf("expected first page has_more=true")
+	}
+	if page1.Data.NextCursor == "" {
+		t.Fatalf("expected first page next_cursor")
+	}
+
+	w2 := e.perform(http.MethodGet, "/api/v1/track/recommend/list?limit=2&cursor="+page1.Data.NextCursor, nil, authHeader(token), ut.Header{Key: middleware.HeaderUserID, Value: "1001"})
+	if w2.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected second page status 200, got %d", w2.Result().StatusCode())
+	}
+	var page2 handler.StandardResponse[*models.TrackSummaryPage]
+	decodeJSON(t, w2.Result().Body(), &page2)
+	if page2.Data == nil {
+		t.Fatalf("expected second page data")
+	}
+	if len(page2.Data.Items) != 1 || page2.Data.Items[0].ID != "trk-c" {
+		t.Fatalf("unexpected second page items: %+v", page2.Data.Items)
+	}
+	if page2.Data.HasMore {
+		t.Fatalf("expected second page has_more=false")
+	}
+	if page2.Data.NextCursor != "" {
+		t.Fatalf("expected second page next_cursor empty, got %q", page2.Data.NextCursor)
+	}
+
+	w3 := e.perform(http.MethodGet, "/api/v1/track/recommend/list?cursor=bad-cursor", nil, authHeader(token), ut.Header{Key: middleware.HeaderUserID, Value: "1001"})
+	if w3.Result().StatusCode() != http.StatusBadRequest {
+		t.Fatalf("expected invalid cursor status 400, got %d", w3.Result().StatusCode())
+	}
+}
+
+func TestSearchCursorPagination(t *testing.T) {
+	e := newTestEnv()
+	ctx := context.Background()
+	token := e.generateTestToken(1001)
+
+	start1 := time.Date(2026, 4, 23, 12, 0, 0, 0, time.UTC)
+	start2 := time.Date(2026, 4, 22, 12, 0, 0, 0, time.UTC)
+	start3 := time.Date(2026, 4, 21, 12, 0, 0, 0, time.UTC)
+
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "search-c", UserID: 1001, Title: "西湖夜骑", StartTime: start3, IsRunning: false, Status: models.TrackStatusNormal})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "search-a", UserID: 1001, Title: "西湖晨跑", StartTime: start1, IsRunning: false, Status: models.TrackStatusNormal})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "search-b", UserID: 1002, Title: "西湖徒步", StartTime: start2, IsRunning: false, Status: models.TrackStatusNormal})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "other-keyword", UserID: 1002, Title: "灵隐寺", StartTime: start1, IsRunning: false, Status: models.TrackStatusNormal})
+
+	w1 := e.perform(http.MethodGet, "/api/v1/track/search/list?keyword=西湖&limit=2", nil, authHeader(token), ut.Header{Key: middleware.HeaderUserID, Value: "1001"})
+	if w1.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected first search page status 200, got %d", w1.Result().StatusCode())
+	}
+	var page1 handler.StandardResponse[*models.TrackSummaryPage]
+	decodeJSON(t, w1.Result().Body(), &page1)
+	if page1.Code != 0 || page1.Data == nil {
+		t.Fatalf("unexpected first search page: %+v", page1)
+	}
+	if len(page1.Data.Items) != 2 {
+		t.Fatalf("expected first search page size 2, got %d", len(page1.Data.Items))
+	}
+	if page1.Data.Items[0].ID != "search-a" || page1.Data.Items[1].ID != "search-b" {
+		t.Fatalf("unexpected first search order: %+v", page1.Data.Items)
+	}
+	if !page1.Data.HasMore || page1.Data.NextCursor == "" {
+		t.Fatalf("expected first search page has next cursor: %+v", page1.Data)
+	}
+
+	w2 := e.perform(http.MethodGet, "/api/v1/track/search/list?keyword=西湖&limit=2&cursor="+page1.Data.NextCursor, nil, authHeader(token), ut.Header{Key: middleware.HeaderUserID, Value: "1001"})
+	if w2.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected second search page status 200, got %d", w2.Result().StatusCode())
+	}
+	var page2 handler.StandardResponse[*models.TrackSummaryPage]
+	decodeJSON(t, w2.Result().Body(), &page2)
+	if page2.Code != 0 || page2.Data == nil {
+		t.Fatalf("unexpected second search page: %+v", page2)
+	}
+	if len(page2.Data.Items) != 1 || page2.Data.Items[0].ID != "search-c" {
+		t.Fatalf("unexpected second search items: %+v", page2.Data.Items)
+	}
+	if page2.Data.HasMore || page2.Data.NextCursor != "" {
+		t.Fatalf("expected second search page end, got %+v", page2.Data)
+	}
+
+	w3 := e.perform(http.MethodGet, "/api/v1/track/search/list?keyword=西湖&cursor=bad-cursor", nil, authHeader(token), ut.Header{Key: middleware.HeaderUserID, Value: "1001"})
+	if w3.Result().StatusCode() != http.StatusBadRequest {
+		t.Fatalf("expected invalid search cursor status 400, got %d", w3.Result().StatusCode())
 	}
 }
 

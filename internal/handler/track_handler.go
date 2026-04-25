@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/common/utils"
@@ -129,12 +130,29 @@ func (h *TrackHandler) ListRecommend(ctx context.Context, c *app.RequestContext)
 		}
 		userID = meta.AuthUserID
 	}
-	tracks, err := h.trackSvc.ListRecommend(ctx, userID, 50)
+	limit := 0
+	if rawLimit := string(c.Query("limit")); rawLimit != "" {
+		parsed, err := strconv.Atoi(rawLimit)
+		if err != nil || parsed <= 0 {
+			c.JSON(http.StatusBadRequest, utils.H{"error": "invalid limit"})
+			return
+		}
+		limit = parsed
+	}
+	page, err := h.trackSvc.ListRecommend(ctx, userID, service.ListRecommendInput{
+		Cursor: string(c.Query("cursor")),
+		Limit:  limit,
+	})
 	if err != nil {
+		var iae *service.InvalidArgumentError
+		if errors.As(err, &iae) {
+			c.JSON(http.StatusBadRequest, utils.H{"error": iae.Error()})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, successResponse(tracks))
+	c.JSON(http.StatusOK, successResponse(page))
 }
 
 // ListMyTracks handles GET /api/v1/track/my/list
@@ -172,12 +190,30 @@ func (h *TrackHandler) SearchTracks(ctx context.Context, c *app.RequestContext) 
 		userID = meta.AuthUserID
 	}
 	keyword := string(c.Query("keyword"))
-	tracks, err := h.trackSvc.SearchTracks(ctx, userID, keyword, 50)
+	limit := 0
+	if rawLimit := string(c.Query("limit")); rawLimit != "" {
+		parsed, err := strconv.Atoi(rawLimit)
+		if err != nil || parsed <= 0 {
+			c.JSON(http.StatusBadRequest, utils.H{"error": "invalid limit"})
+			return
+		}
+		limit = parsed
+	}
+	page, err := h.trackSvc.SearchTracks(ctx, userID, service.SearchTracksInput{
+		Keyword: keyword,
+		Cursor:  string(c.Query("cursor")),
+		Limit:   limit,
+	})
 	if err != nil {
+		var iae *service.InvalidArgumentError
+		if errors.As(err, &iae) {
+			c.JSON(http.StatusBadRequest, utils.H{"error": iae.Error()})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, tracks)
+	c.JSON(http.StatusOK, successResponse(page))
 }
 
 // GetTrackMap handles GET /api/track/:track_id/map

@@ -74,6 +74,24 @@ type TrackSummary struct {
 	RawTrackURL        string    `json:"raw_track_url"`        // RawTrackURL 是服务器本地缓存的原始轨迹文件可下载 URL。
 }
 
+// TrackListCursor 表示按时间倒序翻页时使用的游标锚点。
+//
+// 约定：
+// - start_time 与 id 组合后可稳定定位上一页最后一条记录；
+// - 下一页查询条件为“(start_time, id) 严格小于该游标”；
+// - id 作为同一 start_time 下的稳定次排序键，避免重复/漏数据。
+type TrackListCursor struct {
+	StartTime time.Time `json:"start_time"`
+	ID        string    `json:"id"`
+}
+
+// TrackSummaryPage 是推荐轨迹列表的分页返回模型。
+type TrackSummaryPage struct {
+	Items      []*TrackSummary `json:"items"`
+	NextCursor string          `json:"next_cursor,omitempty"`
+	HasMore    bool            `json:"has_more"`
+}
+
 // MyTrackSummary 是“我的轨迹”列表接口使用的返回模型。
 //
 // 与 TrackSummary 相比：

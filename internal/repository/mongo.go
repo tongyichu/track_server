@@ -153,25 +153,32 @@ func (r *MongoTrackRepository) ListByUserID(ctx context.Context, userID int64, l
 		bson.M{
 			"user_id":    userID,
 			"is_running": false,
-			"status": bson.M{"$in": []models.TrackStatus{models.TrackStatusNormal, models.TrackStatusPrivate}},
+			"status":     bson.M{"$in": []models.TrackStatus{models.TrackStatusNormal, models.TrackStatusPrivate}},
 		},
 		options.Find().SetSort(bson.D{{Key: "start_time", Value: -1}}).SetLimit(int64(limit)),
 	)
 }
 
-// ListRecommend lists normal-status tracks ordered by start time desc.
-func (r *MongoTrackRepository) ListRecommend(ctx context.Context, _ int64, limit int) ([]*models.Track, error) {
+// ListRecommend lists normal-status tracks ordered by start_time desc, id desc.
+func (r *MongoTrackRepository) ListRecommend(ctx context.Context, _ int64, cursor *models.TrackListCursor, limit int) ([]*models.Track, error) {
 	if limit <= 0 {
 		limit = 20
 	}
+	filter := bson.M{"status": models.TrackStatusNormal, "is_running": false}
+	if cursor != nil {
+		filter["$or"] = []bson.M{
+			{"start_time": bson.M{"$lt": cursor.StartTime}},
+			{"start_time": cursor.StartTime, "id": bson.M{"$lt": cursor.ID}},
+		}
+	}
 	return r.listTracks(ctx,
-		bson.M{"status": models.TrackStatusNormal, "is_running": false},
-		options.Find().SetSort(bson.D{{Key: "start_time", Value: -1}}).SetLimit(int64(limit)),
+		filter,
+		options.Find().SetSort(bson.D{{Key: "start_time", Value: -1}, {Key: "id", Value: -1}}).SetLimit(int64(limit)),
 	)
 }
 
 // Search performs case-insensitive title search on normal-status tracks.
-func (r *MongoTrackRepository) Search(ctx context.Context, keyword string, limit int) ([]*models.Track, error) {
+func (r *MongoTrackRepository) Search(ctx context.Context, keyword string, cursor *models.TrackListCursor, limit int) ([]*models.Track, error) {
 	if limit <= 0 {
 		limit = 20
 	}
@@ -179,9 +186,15 @@ func (r *MongoTrackRepository) Search(ctx context.Context, keyword string, limit
 	if keyword != "" {
 		filter["title"] = primitive.Regex{Pattern: regexp.QuoteMeta(keyword), Options: "i"}
 	}
+	if cursor != nil {
+		filter["$or"] = []bson.M{
+			{"start_time": bson.M{"$lt": cursor.StartTime}},
+			{"start_time": cursor.StartTime, "id": bson.M{"$lt": cursor.ID}},
+		}
+	}
 	return r.listTracks(ctx,
 		filter,
-		options.Find().SetSort(bson.D{{Key: "start_time", Value: -1}}).SetLimit(int64(limit)),
+		options.Find().SetSort(bson.D{{Key: "start_time", Value: -1}, {Key: "id", Value: -1}}).SetLimit(int64(limit)),
 	)
 }
 

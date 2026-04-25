@@ -48,8 +48,8 @@ type TrackRepository interface {
 	// - 列表默认按 start_time 倒序；
 	// - 是否包含进行中的轨迹由具体实现决定（推荐只返回已结束轨迹）。
 	ListByUserID(ctx context.Context, userID int64, limit int) ([]*models.Track, error)
-	ListRecommend(ctx context.Context, userID int64, limit int) ([]*models.Track, error)
-	Search(ctx context.Context, keyword string, limit int) ([]*models.Track, error)
+	ListRecommend(ctx context.Context, userID int64, cursor *models.TrackListCursor, limit int) ([]*models.Track, error)
+	Search(ctx context.Context, keyword string, cursor *models.TrackListCursor, limit int) ([]*models.Track, error)
 }
 
 // encodeTrackID 将全局递增序列编码成业务侧使用的轨迹 ID。
