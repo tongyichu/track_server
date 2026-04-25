@@ -10,7 +10,7 @@ import (
 	"github.com/tongyichu/track_server/internal/repository"
 )
 
-const defaultAvatarURLPrefix = "/api/v1/static/default/"
+const defaultAvatarURLPrefix = "/api/v1/static/default_avatars/"
 
 var defaultAvatarFiles = [...]string{"girl_01.png", "girl_2.png", "boy_01.png", "boy_02.png"}
 
