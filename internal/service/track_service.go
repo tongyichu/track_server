@@ -320,6 +320,39 @@ func (s *TrackService) ListRecommend(ctx context.Context, userID int64, limit in
 	return summaries, nil
 }
 
+// ListMyTracks returns tracks that belong to the given user.
+// It is used by the "我的轨迹" list API and intentionally omits user brief and collected fields.
+func (s *TrackService) ListMyTracks(ctx context.Context, userID int64, limit int) ([]*models.MyTrackSummary, error) {
+	if userID <= 0 {
+		return nil, invalidArg("userID is required")
+	}
+	if limit <= 0 {
+		limit = 50
+	}
+	tracks, err := s.tracks.ListByUserID(ctx, userID, limit)
+	if err != nil {
+		return nil, err
+	}
+	summaries := toMySummaries(tracks)
+	// 与推荐/搜索列表保持一致：填充资源本地 URL（截图/原始轨迹）。
+	if s.screenshotCache != nil || s.rawTrackCache != nil {
+		for i, t := range tracks {
+			cacheCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			if s.screenshotCache != nil {
+				summaries[i].TrackScreenshotURL = s.screenshotCache.EnsureCached(cacheCtx, userID, t.ID, t.TrackScreenshotURL)
+			}
+			if s.rawTrackCache != nil {
+				summaries[i].RawTrackURL = s.rawTrackCache.EnsureCached(cacheCtx, userID, t.ID, t.RawTrackURL)
+			}
+			cancel()
+		}
+	}
+	if err := s.fillMyTrackSummaryExtras(ctx, summaries); err != nil {
+		return nil, err
+	}
+	return summaries, nil
+}
+
 // SearchTracks searches tracks globally by keyword.
 func (s *TrackService) SearchTracks(ctx context.Context, userID int64, keyword string, limit int) ([]*models.TrackSummary, error) {
 	tracks, err := s.tracks.Search(ctx, keyword, limit)
@@ -502,6 +535,65 @@ func toSummaries(tracks []*models.Track) []*models.TrackSummary {
 		})
 	}
 	return res
+}
+
+func toMySummaries(tracks []*models.Track) []*models.MyTrackSummary {
+	res := make([]*models.MyTrackSummary, 0, len(tracks))
+	for _, t := range tracks {
+		res = append(res, &models.MyTrackSummary{
+			ID:            t.ID,
+			UserID:        t.UserID,
+			CityCode:      t.CityCode,
+			TrackType:     t.TrackType,
+			StartTime:     t.StartTime,
+			CityName:      config.CityNameByCode(t.CityCode),
+			Title:         t.Title,
+			Distance:      t.Distance,
+			Duration:      t.Duration,
+			ElevationGain: t.ElevationGain,
+		})
+	}
+	return res
+}
+
+// fillMyTrackSummaryExtras fills only counters needed by MyTrackSummary.
+// It intentionally does NOT fill nickname/avatar/collected.
+func (s *TrackService) fillMyTrackSummaryExtras(ctx context.Context, summaries []*models.MyTrackSummary) error {
+	if len(summaries) == 0 {
+		return nil
+	}
+	trackIDs := make([]string, 0, len(summaries))
+	for _, summary := range summaries {
+		trackIDs = append(trackIDs, summary.ID)
+	}
+
+	counts := map[string]int64{}
+	if s.collects != nil {
+		m, err := s.collects.CountByTrackIDs(ctx, trackIDs)
+		if err != nil {
+			return err
+		}
+		counts = m
+	}
+
+	navCounts := map[string]int64{}
+	if s.navigations != nil {
+		m, err := s.navigations.CountByTrackIDs(ctx, trackIDs)
+		if err != nil {
+			return err
+		}
+		navCounts = m
+	}
+
+	for _, summary := range summaries {
+		if s.collects != nil {
+			summary.CollectCount = counts[summary.ID]
+		}
+		if s.navigations != nil {
+			summary.NavigateCount = navCounts[summary.ID]
+		}
+	}
+	return nil
 }
 
 // fillTrackSummaryExtras 负责为 TrackSummary 列表补齐“跨表/跨仓储”的扩展字段。

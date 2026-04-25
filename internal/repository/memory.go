@@ -122,6 +122,41 @@ func (r *InMemoryTrackRepository) FindRunningByUserID(_ context.Context, userID 
 	return nil, ErrNotFound
 }
 
+// ListByUserID returns tracks of the given user ordered by start time desc.
+// It excludes deleted tracks and running tracks by default.
+func (r *InMemoryTrackRepository) ListByUserID(_ context.Context, userID int64, limit int) ([]*models.Track, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	res := make([]*models.Track, 0)
+	for _, t := range r.tracks {
+		if t == nil {
+			continue
+		}
+		if t.UserID != userID {
+			continue
+		}
+		if t.IsRunning {
+			continue
+		}
+		if t.Status == models.TrackStatusDeleted {
+			continue
+		}
+		res = append(res, t)
+	}
+	// sort by start_time desc
+	sort.SliceStable(res, func(i, j int) bool {
+		if res[i].StartTime.Equal(res[j].StartTime) {
+			return res[i].ID > res[j].ID
+		}
+		return res[i].StartTime.After(res[j].StartTime)
+	})
+	if limit > 0 && len(res) > limit {
+		res = res[:limit]
+	}
+	return res, nil
+}
+
 // ListRecommend returns a simple slice of tracks as recommendation.
 func (r *InMemoryTrackRepository) ListRecommend(_ context.Context, _ int64, limit int) ([]*models.Track, error) {
 	r.mu.RLock()

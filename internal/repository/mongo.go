@@ -143,6 +143,22 @@ func (r *MongoTrackRepository) FindRunningByUserID(ctx context.Context, userID i
 	return &track, nil
 }
 
+// ListByUserID lists tracks of a user ordered by start time desc.
+// It excludes deleted tracks and running tracks by default.
+func (r *MongoTrackRepository) ListByUserID(ctx context.Context, userID int64, limit int) ([]*models.Track, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	return r.listTracks(ctx,
+		bson.M{
+			"user_id":    userID,
+			"is_running": false,
+			"status": bson.M{"$in": []models.TrackStatus{models.TrackStatusNormal, models.TrackStatusPrivate}},
+		},
+		options.Find().SetSort(bson.D{{Key: "start_time", Value: -1}}).SetLimit(int64(limit)),
+	)
+}
+
 // ListRecommend lists normal-status tracks ordered by start time desc.
 func (r *MongoTrackRepository) ListRecommend(ctx context.Context, _ int64, limit int) ([]*models.Track, error) {
 	if limit <= 0 {

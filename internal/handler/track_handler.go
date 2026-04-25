@@ -137,6 +137,26 @@ func (h *TrackHandler) ListRecommend(ctx context.Context, c *app.RequestContext)
 	c.JSON(http.StatusOK, successResponse(tracks))
 }
 
+// ListMyTracks handles GET /api/v1/track/my/list
+func (h *TrackHandler) ListMyTracks(ctx context.Context, c *app.RequestContext) {
+	meta := middleware.GetRequestMeta(c)
+	if meta == nil || meta.AuthUserID <= 0 {
+		c.JSON(http.StatusUnauthorized, utils.H{"error": "unauthorized"})
+		return
+	}
+	tracks, err := h.trackSvc.ListMyTracks(ctx, meta.AuthUserID, 50)
+	if err != nil {
+		var iae *service.InvalidArgumentError
+		if errors.As(err, &iae) {
+			c.JSON(http.StatusBadRequest, utils.H{"error": iae.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, successResponse(tracks))
+}
+
 // SearchTracks handles GET /api/track/search/list
 func (h *TrackHandler) SearchTracks(ctx context.Context, c *app.RequestContext) {
 	// 说明：

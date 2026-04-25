@@ -41,6 +41,13 @@ type TrackRepository interface {
 	Update(ctx context.Context, t *models.Track) error
 	FindByID(ctx context.Context, id string) (*models.Track, error)
 	FindRunningByUserID(ctx context.Context, userID int64) (*models.Track, error)
+	// ListByUserID 返回指定用户的轨迹列表（通常用于“我的轨迹”）。
+	//
+	// 约定：
+	// - 仅返回未删除的轨迹；
+	// - 列表默认按 start_time 倒序；
+	// - 是否包含进行中的轨迹由具体实现决定（推荐只返回已结束轨迹）。
+	ListByUserID(ctx context.Context, userID int64, limit int) ([]*models.Track, error)
 	ListRecommend(ctx context.Context, userID int64, limit int) ([]*models.Track, error)
 	Search(ctx context.Context, keyword string, limit int) ([]*models.Track, error)
 }

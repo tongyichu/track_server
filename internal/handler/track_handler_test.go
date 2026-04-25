@@ -414,6 +414,61 @@ func TestRecommendAndSearch(t *testing.T) {
 	}
 }
 
+func TestListMyTracks_OmitsFields(t *testing.T) {
+	e := newTestEnv()
+	ctx := context.Background()
+	token := e.generateTestToken(1001)
+
+	start1 := time.Date(2026, 4, 20, 12, 0, 0, 0, time.UTC)
+	start2 := time.Date(2026, 4, 21, 12, 0, 0, 0, time.UTC)
+	startOther := time.Date(2026, 4, 22, 12, 0, 0, 0, time.UTC)
+
+	// seed tracks: 2 for user 1001 (one private), 1 for other user; running should be excluded.
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "my1", UserID: 1001, CityCode: "330100", TrackType: "跑步", Title: "我的1", StartTime: start1, IsRunning: false, Status: models.TrackStatusNormal})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "my2", UserID: 1001, CityCode: "330100", TrackType: "徒步", Title: "我的2", StartTime: start2, IsRunning: false, Status: models.TrackStatusPrivate})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "other1", UserID: 2002, Title: "别人的", StartTime: startOther, IsRunning: false, Status: models.TrackStatusNormal})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "my-running", UserID: 1001, Title: "进行中", IsRunning: true, Status: models.TrackStatusNormal})
+
+	w := e.perform(http.MethodGet, "/api/v1/track/my/list", nil, authHeader(token))
+	resp := w.Result()
+	if resp.StatusCode() != http.StatusOK {
+		t.Fatalf("expected status 200, got %d, body=%s", resp.StatusCode(), string(resp.Body()))
+	}
+
+	var result handler.StandardResponse[[]map[string]interface{}]
+	decodeJSON(t, resp.Body(), &result)
+	if result.Code != 0 {
+		t.Fatalf("expected code 0, got %d", result.Code)
+	}
+	if len(result.Data) != 2 {
+		t.Fatalf("expected my list size 2, got %d", len(result.Data))
+	}
+	// order should be start_time desc: my2 then my1
+	if id, _ := result.Data[0]["id"].(string); id != "my2" {
+		t.Fatalf("expected first id my2, got %v", result.Data[0]["id"])
+	}
+	for _, item := range result.Data {
+		if _, ok := item["nickname"]; ok {
+			t.Fatalf("nickname should be omitted")
+		}
+		if _, ok := item["user_avatar_url"]; ok {
+			t.Fatalf("user_avatar_url should be omitted")
+		}
+		if _, ok := item["collected"]; ok {
+			t.Fatalf("collected should be omitted")
+		}
+		if _, ok := item["collect_count"]; !ok {
+			t.Fatalf("collect_count should exist")
+		}
+		if _, ok := item["navigate_count"]; !ok {
+			t.Fatalf("navigate_count should exist")
+		}
+		if uid, ok := item["user_id"].(float64); !ok || int64(uid) != 1001 {
+			t.Fatalf("unexpected user_id: %v", item["user_id"])
+		}
+	}
+}
+
 // TestCollectAndUncollect verifies collect related endpoints.
 func TestCollectAndUncollect(t *testing.T) {
 	e := newTestEnv()

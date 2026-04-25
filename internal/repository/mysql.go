@@ -528,6 +528,47 @@ func (r *MySQLTrackRepository) FindRunningByUserID(ctx context.Context, userID i
 	return r.FindByID(ctx, id)
 }
 
+func (r *MySQLTrackRepository) ListByUserID(ctx context.Context, userID int64, limit int) ([]*models.Track, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT id FROM track_records
+		 WHERE user_id=? AND status IN (?, ?) AND is_running=0
+		 ORDER BY start_time DESC LIMIT ?`,
+		userID, models.TrackStatusNormal, models.TrackStatusPrivate, limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	ids := make([]string, 0, limit)
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	res := make([]*models.Track, 0, len(ids))
+	for _, id := range ids {
+		t, err := r.FindByID(ctx, id)
+		if err != nil {
+			if errors.Is(err, ErrNotFound) {
+				continue
+			}
+			return nil, err
+		}
+		res = append(res, t)
+	}
+	return res, nil
+}
+
 func (r *MySQLTrackRepository) ListRecommend(ctx context.Context, _ int64, limit int) ([]*models.Track, error) {
 	if limit <= 0 {
 		limit = 20
