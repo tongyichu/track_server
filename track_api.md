@@ -84,6 +84,7 @@ Token 的获取与说明参考 `login.md`。
 | `elevation_gain` | int | 累计爬升（米） |
 | `raw_track_url` | string | 原始轨迹文件可下载链接（服务端本地缓存 URL，例如 `/api/v1/static/raw_tracks/<track_id>.dat`） |
 | `track_screenshot_url` | string | 轨迹截图可下载链接（服务端本地缓存 URL，例如 `/api/v1/static/screenshots/<track_id>.jpg`） |
+| `track_no_map_bg_screenshot_url` | string | 无地图背景的轨迹路线截图可下载链接（服务端本地缓存 URL，例如 `/api/v1/static/screenshots/<track_id>_no_map_bg.jpg`） |
 | `is_running` | bool | 是否进行中 |
 | `status` | int | 轨迹状态：`0` 删除，`1` 正常，`2` 私密 |
 | `created_at` | string | 创建时间 |
@@ -119,6 +120,7 @@ Authorization: Bearer <token>
   "elevation_gain": 80,
   "raw_track_url": "https://<bucket>.oss-<region>.aliyuncs.com/prod/track/.../xxx.dat",
   "track_screenshot_url": "https://<bucket>.oss-<region>.aliyuncs.com/prod/track/.../xxx.jpg",
+  "track_no_map_bg_screenshot_url": "https://<bucket>.oss-<region>.aliyuncs.com/prod/track/.../xxx_no_map_bg.jpg",
   "is_running": false,
   "avg_speed_kmh": 12.3
 }
@@ -136,6 +138,7 @@ Authorization: Bearer <token>
 | `elevation_gain` | int | 否 | 累计爬升（米），必须 `>= 0` |
 | `raw_track_url` | string | 否 | 原始轨迹文件 OSS 地址（建议传 OSS HTTP URL，可带签名参数） |
 | `track_screenshot_url` | string | 否 | 轨迹截图 OSS 地址（建议传 OSS HTTP URL，可带签名参数） |
+| `track_no_map_bg_screenshot_url` | string | 否 | 无地图背景的轨迹路线截图 OSS 地址（建议传 OSS HTTP URL，可带签名参数） |
 | `is_running` | bool | 否 | 是否进行中，默认 `true` |
 | `avg_speed_kmh` | number | 否 | 平均速度（km/h），必须 `>= 0` |
 
@@ -162,6 +165,7 @@ Authorization: Bearer <token>
     "elevation_gain": 0,
     "raw_track_url": "/api/v1/static/raw_tracks/No.1713520800123456789.dat",
     "track_screenshot_url": "/api/v1/static/screenshots/No.1713520800123456789.jpg",
+    "track_no_map_bg_screenshot_url": "/api/v1/static/screenshots/No.1713520800123456789_no_map_bg.jpg",
     "is_running": true,
     "status": 1,
     "created_at": "2026-04-20T12:00:00Z",
@@ -170,7 +174,7 @@ Authorization: Bearer <token>
 }
 ```
 
-说明：`raw_track_url` / `track_screenshot_url` 在请求时是 OSS 地址，但响应会被服务端替换为可直接从业务服务器下载的本地链接（路径在 `/api/v1/static/...` 下，需要登录态）。
+说明：`raw_track_url` / `track_screenshot_url` / `track_no_map_bg_screenshot_url` 在请求时是 OSS 地址，但响应会被服务端替换为可直接从业务服务器下载的本地链接（路径在 `/api/v1/static/...` 下，需要登录态）。
 
 ### 示例（curl）
 
@@ -190,6 +194,7 @@ curl -X POST "http://<host>:<port>/api/v1/track/create" \
     "elevation_gain": 80,
     "raw_track_url": "https://<bucket>.oss-<region>.aliyuncs.com/prod/track/.../xxx.dat?<签名参数>",
     "track_screenshot_url": "https://<bucket>.oss-<region>.aliyuncs.com/prod/track/.../xxx.jpg?<签名参数>",
+    "track_no_map_bg_screenshot_url": "https://<bucket>.oss-<region>.aliyuncs.com/prod/track/.../xxx_no_map_bg.jpg?<签名参数>",
     "is_running": false,
     "avg_speed_kmh": 12.3
   }'
@@ -214,7 +219,7 @@ curl -X POST "http://<host>:<port>/api/v1/track/create" \
 - 返回结果中的 `city_code` / `city_name` 为轨迹所属城市 Code 及其对应的城市名称。
 - 返回结果中的 `track_type` 为轨迹类型，例如 `徒步` / `跑步` / `骑车` / `自驾`。
 - 返回结果中的 `start_time` 为运动开始时间。
-- 返回结果中的 `raw_track_url` / `track_screenshot_url` 为服务端本地可下载链接（不是 OSS 地址）。
+- 返回结果中的 `raw_track_url` / `track_screenshot_url` / `track_no_map_bg_screenshot_url` 为服务端本地可下载链接（不是 OSS 地址）。
 - 接口已支持基于 `cursor` 的瀑布流分页，排序规则为 `start_time DESC, id DESC`。
 - 首次请求不传 `cursor`；继续翻页时透传上一次返回的 `next_cursor`。
 - `limit` 为可选参数，默认 `20`，最大 `50`；超出最大值时服务端会自动截断到 `50`。
@@ -260,6 +265,7 @@ Authorization: Bearer <token>
         "elevation_gain": 80,
         "raw_track_url": "/api/v1/static/raw_tracks/trk1.dat",
         "track_screenshot_url": "/api/v1/static/screenshots/trk1.jpg",
+        "track_no_map_bg_screenshot_url": "/api/v1/static/screenshots/trk1_no_map_bg.jpg",
         "collected": true,
         "collect_count": 12,
         "navigate_count": 3
@@ -547,7 +553,7 @@ curl -X DELETE "http://<host>:<port>/api/v1/track_collect?track_id=trk2" \
 - 返回结果中的 `city_code` / `city_name` 为轨迹所属城市 Code 及其对应的城市名称。
 - 返回结果中的 `track_type` 为轨迹类型，例如 `徒步` / `跑步` / `骑车` / `自驾`。
 - 返回结果中的 `start_time` 为运动开始时间。
-- 返回结果中的 `raw_track_url` / `track_screenshot_url` 为服务端本地可下载链接（不是 OSS 地址）。
+- 返回结果中的 `raw_track_url` / `track_screenshot_url` / `track_no_map_bg_screenshot_url` 为服务端本地可下载链接（不是 OSS 地址）。
 - 接口已支持基于 `cursor` 的瀑布流分页，排序规则为 `start_time DESC, id DESC`。
 - 首次请求不传 `cursor`；继续翻页时透传上一次返回的 `next_cursor`。
 - `limit` 为可选参数，默认 `20`，最大 `50`；超出最大值时服务端会自动截断到 `50`。
@@ -594,6 +600,7 @@ Authorization: Bearer <token>
         "elevation_gain": 80,
         "raw_track_url": "/api/v1/static/raw_tracks/trk1.dat",
         "track_screenshot_url": "/api/v1/static/screenshots/trk1.jpg",
+        "track_no_map_bg_screenshot_url": "/api/v1/static/screenshots/trk1_no_map_bg.jpg",
         "collected": true,
         "collect_count": 12,
         "navigate_count": 3

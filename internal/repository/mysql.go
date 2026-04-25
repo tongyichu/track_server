@@ -48,6 +48,7 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 			elevation_gain INT DEFAULT 0,
 			raw_track_url VARCHAR(255),
 			track_screenshot_url VARCHAR(255),
+			track_no_map_bg_screenshot_url VARCHAR(255) COMMENT '没有地图背景的轨迹路线截图URI',
 			is_running TINYINT(1) NOT NULL DEFAULT 1,
 			status TINYINT NOT NULL DEFAULT 1,
 			avg_speed_kmh DOUBLE NOT NULL DEFAULT 1,
@@ -115,6 +116,9 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 	if err := ensureMySQLTrackScreenshotURLColumn(ctx, db); err != nil {
+		return err
+	}
+	if err := ensureMySQLTrackNoMapBgScreenshotURLColumn(ctx, db); err != nil {
 		return err
 	}
 	if err := ensureMySQLTrackIsRunningColumn(ctx, db); err != nil {
@@ -189,6 +193,26 @@ func ensureMySQLTrackScreenshotURLColumn(ctx context.Context, db *sql.DB) error 
 	_, err = db.ExecContext(ctx, `ALTER TABLE track_records ADD COLUMN track_screenshot_url VARCHAR(255) COMMENT '轨迹截图文件在对象存储中的地址' AFTER raw_track_url`)
 	if err != nil {
 		return fmt.Errorf("add track_records.track_screenshot_url column: %w", err)
+	}
+	return nil
+}
+
+func ensureMySQLTrackNoMapBgScreenshotURLColumn(ctx context.Context, db *sql.DB) error {
+	var count int
+	err := db.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM information_schema.COLUMNS
+		WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'track_records' AND COLUMN_NAME = 'track_no_map_bg_screenshot_url'`,
+	).Scan(&count)
+	if err != nil {
+		return fmt.Errorf("check track_records.track_no_map_bg_screenshot_url column: %w", err)
+	}
+	if count > 0 {
+		return nil
+	}
+	_, err = db.ExecContext(ctx, `ALTER TABLE track_records ADD COLUMN track_no_map_bg_screenshot_url VARCHAR(255) COMMENT '没有地图背景的轨迹路线截图URI' AFTER track_screenshot_url`)
+	if err != nil {
+		return fmt.Errorf("add track_records.track_no_map_bg_screenshot_url column: %w", err)
 	}
 	return nil
 }
@@ -427,11 +451,11 @@ func (r *MySQLTrackRepository) Create(ctx context.Context, t *models.Track) erro
 	_, err := r.db.ExecContext(ctx,
 		`INSERT INTO track_records (
 			id, user_id, city_code, track_type, title, start_time, end_time,
-			distance, duration, elevation_gain, raw_track_url, track_screenshot_url, is_running, status, avg_speed_kmh,
+			distance, duration, elevation_gain, raw_track_url, track_screenshot_url, track_no_map_bg_screenshot_url, is_running, status, avg_speed_kmh,
 			created_at, updated_at
-		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		t.ID, t.UserID, t.CityCode, t.TrackType, t.Title, t.StartTime, nullableTimeValue(t.EndTime),
-		t.Distance, t.Duration, t.ElevationGain, nullableStringValue(t.RawTrackURL), nullableStringValue(t.TrackScreenshotURL), t.IsRunning, t.Status, t.AvgSpeedKmh,
+		t.Distance, t.Duration, t.ElevationGain, nullableStringValue(t.RawTrackURL), nullableStringValue(t.TrackScreenshotURL), nullableStringValue(t.TrackNoMapBgScreenshotURL), t.IsRunning, t.Status, t.AvgSpeedKmh,
 		t.CreatedAt, t.UpdatedAt,
 	)
 	if err != nil {
@@ -450,10 +474,10 @@ func (r *MySQLTrackRepository) Update(ctx context.Context, t *models.Track) erro
 	res, err := r.db.ExecContext(ctx,
 		`UPDATE track_records SET
 			user_id=?, city_code=?, track_type=?, title=?, start_time=?, end_time=?,
-			distance=?, duration=?, elevation_gain=?, raw_track_url=?, track_screenshot_url=?, is_running=?, status=?, avg_speed_kmh=?, updated_at=?
+			distance=?, duration=?, elevation_gain=?, raw_track_url=?, track_screenshot_url=?, track_no_map_bg_screenshot_url=?, is_running=?, status=?, avg_speed_kmh=?, updated_at=?
 		WHERE id=?`,
 		t.UserID, t.CityCode, t.TrackType, t.Title, t.StartTime, nullableTimeValue(t.EndTime),
-		t.Distance, t.Duration, t.ElevationGain, nullableStringValue(t.RawTrackURL), nullableStringValue(t.TrackScreenshotURL), t.IsRunning, t.Status, t.AvgSpeedKmh, t.UpdatedAt,
+		t.Distance, t.Duration, t.ElevationGain, nullableStringValue(t.RawTrackURL), nullableStringValue(t.TrackScreenshotURL), nullableStringValue(t.TrackNoMapBgScreenshotURL), t.IsRunning, t.Status, t.AvgSpeedKmh, t.UpdatedAt,
 		t.ID,
 	)
 	if err != nil {
@@ -469,7 +493,7 @@ func (r *MySQLTrackRepository) Update(ctx context.Context, t *models.Track) erro
 func (r *MySQLTrackRepository) FindByID(ctx context.Context, id string) (*models.Track, error) {
 	row := r.db.QueryRowContext(ctx,
 		`SELECT id, user_id, city_code, track_type, title, start_time, end_time,
-			distance, duration, elevation_gain, raw_track_url, track_screenshot_url, is_running, status, avg_speed_kmh,
+			distance, duration, elevation_gain, raw_track_url, track_screenshot_url, track_no_map_bg_screenshot_url, is_running, status, avg_speed_kmh,
 			created_at, updated_at
 		FROM track_records WHERE id=?`, id)
 
@@ -481,10 +505,11 @@ func (r *MySQLTrackRepository) FindByID(ctx context.Context, id string) (*models
 		elevationGain   sql.NullInt64
 		rawTrackURL     sql.NullString
 		trackScreenshot sql.NullString
+		noMapBgShot     sql.NullString
 	)
 	if err := row.Scan(
 		&t.ID, &t.UserID, &t.CityCode, &t.TrackType, &t.Title, &t.StartTime, &endTime,
-		&distance, &duration, &elevationGain, &rawTrackURL, &trackScreenshot, &t.IsRunning, &t.Status, &t.AvgSpeedKmh,
+		&distance, &duration, &elevationGain, &rawTrackURL, &trackScreenshot, &noMapBgShot, &t.IsRunning, &t.Status, &t.AvgSpeedKmh,
 		&t.CreatedAt, &t.UpdatedAt,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -509,6 +534,9 @@ func (r *MySQLTrackRepository) FindByID(ctx context.Context, id string) (*models
 	}
 	if trackScreenshot.Valid {
 		t.TrackScreenshotURL = trackScreenshot.String
+	}
+	if noMapBgShot.Valid {
+		t.TrackNoMapBgScreenshotURL = noMapBgShot.String
 	}
 	return &t, nil
 }

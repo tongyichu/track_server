@@ -99,6 +99,7 @@ func (r *MongoTrackRepository) Update(ctx context.Context, t *models.Track) erro
 			"elevation_gain": t.ElevationGain,
 			"raw_track_url":  t.RawTrackURL,
 			"screenshot_url": t.TrackScreenshotURL,
+			"track_no_map_bg_screenshot_url": t.TrackNoMapBgScreenshotURL,
 			"is_running":     t.IsRunning,
 			"status":         t.Status,
 			"updated_at":     t.UpdatedAt,

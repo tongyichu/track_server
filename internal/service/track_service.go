@@ -82,6 +82,7 @@ type CreateTrackInput struct {
 	ElevationGain       *int       `json:"elevation_gain"`
 	RawTrackURL         *string    `json:"raw_track_url"`
 	TrackScreenshotURL  *string    `json:"track_screenshot_url"`
+	TrackNoMapBgScreenshotURL *string `json:"track_no_map_bg_screenshot_url"`
 	LegacyScreenshotURL *string    `json:"screenshot_url,omitempty"`
 	IsRunning           *bool      `json:"is_running"`
 	AvgSpeedKmh         *float64   `json:"avg_speed_kmh"`
@@ -224,6 +225,9 @@ func (s *TrackService) CreateTrack(ctx context.Context, userID int64, input Crea
 	}
 	if input.TrackScreenshotURL != nil {
 		track.TrackScreenshotURL = *input.TrackScreenshotURL
+	}
+	if input.TrackNoMapBgScreenshotURL != nil {
+		track.TrackNoMapBgScreenshotURL = *input.TrackNoMapBgScreenshotURL
 	}
 	if input.AvgSpeedKmh != nil {
 		track.AvgSpeedKmh = *input.AvgSpeedKmh
@@ -404,6 +408,11 @@ func (s *TrackService) ListRecommend(ctx context.Context, userID int64, input Li
 						resEmptySS++
 					}
 				}
+				// 无地图背景轨迹截图：使用不同 cache key，避免与 track_screenshot_url 文件名冲突。
+				if t.TrackNoMapBgScreenshotURL != "" {
+					local := s.screenshotCache.EnsureCached(cacheCtx, userID, t.ID+"_no_map_bg", t.TrackNoMapBgScreenshotURL)
+					summaries[i].TrackNoMapBgScreenshotURL = local
+				}
 			}
 			if s.rawTrackCache != nil {
 				if t.RawTrackURL == "" {
@@ -484,6 +493,9 @@ func (s *TrackService) SearchTracks(ctx context.Context, userID int64, input Sea
 			cacheCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			if s.screenshotCache != nil {
 				summaries[i].TrackScreenshotURL = s.screenshotCache.EnsureCached(cacheCtx, userID, t.ID, t.TrackScreenshotURL)
+				if t.TrackNoMapBgScreenshotURL != "" {
+					summaries[i].TrackNoMapBgScreenshotURL = s.screenshotCache.EnsureCached(cacheCtx, userID, t.ID+"_no_map_bg", t.TrackNoMapBgScreenshotURL)
+				}
 			}
 			if s.rawTrackCache != nil {
 				summaries[i].RawTrackURL = s.rawTrackCache.EnsureCached(cacheCtx, userID, t.ID, t.RawTrackURL)

@@ -38,6 +38,7 @@ type Track struct {
 	ElevationGain      int          `json:"elevation_gain" bson:"elevation_gain"`             // ElevationGain 是累计爬升，单位米。
 	RawTrackURL        string       `json:"raw_track_url" bson:"raw_track_url"`               // RawTrackURL 是原始轨迹点文件在对象存储中的地址。
 	TrackScreenshotURL string       `json:"track_screenshot_url" bson:"track_screenshot_url"` // TrackScreenshotURL 是轨迹截图文件在对象存储中的地址。
+	TrackNoMapBgScreenshotURL string `json:"track_no_map_bg_screenshot_url" bson:"track_no_map_bg_screenshot_url"` // TrackNoMapBgScreenshotURL 是“无地图背景的轨迹路线截图”文件在对象存储中的地址。
 	IsRunning          bool         `json:"is_running" bson:"is_running"`                     // IsRunning 表示轨迹是否仍处于进行中。
 	Status             TrackStatus  `json:"status" bson:"status"`                             // Status 是轨迹状态：0-删除，1-正常，2-私密。
 	CreatedAt          time.Time    `json:"created_at" bson:"created_at"`                     // CreatedAt 是记录创建时间。
@@ -71,6 +72,7 @@ type TrackSummary struct {
 	CollectCount       int64     `json:"collect_count"`        // CollectCount 是轨迹被收藏的总数。
 	NavigateCount      int64     `json:"navigate_count"`       // NavigateCount 是该轨迹被其他用户用于导航的次数。
 	TrackScreenshotURL string    `json:"track_screenshot_url"` // TrackScreenshotURL 是服务器本地缓存的轨迹截图可下载 URL。
+	TrackNoMapBgScreenshotURL string `json:"track_no_map_bg_screenshot_url"` // TrackNoMapBgScreenshotURL 是服务器本地缓存的“无地图背景轨迹截图”可下载 URL。
 	RawTrackURL        string    `json:"raw_track_url"`        // RawTrackURL 是服务器本地缓存的原始轨迹文件可下载 URL。
 }
 
