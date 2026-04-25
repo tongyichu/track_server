@@ -464,6 +464,7 @@ func toSummaries(tracks []*models.Track) []*models.TrackSummary {
 			UserID:        t.UserID,
 			CityCode:      t.CityCode,
 			TrackType:     t.TrackType,
+			StartTime:     t.StartTime,
 			CityName:      config.CityNameByCode(t.CityCode),
 			Title:         t.Title,
 			Distance:      t.Distance,

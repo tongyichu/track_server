@@ -55,21 +55,22 @@ type Track struct {
 // - 若用户信息不存在/查询失败（not found），nickname/avatar_url 将返回空字符串；
 // - collect_count 为该轨迹被收藏的总数；collected 为“当前鉴权用户”是否收藏。
 type TrackSummary struct {
-	ID                 string  `json:"id"`                   // ID 是轨迹记录唯一标识。
-	UserID             int64   `json:"user_id"`              // UserID 是轨迹所属用户 ID。
-	CityCode           string  `json:"city_code"`            // CityCode 是轨迹所属的城市 Code。
-	TrackType          string  `json:"track_type"`           // TrackType 是轨迹类型，例如徒步、跑步、骑车、自驾。
-	CityName           string  `json:"city_name"`            // CityName 是城市名称（由 city_code 映射得到；映射关系由配置文件维护）。
-	Nickname           string  `json:"nickname"`             // Nickname 是轨迹所属用户的昵称（字段定义与 User struct 保持一致）。
-	UserAvatarURL      string  `json:"user_avatar_url"`      // UserAvatarURL 是轨迹所属用户的头像 URI。
-	Title              string  `json:"title"`                // Title 是轨迹名称。
-	Distance           float64 `json:"distance"`             // Distance 是总距离，单位米。
-	Duration           uint32  `json:"duration"`             // Duration 是运动耗时，单位秒。
-	ElevationGain      int     `json:"elevation_gain"`       // ElevationGain 是累计爬升，单位米。
-	Collected          bool    `json:"collected"`            // Collected 表示当前鉴权用户是否已收藏该轨迹。
-	CollectCount       int64   `json:"collect_count"`        // CollectCount 是轨迹被收藏的总数。
-	TrackScreenshotURL string  `json:"track_screenshot_url"` // TrackScreenshotURL 是服务器本地缓存的轨迹截图可下载 URL。
-	RawTrackURL        string  `json:"raw_track_url"`        // RawTrackURL 是服务器本地缓存的原始轨迹文件可下载 URL。
+	ID                 string    `json:"id"`                   // ID 是轨迹记录唯一标识。
+	UserID             int64     `json:"user_id"`              // UserID 是轨迹所属用户 ID。
+	CityCode           string    `json:"city_code"`            // CityCode 是轨迹所属的城市 Code。
+	TrackType          string    `json:"track_type"`           // TrackType 是轨迹类型，例如徒步、跑步、骑车、自驾。
+	StartTime          time.Time `json:"start_time"`           // StartTime 是运动开始时间。
+	CityName           string    `json:"city_name"`            // CityName 是城市名称（由 city_code 映射得到；映射关系由配置文件维护）。
+	Nickname           string    `json:"nickname"`             // Nickname 是轨迹所属用户的昵称（字段定义与 User struct 保持一致）。
+	UserAvatarURL      string    `json:"user_avatar_url"`      // UserAvatarURL 是轨迹所属用户的头像 URI。
+	Title              string    `json:"title"`                // Title 是轨迹名称。
+	Distance           float64   `json:"distance"`             // Distance 是总距离，单位米。
+	Duration           uint32    `json:"duration"`             // Duration 是运动耗时，单位秒。
+	ElevationGain      int       `json:"elevation_gain"`       // ElevationGain 是累计爬升，单位米。
+	Collected          bool      `json:"collected"`            // Collected 表示当前鉴权用户是否已收藏该轨迹。
+	CollectCount       int64     `json:"collect_count"`        // CollectCount 是轨迹被收藏的总数。
+	TrackScreenshotURL string    `json:"track_screenshot_url"` // TrackScreenshotURL 是服务器本地缓存的轨迹截图可下载 URL。
+	RawTrackURL        string    `json:"raw_track_url"`        // RawTrackURL 是服务器本地缓存的原始轨迹文件可下载 URL。
 }
 
 // TrackMap represents data needed for rendering a track polyline on map.

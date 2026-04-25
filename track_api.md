@@ -211,6 +211,7 @@ curl -X POST "http://<host>:<port>/api/v1/track/create" \
 - 返回结果中的 `nickname` / `user_avatar_url` 为轨迹所属用户的昵称/头像 URI。
 - 返回结果中的 `city_code` / `city_name` 为轨迹所属城市 Code 及其对应的城市名称。
 - 返回结果中的 `track_type` 为轨迹类型，例如 `徒步` / `跑步` / `骑车` / `自驾`。
+- 返回结果中的 `start_time` 为运动开始时间。
 - 返回结果中的 `raw_track_url` / `track_screenshot_url` 为服务端本地可下载链接（不是 OSS 地址）。
 
 ### 请求
@@ -237,6 +238,7 @@ Authorization: Bearer <token>
       "user_id": 1001,
       "city_code": "330100",
       "track_type": "徒步",
+      "start_time": "2026-04-20T12:00:00Z",
       "city_name": "杭州市",
       "nickname": "Alice",
       "user_avatar_url": "https://example.com/avatar.png",
@@ -624,6 +626,7 @@ Authorization: Bearer <token>
     "user_id": 1001,
     "city_code": "330100",
     "track_type": "徒步",
+    "start_time": "2026-04-20T12:00:00Z",
     "city_name": "杭州市",
     "nickname": "Alice",
     "user_avatar_url": "https://example.com/avatar.png",
