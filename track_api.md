@@ -71,6 +71,7 @@ Token 的获取与说明参考 `login.md`。
 |------|------|------|
 | `id` | string | 轨迹 ID |
 | `user_id` | int64 | 用户 ID |
+| `city_code` | string | 城市 Code（用于标识轨迹所属城市；城市/省份映射关系维护在配置文件中） |
 | `title` | string | 轨迹标题 |
 | `start_time` | string | 开始时间（RFC3339/ISO8601，服务端序列化时间格式） |
 | `end_time` | string | 结束时间（RFC3339/ISO8601，服务端序列化时间格式） |
@@ -106,6 +107,7 @@ Authorization: Bearer <token>
 ```json
 {
   "title": "傍晚夜跑",
+  "city_code": "330100",
   "start_time": "2026-04-20T12:00:00Z",
   "end_time": "2026-04-20T12:30:00Z",
   "distance": 1200.5,
@@ -121,6 +123,7 @@ Authorization: Bearer <token>
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | `title` | string | 否 | 轨迹标题，默认 `新的轨迹` |
+| `city_code` | string | 否 | 城市 Code（标识轨迹所属城市） |
 | `start_time` | string | 否 | 开始时间，RFC3339/ISO8601 格式 |
 | `end_time` | string | 否 | 结束时间，RFC3339/ISO8601 格式，必须 `>= start_time` |
 | `distance` | number | 否 | 距离（米），必须 `>= 0` |
@@ -143,6 +146,7 @@ Authorization: Bearer <token>
   "data": {
     "id": "No.1713520800123456789",
     "user_id": 1001,
+    "city_code": "330100",
     "title": "傍晚夜跑",
     "start_time": "2026-04-20T12:00:00Z",
     "end_time": "2026-04-20T12:00:00Z",
@@ -171,6 +175,7 @@ curl -X POST "http://<host>:<port>/api/v1/track/create" \
   -H "X-User-ID: 1001" \
   -d '{
     "title": "傍晚夜跑",
+    "city_code": "330100",
     "start_time": "2026-04-20T12:00:00Z",
     "end_time": "2026-04-20T12:30:00Z",
     "distance": 1200.5,
@@ -198,6 +203,7 @@ curl -X POST "http://<host>:<port>/api/v1/track/create" \
 - 返回结果中 `collected` 表示当前鉴权用户是否已收藏该轨迹。
 - 返回结果中的 `collect_count` 表示该轨迹被收藏的总数。
 - 返回结果中的 `nickname` / `user_avatar_url` 为轨迹所属用户的昵称/头像 URI。
+- 返回结果中的 `city_code` / `city_name` 为轨迹所属城市 Code 及其对应的城市名称。
 - 返回结果中的 `raw_track_url` / `track_screenshot_url` 为服务端本地可下载链接（不是 OSS 地址）。
 
 ### 请求
@@ -222,6 +228,8 @@ Authorization: Bearer <token>
     {
       "id": "trk1",
       "user_id": 1001,
+      "city_code": "330100",
+      "city_name": "杭州市",
       "nickname": "Alice",
       "user_avatar_url": "https://example.com/avatar.png",
       "title": "西湖徒步",
@@ -605,6 +613,8 @@ Authorization: Bearer <token>
   {
     "id": "trk1",
     "user_id": 1001,
+    "city_code": "330100",
+    "city_name": "杭州市",
     "nickname": "Alice",
     "user_avatar_url": "https://example.com/avatar.png",
     "title": "西湖徒步",

@@ -28,6 +28,7 @@ type TrackPoint struct {
 type Track struct {
 	ID                 string       `json:"id" bson:"_id,omitempty"`                          // ID 是轨迹记录唯一标识，由 generateTrackID 生成。
 	UserID             int64        `json:"user_id" bson:"user_id"`                           // UserID 是轨迹所属用户 ID。
+	CityCode           string       `json:"city_code" bson:"city_code"`                       // CityCode 是轨迹所属的城市 Code（城市/省份映射由配置文件维护）。
 	Title              string       `json:"title" bson:"title"`                               // Title 是轨迹名称。
 	StartTime          time.Time    `json:"start_time" bson:"start_time"`                     // StartTime 是运动开始时间。
 	EndTime            time.Time    `json:"end_time" bson:"end_time"`                         // EndTime 是运动结束时间。
@@ -55,6 +56,8 @@ type Track struct {
 type TrackSummary struct {
 	ID                 string  `json:"id"`                   // ID 是轨迹记录唯一标识。
 	UserID             int64   `json:"user_id"`              // UserID 是轨迹所属用户 ID。
+	CityCode           string  `json:"city_code"`            // CityCode 是轨迹所属的城市 Code。
+	CityName           string  `json:"city_name"`            // CityName 是城市名称（由 city_code 映射得到；映射关系由配置文件维护）。
 	Nickname           string  `json:"nickname"`             // Nickname 是轨迹所属用户的昵称（字段定义与 User struct 保持一致）。
 	UserAvatarURL      string  `json:"user_avatar_url"`      // UserAvatarURL 是轨迹所属用户的头像 URI。
 	Title              string  `json:"title"`                // Title 是轨迹名称。

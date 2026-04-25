@@ -88,6 +88,7 @@ func (r *MongoTrackRepository) Update(ctx context.Context, t *models.Track) erro
 		bson.M{"_id": t.ID},
 		bson.M{"$set": bson.M{
 			"user_id":        t.UserID,
+			"city_code":      t.CityCode,
 			"title":          t.Title,
 			"start_time":     t.StartTime,
 			"end_time":       t.EndTime,

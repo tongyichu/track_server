@@ -125,6 +125,7 @@ func TestCreateTrack_WithBody(t *testing.T) {
 	token := e.generateTestToken(1001)
 	body, _ := json.Marshal(map[string]interface{}{
 		"title":                "傍晚夜跑",
+		"city_code":            "330100",
 		"start_time":           "2026-04-20T12:00:00Z",
 		"end_time":             "2026-04-20T12:30:00Z",
 		"distance":             1500.5,
@@ -166,6 +167,9 @@ func TestCreateTrack_WithBody(t *testing.T) {
 	}
 	if result.Data.TrackScreenshotURL != "https://example.com/track.png" {
 		t.Fatalf("unexpected track_screenshot_url: %q", result.Data.TrackScreenshotURL)
+	}
+	if result.Data.CityCode != "330100" {
+		t.Fatalf("unexpected city_code: %q", result.Data.CityCode)
 	}
 	if result.Data.IsRunning {
 		t.Fatalf("expected is_running false")
@@ -307,7 +311,7 @@ func TestRecommendAndSearch(t *testing.T) {
 	token := e.generateTestToken(1001)
 	_, _ = e.userRepo.CreateIfNotExists(ctx, &models.User{ID: 1001, Nickname: "Alice", AvatarURL: "https://example.com/avatar.png"})
 	// seed one normal track and one running track (running should be excluded from recommend list)
-	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk1", UserID: 1001, Title: "西湖徒步", IsRunning: false})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk1", UserID: 1001, CityCode: "330100", Title: "西湖徒步", IsRunning: false})
 	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-running", UserID: 1001, Title: "进行中跑步", IsRunning: true})
 	_ = e.collectRepo.AddCollect(ctx, 1001, "trk1")
 
@@ -338,6 +342,12 @@ func TestRecommendAndSearch(t *testing.T) {
 	}
 	if result.Data[0].Nickname != "Alice" {
 		t.Fatalf("expected recommend track trk1 nickname=Alice, got %q", result.Data[0].Nickname)
+	}
+	if result.Data[0].CityCode != "330100" {
+		t.Fatalf("expected recommend track trk1 city_code=330100, got %q", result.Data[0].CityCode)
+	}
+	if result.Data[0].CityName != "杭州市" {
+		t.Fatalf("expected recommend track trk1 city_name=杭州市, got %q", result.Data[0].CityName)
 	}
 
 	w2 := e.perform(http.MethodGet, "/api/v1/track/search/list?keyword=西湖", nil, authHeader(token))

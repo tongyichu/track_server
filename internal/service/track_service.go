@@ -6,6 +6,7 @@ import (
 	"math"
 	"time"
 
+	"github.com/tongyichu/track_server/internal/config"
 	"github.com/tongyichu/track_server/internal/models"
 	"github.com/tongyichu/track_server/internal/repository"
 )
@@ -51,6 +52,7 @@ func invalidArg(msg string) error { return &InvalidArgumentError{Msg: msg} }
 // CreateTrackInput describes optional fields accepted by track creation.
 type CreateTrackInput struct {
 	Title               *string    `json:"title"`
+	CityCode            *string    `json:"city_code"`
 	StartTime           *time.Time `json:"start_time"`
 	EndTime             *time.Time `json:"end_time"`
 	Distance            *float64   `json:"distance"`
@@ -159,6 +161,7 @@ func (s *TrackService) CreateTrack(ctx context.Context, userID int64, input Crea
 	track := &models.Track{
 		ID:        trackID,
 		UserID:    userID,
+		CityCode:  "",
 		Title:     "新的轨迹",
 		StartTime: startTime,
 		IsRunning: isRunning,
@@ -168,6 +171,9 @@ func (s *TrackService) CreateTrack(ctx context.Context, userID int64, input Crea
 	}
 	if input.Title != nil {
 		track.Title = *input.Title
+	}
+	if input.CityCode != nil {
+		track.CityCode = *input.CityCode
 	}
 	if input.EndTime != nil {
 		track.EndTime = *input.EndTime
@@ -439,9 +445,14 @@ func updateTrackMetrics(t *models.Track) {
 func toSummaries(tracks []*models.Track) []*models.TrackSummary {
 	res := make([]*models.TrackSummary, 0, len(tracks))
 	for _, t := range tracks {
+		// city_name 由 city_code 通过本地配置映射得到：
+		// - 若 city_code 为空/未配置，则 city_name 返回空字符串；
+		// - 映射解析失败会被内部吞掉并兜底为空（不影响列表其它字段返回）。
 		res = append(res, &models.TrackSummary{
 			ID:            t.ID,
 			UserID:        t.UserID,
+			CityCode:      t.CityCode,
+			CityName:      config.CityNameByCode(t.CityCode),
 			Title:         t.Title,
 			Distance:      t.Distance,
 			Duration:      t.Duration,

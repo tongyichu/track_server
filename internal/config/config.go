@@ -1,8 +1,11 @@
 package config
 
 import (
+	_ "embed"
+	"encoding/json"
 	"os"
 	"strconv"
+	"sync"
 )
 
 const (
@@ -142,4 +145,66 @@ func getEnvInt64(key string, def int64) int64 {
 		return n
 	}
 	return def
+}
+
+// -----------------------------
+// 城市/省份配置（内置 JSON）
+// -----------------------------
+//
+// 为什么把 JSON 放在 internal/config 并用 go:embed 内置：
+// - 这类映射属于“随服务版本发布的业务配置”，不是运行时环境变量；内置可以减少部署/挂载复杂度。
+// - 列表接口需要在每条 TrackSummary 返回 city_name，读取配置必须足够快且不能成为单点故障。
+// - 通过 sync.Once 在进程内完成一次性解析，后续查询为 map O(1)。
+//
+// 注意：
+// - 当前仅使用 city_code -> city_name 映射；province 的映射文件也一并内置，便于后续扩展（例如返回省份名称）。
+
+//go:embed china_city_raw.json
+var chinaCityRaw []byte
+
+//go:embed china_province_raw.json
+var chinaProvinceRaw []byte
+
+type rawCity struct {
+	Code     string `json:"code"`
+	Name     string `json:"name"`
+	Province string `json:"province"`
+	City     string `json:"city"`
+}
+
+var (
+	cityNameOnce sync.Once
+	cityNameMap  map[string]string
+)
+
+// CityNameByCode 根据城市 Code 返回城市名称。
+//
+// - 数据来源：internal/config/china_city_raw.json（编译期内置），由业务侧维护映射关系；
+// - 若 code 为空或未找到映射，返回空字符串；
+// - 该函数不会抛错，避免影响推荐/搜索列表主流程（拿不到 city_name 时仍返回 city_code 以及其他字段）。
+//
+// 性能说明：
+// - 首次调用会触发一次 JSON Unmarshal（仅一次）；
+// - 后续每次调用为一次 map 查表；
+// - city_code 的合法性校验不在此处做（写入时由上游保证/或后续增加校验逻辑）。
+func CityNameByCode(code string) string {
+	if code == "" {
+		return ""
+	}
+	cityNameOnce.Do(func() {
+		cityNameMap = make(map[string]string, 2500)
+		var cities []rawCity
+		if err := json.Unmarshal(chinaCityRaw, &cities); err != nil {
+			// 配置解析失败时兜底为空 map；调用方拿不到 city_name 但不影响其他字段。
+			cityNameMap = map[string]string{}
+			return
+		}
+		for _, c := range cities {
+			if c.Code == "" {
+				continue
+			}
+			cityNameMap[c.Code] = c.Name
+		}
+	})
+	return cityNameMap[code]
 }

@@ -38,6 +38,7 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 		`CREATE TABLE IF NOT EXISTS track_records (
 			id VARCHAR(64) NOT NULL,
 			user_id BIGINT UNSIGNED NOT NULL,
+			city_code VARCHAR(16) NOT NULL DEFAULT '' COMMENT '城市Code',
 			title VARCHAR(128) NOT NULL DEFAULT '',
 			start_time DATETIME NOT NULL,
 			end_time DATETIME,
@@ -110,6 +111,9 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 	if err := ensureMySQLTrackAvgSpeedKmhColumn(ctx, db); err != nil {
+		return err
+	}
+	if err := ensureMySQLTrackCityCodeColumn(ctx, db); err != nil {
 		return err
 	}
 	if err := ensureMySQLUserIDColumnsBigint(ctx, db); err != nil {
@@ -220,6 +224,27 @@ func ensureMySQLTrackAvgSpeedKmhColumn(ctx context.Context, db *sql.DB) error {
 	_, err = db.ExecContext(ctx, `ALTER TABLE track_records ADD COLUMN avg_speed_kmh DOUBLE NOT NULL DEFAULT 1 AFTER status`)
 	if err != nil {
 		return fmt.Errorf("add track_records.avg_speed_kmh column: %w", err)
+	}
+	return nil
+}
+
+func ensureMySQLTrackCityCodeColumn(ctx context.Context, db *sql.DB) error {
+	var count int
+	err := db.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM information_schema.COLUMNS
+		WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'track_records' AND COLUMN_NAME = 'city_code'`,
+	).Scan(&count)
+	if err != nil {
+		return fmt.Errorf("check track_records.city_code column: %w", err)
+	}
+	if count > 0 {
+		return nil
+	}
+	// city_code 作为“轨迹归属城市”字段，客户端创建轨迹时传入。
+	_, err = db.ExecContext(ctx, `ALTER TABLE track_records ADD COLUMN city_code VARCHAR(16) NOT NULL DEFAULT '' COMMENT '城市Code' AFTER user_id`)
+	if err != nil {
+		return fmt.Errorf("add track_records.city_code column: %w", err)
 	}
 	return nil
 }
@@ -368,11 +393,11 @@ func (r *MySQLTrackRepository) Create(ctx context.Context, t *models.Track) erro
 
 	_, err := r.db.ExecContext(ctx,
 		`INSERT INTO track_records (
-			id, user_id, title, start_time, end_time,
+			id, user_id, city_code, title, start_time, end_time,
 			distance, duration, elevation_gain, raw_track_url, track_screenshot_url, is_running, status, avg_speed_kmh,
 			created_at, updated_at
-		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-		t.ID, t.UserID, t.Title, t.StartTime, nullableTimeValue(t.EndTime),
+		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		t.ID, t.UserID, t.CityCode, t.Title, t.StartTime, nullableTimeValue(t.EndTime),
 		t.Distance, t.Duration, t.ElevationGain, nullableStringValue(t.RawTrackURL), nullableStringValue(t.TrackScreenshotURL), t.IsRunning, t.Status, t.AvgSpeedKmh,
 		t.CreatedAt, t.UpdatedAt,
 	)
@@ -391,10 +416,10 @@ func (r *MySQLTrackRepository) Update(ctx context.Context, t *models.Track) erro
 
 	res, err := r.db.ExecContext(ctx,
 		`UPDATE track_records SET
-			user_id=?, title=?, start_time=?, end_time=?,
+			user_id=?, city_code=?, title=?, start_time=?, end_time=?,
 			distance=?, duration=?, elevation_gain=?, raw_track_url=?, track_screenshot_url=?, is_running=?, status=?, avg_speed_kmh=?, updated_at=?
 		WHERE id=?`,
-		t.UserID, t.Title, t.StartTime, nullableTimeValue(t.EndTime),
+		t.UserID, t.CityCode, t.Title, t.StartTime, nullableTimeValue(t.EndTime),
 		t.Distance, t.Duration, t.ElevationGain, nullableStringValue(t.RawTrackURL), nullableStringValue(t.TrackScreenshotURL), t.IsRunning, t.Status, t.AvgSpeedKmh, t.UpdatedAt,
 		t.ID,
 	)
@@ -410,7 +435,7 @@ func (r *MySQLTrackRepository) Update(ctx context.Context, t *models.Track) erro
 
 func (r *MySQLTrackRepository) FindByID(ctx context.Context, id string) (*models.Track, error) {
 	row := r.db.QueryRowContext(ctx,
-		`SELECT id, user_id, title, start_time, end_time,
+		`SELECT id, user_id, city_code, title, start_time, end_time,
 			distance, duration, elevation_gain, raw_track_url, track_screenshot_url, is_running, status, avg_speed_kmh,
 			created_at, updated_at
 		FROM track_records WHERE id=?`, id)
@@ -425,7 +450,7 @@ func (r *MySQLTrackRepository) FindByID(ctx context.Context, id string) (*models
 		trackScreenshot sql.NullString
 	)
 	if err := row.Scan(
-		&t.ID, &t.UserID, &t.Title, &t.StartTime, &endTime,
+		&t.ID, &t.UserID, &t.CityCode, &t.Title, &t.StartTime, &endTime,
 		&distance, &duration, &elevationGain, &rawTrackURL, &trackScreenshot, &t.IsRunning, &t.Status, &t.AvgSpeedKmh,
 		&t.CreatedAt, &t.UpdatedAt,
 	); err != nil {
