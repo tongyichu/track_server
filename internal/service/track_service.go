@@ -14,6 +14,7 @@ import (
 type TrackService struct {
 	tracks          repository.TrackRepository
 	collects        repository.CollectRepository
+	users           repository.UserRepository
 	screenshotCache *AssetCacheService
 	rawTrackCache   *AssetCacheService
 }
@@ -109,6 +110,12 @@ func (p TrackInfoPatch) empty() bool {
 // NewTrackService constructs a new TrackService instance.
 func NewTrackService(tracks repository.TrackRepository, collects repository.CollectRepository) *TrackService {
 	return &TrackService{tracks: tracks, collects: collects}
+}
+
+// SetUserRepository 注入用户仓储，用于在列表等场景补充用户头像等信息。
+// 独立于构造函数以避免破坏既有调用方/单测。
+func (s *TrackService) SetUserRepository(users repository.UserRepository) {
+	s.users = users
 }
 
 // SetScreenshotCache 设置截图本地缓存服务。
@@ -261,26 +268,36 @@ func (s *TrackService) ListRecommend(ctx context.Context, userID int64, limit in
 			cancel()
 		}
 	}
-	if userID <= 0 || s.collects == nil {
-		return summaries, nil
-	}
-	for _, summary := range summaries {
-		collected, err := s.collects.IsCollected(ctx, userID, summary.ID)
-		if err != nil {
-			return nil, err
-		}
-		summary.Collected = collected
+	if err := s.fillTrackSummaryExtras(ctx, userID, summaries); err != nil {
+		return nil, err
 	}
 	return summaries, nil
 }
 
 // SearchTracks searches tracks globally by keyword.
-func (s *TrackService) SearchTracks(ctx context.Context, keyword string, limit int) ([]*models.TrackSummary, error) {
+func (s *TrackService) SearchTracks(ctx context.Context, userID int64, keyword string, limit int) ([]*models.TrackSummary, error) {
 	tracks, err := s.tracks.Search(ctx, keyword, limit)
 	if err != nil {
 		return nil, err
 	}
-	return toSummaries(tracks), nil
+	summaries := toSummaries(tracks)
+	// 与推荐列表保持一致：填充资源本地 URL / 收藏状态与总数 / 用户昵称和头像。
+	if s.screenshotCache != nil || s.rawTrackCache != nil {
+		for i, t := range tracks {
+			cacheCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			if s.screenshotCache != nil {
+				summaries[i].TrackScreenshotURL = s.screenshotCache.EnsureCached(cacheCtx, userID, t.ID, t.TrackScreenshotURL)
+			}
+			if s.rawTrackCache != nil {
+				summaries[i].RawTrackURL = s.rawTrackCache.EnsureCached(cacheCtx, userID, t.ID, t.RawTrackURL)
+			}
+			cancel()
+		}
+	}
+	if err := s.fillTrackSummaryExtras(ctx, userID, summaries); err != nil {
+		return nil, err
+	}
+	return summaries, nil
 }
 
 // MarkUploadedToCloud marks a finished track as uploaded to cloud.
@@ -432,6 +449,99 @@ func toSummaries(tracks []*models.Track) []*models.TrackSummary {
 		})
 	}
 	return res
+}
+
+// fillTrackSummaryExtras 负责为 TrackSummary 列表补齐“跨表/跨仓储”的扩展字段。
+//
+// 为什么需要它：
+// - TrackSummary 的核心字段来自 track_records，但 nickname/avatar_url、收藏数/收藏状态来自其他表。
+// - 推荐列表与搜索列表都需要同一套补齐逻辑，集中在 service 里更易维护。
+//
+// 补齐的字段：
+// - 用户信息：summary.Nickname / summary.UserAvatarURL（来自 users 表）
+// - 收藏信息：summary.CollectCount（来自 track_collects 的聚合统计）、summary.Collected（当前鉴权用户是否收藏）
+//
+// 性能与一致性说明：
+// - collect_count 通过 CountByTrackIDs 批量聚合，避免逐条 COUNT；
+// - 用户信息按 user_id 去重后查询（仍是逐个 FindByID；若需要进一步减少 SQL 次数，可在 UserRepository 增加 FindByIDs 批量接口）；
+// - collected 目前仍是按轨迹逐条 IsCollected（典型 N 次查询），后续可通过 CollectRepository 增加批量接口优化；
+// - 该函数只负责“组装返回”，不保证强一致（例如用户刚改昵称/头像、刚收藏/取消收藏时可能存在短暂延迟）。
+func (s *TrackService) fillTrackSummaryExtras(ctx context.Context, userID int64, summaries []*models.TrackSummary) error {
+	if len(summaries) == 0 {
+		return nil
+	}
+
+	// 1) 一次遍历收集所需的 trackIDs 和去重后的 userIDs。
+	// 这样后续无论是聚合查询还是用户信息查询，都不需要再扫描 summaries 来构造入参。
+	trackIDs := make([]string, 0, len(summaries))
+	userIDs := make([]int64, 0, len(summaries))
+	seenUserIDs := make(map[int64]struct{}, 8)
+	for _, summary := range summaries {
+		trackIDs = append(trackIDs, summary.ID)
+		if summary.UserID > 0 {
+			if _, ok := seenUserIDs[summary.UserID]; !ok {
+				seenUserIDs[summary.UserID] = struct{}{}
+				userIDs = append(userIDs, summary.UserID)
+			}
+		}
+	}
+
+	// 2) 先准备好“批量/去重”的数据源，再在最后一次遍历里一次性写回 summaries。
+	// 这么做的好处是：
+	// - 写回逻辑只需要一轮 for；
+	// - 数据源（counts/users）都以 map 形式存在，查找是 O(1)。
+	counts := map[string]int64{}
+	if s.collects != nil {
+		m, err := s.collects.CountByTrackIDs(ctx, trackIDs)
+		if err != nil {
+			return err
+		}
+		counts = m
+	}
+
+	type userBrief struct {
+		avatar string
+		nick   string
+	}
+	users := make(map[int64]userBrief, len(userIDs))
+	if s.users != nil {
+		for _, uid := range userIDs {
+			u, err := s.users.FindByID(ctx, uid)
+			switch {
+			case err == nil && u != nil:
+				users[uid] = userBrief{avatar: u.AvatarURL, nick: u.Nickname}
+			case errors.Is(err, repository.ErrNotFound):
+				users[uid] = userBrief{}
+			case err != nil:
+				return err
+			}
+		}
+	}
+
+	// 3) 最后一轮遍历：把准备好的扩展字段写回到每个 summary。
+	for _, summary := range summaries {
+		// 收藏总数
+		if s.collects != nil {
+			summary.CollectCount = counts[summary.ID]
+			// 当前用户是否收藏（需要 userID）
+			if userID > 0 {
+				collected, err := s.collects.IsCollected(ctx, userID, summary.ID)
+				if err != nil {
+					return err
+				}
+				summary.Collected = collected
+			}
+		}
+
+		// 用户昵称/头像
+		if s.users != nil && summary.UserID > 0 {
+			if brief, ok := users[summary.UserID]; ok {
+				summary.UserAvatarURL = brief.avatar
+				summary.Nickname = brief.nick
+			}
+		}
+	}
+	return nil
 }
 
 // haversineDistance computes distance between two lat/lng points in meters.

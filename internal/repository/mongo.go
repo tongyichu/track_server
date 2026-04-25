@@ -269,6 +269,10 @@ func (r *MongoCollectRepository) IsCollected(context.Context, int64, string) (bo
 	return false, errors.New("MongoCollectRepository.IsCollected not implemented")
 }
 
+func (r *MongoCollectRepository) CountByTrackIDs(context.Context, []string) (map[string]int64, error) {
+	return nil, errors.New("MongoCollectRepository.CountByTrackIDs not implemented")
+}
+
 // AddCollect is not implemented in this demo and returns an error.
 func (r *MongoCollectRepository) AddCollect(context.Context, int64, string) error {
 	return errors.New("MongoCollectRepository.AddCollect not implemented")

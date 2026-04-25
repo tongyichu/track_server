@@ -90,6 +90,13 @@ type UserRepository interface {
 // CollectRepository defines persistence operations for track collections.
 type CollectRepository interface {
 	IsCollected(ctx context.Context, userID int64, trackID string) (bool, error)
+	// CountByTrackIDs 批量返回轨迹的收藏总数（track_id -> count）。
+	//
+	// 约定：
+	// - 入参 trackIDs 允许重复/包含空串，实现应自行去重并忽略空串；
+	// - 返回 map 中“未出现的 track_id”视为 0（调用方可直接用 map[key] 的零值）；
+	// - 该统计与当前鉴权用户无关，仅表示全量收藏总数。
+	CountByTrackIDs(ctx context.Context, trackIDs []string) (map[string]int64, error)
 	AddCollect(ctx context.Context, userID int64, trackID string) error
 	RemoveCollect(ctx context.Context, userID int64, trackID string) error
 }

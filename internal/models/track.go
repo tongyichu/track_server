@@ -44,15 +44,25 @@ type Track struct {
 	AvgSpeedKmh        float64      `json:"avg_speed_kmh,omitempty" bson:"avg_speed_kmh"`     // AvgSpeedKmh 是平均速度，单位 km/h。
 }
 
-// TrackSummary is a lightweight view used for recommend/search lists.
+// TrackSummary 是轨迹列表接口使用的轻量返回模型。
+//
+// 设计说明：
+// - 推荐列表（/track/recommend/list）与搜索列表（/track/search/list）均返回该结构，保证字段口径一致；
+// - 除 track_records 中的基础字段外，还会补充“轨迹所属用户信息（nickname/avatar）”与“收藏相关信息（collected/collect_count）”；
+// - 这些补充字段来源于其他表/仓储：users、track_collects，服务层会在组装列表时统一填充；
+// - 若用户信息不存在/查询失败（not found），nickname/avatar_url 将返回空字符串；
+// - collect_count 为该轨迹被收藏的总数；collected 为“当前鉴权用户”是否收藏。
 type TrackSummary struct {
 	ID                 string  `json:"id"`                   // ID 是轨迹记录唯一标识。
 	UserID             int64   `json:"user_id"`              // UserID 是轨迹所属用户 ID。
+	Nickname           string  `json:"nickname"`             // Nickname 是轨迹所属用户的昵称（字段定义与 User struct 保持一致）。
+	UserAvatarURL      string  `json:"user_avatar_url"`      // UserAvatarURL 是轨迹所属用户的头像 URI。
 	Title              string  `json:"title"`                // Title 是轨迹名称。
 	Distance           float64 `json:"distance"`             // Distance 是总距离，单位米。
 	Duration           uint32  `json:"duration"`             // Duration 是运动耗时，单位秒。
 	ElevationGain      int     `json:"elevation_gain"`       // ElevationGain 是累计爬升，单位米。
 	Collected          bool    `json:"collected"`            // Collected 表示当前鉴权用户是否已收藏该轨迹。
+	CollectCount       int64   `json:"collect_count"`         // CollectCount 是轨迹被收藏的总数。
 	TrackScreenshotURL string  `json:"track_screenshot_url"` // TrackScreenshotURL 是服务器本地缓存的轨迹截图可下载 URL。
 	RawTrackURL        string  `json:"raw_track_url"`        // RawTrackURL 是服务器本地缓存的原始轨迹文件可下载 URL。
 }

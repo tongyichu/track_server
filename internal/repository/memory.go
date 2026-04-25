@@ -261,6 +261,40 @@ func (r *InMemoryCollectRepository) IsCollected(_ context.Context, userID int64,
 	return ok, nil
 }
 
+func (r *InMemoryCollectRepository) CountByTrackIDs(_ context.Context, trackIDs []string) (map[string]int64, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	res := make(map[string]int64, len(trackIDs))
+	if len(trackIDs) == 0 {
+		return res, nil
+	}
+	uniq := make(map[string]struct{}, len(trackIDs))
+	for _, id := range trackIDs {
+		if id == "" {
+			continue
+		}
+		if _, ok := uniq[id]; ok {
+			continue
+		}
+		uniq[id] = struct{}{}
+		res[id] = 0
+	}
+	if len(uniq) == 0 {
+		return res, nil
+	}
+
+	// userID -> trackID -> collect，保证每个 userID 对同一 trackID 最多计数 1。
+	for _, tracks := range r.collects {
+		for trackID := range tracks {
+			if _, ok := uniq[trackID]; ok {
+				res[trackID]++
+			}
+		}
+	}
+	return res, nil
+}
+
 // AddCollect adds a collect record.
 func (r *InMemoryCollectRepository) AddCollect(_ context.Context, userID int64, trackID string) error {
 	r.mu.Lock()

@@ -85,6 +85,7 @@ func main() {
 	}
 
 	trackSvc := service.NewTrackService(trackRepo, collectRepo)
+	trackSvc.SetUserRepository(userRepo)
 	userSvc := service.NewUserService(userRepo)
 	loginSvc := service.NewLoginService(userRepo, loginLogRepo, cfg.WechatAppID, cfg.WechatAppSecret, cfg.JWTSecret)
 

@@ -139,8 +139,20 @@ func (h *TrackHandler) ListRecommend(ctx context.Context, c *app.RequestContext)
 
 // SearchTracks handles GET /api/track/search/list
 func (h *TrackHandler) SearchTracks(ctx context.Context, c *app.RequestContext) {
+	// 说明：
+	// - 该接口会在返回 TrackSummary 时同时补齐 collected/collect_count 以及用户昵称/头像等字段。
+	// - collected 的计算依赖“当前鉴权用户”，因此这里需要从请求上下文解析出 AuthUserID 并透传到 service。
+	meta := middleware.GetRequestMeta(c)
+	var userID int64
+	if meta != nil {
+		if meta.RawUserID != "" && meta.AuthUserID <= 0 {
+			c.JSON(http.StatusUnauthorized, utils.H{"error": "unauthorized"})
+			return
+		}
+		userID = meta.AuthUserID
+	}
 	keyword := string(c.Query("keyword"))
-	tracks, err := h.trackSvc.SearchTracks(ctx, keyword, 50)
+	tracks, err := h.trackSvc.SearchTracks(ctx, userID, keyword, 50)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
 		return

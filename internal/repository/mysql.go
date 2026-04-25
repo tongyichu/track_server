@@ -722,6 +722,66 @@ func (r *MySQLCollectRepository) IsCollected(ctx context.Context, userID int64, 
 	return true, nil
 }
 
+func (r *MySQLCollectRepository) CountByTrackIDs(ctx context.Context, trackIDs []string) (map[string]int64, error) {
+	res := make(map[string]int64, len(trackIDs))
+	if len(trackIDs) == 0 {
+		return res, nil
+	}
+
+	// 1) 先对入参去重并过滤空串：
+	// - 保护后续 IN (...) 的 SQL 长度与参数数量
+	// - 同时确保返回 map 至少包含调用方关心的 key（未命中时为 0）
+	uniq := make(map[string]struct{}, len(trackIDs))
+	uniqIDs := make([]string, 0, len(trackIDs))
+	for _, id := range trackIDs {
+		if id == "" {
+			continue
+		}
+		if _, ok := uniq[id]; ok {
+			continue
+		}
+		uniq[id] = struct{}{}
+		uniqIDs = append(uniqIDs, id)
+		res[id] = 0
+	}
+	if len(uniqIDs) == 0 {
+		return res, nil
+	}
+
+	// 2) 用 GROUP BY 统计收藏总数。
+	// track_collects 表对 (user_id, track_id) 具备唯一约束（见 AddCollect 的 ON DUPLICATE KEY），
+	// 因此 COUNT(*) 的语义是“收藏该轨迹的用户数”。
+	placeholders := strings.TrimRight(strings.Repeat("?,", len(uniqIDs)), ",")
+	query := fmt.Sprintf(
+		`SELECT track_id, COUNT(*) AS cnt FROM track_collects WHERE track_id IN (%s) GROUP BY track_id`,
+		placeholders,
+	)
+	args := make([]any, 0, len(uniqIDs))
+	for _, id := range uniqIDs {
+		args = append(args, id)
+	}
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var (
+			trackID string
+			cnt     int64
+		)
+		if err := rows.Scan(&trackID, &cnt); err != nil {
+			return nil, err
+		}
+		res[trackID] = cnt
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
 func (r *MySQLCollectRepository) AddCollect(ctx context.Context, userID int64, trackID string) error {
 	_, err := r.db.ExecContext(ctx,
 		`INSERT INTO track_collects (user_id, track_id, created_at)

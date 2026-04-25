@@ -17,6 +17,7 @@
 | 5 | [获取 OSS STS 读权限临时凭证](#5-获取-oss-sts-读权限临时凭证) | GET | `/oss/sts-token/read` | ✅ |
 | 6 | [收藏轨迹](#6-收藏轨迹) | POST | `/track_collect` | ✅ |
 | 7 | [取消收藏轨迹](#7-取消收藏轨迹) | DELETE | `/track_collect` | ✅ |
+| 8 | [轨迹搜索列表](#8-轨迹搜索列表) | GET | `/track/search/list` | ✅ |
 
 ---
 
@@ -195,6 +196,8 @@ curl -X POST "http://<host>:<port>/api/v1/track/create" \
 - 该接口 **不会返回** `is_running=true` 的轨迹（进行中的轨迹会被过滤）。
 - 返回的是 `TrackSummary` 列表（轻量字段），而不是完整的 `Track`。
 - 返回结果中 `collected` 表示当前鉴权用户是否已收藏该轨迹。
+- 返回结果中的 `collect_count` 表示该轨迹被收藏的总数。
+- 返回结果中的 `nickname` / `user_avatar_url` 为轨迹所属用户的昵称/头像 URI。
 - 返回结果中的 `raw_track_url` / `track_screenshot_url` 为服务端本地可下载链接（不是 OSS 地址）。
 
 ### 请求
@@ -219,13 +222,16 @@ Authorization: Bearer <token>
     {
       "id": "trk1",
       "user_id": 1001,
+      "nickname": "Alice",
+      "user_avatar_url": "https://example.com/avatar.png",
       "title": "西湖徒步",
       "distance": 1200.5,
       "duration": 360,
       "elevation_gain": 80,
       "raw_track_url": "/api/v1/static/raw_tracks/trk1.dat",
       "track_screenshot_url": "/api/v1/static/screenshots/trk1.jpg",
-      "collected": true
+      "collected": true,
+      "collect_count": 12
     }
   ]
 }
@@ -565,4 +571,58 @@ Authorization: Bearer <token>
 ```bash
 curl -X DELETE "http://<host>:<port>/api/v1/track_collect?track_id=trk2" \
   -H "Authorization: Bearer <token>"
+```
+
+---
+
+## 8. 轨迹搜索列表
+
+按关键字搜索轨迹列表。
+
+**需要认证**
+
+### 请求
+
+```
+GET /api/v1/track/search/list?keyword=:keyword
+Authorization: Bearer <token>
+```
+
+**Query 参数：**
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `keyword` | string | 否 | 搜索关键字；为空时返回最近的部分轨迹（最多 50 条） |
+
+### 响应
+
+**状态码：** `200 OK`
+
+直接返回 `TrackSummary[]`（非 `StandardResponse`）：
+
+```json
+[
+  {
+    "id": "trk1",
+    "user_id": 1001,
+    "nickname": "Alice",
+    "user_avatar_url": "https://example.com/avatar.png",
+    "title": "西湖徒步",
+    "distance": 1200.5,
+    "duration": 360,
+    "elevation_gain": 80,
+    "raw_track_url": "/api/v1/static/raw_tracks/trk1.dat",
+    "track_screenshot_url": "/api/v1/static/screenshots/trk1.jpg",
+    "collected": true,
+    "collect_count": 12
+  }
+]
+```
+
+### 示例（curl）
+
+```bash
+curl -X GET "http://<host>:<port>/api/v1/track/search/list?keyword=西湖" \
+  -H "Authorization: Bearer <token>" \
+  -H "X-User-ID: 1001"
 ```
