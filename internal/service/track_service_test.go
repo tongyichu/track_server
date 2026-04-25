@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"regexp"
 	"testing"
 	"time"
@@ -119,6 +121,82 @@ func TestCreateTrack_UsesProvidedFields(t *testing.T) {
 	}
 	if track.AvgSpeedKmh != avgSpeed {
 		t.Fatalf("expected avg_speed_kmh %v, got %v", avgSpeed, track.AvgSpeedKmh)
+	}
+}
+
+func TestCreateTrack_CleansTempAssetCacheOnly(t *testing.T) {
+	trackRepo, _, collectRepo, _ := repository.NewInMemoryRepositories()
+	svc := NewTrackService(trackRepo, collectRepo)
+
+	staticRoot := t.TempDir()
+	screenshotCache, err := NewAssetCacheService(
+		filepath.Join(staticRoot, "screenshots"),
+		"/api/v1/static/screenshots",
+		[]string{".png", ".jpg", ".jpeg", ".webp"},
+		".png",
+	)
+	if err != nil {
+		t.Fatalf("create screenshot cache failed: %v", err)
+	}
+	rawTrackCache, err := NewAssetCacheService(
+		filepath.Join(staticRoot, "raw_tracks"),
+		"/api/v1/static/raw_tracks",
+		[]string{".dat", ".json", ".gpx", ".bin"},
+		".dat",
+	)
+	if err != nil {
+		t.Fatalf("create raw track cache failed: %v", err)
+	}
+	svc.SetScreenshotCache(screenshotCache)
+	svc.SetRawTrackCache(rawTrackCache)
+
+	staleTrackID := "NO.00000001"
+	staleScreenshotPath := filepath.Join(staticRoot, "screenshots", staleTrackID+".png")
+	staleScreenshotTmpPath := staleScreenshotPath + ".tmp"
+	staleRawTrackPath := filepath.Join(staticRoot, "raw_tracks", staleTrackID+".json")
+	staleRawTrackTmpPath := staleRawTrackPath + ".tmp"
+	if err := os.WriteFile(staleScreenshotPath, []byte("old-screenshot"), 0o644); err != nil {
+		t.Fatalf("seed stale screenshot cache failed: %v", err)
+	}
+	if err := os.WriteFile(staleScreenshotTmpPath, []byte("stale-screenshot-tmp"), 0o644); err != nil {
+		t.Fatalf("seed stale screenshot tmp failed: %v", err)
+	}
+	if err := os.WriteFile(staleRawTrackPath, []byte("old-raw-track"), 0o644); err != nil {
+		t.Fatalf("seed stale raw track cache failed: %v", err)
+	}
+	if err := os.WriteFile(staleRawTrackTmpPath, []byte("stale-raw-track-tmp"), 0o644); err != nil {
+		t.Fatalf("seed stale raw track tmp failed: %v", err)
+	}
+
+	rawURL := "https://example.com/raw/track.json"
+	screenshotURL := "https://example.com/track.png"
+	track, err := svc.CreateTrack(context.Background(), 1001, CreateTrackInput{
+		RawTrackURL:        &rawURL,
+		TrackScreenshotURL: &screenshotURL,
+	})
+	if err != nil {
+		t.Fatalf("CreateTrack returned error: %v", err)
+	}
+	if track.ID != staleTrackID {
+		t.Fatalf("expected first track id %q, got %q", staleTrackID, track.ID)
+	}
+	if track.TrackScreenshotURL != "/api/v1/static/screenshots/NO.00000001.png" {
+		t.Fatalf("expected rewritten screenshot url, got %q", track.TrackScreenshotURL)
+	}
+	if track.RawTrackURL != "/api/v1/static/raw_tracks/NO.00000001.json" {
+		t.Fatalf("expected rewritten raw track url, got %q", track.RawTrackURL)
+	}
+	if _, err := os.Stat(staleScreenshotPath); err != nil {
+		t.Fatalf("expected stale screenshot cache kept, stat err=%v", err)
+	}
+	if _, err := os.Stat(staleRawTrackPath); err != nil {
+		t.Fatalf("expected stale raw track cache kept, stat err=%v", err)
+	}
+	if _, err := os.Stat(staleScreenshotTmpPath); !os.IsNotExist(err) {
+		t.Fatalf("expected stale screenshot tmp removed, stat err=%v", err)
+	}
+	if _, err := os.Stat(staleRawTrackTmpPath); !os.IsNotExist(err) {
+		t.Fatalf("expected stale raw track tmp removed, stat err=%v", err)
 	}
 }
 

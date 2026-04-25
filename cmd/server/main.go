@@ -108,6 +108,21 @@ func main() {
 		log.Printf("screenshot cache enabled: %s", screenshotCacheDir)
 	}
 
+	avatarCacheDir := filepath.Join(staticRoot, "avatars")
+	avatarCache, err := service.NewAssetCacheService(
+		avatarCacheDir,
+		"/api/v1/static/avatars",
+		[]string{".png", ".jpg", ".jpeg", ".webp"},
+		".png",
+	)
+	if err != nil {
+		log.Printf("avatar cache disabled: %v", err)
+		avatarCache = nil
+	} else {
+		userSvc.SetAvatarCache(avatarCache)
+		log.Printf("avatar cache enabled: %s", avatarCacheDir)
+	}
+
 	rawTrackCacheDir := filepath.Join(staticRoot, "raw_tracks")
 	// 原始轨迹文件后缀未作强约束（客户端可能用 .dat/.json/.gpx 等），这里允许常见几种，
 	// 未识别时按 .dat 落盘；文件名仍以 track_id 为主键保证唯一。
@@ -152,6 +167,9 @@ func main() {
 	// 把 OSS 下载能力注入资源缓存服务。OSS 对象带权限控制，无法直接 http.Get，
 	// 因此必须通过 STS 临时凭证 + OSS SDK 的方式下载。
 	if ossTokenSvc != nil {
+		if avatarCache != nil {
+			avatarCache.SetDownloader(ossTokenSvc)
+		}
 		if screenshotCache != nil {
 			screenshotCache.SetDownloader(ossTokenSvc)
 		}
@@ -159,7 +177,7 @@ func main() {
 			rawTrackCache.SetDownloader(ossTokenSvc)
 		}
 	} else {
-		if screenshotCache != nil || rawTrackCache != nil {
+		if avatarCache != nil || screenshotCache != nil || rawTrackCache != nil {
 			log.Printf("asset cache has no OSS downloader; only serves already-cached files")
 		}
 	}
@@ -194,7 +212,7 @@ func main() {
 		OSSTokenService: ossTokenSvc,
 		JWTSecret:       cfg.JWTSecret,
 		TokenBlacklist:  tokenBlacklist,
-		StaticRoot:      staticRootIfEnabled(staticRoot, screenshotCache, rawTrackCache),
+		StaticRoot:      staticRootIfEnabled(staticRoot, avatarCache, screenshotCache, rawTrackCache),
 	})
 
 	h.Spin()

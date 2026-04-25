@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"errors"
+	"strconv"
+	"time"
 
 	"github.com/tongyichu/track_server/internal/models"
 	"github.com/tongyichu/track_server/internal/repository"
@@ -10,12 +12,19 @@ import (
 
 // UserService provides business logic related to user profile and settings.
 type UserService struct {
-	users repository.UserRepository
+	users       repository.UserRepository
+	avatarCache *AssetCacheService
 }
 
 // NewUserService constructs a new UserService.
 func NewUserService(users repository.UserRepository) *UserService {
 	return &UserService{users: users}
+}
+
+// SetAvatarCache 设置用户头像本地缓存服务。
+// 未设置时，GetUserProfile 将直接返回仓储中的原始 AvatarURL。
+func (s *UserService) SetAvatarCache(cache *AssetCacheService) {
+	s.avatarCache = cache
 }
 
 // EnsureUser makes sure the user exists in persistence layer.
@@ -32,7 +41,12 @@ func (s *UserService) GetUserProfile(ctx context.Context, userID int64) (*models
 	if userID <= 0 {
 		return nil, errors.New("userID is required")
 	}
-	return s.users.FindByID(ctx, userID)
+	user, err := s.users.FindByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	s.decorateUserAvatar(ctx, user)
+	return user, nil
 }
 
 // UpdateAvatar updates user's avatar URL.
@@ -41,8 +55,28 @@ func (s *UserService) UpdateAvatar(ctx context.Context, userID int64, avatarURL 
 	if err != nil {
 		return nil, err
 	}
+	cacheKey := strconv.FormatInt(userID, 10)
 	user.AvatarURL = avatarURL
-	return user, s.users.Update(ctx, user)
+	if err := s.users.Update(ctx, user); err != nil {
+		return nil, err
+	}
+	if s.avatarCache != nil {
+		if err := s.avatarCache.RemoveCached(cacheKey); err != nil {
+			return nil, err
+		}
+		s.avatarCache.PrefetchAsync(userID, cacheKey, avatarURL)
+		user.AvatarURL = s.avatarCache.GuessLocalURL(cacheKey, avatarURL)
+	}
+	return user, nil
+}
+
+func (s *UserService) decorateUserAvatar(ctx context.Context, user *models.User) {
+	if user == nil || s.avatarCache == nil || user.AvatarURL == "" {
+		return
+	}
+	cacheCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	user.AvatarURL = s.avatarCache.EnsureCached(cacheCtx, user.ID, strconv.FormatInt(user.ID, 10), user.AvatarURL)
 }
 
 // UpdateName updates user's nickname.

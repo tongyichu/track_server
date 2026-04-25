@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -30,6 +32,8 @@ type testEnv struct {
 	loginLogRepo   repository.LoginLogRepository
 	loginSvc       *service.LoginService
 	tokenBlacklist *middleware.TokenBlacklist
+	staticRoot     string
+	avatarCacheDir string
 }
 
 // newTestEnv creates a fresh Hertz server wired with in-memory repositories.
@@ -40,6 +44,17 @@ func newTestEnv() *testEnv {
 	userSvc := service.NewUserService(userRepo)
 	loginSvc := service.NewLoginService(userRepo, loginLogRepo, "", "", testJWTSecret)
 	tokenBlacklist := middleware.NewTokenBlacklist()
+	staticRoot, _ := os.MkdirTemp("", "track_server_test_static_")
+	avatarCacheDir := filepath.Join(staticRoot, "avatars")
+	avatarCache, err := service.NewAssetCacheService(
+		avatarCacheDir,
+		"/api/v1/static/avatars",
+		[]string{".png", ".jpg", ".jpeg", ".webp"},
+		".png",
+	)
+	if err == nil {
+		userSvc.SetAvatarCache(avatarCache)
+	}
 
 	h := server.Default()
 	handler.RegisterRoutes(h, handler.Deps{
@@ -48,9 +63,10 @@ func newTestEnv() *testEnv {
 		LoginService:   loginSvc,
 		JWTSecret:      testJWTSecret,
 		TokenBlacklist: tokenBlacklist,
+		StaticRoot:     staticRoot,
 	})
 
-	return &testEnv{h: h, trackRepo: trackRepo, userRepo: userRepo, collectRepo: collectRepo, loginLogRepo: loginLogRepo, loginSvc: loginSvc, tokenBlacklist: tokenBlacklist}
+	return &testEnv{h: h, trackRepo: trackRepo, userRepo: userRepo, collectRepo: collectRepo, loginLogRepo: loginLogRepo, loginSvc: loginSvc, tokenBlacklist: tokenBlacklist, staticRoot: staticRoot, avatarCacheDir: avatarCacheDir}
 }
 
 func (e *testEnv) generateTestToken(userID int64) string {

@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/tongyichu/track_server/internal/models"
@@ -45,12 +47,39 @@ func TestGetUserDetail_Success(t *testing.T) {
 	}
 }
 
+// TestGetUserDetail_AvatarURLUsesStaticAsset verifies avatar_url is rewritten to local static URL.
+func TestGetUserDetail_AvatarURLUsesStaticAsset(t *testing.T) {
+	e := newTestEnv()
+	ctx := context.Background()
+	token := e.generateTestToken(1005)
+	avatarOSSURL := "https://example-bucket.oss-cn-hangzhou.aliyuncs.com/prod/avatar/1005.png?x-oss-signature=abc"
+	if err := os.WriteFile(filepath.Join(e.avatarCacheDir, "1005.png"), []byte("avatar"), 0o644); err != nil {
+		t.Fatalf("seed avatar cache failed: %v", err)
+	}
+	_, _ = e.userRepo.CreateIfNotExists(ctx, &models.User{ID: 1005, Nickname: "Carol", AvatarURL: avatarOSSURL})
+
+	w := e.perform(http.MethodGet, "/api/v1/user/1005/detail", nil, authHeader(token))
+	resp := w.Result()
+	if resp.StatusCode() != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", resp.StatusCode())
+	}
+	var u models.User
+	decodeJSON(t, resp.Body(), &u)
+	if u.AvatarURL != "/api/v1/static/avatars/1005.png" {
+		t.Fatalf("expected static avatar_url, got %q", u.AvatarURL)
+	}
+}
+
 // TestUpdateNameAndAvatar verifies profile update endpoints.
 func TestUpdateNameAndAvatar(t *testing.T) {
 	e := newTestEnv()
 	ctx := context.Background()
 	token := e.generateTestToken(1002)
-	_, _ = e.userRepo.CreateIfNotExists(ctx, &models.User{ID: 1002})
+	_, _ = e.userRepo.CreateIfNotExists(ctx, &models.User{ID: 1002, AvatarURL: "https://example.com/old-avatar.png"})
+	oldAvatarPath := filepath.Join(e.avatarCacheDir, "1002.png")
+	if err := os.WriteFile(oldAvatarPath, []byte("old-avatar"), 0o644); err != nil {
+		t.Fatalf("seed old avatar cache failed: %v", err)
+	}
 
 	// update name
 	namePayload, _ := json.Marshal(map[string]string{"name": "Bob"})
@@ -70,6 +99,14 @@ func TestUpdateNameAndAvatar(t *testing.T) {
 	w3 := e.perform(http.MethodPut, "/api/v1/user/profile/photo?user_id=1002", avatarPayload, authHeader(token))
 	if w3.Result().StatusCode() != http.StatusOK {
 		t.Fatalf("update avatar should succeed")
+	}
+	var updated models.User
+	decodeJSON(t, w3.Result().Body(), &updated)
+	if updated.AvatarURL != "/api/v1/static/avatars/1002.png" {
+		t.Fatalf("expected rewritten avatar_url, got %q", updated.AvatarURL)
+	}
+	if _, err := os.Stat(oldAvatarPath); !os.IsNotExist(err) {
+		t.Fatalf("expected old avatar cache removed, stat err=%v", err)
 	}
 }
 

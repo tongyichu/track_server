@@ -150,6 +150,39 @@ func (s *AssetCacheService) PrefetchAsync(userID int64, key, sourceURL string) {
 	}()
 }
 
+// RemoveCached 删除 key 对应的本地缓存文件（包括不同允许后缀的历史文件）。
+// 文件不存在时静默跳过，便于在资源更新时先清理旧缓存再触发预热。
+func (s *AssetCacheService) RemoveCached(key string) error {
+	if key == "" {
+		return nil
+	}
+	for _, ext := range s.allowedExts {
+		p := s.localPath(key, ext)
+		if err := os.Remove(p); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		if err := os.Remove(p + ".tmp"); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+	}
+	return nil
+}
+
+// RemoveTempCached 仅删除 key 对应的临时下载文件，不清理已完成的正式缓存文件。
+// 适用于资源 URL 创建后基本不变的场景，避免误删仍可复用的本地缓存。
+func (s *AssetCacheService) RemoveTempCached(key string) error {
+	if key == "" {
+		return nil
+	}
+	for _, ext := range s.allowedExts {
+		p := s.localPath(key, ext)
+		if err := os.Remove(p + ".tmp"); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+	}
+	return nil
+}
+
 // downloadOnce 合并同 key 的并发下载，确保只下载一次。
 func (s *AssetCacheService) downloadOnce(ctx context.Context, userID int64, key, ext, sourceURL string) error {
 	s.mu.Lock()

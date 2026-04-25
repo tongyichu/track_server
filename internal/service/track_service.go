@@ -205,12 +205,18 @@ func (s *TrackService) CreateTrack(ctx context.Context, userID int64, input Crea
 	// 失败不影响主流程，且仅在配置了缓存服务时触发。
 	if s.screenshotCache != nil && track.TrackScreenshotURL != "" {
 		src := track.TrackScreenshotURL
+		if err := s.screenshotCache.RemoveTempCached(track.ID); err != nil {
+			return nil, err
+		}
 		s.screenshotCache.PrefetchAsync(userID, track.ID, src)
 		track.TrackScreenshotURL = s.screenshotCache.GuessLocalURL(track.ID, src)
 	}
 	// 同理异步预热原始轨迹文件。
 	if s.rawTrackCache != nil && track.RawTrackURL != "" {
 		src := track.RawTrackURL
+		if err := s.rawTrackCache.RemoveTempCached(track.ID); err != nil {
+			return nil, err
+		}
 		s.rawTrackCache.PrefetchAsync(userID, track.ID, src)
 		track.RawTrackURL = s.rawTrackCache.GuessLocalURL(track.ID, src)
 	}
