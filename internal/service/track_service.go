@@ -35,6 +35,11 @@ type ListRecommendInput struct {
 	Limit  int
 }
 
+type ListMyTracksInput struct {
+	Cursor string
+	Limit  int
+}
+
 type SearchTracksInput struct {
 	Keyword string
 	Cursor  string
@@ -72,20 +77,20 @@ func invalidArg(msg string) error { return &InvalidArgumentError{Msg: msg} }
 
 // CreateTrackInput describes optional fields accepted by track creation.
 type CreateTrackInput struct {
-	Title               *string    `json:"title"`
-	CityCode            *string    `json:"city_code"`
-	TrackType           *string    `json:"track_type"`
-	StartTime           *time.Time `json:"start_time"`
-	EndTime             *time.Time `json:"end_time"`
-	Distance            *float64   `json:"distance"`
-	Duration            *uint32    `json:"duration"`
-	ElevationGain       *int       `json:"elevation_gain"`
-	RawTrackURL         *string    `json:"raw_track_url"`
-	TrackScreenshotURL  *string    `json:"track_screenshot_url"`
-	TrackNoMapBgScreenshotURL *string `json:"track_no_map_bg_screenshot_url"`
-	LegacyScreenshotURL *string    `json:"screenshot_url,omitempty"`
-	IsRunning           *bool      `json:"is_running"`
-	AvgSpeedKmh         *float64   `json:"avg_speed_kmh"`
+	Title                     *string    `json:"title"`
+	CityCode                  *string    `json:"city_code"`
+	TrackType                 *string    `json:"track_type"`
+	StartTime                 *time.Time `json:"start_time"`
+	EndTime                   *time.Time `json:"end_time"`
+	Distance                  *float64   `json:"distance"`
+	Duration                  *uint32    `json:"duration"`
+	ElevationGain             *int       `json:"elevation_gain"`
+	RawTrackURL               *string    `json:"raw_track_url"`
+	TrackScreenshotURL        *string    `json:"track_screenshot_url"`
+	TrackNoMapBgScreenshotURL *string    `json:"track_no_map_bg_screenshot_url"`
+	LegacyScreenshotURL       *string    `json:"screenshot_url,omitempty"`
+	IsRunning                 *bool      `json:"is_running"`
+	AvgSpeedKmh               *float64   `json:"avg_speed_kmh"`
 }
 
 func (in *CreateTrackInput) normalize() {
@@ -364,6 +369,18 @@ func buildTrackSummaryPage(summaries []*models.TrackSummary, hasMore bool) (*mod
 	return page, nil
 }
 
+func buildMyTrackSummaryPage(summaries []*models.MyTrackSummary, hasMore bool) (*models.MyTrackSummaryPage, error) {
+	page := &models.MyTrackSummaryPage{Items: summaries, HasMore: hasMore}
+	if hasMore && len(summaries) > 0 {
+		nextCursor, err := encodeTrackListCursor(summaries[len(summaries)-1].StartTime, summaries[len(summaries)-1].ID)
+		if err != nil {
+			return nil, err
+		}
+		page.NextCursor = nextCursor
+	}
+	return page, nil
+}
+
 // ListRecommend returns recommended tracks for the user.
 func (s *TrackService) ListRecommend(ctx context.Context, userID int64, input ListRecommendInput) (*models.TrackSummaryPage, error) {
 	limit := normalizeTrackPageLimit(input.Limit)
@@ -440,16 +457,22 @@ func (s *TrackService) ListRecommend(ctx context.Context, userID int64, input Li
 
 // ListMyTracks returns tracks that belong to the given user.
 // It is used by the "我的轨迹" list API and intentionally omits user brief and collected fields.
-func (s *TrackService) ListMyTracks(ctx context.Context, userID int64, limit int) ([]*models.MyTrackSummary, error) {
+func (s *TrackService) ListMyTracks(ctx context.Context, userID int64, input ListMyTracksInput) (*models.MyTrackSummaryPage, error) {
 	if userID <= 0 {
 		return nil, invalidArg("userID is required")
 	}
-	if limit <= 0 {
-		limit = 50
-	}
-	tracks, err := s.tracks.ListByUserID(ctx, userID, limit)
+	limit := normalizeTrackPageLimit(input.Limit)
+	cursor, err := decodeTrackListCursor(input.Cursor)
 	if err != nil {
 		return nil, err
+	}
+	tracks, err := s.tracks.ListByUserID(ctx, userID, cursor, limit+1)
+	if err != nil {
+		return nil, err
+	}
+	hasMore := len(tracks) > limit
+	if hasMore {
+		tracks = tracks[:limit]
 	}
 	summaries := toMySummaries(tracks)
 	// 与推荐/搜索列表保持一致：填充资源本地 URL（截图/原始轨迹）。
@@ -468,7 +491,7 @@ func (s *TrackService) ListMyTracks(ctx context.Context, userID int64, limit int
 	if err := s.fillMyTrackSummaryExtras(ctx, summaries); err != nil {
 		return nil, err
 	}
-	return summaries, nil
+	return buildMyTrackSummaryPage(summaries, hasMore)
 }
 
 // SearchTracks searches tracks globally by keyword.

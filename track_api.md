@@ -720,19 +720,21 @@ Authorization: Bearer <token>
 ### 说明
 
 - 仅返回当前鉴权用户自己的轨迹，不支持查看其他用户的数据。
-- 返回的是 `MyTrackSummary[]`，而不是完整的 `Track`。
+- 返回的是 `MyTrackSummary` 分页列表，而不是完整的 `Track`。
 - 仅返回已结束的轨迹；进行中的轨迹（`is_running=true`）不会出现在结果中。
 - 返回轨迹状态为 `正常` 和 `私密` 的记录，不返回已删除记录。
-- 排序规则为 `start_time DESC`；当时间相同时，具体稳定顺序由底层存储实现决定。
+- 接口已支持基于 `cursor` 的瀑布流分页，排序规则为 `start_time DESC, id DESC`。
+- 首次请求不传 `cursor`；继续翻页时透传上一次返回的 `next_cursor`。
 - 返回结果**不包含** `nickname`、`user_avatar_url`、`collected` 字段。
 - 返回结果**包含** `collect_count`、`navigate_count` 统计字段，便于客户端直接展示。
 - `raw_track_url` / `track_screenshot_url` 为服务端本地可下载链接（不是 OSS 地址）。
-- 当前服务端固定最多返回 `50` 条数据，暂不支持分页参数。
+- `limit` 为可选参数，默认 `20`，最大 `50`；超出最大值时服务端会自动截断到 `50`。
+- 响应中的 `has_more` 表示是否还有下一页；仅当 `has_more=true` 时才会返回 `next_cursor`。
 
 ### 请求
 
 ```
-GET /api/v1/track/my/list
+GET /api/v1/track/my/list?limit=20&cursor=<next_cursor>
 Authorization: Bearer <token>
 ```
 
@@ -744,7 +746,10 @@ Authorization: Bearer <token>
 
 #### Query 参数
 
-无
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `limit` | int | 否 | 每页返回条数，默认 `20`，最大 `50`。 |
+| `cursor` | string | 否 | 分页游标。首屏不传，翻页时透传上一次响应里的 `next_cursor`。 |
 
 #### Body
 
@@ -754,29 +759,33 @@ Authorization: Bearer <token>
 
 **状态码：** `200 OK`
 
-返回 `StandardResponse`，`data` 为 `MyTrackSummary[]`：
+返回 `StandardResponse`，`data` 为分页对象：
 
 ```json
 {
   "code": 0,
-  "data": [
-    {
-      "id": "trk1",
-      "user_id": 1001,
-      "city_code": "330100",
-      "track_type": "徒步",
-      "start_time": "2026-04-20T12:00:00Z",
-      "city_name": "杭州市",
-      "title": "西湖徒步",
-      "distance": 1200.5,
-      "duration": 360,
-      "elevation_gain": 80,
-      "collect_count": 12,
-      "navigate_count": 3,
-      "track_screenshot_url": "/api/v1/static/screenshots/trk1.jpg",
-      "raw_track_url": "/api/v1/static/raw_tracks/trk1.dat"
-    }
-  ]
+  "data": {
+    "items": [
+      {
+        "id": "trk1",
+        "user_id": 1001,
+        "city_code": "330100",
+        "track_type": "徒步",
+        "start_time": "2026-04-20T12:00:00Z",
+        "city_name": "杭州市",
+        "title": "西湖徒步",
+        "distance": 1200.5,
+        "duration": 360,
+        "elevation_gain": 80,
+        "collect_count": 12,
+        "navigate_count": 3,
+        "track_screenshot_url": "/api/v1/static/screenshots/trk1.jpg",
+        "raw_track_url": "/api/v1/static/raw_tracks/trk1.dat"
+      }
+    ],
+    "next_cursor": "eyJzdGFydF90aW1lIjoiMjAyNi0wNC0yMFQxMjowMDowMFoiLCJpZCI6InRyazEifQ",
+    "has_more": true
+  }
 }
 ```
 
@@ -784,24 +793,29 @@ Authorization: Bearer <token>
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `data` | `MyTrackSummary[]` | 当前用户自己的轨迹列表。 |
-| `data[].id` | string | 轨迹 ID。 |
-| `data[].user_id` | int64 | 当前轨迹所属用户 ID。 |
-| `data[].city_code` | string | 城市 Code。 |
-| `data[].track_type` | string | 轨迹类型，例如 `徒步` / `跑步` / `骑车` / `自驾`。 |
-| `data[].start_time` | string | 运动开始时间。 |
-| `data[].city_name` | string | 城市名称，由 `city_code` 映射得到。 |
-| `data[].title` | string | 轨迹标题。 |
-| `data[].distance` | number | 距离，单位米。 |
-| `data[].duration` | int | 时长，单位秒。 |
-| `data[].elevation_gain` | int | 累计爬升，单位米。 |
-| `data[].collect_count` | int64 | 该轨迹被收藏的总数。 |
-| `data[].navigate_count` | int64 | 该轨迹被其他用户用于导航的次数。 |
-| `data[].track_screenshot_url` | string | 服务端本地缓存的轨迹截图可下载 URL。 |
-| `data[].raw_track_url` | string | 服务端本地缓存的原始轨迹文件可下载 URL。 |
+| `data.items` | `MyTrackSummary[]` | 当前页我的轨迹列表。 |
+| `data.next_cursor` | string | 下一页游标；当 `has_more=false` 时为空或不返回。 |
+| `data.has_more` | bool | 是否还有下一页数据。 |
+| `data.items[].id` | string | 轨迹 ID。 |
+| `data.items[].user_id` | int64 | 当前轨迹所属用户 ID。 |
+| `data.items[].city_code` | string | 城市 Code。 |
+| `data.items[].track_type` | string | 轨迹类型，例如 `徒步` / `跑步` / `骑车` / `自驾`。 |
+| `data.items[].start_time` | string | 运动开始时间。 |
+| `data.items[].city_name` | string | 城市名称，由 `city_code` 映射得到。 |
+| `data.items[].title` | string | 轨迹标题。 |
+| `data.items[].distance` | number | 距离，单位米。 |
+| `data.items[].duration` | int | 时长，单位秒。 |
+| `data.items[].elevation_gain` | int | 累计爬升，单位米。 |
+| `data.items[].collect_count` | int64 | 该轨迹被收藏的总数。 |
+| `data.items[].navigate_count` | int64 | 该轨迹被其他用户用于导航的次数。 |
+| `data.items[].track_screenshot_url` | string | 服务端本地缓存的轨迹截图可下载 URL。 |
+| `data.items[].raw_track_url` | string | 服务端本地缓存的原始轨迹文件可下载 URL。 |
 
 ### 错误响应
 
+- `400 Bad Request`
+  - `limit` 不是正整数（返回 `{"error":"invalid limit"}`）
+  - `cursor` 非法或已损坏（返回 `{"error":"invalid cursor"}`）
 - `401 Unauthorized`
   - 缺少/无效/过期的 Token
 - `500 Internal Server Error`
@@ -818,6 +832,13 @@ Authorization: Bearer <token>
 ### 示例（curl）
 
 ```bash
-curl -X GET "http://<host>:<port>/api/v1/track/my/list" \
+curl -X GET "http://<host>:<port>/api/v1/track/my/list?limit=20" \
+  -H "Authorization: Bearer <token>"
+```
+
+翻下一页：
+
+```bash
+curl -X GET "http://<host>:<port>/api/v1/track/my/list?limit=20&cursor=<next_cursor>" \
   -H "Authorization: Bearer <token>"
 ```

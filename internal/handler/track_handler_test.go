@@ -607,37 +607,95 @@ func TestListMyTracks_OmitsFields(t *testing.T) {
 		t.Fatalf("expected status 200, got %d, body=%s", resp.StatusCode(), string(resp.Body()))
 	}
 
-	var result handler.StandardResponse[[]map[string]interface{}]
+	var result handler.StandardResponse[*models.MyTrackSummaryPage]
 	decodeJSON(t, resp.Body(), &result)
 	if result.Code != 0 {
 		t.Fatalf("expected code 0, got %d", result.Code)
 	}
-	if len(result.Data) != 2 {
-		t.Fatalf("expected my list size 2, got %d", len(result.Data))
+	if result.Data == nil {
+		t.Fatalf("expected my list page data")
+	}
+	if len(result.Data.Items) != 2 {
+		t.Fatalf("expected my list size 2, got %d", len(result.Data.Items))
+	}
+	if result.Data.HasMore {
+		t.Fatalf("expected has_more=false")
 	}
 	// order should be start_time desc: my2 then my1
-	if id, _ := result.Data[0]["id"].(string); id != "my2" {
-		t.Fatalf("expected first id my2, got %v", result.Data[0]["id"])
+	if result.Data.Items[0].ID != "my2" {
+		t.Fatalf("expected first id my2, got %v", result.Data.Items[0].ID)
 	}
-	for _, item := range result.Data {
-		if _, ok := item["nickname"]; ok {
-			t.Fatalf("nickname should be omitted")
-		}
-		if _, ok := item["user_avatar_url"]; ok {
-			t.Fatalf("user_avatar_url should be omitted")
-		}
-		if _, ok := item["collected"]; ok {
-			t.Fatalf("collected should be omitted")
-		}
-		if _, ok := item["collect_count"]; !ok {
+	for _, item := range result.Data.Items {
+		if item.CollectCount < 0 {
 			t.Fatalf("collect_count should exist")
 		}
-		if _, ok := item["navigate_count"]; !ok {
+		if item.NavigateCount < 0 {
 			t.Fatalf("navigate_count should exist")
 		}
-		if uid, ok := item["user_id"].(float64); !ok || int64(uid) != 1001 {
-			t.Fatalf("unexpected user_id: %v", item["user_id"])
+		if item.UserID != 1001 {
+			t.Fatalf("unexpected user_id: %v", item.UserID)
 		}
+	}
+}
+
+func TestListMyTracksCursorPagination(t *testing.T) {
+	e := newTestEnv()
+	ctx := context.Background()
+	token := e.generateTestToken(1001)
+
+	start1 := time.Date(2026, 4, 23, 12, 0, 0, 0, time.UTC)
+	start2 := time.Date(2026, 4, 22, 12, 0, 0, 0, time.UTC)
+	start3 := time.Date(2026, 4, 21, 12, 0, 0, 0, time.UTC)
+
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "my-c", UserID: 1001, Title: "第三条", StartTime: start3, IsRunning: false, Status: models.TrackStatusNormal})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "my-a", UserID: 1001, Title: "第一条", StartTime: start1, IsRunning: false, Status: models.TrackStatusNormal})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "my-b", UserID: 1001, Title: "第二条", StartTime: start2, IsRunning: false, Status: models.TrackStatusPrivate})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "other-user", UserID: 1002, Title: "别人的", StartTime: start1, IsRunning: false, Status: models.TrackStatusNormal})
+
+	w1 := e.perform(http.MethodGet, "/api/v1/track/my/list?limit=2", nil, authHeader(token))
+	if w1.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected first my page status 200, got %d", w1.Result().StatusCode())
+	}
+	var page1 handler.StandardResponse[*models.MyTrackSummaryPage]
+	decodeJSON(t, w1.Result().Body(), &page1)
+	if page1.Data == nil {
+		t.Fatalf("expected first my page data")
+	}
+	if len(page1.Data.Items) != 2 {
+		t.Fatalf("expected first my page size 2, got %d", len(page1.Data.Items))
+	}
+	if page1.Data.Items[0].ID != "my-a" || page1.Data.Items[1].ID != "my-b" {
+		t.Fatalf("unexpected first my page order: %+v", page1.Data.Items)
+	}
+	if !page1.Data.HasMore {
+		t.Fatalf("expected first my page has_more=true")
+	}
+	if page1.Data.NextCursor == "" {
+		t.Fatalf("expected first my page next_cursor")
+	}
+
+	w2 := e.perform(http.MethodGet, "/api/v1/track/my/list?limit=2&cursor="+page1.Data.NextCursor, nil, authHeader(token))
+	if w2.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected second my page status 200, got %d", w2.Result().StatusCode())
+	}
+	var page2 handler.StandardResponse[*models.MyTrackSummaryPage]
+	decodeJSON(t, w2.Result().Body(), &page2)
+	if page2.Data == nil {
+		t.Fatalf("expected second my page data")
+	}
+	if len(page2.Data.Items) != 1 || page2.Data.Items[0].ID != "my-c" {
+		t.Fatalf("unexpected second my page items: %+v", page2.Data.Items)
+	}
+	if page2.Data.HasMore {
+		t.Fatalf("expected second my page has_more=false")
+	}
+	if page2.Data.NextCursor != "" {
+		t.Fatalf("expected second my page next_cursor empty, got %q", page2.Data.NextCursor)
+	}
+
+	w3 := e.perform(http.MethodGet, "/api/v1/track/my/list?cursor=bad-cursor", nil, authHeader(token))
+	if w3.Result().StatusCode() != http.StatusBadRequest {
+		t.Fatalf("expected invalid my cursor status 400, got %d", w3.Result().StatusCode())
 	}
 }
 

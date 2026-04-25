@@ -87,22 +87,22 @@ func (r *MongoTrackRepository) Update(ctx context.Context, t *models.Track) erro
 	res, err := r.collection.UpdateOne(ctx,
 		bson.M{"_id": t.ID},
 		bson.M{"$set": bson.M{
-			"user_id":        t.UserID,
-			"city_code":      t.CityCode,
-			"track_type":     t.TrackType,
-			"title":          t.Title,
-			"start_time":     t.StartTime,
-			"end_time":       t.EndTime,
-			"distance":       t.Distance,
-			"duration":       t.Duration,
-			"avg_speed_kmh":  t.AvgSpeedKmh,
-			"elevation_gain": t.ElevationGain,
-			"raw_track_url":  t.RawTrackURL,
-			"screenshot_url": t.TrackScreenshotURL,
+			"user_id":                        t.UserID,
+			"city_code":                      t.CityCode,
+			"track_type":                     t.TrackType,
+			"title":                          t.Title,
+			"start_time":                     t.StartTime,
+			"end_time":                       t.EndTime,
+			"distance":                       t.Distance,
+			"duration":                       t.Duration,
+			"avg_speed_kmh":                  t.AvgSpeedKmh,
+			"elevation_gain":                 t.ElevationGain,
+			"raw_track_url":                  t.RawTrackURL,
+			"screenshot_url":                 t.TrackScreenshotURL,
 			"track_no_map_bg_screenshot_url": t.TrackNoMapBgScreenshotURL,
-			"is_running":     t.IsRunning,
-			"status":         t.Status,
-			"updated_at":     t.UpdatedAt,
+			"is_running":                     t.IsRunning,
+			"status":                         t.Status,
+			"updated_at":                     t.UpdatedAt,
 		}},
 	)
 	if err != nil {
@@ -146,17 +146,24 @@ func (r *MongoTrackRepository) FindRunningByUserID(ctx context.Context, userID i
 
 // ListByUserID lists tracks of a user ordered by start time desc.
 // It excludes deleted tracks and running tracks by default.
-func (r *MongoTrackRepository) ListByUserID(ctx context.Context, userID int64, limit int) ([]*models.Track, error) {
+func (r *MongoTrackRepository) ListByUserID(ctx context.Context, userID int64, cursor *models.TrackListCursor, limit int) ([]*models.Track, error) {
 	if limit <= 0 {
 		limit = 20
 	}
+	filter := bson.M{
+		"user_id":    userID,
+		"is_running": false,
+		"status":     bson.M{"$in": []models.TrackStatus{models.TrackStatusNormal, models.TrackStatusPrivate}},
+	}
+	if cursor != nil {
+		filter["$or"] = []bson.M{
+			{"start_time": bson.M{"$lt": cursor.StartTime}},
+			{"start_time": cursor.StartTime, "id": bson.M{"$lt": cursor.ID}},
+		}
+	}
 	return r.listTracks(ctx,
-		bson.M{
-			"user_id":    userID,
-			"is_running": false,
-			"status":     bson.M{"$in": []models.TrackStatus{models.TrackStatusNormal, models.TrackStatusPrivate}},
-		},
-		options.Find().SetSort(bson.D{{Key: "start_time", Value: -1}}).SetLimit(int64(limit)),
+		filter,
+		options.Find().SetSort(bson.D{{Key: "start_time", Value: -1}, {Key: "id", Value: -1}}).SetLimit(int64(limit)),
 	)
 }
 

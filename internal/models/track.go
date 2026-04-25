@@ -26,25 +26,25 @@ type TrackPoint struct {
 // Track aggregates persisted fields of track_records.
 // Points is transient field kept for existing service logic.
 type Track struct {
-	ID                 string       `json:"id" bson:"_id,omitempty"`                          // ID 是轨迹记录唯一标识，由 generateTrackID 生成。
-	UserID             int64        `json:"user_id" bson:"user_id"`                           // UserID 是轨迹所属用户 ID。
-	CityCode           string       `json:"city_code" bson:"city_code"`                       // CityCode 是轨迹所属的城市 Code（城市/省份映射由配置文件维护）。
-	TrackType          string       `json:"track_type" bson:"track_type"`                     // TrackType 是轨迹类型，例如徒步、跑步、骑车、自驾。
-	Title              string       `json:"title" bson:"title"`                               // Title 是轨迹名称。
-	StartTime          time.Time    `json:"start_time" bson:"start_time"`                     // StartTime 是运动开始时间。
-	EndTime            time.Time    `json:"end_time" bson:"end_time"`                         // EndTime 是运动结束时间。
-	Distance           float64      `json:"distance" bson:"distance"`                         // Distance 是总距离，单位米。
-	Duration           uint32       `json:"duration" bson:"duration"`                         // Duration 是运动耗时，单位秒。
-	ElevationGain      int          `json:"elevation_gain" bson:"elevation_gain"`             // ElevationGain 是累计爬升，单位米。
-	RawTrackURL        string       `json:"raw_track_url" bson:"raw_track_url"`               // RawTrackURL 是原始轨迹点文件在对象存储中的地址。
-	TrackScreenshotURL string       `json:"track_screenshot_url" bson:"track_screenshot_url"` // TrackScreenshotURL 是轨迹截图文件在对象存储中的地址。
-	TrackNoMapBgScreenshotURL string `json:"track_no_map_bg_screenshot_url" bson:"track_no_map_bg_screenshot_url"` // TrackNoMapBgScreenshotURL 是“无地图背景的轨迹路线截图”文件在对象存储中的地址。
-	IsRunning          bool         `json:"is_running" bson:"is_running"`                     // IsRunning 表示轨迹是否仍处于进行中。
-	Status             TrackStatus  `json:"status" bson:"status"`                             // Status 是轨迹状态：0-删除，1-正常，2-私密。
-	CreatedAt          time.Time    `json:"created_at" bson:"created_at"`                     // CreatedAt 是记录创建时间。
-	UpdatedAt          time.Time    `json:"updated_at" bson:"updated_at"`                     // UpdatedAt 是记录更新时间。
-	Points             []TrackPoint `json:"points,omitempty" bson:"-"`                        // Points 是内存中的轨迹点集合，不直接持久化到 track_records。
-	AvgSpeedKmh        float64      `json:"avg_speed_kmh,omitempty" bson:"avg_speed_kmh"`     // AvgSpeedKmh 是平均速度，单位 km/h。
+	ID                        string       `json:"id" bson:"_id,omitempty"`                                              // ID 是轨迹记录唯一标识，由 generateTrackID 生成。
+	UserID                    int64        `json:"user_id" bson:"user_id"`                                               // UserID 是轨迹所属用户 ID。
+	CityCode                  string       `json:"city_code" bson:"city_code"`                                           // CityCode 是轨迹所属的城市 Code（城市/省份映射由配置文件维护）。
+	TrackType                 string       `json:"track_type" bson:"track_type"`                                         // TrackType 是轨迹类型，例如徒步、跑步、骑车、自驾。
+	Title                     string       `json:"title" bson:"title"`                                                   // Title 是轨迹名称。
+	StartTime                 time.Time    `json:"start_time" bson:"start_time"`                                         // StartTime 是运动开始时间。
+	EndTime                   time.Time    `json:"end_time" bson:"end_time"`                                             // EndTime 是运动结束时间。
+	Distance                  float64      `json:"distance" bson:"distance"`                                             // Distance 是总距离，单位米。
+	Duration                  uint32       `json:"duration" bson:"duration"`                                             // Duration 是运动耗时，单位秒。
+	ElevationGain             int          `json:"elevation_gain" bson:"elevation_gain"`                                 // ElevationGain 是累计爬升，单位米。
+	RawTrackURL               string       `json:"raw_track_url" bson:"raw_track_url"`                                   // RawTrackURL 是原始轨迹点文件在对象存储中的地址。
+	TrackScreenshotURL        string       `json:"track_screenshot_url" bson:"track_screenshot_url"`                     // TrackScreenshotURL 是轨迹截图文件在对象存储中的地址。
+	TrackNoMapBgScreenshotURL string       `json:"track_no_map_bg_screenshot_url" bson:"track_no_map_bg_screenshot_url"` // TrackNoMapBgScreenshotURL 是“无地图背景的轨迹路线截图”文件在对象存储中的地址。
+	IsRunning                 bool         `json:"is_running" bson:"is_running"`                                         // IsRunning 表示轨迹是否仍处于进行中。
+	Status                    TrackStatus  `json:"status" bson:"status"`                                                 // Status 是轨迹状态：0-删除，1-正常，2-私密。
+	CreatedAt                 time.Time    `json:"created_at" bson:"created_at"`                                         // CreatedAt 是记录创建时间。
+	UpdatedAt                 time.Time    `json:"updated_at" bson:"updated_at"`                                         // UpdatedAt 是记录更新时间。
+	Points                    []TrackPoint `json:"points,omitempty" bson:"-"`                                            // Points 是内存中的轨迹点集合，不直接持久化到 track_records。
+	AvgSpeedKmh               float64      `json:"avg_speed_kmh,omitempty" bson:"avg_speed_kmh"`                         // AvgSpeedKmh 是平均速度，单位 km/h。
 }
 
 // TrackSummary 是轨迹列表接口使用的轻量返回模型。
@@ -56,24 +56,24 @@ type Track struct {
 // - 若用户信息不存在/查询失败（not found），nickname/avatar_url 将返回空字符串；
 // - collect_count 为该轨迹被收藏的总数；collected 为“当前鉴权用户”是否收藏。
 type TrackSummary struct {
-	ID                 string    `json:"id"`                   // ID 是轨迹记录唯一标识。
-	UserID             int64     `json:"user_id"`              // UserID 是轨迹所属用户 ID。
-	CityCode           string    `json:"city_code"`            // CityCode 是轨迹所属的城市 Code。
-	TrackType          string    `json:"track_type"`           // TrackType 是轨迹类型，例如徒步、跑步、骑车、自驾。
-	StartTime          time.Time `json:"start_time"`           // StartTime 是运动开始时间。
-	CityName           string    `json:"city_name"`            // CityName 是城市名称（由 city_code 映射得到；映射关系由配置文件维护）。
-	Nickname           string    `json:"nickname"`             // Nickname 是轨迹所属用户的昵称（字段定义与 User struct 保持一致）。
-	UserAvatarURL      string    `json:"user_avatar_url"`      // UserAvatarURL 是轨迹所属用户的头像 URI。
-	Title              string    `json:"title"`                // Title 是轨迹名称。
-	Distance           float64   `json:"distance"`             // Distance 是总距离，单位米。
-	Duration           uint32    `json:"duration"`             // Duration 是运动耗时，单位秒。
-	ElevationGain      int       `json:"elevation_gain"`       // ElevationGain 是累计爬升，单位米。
-	Collected          bool      `json:"collected"`            // Collected 表示当前鉴权用户是否已收藏该轨迹。
-	CollectCount       int64     `json:"collect_count"`        // CollectCount 是轨迹被收藏的总数。
-	NavigateCount      int64     `json:"navigate_count"`       // NavigateCount 是该轨迹被其他用户用于导航的次数。
-	TrackScreenshotURL string    `json:"track_screenshot_url"` // TrackScreenshotURL 是服务器本地缓存的轨迹截图可下载 URL。
-	TrackNoMapBgScreenshotURL string `json:"track_no_map_bg_screenshot_url"` // TrackNoMapBgScreenshotURL 是服务器本地缓存的“无地图背景轨迹截图”可下载 URL。
-	RawTrackURL        string    `json:"raw_track_url"`        // RawTrackURL 是服务器本地缓存的原始轨迹文件可下载 URL。
+	ID                        string    `json:"id"`                             // ID 是轨迹记录唯一标识。
+	UserID                    int64     `json:"user_id"`                        // UserID 是轨迹所属用户 ID。
+	CityCode                  string    `json:"city_code"`                      // CityCode 是轨迹所属的城市 Code。
+	TrackType                 string    `json:"track_type"`                     // TrackType 是轨迹类型，例如徒步、跑步、骑车、自驾。
+	StartTime                 time.Time `json:"start_time"`                     // StartTime 是运动开始时间。
+	CityName                  string    `json:"city_name"`                      // CityName 是城市名称（由 city_code 映射得到；映射关系由配置文件维护）。
+	Nickname                  string    `json:"nickname"`                       // Nickname 是轨迹所属用户的昵称（字段定义与 User struct 保持一致）。
+	UserAvatarURL             string    `json:"user_avatar_url"`                // UserAvatarURL 是轨迹所属用户的头像 URI。
+	Title                     string    `json:"title"`                          // Title 是轨迹名称。
+	Distance                  float64   `json:"distance"`                       // Distance 是总距离，单位米。
+	Duration                  uint32    `json:"duration"`                       // Duration 是运动耗时，单位秒。
+	ElevationGain             int       `json:"elevation_gain"`                 // ElevationGain 是累计爬升，单位米。
+	Collected                 bool      `json:"collected"`                      // Collected 表示当前鉴权用户是否已收藏该轨迹。
+	CollectCount              int64     `json:"collect_count"`                  // CollectCount 是轨迹被收藏的总数。
+	NavigateCount             int64     `json:"navigate_count"`                 // NavigateCount 是该轨迹被其他用户用于导航的次数。
+	TrackScreenshotURL        string    `json:"track_screenshot_url"`           // TrackScreenshotURL 是服务器本地缓存的轨迹截图可下载 URL。
+	TrackNoMapBgScreenshotURL string    `json:"track_no_map_bg_screenshot_url"` // TrackNoMapBgScreenshotURL 是服务器本地缓存的“无地图背景轨迹截图”可下载 URL。
+	RawTrackURL               string    `json:"raw_track_url"`                  // RawTrackURL 是服务器本地缓存的原始轨迹文件可下载 URL。
 }
 
 // TrackListCursor 表示按时间倒序翻页时使用的游标锚点。
@@ -114,6 +114,13 @@ type MyTrackSummary struct {
 	NavigateCount      int64     `json:"navigate_count"`       // NavigateCount 是该轨迹被其他用户用于导航的次数。
 	TrackScreenshotURL string    `json:"track_screenshot_url"` // TrackScreenshotURL 是服务器本地缓存的轨迹截图可下载 URL。
 	RawTrackURL        string    `json:"raw_track_url"`        // RawTrackURL 是服务器本地缓存的原始轨迹文件可下载 URL。
+}
+
+// MyTrackSummaryPage 是“我的轨迹”列表的分页返回模型。
+type MyTrackSummaryPage struct {
+	Items      []*MyTrackSummary `json:"items"`
+	NextCursor string            `json:"next_cursor,omitempty"`
+	HasMore    bool              `json:"has_more"`
 }
 
 // TrackMap represents data needed for rendering a track polyline on map.

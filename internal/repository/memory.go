@@ -124,7 +124,7 @@ func (r *InMemoryTrackRepository) FindRunningByUserID(_ context.Context, userID 
 
 // ListByUserID returns tracks of the given user ordered by start time desc.
 // It excludes deleted tracks and running tracks by default.
-func (r *InMemoryTrackRepository) ListByUserID(_ context.Context, userID int64, limit int) ([]*models.Track, error) {
+func (r *InMemoryTrackRepository) ListByUserID(_ context.Context, userID int64, cursor *models.TrackListCursor, limit int) ([]*models.Track, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -138,6 +138,17 @@ func (r *InMemoryTrackRepository) ListByUserID(_ context.Context, userID int64, 
 		}
 		if t.IsRunning {
 			continue
+		}
+		if t.Status != models.TrackStatusNormal && t.Status != models.TrackStatusPrivate {
+			continue
+		}
+		if cursor != nil {
+			if t.StartTime.After(cursor.StartTime) {
+				continue
+			}
+			if t.StartTime.Equal(cursor.StartTime) && t.ID >= cursor.ID {
+				continue
+			}
 		}
 		if t.Status == models.TrackStatusDeleted {
 			continue

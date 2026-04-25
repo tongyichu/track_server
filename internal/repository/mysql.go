@@ -556,16 +556,20 @@ func (r *MySQLTrackRepository) FindRunningByUserID(ctx context.Context, userID i
 	return r.FindByID(ctx, id)
 }
 
-func (r *MySQLTrackRepository) ListByUserID(ctx context.Context, userID int64, limit int) ([]*models.Track, error) {
+func (r *MySQLTrackRepository) ListByUserID(ctx context.Context, userID int64, cursor *models.TrackListCursor, limit int) ([]*models.Track, error) {
 	if limit <= 0 {
 		limit = 20
 	}
-	rows, err := r.db.QueryContext(ctx,
-		`SELECT id FROM track_records
-		 WHERE user_id=? AND status IN (?, ?) AND is_running=0
-		 ORDER BY start_time DESC LIMIT ?`,
-		userID, models.TrackStatusNormal, models.TrackStatusPrivate, limit,
-	)
+	query := `SELECT id FROM track_records WHERE user_id=? AND status IN (?, ?) AND is_running=0`
+	args := make([]interface{}, 0, 6)
+	args = append(args, userID, models.TrackStatusNormal, models.TrackStatusPrivate)
+	if cursor != nil {
+		query += ` AND (start_time < ? OR (start_time = ? AND id < ?))`
+		args = append(args, cursor.StartTime, cursor.StartTime, cursor.ID)
+	}
+	query += ` ORDER BY start_time DESC, id DESC LIMIT ?`
+	args = append(args, limit)
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}

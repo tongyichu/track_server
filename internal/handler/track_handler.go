@@ -162,7 +162,19 @@ func (h *TrackHandler) ListMyTracks(ctx context.Context, c *app.RequestContext) 
 		c.JSON(http.StatusUnauthorized, utils.H{"error": "unauthorized"})
 		return
 	}
-	tracks, err := h.trackSvc.ListMyTracks(ctx, meta.AuthUserID, 50)
+	limit := 0
+	if rawLimit := string(c.Query("limit")); rawLimit != "" {
+		parsed, err := strconv.Atoi(rawLimit)
+		if err != nil || parsed <= 0 {
+			c.JSON(http.StatusBadRequest, utils.H{"error": "invalid limit"})
+			return
+		}
+		limit = parsed
+	}
+	page, err := h.trackSvc.ListMyTracks(ctx, meta.AuthUserID, service.ListMyTracksInput{
+		Cursor: string(c.Query("cursor")),
+		Limit:  limit,
+	})
 	if err != nil {
 		var iae *service.InvalidArgumentError
 		if errors.As(err, &iae) {
@@ -172,7 +184,7 @@ func (h *TrackHandler) ListMyTracks(ctx context.Context, c *app.RequestContext) 
 		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, successResponse(tracks))
+	c.JSON(http.StatusOK, successResponse(page))
 }
 
 // SearchTracks handles GET /api/track/search/list
