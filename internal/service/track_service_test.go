@@ -39,6 +39,9 @@ func TestCreateTrackAssignsRecordFields(t *testing.T) {
 	if !track.IsRunning {
 		t.Fatalf("expected created track to be running")
 	}
+	if track.TrackType != "" {
+		t.Fatalf("expected default track_type empty, got %q", track.TrackType)
+	}
 }
 
 func TestGenerateTrackID_FormatAndUniqueness(t *testing.T) {
@@ -76,9 +79,11 @@ func TestCreateTrack_UsesProvidedFields(t *testing.T) {
 	screenshotURL := "https://example.com/track.png"
 	isRunning := false
 	avgSpeed := 10.4
+	trackType := "跑步"
 
 	track, err := svc.CreateTrack(context.Background(), 1001, CreateTrackInput{
 		Title:              &title,
+		TrackType:          &trackType,
 		StartTime:          &start,
 		EndTime:            &end,
 		Distance:           &distance,
@@ -97,6 +102,9 @@ func TestCreateTrack_UsesProvidedFields(t *testing.T) {
 	}
 	if track.Title != title {
 		t.Fatalf("expected title %q, got %q", title, track.Title)
+	}
+	if track.TrackType != trackType {
+		t.Fatalf("expected track_type %q, got %q", trackType, track.TrackType)
 	}
 	if !track.EndTime.Equal(end) {
 		t.Fatalf("expected end_time %v, got %v", end, track.EndTime)

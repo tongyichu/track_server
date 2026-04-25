@@ -53,6 +53,7 @@ func invalidArg(msg string) error { return &InvalidArgumentError{Msg: msg} }
 type CreateTrackInput struct {
 	Title               *string    `json:"title"`
 	CityCode            *string    `json:"city_code"`
+	TrackType           *string    `json:"track_type"`
 	StartTime           *time.Time `json:"start_time"`
 	EndTime             *time.Time `json:"end_time"`
 	Distance            *float64   `json:"distance"`
@@ -162,6 +163,7 @@ func (s *TrackService) CreateTrack(ctx context.Context, userID int64, input Crea
 		ID:        trackID,
 		UserID:    userID,
 		CityCode:  "",
+		TrackType: "",
 		Title:     "新的轨迹",
 		StartTime: startTime,
 		IsRunning: isRunning,
@@ -174,6 +176,9 @@ func (s *TrackService) CreateTrack(ctx context.Context, userID int64, input Crea
 	}
 	if input.CityCode != nil {
 		track.CityCode = *input.CityCode
+	}
+	if input.TrackType != nil {
+		track.TrackType = *input.TrackType
 	}
 	if input.EndTime != nil {
 		track.EndTime = *input.EndTime
@@ -458,6 +463,7 @@ func toSummaries(tracks []*models.Track) []*models.TrackSummary {
 			ID:            t.ID,
 			UserID:        t.UserID,
 			CityCode:      t.CityCode,
+			TrackType:     t.TrackType,
 			CityName:      config.CityNameByCode(t.CityCode),
 			Title:         t.Title,
 			Distance:      t.Distance,

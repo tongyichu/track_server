@@ -142,6 +142,7 @@ func TestCreateTrack_WithBody(t *testing.T) {
 	body, _ := json.Marshal(map[string]interface{}{
 		"title":                "傍晚夜跑",
 		"city_code":            "330100",
+		"track_type":           "跑步",
 		"start_time":           "2026-04-20T12:00:00Z",
 		"end_time":             "2026-04-20T12:30:00Z",
 		"distance":             1500.5,
@@ -171,6 +172,9 @@ func TestCreateTrack_WithBody(t *testing.T) {
 	}
 	if result.Data.Title != "傍晚夜跑" {
 		t.Fatalf("expected title 傍晚夜跑, got %q", result.Data.Title)
+	}
+	if result.Data.TrackType != "跑步" {
+		t.Fatalf("unexpected track_type: %q", result.Data.TrackType)
 	}
 	if result.Data.Duration != 1800 {
 		t.Fatalf("expected duration 1800, got %v", result.Data.Duration)
@@ -327,7 +331,7 @@ func TestRecommendAndSearch(t *testing.T) {
 	token := e.generateTestToken(1001)
 	_, _ = e.userRepo.CreateIfNotExists(ctx, &models.User{ID: 1001, Nickname: "Alice", AvatarURL: "https://example.com/avatar.png"})
 	// seed one normal track and one running track (running should be excluded from recommend list)
-	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk1", UserID: 1001, CityCode: "330100", Title: "西湖徒步", IsRunning: false})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk1", UserID: 1001, CityCode: "330100", TrackType: "徒步", Title: "西湖徒步", IsRunning: false})
 	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-running", UserID: 1001, Title: "进行中跑步", IsRunning: true})
 	_ = e.collectRepo.AddCollect(ctx, 1001, "trk1")
 
@@ -365,6 +369,9 @@ func TestRecommendAndSearch(t *testing.T) {
 	if result.Data[0].CityName != "杭州市" {
 		t.Fatalf("expected recommend track trk1 city_name=杭州市, got %q", result.Data[0].CityName)
 	}
+	if result.Data[0].TrackType != "徒步" {
+		t.Fatalf("expected recommend track trk1 track_type=徒步, got %q", result.Data[0].TrackType)
+	}
 
 	w2 := e.perform(http.MethodGet, "/api/v1/track/search/list?keyword=西湖", nil, authHeader(token))
 	resp2 := w2.Result()
@@ -375,6 +382,9 @@ func TestRecommendAndSearch(t *testing.T) {
 	decodeJSON(t, resp2.Body(), &search)
 	if len(search) != 1 || search[0].ID != "trk1" {
 		t.Fatalf("unexpected search result: %+v", search)
+	}
+	if search[0].TrackType != "徒步" {
+		t.Fatalf("expected search track trk1 track_type=徒步, got %q", search[0].TrackType)
 	}
 }
 

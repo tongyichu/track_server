@@ -39,6 +39,7 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 			id VARCHAR(64) NOT NULL,
 			user_id BIGINT UNSIGNED NOT NULL,
 			city_code VARCHAR(16) NOT NULL DEFAULT '' COMMENT '城市Code',
+			track_type VARCHAR(32) NOT NULL DEFAULT '' COMMENT '轨迹类型',
 			title VARCHAR(128) NOT NULL DEFAULT '',
 			start_time DATETIME NOT NULL,
 			end_time DATETIME,
@@ -114,6 +115,9 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 	if err := ensureMySQLTrackCityCodeColumn(ctx, db); err != nil {
+		return err
+	}
+	if err := ensureMySQLTrackTypeColumn(ctx, db); err != nil {
 		return err
 	}
 	if err := ensureMySQLUserIDColumnsBigint(ctx, db); err != nil {
@@ -245,6 +249,26 @@ func ensureMySQLTrackCityCodeColumn(ctx context.Context, db *sql.DB) error {
 	_, err = db.ExecContext(ctx, `ALTER TABLE track_records ADD COLUMN city_code VARCHAR(16) NOT NULL DEFAULT '' COMMENT '城市Code' AFTER user_id`)
 	if err != nil {
 		return fmt.Errorf("add track_records.city_code column: %w", err)
+	}
+	return nil
+}
+
+func ensureMySQLTrackTypeColumn(ctx context.Context, db *sql.DB) error {
+	var count int
+	err := db.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM information_schema.COLUMNS
+		WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'track_records' AND COLUMN_NAME = 'track_type'`,
+	).Scan(&count)
+	if err != nil {
+		return fmt.Errorf("check track_records.track_type column: %w", err)
+	}
+	if count > 0 {
+		return nil
+	}
+	_, err = db.ExecContext(ctx, `ALTER TABLE track_records ADD COLUMN track_type VARCHAR(32) NOT NULL DEFAULT '' COMMENT '轨迹类型' AFTER city_code`)
+	if err != nil {
+		return fmt.Errorf("add track_records.track_type column: %w", err)
 	}
 	return nil
 }
@@ -393,11 +417,11 @@ func (r *MySQLTrackRepository) Create(ctx context.Context, t *models.Track) erro
 
 	_, err := r.db.ExecContext(ctx,
 		`INSERT INTO track_records (
-			id, user_id, city_code, title, start_time, end_time,
+			id, user_id, city_code, track_type, title, start_time, end_time,
 			distance, duration, elevation_gain, raw_track_url, track_screenshot_url, is_running, status, avg_speed_kmh,
 			created_at, updated_at
-		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-		t.ID, t.UserID, t.CityCode, t.Title, t.StartTime, nullableTimeValue(t.EndTime),
+		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		t.ID, t.UserID, t.CityCode, t.TrackType, t.Title, t.StartTime, nullableTimeValue(t.EndTime),
 		t.Distance, t.Duration, t.ElevationGain, nullableStringValue(t.RawTrackURL), nullableStringValue(t.TrackScreenshotURL), t.IsRunning, t.Status, t.AvgSpeedKmh,
 		t.CreatedAt, t.UpdatedAt,
 	)
@@ -416,10 +440,10 @@ func (r *MySQLTrackRepository) Update(ctx context.Context, t *models.Track) erro
 
 	res, err := r.db.ExecContext(ctx,
 		`UPDATE track_records SET
-			user_id=?, city_code=?, title=?, start_time=?, end_time=?,
+			user_id=?, city_code=?, track_type=?, title=?, start_time=?, end_time=?,
 			distance=?, duration=?, elevation_gain=?, raw_track_url=?, track_screenshot_url=?, is_running=?, status=?, avg_speed_kmh=?, updated_at=?
 		WHERE id=?`,
-		t.UserID, t.CityCode, t.Title, t.StartTime, nullableTimeValue(t.EndTime),
+		t.UserID, t.CityCode, t.TrackType, t.Title, t.StartTime, nullableTimeValue(t.EndTime),
 		t.Distance, t.Duration, t.ElevationGain, nullableStringValue(t.RawTrackURL), nullableStringValue(t.TrackScreenshotURL), t.IsRunning, t.Status, t.AvgSpeedKmh, t.UpdatedAt,
 		t.ID,
 	)
@@ -435,7 +459,7 @@ func (r *MySQLTrackRepository) Update(ctx context.Context, t *models.Track) erro
 
 func (r *MySQLTrackRepository) FindByID(ctx context.Context, id string) (*models.Track, error) {
 	row := r.db.QueryRowContext(ctx,
-		`SELECT id, user_id, city_code, title, start_time, end_time,
+		`SELECT id, user_id, city_code, track_type, title, start_time, end_time,
 			distance, duration, elevation_gain, raw_track_url, track_screenshot_url, is_running, status, avg_speed_kmh,
 			created_at, updated_at
 		FROM track_records WHERE id=?`, id)
@@ -450,7 +474,7 @@ func (r *MySQLTrackRepository) FindByID(ctx context.Context, id string) (*models
 		trackScreenshot sql.NullString
 	)
 	if err := row.Scan(
-		&t.ID, &t.UserID, &t.CityCode, &t.Title, &t.StartTime, &endTime,
+		&t.ID, &t.UserID, &t.CityCode, &t.TrackType, &t.Title, &t.StartTime, &endTime,
 		&distance, &duration, &elevationGain, &rawTrackURL, &trackScreenshot, &t.IsRunning, &t.Status, &t.AvgSpeedKmh,
 		&t.CreatedAt, &t.UpdatedAt,
 	); err != nil {
