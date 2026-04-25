@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"log"
 	"math"
 	"time"
 
@@ -302,16 +303,47 @@ func (s *TrackService) ListRecommend(ctx context.Context, userID int64, limit in
 	// - 命中本地缓存则直接返回本地 URL
 	// - 未命中则兜底拉取一次（同步，带 5 秒超时），失败则返回空串，不阻塞列表返回其它字段
 	// - userID<=0（未登录游客）时无法申请 STS 读凭证，只尝试本地命中，不主动下载
-	if s.screenshotCache != nil || s.rawTrackCache != nil {
+	// 排查日志（轻量）：若列表返回的 track_screenshot_url/raw_track_url 为空，
+	// 输出汇总计数，避免逐条日志刷屏。
+	var (
+		srcEmptySS, resEmptySS   int
+		srcEmptyRaw, resEmptyRaw int
+	)
+	if s.screenshotCache == nil && s.rawTrackCache == nil {
+		// cache 服务未启用时，两个字段会一直为空。
+		if len(tracks) > 0 {
+			log.Printf("[ListRecommend][asset] cache_disabled user_id=%d tracks=%d", userID, len(tracks))
+		}
+	} else {
 		for i, t := range tracks {
 			cacheCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			if s.screenshotCache != nil {
-				summaries[i].TrackScreenshotURL = s.screenshotCache.EnsureCached(cacheCtx, userID, t.ID, t.TrackScreenshotURL)
+				if t.TrackScreenshotURL == "" {
+					srcEmptySS++
+				} else {
+					local := s.screenshotCache.EnsureCached(cacheCtx, userID, t.ID, t.TrackScreenshotURL)
+					summaries[i].TrackScreenshotURL = local
+					if local == "" {
+						resEmptySS++
+					}
+				}
 			}
 			if s.rawTrackCache != nil {
-				summaries[i].RawTrackURL = s.rawTrackCache.EnsureCached(cacheCtx, userID, t.ID, t.RawTrackURL)
+				if t.RawTrackURL == "" {
+					srcEmptyRaw++
+				} else {
+					local := s.rawTrackCache.EnsureCached(cacheCtx, userID, t.ID, t.RawTrackURL)
+					summaries[i].RawTrackURL = local
+					if local == "" {
+						resEmptyRaw++
+					}
+				}
 			}
 			cancel()
+		}
+		// 仅在出现“源为空 / 结果为空”时打汇总日志，避免正常请求刷屏。
+		if srcEmptySS > 0 || resEmptySS > 0 || srcEmptyRaw > 0 || resEmptyRaw > 0 {
+			log.Printf("[ListRecommend][asset] summary user_id=%d tracks=%d screenshot_src_empty=%d screenshot_result_empty=%d raw_src_empty=%d raw_result_empty=%d", userID, len(tracks), srcEmptySS, resEmptySS, srcEmptyRaw, resEmptyRaw)
 		}
 	}
 	if err := s.fillTrackSummaryExtras(ctx, userID, summaries); err != nil {

@@ -344,6 +344,7 @@ func (s *OSSTokenService) DownloadObject(userID int64, ossObjectURL, localPath s
 	}
 	bucket, _, objectKey, err := s.parseOSSObjectURL(ossObjectURL)
 	if err != nil {
+		log.Printf("[OSSDownload] parse_url_error user_id=%d source=%s local=%s err=%v", userID, redactURL(ossObjectURL), localPath, err)
 		return err
 	}
 	if bucket == "" {
@@ -353,14 +354,19 @@ func (s *OSSTokenService) DownloadObject(userID int64, ossObjectURL, localPath s
 	// 如果没配置 OSSInternalEndpoint，下载会直接失败，避免误走公网产生费用。
 	endpoint := s.ossInternalEndpoint
 	if endpoint == "" {
-		return errors.New("oss internal endpoint is not configured; please set OSS_INTERNAL_ENDPOINT to the internal endpoint to avoid public traffic fee")
+		err := errors.New("oss internal endpoint is not configured; please set OSS_INTERNAL_ENDPOINT to the internal endpoint to avoid public traffic fee")
+		log.Printf("[OSSDownload] missing_internal_endpoint user_id=%d bucket=%s object_key=%s source=%s local=%s", userID, bucket, objectKey, redactURL(ossObjectURL), localPath)
+		return err
 	}
 	if objectKey == "" {
-		return errors.New("failed to parse oss object key")
+		err := errors.New("failed to parse oss object key")
+		log.Printf("[OSSDownload] empty_object_key user_id=%d bucket=%s source=%s local=%s", userID, bucket, redactURL(ossObjectURL), localPath)
+		return err
 	}
 
 	cred, err := s.GetReadCredential(userID)
 	if err != nil {
+		log.Printf("[OSSDownload] get_read_credential_error user_id=%d bucket=%s object_key=%s source=%s err=%v", userID, bucket, objectKey, redactURL(ossObjectURL), err)
 		return err
 	}
 
@@ -368,13 +374,19 @@ func (s *OSSTokenService) DownloadObject(userID int64, ossObjectURL, localPath s
 	// SecurityToken 来自 STS 临时凭证。
 	cli, err := ossclient.New(endpoint, cred.AccessKeyID, cred.AccessKeySecret, ossclient.SecurityToken(cred.SecurityToken))
 	if err != nil {
+		log.Printf("[OSSDownload] new_client_error user_id=%d endpoint=%s bucket=%s object_key=%s err=%v", userID, endpoint, bucket, objectKey, err)
 		return err
 	}
 	bkt, err := cli.Bucket(bucket)
 	if err != nil {
+		log.Printf("[OSSDownload] bucket_error user_id=%d endpoint=%s bucket=%s object_key=%s err=%v", userID, endpoint, bucket, objectKey, err)
 		return err
 	}
-	return bkt.GetObjectToFile(objectKey, localPath)
+	if err := bkt.GetObjectToFile(objectKey, localPath); err != nil {
+		log.Printf("[OSSDownload] get_object_error user_id=%d endpoint=%s bucket=%s object_key=%s local=%s err=%v", userID, endpoint, bucket, objectKey, localPath, err)
+		return err
+	}
+	return nil
 }
 
 // parseOSSObjectURL 从 OSS 对象完整 URL 中解析出 bucket/endpoint/objectKey。

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"net/url"
 	"os"
 	"path"
@@ -128,11 +129,26 @@ func (s *AssetCacheService) EnsureCached(ctx context.Context, userID int64, key,
 		return s.LocalURL(key, ext)
 	}
 	if sourceURL == "" || s.downloader == nil {
+		// 仅在“缺少 downloader（配置/初始化问题）”时记录日志；
+		// sourceURL 为空属于数据缺失，日志容易刷屏。
+		if s.downloader == nil {
+			reason := "no_downloader"
+			if sourceURL == "" {
+				reason = "empty_source_and_no_downloader"
+			}
+			log.Printf("[AssetCache] ensure_cached_skip reason=%s user_id=%d url_prefix=%s key=%s source=%s", reason, userID, s.urlPrefix, key, redactURL(sourceURL))
+		}
 		return ""
 	}
 
 	ext := pickExt(sourceURL, s.allowedExts, s.defaultExt)
 	if err := s.downloadOnce(ctx, userID, key, ext, sourceURL); err != nil {
+		ctxErr := ctx.Err()
+		if ctxErr != nil {
+			log.Printf("[AssetCache] download_failed user_id=%d url_prefix=%s key=%s ext=%s source=%s err=%v ctx_err=%v", userID, s.urlPrefix, key, ext, redactURL(sourceURL), err, ctxErr)
+		} else {
+			log.Printf("[AssetCache] download_failed user_id=%d url_prefix=%s key=%s ext=%s source=%s err=%v", userID, s.urlPrefix, key, ext, redactURL(sourceURL), err)
+		}
 		return ""
 	}
 	return s.LocalURL(key, ext)
@@ -213,17 +229,40 @@ func (s *AssetCacheService) doDownload(userID int64, key, ext, sourceURL string)
 	tmpPath := finalPath + ".tmp"
 	// 先下载到 tmp 文件，成功后再原子 rename，避免半写文件被静态服务读到。
 	if err := s.downloader.DownloadObject(userID, sourceURL, tmpPath); err != nil {
+		log.Printf("[AssetCache] downloader_error user_id=%d url_prefix=%s key=%s ext=%s source=%s tmp=%s err=%v", userID, s.urlPrefix, key, ext, redactURL(sourceURL), tmpPath, err)
 		_ = os.Remove(tmpPath)
 		return err
 	}
 	if fi, err := os.Stat(tmpPath); err != nil || fi.Size() == 0 {
 		_ = os.Remove(tmpPath)
 		if err != nil {
+			log.Printf("[AssetCache] tmp_stat_error user_id=%d url_prefix=%s key=%s ext=%s tmp=%s err=%v", userID, s.urlPrefix, key, ext, tmpPath, err)
 			return err
 		}
+		log.Printf("[AssetCache] tmp_empty user_id=%d url_prefix=%s key=%s ext=%s tmp=%s", userID, s.urlPrefix, key, ext, tmpPath)
 		return errors.New("downloaded asset is empty")
 	}
-	return os.Rename(tmpPath, finalPath)
+	if err := os.Rename(tmpPath, finalPath); err != nil {
+		log.Printf("[AssetCache] rename_error user_id=%d url_prefix=%s key=%s ext=%s tmp=%s final=%s err=%v", userID, s.urlPrefix, key, ext, tmpPath, finalPath, err)
+		return err
+	}
+	return nil
+}
+
+// redactURL strips query params (e.g. OSS signatures) for safe logging.
+func redactURL(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	if !strings.Contains(raw, "://") {
+		return raw
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "<invalid_url>"
+	}
+	return u.Scheme + "://" + u.Host + u.Path
 }
 
 // fileName 生成缓存文件名，保持 key 可作为主键。

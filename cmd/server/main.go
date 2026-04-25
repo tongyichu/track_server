@@ -127,12 +127,12 @@ func main() {
 	}
 
 	rawTrackCacheDir := filepath.Join(staticRoot, "raw_tracks")
-	// 原始轨迹文件后缀未作强约束（客户端可能用 .dat/.json/.gpx 等），这里允许常见几种，
+	// 原始轨迹文件后缀未作强约束（客户端可能用 .dat/.json/.gpx/.kmz 等），这里允许常见几种，
 	// 未识别时按 .dat 落盘；文件名仍以 track_id 为主键保证唯一。
 	rawTrackCache, err := service.NewAssetCacheService(
 		rawTrackCacheDir,
 		"/api/v1/static/raw_tracks",
-		[]string{".dat", ".json", ".gpx", ".bin"},
+		[]string{".dat", ".json", ".gpx", ".kmz"},
 		".dat",
 	)
 	if err != nil {
