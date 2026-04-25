@@ -781,9 +781,9 @@ func (s *TrackService) fillTrackSummaryExtras(ctx context.Context, userID int64,
 			u, err := s.users.FindByID(ctx, uid)
 			switch {
 			case err == nil && u != nil:
-				users[uid] = userBrief{avatar: u.AvatarURL, nick: u.Nickname}
+				users[uid] = userBrief{avatar: fallbackAvatarURL(uid, u.AvatarURL), nick: u.Nickname}
 			case errors.Is(err, repository.ErrNotFound):
-				users[uid] = userBrief{}
+				users[uid] = userBrief{avatar: defaultAvatarURL(uid)}
 			case err != nil:
 				return err
 			}

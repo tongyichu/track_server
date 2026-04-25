@@ -45,6 +45,9 @@ func TestGetUserDetail_Success(t *testing.T) {
 	if u.ID != 1001 {
 		t.Fatalf("expected user id 1001, got %d", u.ID)
 	}
+	if u.AvatarURL != "/api/v1/static/default/girl_01.png" {
+		t.Fatalf("expected default avatar_url, got %q", u.AvatarURL)
+	}
 }
 
 // TestGetUserDetail_AvatarURLUsesStaticAsset verifies avatar_url is rewritten to local static URL.

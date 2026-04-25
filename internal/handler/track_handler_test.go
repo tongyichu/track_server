@@ -495,6 +495,42 @@ func TestRecommendCursorPagination(t *testing.T) {
 	}
 }
 
+func TestRecommendAndSearchUseDefaultAvatarWhenMissing(t *testing.T) {
+	e := newTestEnv()
+	ctx := context.Background()
+	token := e.generateTestToken(1001)
+	startTime := time.Date(2026, 4, 24, 8, 0, 0, 0, time.UTC)
+
+	_, _ = e.userRepo.CreateIfNotExists(ctx, &models.User{ID: 1001, Nickname: "Alice"})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-default-avatar", UserID: 1001, Title: "默认头像轨迹", StartTime: startTime, IsRunning: false, Status: models.TrackStatusNormal})
+
+	w1 := e.perform(http.MethodGet, "/api/v1/track/recommend/list", nil, authHeader(token), ut.Header{Key: middleware.HeaderUserID, Value: "1001"})
+	if w1.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected recommend status 200, got %d", w1.Result().StatusCode())
+	}
+	var recommend handler.StandardResponse[*models.TrackSummaryPage]
+	decodeJSON(t, w1.Result().Body(), &recommend)
+	if recommend.Data == nil || len(recommend.Data.Items) != 1 {
+		t.Fatalf("unexpected recommend result: %+v", recommend)
+	}
+	if recommend.Data.Items[0].UserAvatarURL != "/api/v1/static/default/girl_01.png" {
+		t.Fatalf("expected recommend default user_avatar_url, got %q", recommend.Data.Items[0].UserAvatarURL)
+	}
+
+	w2 := e.perform(http.MethodGet, "/api/v1/track/search/list?keyword=默认头像", nil, authHeader(token))
+	if w2.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected search status 200, got %d", w2.Result().StatusCode())
+	}
+	var search handler.StandardResponse[*models.TrackSummaryPage]
+	decodeJSON(t, w2.Result().Body(), &search)
+	if search.Data == nil || len(search.Data.Items) != 1 {
+		t.Fatalf("unexpected search result: %+v", search)
+	}
+	if search.Data.Items[0].UserAvatarURL != "/api/v1/static/default/girl_01.png" {
+		t.Fatalf("expected search default user_avatar_url, got %q", search.Data.Items[0].UserAvatarURL)
+	}
+}
+
 func TestSearchCursorPagination(t *testing.T) {
 	e := newTestEnv()
 	ctx := context.Background()
