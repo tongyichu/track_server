@@ -1,6 +1,9 @@
 package handler
 
 import (
+	"strings"
+
+	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/tongyichu/track_server/internal/middleware"
 	"github.com/tongyichu/track_server/internal/service"
 
@@ -52,7 +55,40 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 
 	// 静态资源下载（需要登录）
 	if deps.StaticRoot != "" {
-		auth.Static("/static", deps.StaticRoot)
+		// 重要：这里不要直接用 auth.Static("/static", deps.StaticRoot)。
+		//
+		// Hertz 静态文件（app.FS）默认使用 ctx.Path() 作为“相对 Root 的路径”，再拼出本地路径：
+		//   local = <Root> + <ctx.Path()>
+		//
+		// 而本服务的 URL 设计为：
+		//   GET /api/v1/static/<category>/<file>
+		// Root 设计为：
+		//   /var/log/track_server/static
+		//
+		// 若不做重写，ctx.Path() 会是 "/api/v1/static/screenshots/NO.00000005.png"，
+		// 最终去打开的将是：
+		//   /var/log/track_server/static/api/v1/static/screenshots/NO.00000005.png
+		// 这与实际落盘路径：
+		//   /var/log/track_server/static/screenshots/NO.00000005.png
+		// 不一致，从而导致“鉴权通过但始终 404”。
+		//
+		// 因此这里用 StaticFS + PathRewrite，将通配参数 filepath 重写为 "/"+filepath，
+		// 使其正确映射到 Root 下。
+		fs := &app.FS{
+			Root: deps.StaticRoot,
+			PathRewrite: func(ctx *app.RequestContext) []byte {
+				fp := ctx.Param("filepath")
+				if fp == "" {
+					return []byte("/")
+				}
+				// 通配参数一般不带前导 '/'
+				if strings.HasPrefix(fp, "/") {
+					return []byte(fp)
+				}
+				return []byte("/" + fp)
+			},
+		}
+		auth.StaticFS("/static", fs)
 	}
 
 	auth.POST("/logout", loginHandler.Logout)
