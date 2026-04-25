@@ -60,6 +60,16 @@ type LoginResult struct {
 	Token  string       `json:"token"`
 }
 
+var defaultNicknameAdjectives = []string{
+	"元气", "晴空", "轻盈", "温柔", "机灵", "清新", "闪亮", "安静", "热心", "自在",
+}
+
+var defaultNicknameNouns = []string{
+	"海豚", "小鹿", "熊猫", "狐狸", "银杏", "向日葵", "云朵", "星球", "背包", "旅人",
+}
+
+const maxDefaultNicknameAttempts = 20
+
 func NewLoginService(users repository.UserRepository, loginLogs repository.LoginLogRepository, wechatAppID, wechatAppSecret, jwtSecret string) *LoginService {
 	return &LoginService{
 		users:           users,
@@ -198,12 +208,29 @@ func (s *LoginService) LoginBySMS(ctx context.Context, phone, code, ip, deviceID
 	if err != nil {
 		return nil, err
 	}
-	user, err := s.users.CreateIfNotExists(ctx, &models.User{
-		ID:    userID,
-		Phone: phone,
-	})
+	user, err := s.users.FindByID(ctx, userID)
 	if err != nil {
-		return nil, err
+		if !errors.Is(err, repository.ErrNotFound) {
+			return nil, err
+		}
+
+		nickname, genErr := s.generateUniqueDefaultNickname(ctx)
+		if genErr != nil {
+			return nil, genErr
+		}
+
+		user, err = s.users.CreateIfNotExists(ctx, &models.User{
+			ID:       userID,
+			Phone:    phone,
+			Nickname: nickname,
+		})
+		if err != nil {
+			return nil, err
+		}
+		if user.Nickname == "" {
+			user.Nickname = nickname
+			_ = s.users.Update(ctx, user)
+		}
 	}
 	if user.Phone != phone {
 		user.Phone = phone
@@ -224,6 +251,42 @@ func (s *LoginService) LoginBySMS(ctx context.Context, phone, code, ip, deviceID
 	}
 
 	return &LoginResult{UserID: user.ID, User: user, Token: token}, nil
+}
+
+func (s *LoginService) generateUniqueDefaultNickname(ctx context.Context) (string, error) {
+	base := defaultNicknameAdjectives[rand.Intn(len(defaultNicknameAdjectives))] + defaultNicknameNouns[rand.Intn(len(defaultNicknameNouns))]
+
+	available, err := s.nicknameAvailable(ctx, base)
+	if err != nil {
+		return "", err
+	}
+	if available {
+		return base, nil
+	}
+
+	for i := 0; i < maxDefaultNicknameAttempts; i++ {
+		candidate := fmt.Sprintf("%s%d", base, rand.Intn(9000)+1000)
+		available, err = s.nicknameAvailable(ctx, candidate)
+		if err != nil {
+			return "", err
+		}
+		if available {
+			return candidate, nil
+		}
+	}
+
+	return "", errors.New("failed to generate unique default nickname")
+}
+
+func (s *LoginService) nicknameAvailable(ctx context.Context, nickname string) (bool, error) {
+	_, err := s.users.FindByNickname(ctx, nickname)
+	if err == nil {
+		return false, nil
+	}
+	if errors.Is(err, repository.ErrNotFound) {
+		return true, nil
+	}
+	return false, err
 }
 
 func (s *LoginService) LoginByWechat(ctx context.Context, code, ip, deviceID, platform string) (*LoginResult, error) {

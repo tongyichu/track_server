@@ -3,7 +3,9 @@ package handler_test
 import (
 	"context"
 	"encoding/json"
+	"math/rand"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/tongyichu/track_server/internal/handler"
@@ -140,8 +142,55 @@ func TestLoginBySMS_Success(t *testing.T) {
 	if result.Data.User == nil {
 		t.Fatalf("expected non-nil user")
 	}
+	if result.Data.User.Nickname == "" {
+		t.Fatalf("expected generated nickname for first sms login")
+	}
 	if result.Data.Token == "" {
 		t.Fatalf("expected non-empty token")
+	}
+}
+
+func TestLoginBySMS_DuplicateNicknameAppendsRandomNumber(t *testing.T) {
+	e := newTestEnv()
+
+	phone1 := "13800001111"
+	code1 := sendSMSCodeViaService(t, e, phone1)
+	rand.Seed(1)
+	body1, _ := json.Marshal(map[string]string{"phone": phone1, "code": code1})
+	w1 := e.perform(http.MethodPost, "/api/v1/login/sms", body1)
+	if w1.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("first login should succeed, got %d", w1.Result().StatusCode())
+	}
+	var result1 handler.StandardResponse[*service.LoginResult]
+	decodeJSON(t, w1.Result().Body(), &result1)
+	if result1.Data == nil || result1.Data.User == nil {
+		t.Fatalf("expected first login user")
+	}
+	if result1.Data.User.Nickname == "" {
+		t.Fatalf("expected first login nickname")
+	}
+
+	phone2 := "13800002222"
+	code2 := sendSMSCodeViaService(t, e, phone2)
+	rand.Seed(1)
+	body2, _ := json.Marshal(map[string]string{"phone": phone2, "code": code2})
+	w2 := e.perform(http.MethodPost, "/api/v1/login/sms", body2)
+	if w2.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("second login should succeed, got %d", w2.Result().StatusCode())
+	}
+	var result2 handler.StandardResponse[*service.LoginResult]
+	decodeJSON(t, w2.Result().Body(), &result2)
+	if result2.Data == nil || result2.Data.User == nil {
+		t.Fatalf("expected second login user")
+	}
+	if result2.Data.User.Nickname == result1.Data.User.Nickname {
+		t.Fatalf("expected duplicate nickname to append random digits")
+	}
+	if !strings.HasPrefix(result2.Data.User.Nickname, result1.Data.User.Nickname) {
+		t.Fatalf("expected second nickname %q to keep first nickname %q as prefix", result2.Data.User.Nickname, result1.Data.User.Nickname)
+	}
+	if len(result2.Data.User.Nickname) <= len(result1.Data.User.Nickname) {
+		t.Fatalf("expected second nickname %q to be longer than first nickname %q", result2.Data.User.Nickname, result1.Data.User.Nickname)
 	}
 }
 

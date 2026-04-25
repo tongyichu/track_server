@@ -288,6 +288,11 @@ func (r *MongoUserRepository) FindByID(context.Context, int64) (*models.User, er
 	return nil, errors.New("MongoUserRepository.FindByID not implemented")
 }
 
+// FindByNickname is not implemented in this demo and returns an error.
+func (r *MongoUserRepository) FindByNickname(context.Context, string) (*models.User, error) {
+	return nil, errors.New("MongoUserRepository.FindByNickname not implemented")
+}
+
 // Update is not implemented in this demo and returns an error.
 func (r *MongoUserRepository) Update(context.Context, *models.User) error {
 	return errors.New("MongoUserRepository.Update not implemented")

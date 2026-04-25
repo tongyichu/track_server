@@ -321,6 +321,18 @@ func (r *InMemoryUserRepository) FindByID(_ context.Context, id int64) (*models.
 	return u, nil
 }
 
+// FindByNickname finds a user by nickname.
+func (r *InMemoryUserRepository) FindByNickname(_ context.Context, nickname string) (*models.User, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, u := range r.users {
+		if u.Nickname == nickname {
+			return u, nil
+		}
+	}
+	return nil, ErrNotFound
+}
+
 // Update updates a user profile.
 func (r *InMemoryUserRepository) Update(_ context.Context, u *models.User) error {
 	r.mu.Lock()

@@ -91,6 +91,7 @@ type TrackWaypointRepository interface {
 type UserRepository interface {
 	CreateIfNotExists(ctx context.Context, u *models.User) (*models.User, error)
 	FindByID(ctx context.Context, id int64) (*models.User, error)
+	FindByNickname(ctx context.Context, nickname string) (*models.User, error)
 	Update(ctx context.Context, u *models.User) error
 }
 
