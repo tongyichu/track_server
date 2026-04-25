@@ -9,18 +9,26 @@ import (
 
 // Deps groups all handler dependencies.
 type Deps struct {
-	TrackService   *service.TrackService
-	UserService    *service.UserService
-	LoginService   *service.LoginService
+	TrackService    *service.TrackService
+	UserService     *service.UserService
+	LoginService    *service.LoginService
 	OSSTokenService *service.OSSTokenService
-	JWTSecret      string
-	TokenBlacklist *middleware.TokenBlacklist
+	JWTSecret       string
+	TokenBlacklist  *middleware.TokenBlacklist
+
+	// StaticRoot 是服务端本地资源缓存根目录；若非空，会挂载到 /static
+	// 路由下统一提供下载（下层按 screenshots/raw_tracks 等子目录组织）。
+	StaticRoot string
 }
 
 // RegisterRoutes registers all HTTP routes on the given Hertz server.
 func RegisterRoutes(h *server.Hertz, deps Deps) {
 	// global middleware
 	h.Use(middleware.RequestMetaMiddleware())
+
+	// 静态文件服务：对外暴露服务端本地缓存的资源（轨迹截图 / 原始轨迹文件等），供客户端下载。
+	// 路径与各 AssetCacheService 的 urlPrefix 保持一致（/api/v1/static/...）。
+	// 注意：静态资源下载必须走 auth group，保证鉴权逻辑与其他接口一致。
 
 	trackHandler := NewTrackHandler(deps.TrackService)
 	userHandler := NewUserHandler(deps.UserService)
@@ -41,6 +49,11 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 
 	// authenticated routes
 	auth := api.Group("", middleware.JWTAuthMiddleware(deps.JWTSecret, deps.TokenBlacklist))
+
+	// 静态资源下载（需要登录）
+	if deps.StaticRoot != "" {
+		auth.Static("/static", deps.StaticRoot)
+	}
 
 	auth.POST("/logout", loginHandler.Logout)
 	auth.GET("/login/log", loginHandler.GetLoginLog)

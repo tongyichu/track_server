@@ -40,7 +40,8 @@ type Config struct {
 	AliyunRoleSessionPref string // RoleSessionName 前缀（云侧审计可见）。
 	OSSBucket             string // 允许上传的目标 Bucket。该值会写入 STS policy 的 Resource（acs:oss:*:*:<bucket>/<prefix>*），必须与实际 bucket 一致。
 	OSSRegion             string // Bucket 所在地域（主要用于客户端直传时选择配置，服务端申请 STS 不依赖该字段）。
-	OSSEndpoint           string // Bucket 的访问 Endpoint（主要用于客户端直传拼装上传地址）。示例：https://oss-cn-hangzhou.aliyuncs.com
+	OSSEndpoint           string // Bucket 的访问 Endpoint（公网），会回传给客户端直传使用。示例：https://oss-cn-beijing.aliyuncs.com
+	OSSInternalEndpoint   string // Bucket 的访问 Endpoint（内网），仅服务端从 OSS 拉取对象时使用，避免公网下行流量费用。示例：https://oss-cn-beijing-internal.aliyuncs.com
 	OSSUploadPrefix       string // 服务端为“每个用户”分配的上传目录前缀。会在服务端生成最终目录：<prefix>/<userID>/，示例 OSS_UPLOAD_PREFIX=/prod/track/user  => dir=prod/track/user/1001/
 }
 
@@ -96,10 +97,11 @@ func Load() *Config {
 		// - OSS_BUCKET：目标 bucket（会进入 STS policy 的 Resource）
 		// - OSS_REGION/OSS_ENDPOINT：客户端直传时常用的区域/Endpoint 信息
 		// - OSS_UPLOAD_PREFIX：用户目录前缀（最终为 <prefix>/<userID>/）
-		OSSBucket:       getEnv("OSS_BUCKET", DefaultOSSBucket),
-		OSSRegion:       getEnv("OSS_REGION", ""),
-		OSSEndpoint:     getEnv("OSS_ENDPOINT", ""),
-		OSSUploadPrefix: getEnv("OSS_UPLOAD_PREFIX", DefaultOSSPathPrefix),
+		OSSBucket:           getEnv("OSS_BUCKET", DefaultOSSBucket),
+		OSSRegion:           getEnv("OSS_REGION", ""),
+		OSSEndpoint:         getEnv("OSS_ENDPOINT", ""),
+		OSSInternalEndpoint: getEnv("OSS_INTERNAL_ENDPOINT", ""),
+		OSSUploadPrefix:     getEnv("OSS_UPLOAD_PREFIX", DefaultOSSPathPrefix),
 	}
 
 	// Priority:

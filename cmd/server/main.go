@@ -88,6 +88,42 @@ func main() {
 	userSvc := service.NewUserService(userRepo)
 	loginSvc := service.NewLoginService(userRepo, loginLogRepo, cfg.WechatAppID, cfg.WechatAppSecret, cfg.JWTSecret)
 
+	// 初始化本地资源缓存服务：把客户端上传到 OSS 的轨迹截图 / 原始轨迹文件，按需同步到服务器本地，
+	// 供列表/详情接口返回一个服务端可直接下载的 URL。
+	// 缓存目录按类别分子目录放在 <LogDir>/static/<category>，统一通过 /static 静态路由下发。
+	staticRoot := filepath.Join(cfg.LogDir, "static")
+	screenshotCacheDir := filepath.Join(staticRoot, "screenshots")
+	screenshotCache, err := service.NewAssetCacheService(
+		screenshotCacheDir,
+		"/api/v1/static/screenshots",
+		[]string{".png", ".jpg", ".jpeg", ".webp"},
+		".png",
+	)
+	if err != nil {
+		log.Printf("screenshot cache disabled: %v", err)
+		screenshotCache = nil
+	} else {
+		trackSvc.SetScreenshotCache(screenshotCache)
+		log.Printf("screenshot cache enabled: %s", screenshotCacheDir)
+	}
+
+	rawTrackCacheDir := filepath.Join(staticRoot, "raw_tracks")
+	// 原始轨迹文件后缀未作强约束（客户端可能用 .dat/.json/.gpx 等），这里允许常见几种，
+	// 未识别时按 .dat 落盘；文件名仍以 track_id 为主键保证唯一。
+	rawTrackCache, err := service.NewAssetCacheService(
+		rawTrackCacheDir,
+		"/api/v1/static/raw_tracks",
+		[]string{".dat", ".json", ".gpx", ".bin"},
+		".dat",
+	)
+	if err != nil {
+		log.Printf("raw track cache disabled: %v", err)
+		rawTrackCache = nil
+	} else {
+		trackSvc.SetRawTrackCache(rawTrackCache)
+		log.Printf("raw track cache enabled: %s", rawTrackCacheDir)
+	}
+
 	// Aliyun OSS STS（用于客户端直传）
 	// 相关启动参数在 internal/config/config.go 中通过环境变量加载：
 	// - ALIYUN_ACCESS_KEY_ID / ALIYUN_ACCESS_KEY_SECRET / ALIYUN_ROLE_ARN / ALIYUN_STS_REGION
@@ -104,11 +140,27 @@ func main() {
 		cfg.OSSBucket,
 		cfg.OSSRegion,
 		cfg.OSSEndpoint,
+		cfg.OSSInternalEndpoint,
 		cfg.OSSUploadPrefix,
 	)
 	if err != nil {
 		log.Printf("oss sts disabled: %v", err)
 		ossTokenSvc = nil
+	}
+
+	// 把 OSS 下载能力注入资源缓存服务。OSS 对象带权限控制，无法直接 http.Get，
+	// 因此必须通过 STS 临时凭证 + OSS SDK 的方式下载。
+	if ossTokenSvc != nil {
+		if screenshotCache != nil {
+			screenshotCache.SetDownloader(ossTokenSvc)
+		}
+		if rawTrackCache != nil {
+			rawTrackCache.SetDownloader(ossTokenSvc)
+		}
+	} else {
+		if screenshotCache != nil || rawTrackCache != nil {
+			log.Printf("asset cache has no OSS downloader; only serves already-cached files")
+		}
 	}
 
 	var h *server.Hertz
@@ -135,15 +187,27 @@ func main() {
 	defer tokenBlacklist.Close()
 
 	handler.RegisterRoutes(h, handler.Deps{
-		TrackService:   trackSvc,
-		UserService:    userSvc,
-		LoginService:   loginSvc,
+		TrackService:    trackSvc,
+		UserService:     userSvc,
+		LoginService:    loginSvc,
 		OSSTokenService: ossTokenSvc,
-		JWTSecret:      cfg.JWTSecret,
-		TokenBlacklist: tokenBlacklist,
+		JWTSecret:       cfg.JWTSecret,
+		TokenBlacklist:  tokenBlacklist,
+		StaticRoot:      staticRootIfEnabled(staticRoot, screenshotCache, rawTrackCache),
 	})
 
 	h.Spin()
+}
+
+// staticRootIfEnabled 只在至少一个本地资源缓存服务启用时返回静态根目录，
+// 否则返回空串，避免 router 去挂载一个实际不存在/未启用的静态目录。
+func staticRootIfEnabled(dir string, caches ...*service.AssetCacheService) string {
+	for _, c := range caches {
+		if c != nil {
+			return dir
+		}
+	}
+	return ""
 }
 
 func setupLogging(logDir string) (*os.File, error) {

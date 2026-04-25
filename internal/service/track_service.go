@@ -12,8 +12,29 @@ import (
 
 // TrackService provides business logic around track lifecycle and statistics.
 type TrackService struct {
-	tracks   repository.TrackRepository
-	collects repository.CollectRepository
+	tracks          repository.TrackRepository
+	collects        repository.CollectRepository
+	screenshotCache *AssetCacheService
+	rawTrackCache   *AssetCacheService
+}
+
+func (s *TrackService) decorateTrackAssets(ctx context.Context, track *models.Track) {
+	if track == nil {
+		return
+	}
+	// 把 OSS 地址字段覆盖为服务端本地可下载 URL，客户端无需处理 OSS 鉴权。
+	// 未命中缓存时同步兜底拉取（带超时），失败则字段返回空串。
+	// STS 下载凭证使用轨迹归属用户的 userID 申请。
+	if s.screenshotCache != nil && track.TrackScreenshotURL != "" {
+		cacheCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		track.TrackScreenshotURL = s.screenshotCache.EnsureCached(cacheCtx, track.UserID, track.ID, track.TrackScreenshotURL)
+		cancel()
+	}
+	if s.rawTrackCache != nil && track.RawTrackURL != "" {
+		cacheCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		track.RawTrackURL = s.rawTrackCache.EnsureCached(cacheCtx, track.UserID, track.ID, track.RawTrackURL)
+		cancel()
+	}
 }
 
 // ErrForbidden indicates current user has no permission to operate the resource.
@@ -90,6 +111,19 @@ func NewTrackService(tracks repository.TrackRepository, collects repository.Coll
 	return &TrackService{tracks: tracks, collects: collects}
 }
 
+// SetScreenshotCache 设置截图本地缓存服务。
+// 独立于构造函数是为了避免破坏既有单测/调用方；在未设置时，相关逻辑会直接跳过。
+func (s *TrackService) SetScreenshotCache(cache *AssetCacheService) {
+	s.screenshotCache = cache
+}
+
+// SetRawTrackCache 设置原始轨迹文件本地缓存服务。
+// 与截图类似，CreateTrack 会异步预热，GetTrackDetail/ListRecommend 响应时会把
+// raw_track_url 覆盖为服务端本地可下载的 URL。
+func (s *TrackService) SetRawTrackCache(cache *AssetCacheService) {
+	s.rawTrackCache = cache
+}
+
 // CreateTrack creates a new track for a user.
 func (s *TrackService) CreateTrack(ctx context.Context, userID int64, input CreateTrackInput) (*models.Track, error) {
 	if userID <= 0 {
@@ -154,6 +188,19 @@ func (s *TrackService) CreateTrack(ctx context.Context, userID int64, input Crea
 	if err := s.tracks.Create(ctx, track); err != nil {
 		return nil, err
 	}
+	// 异步预热截图到服务端本地缓存目录，供 ListRecommend 等接口后续直接下发本地 URL。
+	// 失败不影响主流程，且仅在配置了缓存服务时触发。
+	if s.screenshotCache != nil && track.TrackScreenshotURL != "" {
+		src := track.TrackScreenshotURL
+		s.screenshotCache.PrefetchAsync(userID, track.ID, src)
+		track.TrackScreenshotURL = s.screenshotCache.GuessLocalURL(track.ID, src)
+	}
+	// 同理异步预热原始轨迹文件。
+	if s.rawTrackCache != nil && track.RawTrackURL != "" {
+		src := track.RawTrackURL
+		s.rawTrackCache.PrefetchAsync(userID, track.ID, src)
+		track.RawTrackURL = s.rawTrackCache.GuessLocalURL(track.ID, src)
+	}
 	return track, nil
 }
 
@@ -168,6 +215,7 @@ func (s *TrackService) GetTrackDetail(ctx context.Context, trackID string) (*mod
 	}
 	// Recompute summary metrics from points if available.
 	updateTrackMetrics(track)
+	s.decorateTrackAssets(ctx, track)
 	return track, nil
 }
 
@@ -182,7 +230,12 @@ func (s *TrackService) GetTrackMap(ctx context.Context, trackID string) (*models
 
 // GetRunningTrack returns currently running track of the user if exists.
 func (s *TrackService) GetRunningTrack(ctx context.Context, userID int64) (*models.Track, error) {
-	return s.tracks.FindRunningByUserID(ctx, userID)
+	track, err := s.tracks.FindRunningByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	s.decorateTrackAssets(ctx, track)
+	return track, nil
 }
 
 // ListRecommend returns recommended tracks for the user.
@@ -192,6 +245,22 @@ func (s *TrackService) ListRecommend(ctx context.Context, userID int64, limit in
 		return nil, err
 	}
 	summaries := toSummaries(tracks)
+	// 填充服务器本地可下载截图 URL：
+	// - 命中本地缓存则直接返回本地 URL
+	// - 未命中则兜底拉取一次（同步，带 5 秒超时），失败则返回空串，不阻塞列表返回其它字段
+	// - userID<=0（未登录游客）时无法申请 STS 读凭证，只尝试本地命中，不主动下载
+	if s.screenshotCache != nil || s.rawTrackCache != nil {
+		for i, t := range tracks {
+			cacheCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			if s.screenshotCache != nil {
+				summaries[i].TrackScreenshotURL = s.screenshotCache.EnsureCached(cacheCtx, userID, t.ID, t.TrackScreenshotURL)
+			}
+			if s.rawTrackCache != nil {
+				summaries[i].RawTrackURL = s.rawTrackCache.EnsureCached(cacheCtx, userID, t.ID, t.RawTrackURL)
+			}
+			cancel()
+		}
+	}
 	if userID <= 0 || s.collects == nil {
 		return summaries, nil
 	}
@@ -284,6 +353,17 @@ func (s *TrackService) UpdateTrackInfo(ctx context.Context, userID int64, trackI
 
 	if err := s.tracks.Update(ctx, track); err != nil {
 		return nil, err
+	}
+	// 轨迹资源链接字段对客户端下发本地可下载 URL（并触发异步预热）。
+	if s.screenshotCache != nil && patch.TrackScreenshotURL != nil {
+		src := track.TrackScreenshotURL
+		s.screenshotCache.PrefetchAsync(userID, track.ID, src)
+		track.TrackScreenshotURL = s.screenshotCache.GuessLocalURL(track.ID, src)
+	}
+	if s.rawTrackCache != nil && patch.RawTrackURL != nil {
+		src := track.RawTrackURL
+		s.rawTrackCache.PrefetchAsync(userID, track.ID, src)
+		track.RawTrackURL = s.rawTrackCache.GuessLocalURL(track.ID, src)
 	}
 	return track, nil
 }

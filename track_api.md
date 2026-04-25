@@ -77,8 +77,8 @@ Token 的获取与说明参考 `login.md`。
 | `duration` | int | 时长（秒） |
 | `avg_speed_kmh` | number | 平均速度（km/h） |
 | `elevation_gain` | int | 累计爬升（米） |
-| `raw_track_url` | string | 原始轨迹文件地址 |
-| `track_screenshot_url` | string | 轨迹截图地址 |
+| `raw_track_url` | string | 原始轨迹文件可下载链接（服务端本地缓存 URL，例如 `/api/v1/static/raw_tracks/<track_id>.dat`） |
+| `track_screenshot_url` | string | 轨迹截图可下载链接（服务端本地缓存 URL，例如 `/api/v1/static/screenshots/<track_id>.jpg`） |
 | `is_running` | bool | 是否进行中 |
 | `status` | int | 轨迹状态：`0` 删除，`1` 正常，`2` 私密 |
 | `created_at` | string | 创建时间 |
@@ -110,8 +110,8 @@ Authorization: Bearer <token>
   "distance": 1200.5,
   "duration": 1800,
   "elevation_gain": 80,
-  "raw_track_url": "https://example.com/raw/xxx.json",
-  "track_screenshot_url": "https://example.com/ss/xxx.png",
+  "raw_track_url": "https://<bucket>.oss-<region>.aliyuncs.com/prod/track/.../xxx.dat",
+  "track_screenshot_url": "https://<bucket>.oss-<region>.aliyuncs.com/prod/track/.../xxx.jpg",
   "is_running": false,
   "avg_speed_kmh": 12.3
 }
@@ -125,8 +125,8 @@ Authorization: Bearer <token>
 | `distance` | number | 否 | 距离（米），必须 `>= 0` |
 | `duration` | int | 否 | 时长（秒），必须 `>= 0` |
 | `elevation_gain` | int | 否 | 累计爬升（米），必须 `>= 0` |
-| `raw_track_url` | string | 否 | 原始轨迹文件地址 |
-| `track_screenshot_url` | string | 否 | 轨迹截图地址 |
+| `raw_track_url` | string | 否 | 原始轨迹文件 OSS 地址（建议传 OSS HTTP URL，可带签名参数） |
+| `track_screenshot_url` | string | 否 | 轨迹截图 OSS 地址（建议传 OSS HTTP URL，可带签名参数） |
 | `is_running` | bool | 否 | 是否进行中，默认 `true` |
 | `avg_speed_kmh` | number | 否 | 平均速度（km/h），必须 `>= 0` |
 
@@ -149,8 +149,8 @@ Authorization: Bearer <token>
     "duration": 0,
     "avg_speed_kmh": 0,
     "elevation_gain": 0,
-    "raw_track_url": "",
-    "track_screenshot_url": "",
+    "raw_track_url": "/api/v1/static/raw_tracks/No.1713520800123456789.dat",
+    "track_screenshot_url": "/api/v1/static/screenshots/No.1713520800123456789.jpg",
     "is_running": true,
     "status": 1,
     "created_at": "2026-04-20T12:00:00Z",
@@ -158,6 +158,8 @@ Authorization: Bearer <token>
   }
 }
 ```
+
+说明：`raw_track_url` / `track_screenshot_url` 在请求时是 OSS 地址，但响应会被服务端替换为可直接从业务服务器下载的本地链接（路径在 `/api/v1/static/...` 下，需要登录态）。
 
 ### 示例（curl）
 
@@ -173,8 +175,8 @@ curl -X POST "http://<host>:<port>/api/v1/track/create" \
     "distance": 1200.5,
     "duration": 1800,
     "elevation_gain": 80,
-    "raw_track_url": "https://example.com/raw/xxx.json",
-    "track_screenshot_url": "https://example.com/ss/xxx.png",
+    "raw_track_url": "https://<bucket>.oss-<region>.aliyuncs.com/prod/track/.../xxx.dat?<签名参数>",
+    "track_screenshot_url": "https://<bucket>.oss-<region>.aliyuncs.com/prod/track/.../xxx.jpg?<签名参数>",
     "is_running": false,
     "avg_speed_kmh": 12.3
   }'
@@ -193,6 +195,7 @@ curl -X POST "http://<host>:<port>/api/v1/track/create" \
 - 该接口 **不会返回** `is_running=true` 的轨迹（进行中的轨迹会被过滤）。
 - 返回的是 `TrackSummary` 列表（轻量字段），而不是完整的 `Track`。
 - 返回结果中 `collected` 表示当前鉴权用户是否已收藏该轨迹。
+- 返回结果中的 `raw_track_url` / `track_screenshot_url` 为服务端本地可下载链接（不是 OSS 地址）。
 
 ### 请求
 
@@ -220,6 +223,8 @@ Authorization: Bearer <token>
       "distance": 1200.5,
       "duration": 360,
       "elevation_gain": 80,
+      "raw_track_url": "/api/v1/static/raw_tracks/trk1.dat",
+      "track_screenshot_url": "/api/v1/static/screenshots/trk1.jpg",
       "collected": true
     }
   ]
@@ -274,8 +279,8 @@ Authorization: Bearer <token>
     "duration": 600,
     "avg_speed_kmh": 7.2,
     "elevation_gain": 80,
-    "raw_track_url": "https://example.com/raw/xxx.json",
-    "screenshot_url": "https://example.com/ss/xxx.png",
+    "raw_track_url": "/api/v1/static/raw_tracks/trk-detail.dat",
+    "track_screenshot_url": "/api/v1/static/screenshots/trk-detail.jpg",
     "is_running": false,
     "status": 1,
     "created_at": "2026-04-20T12:00:00Z",

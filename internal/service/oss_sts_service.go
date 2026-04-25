@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"github.com/tongyichu/track_server/internal/config"
 	"log"
+	"net/url"
 	"strings"
 	"time"
 
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/requests"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/sts"
+	ossclient "github.com/aliyun/aliyun-oss-go-sdk/oss"
 )
 
 // OSSTemporaryCredential 表示服务端向客户端返回的 OSS 临时凭证。
@@ -60,6 +62,9 @@ type OSSTokenService struct {
 	// ossRegion/ossEndpoint 是给客户端上传使用的区域/Endpoint 信息（可选）。
 	ossRegion   string
 	ossEndpoint string
+	// ossInternalEndpoint 仅供服务端从 OSS 拉取对象使用，走内网避免公网流量费用。
+	// 若未配置，服务端下载会直接返回错误。
+	ossInternalEndpoint string
 	// ossUploadPrefix 控制用户目录的一级前缀，例如 "user"；最终目录为 <prefix>/<userID>/。
 	ossUploadPrefix string
 }
@@ -76,7 +81,7 @@ type OSSTokenService struct {
 // roleSessionPrefix：会与 userID/timestamp 组合形成 RoleSessionName，便于云侧审计。
 // ossUploadPrefix：用于生成用户隔离目录，默认 "user"。
 func NewOSSTokenService(stsRegion, accessKeyID, accessKeySecret, roleARN string, durationSeconds int64, roleSessionPrefix string,
-	ossBucket, ossRegion, ossEndpoint, ossUploadPrefix string,
+	ossBucket, ossRegion, ossEndpoint, ossInternalEndpoint, ossUploadPrefix string,
 ) (*OSSTokenService, error) {
 	if accessKeyID == "" || accessKeySecret == "" || roleARN == "" {
 		return nil, errors.New("missing ALIYUN_ACCESS_KEY_ID/ALIYUN_ACCESS_KEY_SECRET/ALIYUN_ROLE_ARN")
@@ -114,14 +119,15 @@ func NewOSSTokenService(stsRegion, accessKeyID, accessKeySecret, roleARN string,
 	}
 
 	return &OSSTokenService{
-		stsClient:         cli,
-		roleARN:           roleARN,
-		durationSeconds:   durationSeconds,
-		roleSessionPrefix: roleSessionPrefix,
-		ossBucket:         ossBucket,
-		ossRegion:         ossRegion,
-		ossEndpoint:       ossEndpoint,
-		ossUploadPrefix:   ossUploadPrefix,
+		stsClient:           cli,
+		roleARN:             roleARN,
+		durationSeconds:     durationSeconds,
+		roleSessionPrefix:   roleSessionPrefix,
+		ossBucket:           ossBucket,
+		ossRegion:           ossRegion,
+		ossEndpoint:         ossEndpoint,
+		ossInternalEndpoint: ossInternalEndpoint,
+		ossUploadPrefix:     ossUploadPrefix,
 	}, nil
 }
 
@@ -262,9 +268,9 @@ func (s *OSSTokenService) GetReadCredential(userID int64) (*OSSTemporaryCredenti
 }
 
 // buildOSSReadObjectPolicy 生成仅允许读取的 Policy。
-// - Action: oss:GetObject, oss:ListObjects
-// - Resource: acs:oss:*:*:<bucket>/<dir>*  以及  acs:oss:*:*:<bucket>
-//   （ListObjects 需要作用于 bucket 级资源）
+//   - Action: oss:GetObject, oss:ListObjects
+//   - Resource: acs:oss:*:*:<bucket>/<dir>*  以及  acs:oss:*:*:<bucket>
+//     （ListObjects 需要作用于 bucket 级资源）
 func buildOSSReadObjectPolicy(bucket, dir string) (string, error) {
 	objectResource := fmt.Sprintf("acs:oss:*:*:%s/%s*", bucket, dir)
 	bucketResource := fmt.Sprintf("acs:oss:*:*:%s", bucket)
@@ -318,4 +324,78 @@ func buildOSSPutObjectPolicy(bucket, dir string) (string, error) {
 		return "", err
 	}
 	return string(b), nil
+}
+
+// DownloadObject 使用服务端获取的读权限临时凭证，把指定 object 下载到本地文件。
+//
+// 这里的 ossObjectURL 可以是以下两种形态之一：
+//  1. 完整 OSS HTTP URL（含签名，如 https://<bucket>.oss-cn-beijing.aliyuncs.com/prod/track/.../a.jpg?OSSAccessKeyId=...）
+//  2. 仅 object key（如 prod/track/1888/1777034875014.jpg）
+//
+// 函数会从 URL 中解析出 bucket/objectKey（丢弃签名参数）。
+//
+// 关于 endpoint：为了避免公网下行流量产生费用，服务端**强制使用配置的内网 endpoint**
+// （例如 https://oss-cn-beijing-internal.aliyuncs.com）。数据库中保存的 URL 通常是
+// 客户端直传/预览使用的公网域名，这里会被有意忽略。
+// 部署时应把 OSS_INTERNAL_ENDPOINT 配置为 bucket 对应地域的 internal endpoint。
+func (s *OSSTokenService) DownloadObject(userID int64, ossObjectURL, localPath string) error {
+	if ossObjectURL == "" {
+		return errors.New("ossObjectURL is empty")
+	}
+	bucket, _, objectKey, err := s.parseOSSObjectURL(ossObjectURL)
+	if err != nil {
+		return err
+	}
+	if bucket == "" {
+		bucket = s.ossBucket
+	}
+	// 强制走内网 endpoint：服务器与 OSS 同地域时，内网流量免费。
+	// 如果没配置 OSSInternalEndpoint，下载会直接失败，避免误走公网产生费用。
+	endpoint := s.ossInternalEndpoint
+	if endpoint == "" {
+		return errors.New("oss internal endpoint is not configured; please set OSS_INTERNAL_ENDPOINT to the internal endpoint to avoid public traffic fee")
+	}
+	if objectKey == "" {
+		return errors.New("failed to parse oss object key")
+	}
+
+	cred, err := s.GetReadCredential(userID)
+	if err != nil {
+		return err
+	}
+
+	// 注意：endpoint 必须是 bucket 所在地域的 internal endpoint（形如 https://oss-cn-beijing-internal.aliyuncs.com）。
+	// SecurityToken 来自 STS 临时凭证。
+	cli, err := ossclient.New(endpoint, cred.AccessKeyID, cred.AccessKeySecret, ossclient.SecurityToken(cred.SecurityToken))
+	if err != nil {
+		return err
+	}
+	bkt, err := cli.Bucket(bucket)
+	if err != nil {
+		return err
+	}
+	return bkt.GetObjectToFile(objectKey, localPath)
+}
+
+// parseOSSObjectURL 从 OSS 对象完整 URL 中解析出 bucket/endpoint/objectKey。
+// 若传入的是相对路径（不含 scheme），则视为 objectKey。
+func (s *OSSTokenService) parseOSSObjectURL(raw string) (bucket, endpoint, objectKey string, err error) {
+	if !strings.Contains(raw, "://") {
+		// 视为 object key（可带前导 /）
+		return "", "", strings.TrimLeft(raw, "/"), nil
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "", "", "", err
+	}
+	host := u.Host
+	// 形如 <bucket>.oss-cn-beijing.aliyuncs.com
+	if idx := strings.Index(host, "."); idx > 0 {
+		bucket = host[:idx]
+		endpoint = u.Scheme + "://" + host[idx+1:]
+	} else {
+		endpoint = u.Scheme + "://" + host
+	}
+	objectKey = strings.TrimLeft(u.Path, "/")
+	return bucket, endpoint, objectKey, nil
 }
