@@ -606,56 +606,6 @@ curl -X DELETE "http://<host>:<port>/api/v1/track_collect?track_id=trk2" \
 ### 请求
 
 ```
-
----
-
-## 9. 导航使用上报
-
-客户端在“使用别人的轨迹进行导航”后上报一次使用记录，服务端将据此统计 `navigate_count`。
-
-**需要认证**
-
-### 请求
-
-```
-POST /api/v1/track/:track_id/navigation/report
-Authorization: Bearer <token>
-```
-
-**Path 参数：**
-
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `track_id` | string | 是 | 轨迹 ID |
-
-### 响应
-
-**状态码：** `200 OK`
-
-```json
-{
-  "code": 0,
-  "data": {
-    "status": "ok"
-  }
-}
-```
-
-### 说明
-
-- 仅统计“其他用户”使用该轨迹导航的次数（自己导航自己的轨迹不会计入）。
-
-### 错误响应
-
-- `400 Bad Request`
-  - 上报了自己创建的轨迹（不允许计入导航次数）
-
-### 示例（curl）
-
-```bash
-curl -X POST "http://<host>:<port>/api/v1/track/trk1/navigation/report" \
-  -H "Authorization: Bearer <token>"
-```
 GET /api/v1/track/search/list?keyword=:keyword
 Authorization: Bearer <token>
 ```
@@ -702,4 +652,77 @@ Authorization: Bearer <token>
 curl -X GET "http://<host>:<port>/api/v1/track/search/list?keyword=西湖" \
   -H "Authorization: Bearer <token>" \
   -H "X-User-ID: 1001"
+```
+
+---
+
+## 9. 导航使用上报
+
+客户端在“使用别人的轨迹进行导航”后上报一次使用记录，服务端将据此统计 `navigate_count`。
+
+**需要认证**
+
+### 请求
+
+```
+POST /api/v1/track/:track_id/navigation/report
+Authorization: Bearer <token>
+```
+
+#### Headers
+
+| Header | 必填 | 说明 |
+|--------|------|------|
+| `Authorization` | 是 | `Bearer <token>`（从 Token 中解析当前用户身份） |
+
+#### Query 参数
+
+无
+
+**Path 参数：**
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `track_id` | string | 是 | 轨迹 ID |
+
+#### Body
+
+无（可传空 body）
+
+### 响应
+
+**状态码：** `200 OK`
+
+```json
+{
+  "code": 0,
+  "data": {
+    "status": "ok"
+  }
+}
+```
+
+### 说明
+
+- 仅统计“其他用户”使用该轨迹导航的次数（自己导航自己的轨迹不会计入）。
+- 每次成功调用会新增一条“导航使用记录”，`navigate_count` 的统计口径为该轨迹对应记录条数的累计（不做去重）。
+- 该接口**非幂等**：重复调用会重复计数；建议客户端侧自行做去重/限频（例如一次导航结束仅上报一次）。
+
+### 错误响应
+
+- `400 Bad Request`
+  - 上报了自己创建的轨迹（不允许计入导航次数）
+- `401 Unauthorized`
+  - 缺少/无效/过期的 Token
+- `404 Not Found`
+  - 轨迹不存在
+- `500 Internal Server Error`
+  - 服务端写入导航使用记录失败
+
+错误响应格式示例：
+
+```json
+{
+  "error": "..."
+}
 ```
