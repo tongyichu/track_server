@@ -67,73 +67,43 @@ func (h *UserHandler) GetUserDetail(ctx context.Context, c *app.RequestContext) 
 	c.JSON(http.StatusOK, successResponse(data))
 }
 
-// UpdateAvatar handles PUT /api/user/profile/photo
-func (h *UserHandler) UpdateAvatar(ctx context.Context, c *app.RequestContext) {
-	userID, err := parseRequiredUserID(string(c.Query("user_id")))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, utils.H{"error": err.Error()})
+// UpdateProfile handles PUT /api/v1/user/profile/update
+// It merges UpdateAvatar/UpdateName/UpdateSignature and only allows updating current authorized user.
+func (h *UserHandler) UpdateProfile(ctx context.Context, c *app.RequestContext) {
+	meta := middleware.GetRequestMeta(c)
+	if meta == nil || meta.AuthUserID <= 0 {
+		c.JSON(http.StatusUnauthorized, utils.H{"error": "unauthorized"})
 		return
 	}
-	var body struct {
-		AvatarURL string `json:"avatar_url"`
-	}
-	data, err := c.Body()
-	if err != nil || json.Unmarshal(data, &body) != nil || body.AvatarURL == "" {
-		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid avatar payload"})
-		return
-	}
-	user, err := h.userSvc.UpdateAvatar(ctx, userID, body.AvatarURL)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, user)
-}
+	authUserID := meta.AuthUserID
 
-// UpdateName handles PUT /api/user/profile/name
-func (h *UserHandler) UpdateName(ctx context.Context, c *app.RequestContext) {
-	userID, err := parseRequiredUserID(string(c.Query("user_id")))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, utils.H{"error": err.Error()})
-		return
-	}
 	var body struct {
-		Name string `json:"name"`
-	}
-	data, err := c.Body()
-	if err != nil || json.Unmarshal(data, &body) != nil || body.Name == "" {
-		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid name payload"})
-		return
-	}
-	user, err := h.userSvc.UpdateName(ctx, userID, body.Name)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, user)
-}
-
-// UpdateSignature handles PUT /api/user/profile/signature
-func (h *UserHandler) UpdateSignature(ctx context.Context, c *app.RequestContext) {
-	userID, err := parseRequiredUserID(string(c.Query("user_id")))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, utils.H{"error": err.Error()})
-		return
-	}
-	var body struct {
-		Signature string `json:"signature"`
+		AvatarURL  *string `json:"avatar_url"`
+		Name       *string `json:"name"`
+		Signature  *string `json:"signature"`
 	}
 	data, err := c.Body()
 	if err != nil || json.Unmarshal(data, &body) != nil {
-		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid signature payload"})
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid payload"})
 		return
 	}
-	user, err := h.userSvc.UpdateSignature(ctx, userID, body.Signature)
+
+	user, err := h.userSvc.UpdateProfile(ctx, authUserID, service.UserProfilePatch{
+		AvatarURL: body.AvatarURL,
+		Name:      body.Name,
+		Signature: body.Signature,
+	})
 	if err != nil {
+		// Keep consistent with existing handler error style.
+		if errors.Is(err, service.ErrNoFieldsToUpdate) || errors.Is(err, service.ErrAvatarURLRequired) || errors.Is(err, service.ErrNameRequired) {
+			c.JSON(http.StatusBadRequest, utils.H{"error": err.Error()})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, user)
+	// StandardResponse
+	c.JSON(http.StatusOK, successResponse(user))
 }
 
 // UpdatePhone handles PUT /api/user/profile/phone

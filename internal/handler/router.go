@@ -120,9 +120,7 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 
 	// user profile
 	auth.GET("/user/:user_id/detail", userHandler.GetUserDetail)
-	auth.PUT("/user/profile/photo", userHandler.UpdateAvatar)
-	auth.PUT("/user/profile/name", userHandler.UpdateName)
-	auth.PUT("/user/profile/signature", userHandler.UpdateSignature)
+	auth.PUT("/user/profile/update", userHandler.UpdateProfile)
 	auth.PUT("/user/profile/phone", userHandler.UpdatePhone)
 	auth.PUT("/user/profile/client_language", userHandler.UpdateClientLanguage)
 }

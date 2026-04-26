@@ -14,12 +14,29 @@ const defaultAvatarURLPrefix = "/api/v1/static/default_avatars/"
 
 var defaultAvatarFiles = [...]string{"girl_01.png", "girl_2.png", "boy_01.png", "boy_02.png"}
 
+var (
+	ErrNoFieldsToUpdate = errors.New("no fields to update")
+	ErrAvatarURLRequired = errors.New("avatar_url is required")
+	ErrNameRequired = errors.New("name is required")
+)
+
 // UserService provides business logic related to user profile and settings.
 type UserService struct {
 	users       repository.UserRepository
 	tracks      repository.TrackRepository
 	navigations repository.NavigationRepository
 	avatarCache *AssetCacheService
+}
+
+// UserProfilePatch describes optional user profile fields that can be updated.
+//
+// Note:
+// - AvatarURL/Name requires non-empty when provided.
+// - Signature can be empty string to clear when provided.
+type UserProfilePatch struct {
+	AvatarURL  *string
+	Name       *string
+	Signature  *string
 }
 
 // NewUserService constructs a new UserService.
@@ -192,6 +209,56 @@ func (s *UserService) UpdateAvatar(ctx context.Context, userID int64, avatarURL 
 		}
 		s.avatarCache.PrefetchAsync(userID, cacheKey, avatarURL)
 		user.AvatarURL = s.avatarCache.GuessLocalURL(cacheKey, avatarURL)
+	}
+	return user, nil
+}
+
+// UpdateProfile updates user's profile fields (avatar/name/signature) in one request.
+// If avatar is updated and avatar cache is enabled, returned AvatarURL will be rewritten to local static URL.
+func (s *UserService) UpdateProfile(ctx context.Context, userID int64, patch UserProfilePatch) (*models.User, error) {
+	if userID <= 0 {
+		return nil, errors.New("userID is required")
+	}
+	if patch.AvatarURL == nil && patch.Name == nil && patch.Signature == nil {
+		return nil, ErrNoFieldsToUpdate
+	}
+	if patch.AvatarURL != nil && *patch.AvatarURL == "" {
+		return nil, ErrAvatarURLRequired
+	}
+	if patch.Name != nil && *patch.Name == "" {
+		return nil, ErrNameRequired
+	}
+
+	user, err := s.users.FindByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Apply patch.
+	avatarUpdated := false
+	if patch.AvatarURL != nil {
+		user.AvatarURL = *patch.AvatarURL
+		avatarUpdated = true
+	}
+	if patch.Name != nil {
+		user.Nickname = *patch.Name
+	}
+	if patch.Signature != nil {
+		user.Signature = *patch.Signature
+	}
+
+	if err := s.users.Update(ctx, user); err != nil {
+		return nil, err
+	}
+
+	// If avatar updated, clear cache and prefetch in background.
+	if avatarUpdated && s.avatarCache != nil {
+		cacheKey := strconv.FormatInt(userID, 10)
+		if err := s.avatarCache.RemoveCached(cacheKey); err != nil {
+			return nil, err
+		}
+		s.avatarCache.PrefetchAsync(userID, cacheKey, user.AvatarURL)
+		user.AvatarURL = s.avatarCache.GuessLocalURL(cacheKey, user.AvatarURL)
 	}
 	return user, nil
 }

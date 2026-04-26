@@ -174,27 +174,30 @@ func TestUpdateNameAndAvatar(t *testing.T) {
 
 	// update name
 	namePayload, _ := json.Marshal(map[string]string{"name": "Bob"})
-	w1 := e.perform(http.MethodPut, "/api/v1/user/profile/name?user_id=1002", namePayload, authHeader(token))
+	w1 := e.perform(http.MethodPut, "/api/v1/user/profile/update", namePayload, authHeader(token))
 	if w1.Result().StatusCode() != http.StatusOK {
 		t.Fatalf("update name should succeed")
 	}
 
 	// update avatar with invalid payload
-	w2 := e.perform(http.MethodPut, "/api/v1/user/profile/photo?user_id=1002", []byte(`{}`), authHeader(token))
+	w2 := e.perform(http.MethodPut, "/api/v1/user/profile/update", []byte(`{}`), authHeader(token))
 	if w2.Result().StatusCode() != http.StatusBadRequest {
-		t.Fatalf("invalid avatar payload should return 400")
+		t.Fatalf("invalid payload should return 400")
 	}
 
 	// update avatar with valid payload
 	avatarPayload, _ := json.Marshal(map[string]string{"avatar_url": "https://example.com/a.png"})
-	w3 := e.perform(http.MethodPut, "/api/v1/user/profile/photo?user_id=1002", avatarPayload, authHeader(token))
+	w3 := e.perform(http.MethodPut, "/api/v1/user/profile/update", avatarPayload, authHeader(token))
 	if w3.Result().StatusCode() != http.StatusOK {
 		t.Fatalf("update avatar should succeed")
 	}
-	var updated models.User
-	decodeJSON(t, w3.Result().Body(), &updated)
-	if updated.AvatarURL != "/api/v1/static/avatars/1002.png" {
-		t.Fatalf("expected rewritten avatar_url, got %q", updated.AvatarURL)
+	var out handler.StandardResponse[*models.User]
+	decodeJSON(t, w3.Result().Body(), &out)
+	if out.Code != 0 || out.Data == nil {
+		t.Fatalf("expected standard response with data")
+	}
+	if out.Data.AvatarURL != "/api/v1/static/avatars/1002.png" {
+		t.Fatalf("expected rewritten avatar_url, got %q", out.Data.AvatarURL)
 	}
 	if _, err := os.Stat(oldAvatarPath); !os.IsNotExist(err) {
 		t.Fatalf("expected old avatar cache removed, stat err=%v", err)
@@ -209,7 +212,7 @@ func TestUpdateSignatureAndLanguage(t *testing.T) {
 	_, _ = e.userRepo.CreateIfNotExists(ctx, &models.User{ID: 1003})
 
 	sigPayload, _ := json.Marshal(map[string]string{"signature": "hello world"})
-	w1 := e.perform(http.MethodPut, "/api/v1/user/profile/signature?user_id=1003", sigPayload, authHeader(token))
+	w1 := e.perform(http.MethodPut, "/api/v1/user/profile/update", sigPayload, authHeader(token))
 	if w1.Result().StatusCode() != http.StatusOK {
 		t.Fatalf("update signature should succeed")
 	}
@@ -258,9 +261,10 @@ func TestUserHandlers_InvalidUserID(t *testing.T) {
 		t.Fatalf("invalid path user_id should return 400")
 	}
 
-	namePayload, _ := json.Marshal(map[string]string{"name": "Bob"})
-	w2 := e.perform(http.MethodPut, "/api/v1/user/profile/name?user_id=bad", namePayload, authHeader(token))
+	// profile update: empty name should be rejected
+	namePayload, _ := json.Marshal(map[string]string{"name": ""})
+	w2 := e.perform(http.MethodPut, "/api/v1/user/profile/update", namePayload, authHeader(token))
 	if w2.Result().StatusCode() != http.StatusBadRequest {
-		t.Fatalf("invalid query user_id should return 400")
+		t.Fatalf("invalid profile payload should return 400")
 	}
 }

@@ -23,6 +23,7 @@
 | 11 | [更新轨迹信息](#11-更新轨迹信息) | PUT | `/track/:track_id/update` | ✅ |
 | 12 | [删除轨迹](#12-删除轨迹) | DELETE | `/track/:track_id` | ✅ |
 | 13 | [用户已收藏轨迹列表](#13-用户已收藏轨迹列表) | GET | `/track/collected/list` | ✅ |
+| 14 | [更新个人信息](#14-更新个人信息) | PUT | `/user/profile/update` | ✅ |
 
 ---
 
@@ -1178,3 +1179,75 @@ Authorization: Bearer <token>
   - 缺少/无效/过期的 Token
 - `500 Internal Server Error`
   - 服务端查询收藏列表失败
+
+
+---
+
+## 14. 更新个人信息
+
+支持一次更新一个或多个字段。
+
+**需要认证**
+
+### 说明
+
+- 用户身份以 `Authorization` 解析出的 `user_id` 为准；接口不接收 `user_id` 参数。
+- 只允许更新自己的个人信息。
+- 更新头像成功后，响应中的 `avatar_url` 会被服务端替换为本地静态资源下载链接（例如 `/api/v1/static/avatars/<user_id>.png`）。
+
+### 请求
+
+```
+PUT /api/v1/user/profile/update
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+**请求体（字段均为可选，至少传一个）：**
+
+```json
+{
+  "avatar_url": "https://example.com/avatar.png",
+  "name": "Alice",
+  "signature": "hello world"
+}
+```
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `avatar_url` | string | 否 | 新头像地址（必须为非空字符串） |
+| `name` | string | 否 | 新昵称（必须为非空字符串） |
+| `signature` | string | 否 | 个性签名（允许传空串用于清空） |
+
+### 响应
+
+**状态码：** `200 OK`
+
+返回统一响应格式 `StandardResponse`，`data` 为更新后的 `User`：
+
+```json
+{
+  "code": 0,
+  "data": {
+    "id": 1001,
+    "nickname": "Alice",
+    "avatar_url": "/api/v1/static/avatars/1001.png",
+    "signature": "hello world",
+    "phone": "",
+    "client_language": "",
+    "created_at": "2026-04-20T12:00:00Z",
+    "updated_at": "2026-04-20T12:00:00Z"
+  }
+}
+```
+
+### 错误响应
+
+- `400 Bad Request`
+  - 请求体不是合法 JSON（返回 `{"error":"invalid payload"}`）
+  - 未传任何可更新字段（返回 `{"error":"no fields to update"}`）
+  - `avatar_url` 或 `name` 传了空字符串（返回 `{"error":"avatar_url is required"}` / `{"error":"name is required"}`）
+- `401 Unauthorized`
+  - 缺少/无效/过期的 Token
+- `500 Internal Server Error`
+  - 服务端更新个人信息失败
