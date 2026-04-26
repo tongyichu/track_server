@@ -832,27 +832,33 @@ func TestUpdateTrackInfo_Success(t *testing.T) {
 	token := e.generateTestToken(1001)
 
 	_ = e.trackRepo.Create(ctx, &models.Track{
-		ID:                 "trk-upd",
-		UserID:             1001,
-		Title:              "轨迹",
-		Distance:           100,
-		Duration:           10,
-		ElevationGain:      1,
-		RawTrackURL:        "old-url",
-		TrackScreenshotURL: "old-ss",
-		IsRunning:          true,
-		AvgSpeedKmh:        1.2,
-		Status:             models.TrackStatusNormal,
+		ID:                        "trk-upd",
+		UserID:                    1001,
+		Title:                     "轨迹",
+		Distance:                  0,
+		Duration:                  10,
+		ElevationGain:             0,
+		RawTrackURL:               "",
+		TrackScreenshotURL:        "old-ss",
+		TrackNoMapBgScreenshotURL: "",
+		CityCode:                  "",
+		LocateAddr:                "",
+		IsRunning:                 true,
+		AvgSpeedKmh:               0,
+		Status:                    models.TrackStatusNormal,
 	})
 
 	body, _ := json.Marshal(map[string]interface{}{
-		"distance":       200.5,
-		"is_running":     false,
-		"avg_speed_kmh":  12.3,
-		"raw_track_url":  "new-url",
-		"screenshot_url": "new-ss",
-		"elevation_gain": 23,
-		"duration":       99,
+		"city_code":                      "330100",
+		"locate_addr":                    "杭州市西湖区",
+		"distance":                       200.5,
+		"is_running":                     false,
+		"avg_speed_kmh":                  12.3,
+		"raw_track_url":                  "new-url",
+		"track_screenshot_url":           "new-ss",
+		"track_no_map_bg_screenshot_url": "new-no-map-bg",
+		"elevation_gain":                 23,
+		"duration":                       99,
 	})
 
 	w := e.perform(http.MethodPut, "/api/v1/track/trk-upd/update", body, authHeader(token), ut.Header{Key: middleware.HeaderUserID, Value: "1001"})
@@ -874,8 +880,9 @@ func TestUpdateTrackInfo_Success(t *testing.T) {
 	if result.Data.Distance != 200.5 {
 		t.Fatalf("expected distance 200.5, got %v", result.Data.Distance)
 	}
-	if result.Data.Duration != 99 {
-		t.Fatalf("expected duration 99, got %v", result.Data.Duration)
+	// 只有当字段为空时才允许更新：duration 非空应保持原值。
+	if result.Data.Duration != 10 {
+		t.Fatalf("expected duration 10 (unchanged), got %v", result.Data.Duration)
 	}
 	if result.Data.ElevationGain != 23 {
 		t.Fatalf("expected elevation_gain 23, got %v", result.Data.ElevationGain)
@@ -883,14 +890,47 @@ func TestUpdateTrackInfo_Success(t *testing.T) {
 	if result.Data.RawTrackURL != "new-url" {
 		t.Fatalf("expected raw_track_url new-url, got %q", result.Data.RawTrackURL)
 	}
-	if result.Data.TrackScreenshotURL != "new-ss" {
-		t.Fatalf("expected screenshot_url new-ss, got %q", result.Data.TrackScreenshotURL)
+	// 只有当字段为空时才允许更新：track_screenshot_url 非空应保持原值。
+	if result.Data.TrackScreenshotURL != "old-ss" {
+		t.Fatalf("expected track_screenshot_url old-ss (unchanged), got %q", result.Data.TrackScreenshotURL)
 	}
-	if result.Data.IsRunning {
-		t.Fatalf("expected is_running false")
+	if result.Data.TrackNoMapBgScreenshotURL != "new-no-map-bg" {
+		t.Fatalf("expected track_no_map_bg_screenshot_url new-no-map-bg, got %q", result.Data.TrackNoMapBgScreenshotURL)
+	}
+	if result.Data.CityCode != "330100" {
+		t.Fatalf("expected city_code 330100, got %q", result.Data.CityCode)
+	}
+	if result.Data.LocateAddr != "杭州市西湖区" {
+		t.Fatalf("expected locate_addr 杭州市西湖区, got %q", result.Data.LocateAddr)
+	}
+	// is_running 静默忽略，应保持原值。
+	if !result.Data.IsRunning {
+		t.Fatalf("expected is_running unchanged true")
 	}
 	if result.Data.AvgSpeedKmh != 12.3 {
 		t.Fatalf("expected avg_speed_kmh 12.3, got %v", result.Data.AvgSpeedKmh)
+	}
+}
+
+func TestUpdateTrackInfo_IgnoreIsRunning(t *testing.T) {
+	e := newTestEnv()
+	ctx := context.Background()
+	token := e.generateTestToken(1001)
+
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-upd-running", UserID: 1001, Title: "轨迹", IsRunning: true, Status: models.TrackStatusNormal})
+	body, _ := json.Marshal(map[string]interface{}{"is_running": false, "distance": 1})
+
+	w := e.perform(http.MethodPut, "/api/v1/track/trk-upd-running/update", body, authHeader(token), ut.Header{Key: middleware.HeaderUserID, Value: "1001"})
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected status 200, got %d, body=%s", w.Result().StatusCode(), string(w.Result().Body()))
+	}
+
+	updated, err := e.trackRepo.FindByID(ctx, "trk-upd-running")
+	if err != nil {
+		t.Fatalf("find updated track failed: %v", err)
+	}
+	if !updated.IsRunning {
+		t.Fatalf("expected is_running unchanged true")
 	}
 }
 

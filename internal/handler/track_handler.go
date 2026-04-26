@@ -76,8 +76,7 @@ func (h *TrackHandler) CreateTrack(ctx context.Context, c *app.RequestContext) {
 }
 
 // UpdateTrackInfo handles PUT /api/v1/track/:track_id/update
-// It supports partial update of: Distance, Duration, ElevationGain, RawTrackURL,
-// TrackScreenshotURL, IsRunning, AvgSpeedKmh.
+// It supports partial update of summary fields. See track_api.md for details.
 func (h *TrackHandler) UpdateTrackInfo(ctx context.Context, c *app.RequestContext) {
 	meta := middleware.GetRequestMeta(c)
 	if meta == nil || meta.AuthUserID <= 0 {

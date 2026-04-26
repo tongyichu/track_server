@@ -122,22 +122,37 @@ func (in CreateTrackInput) validate() error {
 // TrackInfoPatch describes which track summary fields should be updated.
 // Nil means the field is not provided and should remain unchanged.
 type TrackInfoPatch struct {
-	Distance           *float64 `json:"distance"`
-	Duration           *uint32  `json:"duration"`
-	ElevationGain      *int     `json:"elevation_gain"`
-	RawTrackURL        *string  `json:"raw_track_url"`
-	TrackScreenshotURL *string  `json:"screenshot_url"`
-	IsRunning          *bool    `json:"is_running"`
-	AvgSpeedKmh        *float64 `json:"avg_speed_kmh"`
+	CityCode                  *string  `json:"city_code"`
+	LocateAddr                *string  `json:"locate_addr"`
+	Distance                  *float64 `json:"distance"`
+	Duration                  *uint32  `json:"duration"`
+	ElevationGain             *int     `json:"elevation_gain"`
+	RawTrackURL               *string  `json:"raw_track_url"`
+	TrackScreenshotURL        *string  `json:"track_screenshot_url"`
+	TrackNoMapBgScreenshotURL *string  `json:"track_no_map_bg_screenshot_url"`
+	LegacyScreenshotURL       *string  `json:"screenshot_url,omitempty"`
+	AvgSpeedKmh               *float64 `json:"avg_speed_kmh"`
+}
+
+func (p *TrackInfoPatch) normalize() {
+	if p == nil {
+		return
+	}
+	if p.TrackScreenshotURL == nil && p.LegacyScreenshotURL != nil {
+		p.TrackScreenshotURL = p.LegacyScreenshotURL
+	}
 }
 
 func (p TrackInfoPatch) empty() bool {
-	return p.Distance == nil &&
+	return p.CityCode == nil &&
+		p.LocateAddr == nil &&
+		p.Distance == nil &&
 		p.Duration == nil &&
 		p.ElevationGain == nil &&
 		p.RawTrackURL == nil &&
 		p.TrackScreenshotURL == nil &&
-		p.IsRunning == nil &&
+		p.TrackNoMapBgScreenshotURL == nil &&
+		p.LegacyScreenshotURL == nil &&
 		p.AvgSpeedKmh == nil
 }
 
@@ -564,11 +579,15 @@ func (s *TrackService) UpdateTrackInfo(ctx context.Context, userID int64, trackI
 	if trackID == "" {
 		return nil, invalidArg("trackID is required")
 	}
+	patch.normalize()
 	if patch.empty() {
 		return nil, invalidArg("no fields to update")
 	}
 	if patch.Distance != nil && *patch.Distance < 0 {
 		return nil, invalidArg("distance must be >= 0")
+	}
+	if patch.LocateAddr != nil && len(*patch.LocateAddr) > 128 {
+		return nil, invalidArg("locate_addr is too long")
 	}
 	if patch.ElevationGain != nil && *patch.ElevationGain < 0 {
 		return nil, invalidArg("elevation_gain must be >= 0")
@@ -585,38 +604,73 @@ func (s *TrackService) UpdateTrackInfo(ctx context.Context, userID int64, trackI
 		return nil, ErrForbidden
 	}
 
-	if patch.Distance != nil {
+	updated := false
+	updatedRaw := false
+	updatedScreenshot := false
+	updatedNoMapBgScreenshot := false
+
+	// 只允许“补全”空字段：若数据库已有值，则忽略该字段更新。
+	if patch.CityCode != nil && track.CityCode == "" {
+		track.CityCode = *patch.CityCode
+		updated = true
+	}
+	if patch.LocateAddr != nil && track.LocateAddr == "" {
+		track.LocateAddr = *patch.LocateAddr
+		updated = true
+	}
+	if patch.Distance != nil && track.Distance == 0 {
 		track.Distance = *patch.Distance
+		updated = true
 	}
-	if patch.Duration != nil {
+	if patch.Duration != nil && track.Duration == 0 {
 		track.Duration = *patch.Duration
+		updated = true
 	}
-	if patch.ElevationGain != nil {
+	if patch.ElevationGain != nil && track.ElevationGain == 0 {
 		track.ElevationGain = *patch.ElevationGain
+		updated = true
 	}
-	if patch.RawTrackURL != nil {
-		track.RawTrackURL = *patch.RawTrackURL
-	}
-	if patch.TrackScreenshotURL != nil {
-		track.TrackScreenshotURL = *patch.TrackScreenshotURL
-	}
-	if patch.IsRunning != nil {
-		track.IsRunning = *patch.IsRunning
-	}
-	if patch.AvgSpeedKmh != nil {
+	if patch.AvgSpeedKmh != nil && track.AvgSpeedKmh == 0 {
 		track.AvgSpeedKmh = *patch.AvgSpeedKmh
+		updated = true
+	}
+	if patch.RawTrackURL != nil && track.RawTrackURL == "" {
+		track.RawTrackURL = *patch.RawTrackURL
+		updated = true
+		updatedRaw = true
+	}
+	if patch.TrackScreenshotURL != nil && track.TrackScreenshotURL == "" {
+		track.TrackScreenshotURL = *patch.TrackScreenshotURL
+		updated = true
+		updatedScreenshot = true
+	}
+	if patch.TrackNoMapBgScreenshotURL != nil && track.TrackNoMapBgScreenshotURL == "" {
+		track.TrackNoMapBgScreenshotURL = *patch.TrackNoMapBgScreenshotURL
+		updated = true
+		updatedNoMapBgScreenshot = true
 	}
 
-	if err := s.tracks.Update(ctx, track); err != nil {
-		return nil, err
+	if updated {
+		if err := s.tracks.Update(ctx, track); err != nil {
+			return nil, err
+		}
 	}
+
 	// 轨迹资源链接字段对客户端下发本地可下载 URL（并触发异步预热）。
-	if s.screenshotCache != nil && patch.TrackScreenshotURL != nil {
-		src := track.TrackScreenshotURL
-		s.screenshotCache.PrefetchAsync(userID, track.ID, src)
-		track.TrackScreenshotURL = s.screenshotCache.GuessLocalURL(track.ID, src)
+	if s.screenshotCache != nil {
+		if updatedScreenshot {
+			src := track.TrackScreenshotURL
+			s.screenshotCache.PrefetchAsync(userID, track.ID, src)
+			track.TrackScreenshotURL = s.screenshotCache.GuessLocalURL(track.ID, src)
+		}
+		if updatedNoMapBgScreenshot {
+			key := track.ID + "_no_map_bg"
+			src := track.TrackNoMapBgScreenshotURL
+			s.screenshotCache.PrefetchAsync(userID, key, src)
+			track.TrackNoMapBgScreenshotURL = s.screenshotCache.GuessLocalURL(key, src)
+		}
 	}
-	if s.rawTrackCache != nil && patch.RawTrackURL != nil {
+	if s.rawTrackCache != nil && updatedRaw {
 		src := track.RawTrackURL
 		s.rawTrackCache.PrefetchAsync(userID, track.ID, src)
 		track.RawTrackURL = s.rawTrackCache.GuessLocalURL(track.ID, src)

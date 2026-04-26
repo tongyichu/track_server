@@ -20,6 +20,7 @@
 | 8 | [导航使用上报](#8-导航使用上报) | POST | `/track/:track_id/navigation/report` | ✅ |
 | 9 | [我的轨迹列表](#9-我的轨迹列表) | GET | `/track/my/list` | ✅ |
 | 10 | [获取用户详情](#10-获取用户详情) | GET | `/user/:user_id/detail` | ✅ |
+| 11 | [更新轨迹信息](#11-更新轨迹信息) | PUT | `/track/:track_id/update` | ✅ |
 
 ---
 
@@ -726,6 +727,96 @@ Authorization: Bearer <token>
   "error": "..."
 }
 ```
+
+---
+
+## 11. 更新轨迹信息
+
+更新指定轨迹的摘要信息（`UpdateTrackInfo`）。
+
+### 说明
+
+- 该接口用于“补全”轨迹记录：**只有当数据库中对应字段为空（字符串为空串或数值为 0）时才会更新**；否则该字段会被忽略并保持原值不变。
+- `is_running` 不支持更新：请求体中传入会被服务端**静默忽略**，并保持数据库原值不变。
+- 资源字段（`raw_track_url` / `track_screenshot_url` / `track_no_map_bg_screenshot_url`）在请求时通常是 OSS 地址，但响应会被服务端替换为可直接从业务服务器下载的本地链接（路径在 `/api/v1/static/...` 下，需要登录态）。
+- 兼容旧字段：`screenshot_url` 会被当作 `track_screenshot_url` 处理。
+
+### 请求
+
+```
+PUT /api/v1/track/:track_id/update
+Content-Type: application/json
+Authorization: Bearer <token>
+```
+
+**Path 参数：**
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `track_id` | string | 是 | 轨迹 ID |
+
+**请求体：**（至少传 1 个字段）
+
+```json
+{
+  "city_code": "330100",
+  "locate_addr": "杭州市西湖区",
+  "raw_track_url": "https://<bucket>.oss-<region>.aliyuncs.com/prod/track/.../xxx.dat",
+  "track_screenshot_url": "https://<bucket>.oss-<region>.aliyuncs.com/prod/track/.../xxx.jpg",
+  "track_no_map_bg_screenshot_url": "https://<bucket>.oss-<region>.aliyuncs.com/prod/track/.../xxx_no_map_bg.jpg",
+  "distance": 1200.5,
+  "duration": 1800,
+  "elevation_gain": 80,
+  "avg_speed_kmh": 12.3
+}
+```
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `city_code` | string | 否 | 城市 Code（仅当原值为空时才会写入） |
+| `locate_addr` | string | 否 | 轨迹的具体位置信息，最大长度 `128`（仅当原值为空时才会写入） |
+| `raw_track_url` | string | 否 | 原始轨迹文件 OSS 地址（仅当原值为空时才会写入） |
+| `track_screenshot_url` | string | 否 | 轨迹截图 OSS 地址（仅当原值为空时才会写入） |
+| `track_no_map_bg_screenshot_url` | string | 否 | 无地图背景的轨迹路线截图 OSS 地址（仅当原值为空时才会写入） |
+| `distance` | number | 否 | 距离（米），必须 `>= 0`（仅当原值为 `0` 时才会写入） |
+| `duration` | int | 否 | 时长（秒），必须 `>= 0`（仅当原值为 `0` 时才会写入） |
+| `elevation_gain` | int | 否 | 累计爬升（米），必须 `>= 0`（仅当原值为 `0` 时才会写入） |
+| `avg_speed_kmh` | number | 否 | 平均速度（km/h），必须 `>= 0`（仅当原值为 `0` 时才会写入） |
+
+### 响应
+
+**状态码：** `200 OK`
+
+返回更新后的 `Track` 对象，使用统一响应格式 `StandardResponse`。
+
+### 示例（curl）
+
+```bash
+curl -X PUT "http://<host>:<port>/api/v1/track/trk1/update" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "city_code": "330100",
+    "locate_addr": "杭州市西湖区",
+    "track_no_map_bg_screenshot_url": "https://<bucket>.oss-<region>.aliyuncs.com/prod/track/.../xxx_no_map_bg.jpg"
+  }'
+```
+
+### 错误响应
+
+- `400 Bad Request`
+  - 请求体不是合法 JSON（返回 `{"error":"invalid payload"}`）
+  - 请求体未包含任何字段（返回 `{"error":"no fields to update"}`）
+  - `locate_addr` 超过最大长度（返回 `{"error":"locate_addr is too long"}`）
+  - `distance` / `elevation_gain` / `avg_speed_kmh` 为负数
+- `401 Unauthorized`
+  - 缺少/无效/过期的 Token
+- `403 Forbidden`
+  - 更新他人的轨迹
+- `404 Not Found`
+  - 轨迹不存在
+- `500 Internal Server Error`
+  - 服务端更新轨迹失败
 
 ---
 

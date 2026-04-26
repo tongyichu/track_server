@@ -232,28 +232,42 @@ func TestUpdateTrackInfo_PartialUpdate(t *testing.T) {
 	svc := NewTrackService(trackRepo, collectRepo)
 	ctx := context.Background()
 
-	_ = trackRepo.Create(ctx, &models.Track{ID: "trk1", UserID: 1001, Title: "t", Distance: 1, Duration: 2, ElevationGain: 3, IsRunning: true})
+	_ = trackRepo.Create(ctx, &models.Track{ID: "trk1", UserID: 1001, Title: "t", Distance: 0, Duration: 2, ElevationGain: 0, TrackScreenshotURL: "already.jpg", IsRunning: true})
 
+	cityCode := "330100"
+	locateAddr := "杭州市西湖区"
 	distance := 123.4
-	isRunning := false
 	avg := 9.8
-	patch := TrackInfoPatch{Distance: &distance, IsRunning: &isRunning, AvgSpeedKmh: &avg}
+	noMapBg := "https://<bucket>.oss-<region>.aliyuncs.com/prod/track/.../xxx_no_map_bg.jpg"
+	screenshot := "https://<bucket>.oss-<region>.aliyuncs.com/prod/track/.../xxx.jpg"
+	duration := uint32(99)
+	patch := TrackInfoPatch{CityCode: &cityCode, LocateAddr: &locateAddr, Distance: &distance, Duration: &duration, TrackScreenshotURL: &screenshot, TrackNoMapBgScreenshotURL: &noMapBg, AvgSpeedKmh: &avg}
 
 	track, err := svc.UpdateTrackInfo(ctx, 1001, "trk1", patch)
 	if err != nil {
 		t.Fatalf("UpdateTrackInfo returned error: %v", err)
 	}
+	// 只有当字段为空时才允许补全。
 	if track.Distance != 123.4 {
 		t.Fatalf("expected distance 123.4, got %v", track.Distance)
 	}
-	if track.IsRunning {
-		t.Fatalf("expected is_running false")
+	if track.Duration != 2 {
+		t.Fatalf("expected duration unchanged 2, got %v", track.Duration)
+	}
+	if track.TrackScreenshotURL != "already.jpg" {
+		t.Fatalf("expected track_screenshot_url unchanged, got %q", track.TrackScreenshotURL)
+	}
+	if track.TrackNoMapBgScreenshotURL != noMapBg {
+		t.Fatalf("expected track_no_map_bg_screenshot_url %q, got %q", noMapBg, track.TrackNoMapBgScreenshotURL)
+	}
+	if track.CityCode != cityCode {
+		t.Fatalf("expected city_code %q, got %q", cityCode, track.CityCode)
+	}
+	if track.LocateAddr != locateAddr {
+		t.Fatalf("expected locate_addr %q, got %q", locateAddr, track.LocateAddr)
 	}
 	if track.AvgSpeedKmh != 9.8 {
 		t.Fatalf("expected avg_speed_kmh 9.8, got %v", track.AvgSpeedKmh)
-	}
-	if track.Duration != 2 {
-		t.Fatalf("expected duration unchanged 2, got %v", track.Duration)
 	}
 }
 
