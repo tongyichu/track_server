@@ -61,6 +61,7 @@ type TrackSummary struct {
 	CityCode                  string    `json:"city_code"`                      // CityCode 是轨迹所属的城市 Code。
 	TrackType                 string    `json:"track_type"`                     // TrackType 是轨迹类型，例如徒步、跑步、骑车、自驾。
 	StartTime                 time.Time `json:"start_time"`                     // StartTime 是运动开始时间。
+	EndTime                   time.Time `json:"end_time"`                       // EndTime 是运动结束时间。
 	CityName                  string    `json:"city_name"`                      // CityName 是城市名称（由 city_code 映射得到；映射关系由配置文件维护）。
 	Nickname                  string    `json:"nickname"`                       // Nickname 是轨迹所属用户的昵称（字段定义与 User struct 保持一致）。
 	UserAvatarURL             string    `json:"user_avatar_url"`                // UserAvatarURL 是轨迹所属用户的头像 URI。
@@ -105,6 +106,7 @@ type MyTrackSummary struct {
 	CityCode           string    `json:"city_code"`            // CityCode 是轨迹所属的城市 Code。
 	TrackType          string    `json:"track_type"`           // TrackType 是轨迹类型，例如徒步、跑步、骑车、自驾。
 	StartTime          time.Time `json:"start_time"`           // StartTime 是运动开始时间。
+	EndTime            time.Time `json:"end_time"`             // EndTime 是运动结束时间。
 	CityName           string    `json:"city_name"`            // CityName 是城市名称（由 city_code 映射得到）。
 	Title              string    `json:"title"`                // Title 是轨迹名称。
 	Distance           float64   `json:"distance"`             // Distance 是总距离，单位米。
