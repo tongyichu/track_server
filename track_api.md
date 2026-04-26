@@ -220,6 +220,7 @@ curl -X POST "http://<host>:<port>/api/v1/track/create" \
 - 返回结果中的 `city_code` / `city_name` 为轨迹所属城市 Code 及其对应的城市名称。
 - 返回结果中的 `track_type` 为轨迹类型，例如 `徒步` / `跑步` / `骑车` / `自驾`。
 - 返回结果中的 `start_time` 为运动开始时间。
+- 返回结果中的 `end_time` 为运动结束时间。
 - 返回结果中的 `raw_track_url` / `track_screenshot_url` / `track_no_map_bg_screenshot_url` 为服务端本地可下载链接（不是 OSS 地址）。
 - 接口已支持基于 `cursor` 的瀑布流分页，排序规则为 `start_time DESC, id DESC`。
 - 首次请求不传 `cursor`；继续翻页时透传上一次返回的 `next_cursor`。
@@ -257,6 +258,7 @@ Authorization: Bearer <token>
         "city_code": "330100",
         "track_type": "徒步",
         "start_time": "2026-04-20T12:00:00Z",
+        "end_time": "2026-04-20T12:10:00Z",
         "city_name": "杭州市",
         "nickname": "Alice",
         "user_avatar_url": "https://example.com/avatar.png",
@@ -554,6 +556,7 @@ curl -X DELETE "http://<host>:<port>/api/v1/track_collect?track_id=trk2" \
 - 返回结果中的 `city_code` / `city_name` 为轨迹所属城市 Code 及其对应的城市名称。
 - 返回结果中的 `track_type` 为轨迹类型，例如 `徒步` / `跑步` / `骑车` / `自驾`。
 - 返回结果中的 `start_time` 为运动开始时间。
+- 返回结果中的 `end_time` 为运动结束时间。
 - 返回结果中的 `raw_track_url` / `track_screenshot_url` / `track_no_map_bg_screenshot_url` 为服务端本地可下载链接（不是 OSS 地址）。
 - 接口已支持基于 `cursor` 的瀑布流分页，排序规则为 `start_time DESC, id DESC`。
 - 首次请求不传 `cursor`；继续翻页时透传上一次返回的 `next_cursor`。
@@ -592,6 +595,7 @@ Authorization: Bearer <token>
         "city_code": "330100",
         "track_type": "徒步",
         "start_time": "2026-04-20T12:00:00Z",
+        "end_time": "2026-04-20T12:10:00Z",
         "city_name": "杭州市",
         "nickname": "Alice",
         "user_avatar_url": "https://example.com/avatar.png",
@@ -773,6 +777,7 @@ Authorization: Bearer <token>
         "city_code": "330100",
         "track_type": "徒步",
         "start_time": "2026-04-20T12:00:00Z",
+        "end_time": "2026-04-20T12:10:00Z",
         "city_name": "杭州市",
         "title": "西湖徒步",
         "distance": 1200.5,
@@ -802,6 +807,7 @@ Authorization: Bearer <token>
 | `data.items[].city_code` | string | 城市 Code。 |
 | `data.items[].track_type` | string | 轨迹类型，例如 `徒步` / `跑步` / `骑车` / `自驾`。 |
 | `data.items[].start_time` | string | 运动开始时间。 |
+| `data.items[].end_time` | string | 运动结束时间。 |
 | `data.items[].city_name` | string | 城市名称，由 `city_code` 映射得到。 |
 | `data.items[].title` | string | 轨迹标题。 |
 | `data.items[].distance` | number | 距离，单位米。 |
