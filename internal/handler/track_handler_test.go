@@ -451,6 +451,48 @@ func TestRecommendAndSearch(t *testing.T) {
 	}
 }
 
+func TestCollectedTracksList_OmitsCollectedField(t *testing.T) {
+	e := newTestEnv()
+	ctx := context.Background()
+	token := e.generateTestToken(1001)
+	startTime := time.Date(2026, 4, 25, 12, 0, 0, 0, time.UTC)
+	endTime := startTime.Add(30 * time.Minute)
+
+	_, _ = e.userRepo.CreateIfNotExists(ctx, &models.User{ID: 1001, Nickname: "Alice", AvatarURL: "https://example.com/avatar.png"})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-collected-1", UserID: 1001, CityCode: "330100", TrackType: "徒步", Title: "收藏的轨迹", StartTime: startTime, EndTime: endTime, AvgSpeedKmh: 10.0, IsRunning: false, Status: models.TrackStatusNormal})
+	_ = e.collectRepo.AddCollect(ctx, 1001, "trk-collected-1")
+
+	w := e.perform(http.MethodGet, "/api/v1/track/collected/list", nil, authHeader(token))
+	resp := w.Result()
+	if resp.StatusCode() != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", resp.StatusCode())
+	}
+
+	var raw map[string]any
+	decodeJSON(t, resp.Body(), &raw)
+	if code, ok := raw["code"].(float64); !ok || int(code) != 0 {
+		t.Fatalf("expected code 0, got %+v", raw["code"])
+	}
+	data, ok := raw["data"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected data object, got %+v", raw["data"])
+	}
+	items, ok := data["items"].([]any)
+	if !ok || len(items) != 1 {
+		t.Fatalf("expected items size 1, got %+v", data["items"])
+	}
+	item0, ok := items[0].(map[string]any)
+	if !ok {
+		t.Fatalf("expected item object, got %+v", items[0])
+	}
+	if _, exists := item0["collected"]; exists {
+		t.Fatalf("expected collected field omitted, got %+v", item0)
+	}
+	if item0["id"] != "trk-collected-1" {
+		t.Fatalf("expected id trk-collected-1, got %v", item0["id"])
+	}
+}
+
 func TestRecommendCursorPagination(t *testing.T) {
 	e := newTestEnv()
 	ctx := context.Background()
@@ -977,6 +1019,8 @@ func TestDeleteTrack_Success(t *testing.T) {
 	token := e.generateTestToken(1001)
 
 	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-del", UserID: 1001, Title: "待删除", IsRunning: true, Status: models.TrackStatusNormal})
+	_ = e.collectRepo.AddCollect(ctx, 2002, "trk-del")
+	_ = e.collectRepo.AddCollect(ctx, 1001, "trk-del")
 
 	w := e.perform(http.MethodDelete, "/api/v1/track/trk-del", nil, authHeader(token), ut.Header{Key: middleware.HeaderUserID, Value: "1001"})
 	if w.Result().StatusCode() != http.StatusOK {
@@ -994,6 +1038,13 @@ func TestDeleteTrack_Success(t *testing.T) {
 	}
 	if updated.IsRunning {
 		t.Fatalf("expected is_running false")
+	}
+	// 删除轨迹后应同步清理收藏关系。
+	if collected, _ := e.collectRepo.IsCollected(ctx, 1001, "trk-del"); collected {
+		t.Fatalf("expected collect record removed for owner")
+	}
+	if collected, _ := e.collectRepo.IsCollected(ctx, 2002, "trk-del"); collected {
+		t.Fatalf("expected collect record removed for other user")
 	}
 }
 

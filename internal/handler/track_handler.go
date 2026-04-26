@@ -216,6 +216,38 @@ func (h *TrackHandler) ListMyTracks(ctx context.Context, c *app.RequestContext) 
 	c.JSON(http.StatusOK, successResponse(page))
 }
 
+// ListCollectedTracks handles GET /api/v1/track/collected/list
+func (h *TrackHandler) ListCollectedTracks(ctx context.Context, c *app.RequestContext) {
+	meta := middleware.GetRequestMeta(c)
+	if meta == nil || meta.AuthUserID <= 0 {
+		c.JSON(http.StatusUnauthorized, utils.H{"error": "unauthorized"})
+		return
+	}
+	limit := 0
+	if rawLimit := string(c.Query("limit")); rawLimit != "" {
+		parsed, err := strconv.Atoi(rawLimit)
+		if err != nil || parsed <= 0 {
+			c.JSON(http.StatusBadRequest, utils.H{"error": "invalid limit"})
+			return
+		}
+		limit = parsed
+	}
+	page, err := h.trackSvc.ListCollectedTracks(ctx, meta.AuthUserID, service.ListCollectedTracksInput{
+		Cursor: string(c.Query("cursor")),
+		Limit:  limit,
+	})
+	if err != nil {
+		var iae *service.InvalidArgumentError
+		if errors.As(err, &iae) {
+			c.JSON(http.StatusBadRequest, utils.H{"error": iae.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, successResponse(page))
+}
+
 // SearchTracks handles GET /api/track/search/list
 func (h *TrackHandler) SearchTracks(ctx context.Context, c *app.RequestContext) {
 	// 说明：

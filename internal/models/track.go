@@ -81,6 +81,31 @@ type TrackSummary struct {
 	RawTrackURL               string    `json:"raw_track_url"`                  // RawTrackURL 是服务器本地缓存的原始轨迹文件可下载 URL。
 }
 
+// CollectedTrackSummary is used by "user collected tracks list".
+// It is consistent with TrackSummary but intentionally omits the `collected` field.
+type CollectedTrackSummary struct {
+	ID                        string    `json:"id"`
+	UserID                    int64     `json:"user_id"`
+	CityCode                  string    `json:"city_code"`
+	LocateAddr                string    `json:"locate_addr"`
+	TrackType                 string    `json:"track_type"`
+	StartTime                 time.Time `json:"start_time"`
+	EndTime                   time.Time `json:"end_time"`
+	CityName                  string    `json:"city_name"`
+	Nickname                  string    `json:"nickname"`
+	UserAvatarURL             string    `json:"user_avatar_url"`
+	Title                     string    `json:"title"`
+	Distance                  float64   `json:"distance"`
+	Duration                  uint32    `json:"duration"`
+	AvgSpeedKmh               float64   `json:"avg_speed_kmh"`
+	ElevationGain             int       `json:"elevation_gain"`
+	CollectCount              int64     `json:"collect_count"`
+	NavigateCount             int64     `json:"navigate_count"`
+	TrackScreenshotURL        string    `json:"track_screenshot_url"`
+	TrackNoMapBgScreenshotURL string    `json:"track_no_map_bg_screenshot_url"`
+	RawTrackURL               string    `json:"raw_track_url"`
+}
+
 // TrackListCursor 表示按时间倒序翻页时使用的游标锚点。
 //
 // 约定：
@@ -97,6 +122,14 @@ type TrackSummaryPage struct {
 	Items      []*TrackSummary `json:"items"`
 	NextCursor string          `json:"next_cursor,omitempty"`
 	HasMore    bool            `json:"has_more"`
+}
+
+// CollectedTrackSummaryPage is the paging response of collected track list.
+// Field names keep consistent with TrackSummaryPage.
+type CollectedTrackSummaryPage struct {
+	Items      []*CollectedTrackSummary `json:"items"`
+	NextCursor string                  `json:"next_cursor,omitempty"`
+	HasMore    bool                    `json:"has_more"`
 }
 
 // MyTrackSummary 是“我的轨迹”列表接口使用的返回模型。

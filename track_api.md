@@ -22,6 +22,7 @@
 | 10 | [获取用户详情](#10-获取用户详情) | GET | `/user/:user_id/detail` | ✅ |
 | 11 | [更新轨迹信息](#11-更新轨迹信息) | PUT | `/track/:track_id/update` | ✅ |
 | 12 | [删除轨迹](#12-删除轨迹) | DELETE | `/track/:track_id` | ✅ |
+| 13 | [用户已收藏轨迹列表](#13-用户已收藏轨迹列表) | GET | `/track/collected/list` | ✅ |
 
 ---
 
@@ -1100,3 +1101,80 @@ Authorization: Bearer <token>
   - 轨迹不存在
 - `500 Internal Server Error`
   - 服务端删除轨迹失败
+
+
+---
+
+## 13. 用户已收藏轨迹列表
+
+获取当前登录用户已收藏的轨迹列表。
+
+### 说明
+
+- 列表按“收藏时间”倒序返回（收藏记录的 `created_at`）。
+- 与推荐/搜索列表口径保持一致：仅返回 `status=1` 且 `is_running=false` 的轨迹。
+- 返回结构与 [推荐轨迹列表](#2-推荐轨迹列表) 保持一致，但每个 item **不返回** `collected` 字段（因为该列表内的轨迹天然已收藏）。
+- `cursor` 为服务端生成的分页游标，客户端应原样透传，不要解析。
+
+### 请求
+
+```
+GET /api/v1/track/collected/list?limit=20&cursor=<next_cursor>
+Authorization: Bearer <token>
+```
+
+**Query 参数：**
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `limit` | int | 否 | 每页数量，默认 `20`，最大 `50` |
+| `cursor` | string | 否 | 分页游标（上一页返回的 `next_cursor`） |
+
+### 响应
+
+**状态码：** `200 OK`
+
+返回统一响应格式 `StandardResponse`：
+
+```json
+{
+  "code": 0,
+  "data": {
+    "items": [
+      {
+        "id": "NO.00000001",
+        "user_id": 1001,
+        "city_code": "330100",
+        "locate_addr": "杭州市西湖区",
+        "track_type": "徒步",
+        "start_time": "2026-04-20T12:00:00Z",
+        "end_time": "2026-04-20T13:30:00Z",
+        "city_name": "杭州市",
+        "nickname": "Alice",
+        "user_avatar_url": "https://example.com/avatar.png",
+        "title": "西湖徒步",
+        "distance": 1200.5,
+        "duration": 1800,
+        "avg_speed_kmh": 12.34,
+        "elevation_gain": 80,
+        "collect_count": 10,
+        "navigate_count": 2,
+        "track_screenshot_url": "/api/v1/static/screenshots/NO.00000001.jpg",
+        "track_no_map_bg_screenshot_url": "/api/v1/static/screenshots/NO.00000001_no_map_bg.jpg",
+        "raw_track_url": "/api/v1/static/raw_tracks/NO.00000001.dat"
+      }
+    ],
+    "next_cursor": "<opaque>",
+    "has_more": true
+  }
+}
+```
+
+### 错误响应
+
+- `400 Bad Request`
+  - `cursor` 非法（返回 `{"error":"invalid cursor"}`）
+- `401 Unauthorized`
+  - 缺少/无效/过期的 Token
+- `500 Internal Server Error`
+  - 服务端查询收藏列表失败

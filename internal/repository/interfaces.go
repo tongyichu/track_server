@@ -29,6 +29,8 @@ var (
 	ErrNotFound = errors.New("not found")
 	// ErrAlreadyExists indicates entity creation conflicts with an existing unique key.
 	ErrAlreadyExists = errors.New("already exists")
+	// ErrForbidden indicates current user has no permission to operate the resource.
+	ErrForbidden = errors.New("forbidden")
 )
 
 // TrackRepository defines persistence operations for Track entities.
@@ -98,6 +100,14 @@ type UserRepository interface {
 // CollectRepository defines persistence operations for track collections.
 type CollectRepository interface {
 	IsCollected(ctx context.Context, userID int64, trackID string) (bool, error)
+	// ListByUserID lists collect records of a user in reverse chronological order.
+	//
+	// Order: created_at desc, track_id desc.
+	// Cursor condition: (created_at, track_id) strictly less than cursor.
+	ListByUserID(ctx context.Context, userID int64, cursor *models.TrackCollectCursor, limit int) ([]*models.TrackCollect, error)
+	// RemoveByTrackID removes all collect records of the given track.
+	// It is used to keep track_collects consistent when a track is deleted.
+	RemoveByTrackID(ctx context.Context, trackID string) error
 	// CountByTrackIDs 批量返回轨迹的收藏总数（track_id -> count）。
 	//
 	// 约定：

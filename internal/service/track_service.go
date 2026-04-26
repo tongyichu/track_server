@@ -46,6 +46,11 @@ type SearchTracksInput struct {
 	Limit   int
 }
 
+type ListCollectedTracksInput struct {
+	Cursor string
+	Limit  int
+}
+
 func (s *TrackService) decorateTrackAssets(ctx context.Context, track *models.Track) {
 	if track == nil {
 		return
@@ -379,6 +384,33 @@ func encodeTrackListCursor(startTime time.Time, id string) (string, error) {
 	return base64.RawURLEncoding.EncodeToString(buf), nil
 }
 
+func decodeTrackCollectCursor(raw string) (*models.TrackCollectCursor, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, nil
+	}
+	buf, err := base64.RawURLEncoding.DecodeString(raw)
+	if err != nil {
+		return nil, invalidArg("invalid cursor")
+	}
+	var cursor models.TrackCollectCursor
+	if err := json.Unmarshal(buf, &cursor); err != nil {
+		return nil, invalidArg("invalid cursor")
+	}
+	if cursor.TrackID == "" || cursor.CreatedAt.IsZero() {
+		return nil, invalidArg("invalid cursor")
+	}
+	return &cursor, nil
+}
+
+func encodeTrackCollectCursor(createdAt time.Time, trackID string) (string, error) {
+	buf, err := json.Marshal(models.TrackCollectCursor{CreatedAt: createdAt, TrackID: trackID})
+	if err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(buf), nil
+}
+
 func buildTrackSummaryPage(summaries []*models.TrackSummary, hasMore bool) (*models.TrackSummaryPage, error) {
 	page := &models.TrackSummaryPage{Items: summaries, HasMore: hasMore}
 	if hasMore && len(summaries) > 0 {
@@ -554,6 +586,132 @@ func (s *TrackService) SearchTracks(ctx context.Context, userID int64, input Sea
 	return buildTrackSummaryPage(summaries, hasMore)
 }
 
+// ListCollectedTracks 返回“当前用户已收藏的轨迹列表”。
+//
+// 返回结构约定：
+// - 外层分页结构与 ListRecommend 保持一致（items/next_cursor/has_more）。
+// - items 字段与 TrackSummary 基本一致，但**不返回** `collected` 字段：因为该列表内的轨迹天然已收藏。
+//
+// 排序/翻页约定：
+// - 按收藏记录的 created_at 倒序（created_at desc, track_id desc）翻页。
+// - cursor 是 TrackCollectCursor 的 base64(JSON) 结果，客户端应原样透传。
+func (s *TrackService) ListCollectedTracks(ctx context.Context, userID int64, input ListCollectedTracksInput) (*models.CollectedTrackSummaryPage, error) {
+	if userID <= 0 {
+		return nil, invalidArg("userID is required")
+	}
+	if s.collects == nil {
+		return nil, errors.New("collect repository not configured")
+	}
+	limit := normalizeTrackPageLimit(input.Limit)
+	cur, err := decodeTrackCollectCursor(input.Cursor)
+	if err != nil {
+		return nil, err
+	}
+
+	// 先拉收藏记录，再逐条通过 TrackRepository.FindByID 解析到 track_records。
+	// NOTE: CollectRepository.ListByUserID 不做 join（保持仓储职责单一），因此这里需要二次查询解析轨迹。
+	//
+	// 约束/假设：
+	// - 当轨迹被删除时，DeleteTrack 会同步调用 CollectRepository.RemoveByTrackID 清理收藏记录；
+	//   因此这里不需要通过“多轮补齐”来对抗大量无效收藏记录。
+	batch := limit + 1 // 取多 1 条用于判断 has_more
+
+	recs, err := s.collects.ListByUserID(ctx, userID, cur, batch)
+	if err != nil {
+		return nil, err
+	}
+
+	tracks := make([]*models.Track, 0, len(recs))
+	includedCursors := make([]models.TrackCollectCursor, 0, len(recs))
+	for _, rec := range recs {
+		t, err := s.tracks.FindByID(ctx, rec.TrackID)
+		switch {
+		case err == nil && t != nil:
+			// 与推荐/搜索列表保持一致：排除删除/私密/进行中轨迹。
+			// 理论上：删除轨迹会同步清理收藏记录，这里更多是兜底保护。
+			if t.Status != models.TrackStatusNormal || t.IsRunning {
+				continue
+			}
+			tracks = append(tracks, t)
+			includedCursors = append(includedCursors, models.TrackCollectCursor{CreatedAt: rec.CreatedAt, TrackID: rec.TrackID})
+		case errors.Is(err, repository.ErrNotFound):
+			continue
+		case err != nil:
+			return nil, err
+		}
+	}
+
+	hasMore := len(tracks) > limit
+	var nextCursorSrc *models.TrackCollectCursor
+	if hasMore {
+		// Use the cursor of the last returned item (the limit-th), not the extra one.
+		c := includedCursors[limit-1]
+		nextCursorSrc = &c
+		tracks = tracks[:limit]
+	} else if len(tracks) > 0 {
+		c := includedCursors[len(includedCursors)-1]
+		nextCursorSrc = &c
+	}
+
+	summaries := toSummaries(tracks)
+	// Fill asset local URLs (same as recommend/search).
+	if s.screenshotCache != nil || s.rawTrackCache != nil {
+		for i, t := range tracks {
+			cacheCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			if s.screenshotCache != nil {
+				summaries[i].TrackScreenshotURL = s.screenshotCache.EnsureCached(cacheCtx, userID, t.ID, t.TrackScreenshotURL)
+				if t.TrackNoMapBgScreenshotURL != "" {
+					summaries[i].TrackNoMapBgScreenshotURL = s.screenshotCache.EnsureCached(cacheCtx, userID, t.ID+"_no_map_bg", t.TrackNoMapBgScreenshotURL)
+				}
+			}
+			if s.rawTrackCache != nil {
+				summaries[i].RawTrackURL = s.rawTrackCache.EnsureCached(cacheCtx, userID, t.ID, t.RawTrackURL)
+			}
+			cancel()
+		}
+	}
+	// Reuse TrackSummary filling logic but skip per-item `collected` check.
+	if err := s.fillTrackSummaryExtras(ctx, 0, summaries); err != nil {
+		return nil, err
+	}
+
+	items := make([]*models.CollectedTrackSummary, 0, len(summaries))
+	for _, s := range summaries {
+		items = append(items, &models.CollectedTrackSummary{
+			ID:                        s.ID,
+			UserID:                    s.UserID,
+			CityCode:                  s.CityCode,
+			LocateAddr:                s.LocateAddr,
+			TrackType:                 s.TrackType,
+			StartTime:                 s.StartTime,
+			EndTime:                   s.EndTime,
+			CityName:                  s.CityName,
+			Nickname:                  s.Nickname,
+			UserAvatarURL:             s.UserAvatarURL,
+			Title:                     s.Title,
+			Distance:                  s.Distance,
+			Duration:                  s.Duration,
+			AvgSpeedKmh:               s.AvgSpeedKmh,
+			ElevationGain:             s.ElevationGain,
+			CollectCount:              s.CollectCount,
+			NavigateCount:             s.NavigateCount,
+			TrackScreenshotURL:        s.TrackScreenshotURL,
+			TrackNoMapBgScreenshotURL: s.TrackNoMapBgScreenshotURL,
+			RawTrackURL:               s.RawTrackURL,
+		})
+	}
+
+	page := &models.CollectedTrackSummaryPage{Items: items, HasMore: hasMore}
+	if hasMore && nextCursorSrc != nil {
+		nextCursor, err := encodeTrackCollectCursor(nextCursorSrc.CreatedAt, nextCursorSrc.TrackID)
+		if err != nil {
+			return nil, err
+		}
+		page.NextCursor = nextCursor
+	}
+	return page, nil
+}
+
 // MarkUploadedToCloud marks a finished track as uploaded to cloud.
 func (s *TrackService) MarkUploadedToCloud(ctx context.Context, trackID string) error {
 	track, err := s.tracks.FindByID(ctx, trackID)
@@ -687,6 +845,23 @@ func (s *TrackService) DeleteTrack(ctx context.Context, userID int64, trackID st
 	if trackID == "" {
 		return invalidArg("trackID is required")
 	}
+	// MySQL：把“软删除轨迹 + 清理收藏记录”放到同一个事务中，保证一致性。
+	if txDeleter, ok := s.tracks.(interface {
+		SoftDeleteAndCleanupCollectsTx(ctx context.Context, userID int64, trackID string) error
+	}); ok {
+		// 注意：走到这里意味着底层仓储（MySQL）会在事务里同时完成
+		// - track_records 的软删除
+		// - track_collects 的清理
+		// 因此此分支成功后需要直接 return，不能再走下面的“非事务兜底逻辑”（否则会重复 Update/重复删除收藏）。
+		if err := txDeleter.SoftDeleteAndCleanupCollectsTx(ctx, userID, trackID); err != nil {
+			if errors.Is(err, repository.ErrForbidden) {
+				return ErrForbidden
+			}
+			return err
+		}
+		return nil
+	}
+
 	track, err := s.tracks.FindByID(ctx, trackID)
 	if err != nil {
 		return err
@@ -703,7 +878,16 @@ func (s *TrackService) DeleteTrack(ctx context.Context, userID int64, trackID st
 	}
 	// 删除后不应再被视为进行中。
 	track.IsRunning = false
-	return s.tracks.Update(ctx, track)
+	if err := s.tracks.Update(ctx, track); err != nil {
+		return err
+	}
+	// 同步清理收藏记录：用户删除轨迹后，track_collects 中不应继续保留该轨迹的收藏关系。
+	if s.collects != nil {
+		if err := s.collects.RemoveByTrackID(ctx, trackID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // IsCollected reports whether a track is collected by user.

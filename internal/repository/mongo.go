@@ -350,6 +350,14 @@ func (r *MongoCollectRepository) IsCollected(context.Context, int64, string) (bo
 	return false, errors.New("MongoCollectRepository.IsCollected not implemented")
 }
 
+func (r *MongoCollectRepository) ListByUserID(context.Context, int64, *models.TrackCollectCursor, int) ([]*models.TrackCollect, error) {
+	return nil, errors.New("MongoCollectRepository.ListByUserID not implemented")
+}
+
+func (r *MongoCollectRepository) RemoveByTrackID(context.Context, string) error {
+	return errors.New("MongoCollectRepository.RemoveByTrackID not implemented")
+}
+
 func (r *MongoCollectRepository) CountByTrackIDs(context.Context, []string) (map[string]int64, error) {
 	return nil, errors.New("MongoCollectRepository.CountByTrackIDs not implemented")
 }

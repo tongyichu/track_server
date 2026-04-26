@@ -539,6 +539,65 @@ func (r *MySQLTrackRepository) Update(ctx context.Context, t *models.Track) erro
 	return nil
 }
 
+// SoftDeleteAndCleanupCollectsTx 在一个 MySQL 事务中完成“删除轨迹 + 清理收藏记录”。
+//
+// 为什么要用事务：
+// - 轨迹删除是软删除（track_records.status=0 + deleted_at），同时需要清理 track_collects；
+// - 若不使用事务，可能出现“轨迹已删除但收藏未清理 / 收藏已清理但轨迹未删除”的中间态；
+// - 使用事务可以保证这两步要么都成功提交，要么都回滚。
+//
+// 事务内做的事情：
+// 1) 先 SELECT 校验归属（track_records.user_id 必须等于 userID），不允许删他人轨迹。
+// 2) UPDATE 软删除 track_records：status=0、is_running=0、deleted_at（若已存在则保持不变）、updated_at。
+// 3) DELETE 清理 track_collects：删除所有 track_id=该轨迹的收藏关系（不区分收藏用户）。
+func (r *MySQLTrackRepository) SoftDeleteAndCleanupCollectsTx(ctx context.Context, userID int64, trackID string) error {
+	if userID <= 0 || trackID == "" {
+		return ErrNotFound
+	}
+	// 显式开启事务；后续任一步失败都会触发 defer 的 Rollback。
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	// 注意：这里统一 defer Rollback，Commit 成功后 Rollback 会返回 sql.ErrTxDone 并被忽略。
+	defer func() { _ = tx.Rollback() }()
+
+	var (
+		ownerUserID int64
+		deletedAt   sql.NullTime
+	)
+	// 1) 读取 owner_user_id 做权限校验。
+	if err := tx.QueryRowContext(ctx, `SELECT user_id, deleted_at FROM track_records WHERE id=? LIMIT 1`, trackID).Scan(&ownerUserID, &deletedAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		}
+		return err
+	}
+	if ownerUserID != userID {
+		return ErrForbidden
+	}
+
+	now := time.Now()
+	da := now
+	if deletedAt.Valid {
+		// 若之前已删除过，deleted_at 保持原值，避免重复删除刷新时间导致审计/排序混乱。
+		da = deletedAt.Time
+	}
+	// 2) 软删除轨迹。
+	if _, err := tx.ExecContext(ctx,
+		`UPDATE track_records SET status=?, is_running=0, deleted_at=?, updated_at=? WHERE id=?`,
+		models.TrackStatusDeleted, da, now, trackID,
+	); err != nil {
+		return err
+	}
+	// 3) 清理收藏关系。
+	if _, err := tx.ExecContext(ctx, `DELETE FROM track_collects WHERE track_id=?`, trackID); err != nil {
+		return err
+	}
+	// 事务提交：只有 Commit 成功，删除与清理才对外可见。
+	return tx.Commit()
+}
+
 func (r *MySQLTrackRepository) FindByID(ctx context.Context, id string) (*models.Track, error) {
 	row := r.db.QueryRowContext(ctx,
 		`SELECT id, user_id, city_code, locate_addr, track_type, title, start_time, end_time,
@@ -959,6 +1018,53 @@ func (r *MySQLCollectRepository) IsCollected(ctx context.Context, userID int64, 
 		return false, err
 	}
 	return true, nil
+}
+
+func (r *MySQLCollectRepository) ListByUserID(ctx context.Context, userID int64, cursor *models.TrackCollectCursor, limit int) ([]*models.TrackCollect, error) {
+	if userID <= 0 {
+		return nil, nil
+	}
+	if limit <= 0 {
+		return []*models.TrackCollect{}, nil
+	}
+
+	// Order: created_at desc, track_id desc
+	query := `SELECT user_id, track_id, created_at FROM track_collects WHERE user_id=?`
+	args := make([]any, 0, 4)
+	args = append(args, userID)
+	if cursor != nil && !cursor.CreatedAt.IsZero() && cursor.TrackID != "" {
+		query += ` AND (created_at < ? OR (created_at = ? AND track_id < ?))`
+		args = append(args, cursor.CreatedAt, cursor.CreatedAt, cursor.TrackID)
+	}
+	query += ` ORDER BY created_at DESC, track_id DESC LIMIT ?`
+	args = append(args, limit)
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	res := make([]*models.TrackCollect, 0, limit)
+	for rows.Next() {
+		var c models.TrackCollect
+		if err := rows.Scan(&c.UserID, &c.TrackID, &c.CreatedAt); err != nil {
+			return nil, err
+		}
+		res = append(res, &c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
+func (r *MySQLCollectRepository) RemoveByTrackID(ctx context.Context, trackID string) error {
+	if trackID == "" {
+		return nil
+	}
+	_, err := r.db.ExecContext(ctx, `DELETE FROM track_collects WHERE track_id=?`, trackID)
+	return err
 }
 
 func (r *MySQLCollectRepository) CountByTrackIDs(ctx context.Context, trackIDs []string) (map[string]int64, error) {

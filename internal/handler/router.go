@@ -104,6 +104,7 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 	auth.DELETE("/track/:track_id", trackHandler.DeleteTrack)
 	auth.GET("/track/recommend/list", trackHandler.ListRecommend)
 	auth.GET("/track/my/list", trackHandler.ListMyTracks)
+	auth.GET("/track/collected/list", trackHandler.ListCollectedTracks)
 	auth.GET("/track/search/list", trackHandler.SearchTracks)
 	auth.POST("/track/:track_id/upload_cloud", trackHandler.UploadTrackCloud)
 	auth.GET("/track/running", trackHandler.GetRunningTrack)

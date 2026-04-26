@@ -21,6 +21,15 @@ type TrackCollect struct {
 	CreatedAt time.Time `json:"created_at" bson:"created_at"`
 }
 
+// TrackCollectCursor is the cursor used for paging a user's collected track list.
+//
+// Order: created_at desc, track_id desc.
+// Next page condition: (created_at, track_id) strictly less than cursor.
+type TrackCollectCursor struct {
+	CreatedAt time.Time `json:"created_at"`
+	TrackID   string    `json:"track_id"`
+}
+
 // LoginLog records a user's login event for audit and statistics.
 type LoginLog struct {
 	ID        int64     `json:"id" bson:"_id,omitempty"`

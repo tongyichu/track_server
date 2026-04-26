@@ -396,6 +396,66 @@ func (r *InMemoryCollectRepository) IsCollected(_ context.Context, userID int64,
 	return ok, nil
 }
 
+// ListByUserID lists collect records of a user in reverse chronological order.
+// Order: created_at desc, track_id desc.
+func (r *InMemoryCollectRepository) ListByUserID(_ context.Context, userID int64, cursor *models.TrackCollectCursor, limit int) ([]*models.TrackCollect, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if userID <= 0 || limit <= 0 {
+		return []*models.TrackCollect{}, nil
+	}
+	tracks, ok := r.collects[userID]
+	if !ok || len(tracks) == 0 {
+		return []*models.TrackCollect{}, nil
+	}
+
+	items := make([]*models.TrackCollect, 0, len(tracks))
+	for _, c := range tracks {
+		clone := *c
+		items = append(items, &clone)
+	}
+
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].CreatedAt.Equal(items[j].CreatedAt) {
+			return items[i].TrackID > items[j].TrackID
+		}
+		return items[i].CreatedAt.After(items[j].CreatedAt)
+	})
+
+	res := make([]*models.TrackCollect, 0, limit)
+	for _, c := range items {
+		if cursor != nil && !cursor.CreatedAt.IsZero() && cursor.TrackID != "" {
+			// Keep only those strictly less than cursor in (created_at desc, track_id desc).
+			if c.CreatedAt.After(cursor.CreatedAt) {
+				continue
+			}
+			if c.CreatedAt.Equal(cursor.CreatedAt) && c.TrackID >= cursor.TrackID {
+				continue
+			}
+		}
+		res = append(res, c)
+		if len(res) >= limit {
+			break
+		}
+	}
+	return res, nil
+}
+
+func (r *InMemoryCollectRepository) RemoveByTrackID(_ context.Context, trackID string) error {
+	if trackID == "" {
+		return nil
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for uid, tracks := range r.collects {
+		delete(tracks, trackID)
+		if len(tracks) == 0 {
+			delete(r.collects, uid)
+		}
+	}
+	return nil
+}
+
 func (r *InMemoryCollectRepository) CountByTrackIDs(_ context.Context, trackIDs []string) (map[string]int64, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
