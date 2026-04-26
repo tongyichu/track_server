@@ -68,6 +68,7 @@ type TrackSummary struct {
 	Title                     string    `json:"title"`                          // Title 是轨迹名称。
 	Distance                  float64   `json:"distance"`                       // Distance 是总距离，单位米。
 	Duration                  uint32    `json:"duration"`                       // Duration 是运动耗时，单位秒。
+	AvgSpeedKmh               float64   `json:"avg_speed_kmh"`                  // AvgSpeedKmh 是平均速度，单位 km/h。
 	ElevationGain             int       `json:"elevation_gain"`                 // ElevationGain 是累计爬升，单位米。
 	Collected                 bool      `json:"collected"`                      // Collected 表示当前鉴权用户是否已收藏该轨迹。
 	CollectCount              int64     `json:"collect_count"`                  // CollectCount 是轨迹被收藏的总数。
@@ -111,6 +112,7 @@ type MyTrackSummary struct {
 	Title              string    `json:"title"`                // Title 是轨迹名称。
 	Distance           float64   `json:"distance"`             // Distance 是总距离，单位米。
 	Duration           uint32    `json:"duration"`             // Duration 是运动耗时，单位秒。
+	AvgSpeedKmh        float64   `json:"avg_speed_kmh"`        // AvgSpeedKmh 是平均速度，单位 km/h。
 	ElevationGain      int       `json:"elevation_gain"`       // ElevationGain 是累计爬升，单位米。
 	CollectCount       int64     `json:"collect_count"`        // CollectCount 是轨迹被收藏的总数。
 	NavigateCount      int64     `json:"navigate_count"`       // NavigateCount 是该轨迹被其他用户用于导航的次数。

@@ -16,6 +16,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 
+	"github.com/tongyichu/track_server/internal/config"
 	"github.com/tongyichu/track_server/internal/models"
 	"github.com/tongyichu/track_server/internal/repository"
 )
@@ -58,14 +59,6 @@ type LoginResult struct {
 	UserID int64        `json:"user_id"`
 	User   *models.User `json:"user"`
 	Token  string       `json:"token"`
-}
-
-var defaultNicknameAdjectives = []string{
-	"元气", "晴空", "轻盈", "温柔", "机灵", "清新", "闪亮", "安静", "热心", "自在",
-}
-
-var defaultNicknameNouns = []string{
-	"海豚", "小鹿", "熊猫", "狐狸", "银杏", "向日葵", "云朵", "星球", "背包", "旅人",
 }
 
 const maxDefaultNicknameAttempts = 20
@@ -257,7 +250,11 @@ func (s *LoginService) LoginBySMS(ctx context.Context, phone, code, ip, deviceID
 }
 
 func (s *LoginService) generateUniqueDefaultNickname(ctx context.Context) (string, error) {
-	base := defaultNicknameAdjectives[rand.Intn(len(defaultNicknameAdjectives))] + defaultNicknameNouns[rand.Intn(len(defaultNicknameNouns))]
+	bases := config.DefaultNicknameBases()
+	if len(bases) == 0 {
+		return "", errors.New("default nickname bases is empty")
+	}
+	base := bases[rand.Intn(len(bases))]
 
 	available, err := s.nicknameAvailable(ctx, base)
 	if err != nil {

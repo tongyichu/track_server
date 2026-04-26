@@ -2,12 +2,15 @@ package service
 
 import (
 	"context"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/tongyichu/track_server/internal/config"
 	"github.com/tongyichu/track_server/internal/models"
 	"github.com/tongyichu/track_server/internal/repository"
 )
@@ -265,5 +268,52 @@ func TestUpdateTrackInfo_EmptyPatch(t *testing.T) {
 	}
 	if _, ok := err.(*InvalidArgumentError); !ok {
 		t.Fatalf("expected InvalidArgumentError, got %T: %v", err, err)
+	}
+}
+
+func TestGenerateUniqueDefaultNickname_UsesCuratedBase(t *testing.T) {
+	_, userRepo, _, loginLogRepo, _ := repository.NewInMemoryRepositories()
+	svc := NewLoginService(userRepo, loginLogRepo, "", "", "test-secret")
+	bases := config.DefaultNicknameBases()
+	if len(bases) != 180 {
+		t.Fatalf("expected 180 default nickname bases after expansion, got %d", len(bases))
+	}
+
+	rand.Seed(7)
+	nickname, err := svc.generateUniqueDefaultNickname(context.Background())
+	if err != nil {
+		t.Fatalf("generateUniqueDefaultNickname returned error: %v", err)
+	}
+
+	for _, base := range bases {
+		if nickname == base {
+			return
+		}
+	}
+	t.Fatalf("expected nickname %q to come from curated base list", nickname)
+}
+
+func TestGenerateUniqueDefaultNickname_DuplicateBaseAppendsRandomNumber(t *testing.T) {
+	_, userRepo, _, loginLogRepo, _ := repository.NewInMemoryRepositories()
+	svc := NewLoginService(userRepo, loginLogRepo, "", "", "test-secret")
+	bases := config.DefaultNicknameBases()
+
+	rand.Seed(1)
+	base := bases[rand.Intn(len(bases))]
+	_, err := userRepo.CreateIfNotExists(context.Background(), &models.User{ID: 1001, Nickname: base})
+	if err != nil {
+		t.Fatalf("seed duplicate nickname failed: %v", err)
+	}
+
+	rand.Seed(1)
+	nickname, err := svc.generateUniqueDefaultNickname(context.Background())
+	if err != nil {
+		t.Fatalf("generateUniqueDefaultNickname returned error: %v", err)
+	}
+	if nickname == base {
+		t.Fatalf("expected duplicate base nickname to append random digits")
+	}
+	if !strings.HasPrefix(nickname, base) {
+		t.Fatalf("expected nickname %q to keep base %q as prefix", nickname, base)
 	}
 }

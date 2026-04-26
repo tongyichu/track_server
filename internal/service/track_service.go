@@ -685,6 +685,7 @@ func toSummaries(tracks []*models.Track) []*models.TrackSummary {
 			Title:         t.Title,
 			Distance:      t.Distance,
 			Duration:      t.Duration,
+			AvgSpeedKmh:   t.AvgSpeedKmh,
 			ElevationGain: t.ElevationGain,
 		})
 	}
@@ -705,6 +706,7 @@ func toMySummaries(tracks []*models.Track) []*models.MyTrackSummary {
 			Title:         t.Title,
 			Distance:      t.Distance,
 			Duration:      t.Duration,
+			AvgSpeedKmh:   t.AvgSpeedKmh,
 			ElevationGain: t.ElevationGain,
 		})
 	}

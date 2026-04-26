@@ -338,7 +338,7 @@ func TestRecommendAndSearch(t *testing.T) {
 	endTime := startTime.Add(90 * time.Minute)
 	_, _ = e.userRepo.CreateIfNotExists(ctx, &models.User{ID: 1001, Nickname: "Alice", AvatarURL: "https://example.com/avatar.png"})
 	// seed one normal track and one running track (running should be excluded from recommend list)
-	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk1", UserID: 1001, CityCode: "330100", TrackType: "徒步", Title: "西湖徒步", StartTime: startTime, EndTime: endTime, IsRunning: false, Status: models.TrackStatusNormal})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk1", UserID: 1001, CityCode: "330100", TrackType: "徒步", Title: "西湖徒步", StartTime: startTime, EndTime: endTime, AvgSpeedKmh: 12.34, IsRunning: false, Status: models.TrackStatusNormal})
 	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-running", UserID: 1001, Title: "进行中跑步", IsRunning: true})
 	_ = e.collectRepo.AddCollect(ctx, 1001, "trk1")
 
@@ -405,6 +405,9 @@ func TestRecommendAndSearch(t *testing.T) {
 	if got := result.Data.Items[0].EndTime.Format(time.RFC3339); got != "2026-04-20T13:30:00Z" {
 		t.Fatalf("expected recommend track trk1 end_time=2026-04-20T13:30:00Z, got %s", got)
 	}
+	if got := result.Data.Items[0].AvgSpeedKmh; got != 12.34 {
+		t.Fatalf("expected recommend track trk1 avg_speed_kmh=12.34, got %v", got)
+	}
 	if result.Data.Items[0].NavigateCount != 1 {
 		t.Fatalf("expected recommend track trk1 navigate_count=1, got %d", result.Data.Items[0].NavigateCount)
 	}
@@ -440,6 +443,9 @@ func TestRecommendAndSearch(t *testing.T) {
 	if got := search.Data.Items[0].EndTime.Format(time.RFC3339); got != "2026-04-20T13:30:00Z" {
 		t.Fatalf("expected search track trk1 end_time=2026-04-20T13:30:00Z, got %s", got)
 	}
+	if got := search.Data.Items[0].AvgSpeedKmh; got != 12.34 {
+		t.Fatalf("expected search track trk1 avg_speed_kmh=12.34, got %v", got)
+	}
 	if search.Data.Items[0].NavigateCount != 1 {
 		t.Fatalf("expected search track trk1 navigate_count=1, got %d", search.Data.Items[0].NavigateCount)
 	}
@@ -454,9 +460,9 @@ func TestRecommendCursorPagination(t *testing.T) {
 	start2 := time.Date(2026, 4, 22, 12, 0, 0, 0, time.UTC)
 	start3 := time.Date(2026, 4, 21, 12, 0, 0, 0, time.UTC)
 
-	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-c", UserID: 1001, Title: "第三条", StartTime: start3, EndTime: start3.Add(30 * time.Minute), IsRunning: false, Status: models.TrackStatusNormal})
-	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-a", UserID: 1001, Title: "第一条", StartTime: start1, EndTime: start1.Add(30 * time.Minute), IsRunning: false, Status: models.TrackStatusNormal})
-	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-b", UserID: 1002, Title: "第二条", StartTime: start2, EndTime: start2.Add(30 * time.Minute), IsRunning: false, Status: models.TrackStatusNormal})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-c", UserID: 1001, Title: "第三条", StartTime: start3, EndTime: start3.Add(30 * time.Minute), AvgSpeedKmh: 8.8, IsRunning: false, Status: models.TrackStatusNormal})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-a", UserID: 1001, Title: "第一条", StartTime: start1, EndTime: start1.Add(30 * time.Minute), AvgSpeedKmh: 10.1, IsRunning: false, Status: models.TrackStatusNormal})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-b", UserID: 1002, Title: "第二条", StartTime: start2, EndTime: start2.Add(30 * time.Minute), AvgSpeedKmh: 9.5, IsRunning: false, Status: models.TrackStatusNormal})
 
 	w1 := e.perform(http.MethodGet, "/api/v1/track/recommend/list?limit=2", nil, authHeader(token), ut.Header{Key: middleware.HeaderUserID, Value: "1001"})
 	if w1.Result().StatusCode() != http.StatusOK {
@@ -479,6 +485,12 @@ func TestRecommendCursorPagination(t *testing.T) {
 	if got := page1.Data.Items[1].EndTime.Format(time.RFC3339); got != "2026-04-22T12:30:00Z" {
 		t.Fatalf("expected second recommend item end_time=2026-04-22T12:30:00Z, got %s", got)
 	}
+	if got := page1.Data.Items[0].AvgSpeedKmh; got != 10.1 {
+		t.Fatalf("expected first recommend item avg_speed_kmh=10.1, got %v", got)
+	}
+	if got := page1.Data.Items[1].AvgSpeedKmh; got != 9.5 {
+		t.Fatalf("expected second recommend item avg_speed_kmh=9.5, got %v", got)
+	}
 	if !page1.Data.HasMore {
 		t.Fatalf("expected first page has_more=true")
 	}
@@ -500,6 +512,9 @@ func TestRecommendCursorPagination(t *testing.T) {
 	}
 	if got := page2.Data.Items[0].EndTime.Format(time.RFC3339); got != "2026-04-21T12:30:00Z" {
 		t.Fatalf("expected second page recommend item end_time=2026-04-21T12:30:00Z, got %s", got)
+	}
+	if got := page2.Data.Items[0].AvgSpeedKmh; got != 8.8 {
+		t.Fatalf("expected second page recommend item avg_speed_kmh=8.8, got %v", got)
 	}
 	if page2.Data.HasMore {
 		t.Fatalf("expected second page has_more=false")
@@ -559,9 +574,9 @@ func TestSearchCursorPagination(t *testing.T) {
 	start2 := time.Date(2026, 4, 22, 12, 0, 0, 0, time.UTC)
 	start3 := time.Date(2026, 4, 21, 12, 0, 0, 0, time.UTC)
 
-	_ = e.trackRepo.Create(ctx, &models.Track{ID: "search-c", UserID: 1001, Title: "西湖夜骑", StartTime: start3, IsRunning: false, Status: models.TrackStatusNormal})
-	_ = e.trackRepo.Create(ctx, &models.Track{ID: "search-a", UserID: 1001, Title: "西湖晨跑", StartTime: start1, IsRunning: false, Status: models.TrackStatusNormal})
-	_ = e.trackRepo.Create(ctx, &models.Track{ID: "search-b", UserID: 1002, Title: "西湖徒步", StartTime: start2, IsRunning: false, Status: models.TrackStatusNormal})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "search-c", UserID: 1001, Title: "西湖夜骑", StartTime: start3, AvgSpeedKmh: 7.2, IsRunning: false, Status: models.TrackStatusNormal})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "search-a", UserID: 1001, Title: "西湖晨跑", StartTime: start1, AvgSpeedKmh: 11.6, IsRunning: false, Status: models.TrackStatusNormal})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "search-b", UserID: 1002, Title: "西湖徒步", StartTime: start2, AvgSpeedKmh: 6.4, IsRunning: false, Status: models.TrackStatusNormal})
 	_ = e.trackRepo.Create(ctx, &models.Track{ID: "other-keyword", UserID: 1002, Title: "灵隐寺", StartTime: start1, IsRunning: false, Status: models.TrackStatusNormal})
 
 	w1 := e.perform(http.MethodGet, "/api/v1/track/search/list?keyword=西湖&limit=2", nil, authHeader(token), ut.Header{Key: middleware.HeaderUserID, Value: "1001"})
@@ -579,6 +594,12 @@ func TestSearchCursorPagination(t *testing.T) {
 	if page1.Data.Items[0].ID != "search-a" || page1.Data.Items[1].ID != "search-b" {
 		t.Fatalf("unexpected first search order: %+v", page1.Data.Items)
 	}
+	if got := page1.Data.Items[0].AvgSpeedKmh; got != 11.6 {
+		t.Fatalf("expected first search item avg_speed_kmh=11.6, got %v", got)
+	}
+	if got := page1.Data.Items[1].AvgSpeedKmh; got != 6.4 {
+		t.Fatalf("expected second search item avg_speed_kmh=6.4, got %v", got)
+	}
 	if !page1.Data.HasMore || page1.Data.NextCursor == "" {
 		t.Fatalf("expected first search page has next cursor: %+v", page1.Data)
 	}
@@ -594,6 +615,9 @@ func TestSearchCursorPagination(t *testing.T) {
 	}
 	if len(page2.Data.Items) != 1 || page2.Data.Items[0].ID != "search-c" {
 		t.Fatalf("unexpected second search items: %+v", page2.Data.Items)
+	}
+	if got := page2.Data.Items[0].AvgSpeedKmh; got != 7.2 {
+		t.Fatalf("expected second search item avg_speed_kmh=7.2, got %v", got)
 	}
 	if page2.Data.HasMore || page2.Data.NextCursor != "" {
 		t.Fatalf("expected second search page end, got %+v", page2.Data)
@@ -615,8 +639,8 @@ func TestListMyTracks_OmitsFields(t *testing.T) {
 	startOther := time.Date(2026, 4, 22, 12, 0, 0, 0, time.UTC)
 
 	// seed tracks: 2 for user 1001 (one private), 1 for other user; running should be excluded.
-	_ = e.trackRepo.Create(ctx, &models.Track{ID: "my1", UserID: 1001, CityCode: "330100", TrackType: "跑步", Title: "我的1", StartTime: start1, IsRunning: false, Status: models.TrackStatusNormal})
-	_ = e.trackRepo.Create(ctx, &models.Track{ID: "my2", UserID: 1001, CityCode: "330100", TrackType: "徒步", Title: "我的2", StartTime: start2, IsRunning: false, Status: models.TrackStatusPrivate})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "my1", UserID: 1001, CityCode: "330100", TrackType: "跑步", Title: "我的1", StartTime: start1, AvgSpeedKmh: 13.2, IsRunning: false, Status: models.TrackStatusNormal})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "my2", UserID: 1001, CityCode: "330100", TrackType: "徒步", Title: "我的2", StartTime: start2, AvgSpeedKmh: 5.6, IsRunning: false, Status: models.TrackStatusPrivate})
 	_ = e.trackRepo.Create(ctx, &models.Track{ID: "other1", UserID: 2002, Title: "别人的", StartTime: startOther, IsRunning: false, Status: models.TrackStatusNormal})
 	_ = e.trackRepo.Create(ctx, &models.Track{ID: "my-running", UserID: 1001, Title: "进行中", IsRunning: true, Status: models.TrackStatusNormal})
 
@@ -655,6 +679,12 @@ func TestListMyTracks_OmitsFields(t *testing.T) {
 			t.Fatalf("unexpected user_id: %v", item.UserID)
 		}
 	}
+	if got := result.Data.Items[0].AvgSpeedKmh; got != 5.6 {
+		t.Fatalf("expected first my item avg_speed_kmh=5.6, got %v", got)
+	}
+	if got := result.Data.Items[1].AvgSpeedKmh; got != 13.2 {
+		t.Fatalf("expected second my item avg_speed_kmh=13.2, got %v", got)
+	}
 }
 
 func TestListMyTracksCursorPagination(t *testing.T) {
@@ -666,9 +696,9 @@ func TestListMyTracksCursorPagination(t *testing.T) {
 	start2 := time.Date(2026, 4, 22, 12, 0, 0, 0, time.UTC)
 	start3 := time.Date(2026, 4, 21, 12, 0, 0, 0, time.UTC)
 
-	_ = e.trackRepo.Create(ctx, &models.Track{ID: "my-c", UserID: 1001, Title: "第三条", StartTime: start3, EndTime: start3.Add(40 * time.Minute), IsRunning: false, Status: models.TrackStatusNormal})
-	_ = e.trackRepo.Create(ctx, &models.Track{ID: "my-a", UserID: 1001, Title: "第一条", StartTime: start1, EndTime: start1.Add(40 * time.Minute), IsRunning: false, Status: models.TrackStatusNormal})
-	_ = e.trackRepo.Create(ctx, &models.Track{ID: "my-b", UserID: 1001, Title: "第二条", StartTime: start2, EndTime: start2.Add(40 * time.Minute), IsRunning: false, Status: models.TrackStatusPrivate})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "my-c", UserID: 1001, Title: "第三条", StartTime: start3, EndTime: start3.Add(40 * time.Minute), AvgSpeedKmh: 8.3, IsRunning: false, Status: models.TrackStatusNormal})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "my-a", UserID: 1001, Title: "第一条", StartTime: start1, EndTime: start1.Add(40 * time.Minute), AvgSpeedKmh: 12.1, IsRunning: false, Status: models.TrackStatusNormal})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "my-b", UserID: 1001, Title: "第二条", StartTime: start2, EndTime: start2.Add(40 * time.Minute), AvgSpeedKmh: 9.9, IsRunning: false, Status: models.TrackStatusPrivate})
 	_ = e.trackRepo.Create(ctx, &models.Track{ID: "other-user", UserID: 1002, Title: "别人的", StartTime: start1, IsRunning: false, Status: models.TrackStatusNormal})
 
 	w1 := e.perform(http.MethodGet, "/api/v1/track/my/list?limit=2", nil, authHeader(token))
@@ -692,6 +722,12 @@ func TestListMyTracksCursorPagination(t *testing.T) {
 	if got := page1.Data.Items[1].EndTime.Format(time.RFC3339); got != "2026-04-22T12:40:00Z" {
 		t.Fatalf("expected second my item end_time=2026-04-22T12:40:00Z, got %s", got)
 	}
+	if got := page1.Data.Items[0].AvgSpeedKmh; got != 12.1 {
+		t.Fatalf("expected first my item avg_speed_kmh=12.1, got %v", got)
+	}
+	if got := page1.Data.Items[1].AvgSpeedKmh; got != 9.9 {
+		t.Fatalf("expected second my item avg_speed_kmh=9.9, got %v", got)
+	}
 	if !page1.Data.HasMore {
 		t.Fatalf("expected first my page has_more=true")
 	}
@@ -713,6 +749,9 @@ func TestListMyTracksCursorPagination(t *testing.T) {
 	}
 	if got := page2.Data.Items[0].EndTime.Format(time.RFC3339); got != "2026-04-21T12:40:00Z" {
 		t.Fatalf("expected second my item end_time=2026-04-21T12:40:00Z, got %s", got)
+	}
+	if got := page2.Data.Items[0].AvgSpeedKmh; got != 8.3 {
+		t.Fatalf("expected second my item avg_speed_kmh=8.3, got %v", got)
 	}
 	if page2.Data.HasMore {
 		t.Fatalf("expected second my page has_more=false")
