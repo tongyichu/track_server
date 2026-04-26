@@ -102,7 +102,7 @@ func main() {
 	screenshotCache, err := service.NewAssetCacheService(
 		screenshotCacheDir,
 		"/api/v1/static/screenshots",
-		[]string{".png", ".jpg", ".jpeg", ".webp"},
+		[]string{".png", ".jpg", ".jpeg", ".webp", ".svg"},
 		".png",
 	)
 	if err != nil {
@@ -134,7 +134,7 @@ func main() {
 	rawTrackCache, err := service.NewAssetCacheService(
 		rawTrackCacheDir,
 		"/api/v1/static/raw_tracks",
-		[]string{".dat", ".json", ".gpx", ".kmz"},
+		[]string{".dat", ".json", ".gpx", ".kmz", ".zip"},
 		".dat",
 	)
 	if err != nil {
