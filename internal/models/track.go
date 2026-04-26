@@ -29,6 +29,7 @@ type Track struct {
 	ID                        string       `json:"id" bson:"_id,omitempty"`                                              // ID 是轨迹记录唯一标识，由 generateTrackID 生成。
 	UserID                    int64        `json:"user_id" bson:"user_id"`                                               // UserID 是轨迹所属用户 ID。
 	CityCode                  string       `json:"city_code" bson:"city_code"`                                           // CityCode 是轨迹所属的城市 Code（城市/省份映射由配置文件维护）。
+	LocateAddr                string       `json:"locate_addr" bson:"locate_addr"`                                       // LocateAddr 是轨迹的具体位置信息。
 	TrackType                 string       `json:"track_type" bson:"track_type"`                                         // TrackType 是轨迹类型，例如徒步、跑步、骑车、自驾。
 	Title                     string       `json:"title" bson:"title"`                                                   // Title 是轨迹名称。
 	StartTime                 time.Time    `json:"start_time" bson:"start_time"`                                         // StartTime 是运动开始时间。
@@ -59,6 +60,7 @@ type TrackSummary struct {
 	ID                        string    `json:"id"`                             // ID 是轨迹记录唯一标识。
 	UserID                    int64     `json:"user_id"`                        // UserID 是轨迹所属用户 ID。
 	CityCode                  string    `json:"city_code"`                      // CityCode 是轨迹所属的城市 Code。
+	LocateAddr                string    `json:"locate_addr"`                     // LocateAddr 是轨迹的具体位置信息。
 	TrackType                 string    `json:"track_type"`                     // TrackType 是轨迹类型，例如徒步、跑步、骑车、自驾。
 	StartTime                 time.Time `json:"start_time"`                     // StartTime 是运动开始时间。
 	EndTime                   time.Time `json:"end_time"`                       // EndTime 是运动结束时间。
@@ -105,6 +107,7 @@ type MyTrackSummary struct {
 	ID                 string    `json:"id"`                   // ID 是轨迹记录唯一标识。
 	UserID             int64     `json:"user_id"`              // UserID 是轨迹所属用户 ID。
 	CityCode           string    `json:"city_code"`            // CityCode 是轨迹所属的城市 Code。
+	LocateAddr         string    `json:"locate_addr"`          // LocateAddr 是轨迹的具体位置信息。
 	TrackType          string    `json:"track_type"`           // TrackType 是轨迹类型，例如徒步、跑步、骑车、自驾。
 	StartTime          time.Time `json:"start_time"`           // StartTime 是运动开始时间。
 	EndTime            time.Time `json:"end_time"`             // EndTime 是运动结束时间。

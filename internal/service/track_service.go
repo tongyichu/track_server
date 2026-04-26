@@ -79,6 +79,7 @@ func invalidArg(msg string) error { return &InvalidArgumentError{Msg: msg} }
 type CreateTrackInput struct {
 	Title                     *string    `json:"title"`
 	CityCode                  *string    `json:"city_code"`
+	LocateAddr                *string    `json:"locate_addr"`
 	TrackType                 *string    `json:"track_type"`
 	StartTime                 *time.Time `json:"start_time"`
 	EndTime                   *time.Time `json:"end_time"`
@@ -102,6 +103,9 @@ func (in *CreateTrackInput) normalize() {
 func (in CreateTrackInput) validate() error {
 	if in.Distance != nil && *in.Distance < 0 {
 		return invalidArg("distance must be >= 0")
+	}
+	if in.LocateAddr != nil && len(*in.LocateAddr) > 128 {
+		return invalidArg("locate_addr is too long")
 	}
 	if in.ElevationGain != nil && *in.ElevationGain < 0 {
 		return invalidArg("elevation_gain must be >= 0")
@@ -209,6 +213,9 @@ func (s *TrackService) CreateTrack(ctx context.Context, userID int64, input Crea
 	}
 	if input.CityCode != nil {
 		track.CityCode = *input.CityCode
+	}
+	if input.LocateAddr != nil {
+		track.LocateAddr = *input.LocateAddr
 	}
 	if input.TrackType != nil {
 		track.TrackType = *input.TrackType
@@ -678,6 +685,7 @@ func toSummaries(tracks []*models.Track) []*models.TrackSummary {
 			ID:            t.ID,
 			UserID:        t.UserID,
 			CityCode:      t.CityCode,
+			LocateAddr:    t.LocateAddr,
 			TrackType:     t.TrackType,
 			StartTime:     t.StartTime,
 			EndTime:       t.EndTime,
@@ -699,6 +707,7 @@ func toMySummaries(tracks []*models.Track) []*models.MyTrackSummary {
 			ID:            t.ID,
 			UserID:        t.UserID,
 			CityCode:      t.CityCode,
+			LocateAddr:    t.LocateAddr,
 			TrackType:     t.TrackType,
 			StartTime:     t.StartTime,
 			EndTime:       t.EndTime,

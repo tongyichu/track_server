@@ -16,6 +16,7 @@ CREATE TABLE `track_records` (
                                  `id` VARCHAR(64) NOT NULL,
                                  `user_id` bigint unsigned NOT NULL COMMENT '用户ID',
                                  `city_code` varchar(16) NOT NULL DEFAULT '' COMMENT '城市Code',
+                                 `locate_addr` varchar(128) NOT NULL DEFAULT '' COMMENT '轨迹的具体位置信息',
                                  `track_type` varchar(32) NOT NULL DEFAULT '' COMMENT '轨迹类型，如徒步/跑步/骑车/自驾',
                                  `title` varchar(128) NOT NULL DEFAULT '' COMMENT '轨迹名称',
                                  `start_time` datetime NOT NULL COMMENT '开始时间',

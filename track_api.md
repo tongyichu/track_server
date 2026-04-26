@@ -75,6 +75,7 @@ Token 的获取与说明参考 `login.md`。
 | `id` | string | 轨迹 ID |
 | `user_id` | int64 | 用户 ID |
 | `city_code` | string | 城市 Code（用于标识轨迹所属城市；城市/省份映射关系维护在配置文件中） |
+| `locate_addr` | string | 轨迹的具体位置信息 |
 | `track_type` | string | 轨迹类型，例如 `徒步` / `跑步` / `骑车` / `自驾` |
 | `title` | string | 轨迹标题 |
 | `start_time` | string | 开始时间（RFC3339/ISO8601，服务端序列化时间格式） |
@@ -113,6 +114,7 @@ Authorization: Bearer <token>
 {
   "title": "傍晚夜跑",
   "city_code": "330100",
+  "locate_addr": "杭州市西湖区",
   "track_type": "跑步",
   "start_time": "2026-04-20T12:00:00Z",
   "end_time": "2026-04-20T12:30:00Z",
@@ -131,6 +133,7 @@ Authorization: Bearer <token>
 |------|------|------|------|
 | `title` | string | 否 | 轨迹标题，默认 `新的轨迹` |
 | `city_code` | string | 否 | 城市 Code（标识轨迹所属城市） |
+| `locate_addr` | string | 否 | 轨迹的具体位置信息，最大长度 `128` |
 | `track_type` | string | 否 | 轨迹类型，例如 `徒步` / `跑步` / `骑车` / `自驾` |
 | `start_time` | string | 否 | 开始时间，RFC3339/ISO8601 格式 |
 | `end_time` | string | 否 | 结束时间，RFC3339/ISO8601 格式，必须 `>= start_time` |
@@ -156,6 +159,7 @@ Authorization: Bearer <token>
     "id": "No.1713520800123456789",
     "user_id": 1001,
     "city_code": "330100",
+    "locate_addr": "杭州市西湖区",
     "track_type": "跑步",
     "title": "傍晚夜跑",
     "start_time": "2026-04-20T12:00:00Z",
@@ -187,6 +191,7 @@ curl -X POST "http://<host>:<port>/api/v1/track/create" \
   -d '{
     "title": "傍晚夜跑",
     "city_code": "330100",
+    "locate_addr": "杭州市西湖区",
     "track_type": "跑步",
     "start_time": "2026-04-20T12:00:00Z",
     "end_time": "2026-04-20T12:30:00Z",
@@ -218,6 +223,7 @@ curl -X POST "http://<host>:<port>/api/v1/track/create" \
 - 返回结果中的 `navigate_count` 表示该轨迹被其他用户用于导航的次数。
 - 返回结果中的 `nickname` / `user_avatar_url` 为轨迹所属用户的昵称/头像 URI。
 - 返回结果中的 `city_code` / `city_name` 为轨迹所属城市 Code 及其对应的城市名称。
+- 返回结果中的 `locate_addr` 为轨迹的具体位置信息。
 - 返回结果中的 `track_type` 为轨迹类型，例如 `徒步` / `跑步` / `骑车` / `自驾`。
 - 返回结果中的 `start_time` 为运动开始时间。
 - 返回结果中的 `end_time` 为运动结束时间。
@@ -257,6 +263,7 @@ Authorization: Bearer <token>
         "id": "trk1",
         "user_id": 1001,
         "city_code": "330100",
+        "locate_addr": "杭州市西湖区",
         "track_type": "徒步",
         "start_time": "2026-04-20T12:00:00Z",
         "end_time": "2026-04-20T12:10:00Z",
@@ -556,6 +563,7 @@ curl -X DELETE "http://<host>:<port>/api/v1/track_collect?track_id=trk2" \
 - 返回结果中的 `navigate_count` 表示该轨迹被其他用户用于导航的次数。
 - 返回结果中的 `nickname` / `user_avatar_url` 为轨迹所属用户的昵称/头像 URI。
 - 返回结果中的 `city_code` / `city_name` 为轨迹所属城市 Code 及其对应的城市名称。
+- 返回结果中的 `locate_addr` 为轨迹的具体位置信息。
 - 返回结果中的 `track_type` 为轨迹类型，例如 `徒步` / `跑步` / `骑车` / `自驾`。
 - 返回结果中的 `start_time` 为运动开始时间。
 - 返回结果中的 `end_time` 为运动结束时间。
@@ -596,6 +604,7 @@ Authorization: Bearer <token>
         "id": "trk1",
         "user_id": 1001,
         "city_code": "330100",
+        "locate_addr": "杭州市西湖区",
         "track_type": "徒步",
         "start_time": "2026-04-20T12:00:00Z",
         "end_time": "2026-04-20T12:10:00Z",
@@ -736,6 +745,7 @@ Authorization: Bearer <token>
 - 首次请求不传 `cursor`；继续翻页时透传上一次返回的 `next_cursor`。
 - 返回结果**不包含** `nickname`、`user_avatar_url`、`collected` 字段。
 - 返回结果**包含** `collect_count`、`navigate_count` 统计字段，便于客户端直接展示。
+- 返回结果中的 `locate_addr` 为轨迹的具体位置信息。
 - 返回结果中的 `avg_speed_kmh` 为平均速度（km/h）。
 - `raw_track_url` / `track_screenshot_url` 为服务端本地可下载链接（不是 OSS 地址）。
 - `limit` 为可选参数，默认 `20`，最大 `50`；超出最大值时服务端会自动截断到 `50`。
@@ -780,6 +790,7 @@ Authorization: Bearer <token>
         "id": "trk1",
         "user_id": 1001,
         "city_code": "330100",
+        "locate_addr": "杭州市西湖区",
         "track_type": "徒步",
         "start_time": "2026-04-20T12:00:00Z",
         "end_time": "2026-04-20T12:10:00Z",
@@ -811,6 +822,7 @@ Authorization: Bearer <token>
 | `data.items[].id` | string | 轨迹 ID。 |
 | `data.items[].user_id` | int64 | 当前轨迹所属用户 ID。 |
 | `data.items[].city_code` | string | 城市 Code。 |
+| `data.items[].locate_addr` | string | 轨迹的具体位置信息。 |
 | `data.items[].track_type` | string | 轨迹类型，例如 `徒步` / `跑步` / `骑车` / `自驾`。 |
 | `data.items[].start_time` | string | 运动开始时间。 |
 | `data.items[].end_time` | string | 运动结束时间。 |
