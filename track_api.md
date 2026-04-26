@@ -221,6 +221,7 @@ curl -X POST "http://<host>:<port>/api/v1/track/create" \
 - 返回结果中的 `track_type` 为轨迹类型，例如 `徒步` / `跑步` / `骑车` / `自驾`。
 - 返回结果中的 `start_time` 为运动开始时间。
 - 返回结果中的 `end_time` 为运动结束时间。
+- 返回结果中的 `avg_speed_kmh` 为平均速度（km/h）。
 - 返回结果中的 `raw_track_url` / `track_screenshot_url` / `track_no_map_bg_screenshot_url` 为服务端本地可下载链接（不是 OSS 地址）。
 - 接口已支持基于 `cursor` 的瀑布流分页，排序规则为 `start_time DESC, id DESC`。
 - 首次请求不传 `cursor`；继续翻页时透传上一次返回的 `next_cursor`。
@@ -265,6 +266,7 @@ Authorization: Bearer <token>
         "title": "西湖徒步",
         "distance": 1200.5,
         "duration": 360,
+        "avg_speed_kmh": 12.3,
         "elevation_gain": 80,
         "raw_track_url": "/api/v1/static/raw_tracks/trk1.dat",
         "track_screenshot_url": "/api/v1/static/screenshots/trk1.jpg",
@@ -557,6 +559,7 @@ curl -X DELETE "http://<host>:<port>/api/v1/track_collect?track_id=trk2" \
 - 返回结果中的 `track_type` 为轨迹类型，例如 `徒步` / `跑步` / `骑车` / `自驾`。
 - 返回结果中的 `start_time` 为运动开始时间。
 - 返回结果中的 `end_time` 为运动结束时间。
+- 返回结果中的 `avg_speed_kmh` 为平均速度（km/h）。
 - 返回结果中的 `raw_track_url` / `track_screenshot_url` / `track_no_map_bg_screenshot_url` 为服务端本地可下载链接（不是 OSS 地址）。
 - 接口已支持基于 `cursor` 的瀑布流分页，排序规则为 `start_time DESC, id DESC`。
 - 首次请求不传 `cursor`；继续翻页时透传上一次返回的 `next_cursor`。
@@ -602,6 +605,7 @@ Authorization: Bearer <token>
         "title": "西湖徒步",
         "distance": 1200.5,
         "duration": 360,
+        "avg_speed_kmh": 12.3,
         "elevation_gain": 80,
         "raw_track_url": "/api/v1/static/raw_tracks/trk1.dat",
         "track_screenshot_url": "/api/v1/static/screenshots/trk1.jpg",
@@ -732,6 +736,7 @@ Authorization: Bearer <token>
 - 首次请求不传 `cursor`；继续翻页时透传上一次返回的 `next_cursor`。
 - 返回结果**不包含** `nickname`、`user_avatar_url`、`collected` 字段。
 - 返回结果**包含** `collect_count`、`navigate_count` 统计字段，便于客户端直接展示。
+- 返回结果中的 `avg_speed_kmh` 为平均速度（km/h）。
 - `raw_track_url` / `track_screenshot_url` 为服务端本地可下载链接（不是 OSS 地址）。
 - `limit` 为可选参数，默认 `20`，最大 `50`；超出最大值时服务端会自动截断到 `50`。
 - 响应中的 `has_more` 表示是否还有下一页；仅当 `has_more=true` 时才会返回 `next_cursor`。
@@ -782,6 +787,7 @@ Authorization: Bearer <token>
         "title": "西湖徒步",
         "distance": 1200.5,
         "duration": 360,
+        "avg_speed_kmh": 12.3,
         "elevation_gain": 80,
         "collect_count": 12,
         "navigate_count": 3,
@@ -812,6 +818,7 @@ Authorization: Bearer <token>
 | `data.items[].title` | string | 轨迹标题。 |
 | `data.items[].distance` | number | 距离，单位米。 |
 | `data.items[].duration` | int | 时长，单位秒。 |
+| `data.items[].avg_speed_kmh` | number | 平均速度（km/h）。 |
 | `data.items[].elevation_gain` | int | 累计爬升，单位米。 |
 | `data.items[].collect_count` | int64 | 该轨迹被收藏的总数。 |
 | `data.items[].navigate_count` | int64 | 该轨迹被其他用户用于导航的次数。 |
