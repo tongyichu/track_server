@@ -31,7 +31,8 @@ CREATE TABLE `track_records` (
                                  `status` tinyint NOT NULL DEFAULT '1' COMMENT '状态: 0-删除, 1-正常, 2-私密',
                                  `avg_speed_kmh` double NOT NULL DEFAULT '1' COMMENT '平均速度，单位 km/h',
                                  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                                 `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+							 `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+							 `deleted_at` datetime DEFAULT NULL COMMENT '删除时间',
                                  PRIMARY KEY (`id`),
                                  KEY `idx_user_time` (`user_id`,`start_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='轨迹概要信息表';

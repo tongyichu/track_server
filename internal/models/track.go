@@ -44,6 +44,7 @@ type Track struct {
 	Status                    TrackStatus  `json:"status" bson:"status"`                                                 // Status 是轨迹状态：0-删除，1-正常，2-私密。
 	CreatedAt                 time.Time    `json:"created_at" bson:"created_at"`                                         // CreatedAt 是记录创建时间。
 	UpdatedAt                 time.Time    `json:"updated_at" bson:"updated_at"`                                         // UpdatedAt 是记录更新时间。
+	DeletedAt                 time.Time    `json:"deleted_at,omitempty" bson:"deleted_at"`                               // DeletedAt 是删除时间（软删除）。
 	Points                    []TrackPoint `json:"points,omitempty" bson:"-"`                                            // Points 是内存中的轨迹点集合，不直接持久化到 track_records。
 	AvgSpeedKmh               float64      `json:"avg_speed_kmh,omitempty" bson:"avg_speed_kmh"`                         // AvgSpeedKmh 是平均速度，单位 km/h。
 }
@@ -60,7 +61,7 @@ type TrackSummary struct {
 	ID                        string    `json:"id"`                             // ID 是轨迹记录唯一标识。
 	UserID                    int64     `json:"user_id"`                        // UserID 是轨迹所属用户 ID。
 	CityCode                  string    `json:"city_code"`                      // CityCode 是轨迹所属的城市 Code。
-	LocateAddr                string    `json:"locate_addr"`                     // LocateAddr 是轨迹的具体位置信息。
+	LocateAddr                string    `json:"locate_addr"`                    // LocateAddr 是轨迹的具体位置信息。
 	TrackType                 string    `json:"track_type"`                     // TrackType 是轨迹类型，例如徒步、跑步、骑车、自驾。
 	StartTime                 time.Time `json:"start_time"`                     // StartTime 是运动开始时间。
 	EndTime                   time.Time `json:"end_time"`                       // EndTime 是运动结束时间。

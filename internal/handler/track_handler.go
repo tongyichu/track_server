@@ -118,6 +118,36 @@ func (h *TrackHandler) UpdateTrackInfo(ctx context.Context, c *app.RequestContex
 	c.JSON(http.StatusOK, successResponse(track))
 }
 
+// DeleteTrack handles DELETE /api/v1/track/:track_id
+// It performs a soft delete and only marks status=0.
+func (h *TrackHandler) DeleteTrack(ctx context.Context, c *app.RequestContext) {
+	meta := middleware.GetRequestMeta(c)
+	if meta == nil || meta.AuthUserID <= 0 {
+		c.JSON(http.StatusUnauthorized, utils.H{"error": "unauthorized"})
+		return
+	}
+	trackID := c.Param("track_id")
+	if err := h.trackSvc.DeleteTrack(ctx, meta.AuthUserID, trackID); err != nil {
+		switch {
+		case errors.Is(err, repository.ErrNotFound):
+			c.JSON(http.StatusNotFound, utils.H{"error": err.Error()})
+			return
+		case errors.Is(err, service.ErrForbidden):
+			c.JSON(http.StatusForbidden, utils.H{"error": "forbidden"})
+			return
+		default:
+			var iae *service.InvalidArgumentError
+			if errors.As(err, &iae) {
+				c.JSON(http.StatusBadRequest, utils.H{"error": iae.Error()})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+			return
+		}
+	}
+	c.JSON(http.StatusOK, successResponse(StatusResult{Status: "ok"}))
+}
+
 // ListRecommend handles GET /api/track/recommend/list
 func (h *TrackHandler) ListRecommend(ctx context.Context, c *app.RequestContext) {
 	meta := middleware.GetRequestMeta(c)

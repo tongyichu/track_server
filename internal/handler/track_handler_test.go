@@ -971,6 +971,45 @@ func TestUpdateTrackInfo_Forbidden(t *testing.T) {
 	}
 }
 
+func TestDeleteTrack_Success(t *testing.T) {
+	e := newTestEnv()
+	ctx := context.Background()
+	token := e.generateTestToken(1001)
+
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-del", UserID: 1001, Title: "待删除", IsRunning: true, Status: models.TrackStatusNormal})
+
+	w := e.perform(http.MethodDelete, "/api/v1/track/trk-del", nil, authHeader(token), ut.Header{Key: middleware.HeaderUserID, Value: "1001"})
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected status 200, got %d, body=%s", w.Result().StatusCode(), string(w.Result().Body()))
+	}
+	updated, err := e.trackRepo.FindByID(ctx, "trk-del")
+	if err != nil {
+		t.Fatalf("find updated track failed: %v", err)
+	}
+	if updated.Status != models.TrackStatusDeleted {
+		t.Fatalf("expected status deleted, got %d", updated.Status)
+	}
+	if updated.DeletedAt.IsZero() {
+		t.Fatalf("expected deleted_at set")
+	}
+	if updated.IsRunning {
+		t.Fatalf("expected is_running false")
+	}
+}
+
+func TestDeleteTrack_Forbidden(t *testing.T) {
+	e := newTestEnv()
+	ctx := context.Background()
+	token := e.generateTestToken(1001)
+
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-del-forbidden", UserID: 1002, Title: "他人的轨迹", Status: models.TrackStatusNormal})
+
+	w := e.perform(http.MethodDelete, "/api/v1/track/trk-del-forbidden", nil, authHeader(token), ut.Header{Key: middleware.HeaderUserID, Value: "1001"})
+	if w.Result().StatusCode() != http.StatusForbidden {
+		t.Fatalf("expected status 403, got %d", w.Result().StatusCode())
+	}
+}
+
 // TestUploadTrackCloud_ClearsRunning verifies upload_cloud marks running track as finished.
 func TestUploadTrackCloud_ClearsRunning(t *testing.T) {
 	e := newTestEnv()

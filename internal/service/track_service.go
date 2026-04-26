@@ -678,6 +678,34 @@ func (s *TrackService) UpdateTrackInfo(ctx context.Context, userID int64, trackI
 	return track, nil
 }
 
+// DeleteTrack performs a soft delete for a track.
+// It only marks status as deleted and records deleted_at.
+func (s *TrackService) DeleteTrack(ctx context.Context, userID int64, trackID string) error {
+	if userID <= 0 {
+		return invalidArg("userID is required")
+	}
+	if trackID == "" {
+		return invalidArg("trackID is required")
+	}
+	track, err := s.tracks.FindByID(ctx, trackID)
+	if err != nil {
+		return err
+	}
+	if track.UserID != userID {
+		return ErrForbidden
+	}
+	// 软删除：仅标记 status=0，并记录删除时间。
+	if track.Status != models.TrackStatusDeleted {
+		track.Status = models.TrackStatusDeleted
+	}
+	if track.DeletedAt.IsZero() {
+		track.DeletedAt = time.Now()
+	}
+	// 删除后不应再被视为进行中。
+	track.IsRunning = false
+	return s.tracks.Update(ctx, track)
+}
+
 // IsCollected reports whether a track is collected by user.
 func (s *TrackService) IsCollected(ctx context.Context, userID int64, trackID string) (bool, error) {
 	return s.collects.IsCollected(ctx, userID, trackID)

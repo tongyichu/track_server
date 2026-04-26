@@ -285,6 +285,42 @@ func TestUpdateTrackInfo_EmptyPatch(t *testing.T) {
 	}
 }
 
+func TestDeleteTrack_SoftDelete(t *testing.T) {
+	trackRepo, _, collectRepo, _, _ := repository.NewInMemoryRepositories()
+	svc := NewTrackService(trackRepo, collectRepo)
+	ctx := context.Background()
+
+	_ = trackRepo.Create(ctx, &models.Track{ID: "trk-del", UserID: 1001, Title: "t", IsRunning: true, Status: models.TrackStatusNormal})
+
+	if err := svc.DeleteTrack(ctx, 1001, "trk-del"); err != nil {
+		t.Fatalf("DeleteTrack returned error: %v", err)
+	}
+	track, err := trackRepo.FindByID(ctx, "trk-del")
+	if err != nil {
+		t.Fatalf("FindByID returned error: %v", err)
+	}
+	if track.Status != models.TrackStatusDeleted {
+		t.Fatalf("expected status deleted, got %d", track.Status)
+	}
+	if track.DeletedAt.IsZero() {
+		t.Fatalf("expected deleted_at set")
+	}
+	if track.IsRunning {
+		t.Fatalf("expected is_running false after delete")
+	}
+}
+
+func TestDeleteTrack_Forbidden(t *testing.T) {
+	trackRepo, _, collectRepo, _, _ := repository.NewInMemoryRepositories()
+	svc := NewTrackService(trackRepo, collectRepo)
+	ctx := context.Background()
+
+	_ = trackRepo.Create(ctx, &models.Track{ID: "trk-del-other", UserID: 1002, Title: "t"})
+	if err := svc.DeleteTrack(ctx, 1001, "trk-del-other"); err == nil {
+		t.Fatalf("expected forbidden error")
+	}
+}
+
 func TestGenerateUniqueDefaultNickname_UsesCuratedBase(t *testing.T) {
 	_, userRepo, _, loginLogRepo, _ := repository.NewInMemoryRepositories()
 	svc := NewLoginService(userRepo, loginLogRepo, "", "", "test-secret")

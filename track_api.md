@@ -21,6 +21,7 @@
 | 9 | [我的轨迹列表](#9-我的轨迹列表) | GET | `/track/my/list` | ✅ |
 | 10 | [获取用户详情](#10-获取用户详情) | GET | `/user/:user_id/detail` | ✅ |
 | 11 | [更新轨迹信息](#11-更新轨迹信息) | PUT | `/track/:track_id/update` | ✅ |
+| 12 | [删除轨迹](#12-删除轨迹) | DELETE | `/track/:track_id` | ✅ |
 
 ---
 
@@ -92,6 +93,7 @@ Token 的获取与说明参考 `login.md`。
 | `status` | int | 轨迹状态：`0` 删除，`1` 正常，`2` 私密 |
 | `created_at` | string | 创建时间 |
 | `updated_at` | string | 更新时间 |
+| `deleted_at` | string | 删除时间（软删除；未删除时为空或不返回） |
 
 ---
 
@@ -1047,3 +1049,54 @@ curl -X PUT "http://<host>:<port>/api/v1/track/trk1/update" \
   - 轨迹不存在
 - `500 Internal Server Error`
   - 服务端更新轨迹失败
+
+
+---
+
+## 12. 删除轨迹
+
+删除指定轨迹（软删除）：仅标记 `status=0` 并记录 `deleted_at`。
+
+### 说明
+
+- 仅允许删除属于当前鉴权用户（Authorization Token 解析出的 `user_id`）的轨迹；若 `track_id` 不属于该用户，返回 `403 Forbidden`。
+- 软删除后：轨迹会从“推荐列表/搜索列表/我的轨迹列表”等列表接口中被过滤（列表均不返回 `status=0` 的轨迹）。
+
+### 请求
+
+```
+DELETE /api/v1/track/:track_id
+Authorization: Bearer <token>
+```
+
+**Path 参数：**
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `track_id` | string | 是 | 轨迹 ID |
+
+### 响应
+
+**状态码：** `200 OK`
+
+返回统一响应格式 `StandardResponse`：
+
+```json
+{
+  "code": 0,
+  "data": {
+    "status": "ok"
+  }
+}
+```
+
+### 错误响应
+
+- `401 Unauthorized`
+  - 缺少/无效/过期的 Token
+- `403 Forbidden`
+  - 删除他人的轨迹
+- `404 Not Found`
+  - 轨迹不存在
+- `500 Internal Server Error`
+  - 服务端删除轨迹失败

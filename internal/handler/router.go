@@ -101,6 +101,7 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 	// track related
 	auth.POST("/track/create", trackHandler.CreateTrack)
 	auth.PUT("/track/:track_id/update", trackHandler.UpdateTrackInfo)
+	auth.DELETE("/track/:track_id", trackHandler.DeleteTrack)
 	auth.GET("/track/recommend/list", trackHandler.ListRecommend)
 	auth.GET("/track/my/list", trackHandler.ListMyTracks)
 	auth.GET("/track/search/list", trackHandler.SearchTracks)

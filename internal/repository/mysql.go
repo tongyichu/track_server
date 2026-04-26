@@ -55,6 +55,7 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 			avg_speed_kmh DOUBLE NOT NULL DEFAULT 1,
 			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+			deleted_at DATETIME NULL COMMENT '删除时间',
 			PRIMARY KEY (id),
 			KEY idx_user_running (user_id, is_running, start_time),
 			KEY idx_user_time (user_id, start_time)
@@ -132,6 +133,9 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 	if err := ensureMySQLTrackLocateAddrColumn(ctx, db); err != nil {
+		return err
+	}
+	if err := ensureMySQLTrackDeletedAtColumn(ctx, db); err != nil {
 		return err
 	}
 	if err := ensureMySQLTrackTypeColumn(ctx, db); err != nil {
@@ -237,6 +241,26 @@ func ensureMySQLTrackLocateAddrColumn(ctx context.Context, db *sql.DB) error {
 	_, err = db.ExecContext(ctx, `ALTER TABLE track_records ADD COLUMN locate_addr VARCHAR(128) NOT NULL DEFAULT '' COMMENT '轨迹的具体位置信息' AFTER city_code`)
 	if err != nil {
 		return fmt.Errorf("add track_records.locate_addr column: %w", err)
+	}
+	return nil
+}
+
+func ensureMySQLTrackDeletedAtColumn(ctx context.Context, db *sql.DB) error {
+	var count int
+	err := db.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM information_schema.COLUMNS
+		WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'track_records' AND COLUMN_NAME = 'deleted_at'`,
+	).Scan(&count)
+	if err != nil {
+		return fmt.Errorf("check track_records.deleted_at column: %w", err)
+	}
+	if count > 0 {
+		return nil
+	}
+	_, err = db.ExecContext(ctx, `ALTER TABLE track_records ADD COLUMN deleted_at DATETIME NULL COMMENT '删除时间' AFTER updated_at`)
+	if err != nil {
+		return fmt.Errorf("add track_records.deleted_at column: %w", err)
 	}
 	return nil
 }
@@ -476,11 +500,11 @@ func (r *MySQLTrackRepository) Create(ctx context.Context, t *models.Track) erro
 		`INSERT INTO track_records (
 			id, user_id, city_code, locate_addr, track_type, title, start_time, end_time,
 			distance, duration, elevation_gain, raw_track_url, track_screenshot_url, track_no_map_bg_screenshot_url, is_running, status, avg_speed_kmh,
-			created_at, updated_at
-		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+			created_at, updated_at, deleted_at
+		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		t.ID, t.UserID, t.CityCode, t.LocateAddr, t.TrackType, t.Title, t.StartTime, nullableTimeValue(t.EndTime),
 		t.Distance, t.Duration, t.ElevationGain, nullableStringValue(t.RawTrackURL), nullableStringValue(t.TrackScreenshotURL), nullableStringValue(t.TrackNoMapBgScreenshotURL), t.IsRunning, t.Status, t.AvgSpeedKmh,
-		t.CreatedAt, t.UpdatedAt,
+		t.CreatedAt, t.UpdatedAt, nullableTimeValue(t.DeletedAt),
 	)
 	if err != nil {
 		var mysqlErr *mysql.MySQLError
@@ -498,10 +522,11 @@ func (r *MySQLTrackRepository) Update(ctx context.Context, t *models.Track) erro
 	res, err := r.db.ExecContext(ctx,
 		`UPDATE track_records SET
 			user_id=?, city_code=?, locate_addr=?, track_type=?, title=?, start_time=?, end_time=?,
-			distance=?, duration=?, elevation_gain=?, raw_track_url=?, track_screenshot_url=?, track_no_map_bg_screenshot_url=?, is_running=?, status=?, avg_speed_kmh=?, updated_at=?
+			distance=?, duration=?, elevation_gain=?, raw_track_url=?, track_screenshot_url=?, track_no_map_bg_screenshot_url=?, is_running=?, status=?, avg_speed_kmh=?, updated_at=?, deleted_at=?
 		WHERE id=?`,
 		t.UserID, t.CityCode, t.LocateAddr, t.TrackType, t.Title, t.StartTime, nullableTimeValue(t.EndTime),
 		t.Distance, t.Duration, t.ElevationGain, nullableStringValue(t.RawTrackURL), nullableStringValue(t.TrackScreenshotURL), nullableStringValue(t.TrackNoMapBgScreenshotURL), t.IsRunning, t.Status, t.AvgSpeedKmh, t.UpdatedAt,
+		nullableTimeValue(t.DeletedAt),
 		t.ID,
 	)
 	if err != nil {
@@ -518,12 +543,13 @@ func (r *MySQLTrackRepository) FindByID(ctx context.Context, id string) (*models
 	row := r.db.QueryRowContext(ctx,
 		`SELECT id, user_id, city_code, locate_addr, track_type, title, start_time, end_time,
 			distance, duration, elevation_gain, raw_track_url, track_screenshot_url, track_no_map_bg_screenshot_url, is_running, status, avg_speed_kmh,
-			created_at, updated_at
+			created_at, updated_at, deleted_at
 		FROM track_records WHERE id=?`, id)
 
 	var (
 		t               models.Track
 		endTime         sql.NullTime
+		deletedAt       sql.NullTime
 		distance        sql.NullFloat64
 		duration        sql.NullInt64
 		elevationGain   sql.NullInt64
@@ -534,7 +560,7 @@ func (r *MySQLTrackRepository) FindByID(ctx context.Context, id string) (*models
 	if err := row.Scan(
 		&t.ID, &t.UserID, &t.CityCode, &t.LocateAddr, &t.TrackType, &t.Title, &t.StartTime, &endTime,
 		&distance, &duration, &elevationGain, &rawTrackURL, &trackScreenshot, &noMapBgShot, &t.IsRunning, &t.Status, &t.AvgSpeedKmh,
-		&t.CreatedAt, &t.UpdatedAt,
+		&t.CreatedAt, &t.UpdatedAt, &deletedAt,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
@@ -543,6 +569,9 @@ func (r *MySQLTrackRepository) FindByID(ctx context.Context, id string) (*models
 	}
 	if endTime.Valid {
 		t.EndTime = endTime.Time
+	}
+	if deletedAt.Valid {
+		t.DeletedAt = deletedAt.Time
 	}
 	if distance.Valid {
 		t.Distance = distance.Float64
@@ -587,7 +616,7 @@ func (r *MySQLTrackRepository) StatsByUserID(ctx context.Context, userID int64) 
 		ctx,
 		`SELECT COUNT(*) AS cnt, COALESCE(SUM(distance), 0) AS total_distance
 		 FROM track_records
-		 WHERE user_id=? AND is_running=0 AND status IN (?, ?)` ,
+		 WHERE user_id=? AND is_running=0 AND status IN (?, ?)`,
 		userID, models.TrackStatusNormal, models.TrackStatusPrivate,
 	)
 	var (
@@ -1093,7 +1122,7 @@ func (r *MySQLNavigationRepository) CountByTrackOwnerUserID(ctx context.Context,
 		`SELECT COUNT(*)
 		 FROM track_navigations n
 		 JOIN track_records t ON n.track_id = t.id
-		 WHERE t.user_id=? AND t.is_running=0 AND t.status IN (?, ?)` ,
+		 WHERE t.user_id=? AND t.is_running=0 AND t.status IN (?, ?)`,
 		ownerUserID, models.TrackStatusNormal, models.TrackStatusPrivate,
 	)
 	var cnt int64
