@@ -966,6 +966,7 @@ Authorization: Bearer <token>
 ### 说明
 
 - 该接口用于“补全”轨迹记录：**只有当数据库中对应字段为空（字符串为空串或数值为 0）时才会更新**；否则该字段会被忽略并保持原值不变。
+- 仅允许更新属于当前鉴权用户（Authorization Token 解析出的 `user_id`）的轨迹；若 `track_id` 不属于该用户，返回 `403 Forbidden`。
 - `is_running` 不支持更新：请求体中传入会被服务端**静默忽略**，并保持数据库原值不变。
 - 资源字段（`raw_track_url` / `track_screenshot_url` / `track_no_map_bg_screenshot_url`）在请求时通常是 OSS 地址，但响应会被服务端替换为可直接从业务服务器下载的本地链接（路径在 `/api/v1/static/...` 下，需要登录态）。
 - 兼容旧字段：`screenshot_url` 会被当作 `track_screenshot_url` 处理。

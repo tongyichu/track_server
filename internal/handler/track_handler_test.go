@@ -934,6 +934,29 @@ func TestUpdateTrackInfo_IgnoreIsRunning(t *testing.T) {
 	}
 }
 
+func TestUpdateTrackInfo_UsesJWTUserID(t *testing.T) {
+	e := newTestEnv()
+	ctx := context.Background()
+	// token user_id=1001, but header carries a different X-User-ID.
+	token := e.generateTestToken(1001)
+
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-upd-jwt", UserID: 1001, Title: "轨迹", Distance: 0, IsRunning: true, Status: models.TrackStatusNormal})
+	body, _ := json.Marshal(map[string]interface{}{"distance": 1})
+
+	w := e.perform(http.MethodPut, "/api/v1/track/trk-upd-jwt/update", body, authHeader(token), ut.Header{Key: middleware.HeaderUserID, Value: "1002"})
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected status 200, got %d, body=%s", w.Result().StatusCode(), string(w.Result().Body()))
+	}
+
+	updated, err := e.trackRepo.FindByID(ctx, "trk-upd-jwt")
+	if err != nil {
+		t.Fatalf("find updated track failed: %v", err)
+	}
+	if updated.UserID != 1001 {
+		t.Fatalf("expected track user_id 1001 (from JWT), got %d", updated.UserID)
+	}
+}
+
 func TestUpdateTrackInfo_Forbidden(t *testing.T) {
 	e := newTestEnv()
 	ctx := context.Background()
