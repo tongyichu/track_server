@@ -423,8 +423,8 @@ func buildTrackSummaryPage(summaries []*models.TrackSummary, hasMore bool) (*mod
 	return page, nil
 }
 
-func buildMyTrackSummaryPage(summaries []*models.MyTrackSummary, hasMore bool) (*models.MyTrackSummaryPage, error) {
-	page := &models.MyTrackSummaryPage{Items: summaries, HasMore: hasMore}
+func buildMyTrackSummaryPage(summaries []*models.MyTrackSummary, hasMore bool, totalCount int64) (*models.MyTrackSummaryPage, error) {
+	page := &models.MyTrackSummaryPage{Items: summaries, HasMore: hasMore, TotalCount: totalCount}
 	if hasMore && len(summaries) > 0 {
 		nextCursor, err := encodeTrackListCursor(summaries[len(summaries)-1].StartTime, summaries[len(summaries)-1].ID)
 		if err != nil {
@@ -442,24 +442,20 @@ func (s *TrackService) ListRecommend(ctx context.Context, userID int64, input Li
 	if err != nil {
 		return nil, err
 	}
-	tracks, err := s.tracks.ListRecommend(ctx, userID, cursor, limit+1)
+	tracks, hasMore, err := s.listTracksWithNonEmptyRawTrackURL(ctx, cursor, limit, func(cur *models.TrackListCursor, n int) ([]*models.Track, error) {
+		return s.tracks.ListRecommend(ctx, userID, cur, n)
+	})
 	if err != nil {
 		return nil, err
-	}
-	hasMore := len(tracks) > limit
-	if hasMore {
-		tracks = tracks[:limit]
 	}
 	summaries := toSummaries(tracks)
 	// 填充服务器本地可下载截图 URL：
 	// - 命中本地缓存则直接返回本地 URL
 	// - 未命中则兜底拉取一次（同步，带 5 秒超时），失败则返回空串，不阻塞列表返回其它字段
 	// - userID<=0（未登录游客）时无法申请 STS 读凭证，只尝试本地命中，不主动下载
-	// 排查日志（轻量）：若列表返回的 track_screenshot_url/raw_track_url 为空，
-	// 输出汇总计数，避免逐条日志刷屏。
+	// 排查日志（轻量）：若列表返回的 track_screenshot_url 为空，输出汇总计数，避免逐条日志刷屏。
 	var (
 		srcEmptySS, resEmptySS   int
-		srcEmptyRaw, resEmptyRaw int
 	)
 	if s.screenshotCache == nil && s.rawTrackCache == nil {
 		// cache 服务未启用时，两个字段会一直为空。
@@ -486,21 +482,16 @@ func (s *TrackService) ListRecommend(ctx context.Context, userID int64, input Li
 				}
 			}
 			if s.rawTrackCache != nil {
-				if t.RawTrackURL == "" {
-					srcEmptyRaw++
-				} else {
+				if t.RawTrackURL != "" {
 					local := s.rawTrackCache.EnsureCached(cacheCtx, userID, t.ID, t.RawTrackURL)
 					summaries[i].RawTrackURL = local
-					if local == "" {
-						resEmptyRaw++
-					}
 				}
 			}
 			cancel()
 		}
 		// 仅在出现“源为空 / 结果为空”时打汇总日志，避免正常请求刷屏。
-		if srcEmptySS > 0 || resEmptySS > 0 || srcEmptyRaw > 0 || resEmptyRaw > 0 {
-			log.Printf("[ListRecommend][asset] summary user_id=%d tracks=%d screenshot_src_empty=%d screenshot_result_empty=%d raw_src_empty=%d raw_result_empty=%d", userID, len(tracks), srcEmptySS, resEmptySS, srcEmptyRaw, resEmptyRaw)
+		if srcEmptySS > 0 || resEmptySS > 0 {
+			log.Printf("[ListRecommend][asset] summary user_id=%d tracks=%d screenshot_src_empty=%d screenshot_result_empty=%d", userID, len(tracks), srcEmptySS, resEmptySS)
 		}
 	}
 	if err := s.fillTrackSummaryExtras(ctx, userID, summaries); err != nil {
@@ -517,6 +508,10 @@ func (s *TrackService) ListMyTracks(ctx context.Context, userID int64, input Lis
 	}
 	limit := normalizeTrackPageLimit(input.Limit)
 	cursor, err := decodeTrackListCursor(input.Cursor)
+	if err != nil {
+		return nil, err
+	}
+	totalCount, err := s.countMyTracksTotalCount(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -545,7 +540,102 @@ func (s *TrackService) ListMyTracks(ctx context.Context, userID int64, input Lis
 	if err := s.fillMyTrackSummaryExtras(ctx, summaries); err != nil {
 		return nil, err
 	}
-	return buildMyTrackSummaryPage(summaries, hasMore)
+	return buildMyTrackSummaryPage(summaries, hasMore, totalCount)
+}
+
+func (s *TrackService) countMyTracksTotalCount(ctx context.Context, userID int64) (int64, error) {
+	if userID <= 0 {
+		return 0, nil
+	}
+	if s.tracks == nil {
+		return 0, nil
+	}
+	if p, ok := s.tracks.(userTrackStatsProvider); ok {
+		cnt, _, err := p.StatsByUserID(ctx, userID)
+		return cnt, err
+	}
+
+	// fallback：逐页扫描（用于非 SQL/测试实现）。
+	var (
+		cursor *models.TrackListCursor
+		limit  = 200
+		count  int64
+	)
+	for page := 0; page < 1000; page++ { // guard: 避免异常实现导致死循环
+		items, err := s.tracks.ListByUserID(ctx, userID, cursor, limit)
+		if err != nil {
+			return 0, err
+		}
+		if len(items) == 0 {
+			break
+		}
+		count += int64(len(items))
+		last := items[len(items)-1]
+		if last == nil || last.ID == "" || last.StartTime.IsZero() {
+			break
+		}
+		cursor = &models.TrackListCursor{StartTime: last.StartTime, ID: last.ID}
+		if len(items) < limit {
+			break
+		}
+	}
+	return count, nil
+}
+
+type collectVisibleCounter interface {
+	CountVisibleByUserID(ctx context.Context, userID int64) (int64, error)
+}
+
+func (s *TrackService) countVisibleCollectedTotalCount(ctx context.Context, userID int64) (int64, error) {
+	if userID <= 0 {
+		return 0, nil
+	}
+	if s.collects == nil || s.tracks == nil {
+		return 0, nil
+	}
+	if c, ok := s.collects.(collectVisibleCounter); ok {
+		return c.CountVisibleByUserID(ctx, userID)
+	}
+
+	// fallback：逐页扫描收藏记录 + FindByID 过滤（用于非 SQL/测试实现）。
+	var (
+		cursor *models.TrackCollectCursor
+		limit  = 200
+		count  int64
+	)
+	for page := 0; page < 10000; page++ { // guard
+		collects, err := s.collects.ListByUserID(ctx, userID, cursor, limit)
+		if err != nil {
+			return 0, err
+		}
+		if len(collects) == 0 {
+			break
+		}
+		for _, c := range collects {
+			if c == nil || c.TrackID == "" {
+				continue
+			}
+			t, err := s.tracks.FindByID(ctx, c.TrackID)
+			if err != nil {
+				if errors.Is(err, repository.ErrNotFound) {
+					continue
+				}
+				return 0, err
+			}
+			if t != nil && t.Status == models.TrackStatusNormal && !t.IsRunning {
+				count++
+			}
+		}
+		last := collects[len(collects)-1]
+		if last == nil || last.TrackID == "" || last.CreatedAt.IsZero() {
+			break
+		}
+		cursor = &models.TrackCollectCursor{CreatedAt: last.CreatedAt, TrackID: last.TrackID}
+		if len(collects) < limit {
+			break
+		}
+	}
+	return count, nil
 }
 
 // SearchTracks searches tracks globally by keyword.
@@ -555,13 +645,11 @@ func (s *TrackService) SearchTracks(ctx context.Context, userID int64, input Sea
 	if err != nil {
 		return nil, err
 	}
-	tracks, err := s.tracks.Search(ctx, input.Keyword, cursor, limit+1)
+	tracks, hasMore, err := s.listTracksWithNonEmptyRawTrackURL(ctx, cursor, limit, func(cur *models.TrackListCursor, n int) ([]*models.Track, error) {
+		return s.tracks.Search(ctx, input.Keyword, cur, n)
+	})
 	if err != nil {
 		return nil, err
-	}
-	hasMore := len(tracks) > limit
-	if hasMore {
-		tracks = tracks[:limit]
 	}
 	summaries := toSummaries(tracks)
 	// 与推荐列表保持一致：填充资源本地 URL / 收藏状态与总数 / 用户昵称和头像。
@@ -586,6 +674,69 @@ func (s *TrackService) SearchTracks(ctx context.Context, userID int64, input Sea
 	return buildTrackSummaryPage(summaries, hasMore)
 }
 
+// listTracksWithNonEmptyRawTrackURL scans pages from repository and only keeps tracks with non-empty RawTrackURL.
+//
+// This is used by ListRecommend/SearchTracks to filter out tracks that do not have raw_track_url.
+// It makes a bounded number of additional repository calls to compensate for filtered items.
+func (s *TrackService) listTracksWithNonEmptyRawTrackURL(
+	ctx context.Context,
+	cursor *models.TrackListCursor,
+	limit int,
+	fetch func(cur *models.TrackListCursor, n int) ([]*models.Track, error),
+) ([]*models.Track, bool, error) {
+	if limit <= 0 {
+		return []*models.Track{}, false, nil
+	}
+
+	// 过滤后仍尽量凑满一页：多取一些并允许最多多轮扫描。
+	const maxRounds = 5
+	batch := limit*5 + 1
+	if batch < limit+1 {
+		batch = limit + 1
+	}
+	if batch > 200 {
+		batch = 200
+	}
+
+	scanCursor := cursor
+	res := make([]*models.Track, 0, limit+1)
+	for round := 0; round < maxRounds && len(res) < limit+1; round++ {
+		items, err := fetch(scanCursor, batch)
+		if err != nil {
+			return nil, false, err
+		}
+		if len(items) == 0 {
+			break
+		}
+		for _, t := range items {
+			if t == nil {
+				continue
+			}
+			if t.RawTrackURL == "" {
+				continue
+			}
+			res = append(res, t)
+			if len(res) >= limit+1 {
+				break
+			}
+		}
+		last := items[len(items)-1]
+		if last == nil || last.ID == "" || last.StartTime.IsZero() {
+			break
+		}
+		scanCursor = &models.TrackListCursor{StartTime: last.StartTime, ID: last.ID}
+		if len(items) < batch {
+			break
+		}
+	}
+
+	hasMore := len(res) > limit
+	if hasMore {
+		res = res[:limit]
+	}
+	return res, hasMore, nil
+}
+
 // ListCollectedTracks 返回“当前用户已收藏的轨迹列表”。
 //
 // 返回结构约定：
@@ -604,6 +755,10 @@ func (s *TrackService) ListCollectedTracks(ctx context.Context, userID int64, in
 	}
 	limit := normalizeTrackPageLimit(input.Limit)
 	cur, err := decodeTrackCollectCursor(input.Cursor)
+	if err != nil {
+		return nil, err
+	}
+	totalCount, err := s.countVisibleCollectedTotalCount(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -701,7 +856,7 @@ func (s *TrackService) ListCollectedTracks(ctx context.Context, userID int64, in
 		})
 	}
 
-	page := &models.CollectedTrackSummaryPage{Items: items, HasMore: hasMore}
+	page := &models.CollectedTrackSummaryPage{Items: items, HasMore: hasMore, TotalCount: totalCount}
 	if hasMore && nextCursorSrc != nil {
 		nextCursor, err := encodeTrackCollectCursor(nextCursorSrc.CreatedAt, nextCursorSrc.TrackID)
 		if err != nil {

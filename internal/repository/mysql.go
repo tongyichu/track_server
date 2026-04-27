@@ -1059,6 +1059,29 @@ func (r *MySQLCollectRepository) ListByUserID(ctx context.Context, userID int64,
 	return res, nil
 }
 
+// CountVisibleByUserID returns the count of collected tracks that are visible in collected list.
+// Visibility rule keeps consistent with TrackService.ListCollectedTracks:
+// - track exists
+// - track.status == Normal
+// - track.is_running == 0
+func (r *MySQLCollectRepository) CountVisibleByUserID(ctx context.Context, userID int64) (int64, error) {
+	if userID <= 0 {
+		return 0, nil
+	}
+	row := r.db.QueryRowContext(ctx,
+		`SELECT COUNT(*)
+		 FROM track_collects c
+		 JOIN track_records t ON c.track_id = t.id
+		 WHERE c.user_id=? AND t.status=? AND t.is_running=0`,
+		userID, models.TrackStatusNormal,
+	)
+	var cnt int64
+	if err := row.Scan(&cnt); err != nil {
+		return 0, err
+	}
+	return cnt, nil
+}
+
 func (r *MySQLCollectRepository) RemoveByTrackID(ctx context.Context, trackID string) error {
 	if trackID == "" {
 		return nil

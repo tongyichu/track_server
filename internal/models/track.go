@@ -128,6 +128,7 @@ type TrackSummaryPage struct {
 // Field names keep consistent with TrackSummaryPage.
 type CollectedTrackSummaryPage struct {
 	Items      []*CollectedTrackSummary `json:"items"`
+	TotalCount int64                   `json:"total_count"`
 	NextCursor string                  `json:"next_cursor,omitempty"`
 	HasMore    bool                    `json:"has_more"`
 }
@@ -160,6 +161,7 @@ type MyTrackSummary struct {
 // MyTrackSummaryPage 是“我的轨迹”列表的分页返回模型。
 type MyTrackSummaryPage struct {
 	Items      []*MyTrackSummary `json:"items"`
+	TotalCount int64             `json:"total_count"`
 	NextCursor string            `json:"next_cursor,omitempty"`
 	HasMore    bool              `json:"has_more"`
 }

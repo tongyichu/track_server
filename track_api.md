@@ -578,6 +578,7 @@ curl -X DELETE "http://<host>:<port>/api/v1/track_collect?track_id=trk2" \
 - 首次请求不传 `cursor`；继续翻页时透传上一次返回的 `next_cursor`。
 - `limit` 为可选参数，默认 `20`，最大 `50`；超出最大值时服务端会自动截断到 `50`。
 - 响应中的 `has_more` 表示是否还有下一页；仅当 `has_more=true` 时才会返回 `next_cursor`。
+- 响应中的 `total_count` 表示“我的轨迹”总数（按本接口口径：排除删除与进行中，包含 `正常/私密`）。
 
 ### 请求
 
@@ -755,6 +756,7 @@ Authorization: Bearer <token>
 - `raw_track_url` / `track_screenshot_url` 为服务端本地可下载链接（不是 OSS 地址）。
 - `limit` 为可选参数，默认 `20`，最大 `50`；超出最大值时服务端会自动截断到 `50`。
 - 响应中的 `has_more` 表示是否还有下一页；仅当 `has_more=true` 时才会返回 `next_cursor`。
+- 响应中的 `total_count` 表示“我的轨迹”总数（按本接口口径：排除删除与进行中，包含 `正常/私密`）。
 
 ### 请求
 
@@ -811,6 +813,7 @@ Authorization: Bearer <token>
         "raw_track_url": "/api/v1/static/raw_tracks/trk1.dat"
       }
     ],
+    "total_count": 2,
     "next_cursor": "eyJzdGFydF90aW1lIjoiMjAyNi0wNC0yMFQxMjowMDowMFoiLCJpZCI6InRyazEifQ",
     "has_more": true
   }
@@ -822,6 +825,7 @@ Authorization: Bearer <token>
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `data.items` | `MyTrackSummary[]` | 当前页我的轨迹列表。 |
+| `data.total_count` | int64 | 我的轨迹总数（按本接口口径）。 |
 | `data.next_cursor` | string | 下一页游标；当 `has_more=false` 时为空或不返回。 |
 | `data.has_more` | bool | 是否还有下一页数据。 |
 | `data.items[].id` | string | 轨迹 ID。 |
@@ -1116,6 +1120,7 @@ Authorization: Bearer <token>
 - 与推荐/搜索列表口径保持一致：仅返回 `status=1` 且 `is_running=false` 的轨迹。
 - 返回结构与 [推荐轨迹列表](#2-推荐轨迹列表) 保持一致，但每个 item **不返回** `collected` 字段（因为该列表内的轨迹天然已收藏）。
 - `cursor` 为服务端生成的分页游标，客户端应原样透传，不要解析。
+- 响应中的 `total_count` 表示“收藏列表”总数（按本接口口径：仅统计 `status=1` 且 `is_running=false` 的轨迹）。
 
 ### 请求
 
@@ -1165,11 +1170,21 @@ Authorization: Bearer <token>
         "raw_track_url": "/api/v1/static/raw_tracks/NO.00000001.dat"
       }
     ],
+    "total_count": 10,
     "next_cursor": "<opaque>",
     "has_more": true
   }
 }
 ```
+
+**字段说明：**
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `data.items` | `CollectedTrackSummary[]` | 当前页收藏的轨迹列表（字段与 `TrackSummary` 基本一致，但不返回 `collected`）。 |
+| `data.total_count` | int64 | 收藏列表总数（按本接口口径）。 |
+| `data.next_cursor` | string | 下一页游标；当 `has_more=false` 时为空或不返回。 |
+| `data.has_more` | bool | 是否还有下一页数据。 |
 
 ### 错误响应
 

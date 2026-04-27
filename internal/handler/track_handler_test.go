@@ -338,7 +338,7 @@ func TestRecommendAndSearch(t *testing.T) {
 	endTime := startTime.Add(90 * time.Minute)
 	_, _ = e.userRepo.CreateIfNotExists(ctx, &models.User{ID: 1001, Nickname: "Alice", AvatarURL: "https://example.com/avatar.png"})
 	// seed one normal track and one running track (running should be excluded from recommend list)
-	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk1", UserID: 1001, CityCode: "330100", TrackType: "徒步", Title: "西湖徒步", StartTime: startTime, EndTime: endTime, AvgSpeedKmh: 12.34, IsRunning: false, Status: models.TrackStatusNormal})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk1", UserID: 1001, CityCode: "330100", TrackType: "徒步", Title: "西湖徒步", StartTime: startTime, EndTime: endTime, AvgSpeedKmh: 12.34, RawTrackURL: "https://example.com/trk1.dat", IsRunning: false, Status: models.TrackStatusNormal})
 	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-running", UserID: 1001, Title: "进行中跑步", IsRunning: true})
 	_ = e.collectRepo.AddCollect(ctx, 1001, "trk1")
 
@@ -477,6 +477,9 @@ func TestCollectedTracksList_OmitsCollectedField(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected data object, got %+v", raw["data"])
 	}
+	if got, ok := data["total_count"].(float64); !ok || int64(got) != 1 {
+		t.Fatalf("expected total_count=1, got %+v", data["total_count"])
+	}
 	items, ok := data["items"].([]any)
 	if !ok || len(items) != 1 {
 		t.Fatalf("expected items size 1, got %+v", data["items"])
@@ -502,9 +505,9 @@ func TestRecommendCursorPagination(t *testing.T) {
 	start2 := time.Date(2026, 4, 22, 12, 0, 0, 0, time.UTC)
 	start3 := time.Date(2026, 4, 21, 12, 0, 0, 0, time.UTC)
 
-	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-c", UserID: 1001, Title: "第三条", StartTime: start3, EndTime: start3.Add(30 * time.Minute), AvgSpeedKmh: 8.8, IsRunning: false, Status: models.TrackStatusNormal})
-	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-a", UserID: 1001, Title: "第一条", StartTime: start1, EndTime: start1.Add(30 * time.Minute), AvgSpeedKmh: 10.1, IsRunning: false, Status: models.TrackStatusNormal})
-	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-b", UserID: 1002, Title: "第二条", StartTime: start2, EndTime: start2.Add(30 * time.Minute), AvgSpeedKmh: 9.5, IsRunning: false, Status: models.TrackStatusNormal})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-c", UserID: 1001, Title: "第三条", StartTime: start3, EndTime: start3.Add(30 * time.Minute), AvgSpeedKmh: 8.8, RawTrackURL: "https://example.com/trk-c.dat", IsRunning: false, Status: models.TrackStatusNormal})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-a", UserID: 1001, Title: "第一条", StartTime: start1, EndTime: start1.Add(30 * time.Minute), AvgSpeedKmh: 10.1, RawTrackURL: "https://example.com/trk-a.dat", IsRunning: false, Status: models.TrackStatusNormal})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-b", UserID: 1002, Title: "第二条", StartTime: start2, EndTime: start2.Add(30 * time.Minute), AvgSpeedKmh: 9.5, RawTrackURL: "https://example.com/trk-b.dat", IsRunning: false, Status: models.TrackStatusNormal})
 
 	w1 := e.perform(http.MethodGet, "/api/v1/track/recommend/list?limit=2", nil, authHeader(token), ut.Header{Key: middleware.HeaderUserID, Value: "1001"})
 	if w1.Result().StatusCode() != http.StatusOK {
@@ -578,7 +581,7 @@ func TestRecommendAndSearchUseDefaultAvatarWhenMissing(t *testing.T) {
 	startTime := time.Date(2026, 4, 24, 8, 0, 0, 0, time.UTC)
 
 	_, _ = e.userRepo.CreateIfNotExists(ctx, &models.User{ID: 1001, Nickname: "Alice"})
-	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-default-avatar", UserID: 1001, Title: "默认头像轨迹", StartTime: startTime, IsRunning: false, Status: models.TrackStatusNormal})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-default-avatar", UserID: 1001, Title: "默认头像轨迹", StartTime: startTime, RawTrackURL: "https://example.com/trk-default-avatar.dat", IsRunning: false, Status: models.TrackStatusNormal})
 
 	w1 := e.perform(http.MethodGet, "/api/v1/track/recommend/list", nil, authHeader(token), ut.Header{Key: middleware.HeaderUserID, Value: "1001"})
 	if w1.Result().StatusCode() != http.StatusOK {
@@ -616,9 +619,9 @@ func TestSearchCursorPagination(t *testing.T) {
 	start2 := time.Date(2026, 4, 22, 12, 0, 0, 0, time.UTC)
 	start3 := time.Date(2026, 4, 21, 12, 0, 0, 0, time.UTC)
 
-	_ = e.trackRepo.Create(ctx, &models.Track{ID: "search-c", UserID: 1001, Title: "西湖夜骑", StartTime: start3, AvgSpeedKmh: 7.2, IsRunning: false, Status: models.TrackStatusNormal})
-	_ = e.trackRepo.Create(ctx, &models.Track{ID: "search-a", UserID: 1001, Title: "西湖晨跑", StartTime: start1, AvgSpeedKmh: 11.6, IsRunning: false, Status: models.TrackStatusNormal})
-	_ = e.trackRepo.Create(ctx, &models.Track{ID: "search-b", UserID: 1002, Title: "西湖徒步", StartTime: start2, AvgSpeedKmh: 6.4, IsRunning: false, Status: models.TrackStatusNormal})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "search-c", UserID: 1001, Title: "西湖夜骑", StartTime: start3, AvgSpeedKmh: 7.2, RawTrackURL: "https://example.com/search-c.dat", IsRunning: false, Status: models.TrackStatusNormal})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "search-a", UserID: 1001, Title: "西湖晨跑", StartTime: start1, AvgSpeedKmh: 11.6, RawTrackURL: "https://example.com/search-a.dat", IsRunning: false, Status: models.TrackStatusNormal})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "search-b", UserID: 1002, Title: "西湖徒步", StartTime: start2, AvgSpeedKmh: 6.4, RawTrackURL: "https://example.com/search-b.dat", IsRunning: false, Status: models.TrackStatusNormal})
 	_ = e.trackRepo.Create(ctx, &models.Track{ID: "other-keyword", UserID: 1002, Title: "灵隐寺", StartTime: start1, IsRunning: false, Status: models.TrackStatusNormal})
 
 	w1 := e.perform(http.MethodGet, "/api/v1/track/search/list?keyword=西湖&limit=2", nil, authHeader(token), ut.Header{Key: middleware.HeaderUserID, Value: "1001"})
@@ -700,6 +703,9 @@ func TestListMyTracks_OmitsFields(t *testing.T) {
 	if result.Data == nil {
 		t.Fatalf("expected my list page data")
 	}
+	if result.Data.TotalCount != 2 {
+		t.Fatalf("expected total_count=2, got %d", result.Data.TotalCount)
+	}
 	if len(result.Data.Items) != 2 {
 		t.Fatalf("expected my list size 2, got %d", len(result.Data.Items))
 	}
@@ -752,6 +758,9 @@ func TestListMyTracksCursorPagination(t *testing.T) {
 	if page1.Data == nil {
 		t.Fatalf("expected first my page data")
 	}
+	if page1.Data.TotalCount != 3 {
+		t.Fatalf("expected first my page total_count=3, got %d", page1.Data.TotalCount)
+	}
 	if len(page1.Data.Items) != 2 {
 		t.Fatalf("expected first my page size 2, got %d", len(page1.Data.Items))
 	}
@@ -785,6 +794,9 @@ func TestListMyTracksCursorPagination(t *testing.T) {
 	decodeJSON(t, w2.Result().Body(), &page2)
 	if page2.Data == nil {
 		t.Fatalf("expected second my page data")
+	}
+	if page2.Data.TotalCount != 3 {
+		t.Fatalf("expected second my page total_count=3, got %d", page2.Data.TotalCount)
 	}
 	if len(page2.Data.Items) != 1 || page2.Data.Items[0].ID != "my-c" {
 		t.Fatalf("unexpected second my page items: %+v", page2.Data.Items)
