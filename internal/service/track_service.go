@@ -515,13 +515,11 @@ func (s *TrackService) ListMyTracks(ctx context.Context, userID int64, input Lis
 	if err != nil {
 		return nil, err
 	}
-	tracks, err := s.tracks.ListByUserID(ctx, userID, cursor, limit+1)
+	tracks, hasMore, err := s.listTracksWithNonEmptyRawTrackURL(ctx, cursor, limit, func(cur *models.TrackListCursor, n int) ([]*models.Track, error) {
+		return s.tracks.ListByUserID(ctx, userID, cur, n)
+	})
 	if err != nil {
 		return nil, err
-	}
-	hasMore := len(tracks) > limit
-	if hasMore {
-		tracks = tracks[:limit]
 	}
 	summaries := toMySummaries(tracks)
 	// 与推荐/搜索列表保持一致：填充资源本地 URL（截图/原始轨迹）。
@@ -550,9 +548,11 @@ func (s *TrackService) countMyTracksTotalCount(ctx context.Context, userID int64
 	if s.tracks == nil {
 		return 0, nil
 	}
-	if p, ok := s.tracks.(userTrackStatsProvider); ok {
-		cnt, _, err := p.StatsByUserID(ctx, userID)
-		return cnt, err
+	// 优先走仓储侧聚合（仅统计 raw_track_url 非空的轨迹）。
+	if p, ok := s.tracks.(interface{
+		CountByUserIDWithNonEmptyRawTrackURL(ctx context.Context, userID int64) (int64, error)
+	}); ok {
+		return p.CountByUserIDWithNonEmptyRawTrackURL(ctx, userID)
 	}
 
 	// fallback：逐页扫描（用于非 SQL/测试实现）。
@@ -569,7 +569,15 @@ func (s *TrackService) countMyTracksTotalCount(ctx context.Context, userID int64
 		if len(items) == 0 {
 			break
 		}
-		count += int64(len(items))
+		for _, t := range items {
+			if t == nil {
+				continue
+			}
+			if t.RawTrackURL == "" {
+				continue
+			}
+			count++
+		}
 		last := items[len(items)-1]
 		if last == nil || last.ID == "" || last.StartTime.IsZero() {
 			break

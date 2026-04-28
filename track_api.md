@@ -754,9 +754,10 @@ Authorization: Bearer <token>
 - 返回结果中的 `locate_addr` 为轨迹的具体位置信息。
 - 返回结果中的 `avg_speed_kmh` 为平均速度（km/h）。
 - `raw_track_url` / `track_screenshot_url` 为服务端本地可下载链接（不是 OSS 地址）。
+- 若轨迹记录的 `raw_track_url` 为空，则该轨迹不会出现在本接口返回结果中。
 - `limit` 为可选参数，默认 `20`，最大 `50`；超出最大值时服务端会自动截断到 `50`。
 - 响应中的 `has_more` 表示是否还有下一页；仅当 `has_more=true` 时才会返回 `next_cursor`。
-- 响应中的 `total_count` 表示“我的轨迹”总数（按本接口口径：排除删除与进行中，包含 `正常/私密`）。
+- 响应中的 `total_count` 表示“我的轨迹”总数（按本接口口径：排除删除与进行中，包含 `正常/私密`，并且仅统计 `raw_track_url` 非空的轨迹）。
 
 ### 请求
 

@@ -684,8 +684,8 @@ func TestListMyTracks_OmitsFields(t *testing.T) {
 	startOther := time.Date(2026, 4, 22, 12, 0, 0, 0, time.UTC)
 
 	// seed tracks: 2 for user 1001 (one private), 1 for other user; running should be excluded.
-	_ = e.trackRepo.Create(ctx, &models.Track{ID: "my1", UserID: 1001, CityCode: "330100", TrackType: "跑步", Title: "我的1", StartTime: start1, AvgSpeedKmh: 13.2, IsRunning: false, Status: models.TrackStatusNormal})
-	_ = e.trackRepo.Create(ctx, &models.Track{ID: "my2", UserID: 1001, CityCode: "330100", TrackType: "徒步", Title: "我的2", StartTime: start2, AvgSpeedKmh: 5.6, IsRunning: false, Status: models.TrackStatusPrivate})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "my1", UserID: 1001, CityCode: "330100", TrackType: "跑步", Title: "我的1", StartTime: start1, AvgSpeedKmh: 13.2, RawTrackURL: "https://example.com/my1.dat", IsRunning: false, Status: models.TrackStatusNormal})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "my2", UserID: 1001, CityCode: "330100", TrackType: "徒步", Title: "我的2", StartTime: start2, AvgSpeedKmh: 5.6, RawTrackURL: "https://example.com/my2.dat", IsRunning: false, Status: models.TrackStatusPrivate})
 	_ = e.trackRepo.Create(ctx, &models.Track{ID: "other1", UserID: 2002, Title: "别人的", StartTime: startOther, IsRunning: false, Status: models.TrackStatusNormal})
 	_ = e.trackRepo.Create(ctx, &models.Track{ID: "my-running", UserID: 1001, Title: "进行中", IsRunning: true, Status: models.TrackStatusNormal})
 
@@ -744,9 +744,9 @@ func TestListMyTracksCursorPagination(t *testing.T) {
 	start2 := time.Date(2026, 4, 22, 12, 0, 0, 0, time.UTC)
 	start3 := time.Date(2026, 4, 21, 12, 0, 0, 0, time.UTC)
 
-	_ = e.trackRepo.Create(ctx, &models.Track{ID: "my-c", UserID: 1001, Title: "第三条", StartTime: start3, EndTime: start3.Add(40 * time.Minute), AvgSpeedKmh: 8.3, IsRunning: false, Status: models.TrackStatusNormal})
-	_ = e.trackRepo.Create(ctx, &models.Track{ID: "my-a", UserID: 1001, Title: "第一条", StartTime: start1, EndTime: start1.Add(40 * time.Minute), AvgSpeedKmh: 12.1, IsRunning: false, Status: models.TrackStatusNormal})
-	_ = e.trackRepo.Create(ctx, &models.Track{ID: "my-b", UserID: 1001, Title: "第二条", StartTime: start2, EndTime: start2.Add(40 * time.Minute), AvgSpeedKmh: 9.9, IsRunning: false, Status: models.TrackStatusPrivate})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "my-c", UserID: 1001, Title: "第三条", StartTime: start3, EndTime: start3.Add(40 * time.Minute), AvgSpeedKmh: 8.3, RawTrackURL: "https://example.com/my-c.dat", IsRunning: false, Status: models.TrackStatusNormal})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "my-a", UserID: 1001, Title: "第一条", StartTime: start1, EndTime: start1.Add(40 * time.Minute), AvgSpeedKmh: 12.1, RawTrackURL: "https://example.com/my-a.dat", IsRunning: false, Status: models.TrackStatusNormal})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "my-b", UserID: 1001, Title: "第二条", StartTime: start2, EndTime: start2.Add(40 * time.Minute), AvgSpeedKmh: 9.9, RawTrackURL: "https://example.com/my-b.dat", IsRunning: false, Status: models.TrackStatusPrivate})
 	_ = e.trackRepo.Create(ctx, &models.Track{ID: "other-user", UserID: 1002, Title: "别人的", StartTime: start1, IsRunning: false, Status: models.TrackStatusNormal})
 
 	w1 := e.perform(http.MethodGet, "/api/v1/track/my/list?limit=2", nil, authHeader(token))

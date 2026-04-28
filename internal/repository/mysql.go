@@ -688,6 +688,23 @@ func (r *MySQLTrackRepository) StatsByUserID(ctx context.Context, userID int64) 
 	return cnt, dist, nil
 }
 
+// CountByUserIDWithNonEmptyRawTrackURL returns track count of a user where raw_track_url is non-empty.
+// 口径与 ListByUserID 保持一致：排除删除与进行中轨迹，并且仅统计 raw_track_url 非空。
+func (r *MySQLTrackRepository) CountByUserIDWithNonEmptyRawTrackURL(ctx context.Context, userID int64) (int64, error) {
+	row := r.db.QueryRowContext(
+		ctx,
+		`SELECT COUNT(*) AS cnt
+		 FROM track_records
+		 WHERE user_id=? AND is_running=0 AND status IN (?, ?) AND raw_track_url IS NOT NULL AND raw_track_url <> ''`,
+		userID, models.TrackStatusNormal, models.TrackStatusPrivate,
+	)
+	var cnt int64
+	if err := row.Scan(&cnt); err != nil {
+		return 0, err
+	}
+	return cnt, nil
+}
+
 func (r *MySQLTrackRepository) ListByUserID(ctx context.Context, userID int64, cursor *models.TrackListCursor, limit int) ([]*models.Track, error) {
 	if limit <= 0 {
 		limit = 20
