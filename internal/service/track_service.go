@@ -7,6 +7,8 @@ import (
 	"errors"
 	"log"
 	"math"
+	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -22,6 +24,7 @@ type TrackService struct {
 	navigations     repository.NavigationRepository
 	users           repository.UserRepository
 	screenshotCache *AssetCacheService
+	avatarCache     *AssetCacheService
 	rawTrackCache   *AssetCacheService
 }
 
@@ -182,6 +185,12 @@ func (s *TrackService) SetNavigationRepository(navigations repository.Navigation
 // 独立于构造函数是为了避免破坏既有单测/调用方；在未设置时，相关逻辑会直接跳过。
 func (s *TrackService) SetScreenshotCache(cache *AssetCacheService) {
 	s.screenshotCache = cache
+}
+
+// SetAvatarCache 设置头像本地缓存服务。
+// 仅用于需要把 OSS 头像地址改写为服务端静态资源地址的列表场景。
+func (s *TrackService) SetAvatarCache(cache *AssetCacheService) {
+	s.avatarCache = cache
 }
 
 // SetRawTrackCache 设置原始轨迹文件本地缓存服务。
@@ -455,7 +464,7 @@ func (s *TrackService) ListRecommend(ctx context.Context, userID int64, input Li
 	// - userID<=0（未登录游客）时无法申请 STS 读凭证，只尝试本地命中，不主动下载
 	// 排查日志（轻量）：若列表返回的 track_screenshot_url 为空，输出汇总计数，避免逐条日志刷屏。
 	var (
-		srcEmptySS, resEmptySS   int
+		srcEmptySS, resEmptySS int
 	)
 	if s.screenshotCache == nil && s.rawTrackCache == nil {
 		// cache 服务未启用时，两个字段会一直为空。
@@ -549,7 +558,7 @@ func (s *TrackService) countMyTracksTotalCount(ctx context.Context, userID int64
 		return 0, nil
 	}
 	// 优先走仓储侧聚合（仅统计 raw_track_url 非空的轨迹）。
-	if p, ok := s.tracks.(interface{
+	if p, ok := s.tracks.(interface {
 		CountByUserIDWithNonEmptyRawTrackURL(ctx context.Context, userID int64) (int64, error)
 	}); ok {
 		return p.CountByUserIDWithNonEmptyRawTrackURL(ctx, userID)
@@ -1258,7 +1267,15 @@ func (s *TrackService) fillTrackSummaryExtras(ctx context.Context, userID int64,
 			u, err := s.users.FindByID(ctx, uid)
 			switch {
 			case err == nil && u != nil:
-				users[uid] = userBrief{avatar: fallbackAvatarURL(uid, u.AvatarURL), nick: u.Nickname}
+				avatar := fallbackAvatarURL(uid, u.AvatarURL)
+				if s.avatarCache != nil && shouldRewriteAvatarURL(avatar) {
+					cacheCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+					if local := s.avatarCache.EnsureCached(cacheCtx, uid, formatUserAvatarCacheKey(uid), avatar); local != "" {
+						avatar = local
+					}
+					cancel()
+				}
+				users[uid] = userBrief{avatar: avatar, nick: u.Nickname}
 			case errors.Is(err, repository.ErrNotFound):
 				users[uid] = userBrief{avatar: defaultAvatarURL(uid)}
 			case err != nil:
@@ -1311,4 +1328,20 @@ func haversineDistance(lat1, lon1, lat2, lon2 float64) float64 {
 		math.Cos(phi1)*math.Cos(phi2)*math.Sin(deltaLambda/2)*math.Sin(deltaLambda/2)
 	c := 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
 	return earthRadius * c
+}
+
+func shouldRewriteAvatarURL(avatarURL string) bool {
+	if avatarURL == "" || strings.HasPrefix(avatarURL, "/api/v1/static/") {
+		return false
+	}
+	u, err := url.Parse(avatarURL)
+	if err != nil || u.Host == "" {
+		return false
+	}
+	host := strings.ToLower(u.Hostname())
+	return strings.Contains(host, ".aliyuncs.com") || strings.Contains(host, ".aliyun-inc.com")
+}
+
+func formatUserAvatarCacheKey(userID int64) string {
+	return strings.TrimSpace(strconv.FormatInt(userID, 10))
 }

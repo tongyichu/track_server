@@ -57,6 +57,7 @@ func newTestEnv() *testEnv {
 		".png",
 	)
 	if err == nil {
+		trackSvc.SetAvatarCache(avatarCache)
 		userSvc.SetAvatarCache(avatarCache)
 	}
 
@@ -448,6 +449,45 @@ func TestRecommendAndSearch(t *testing.T) {
 	}
 	if search.Data.Items[0].NavigateCount != 1 {
 		t.Fatalf("expected search track trk1 navigate_count=1, got %d", search.Data.Items[0].NavigateCount)
+	}
+}
+
+func TestTrackSummaryList_RewritesOSSAvatarToStaticURL(t *testing.T) {
+	e := newTestEnv()
+	ctx := context.Background()
+	token := e.generateTestToken(1001)
+	startTime := time.Date(2026, 4, 20, 12, 0, 0, 0, time.UTC)
+	avatarURL := "https://track-avatar.oss-cn-beijing.aliyuncs.com/avatar/1001.png"
+
+	if err := os.WriteFile(filepath.Join(e.avatarCacheDir, "1001.png"), []byte("avatar"), 0o644); err != nil {
+		t.Fatalf("seed avatar cache failed: %v", err)
+	}
+	_, _ = e.userRepo.CreateIfNotExists(ctx, &models.User{ID: 1001, Nickname: "Alice", AvatarURL: avatarURL})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-oss-avatar", UserID: 1001, Title: "头像静态化", StartTime: startTime, RawTrackURL: "https://example.com/trk-oss-avatar.dat", IsRunning: false, Status: models.TrackStatusNormal})
+
+	w := e.perform(http.MethodGet, "/api/v1/track/recommend/list", nil, authHeader(token), ut.Header{Key: middleware.HeaderUserID, Value: "1001"})
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Result().StatusCode())
+	}
+	var result handler.StandardResponse[*models.TrackSummaryPage]
+	decodeJSON(t, w.Result().Body(), &result)
+	if result.Data == nil || len(result.Data.Items) != 1 {
+		t.Fatalf("unexpected recommend result: %+v", result)
+	}
+	if result.Data.Items[0].UserAvatarURL != "/api/v1/static/avatars/1001.png" {
+		t.Fatalf("expected recommend user_avatar_url rewritten to static url, got %q", result.Data.Items[0].UserAvatarURL)
+	}
+
+	w = e.perform(http.MethodGet, "/api/v1/track/search/list?keyword=头像静态化", nil, authHeader(token))
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected search status 200, got %d", w.Result().StatusCode())
+	}
+	decodeJSON(t, w.Result().Body(), &result)
+	if result.Data == nil || len(result.Data.Items) != 1 {
+		t.Fatalf("unexpected search result: %+v", result)
+	}
+	if result.Data.Items[0].UserAvatarURL != "/api/v1/static/avatars/1001.png" {
+		t.Fatalf("expected search user_avatar_url rewritten to static url, got %q", result.Data.Items[0].UserAvatarURL)
 	}
 }
 

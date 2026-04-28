@@ -124,6 +124,7 @@ func main() {
 		log.Printf("avatar cache disabled: %v", err)
 		avatarCache = nil
 	} else {
+		trackSvc.SetAvatarCache(avatarCache)
 		userSvc.SetAvatarCache(avatarCache)
 		log.Printf("avatar cache enabled: %s", avatarCacheDir)
 	}
