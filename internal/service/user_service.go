@@ -15,9 +15,9 @@ const defaultAvatarURLPrefix = "/api/v1/static/default_avatars/"
 var defaultAvatarFiles = [...]string{"girl_01.png", "girl_2.png", "boy_01.png", "boy_02.png"}
 
 var (
-	ErrNoFieldsToUpdate = errors.New("no fields to update")
+	ErrNoFieldsToUpdate  = errors.New("no fields to update")
 	ErrAvatarURLRequired = errors.New("avatar_url is required")
-	ErrNameRequired = errors.New("name is required")
+	ErrNameRequired      = errors.New("name is required")
 )
 
 // UserService provides business logic related to user profile and settings.
@@ -34,9 +34,9 @@ type UserService struct {
 // - AvatarURL/Name requires non-empty when provided.
 // - Signature can be empty string to clear when provided.
 type UserProfilePatch struct {
-	AvatarURL  *string
-	Name       *string
-	Signature  *string
+	AvatarURL *string
+	Name      *string
+	Signature *string
 }
 
 // NewUserService constructs a new UserService.
@@ -70,7 +70,8 @@ type UserStats struct {
 }
 
 // GetUserStats 返回用户维度的统计信息。
-// - 总里程/轨迹总数：来自 track_records（按“我的轨迹”口径：排除删除与进行中）。
+// - 总里程：来自 track_records（按“我的轨迹”口径：排除删除与进行中）。
+// - 轨迹总数：在上面基础上进一步过滤 raw_track_url 为空的记录。
 // - 轨迹被使用总次数：来自 track_navigations（统计该用户轨迹被导航使用的记录数）。
 func (s *UserService) GetUserStats(ctx context.Context, userID int64) (*UserStats, error) {
 	stats := &UserStats{}
@@ -105,7 +106,9 @@ func (s *UserService) GetUserStats(ctx context.Context, userID int64) (*UserStat
 					if t == nil {
 						continue
 					}
-					stats.TrackCount++
+					if t.RawTrackURL != "" {
+						stats.TrackCount++
+					}
 					stats.TotalDistance += t.Distance
 				}
 				last := items[len(items)-1]

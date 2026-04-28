@@ -145,17 +145,24 @@ func (r *MongoTrackRepository) FindRunningByUserID(ctx context.Context, userID i
 }
 
 // StatsByUserID returns (trackCount, totalDistance) for tracks owned by user.
-// 口径与 ListByUserID 保持一致：排除删除与进行中轨迹。
+// 口径与 ListByUserID 保持一致：排除删除与进行中轨迹；其中 trackCount 仅统计 raw_track_url 非空的轨迹。
 func (r *MongoTrackRepository) StatsByUserID(ctx context.Context, userID int64) (int64, float64, error) {
 	pipeline := mongo.Pipeline{
 		bson.D{{Key: "$match", Value: bson.M{
 			"user_id":    userID,
 			"is_running": false,
-			"status": bson.M{"$in": []models.TrackStatus{models.TrackStatusNormal, models.TrackStatusPrivate}},
+			"status":     bson.M{"$in": []models.TrackStatus{models.TrackStatusNormal, models.TrackStatusPrivate}},
 		}}},
 		bson.D{{Key: "$group", Value: bson.M{
-			"_id":  nil,
-			"cnt":  bson.M{"$sum": 1},
+			"_id": nil,
+			"cnt": bson.M{"$sum": bson.M{"$cond": bson.A{
+				bson.M{"$and": bson.A{
+					bson.M{"$ne": bson.A{"$raw_track_url", nil}},
+					bson.M{"$ne": bson.A{"$raw_track_url", ""}},
+				}},
+				1,
+				0,
+			}}},
 			"dist": bson.M{"$sum": "$distance"},
 		}}},
 	}

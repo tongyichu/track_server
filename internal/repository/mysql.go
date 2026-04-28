@@ -669,11 +669,12 @@ func (r *MySQLTrackRepository) FindRunningByUserID(ctx context.Context, userID i
 }
 
 // StatsByUserID returns (trackCount, totalDistance) for a user.
-// 口径与 ListByUserID 保持一致：排除删除与进行中轨迹。
+// 口径与 ListByUserID 保持一致：排除删除与进行中轨迹；其中 trackCount 仅统计 raw_track_url 非空的轨迹。
 func (r *MySQLTrackRepository) StatsByUserID(ctx context.Context, userID int64) (int64, float64, error) {
 	row := r.db.QueryRowContext(
 		ctx,
-		`SELECT COUNT(*) AS cnt, COALESCE(SUM(distance), 0) AS total_distance
+		`SELECT COALESCE(SUM(CASE WHEN raw_track_url IS NOT NULL AND raw_track_url <> '' THEN 1 ELSE 0 END), 0) AS cnt,
+		        COALESCE(SUM(distance), 0) AS total_distance
 		 FROM track_records
 		 WHERE user_id=? AND is_running=0 AND status IN (?, ?)`,
 		userID, models.TrackStatusNormal, models.TrackStatusPrivate,

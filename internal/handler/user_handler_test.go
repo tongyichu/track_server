@@ -90,9 +90,11 @@ func TestGetUserDetail_Stats(t *testing.T) {
 	_, _ = e.userRepo.CreateIfNotExists(ctx, &models.User{ID: 1001, Nickname: "Alice"})
 
 	start := time.Date(2026, 4, 24, 8, 0, 0, 0, time.UTC)
-	// 计入统计：2 条已完成轨迹（normal/private）
-	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-a", UserID: 1001, Title: "A", StartTime: start, IsRunning: false, Status: models.TrackStatusNormal, Distance: 1200})
-	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-b", UserID: 1001, Title: "B", StartTime: start.Add(-time.Hour), IsRunning: false, Status: models.TrackStatusPrivate, Distance: 800})
+	// 计入统计：2 条已完成且 raw_track_url 非空的轨迹（normal/private）
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-a", UserID: 1001, Title: "A", StartTime: start, IsRunning: false, Status: models.TrackStatusNormal, Distance: 1200, RawTrackURL: "https://example.com/trk-a.dat"})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-b", UserID: 1001, Title: "B", StartTime: start.Add(-time.Hour), IsRunning: false, Status: models.TrackStatusPrivate, Distance: 800, RawTrackURL: "https://example.com/trk-b.dat"})
+	// 不计入 TrackCount：raw_track_url 为空
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-empty-raw", UserID: 1001, Title: "E", StartTime: start.Add(-30 * time.Minute), IsRunning: false, Status: models.TrackStatusNormal, Distance: 600})
 	// 不计入：进行中/删除
 	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-running", UserID: 1001, Title: "R", StartTime: start.Add(-2 * time.Hour), IsRunning: true, Status: models.TrackStatusNormal, Distance: 999})
 	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-deleted", UserID: 1001, Title: "D", StartTime: start.Add(-3 * time.Hour), IsRunning: false, Status: models.TrackStatusDeleted, Distance: 999})
@@ -122,8 +124,8 @@ func TestGetUserDetail_Stats(t *testing.T) {
 	if data.TrackCount != 2 {
 		t.Fatalf("expected track_count 2, got %d", data.TrackCount)
 	}
-	if data.TotalDistance != 2000 {
-		t.Fatalf("expected total_distance 2000, got %v", data.TotalDistance)
+	if data.TotalDistance != 2600 {
+		t.Fatalf("expected total_distance 2600, got %v", data.TotalDistance)
 	}
 	if data.TrackUsedCount != 3 {
 		t.Fatalf("expected track_used_count 3, got %d", data.TrackUsedCount)
