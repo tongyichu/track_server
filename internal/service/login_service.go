@@ -197,14 +197,15 @@ func (s *LoginService) LoginBySMS(ctx context.Context, phone, code, ip, deviceID
 	delete(s.smsCodes, phone)
 	s.mu.Unlock()
 
-	userID, err := phoneToUserID(phone)
-	if err != nil {
-		return nil, err
-	}
-	user, err := s.users.FindByID(ctx, userID)
+	user, err := s.users.FindByPhone(ctx, phone)
 	if err != nil {
 		if !errors.Is(err, repository.ErrNotFound) {
 			return nil, err
+		}
+
+		userID, idErr := phoneToUserID(phone)
+		if idErr != nil {
+			return nil, idErr
 		}
 
 		nickname, genErr := s.generateUniqueDefaultNickname(ctx)

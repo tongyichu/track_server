@@ -194,6 +194,48 @@ func TestLoginBySMS_DuplicateNicknameAppendsRandomNumber(t *testing.T) {
 	}
 }
 
+func TestLoginBySMS_SamePhoneReusesExistingUserID(t *testing.T) {
+	e := newTestEnv()
+	phone := "13800001111"
+
+	code1 := sendSMSCodeViaService(t, e, phone)
+	body1, _ := json.Marshal(map[string]string{"phone": phone, "code": code1})
+	w1 := e.perform(http.MethodPost, "/api/v1/login/sms", body1)
+	if w1.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("first login should succeed, got %d", w1.Result().StatusCode())
+	}
+	var result1 handler.StandardResponse[*service.LoginResult]
+	decodeJSON(t, w1.Result().Body(), &result1)
+	if result1.Data == nil || result1.Data.User == nil {
+		t.Fatalf("expected first login user")
+	}
+
+	code2 := sendSMSCodeViaService(t, e, phone)
+	body2, _ := json.Marshal(map[string]string{"phone": phone, "code": code2})
+	w2 := e.perform(http.MethodPost, "/api/v1/login/sms", body2)
+	if w2.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("second login should succeed, got %d", w2.Result().StatusCode())
+	}
+	var result2 handler.StandardResponse[*service.LoginResult]
+	decodeJSON(t, w2.Result().Body(), &result2)
+	if result2.Data == nil || result2.Data.User == nil {
+		t.Fatalf("expected second login user")
+	}
+	if result2.Data.UserID != result1.Data.UserID {
+		t.Fatalf("expected same phone to reuse user_id, got %d and %d", result1.Data.UserID, result2.Data.UserID)
+	}
+	if result2.Data.User.Nickname != result1.Data.User.Nickname {
+		t.Fatalf("expected same phone to reuse nickname, got %q and %q", result1.Data.User.Nickname, result2.Data.User.Nickname)
+	}
+	stored, err := e.userRepo.FindByPhone(context.Background(), phone)
+	if err != nil {
+		t.Fatalf("expected stored user by phone, got err=%v", err)
+	}
+	if stored.ID != result1.Data.UserID {
+		t.Fatalf("expected stored user id %d, got %d", result1.Data.UserID, stored.ID)
+	}
+}
+
 func TestLoginBySMS_InvalidCode(t *testing.T) {
 	e := newTestEnv()
 

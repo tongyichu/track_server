@@ -975,6 +975,31 @@ func (r *MySQLUserRepository) FindByID(ctx context.Context, id int64) (*models.U
 	return &u, nil
 }
 
+func (r *MySQLUserRepository) FindByPhone(ctx context.Context, phone string) (*models.User, error) {
+	row := r.db.QueryRowContext(ctx,
+		`SELECT id, nickname, avatar_url, signature, phone, client_language, created_at, updated_at FROM users WHERE phone=? LIMIT 1`,
+		phone,
+	)
+	var (
+		u         models.User
+		avatarURL sql.NullString
+		signature sql.NullString
+	)
+	if err := row.Scan(&u.ID, &u.Nickname, &avatarURL, &signature, &u.Phone, &u.ClientLanguage, &u.CreatedAt, &u.UpdatedAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	if avatarURL.Valid {
+		u.AvatarURL = avatarURL.String
+	}
+	if signature.Valid {
+		u.Signature = signature.String
+	}
+	return &u, nil
+}
+
 func (r *MySQLUserRepository) FindByNickname(ctx context.Context, nickname string) (*models.User, error) {
 	row := r.db.QueryRowContext(ctx,
 		`SELECT id, nickname, avatar_url, signature, phone, client_language, created_at, updated_at FROM users WHERE nickname=? LIMIT 1`,

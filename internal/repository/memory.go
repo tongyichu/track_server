@@ -351,6 +351,18 @@ func (r *InMemoryUserRepository) FindByID(_ context.Context, id int64) (*models.
 	return u, nil
 }
 
+// FindByPhone finds a user by phone.
+func (r *InMemoryUserRepository) FindByPhone(_ context.Context, phone string) (*models.User, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, u := range r.users {
+		if u.Phone == phone {
+			return u, nil
+		}
+	}
+	return nil, ErrNotFound
+}
+
 // FindByNickname finds a user by nickname.
 func (r *InMemoryUserRepository) FindByNickname(_ context.Context, nickname string) (*models.User, error) {
 	r.mu.RLock()
