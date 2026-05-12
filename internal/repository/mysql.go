@@ -15,11 +15,11 @@ import (
 )
 
 // NewMySQLRepositories wires MySQL-backed repositories and ensures schema exists.
-func NewMySQLRepositories(ctx context.Context, db *sql.DB) (TrackRepository, UserRepository, CollectRepository, LoginLogRepository, NavigationRepository, error) {
+func NewMySQLRepositories(ctx context.Context, db *sql.DB) (TrackRepository, UserRepository, CollectRepository, LoginLogRepository, NavigationRepository, AppReleaseRepository, error) {
 	if err := ensureMySQLSchema(ctx, db); err != nil {
-		return nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, err
 	}
-	return NewMySQLTrackRepository(db), NewMySQLUserRepository(db), NewMySQLCollectRepository(db), NewMySQLLoginLogRepository(db), NewMySQLNavigationRepository(db), nil
+	return NewMySQLTrackRepository(db), NewMySQLUserRepository(db), NewMySQLCollectRepository(db), NewMySQLLoginLogRepository(db), NewMySQLNavigationRepository(db), NewMySQLAppReleaseRepository(db), nil
 }
 
 func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
@@ -107,6 +107,26 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 			platform VARCHAR(10) COMMENT '客户端平台：ios / android，用于按平台统计和排查问题',
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
+		`CREATE TABLE IF NOT EXISTS app_releases (
+			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+			platform VARCHAR(16) NOT NULL COMMENT 'android / ios',
+			version_name VARCHAR(32) NOT NULL,
+			version_code INT UNSIGNED NOT NULL,
+			min_supported_version_code INT UNSIGNED NOT NULL DEFAULT 0,
+			package_url VARCHAR(512) NOT NULL DEFAULT '',
+			package_size BIGINT UNSIGNED NOT NULL DEFAULT 0,
+			package_md5 VARCHAR(64) NOT NULL DEFAULT '',
+			release_notes TEXT,
+			force_update TINYINT NOT NULL DEFAULT 0,
+			status VARCHAR(16) NOT NULL DEFAULT 'published',
+			operator_user_id BIGINT NOT NULL DEFAULT 0,
+			operator_name VARCHAR(64) NOT NULL DEFAULT '',
+			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+			PRIMARY KEY (id),
+			UNIQUE KEY uk_platform_version_code (platform, version_code),
+			KEY idx_platform_status_code (platform, status, version_code)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='App 发布信息表';`,
 	}
 
 	for _, stmt := range stmts {
@@ -1402,4 +1422,188 @@ func OpenMySQL(dsn string) (*sql.DB, error) {
 	db.SetMaxIdleConns(5)
 	db.SetConnMaxLifetime(30 * time.Minute)
 	return db, nil
+}
+
+// MySQLAppReleaseRepository implements AppReleaseRepository on top of MySQL.
+type MySQLAppReleaseRepository struct{ db *sql.DB }
+
+func NewMySQLAppReleaseRepository(db *sql.DB) *MySQLAppReleaseRepository {
+	return &MySQLAppReleaseRepository{db: db}
+}
+
+// Upsert 插入或更新一条发布记录。
+//
+// 通过 (platform, version_code) 的唯一键实现幂等：
+// - 首次插入时填充所有字段；
+// - 再次插入同一 (platform, version_code) 时，更新可变字段（保留 created_at）。
+func (r *MySQLAppReleaseRepository) Upsert(ctx context.Context, release *models.AppRelease) error {
+	if release == nil {
+		return errors.New("release is nil")
+	}
+	if release.Platform == "" {
+		return errors.New("release.platform is required")
+	}
+	if release.VersionCode <= 0 {
+		return errors.New("release.version_code must be > 0")
+	}
+	now := time.Now()
+	if release.CreatedAt.IsZero() {
+		release.CreatedAt = now
+	}
+	release.UpdatedAt = now
+	if release.Status == "" {
+		release.Status = models.AppReleaseStatusPublished
+	}
+
+	res, err := r.db.ExecContext(ctx,
+		`INSERT INTO app_releases (
+			platform, version_name, version_code, min_supported_version_code,
+			package_url, package_size, package_md5, release_notes, force_update,
+			status, operator_user_id, operator_name, created_at, updated_at
+		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+		ON DUPLICATE KEY UPDATE
+			version_name=VALUES(version_name),
+			min_supported_version_code=VALUES(min_supported_version_code),
+			package_url=VALUES(package_url),
+			package_size=VALUES(package_size),
+			package_md5=VALUES(package_md5),
+			release_notes=VALUES(release_notes),
+			force_update=VALUES(force_update),
+			status=VALUES(status),
+			operator_user_id=VALUES(operator_user_id),
+			operator_name=VALUES(operator_name),
+			updated_at=VALUES(updated_at)`,
+		release.Platform, release.VersionName, release.VersionCode, release.MinSupportedVersionCode,
+		release.PackageURL, release.PackageSize, release.PackageMD5, nullableStringValue(release.ReleaseNotes), boolToInt(release.ForceUpdate),
+		release.Status, release.OperatorUserID, release.OperatorName, release.CreatedAt, release.UpdatedAt,
+	)
+	if err != nil {
+		return err
+	}
+	// LastInsertId：插入时返回新自增 id；更新时 MySQL 返回 0。
+	id, _ := res.LastInsertId()
+	if id > 0 {
+		release.ID = id
+		return nil
+	}
+	// 更新分支：回查一次拿到实际 id 及 created_at。
+	existing, err := r.GetByPlatformVersion(ctx, release.Platform, release.VersionCode)
+	if err != nil {
+		return err
+	}
+	release.ID = existing.ID
+	release.CreatedAt = existing.CreatedAt
+	return nil
+}
+
+func (r *MySQLAppReleaseRepository) GetByID(ctx context.Context, id int64) (*models.AppRelease, error) {
+	row := r.db.QueryRowContext(ctx, appReleaseSelectSQL()+` WHERE id=?`, id)
+	return scanAppReleaseRow(row)
+}
+
+func (r *MySQLAppReleaseRepository) GetByPlatformVersion(ctx context.Context, platform models.AppReleasePlatform, versionCode int64) (*models.AppRelease, error) {
+	row := r.db.QueryRowContext(ctx, appReleaseSelectSQL()+` WHERE platform=? AND version_code=?`, platform, versionCode)
+	return scanAppReleaseRow(row)
+}
+
+func (r *MySQLAppReleaseRepository) List(ctx context.Context, filter models.AppReleaseListFilter) ([]*models.AppRelease, error) {
+	query := appReleaseSelectSQL() + ` WHERE 1=1`
+	args := make([]any, 0, 2)
+	if filter.Platform != "" {
+		query += ` AND platform=?`
+		args = append(args, filter.Platform)
+	}
+	if filter.Status != "" {
+		query += ` AND status=?`
+		args = append(args, filter.Status)
+	}
+	query += ` ORDER BY platform ASC, version_code DESC`
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	res := make([]*models.AppRelease, 0)
+	for rows.Next() {
+		item, err := scanAppRelease(rows)
+		if err != nil {
+			return nil, err
+		}
+		res = append(res, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
+func (r *MySQLAppReleaseRepository) GetLatestPublished(ctx context.Context, platform models.AppReleasePlatform) (*models.AppRelease, error) {
+	row := r.db.QueryRowContext(ctx,
+		appReleaseSelectSQL()+` WHERE platform=? AND status=? ORDER BY version_code DESC LIMIT 1`,
+		platform, models.AppReleaseStatusPublished,
+	)
+	return scanAppReleaseRow(row)
+}
+
+func (r *MySQLAppReleaseRepository) Delete(ctx context.Context, id int64) error {
+	res, err := r.db.ExecContext(ctx, `DELETE FROM app_releases WHERE id=?`, id)
+	if err != nil {
+		return err
+	}
+	rows, _ := res.RowsAffected()
+	if rows == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func appReleaseSelectSQL() string {
+	return `SELECT id, platform, version_name, version_code, min_supported_version_code,
+		package_url, package_size, package_md5, release_notes, force_update,
+		status, operator_user_id, operator_name, created_at, updated_at
+	FROM app_releases`
+}
+
+// appReleaseRowScanner 抽象 sql.Row 与 sql.Rows 的 Scan 方法，便于统一扫描逻辑。
+type appReleaseRowScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanAppRelease(row appReleaseRowScanner) (*models.AppRelease, error) {
+	var (
+		item         models.AppRelease
+		releaseNotes sql.NullString
+		forceUpdate  int
+	)
+	if err := row.Scan(
+		&item.ID, &item.Platform, &item.VersionName, &item.VersionCode, &item.MinSupportedVersionCode,
+		&item.PackageURL, &item.PackageSize, &item.PackageMD5, &releaseNotes, &forceUpdate,
+		&item.Status, &item.OperatorUserID, &item.OperatorName, &item.CreatedAt, &item.UpdatedAt,
+	); err != nil {
+		return nil, err
+	}
+	if releaseNotes.Valid {
+		item.ReleaseNotes = releaseNotes.String
+	}
+	item.ForceUpdate = forceUpdate != 0
+	return &item, nil
+}
+
+func scanAppReleaseRow(row *sql.Row) (*models.AppRelease, error) {
+	item, err := scanAppRelease(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return item, nil
+}
+
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }

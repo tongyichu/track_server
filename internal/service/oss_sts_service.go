@@ -131,6 +131,62 @@ func NewOSSTokenService(stsRegion, accessKeyID, accessKeySecret, roleARN string,
 	}, nil
 }
 
+// GetReleaseUploadCredential 为 App 安装包上传申请一份仅允许写入 release 目录的临时凭证。
+//
+// 与 GetUploadCredential 的区别：
+//   - 这里不做“按 userID 隔离”的子目录；所有管理员上传到同一个 release 目录下；
+//   - 目录形如 "release/"（若传入 subDir，则为 "release/<subDir>/"）。
+//
+// 使用场景：管理后台（admin）发布 Android APK 时，浏览器直接使用该凭证 PUT 到 OSS，
+// 避免把几十 MB 的安装包经过 Hertz 服务端中转。
+func (s *OSSTokenService) GetReleaseUploadCredential(subDir string) (*OSSTemporaryCredential, error) {
+	base := "release"
+	dir := base + "/"
+	sub := strings.Trim(subDir, "/")
+	if sub != "" {
+		dir = base + "/" + sub + "/"
+	}
+
+	policyJSON, err := buildOSSPutObjectPolicy(s.ossBucket, dir)
+	if err != nil {
+		log.Printf("debug info failed to build release policy JSON: %v", err)
+		return nil, err
+	}
+
+	roleSessionName := fmt.Sprintf("%srelease-%d", s.roleSessionPrefix, time.Now().Unix())
+	if len(roleSessionName) > 64 {
+		roleSessionName = roleSessionName[:64]
+	}
+
+	req := sts.CreateAssumeRoleRequest()
+	req.Scheme = "https"
+	req.RoleArn = s.roleARN
+	req.RoleSessionName = roleSessionName
+	req.DurationSeconds = requests.NewInteger(int(s.durationSeconds))
+	req.Policy = policyJSON
+
+	resp, err := s.stsClient.AssumeRole(req)
+	if err != nil {
+		log.Printf("debug info sts AssumeRole(release) error [req=%v]: %v", req, err)
+		return nil, err
+	}
+	cred := resp.Credentials
+	if cred.AccessKeyId == "" || cred.AccessKeySecret == "" || cred.SecurityToken == "" {
+		return nil, errors.New("sts returned empty credentials")
+	}
+
+	return &OSSTemporaryCredential{
+		AccessKeyID:     cred.AccessKeyId,
+		AccessKeySecret: cred.AccessKeySecret,
+		SecurityToken:   cred.SecurityToken,
+		Expiration:      cred.Expiration,
+		Bucket:          s.ossBucket,
+		Region:          s.ossRegion,
+		Endpoint:        s.ossEndpoint,
+		Dir:             dir,
+	}, nil
+}
+
 // GetUploadCredential 为指定 userID 申请一份“仅允许上传到该用户目录”的临时凭证。
 //
 // 目录隔离：最终 dir 形如：<OSSUploadPrefix>/<userID>/，例如 "user/123/"。

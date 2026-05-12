@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -46,6 +47,21 @@ type Config struct {
 	OSSEndpoint           string // Bucket 的访问 Endpoint（公网），会回传给客户端直传使用。示例：https://oss-cn-beijing.aliyuncs.com
 	OSSInternalEndpoint   string // Bucket 的访问 Endpoint（内网），仅服务端从 OSS 拉取对象时使用，避免公网下行流量费用。示例：https://oss-cn-beijing-internal.aliyuncs.com
 	OSSUploadPrefix       string // 服务端为“每个用户”分配的上传目录前缀。会在服务端生成最终目录：<prefix>/<userID>/，示例 OSS_UPLOAD_PREFIX=/prod/track/user  => dir=prod/track/user/1001/
+
+	// 管理后台登录凭证（独立于业务用户的鉴权体系）
+	//
+	// 推荐：通过 ADMIN_ACCOUNTS 同时配置多个管理员，格式：
+	//     user1:bcryptHash1;user2:bcryptHash2
+	//   - 多个账号用 ";" 分隔；用户名与哈希用 ":" 分隔；
+	//   - 哈希里本身可能含 ":"（bcrypt 不会，但保持稳健），username 只截取首个 ":" 之前。
+	//
+	// 兼容：仍支持旧的单账号配置：
+	//   - ADMIN_USERNAME / ADMIN_PASSWORD_HASH
+	//   - 若同时配置 ADMIN_ACCOUNTS 和 ADMIN_USERNAME，会合并；同名用户以 ADMIN_ACCOUNTS 为准。
+	//
+	// 任一来源解析为非空账号集时后台启用；否则后台禁用。
+	// 哈希生成示例：htpasswd -nbBC 10 "" "<plain>" | tr -d ':\n' | sed 's/^$2y/$2a/'
+	AdminAccounts map[string]string
 }
 
 // Load reads configuration from environment variables with sensible defaults.
@@ -105,6 +121,9 @@ func Load() *Config {
 		OSSEndpoint:         getEnv("OSS_ENDPOINT", ""),
 		OSSInternalEndpoint: getEnv("OSS_INTERNAL_ENDPOINT", ""),
 		OSSUploadPrefix:     getEnv("OSS_UPLOAD_PREFIX", DefaultOSSPathPrefix),
+
+		// 管理后台登录凭证（独立于业务用户鉴权）
+		AdminAccounts: parseAdminAccounts(os.Getenv("ADMIN_ACCOUNTS"), os.Getenv("ADMIN_USERNAME"), os.Getenv("ADMIN_PASSWORD_HASH")),
 	}
 
 	// Priority:
@@ -145,6 +164,63 @@ func getEnvInt64(key string, def int64) int64 {
 		return n
 	}
 	return def
+}
+
+// parseAdminAccounts 解析管理员账号配置，返回 username -> bcryptHash 的映射。
+//
+// 解析优先级：
+//  1. 先解析 ADMIN_ACCOUNTS（格式：user1:hash1;user2:hash2，支持 "," 作为分隔符）；
+//  2. 再合并旧的 ADMIN_USERNAME / ADMIN_PASSWORD_HASH（若两者都非空）；
+//     — 同名用户以 ADMIN_ACCOUNTS 中的为准（先写入者保留）。
+//
+// 规则：
+//   - 每个条目 split 第一个 ":"：前半为 username，后半为 hash（hash 内即使含 ":" 也保留原样）；
+//   - username/hash 都会 TrimSpace；任一为空的条目忽略；
+//   - 返回空 map 表示后台禁用。
+func parseAdminAccounts(rawAccounts, legacyUser, legacyHash string) map[string]string {
+	out := make(map[string]string)
+
+	for _, entry := range splitByAny(rawAccounts, ";,") {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		idx := strings.IndexByte(entry, ':')
+		if idx <= 0 || idx == len(entry)-1 {
+			continue
+		}
+		user := strings.TrimSpace(entry[:idx])
+		hash := strings.TrimSpace(entry[idx+1:])
+		if user == "" || hash == "" {
+			continue
+		}
+		if _, exists := out[user]; !exists {
+			out[user] = hash
+		}
+	}
+
+	legacyUser = strings.TrimSpace(legacyUser)
+	legacyHash = strings.TrimSpace(legacyHash)
+	if legacyUser != "" && legacyHash != "" {
+		if _, exists := out[legacyUser]; !exists {
+			out[legacyUser] = legacyHash
+		}
+	}
+
+	return out
+}
+
+// splitByAny 按 seps 中任一字符拆分 s；seps 为空时退化为单字符 ";" 切分。
+func splitByAny(s, seps string) []string {
+	if s == "" {
+		return nil
+	}
+	if seps == "" {
+		seps = ";"
+	}
+	return strings.FieldsFunc(s, func(r rune) bool {
+		return strings.ContainsRune(seps, r)
+	})
 }
 
 // -----------------------------

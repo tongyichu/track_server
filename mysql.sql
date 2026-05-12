@@ -81,6 +81,28 @@ CREATE TABLE `track_navigations` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='轨迹导航使用记录表';
 
 
+CREATE TABLE `app_releases` (
+                                `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                                `platform` VARCHAR(16) NOT NULL COMMENT 'android / ios',
+                                `version_name` VARCHAR(32) NOT NULL COMMENT '版本名，例如 1.2.3',
+                                `version_code` INT UNSIGNED NOT NULL COMMENT '版本号，单调递增整数',
+                                `min_supported_version_code` INT UNSIGNED NOT NULL DEFAULT '0' COMMENT '低于该版本必须强升',
+                                `package_url` VARCHAR(512) NOT NULL DEFAULT '' COMMENT '安装包下载地址（iOS 通常为 AppStore 跳转链接）',
+                                `package_size` BIGINT UNSIGNED NOT NULL DEFAULT '0' COMMENT '安装包大小（字节）',
+                                `package_md5` VARCHAR(64) NOT NULL DEFAULT '' COMMENT '安装包 md5，可选',
+                                `release_notes` TEXT COMMENT '版本说明',
+                                `force_update` TINYINT NOT NULL DEFAULT '0' COMMENT '是否强制升级',
+                                `status` VARCHAR(16) NOT NULL DEFAULT 'published' COMMENT 'draft / published / archived',
+                                `operator_user_id` BIGINT NOT NULL DEFAULT '0' COMMENT '发布操作者',
+                                `operator_name` VARCHAR(64) NOT NULL DEFAULT '' COMMENT '发布操作者名称',
+                                `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                                `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                                PRIMARY KEY (`id`),
+                                UNIQUE KEY `uk_platform_version_code` (`platform`,`version_code`),
+                                KEY `idx_platform_status_code` (`platform`,`status`,`version_code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='App 发布信息表';
+
+
 CREATE TABLE `login_log` (
                              `id` BIGINT NOT NULL AUTO_INCREMENT,
                              `user_id` BIGINT NOT NULL COMMENT '用户ID',

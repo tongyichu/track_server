@@ -141,3 +141,18 @@ type LoginLogRepository interface {
 	Create(ctx context.Context, log *models.LoginLog) error
 	ListByUserID(ctx context.Context, userID int64, limit int) ([]*models.LoginLog, error)
 }
+
+// AppReleaseRepository defines persistence operations for App release records.
+//
+// 设计说明：
+// - Upsert 以 (platform, version_code) 作为唯一键，便于管理后台对同一版本反复编辑；
+// - List 按 (platform, status) 过滤，按 version_code 倒序返回；
+// - GetLatestPublished 用于客户端升级检查，返回该平台 status=published 中 version_code 最大的一条。
+type AppReleaseRepository interface {
+	Upsert(ctx context.Context, release *models.AppRelease) error
+	GetByID(ctx context.Context, id int64) (*models.AppRelease, error)
+	GetByPlatformVersion(ctx context.Context, platform models.AppReleasePlatform, versionCode int64) (*models.AppRelease, error)
+	List(ctx context.Context, filter models.AppReleaseListFilter) ([]*models.AppRelease, error)
+	GetLatestPublished(ctx context.Context, platform models.AppReleasePlatform) (*models.AppRelease, error)
+	Delete(ctx context.Context, id int64) error
+}

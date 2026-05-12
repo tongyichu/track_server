@@ -583,8 +583,8 @@ func (r *InMemoryLoginLogRepository) ListByUserID(_ context.Context, userID int6
 }
 
 // NewInMemoryRepositories is a helper to create a full set of in-memory repositories.
-func NewInMemoryRepositories() (TrackRepository, UserRepository, CollectRepository, LoginLogRepository, NavigationRepository) {
-	return NewInMemoryTrackRepository(), NewInMemoryUserRepository(), NewInMemoryCollectRepository(), NewInMemoryLoginLogRepository(), NewInMemoryNavigationRepository()
+func NewInMemoryRepositories() (TrackRepository, UserRepository, CollectRepository, LoginLogRepository, NavigationRepository, AppReleaseRepository) {
+	return NewInMemoryTrackRepository(), NewInMemoryUserRepository(), NewInMemoryCollectRepository(), NewInMemoryLoginLogRepository(), NewInMemoryNavigationRepository(), NewInMemoryAppReleaseRepository()
 }
 
 func (r *InMemoryNavigationRepository) AddNavigation(_ context.Context, navigatorUserID int64, trackID string) error {
@@ -660,3 +660,135 @@ func containsIgnoreCase(s, sub string) bool {
 	}
 	return false
 }
+
+// InMemoryAppReleaseRepository is an in-memory implementation of AppReleaseRepository.
+type InMemoryAppReleaseRepository struct {
+	mu       sync.RWMutex
+	nextID   int64
+	releases map[int64]*models.AppRelease
+}
+
+// NewInMemoryAppReleaseRepository creates an in-memory app release repository.
+func NewInMemoryAppReleaseRepository() *InMemoryAppReleaseRepository {
+	return &InMemoryAppReleaseRepository{nextID: 1, releases: make(map[int64]*models.AppRelease)}
+}
+
+// Upsert inserts or updates a release record by (platform, version_code).
+func (r *InMemoryAppReleaseRepository) Upsert(_ context.Context, release *models.AppRelease) error {
+	if release == nil {
+		return errors.New("release is nil")
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	now := time.Now()
+	// Lookup existing by (platform, version_code).
+	for _, existing := range r.releases {
+		if existing.Platform == release.Platform && existing.VersionCode == release.VersionCode {
+			release.ID = existing.ID
+			release.CreatedAt = existing.CreatedAt
+			release.UpdatedAt = now
+			clone := *release
+			r.releases[existing.ID] = &clone
+			return nil
+		}
+	}
+	if release.ID == 0 {
+		release.ID = r.nextID
+		r.nextID++
+	} else if release.ID >= r.nextID {
+		r.nextID = release.ID + 1
+	}
+	if release.CreatedAt.IsZero() {
+		release.CreatedAt = now
+	}
+	release.UpdatedAt = now
+	clone := *release
+	r.releases[release.ID] = &clone
+	return nil
+}
+
+// GetByID returns the release by id.
+func (r *InMemoryAppReleaseRepository) GetByID(_ context.Context, id int64) (*models.AppRelease, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	item, ok := r.releases[id]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	clone := *item
+	return &clone, nil
+}
+
+// GetByPlatformVersion returns the release by (platform, version_code).
+func (r *InMemoryAppReleaseRepository) GetByPlatformVersion(_ context.Context, platform models.AppReleasePlatform, versionCode int64) (*models.AppRelease, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, item := range r.releases {
+		if item.Platform == platform && item.VersionCode == versionCode {
+			clone := *item
+			return &clone, nil
+		}
+	}
+	return nil, ErrNotFound
+}
+
+// List returns releases matching the filter, ordered by version_code desc.
+func (r *InMemoryAppReleaseRepository) List(_ context.Context, filter models.AppReleaseListFilter) ([]*models.AppRelease, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	res := make([]*models.AppRelease, 0)
+	for _, item := range r.releases {
+		if filter.Platform != "" && item.Platform != filter.Platform {
+			continue
+		}
+		if filter.Status != "" && item.Status != filter.Status {
+			continue
+		}
+		clone := *item
+		res = append(res, &clone)
+	}
+	sort.SliceStable(res, func(i, j int) bool {
+		if res[i].Platform == res[j].Platform {
+			return res[i].VersionCode > res[j].VersionCode
+		}
+		return res[i].Platform < res[j].Platform
+	})
+	return res, nil
+}
+
+// GetLatestPublished returns the published release with the max version_code for the platform.
+func (r *InMemoryAppReleaseRepository) GetLatestPublished(_ context.Context, platform models.AppReleasePlatform) (*models.AppRelease, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var latest *models.AppRelease
+	for _, item := range r.releases {
+		if item.Platform != platform {
+			continue
+		}
+		if item.Status != models.AppReleaseStatusPublished {
+			continue
+		}
+		if latest == nil || item.VersionCode > latest.VersionCode {
+			latest = item
+		}
+	}
+	if latest == nil {
+		return nil, ErrNotFound
+	}
+	clone := *latest
+	return &clone, nil
+}
+
+// Delete removes a release by id.
+func (r *InMemoryAppReleaseRepository) Delete(_ context.Context, id int64) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, ok := r.releases[id]; !ok {
+		return ErrNotFound
+	}
+	delete(r.releases, id)
+	return nil
+}
+
+func duplicateContainsIgnoreCaseShim() {}
+

@@ -14,12 +14,15 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
+	"github.com/tongyichu/track_server/internal/admin"
 	"github.com/tongyichu/track_server/internal/config"
 	"github.com/tongyichu/track_server/internal/handler"
 	"github.com/tongyichu/track_server/internal/middleware"
 	"github.com/tongyichu/track_server/internal/repository"
 	"github.com/tongyichu/track_server/internal/service"
 )
+
+const maxRequestBodySize = 100 * 1024 * 1024 // 100 MiB，需覆盖管理后台安装包 multipart 上传
 
 // main is the entrypoint of the Hertz HTTP server.
 func main() {
@@ -42,30 +45,31 @@ func main() {
 	var collectRepo repository.CollectRepository
 	var loginLogRepo repository.LoginLogRepository
 	var navigationRepo repository.NavigationRepository
+	var appReleaseRepo repository.AppReleaseRepository
 
 	if cfg.UseInMemory {
-		trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo = repository.NewInMemoryRepositories()
+		trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo = repository.NewInMemoryRepositories()
 		log.Println("using in-memory repositories")
 	} else if cfg.UseMySQL {
 		db, err := repository.OpenMySQL(cfg.MySQLDSN)
 		if err != nil {
 			log.Printf("failed to open mysql, fallback to memory: %v", err)
-			trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo = repository.NewInMemoryRepositories()
+			trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo = repository.NewInMemoryRepositories()
 		} else if err := db.PingContext(ctx); err != nil {
 			log.Printf("failed to ping mysql, fallback to memory: %v", err)
 			_ = db.Close()
-			trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo = repository.NewInMemoryRepositories()
+			trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo = repository.NewInMemoryRepositories()
 		} else {
-			tr, ur, cr, lr, nr, err := repository.NewMySQLRepositories(ctx, db)
+			tr, ur, cr, lr, nr, ar, err := repository.NewMySQLRepositories(ctx, db)
 			if err != nil {
 				log.Printf("failed to init mysql schema, fallback to memory: %v", err)
 				_ = db.Close()
-				trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo = repository.NewInMemoryRepositories()
+				trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo = repository.NewInMemoryRepositories()
 			} else {
 				defer func() {
 					_ = db.Close()
 				}()
-				trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo = tr, ur, cr, lr, nr
+				trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo = tr, ur, cr, lr, nr, ar
 				log.Println("using mysql repositories")
 			}
 		}
@@ -74,7 +78,7 @@ func main() {
 		client, err := mongo.Connect(ctx, options.Client().ApplyURI(cfg.MongoURI))
 		if err != nil {
 			log.Printf("failed to connect mongo, fallback to memory: %v", err)
-			trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo = repository.NewInMemoryRepositories()
+			trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo = repository.NewInMemoryRepositories()
 		} else {
 			db := client.Database(cfg.MongoDBName)
 			trackRepo = repository.NewMongoTrackRepository(db.Collection("tracks"))
@@ -82,6 +86,7 @@ func main() {
 			collectRepo = repository.NewMongoCollectRepository(db.Collection("track_collects"))
 			loginLogRepo = repository.NewMongoLoginLogRepository(db.Collection("login_log"))
 			navigationRepo = repository.NewMongoNavigationRepository(db.Collection("track_navigations"))
+			appReleaseRepo = repository.NewMongoAppReleaseRepository(db.Collection("app_releases"))
 			log.Println("mongo repositories initialized")
 		}
 	}
@@ -93,6 +98,7 @@ func main() {
 	userSvc.SetTrackRepository(trackRepo)
 	userSvc.SetNavigationRepository(navigationRepo)
 	loginSvc := service.NewLoginService(userRepo, loginLogRepo, cfg.WechatAppID, cfg.WechatAppSecret, cfg.JWTSecret)
+	appReleaseSvc := service.NewAppReleaseService(appReleaseRepo)
 
 	// 初始化本地资源缓存服务：把客户端上传到 OSS 的轨迹截图 / 原始轨迹文件，按需同步到服务器本地，
 	// 供列表/详情接口返回一个服务端可直接下载的 URL。
@@ -201,10 +207,14 @@ func main() {
 		h = server.Default(
 			server.WithHostPorts(cfg.ServerAddr),
 			server.WithTLS(tlsCfg),
+			server.WithMaxRequestBodySize(maxRequestBodySize),
 		)
 		log.Printf("server listening on %s (HTTPS)", cfg.ServerAddr)
 	} else {
-		h = server.Default(server.WithHostPorts(cfg.ServerAddr))
+		h = server.Default(
+			server.WithHostPorts(cfg.ServerAddr),
+			server.WithMaxRequestBodySize(maxRequestBodySize),
+		)
 		log.Printf("server listening on %s (HTTP)", cfg.ServerAddr)
 	}
 
@@ -212,27 +222,28 @@ func main() {
 	defer tokenBlacklist.Close()
 
 	handler.RegisterRoutes(h, handler.Deps{
-		TrackService:    trackSvc,
-		UserService:     userSvc,
-		LoginService:    loginSvc,
-		OSSTokenService: ossTokenSvc,
-		JWTSecret:       cfg.JWTSecret,
-		TokenBlacklist:  tokenBlacklist,
-		StaticRoot:      staticRootIfEnabled(staticRoot, avatarCache, screenshotCache, rawTrackCache),
+		TrackService:      trackSvc,
+		UserService:       userSvc,
+		LoginService:      loginSvc,
+		OSSTokenService:   ossTokenSvc,
+		AppReleaseService: appReleaseSvc,
+		JWTSecret:         cfg.JWTSecret,
+		TokenBlacklist:    tokenBlacklist,
+		StaticRoot:        staticRoot,
 	})
 
-	h.Spin()
-}
-
-// staticRootIfEnabled 只在至少一个本地资源缓存服务启用时返回静态根目录，
-// 否则返回空串，避免 router 去挂载一个实际不存在/未启用的静态目录。
-func staticRootIfEnabled(dir string, caches ...*service.AssetCacheService) string {
-	for _, c := range caches {
-		if c != nil {
-			return dir
-		}
+	// 管理后台（独立于业务用户鉴权）。若未配置任何管理员账号，
+	// NewModule 创建出的 auth 为 nil，RegisterRoutes 会直接跳过。
+	adminModule := admin.NewModule(cfg.AdminAccounts, appReleaseSvc, ossTokenSvc, staticRoot)
+	defer adminModule.Close()
+	adminModule.RegisterRoutes(h)
+	if adminModule != nil && adminModule.Auth != nil {
+		log.Printf("admin console enabled at /admin/ (%d account(s))", adminModule.Auth.AccountCount())
+	} else {
+		log.Println("admin console disabled: ADMIN_ACCOUNTS / ADMIN_USERNAME / ADMIN_PASSWORD_HASH not set")
 	}
-	return ""
+
+	h.Spin()
 }
 
 func setupLogging(logDir string) (*os.File, error) {

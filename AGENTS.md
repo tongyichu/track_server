@@ -77,7 +77,7 @@ HTTP Request
   → repository.<Xxx>Repository（数据持久化）
 ```
 
-**资源缓存**：客户端经 OSS 直传（头像 / 轨迹截图 / 原始轨迹文件），列表/详情接口返回时由 `AssetCacheService` 按需从 OSS 拉回本地 `<LogDir>/static/<category>/`，对外走 `GET /api/v1/static/<category>/<file>`（需登录）。
+**资源缓存与静态发布包**：客户端经 OSS 直传（头像 / 轨迹截图 / 原始轨迹文件），列表/详情接口返回时由 `AssetCacheService` 按需从 OSS 拉回本地 `<LogDir>/static/<category>/`，对外走 `GET /api/v1/static/<category>/<file>`（需登录）。管理后台上传的 App 发布包直接写入 `<LogDir>/static/release/<platform>/`，对外走公开的 `GET /api/v1/static/release/<platform>/<file>`，供升级下载使用。
 
 ### 提交前最小检查
 - 构建可通过：`go build ./...`

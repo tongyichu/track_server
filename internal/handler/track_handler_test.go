@@ -39,7 +39,7 @@ type testEnv struct {
 
 // newTestEnv creates a fresh Hertz server wired with in-memory repositories.
 func newTestEnv() *testEnv {
-	trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo := repository.NewInMemoryRepositories()
+	trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, _ := repository.NewInMemoryRepositories()
 	trackSvc := service.NewTrackService(trackRepo, collectRepo)
 	trackSvc.SetUserRepository(userRepo)
 	trackSvc.SetNavigationRepository(navigationRepo)

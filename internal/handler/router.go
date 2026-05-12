@@ -12,12 +12,13 @@ import (
 
 // Deps groups all handler dependencies.
 type Deps struct {
-	TrackService    *service.TrackService
-	UserService     *service.UserService
-	LoginService    *service.LoginService
-	OSSTokenService *service.OSSTokenService
-	JWTSecret       string
-	TokenBlacklist  *middleware.TokenBlacklist
+	TrackService      *service.TrackService
+	UserService       *service.UserService
+	LoginService      *service.LoginService
+	OSSTokenService   *service.OSSTokenService
+	AppReleaseService *service.AppReleaseService
+	JWTSecret         string
+	TokenBlacklist    *middleware.TokenBlacklist
 
 	// StaticRoot 是服务端本地资源缓存根目录；若非空，会挂载到 /static
 	// 路由下统一提供下载（下层按 screenshots/raw_tracks 等子目录组织）。
@@ -37,6 +38,7 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 	userHandler := NewUserHandler(deps.UserService)
 	loginHandler := NewLoginHandler(deps.LoginService, deps.TokenBlacklist)
 	ossHandler := NewOSSHandler(deps.OSSTokenService)
+	appReleaseHandler := NewAppReleaseHandler(deps.AppReleaseService)
 
 	api := h.Group("/api/v1")
 
@@ -49,6 +51,26 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 	api.POST("/login/sms", loginHandler.LoginBySMS)
 	api.POST("/login/wechat", loginHandler.LoginByWechat)
 	api.POST("/login/apple", loginHandler.LoginByApple)
+
+	// public: upgrade check (客户端启动/切前台时调用，无需登录)
+	api.GET("/upgrade/check", appReleaseHandler.CheckUpgrade)
+	// public: app release package download.
+	// 升级检查接口本身无需登录，因此其返回的安装包 URL 也必须能被系统下载器直接访问。
+	// 只公开 static/release 子目录；轨迹截图、头像、原始轨迹文件仍在下方 auth.StaticFS 里鉴权访问。
+	if deps.StaticRoot != "" {
+		releaseFS := &app.FS{
+			Root: deps.StaticRoot,
+			PathRewrite: func(ctx *app.RequestContext) []byte {
+				fp := ctx.Param("filepath")
+				if fp == "" {
+					return []byte("/release/")
+				}
+				fp = strings.TrimPrefix(fp, "/")
+				return []byte("/release/" + fp)
+			},
+		}
+		api.StaticFS("/static/release", releaseFS)
+	}
 
 	// authenticated routes
 	auth := api.Group("", middleware.JWTAuthMiddleware(deps.JWTSecret, deps.TokenBlacklist))

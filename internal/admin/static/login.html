@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>管理后台登录 - Track</title>
+  <link rel="stylesheet" href="/admin/static/style.css" />
+</head>
+<body>
+  <div class="login-box">
+    <h1>管理后台登录</h1>
+    <form id="loginForm">
+      <label>用户名
+        <input type="text" name="username" required autocomplete="username" />
+      </label>
+      <label>密码
+        <input type="password" name="password" required autocomplete="current-password" />
+      </label>
+      <button type="submit">登录</button>
+      <p class="error" id="err"></p>
+    </form>
+  </div>
+  <script src="/admin/static/login.js"></script>
+</body>
+</html>

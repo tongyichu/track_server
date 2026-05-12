@@ -421,3 +421,37 @@ func (r *MongoLoginLogRepository) Create(context.Context, *models.LoginLog) erro
 func (r *MongoLoginLogRepository) ListByUserID(context.Context, int64, int) ([]*models.LoginLog, error) {
 	return nil, errors.New("MongoLoginLogRepository.ListByUserID not implemented")
 }
+
+// MongoAppReleaseRepository is a stub of AppReleaseRepository backed by MongoDB.
+type MongoAppReleaseRepository struct {
+	collection *mongo.Collection
+}
+
+// NewMongoAppReleaseRepository constructs a Mongo-backed AppReleaseRepository.
+func NewMongoAppReleaseRepository(collection *mongo.Collection) *MongoAppReleaseRepository {
+	return &MongoAppReleaseRepository{collection: collection}
+}
+
+func (r *MongoAppReleaseRepository) Upsert(context.Context, *models.AppRelease) error {
+	return errors.New("MongoAppReleaseRepository.Upsert not implemented")
+}
+
+func (r *MongoAppReleaseRepository) GetByID(context.Context, int64) (*models.AppRelease, error) {
+	return nil, errors.New("MongoAppReleaseRepository.GetByID not implemented")
+}
+
+func (r *MongoAppReleaseRepository) GetByPlatformVersion(context.Context, models.AppReleasePlatform, int64) (*models.AppRelease, error) {
+	return nil, errors.New("MongoAppReleaseRepository.GetByPlatformVersion not implemented")
+}
+
+func (r *MongoAppReleaseRepository) List(context.Context, models.AppReleaseListFilter) ([]*models.AppRelease, error) {
+	return nil, errors.New("MongoAppReleaseRepository.List not implemented")
+}
+
+func (r *MongoAppReleaseRepository) GetLatestPublished(context.Context, models.AppReleasePlatform) (*models.AppRelease, error) {
+	return nil, errors.New("MongoAppReleaseRepository.GetLatestPublished not implemented")
+}
+
+func (r *MongoAppReleaseRepository) Delete(context.Context, int64) error {
+	return errors.New("MongoAppReleaseRepository.Delete not implemented")
+}

@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>App 发布管理 - Track</title>
+  <link rel="stylesheet" href="/admin/static/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="title">Track 管理后台</div>
+    <div class="spacer"></div>
+    <div class="user">
+      <span id="userName"></span>
+      <button id="logoutBtn">退出</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="panel">
+      <h2>发布新版本</h2>
+      <form id="publishForm" class="grid">
+        <label>平台
+          <select name="platform" required>
+            <option value="android">Android</option>
+            <option value="ios">iOS</option>
+          </select>
+        </label>
+        <label>版本名 (version_name)
+          <input type="text" name="version_name" placeholder="1.2.3" required />
+        </label>
+        <label>版本号 (version_code)
+          <input type="number" name="version_code" min="1" required />
+        </label>
+        <label>最低支持版本号 (min_supported_version_code)
+          <input type="number" name="min_supported_version_code" min="0" value="0" />
+        </label>
+        <label class="row">
+          <input type="checkbox" name="force_update" /> 强制升级
+        </label>
+        <label>发布状态
+          <select name="status">
+            <option value="published">published</option>
+            <option value="draft">draft</option>
+            <option value="archived">archived</option>
+          </select>
+        </label>
+
+        <fieldset class="full">
+          <legend>安装包</legend>
+          <div class="row">
+            <input type="file" id="apkFile" accept=".apk,.ipa" />
+            <button type="button" id="uploadBtn">上传到服务器</button>
+            <span class="hint" id="uploadHint"></span>
+          </div>
+          <label>package_url
+            <input type="text" name="package_url" placeholder="Android: 上传后自动填入；iOS: AppStore 链接" required />
+          </label>
+          <div class="row">
+            <label class="flex1">package_size (字节)
+              <input type="number" name="package_size" min="0" value="0" />
+            </label>
+            <label class="flex1">package_md5
+              <input type="text" name="package_md5" />
+            </label>
+          </div>
+        </fieldset>
+
+        <label class="full">版本说明 (release_notes)
+          <textarea name="release_notes" rows="4"></textarea>
+        </label>
+
+        <div class="full actions">
+          <button type="submit">发布</button>
+          <span class="error" id="publishErr"></span>
+          <span class="ok" id="publishOk"></span>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel">
+      <h2>版本列表</h2>
+      <div class="row">
+        <label>平台过滤
+          <select id="filterPlatform">
+            <option value="">全部</option>
+            <option value="android">android</option>
+            <option value="ios">ios</option>
+          </select>
+        </label>
+        <label>状态过滤
+          <select id="filterStatus">
+            <option value="">全部</option>
+            <option value="published">published</option>
+            <option value="draft">draft</option>
+            <option value="archived">archived</option>
+          </select>
+        </label>
+        <button id="refreshBtn">刷新</button>
+      </div>
+      <table class="data">
+        <thead>
+          <tr>
+            <th>ID</th><th>平台</th><th>版本名</th><th>版本号</th>
+            <th>最低支持</th><th>强升</th><th>状态</th>
+            <th>发布人</th><th>时间</th><th>包地址</th><th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="releaseList"></tbody>
+      </table>
+    </section>
+  </main>
+
+  <script src="/admin/static/app.js"></script>
+</body>
+</html>
