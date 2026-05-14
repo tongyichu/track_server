@@ -26,6 +26,7 @@ type TrackService struct {
 	screenshotCache *AssetCacheService
 	avatarCache     *AssetCacheService
 	rawTrackCache   *AssetCacheService
+	trackTypes      []string
 }
 
 const (
@@ -93,6 +94,7 @@ type CreateTrackInput struct {
 	EndTime                   *time.Time `json:"end_time"`
 	Distance                  *float64   `json:"distance"`
 	Duration                  *uint32    `json:"duration"`
+	CaloriesBurned            *float64   `json:"calories_burned"`
 	ElevationGain             *int       `json:"elevation_gain"`
 	RawTrackURL               *string    `json:"raw_track_url"`
 	TrackScreenshotURL        *string    `json:"track_screenshot_url"`
@@ -120,6 +122,9 @@ func (in CreateTrackInput) validate() error {
 	}
 	if in.AvgSpeedKmh != nil && *in.AvgSpeedKmh < 0 {
 		return invalidArg("avg_speed_kmh must be >= 0")
+	}
+	if in.CaloriesBurned != nil && *in.CaloriesBurned < 0 {
+		return invalidArg("calories_burned must be >= 0")
 	}
 	if in.StartTime != nil && in.EndTime != nil && in.EndTime.Before(*in.StartTime) {
 		return invalidArg("end_time must be >= start_time")
@@ -166,7 +171,20 @@ func (p TrackInfoPatch) empty() bool {
 
 // NewTrackService constructs a new TrackService instance.
 func NewTrackService(tracks repository.TrackRepository, collects repository.CollectRepository) *TrackService {
-	return &TrackService{tracks: tracks, collects: collects}
+	return &TrackService{tracks: tracks, collects: collects, trackTypes: config.ParseTrackTypes("")}
+}
+
+// SetTrackTypes configures the list of track types returned to clients.
+func (s *TrackService) SetTrackTypes(trackTypes []string) {
+	s.trackTypes = config.ParseTrackTypes(strings.Join(trackTypes, ","))
+}
+
+// ListTrackTypes returns configured track types for clients to choose from.
+func (s *TrackService) ListTrackTypes() []string {
+	if len(s.trackTypes) == 0 {
+		return config.ParseTrackTypes("")
+	}
+	return append([]string(nil), s.trackTypes...)
 }
 
 // SetUserRepository 注入用户仓储，用于在列表等场景补充用户头像等信息。
@@ -257,6 +275,9 @@ func (s *TrackService) CreateTrack(ctx context.Context, userID int64, input Crea
 	}
 	if input.Duration != nil {
 		track.Duration = *input.Duration
+	}
+	if input.CaloriesBurned != nil {
+		track.CaloriesBurned = *input.CaloriesBurned
 	}
 	if input.ElevationGain != nil {
 		track.ElevationGain = *input.ElevationGain
@@ -864,6 +885,7 @@ func (s *TrackService) ListCollectedTracks(ctx context.Context, userID int64, in
 			Distance:                  s.Distance,
 			Duration:                  s.Duration,
 			AvgSpeedKmh:               s.AvgSpeedKmh,
+			CaloriesBurned:            s.CaloriesBurned,
 			ElevationGain:             s.ElevationGain,
 			CollectCount:              s.CollectCount,
 			NavigateCount:             s.NavigateCount,
@@ -925,7 +947,6 @@ func (s *TrackService) UpdateTrackInfo(ctx context.Context, userID int64, trackI
 	if patch.AvgSpeedKmh != nil && *patch.AvgSpeedKmh < 0 {
 		return nil, invalidArg("avg_speed_kmh must be >= 0")
 	}
-
 	track, err := s.tracks.FindByID(ctx, trackID)
 	if err != nil {
 		return nil, err
@@ -1120,19 +1141,20 @@ func toSummaries(tracks []*models.Track) []*models.TrackSummary {
 		// - 若 city_code 为空/未配置，则 city_name 返回空字符串；
 		// - 映射解析失败会被内部吞掉并兜底为空（不影响列表其它字段返回）。
 		res = append(res, &models.TrackSummary{
-			ID:            t.ID,
-			UserID:        t.UserID,
-			CityCode:      t.CityCode,
-			LocateAddr:    t.LocateAddr,
-			TrackType:     t.TrackType,
-			StartTime:     t.StartTime,
-			EndTime:       t.EndTime,
-			CityName:      config.CityNameByCode(t.CityCode),
-			Title:         t.Title,
-			Distance:      t.Distance,
-			Duration:      t.Duration,
-			AvgSpeedKmh:   t.AvgSpeedKmh,
-			ElevationGain: t.ElevationGain,
+			ID:             t.ID,
+			UserID:         t.UserID,
+			CityCode:       t.CityCode,
+			LocateAddr:     t.LocateAddr,
+			TrackType:      t.TrackType,
+			StartTime:      t.StartTime,
+			EndTime:        t.EndTime,
+			CityName:       config.CityNameByCode(t.CityCode),
+			Title:          t.Title,
+			Distance:       t.Distance,
+			Duration:       t.Duration,
+			AvgSpeedKmh:    t.AvgSpeedKmh,
+			CaloriesBurned: t.CaloriesBurned,
+			ElevationGain:  t.ElevationGain,
 		})
 	}
 	return res
@@ -1142,19 +1164,20 @@ func toMySummaries(tracks []*models.Track) []*models.MyTrackSummary {
 	res := make([]*models.MyTrackSummary, 0, len(tracks))
 	for _, t := range tracks {
 		res = append(res, &models.MyTrackSummary{
-			ID:            t.ID,
-			UserID:        t.UserID,
-			CityCode:      t.CityCode,
-			LocateAddr:    t.LocateAddr,
-			TrackType:     t.TrackType,
-			StartTime:     t.StartTime,
-			EndTime:       t.EndTime,
-			CityName:      config.CityNameByCode(t.CityCode),
-			Title:         t.Title,
-			Distance:      t.Distance,
-			Duration:      t.Duration,
-			AvgSpeedKmh:   t.AvgSpeedKmh,
-			ElevationGain: t.ElevationGain,
+			ID:             t.ID,
+			UserID:         t.UserID,
+			CityCode:       t.CityCode,
+			LocateAddr:     t.LocateAddr,
+			TrackType:      t.TrackType,
+			StartTime:      t.StartTime,
+			EndTime:        t.EndTime,
+			CityName:       config.CityNameByCode(t.CityCode),
+			Title:          t.Title,
+			Distance:       t.Distance,
+			Duration:       t.Duration,
+			AvgSpeedKmh:    t.AvgSpeedKmh,
+			CaloriesBurned: t.CaloriesBurned,
+			ElevationGain:  t.ElevationGain,
 		})
 	}
 	return res

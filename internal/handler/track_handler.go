@@ -36,9 +36,18 @@ type StatusResult struct {
 	Status string `json:"status"`
 }
 
+type TrackTypesResult struct {
+	Items []string `json:"items"`
+}
+
 // NewTrackHandler creates a new TrackHandler.
 func NewTrackHandler(trackSvc *service.TrackService) *TrackHandler {
 	return &TrackHandler{trackSvc: trackSvc}
+}
+
+// ListTrackTypes handles GET /api/v1/track/types.
+func (h *TrackHandler) ListTrackTypes(ctx context.Context, c *app.RequestContext) {
+	c.JSON(http.StatusOK, successResponse(TrackTypesResult{Items: h.trackSvc.ListTrackTypes()}))
 }
 
 // CreateTrack handles POST /api/track/create

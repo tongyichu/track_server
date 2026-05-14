@@ -141,6 +141,31 @@ func TestCreateTrack_Success(t *testing.T) {
 	}
 }
 
+func TestListTrackTypes(t *testing.T) {
+	e := newTestEnv()
+	token := e.generateTestToken(1001)
+
+	w := e.perform(http.MethodGet, "/api/v1/track/types", nil, authHeader(token), ut.Header{Key: middleware.HeaderUserID, Value: "1001"})
+	resp := w.Result()
+	if resp.StatusCode() != http.StatusOK {
+		t.Fatalf("expected status 200, got %d, body=%s", resp.StatusCode(), string(resp.Body()))
+	}
+	var result handler.StandardResponse[handler.TrackTypesResult]
+	decodeJSON(t, resp.Body(), &result)
+	if result.Code != 0 {
+		t.Fatalf("expected code 0, got %d", result.Code)
+	}
+	expected := []string{"徒步", "跑步", "爬山", "骑行"}
+	if len(result.Data.Items) != len(expected) {
+		t.Fatalf("expected %d track types, got %#v", len(expected), result.Data.Items)
+	}
+	for i, item := range expected {
+		if result.Data.Items[i] != item {
+			t.Fatalf("expected track type[%d]=%q, got %q", i, item, result.Data.Items[i])
+		}
+	}
+}
+
 func TestCreateTrack_WithBody(t *testing.T) {
 	e := newTestEnv()
 	token := e.generateTestToken(1001)
@@ -152,6 +177,7 @@ func TestCreateTrack_WithBody(t *testing.T) {
 		"end_time":             "2026-04-20T12:30:00Z",
 		"distance":             1500.5,
 		"duration":             1800,
+		"calories_burned":      96.5,
 		"elevation_gain":       66,
 		"raw_track_url":        "https://example.com/raw/track.json",
 		"track_screenshot_url": "https://example.com/track.png",
@@ -183,6 +209,9 @@ func TestCreateTrack_WithBody(t *testing.T) {
 	}
 	if result.Data.Duration != 1800 {
 		t.Fatalf("expected duration 1800, got %v", result.Data.Duration)
+	}
+	if result.Data.CaloriesBurned != 96.5 {
+		t.Fatalf("expected calories_burned 96.5, got %v", result.Data.CaloriesBurned)
 	}
 	if result.Data.ElevationGain != 66 {
 		t.Fatalf("expected elevation_gain 66, got %v", result.Data.ElevationGain)
@@ -339,7 +368,7 @@ func TestRecommendAndSearch(t *testing.T) {
 	endTime := startTime.Add(90 * time.Minute)
 	_, _ = e.userRepo.CreateIfNotExists(ctx, &models.User{ID: 1001, Nickname: "Alice", AvatarURL: "https://example.com/avatar.png"})
 	// seed one normal track and one running track (running should be excluded from recommend list)
-	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk1", UserID: 1001, CityCode: "330100", TrackType: "徒步", Title: "西湖徒步", StartTime: startTime, EndTime: endTime, AvgSpeedKmh: 12.34, RawTrackURL: "https://example.com/trk1.dat", IsRunning: false, Status: models.TrackStatusNormal})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk1", UserID: 1001, CityCode: "330100", TrackType: "徒步", Title: "西湖徒步", StartTime: startTime, EndTime: endTime, AvgSpeedKmh: 12.34, CaloriesBurned: 88.8, RawTrackURL: "https://example.com/trk1.dat", IsRunning: false, Status: models.TrackStatusNormal})
 	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-running", UserID: 1001, Title: "进行中跑步", IsRunning: true})
 	_ = e.collectRepo.AddCollect(ctx, 1001, "trk1")
 
@@ -409,6 +438,9 @@ func TestRecommendAndSearch(t *testing.T) {
 	if got := result.Data.Items[0].AvgSpeedKmh; got != 12.34 {
 		t.Fatalf("expected recommend track trk1 avg_speed_kmh=12.34, got %v", got)
 	}
+	if got := result.Data.Items[0].CaloriesBurned; got != 88.8 {
+		t.Fatalf("expected recommend track trk1 calories_burned=88.8, got %v", got)
+	}
 	if result.Data.Items[0].NavigateCount != 1 {
 		t.Fatalf("expected recommend track trk1 navigate_count=1, got %d", result.Data.Items[0].NavigateCount)
 	}
@@ -446,6 +478,9 @@ func TestRecommendAndSearch(t *testing.T) {
 	}
 	if got := search.Data.Items[0].AvgSpeedKmh; got != 12.34 {
 		t.Fatalf("expected search track trk1 avg_speed_kmh=12.34, got %v", got)
+	}
+	if got := search.Data.Items[0].CaloriesBurned; got != 88.8 {
+		t.Fatalf("expected search track trk1 calories_burned=88.8, got %v", got)
 	}
 	if search.Data.Items[0].NavigateCount != 1 {
 		t.Fatalf("expected search track trk1 navigate_count=1, got %d", search.Data.Items[0].NavigateCount)

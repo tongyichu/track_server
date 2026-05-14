@@ -25,6 +25,7 @@
 | 13 | [用户已收藏轨迹列表](#13-用户已收藏轨迹列表) | GET | `/track/collected/list` | ✅ |
 | 14 | [更新个人信息](#14-更新个人信息) | PUT | `/user/profile/update` | ✅ |
 | 15 | [App 升级检查](#15-app-升级检查) | GET | `/upgrade/check` | ❌ |
+| 16 | [获取运动类型](#16-获取运动类型) | GET | `/track/types` | ✅ |
 
 ---
 
@@ -88,6 +89,7 @@ Token 的获取与说明参考 `login.md`。
 | `distance` | number | 距离（米） |
 | `duration` | int | 时长（秒） |
 | `avg_speed_kmh` | number | 平均速度（km/h） |
+| `calories_burned` | number | 热量消耗（千卡） |
 | `elevation_gain` | int | 累计爬升（米） |
 | `raw_track_url` | string | 原始轨迹文件可下载链接（服务端本地缓存 URL，例如 `/api/v1/static/raw_tracks/<track_id>.dat`） |
 | `track_screenshot_url` | string | 轨迹截图可下载链接（服务端本地缓存 URL，例如 `/api/v1/static/screenshots/<track_id>.jpg`） |
@@ -126,6 +128,7 @@ Authorization: Bearer <token>
   "end_time": "2026-04-20T12:30:00Z",
   "distance": 1200.5,
   "duration": 1800,
+  "calories_burned": 96.5,
   "elevation_gain": 80,
   "raw_track_url": "https://<bucket>.oss-<region>.aliyuncs.com/prod/track/.../xxx.dat",
   "track_screenshot_url": "https://<bucket>.oss-<region>.aliyuncs.com/prod/track/.../xxx.jpg",
@@ -145,6 +148,7 @@ Authorization: Bearer <token>
 | `end_time` | string | 否 | 结束时间，RFC3339/ISO8601 格式，必须 `>= start_time` |
 | `distance` | number | 否 | 距离（米），必须 `>= 0` |
 | `duration` | int | 否 | 时长（秒），必须 `>= 0` |
+| `calories_burned` | number | 否 | 热量消耗（千卡），必须 `>= 0` |
 | `elevation_gain` | int | 否 | 累计爬升（米），必须 `>= 0` |
 | `raw_track_url` | string | 否 | 原始轨迹文件 OSS 地址（建议传 OSS HTTP URL，可带签名参数） |
 | `track_screenshot_url` | string | 否 | 轨迹截图 OSS 地址（建议传 OSS HTTP URL，可带签名参数） |
@@ -173,6 +177,7 @@ Authorization: Bearer <token>
     "distance": 0,
     "duration": 0,
     "avg_speed_kmh": 0,
+    "calories_burned": 0,
     "elevation_gain": 0,
     "raw_track_url": "/api/v1/static/raw_tracks/No.1713520800123456789.dat",
     "track_screenshot_url": "/api/v1/static/screenshots/No.1713520800123456789.jpg",
@@ -203,6 +208,7 @@ curl -X POST "http://<host>:<port>/api/v1/track/create" \
     "end_time": "2026-04-20T12:30:00Z",
     "distance": 1200.5,
     "duration": 1800,
+    "calories_burned": 96.5,
     "elevation_gain": 80,
     "raw_track_url": "https://<bucket>.oss-<region>.aliyuncs.com/prod/track/.../xxx.dat?<签名参数>",
     "track_screenshot_url": "https://<bucket>.oss-<region>.aliyuncs.com/prod/track/.../xxx.jpg?<签名参数>",
@@ -234,6 +240,7 @@ curl -X POST "http://<host>:<port>/api/v1/track/create" \
 - 返回结果中的 `start_time` 为运动开始时间。
 - 返回结果中的 `end_time` 为运动结束时间。
 - 返回结果中的 `avg_speed_kmh` 为平均速度（km/h）。
+- 返回结果中的 `calories_burned` 为热量消耗（千卡）。
 - 返回结果中的 `raw_track_url` / `track_screenshot_url` / `track_no_map_bg_screenshot_url` 为服务端本地可下载链接（不是 OSS 地址）。
 - 接口已支持基于 `cursor` 的瀑布流分页，排序规则为 `start_time DESC, id DESC`。
 - 首次请求不传 `cursor`；继续翻页时透传上一次返回的 `next_cursor`。
@@ -280,6 +287,7 @@ Authorization: Bearer <token>
         "distance": 1200.5,
         "duration": 360,
         "avg_speed_kmh": 12.3,
+        "calories_burned": 96.5,
         "elevation_gain": 80,
         "raw_track_url": "/api/v1/static/raw_tracks/trk1.dat",
         "track_screenshot_url": "/api/v1/static/screenshots/trk1.jpg",
@@ -574,6 +582,7 @@ curl -X DELETE "http://<host>:<port>/api/v1/track_collect?track_id=trk2" \
 - 返回结果中的 `start_time` 为运动开始时间。
 - 返回结果中的 `end_time` 为运动结束时间。
 - 返回结果中的 `avg_speed_kmh` 为平均速度（km/h）。
+- 返回结果中的 `calories_burned` 为热量消耗（千卡）。
 - 返回结果中的 `raw_track_url` / `track_screenshot_url` / `track_no_map_bg_screenshot_url` 为服务端本地可下载链接（不是 OSS 地址）。
 - 接口已支持基于 `cursor` 的瀑布流分页，排序规则为 `start_time DESC, id DESC`。
 - 首次请求不传 `cursor`；继续翻页时透传上一次返回的 `next_cursor`。
@@ -622,6 +631,7 @@ Authorization: Bearer <token>
         "distance": 1200.5,
         "duration": 360,
         "avg_speed_kmh": 12.3,
+        "calories_burned": 96.5,
         "elevation_gain": 80,
         "raw_track_url": "/api/v1/static/raw_tracks/trk1.dat",
         "track_screenshot_url": "/api/v1/static/screenshots/trk1.jpg",
@@ -808,6 +818,7 @@ Authorization: Bearer <token>
         "distance": 1200.5,
         "duration": 360,
         "avg_speed_kmh": 12.3,
+        "calories_burned": 96.5,
         "elevation_gain": 80,
         "collect_count": 12,
         "navigate_count": 3,
@@ -842,6 +853,7 @@ Authorization: Bearer <token>
 | `data.items[].distance` | number | 距离，单位米。 |
 | `data.items[].duration` | int | 时长，单位秒。 |
 | `data.items[].avg_speed_kmh` | number | 平均速度（km/h）。 |
+| `data.items[].calories_burned` | number | 热量消耗（千卡）。 |
 | `data.items[].elevation_gain` | int | 累计爬升，单位米。 |
 | `data.items[].collect_count` | int64 | 该轨迹被收藏的总数。 |
 | `data.items[].navigate_count` | int64 | 该轨迹被其他用户用于导航的次数。 |
@@ -1164,6 +1176,7 @@ Authorization: Bearer <token>
         "distance": 1200.5,
         "duration": 1800,
         "avg_speed_kmh": 12.34,
+        "calories_burned": 96.5,
         "elevation_gain": 80,
         "collect_count": 10,
         "navigate_count": 2,
@@ -1402,3 +1415,48 @@ X-Platform: android
   - `version_code < 0`（返回 `{"error":"current_version_code must be >= 0"}`）
 - `500 Internal Server Error`
   - 服务端查询发布信息失败
+
+---
+
+## 16. 获取运动类型
+
+获取客户端创建/编辑轨迹时可选择的运动类型列表。
+
+**需要认证**
+
+### 说明
+
+- 默认返回：`徒步`、`跑步`、`爬山`、`骑行`。
+- 服务端可通过环境变量 `TRACK_TYPES` 配置运动类型，支持使用英文逗号、分号、中文逗号、顿号或竖线分隔，例如：`TRACK_TYPES=徒步,跑步,爬山,骑行,滑雪`。
+- 服务端会自动过滤空项和重复项；若未配置或配置为空，则使用默认列表。
+
+### 请求
+
+```
+GET /api/v1/track/types
+Authorization: Bearer <token>
+```
+
+### 响应
+
+**状态码：** `200 OK`
+
+返回统一响应格式 `StandardResponse`：
+
+```json
+{
+  "code": 0,
+  "data": {
+    "items": ["徒步", "跑步", "爬山", "骑行"]
+  }
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `data.items` | `string[]` | 可选运动类型列表。 |
+
+### 错误响应
+
+- `401 Unauthorized`
+  - 缺少/无效/过期的 Token

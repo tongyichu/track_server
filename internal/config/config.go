@@ -18,6 +18,8 @@ const (
 	OSSFileBucketSize         = 2000 //所有用户的轨迹文件hash到2000个桶以内，该值不能轻易修改
 )
 
+var DefaultTrackTypes = []string{"徒步", "跑步", "爬山", "骑行"}
+
 // Config holds server configuration loaded from environment variables.
 type Config struct {
 	MongoURI        string
@@ -35,6 +37,7 @@ type Config struct {
 	TLSKeyFile      string
 	EnableTLS       bool
 	JWTSecret       string
+	TrackTypes      []string // 客户端可选运动类型列表，默认：徒步/跑步/爬山/骑行。
 
 	AliyunAccessKeyID     string // 服务端长期 AK（仅在服务端保存）。
 	AliyunAccessKeySecret string // 服务端长期 SK（仅在服务端保存）。
@@ -98,6 +101,7 @@ func Load() *Config {
 		TLSKeyFile:      tlsKey,
 		EnableTLS:       tlsCert != "" && tlsKey != "",
 		JWTSecret:       getEnv("JWT_SECRET", "track_server_default_jwt_secret"),
+		TrackTypes:      ParseTrackTypes(os.Getenv("TRACK_TYPES")),
 
 		// Aliyun OSS STS（客户端直传上传凭证）
 		// - ALIYUN_ACCESS_KEY_ID / ALIYUN_ACCESS_KEY_SECRET：服务端长期 AK/SK
@@ -164,6 +168,33 @@ func getEnvInt64(key string, def int64) int64 {
 		return n
 	}
 	return def
+}
+
+// ParseTrackTypes parses configurable track types from env value.
+// Supported separators: comma, semicolon, Chinese comma/dunhao and vertical bar.
+// Empty input or all-empty entries fall back to DefaultTrackTypes.
+func ParseTrackTypes(raw string) []string {
+	items := splitByAny(raw, ",;，、|")
+	if len(items) == 0 {
+		return append([]string(nil), DefaultTrackTypes...)
+	}
+	out := make([]string, 0, len(items))
+	seen := make(map[string]struct{}, len(items))
+	for _, item := range items {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		if _, ok := seen[item]; ok {
+			continue
+		}
+		seen[item] = struct{}{}
+		out = append(out, item)
+	}
+	if len(out) == 0 {
+		return append([]string(nil), DefaultTrackTypes...)
+	}
+	return out
 }
 
 // parseAdminAccounts 解析管理员账号配置，返回 username -> bcryptHash 的映射。

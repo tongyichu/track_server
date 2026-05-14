@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -68,6 +69,20 @@ func TestGenerateTrackID_FormatAndUniqueness(t *testing.T) {
 	}
 }
 
+func TestTrackServiceListTrackTypes(t *testing.T) {
+	trackRepo, _, collectRepo, _, _, _ := repository.NewInMemoryRepositories()
+	svc := NewTrackService(trackRepo, collectRepo)
+
+	if got := svc.ListTrackTypes(); !slices.Equal(got, []string{"徒步", "跑步", "爬山", "骑行"}) {
+		t.Fatalf("expected default track types, got %#v", got)
+	}
+
+	svc.SetTrackTypes(config.ParseTrackTypes("徒步,跑步,滑雪,徒步"))
+	if got := svc.ListTrackTypes(); !slices.Equal(got, []string{"徒步", "跑步", "滑雪"}) {
+		t.Fatalf("expected configured track types, got %#v", got)
+	}
+}
+
 func TestCreateTrack_UsesProvidedFields(t *testing.T) {
 	trackRepo, _, collectRepo, _, _, _ := repository.NewInMemoryRepositories()
 	svc := NewTrackService(trackRepo, collectRepo)
@@ -77,6 +92,7 @@ func TestCreateTrack_UsesProvidedFields(t *testing.T) {
 	title := "傍晚夜跑"
 	distance := 5200.5
 	duration := uint32(1800)
+	caloriesBurned := 96.5
 	elevationGain := 120
 	rawURL := "https://example.com/raw/track.json"
 	screenshotURL := "https://example.com/track.png"
@@ -91,6 +107,7 @@ func TestCreateTrack_UsesProvidedFields(t *testing.T) {
 		EndTime:            &end,
 		Distance:           &distance,
 		Duration:           &duration,
+		CaloriesBurned:     &caloriesBurned,
 		ElevationGain:      &elevationGain,
 		RawTrackURL:        &rawURL,
 		TrackScreenshotURL: &screenshotURL,
@@ -117,6 +134,9 @@ func TestCreateTrack_UsesProvidedFields(t *testing.T) {
 	}
 	if track.Duration != duration {
 		t.Fatalf("expected duration %v, got %v", duration, track.Duration)
+	}
+	if track.CaloriesBurned != caloriesBurned {
+		t.Fatalf("expected calories_burned %v, got %v", caloriesBurned, track.CaloriesBurned)
 	}
 	if track.ElevationGain != elevationGain {
 		t.Fatalf("expected elevation_gain %v, got %v", elevationGain, track.ElevationGain)

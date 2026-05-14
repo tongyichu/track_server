@@ -95,6 +95,7 @@ func (r *MongoTrackRepository) Update(ctx context.Context, t *models.Track) erro
 			"end_time":                       t.EndTime,
 			"distance":                       t.Distance,
 			"duration":                       t.Duration,
+			"calories_burned":                t.CaloriesBurned,
 			"avg_speed_kmh":                  t.AvgSpeedKmh,
 			"elevation_gain":                 t.ElevationGain,
 			"raw_track_url":                  t.RawTrackURL,

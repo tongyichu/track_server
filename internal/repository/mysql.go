@@ -46,6 +46,7 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 			end_time DATETIME,
 			distance DECIMAL(10,2) DEFAULT 0.00,
 			duration INT UNSIGNED DEFAULT 0,
+			calories_burned DECIMAL(10,2) DEFAULT 0.00 COMMENT '热量消耗(千卡)',
 			elevation_gain INT DEFAULT 0,
 			raw_track_url VARCHAR(255),
 			track_screenshot_url VARCHAR(255),
@@ -147,6 +148,9 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 	if err := ensureMySQLTrackAvgSpeedKmhColumn(ctx, db); err != nil {
+		return err
+	}
+	if err := ensureMySQLTrackCaloriesBurnedColumn(ctx, db); err != nil {
 		return err
 	}
 	if err := ensureMySQLTrackCityCodeColumn(ctx, db); err != nil {
@@ -329,6 +333,30 @@ func ensureMySQLTrackAvgSpeedKmhColumn(ctx context.Context, db *sql.DB) error {
 	_, err = db.ExecContext(ctx, `ALTER TABLE track_records ADD COLUMN avg_speed_kmh DOUBLE NOT NULL DEFAULT 1 AFTER status`)
 	if err != nil {
 		return fmt.Errorf("add track_records.avg_speed_kmh column: %w", err)
+	}
+	return nil
+}
+
+func ensureMySQLTrackCaloriesBurnedColumn(ctx context.Context, db *sql.DB) error {
+	var count int
+	err := db.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM information_schema.COLUMNS
+		WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'track_records' AND COLUMN_NAME = 'calories_burned'`,
+	).Scan(&count)
+	if err != nil {
+		return fmt.Errorf("check track_records.calories_burned column: %w", err)
+	}
+	if count > 0 {
+		_, err = db.ExecContext(ctx, `ALTER TABLE track_records MODIFY COLUMN calories_burned DECIMAL(10,2) DEFAULT 0.00 COMMENT '热量消耗(千卡)'`)
+		if err != nil {
+			return fmt.Errorf("modify track_records.calories_burned column: %w", err)
+		}
+		return nil
+	}
+	_, err = db.ExecContext(ctx, `ALTER TABLE track_records ADD COLUMN calories_burned DECIMAL(10,2) DEFAULT 0.00 COMMENT '热量消耗(千卡)' AFTER duration`)
+	if err != nil {
+		return fmt.Errorf("add track_records.calories_burned column: %w", err)
 	}
 	return nil
 }
@@ -519,11 +547,11 @@ func (r *MySQLTrackRepository) Create(ctx context.Context, t *models.Track) erro
 	_, err := r.db.ExecContext(ctx,
 		`INSERT INTO track_records (
 			id, user_id, city_code, locate_addr, track_type, title, start_time, end_time,
-			distance, duration, elevation_gain, raw_track_url, track_screenshot_url, track_no_map_bg_screenshot_url, is_running, status, avg_speed_kmh,
+			distance, duration, calories_burned, elevation_gain, raw_track_url, track_screenshot_url, track_no_map_bg_screenshot_url, is_running, status, avg_speed_kmh,
 			created_at, updated_at, deleted_at
-		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		t.ID, t.UserID, t.CityCode, t.LocateAddr, t.TrackType, t.Title, t.StartTime, nullableTimeValue(t.EndTime),
-		t.Distance, t.Duration, t.ElevationGain, nullableStringValue(t.RawTrackURL), nullableStringValue(t.TrackScreenshotURL), nullableStringValue(t.TrackNoMapBgScreenshotURL), t.IsRunning, t.Status, t.AvgSpeedKmh,
+		t.Distance, t.Duration, t.CaloriesBurned, t.ElevationGain, nullableStringValue(t.RawTrackURL), nullableStringValue(t.TrackScreenshotURL), nullableStringValue(t.TrackNoMapBgScreenshotURL), t.IsRunning, t.Status, t.AvgSpeedKmh,
 		t.CreatedAt, t.UpdatedAt, nullableTimeValue(t.DeletedAt),
 	)
 	if err != nil {
@@ -542,10 +570,10 @@ func (r *MySQLTrackRepository) Update(ctx context.Context, t *models.Track) erro
 	res, err := r.db.ExecContext(ctx,
 		`UPDATE track_records SET
 			user_id=?, city_code=?, locate_addr=?, track_type=?, title=?, start_time=?, end_time=?,
-			distance=?, duration=?, elevation_gain=?, raw_track_url=?, track_screenshot_url=?, track_no_map_bg_screenshot_url=?, is_running=?, status=?, avg_speed_kmh=?, updated_at=?, deleted_at=?
+			distance=?, duration=?, calories_burned=?, elevation_gain=?, raw_track_url=?, track_screenshot_url=?, track_no_map_bg_screenshot_url=?, is_running=?, status=?, avg_speed_kmh=?, updated_at=?, deleted_at=?
 		WHERE id=?`,
 		t.UserID, t.CityCode, t.LocateAddr, t.TrackType, t.Title, t.StartTime, nullableTimeValue(t.EndTime),
-		t.Distance, t.Duration, t.ElevationGain, nullableStringValue(t.RawTrackURL), nullableStringValue(t.TrackScreenshotURL), nullableStringValue(t.TrackNoMapBgScreenshotURL), t.IsRunning, t.Status, t.AvgSpeedKmh, t.UpdatedAt,
+		t.Distance, t.Duration, t.CaloriesBurned, t.ElevationGain, nullableStringValue(t.RawTrackURL), nullableStringValue(t.TrackScreenshotURL), nullableStringValue(t.TrackNoMapBgScreenshotURL), t.IsRunning, t.Status, t.AvgSpeedKmh, t.UpdatedAt,
 		nullableTimeValue(t.DeletedAt),
 		t.ID,
 	)
@@ -621,7 +649,7 @@ func (r *MySQLTrackRepository) SoftDeleteAndCleanupCollectsTx(ctx context.Contex
 func (r *MySQLTrackRepository) FindByID(ctx context.Context, id string) (*models.Track, error) {
 	row := r.db.QueryRowContext(ctx,
 		`SELECT id, user_id, city_code, locate_addr, track_type, title, start_time, end_time,
-			distance, duration, elevation_gain, raw_track_url, track_screenshot_url, track_no_map_bg_screenshot_url, is_running, status, avg_speed_kmh,
+			distance, duration, calories_burned, elevation_gain, raw_track_url, track_screenshot_url, track_no_map_bg_screenshot_url, is_running, status, avg_speed_kmh,
 			created_at, updated_at, deleted_at
 		FROM track_records WHERE id=?`, id)
 
@@ -631,6 +659,7 @@ func (r *MySQLTrackRepository) FindByID(ctx context.Context, id string) (*models
 		deletedAt       sql.NullTime
 		distance        sql.NullFloat64
 		duration        sql.NullInt64
+		caloriesBurned  sql.NullFloat64
 		elevationGain   sql.NullInt64
 		rawTrackURL     sql.NullString
 		trackScreenshot sql.NullString
@@ -638,7 +667,7 @@ func (r *MySQLTrackRepository) FindByID(ctx context.Context, id string) (*models
 	)
 	if err := row.Scan(
 		&t.ID, &t.UserID, &t.CityCode, &t.LocateAddr, &t.TrackType, &t.Title, &t.StartTime, &endTime,
-		&distance, &duration, &elevationGain, &rawTrackURL, &trackScreenshot, &noMapBgShot, &t.IsRunning, &t.Status, &t.AvgSpeedKmh,
+		&distance, &duration, &caloriesBurned, &elevationGain, &rawTrackURL, &trackScreenshot, &noMapBgShot, &t.IsRunning, &t.Status, &t.AvgSpeedKmh,
 		&t.CreatedAt, &t.UpdatedAt, &deletedAt,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -657,6 +686,9 @@ func (r *MySQLTrackRepository) FindByID(ctx context.Context, id string) (*models
 	}
 	if duration.Valid {
 		t.Duration = uint32(duration.Int64)
+	}
+	if caloriesBurned.Valid {
+		t.CaloriesBurned = caloriesBurned.Float64
 	}
 	if elevationGain.Valid {
 		t.ElevationGain = int(elevationGain.Int64)

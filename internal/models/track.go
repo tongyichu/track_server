@@ -36,6 +36,7 @@ type Track struct {
 	EndTime                   time.Time    `json:"end_time" bson:"end_time"`                                             // EndTime 是运动结束时间。
 	Distance                  float64      `json:"distance" bson:"distance"`                                             // Distance 是总距离，单位米。
 	Duration                  uint32       `json:"duration" bson:"duration"`                                             // Duration 是运动耗时，单位秒。
+	CaloriesBurned            float64      `json:"calories_burned" bson:"calories_burned"`                               // CaloriesBurned 是热量消耗，单位千卡。
 	ElevationGain             int          `json:"elevation_gain" bson:"elevation_gain"`                                 // ElevationGain 是累计爬升，单位米。
 	RawTrackURL               string       `json:"raw_track_url" bson:"raw_track_url"`                                   // RawTrackURL 是原始轨迹点文件在对象存储中的地址。
 	TrackScreenshotURL        string       `json:"track_screenshot_url" bson:"track_screenshot_url"`                     // TrackScreenshotURL 是轨迹截图文件在对象存储中的地址。
@@ -72,6 +73,7 @@ type TrackSummary struct {
 	Distance                  float64   `json:"distance"`                       // Distance 是总距离，单位米。
 	Duration                  uint32    `json:"duration"`                       // Duration 是运动耗时，单位秒。
 	AvgSpeedKmh               float64   `json:"avg_speed_kmh"`                  // AvgSpeedKmh 是平均速度，单位 km/h。
+	CaloriesBurned            float64   `json:"calories_burned"`                // CaloriesBurned 是热量消耗，单位千卡。
 	ElevationGain             int       `json:"elevation_gain"`                 // ElevationGain 是累计爬升，单位米。
 	Collected                 bool      `json:"collected"`                      // Collected 表示当前鉴权用户是否已收藏该轨迹。
 	CollectCount              int64     `json:"collect_count"`                  // CollectCount 是轨迹被收藏的总数。
@@ -98,6 +100,7 @@ type CollectedTrackSummary struct {
 	Distance                  float64   `json:"distance"`
 	Duration                  uint32    `json:"duration"`
 	AvgSpeedKmh               float64   `json:"avg_speed_kmh"`
+	CaloriesBurned            float64   `json:"calories_burned"`
 	ElevationGain             int       `json:"elevation_gain"`
 	CollectCount              int64     `json:"collect_count"`
 	NavigateCount             int64     `json:"navigate_count"`
@@ -128,9 +131,9 @@ type TrackSummaryPage struct {
 // Field names keep consistent with TrackSummaryPage.
 type CollectedTrackSummaryPage struct {
 	Items      []*CollectedTrackSummary `json:"items"`
-	TotalCount int64                   `json:"total_count"`
-	NextCursor string                  `json:"next_cursor,omitempty"`
-	HasMore    bool                    `json:"has_more"`
+	TotalCount int64                    `json:"total_count"`
+	NextCursor string                   `json:"next_cursor,omitempty"`
+	HasMore    bool                     `json:"has_more"`
 }
 
 // MyTrackSummary 是“我的轨迹”列表接口使用的返回模型。
@@ -151,6 +154,7 @@ type MyTrackSummary struct {
 	Distance           float64   `json:"distance"`             // Distance 是总距离，单位米。
 	Duration           uint32    `json:"duration"`             // Duration 是运动耗时，单位秒。
 	AvgSpeedKmh        float64   `json:"avg_speed_kmh"`        // AvgSpeedKmh 是平均速度，单位 km/h。
+	CaloriesBurned     float64   `json:"calories_burned"`      // CaloriesBurned 是热量消耗，单位千卡。
 	ElevationGain      int       `json:"elevation_gain"`       // ElevationGain 是累计爬升，单位米。
 	CollectCount       int64     `json:"collect_count"`        // CollectCount 是轨迹被收藏的总数。
 	NavigateCount      int64     `json:"navigate_count"`       // NavigateCount 是该轨迹被其他用户用于导航的次数。

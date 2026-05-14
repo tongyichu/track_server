@@ -23,6 +23,7 @@ CREATE TABLE `track_records` (
                                  `end_time` datetime COMMENT '结束时间',
                                  `distance` decimal(10,2) DEFAULT '0.00' COMMENT '总距离(米)',
                                  `duration` int unsigned DEFAULT '0' COMMENT '运动耗时(秒)',
+                                 `calories_burned` decimal(10,2) DEFAULT '0.00' COMMENT '热量消耗(千卡)',
                                  `elevation_gain` int DEFAULT '0' COMMENT '累计爬升(米)',
                                  `raw_track_url` varchar(255) COMMENT '指向对象存储中原始轨迹点文件(JSON/GeoJSON)的URL',
                                  `track_screenshot_url` varchar(255) COMMENT '轨迹截图文件在对象存储中的地址',

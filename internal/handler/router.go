@@ -121,6 +121,7 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 	auth.GET("/oss/sts-token/read", ossHandler.GetSTSReadToken)
 
 	// track related
+	auth.GET("/track/types", trackHandler.ListTrackTypes)
 	auth.POST("/track/create", trackHandler.CreateTrack)
 	auth.PUT("/track/:track_id/update", trackHandler.UpdateTrackInfo)
 	auth.DELETE("/track/:track_id", trackHandler.DeleteTrack)

@@ -92,6 +92,7 @@ func main() {
 	}
 
 	trackSvc := service.NewTrackService(trackRepo, collectRepo)
+	trackSvc.SetTrackTypes(cfg.TrackTypes)
 	trackSvc.SetUserRepository(userRepo)
 	trackSvc.SetNavigationRepository(navigationRepo)
 	userSvc := service.NewUserService(userRepo)
