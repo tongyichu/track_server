@@ -37,7 +37,8 @@ type StatusResult struct {
 }
 
 type TrackTypesResult struct {
-	Items []string `json:"items"`
+	Items []string               `json:"items"`
+	Stats *models.TrackUserStats `json:"stats"`
 }
 
 // NewTrackHandler creates a new TrackHandler.
@@ -47,7 +48,22 @@ func NewTrackHandler(trackSvc *service.TrackService) *TrackHandler {
 
 // ListTrackTypes handles GET /api/v1/track/types.
 func (h *TrackHandler) ListTrackTypes(ctx context.Context, c *app.RequestContext) {
-	c.JSON(http.StatusOK, successResponse(TrackTypesResult{Items: h.trackSvc.ListTrackTypes()}))
+	meta := middleware.GetRequestMeta(c)
+	if meta == nil || meta.AuthUserID <= 0 {
+		c.JSON(http.StatusUnauthorized, utils.H{"error": "unauthorized"})
+		return
+	}
+	stats, err := h.trackSvc.GetUserTrackStats(ctx, meta.AuthUserID)
+	if err != nil {
+		var iae *service.InvalidArgumentError
+		if errors.As(err, &iae) {
+			c.JSON(http.StatusBadRequest, utils.H{"error": iae.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, successResponse(TrackTypesResult{Items: h.trackSvc.ListTrackTypes(), Stats: stats}))
 }
 
 // CreateTrack handles POST /api/track/create

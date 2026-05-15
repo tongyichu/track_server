@@ -1420,7 +1420,7 @@ X-Platform: android
 
 ## 16. 获取运动类型
 
-获取客户端创建/编辑轨迹时可选择的运动类型列表。
+获取客户端创建/编辑轨迹时可选择的运动类型列表，并返回当前用户的轨迹统计数据。
 
 **需要认证**
 
@@ -1429,6 +1429,8 @@ X-Platform: android
 - 默认返回：`徒步`、`跑步`、`爬山`、`骑行`。
 - 服务端可通过环境变量 `TRACK_TYPES` 配置运动类型，支持使用英文逗号、分号、中文逗号、顿号或竖线分隔，例如：`TRACK_TYPES=徒步,跑步,爬山,骑行,滑雪`。
 - 服务端会自动过滤空项和重复项；若未配置或配置为空，则使用默认列表。
+- 统计数据按 `Authorization` Token 解析出的当前用户统计 `track_records`：排除删除与进行中轨迹，仅统计 `正常/私密` 轨迹。
+- 统计字段包括：总里程、轨迹次数、总耗时、总热量。
 
 ### 请求
 
@@ -1447,7 +1449,13 @@ Authorization: Bearer <token>
 {
   "code": 0,
   "data": {
-    "items": ["徒步", "跑步", "爬山", "骑行"]
+    "items": ["徒步", "跑步", "爬山", "骑行"],
+    "stats": {
+      "total_distance": 2000.5,
+      "track_count": 2,
+      "total_duration": 1000,
+      "total_calories": 140.5
+    }
   }
 }
 ```
@@ -1455,6 +1463,10 @@ Authorization: Bearer <token>
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `data.items` | `string[]` | 可选运动类型列表。 |
+| `data.stats.total_distance` | number | 当前用户总里程，单位米。 |
+| `data.stats.track_count` | int64 | 当前用户轨迹次数。 |
+| `data.stats.total_duration` | int64 | 当前用户总耗时，单位秒。 |
+| `data.stats.total_calories` | number | 当前用户总热量，单位千卡。 |
 
 ### 错误响应
 

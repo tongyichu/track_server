@@ -43,6 +43,7 @@ type TrackRepository interface {
 	Update(ctx context.Context, t *models.Track) error
 	FindByID(ctx context.Context, id string) (*models.Track, error)
 	FindRunningByUserID(ctx context.Context, userID int64) (*models.Track, error)
+	StatsSummaryByUserID(ctx context.Context, userID int64) (*models.TrackUserStats, error)
 	// ListByUserID 返回指定用户的轨迹列表（通常用于“我的轨迹”）。
 	//
 	// 约定：

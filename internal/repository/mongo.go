@@ -189,6 +189,41 @@ func (r *MongoTrackRepository) StatsByUserID(ctx context.Context, userID int64) 
 	return 0, 0, nil
 }
 
+// StatsSummaryByUserID returns user track statistics from tracks collection.
+// 口径：排除删除与进行中轨迹，统计正常/私密轨迹的总里程、次数、总耗时和总热量。
+func (r *MongoTrackRepository) StatsSummaryByUserID(ctx context.Context, userID int64) (*models.TrackUserStats, error) {
+	pipeline := mongo.Pipeline{
+		bson.D{{Key: "$match", Value: bson.M{
+			"user_id":    userID,
+			"is_running": false,
+			"status":     bson.M{"$in": []models.TrackStatus{models.TrackStatusNormal, models.TrackStatusPrivate}},
+		}}},
+		bson.D{{Key: "$group", Value: bson.M{
+			"_id":            nil,
+			"track_count":    bson.M{"$sum": 1},
+			"total_distance": bson.M{"$sum": "$distance"},
+			"total_duration": bson.M{"$sum": "$duration"},
+			"total_calories": bson.M{"$sum": "$calories_burned"},
+		}}},
+	}
+	cur, err := r.collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+
+	stats := &models.TrackUserStats{}
+	if cur.Next(ctx) {
+		if err := cur.Decode(stats); err != nil {
+			return nil, err
+		}
+	}
+	if err := cur.Err(); err != nil {
+		return nil, err
+	}
+	return stats, nil
+}
+
 // ListByUserID lists tracks of a user ordered by start time desc.
 // It excludes deleted tracks and running tracks by default.
 func (r *MongoTrackRepository) ListByUserID(ctx context.Context, userID int64, cursor *models.TrackListCursor, limit int) ([]*models.Track, error) {

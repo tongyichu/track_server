@@ -741,6 +741,26 @@ func (r *MySQLTrackRepository) StatsByUserID(ctx context.Context, userID int64) 
 	return cnt, dist, nil
 }
 
+// StatsSummaryByUserID returns user track statistics from track_records.
+// 口径：排除删除与进行中轨迹，统计正常/私密轨迹的总里程、次数、总耗时和总热量。
+func (r *MySQLTrackRepository) StatsSummaryByUserID(ctx context.Context, userID int64) (*models.TrackUserStats, error) {
+	row := r.db.QueryRowContext(
+		ctx,
+		`SELECT COUNT(*) AS track_count,
+		        COALESCE(SUM(distance), 0) AS total_distance,
+		        COALESCE(SUM(duration), 0) AS total_duration,
+		        COALESCE(SUM(calories_burned), 0) AS total_calories
+		 FROM track_records
+		 WHERE user_id=? AND is_running=0 AND status IN (?, ?)`,
+		userID, models.TrackStatusNormal, models.TrackStatusPrivate,
+	)
+	stats := &models.TrackUserStats{}
+	if err := row.Scan(&stats.TrackCount, &stats.TotalDistance, &stats.TotalDuration, &stats.TotalCalories); err != nil {
+		return nil, err
+	}
+	return stats, nil
+}
+
 // CountByUserIDWithNonEmptyRawTrackURL returns track count of a user where raw_track_url is non-empty.
 // 口径与 ListByUserID 保持一致：排除删除与进行中轨迹，并且仅统计 raw_track_url 非空。
 func (r *MySQLTrackRepository) CountByUserIDWithNonEmptyRawTrackURL(ctx context.Context, userID int64) (int64, error) {

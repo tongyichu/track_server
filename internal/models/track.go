@@ -176,6 +176,14 @@ type TrackMap struct {
 	Points  []TrackPoint `json:"points"`   // Points 是用于地图绘制的轨迹点集合。
 }
 
+// TrackUserStats 是用户维度的轨迹统计数据。
+type TrackUserStats struct {
+	TotalDistance float64 `json:"total_distance" bson:"total_distance"` // TotalDistance 是总里程，单位米。
+	TrackCount    int64   `json:"track_count" bson:"track_count"`       // TrackCount 是轨迹次数。
+	TotalDuration int64   `json:"total_duration" bson:"total_duration"` // TotalDuration 是总耗时，单位秒。
+	TotalCalories float64 `json:"total_calories" bson:"total_calories"` // TotalCalories 是总热量，单位千卡。
+}
+
 // TrackWaypointMediaType represents the media type of a waypoint node.
 type TrackWaypointMediaType int8
 

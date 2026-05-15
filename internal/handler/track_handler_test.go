@@ -143,9 +143,17 @@ func TestCreateTrack_Success(t *testing.T) {
 
 func TestListTrackTypes(t *testing.T) {
 	e := newTestEnv()
+	ctx := context.Background()
 	token := e.generateTestToken(1001)
+	start := time.Date(2026, 4, 20, 12, 0, 0, 0, time.UTC)
 
-	w := e.perform(http.MethodGet, "/api/v1/track/types", nil, authHeader(token), ut.Header{Key: middleware.HeaderUserID, Value: "1001"})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "stats-1", UserID: 1001, Title: "统计1", StartTime: start, Distance: 1200.5, Duration: 600, CaloriesBurned: 80.5, IsRunning: false, Status: models.TrackStatusNormal})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "stats-2", UserID: 1001, Title: "统计2", StartTime: start.Add(time.Hour), Distance: 800, Duration: 400, CaloriesBurned: 60, IsRunning: false, Status: models.TrackStatusPrivate})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "stats-running", UserID: 1001, Title: "进行中", Distance: 999, Duration: 999, CaloriesBurned: 999, IsRunning: true, Status: models.TrackStatusNormal})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "stats-other", UserID: 1002, Title: "他人", Distance: 999, Duration: 999, CaloriesBurned: 999, IsRunning: false, Status: models.TrackStatusNormal})
+
+	// X-User-ID 即使被伪造成其他用户，也应以 token 解析出的 AuthUserID=1001 为准。
+	w := e.perform(http.MethodGet, "/api/v1/track/types", nil, authHeader(token), ut.Header{Key: middleware.HeaderUserID, Value: "1002"})
 	resp := w.Result()
 	if resp.StatusCode() != http.StatusOK {
 		t.Fatalf("expected status 200, got %d, body=%s", resp.StatusCode(), string(resp.Body()))
@@ -163,6 +171,21 @@ func TestListTrackTypes(t *testing.T) {
 		if result.Data.Items[i] != item {
 			t.Fatalf("expected track type[%d]=%q, got %q", i, item, result.Data.Items[i])
 		}
+	}
+	if result.Data.Stats == nil {
+		t.Fatalf("expected stats")
+	}
+	if result.Data.Stats.TrackCount != 2 {
+		t.Fatalf("expected track_count 2, got %d", result.Data.Stats.TrackCount)
+	}
+	if result.Data.Stats.TotalDistance != 2000.5 {
+		t.Fatalf("expected total_distance 2000.5, got %v", result.Data.Stats.TotalDistance)
+	}
+	if result.Data.Stats.TotalDuration != 1000 {
+		t.Fatalf("expected total_duration 1000, got %d", result.Data.Stats.TotalDuration)
+	}
+	if result.Data.Stats.TotalCalories != 140.5 {
+		t.Fatalf("expected total_calories 140.5, got %v", result.Data.Stats.TotalCalories)
 	}
 }
 

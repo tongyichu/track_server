@@ -187,6 +187,18 @@ func (s *TrackService) ListTrackTypes() []string {
 	return append([]string(nil), s.trackTypes...)
 }
 
+// GetUserTrackStats returns per-user track statistics.
+func (s *TrackService) GetUserTrackStats(ctx context.Context, userID int64) (*models.TrackUserStats, error) {
+	stats := &models.TrackUserStats{}
+	if userID <= 0 {
+		return stats, invalidArg("userID is required")
+	}
+	if s.tracks == nil {
+		return stats, nil
+	}
+	return s.tracks.StatsSummaryByUserID(ctx, userID)
+}
+
 // SetUserRepository 注入用户仓储，用于在列表等场景补充用户头像等信息。
 // 独立于构造函数以避免破坏既有调用方/单测。
 func (s *TrackService) SetUserRepository(users repository.UserRepository) {

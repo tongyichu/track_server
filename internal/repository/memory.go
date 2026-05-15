@@ -152,6 +152,31 @@ func (r *InMemoryTrackRepository) StatsByUserID(_ context.Context, userID int64)
 	return cnt, dist, nil
 }
 
+// StatsSummaryByUserID returns user track statistics from track records.
+// 口径：排除删除与进行中轨迹，统计正常/私密轨迹的总里程、次数、总耗时和总热量。
+func (r *InMemoryTrackRepository) StatsSummaryByUserID(_ context.Context, userID int64) (*models.TrackUserStats, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	stats := &models.TrackUserStats{}
+	for _, t := range r.tracks {
+		if t == nil {
+			continue
+		}
+		if t.UserID != userID || t.IsRunning {
+			continue
+		}
+		if t.Status != models.TrackStatusNormal && t.Status != models.TrackStatusPrivate {
+			continue
+		}
+		stats.TrackCount++
+		stats.TotalDistance += t.Distance
+		stats.TotalDuration += int64(t.Duration)
+		stats.TotalCalories += t.CaloriesBurned
+	}
+	return stats, nil
+}
+
 // ListByUserID returns tracks of the given user ordered by start time desc.
 // It excludes deleted tracks and running tracks by default.
 func (r *InMemoryTrackRepository) ListByUserID(_ context.Context, userID int64, cursor *models.TrackListCursor, limit int) ([]*models.Track, error) {
@@ -791,4 +816,3 @@ func (r *InMemoryAppReleaseRepository) Delete(_ context.Context, id int64) error
 }
 
 func duplicateContainsIgnoreCaseShim() {}
-
