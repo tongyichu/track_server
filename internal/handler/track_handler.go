@@ -37,8 +37,8 @@ type StatusResult struct {
 }
 
 type TrackTypesResult struct {
-	Items []string               `json:"items"`
-	Stats *models.TrackUserStats `json:"stats"`
+	Items []models.TrackTypeOption `json:"items"`
+	Stats *models.TrackUserStats   `json:"stats"`
 }
 
 // NewTrackHandler creates a new TrackHandler.
@@ -63,7 +63,7 @@ func (h *TrackHandler) ListTrackTypes(ctx context.Context, c *app.RequestContext
 		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, successResponse(TrackTypesResult{Items: h.trackSvc.ListTrackTypes(), Stats: stats}))
+	c.JSON(http.StatusOK, successResponse(TrackTypesResult{Items: h.trackSvc.ListTrackTypeOptions(), Stats: stats}))
 }
 
 // CreateTrack handles POST /api/track/create

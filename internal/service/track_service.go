@@ -30,8 +30,9 @@ type TrackService struct {
 }
 
 const (
-	defaultTrackPageSize = 20
-	maxTrackPageSize     = 50
+	defaultTrackPageSize   = 20
+	maxTrackPageSize       = 50
+	trackTypeIconURLPrefix = "/api/v1/static/track_type_icon/"
 )
 
 type ListRecommendInput struct {
@@ -185,6 +186,26 @@ func (s *TrackService) ListTrackTypes() []string {
 		return config.ParseTrackTypes("")
 	}
 	return append([]string(nil), s.trackTypes...)
+}
+
+// ListTrackTypeOptions returns configured track types with icon URLs.
+func (s *TrackService) ListTrackTypeOptions() []models.TrackTypeOption {
+	types := s.ListTrackTypes()
+	items := make([]models.TrackTypeOption, 0, len(types))
+	for _, trackType := range types {
+		items = append(items, models.TrackTypeOption{
+			Name:    trackType,
+			IconURL: trackTypeIconURL(trackType),
+		})
+	}
+	return items
+}
+
+func trackTypeIconURL(trackType string) string {
+	if file, ok := config.TrackTypeIconFile(trackType); ok {
+		return trackTypeIconURLPrefix + file
+	}
+	return trackTypeIconURLPrefix + url.PathEscape(trackType) + ".svg"
 }
 
 // GetUserTrackStats returns per-user track statistics.

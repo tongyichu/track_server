@@ -81,6 +81,16 @@ func TestTrackServiceListTrackTypes(t *testing.T) {
 	if got := svc.ListTrackTypes(); !slices.Equal(got, []string{"徒步", "跑步", "滑雪"}) {
 		t.Fatalf("expected configured track types, got %#v", got)
 	}
+	options := svc.ListTrackTypeOptions()
+	if len(options) != 3 {
+		t.Fatalf("expected 3 track type options, got %#v", options)
+	}
+	if options[0].Name != "徒步" || options[0].IconURL != "/api/v1/static/track_type_icon/hiking.svg" {
+		t.Fatalf("unexpected first track type option: %#v", options[0])
+	}
+	if options[2].Name != "滑雪" || options[2].IconURL != "/api/v1/static/track_type_icon/%E6%BB%91%E9%9B%AA.svg" {
+		t.Fatalf("unexpected third track type option: %#v", options[2])
+	}
 }
 
 func TestCreateTrack_UsesProvidedFields(t *testing.T) {

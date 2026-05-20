@@ -163,13 +163,24 @@ func TestListTrackTypes(t *testing.T) {
 	if result.Code != 0 {
 		t.Fatalf("expected code 0, got %d", result.Code)
 	}
-	expected := []string{"徒步", "跑步", "爬山", "骑行"}
+	expected := []struct {
+		name    string
+		iconURL string
+	}{
+		{name: "徒步", iconURL: "/api/v1/static/track_type_icon/hiking.svg"},
+		{name: "跑步", iconURL: "/api/v1/static/track_type_icon/running.svg"},
+		{name: "爬山", iconURL: "/api/v1/static/track_type_icon/climbing.svg"},
+		{name: "骑行", iconURL: "/api/v1/static/track_type_icon/riding.svg"},
+	}
 	if len(result.Data.Items) != len(expected) {
 		t.Fatalf("expected %d track types, got %#v", len(expected), result.Data.Items)
 	}
 	for i, item := range expected {
-		if result.Data.Items[i] != item {
-			t.Fatalf("expected track type[%d]=%q, got %q", i, item, result.Data.Items[i])
+		if result.Data.Items[i].Name != item.name {
+			t.Fatalf("expected track type[%d].name=%q, got %q", i, item.name, result.Data.Items[i].Name)
+		}
+		if result.Data.Items[i].IconURL != item.iconURL {
+			t.Fatalf("expected track type[%d].icon_url=%q, got %q", i, item.iconURL, result.Data.Items[i].IconURL)
 		}
 	}
 	if result.Data.Stats == nil {

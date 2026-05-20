@@ -18,7 +18,19 @@ const (
 	OSSFileBucketSize         = 2000 //所有用户的轨迹文件hash到2000个桶以内，该值不能轻易修改
 )
 
-var DefaultTrackTypes = []string{"徒步", "跑步", "爬山", "骑行"}
+// TrackTypeConfig defines one built-in track type and its static icon file.
+type TrackTypeConfig struct {
+	Name     string
+	IconFile string
+}
+
+// DefaultTrackTypeConfigs keeps built-in track type names and icons in one place.
+var DefaultTrackTypeConfigs = []TrackTypeConfig{
+	{Name: "徒步", IconFile: "hiking.svg"},
+	{Name: "跑步", IconFile: "running.svg"},
+	{Name: "爬山", IconFile: "climbing.svg"},
+	{Name: "骑行", IconFile: "riding.svg"},
+}
 
 // Config holds server configuration loaded from environment variables.
 type Config struct {
@@ -172,11 +184,11 @@ func getEnvInt64(key string, def int64) int64 {
 
 // ParseTrackTypes parses configurable track types from env value.
 // Supported separators: comma, semicolon, Chinese comma/dunhao and vertical bar.
-// Empty input or all-empty entries fall back to DefaultTrackTypes.
+// Empty input or all-empty entries fall back to DefaultTrackTypes().
 func ParseTrackTypes(raw string) []string {
 	items := splitByAny(raw, ",;，、|")
 	if len(items) == 0 {
-		return append([]string(nil), DefaultTrackTypes...)
+		return DefaultTrackTypes()
 	}
 	out := make([]string, 0, len(items))
 	seen := make(map[string]struct{}, len(items))
@@ -192,9 +204,28 @@ func ParseTrackTypes(raw string) []string {
 		out = append(out, item)
 	}
 	if len(out) == 0 {
-		return append([]string(nil), DefaultTrackTypes...)
+		return DefaultTrackTypes()
 	}
 	return out
+}
+
+// DefaultTrackTypes returns built-in track type names in display order.
+func DefaultTrackTypes() []string {
+	out := make([]string, 0, len(DefaultTrackTypeConfigs))
+	for _, item := range DefaultTrackTypeConfigs {
+		out = append(out, item.Name)
+	}
+	return out
+}
+
+// TrackTypeIconFile returns built-in icon filename for a track type.
+func TrackTypeIconFile(trackType string) (string, bool) {
+	for _, item := range DefaultTrackTypeConfigs {
+		if item.Name == trackType {
+			return item.IconFile, true
+		}
+	}
+	return "", false
 }
 
 // parseAdminAccounts 解析管理员账号配置，返回 username -> bcryptHash 的映射。

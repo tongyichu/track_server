@@ -1429,6 +1429,7 @@ X-Platform: android
 - 默认返回：`徒步`、`跑步`、`爬山`、`骑行`。
 - 服务端可通过环境变量 `TRACK_TYPES` 配置运动类型，支持使用英文逗号、分号、中文逗号、顿号或竖线分隔，例如：`TRACK_TYPES=徒步,跑步,爬山,骑行,滑雪`。
 - 服务端会自动过滤空项和重复项；若未配置或配置为空，则使用默认列表。
+- 每个运动类型会返回一个图标链接 `icon_url`，图标文件来自服务端静态目录 `/api/v1/static/track_type_icon/`；默认对应关系为：`徒步 -> hiking.svg`、`跑步 -> running.svg`、`爬山 -> climbing.svg`、`骑行 -> riding.svg`。
 - 统计数据按 `Authorization` Token 解析出的当前用户统计 `track_records`：排除删除与进行中轨迹，仅统计 `正常/私密` 轨迹。
 - 统计字段包括：总里程、轨迹次数、总耗时、总热量。
 
@@ -1449,7 +1450,16 @@ Authorization: Bearer <token>
 {
   "code": 0,
   "data": {
-    "items": ["徒步", "跑步", "爬山", "骑行"],
+    "items": [
+      {
+        "name": "徒步",
+        "icon_url": "/api/v1/static/track_type_icon/hiking.svg"
+      },
+      {
+        "name": "跑步",
+        "icon_url": "/api/v1/static/track_type_icon/running.svg"
+      }
+    ],
     "stats": {
       "total_distance": 2000.5,
       "track_count": 2,
@@ -1462,7 +1472,9 @@ Authorization: Bearer <token>
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `data.items` | `string[]` | 可选运动类型列表。 |
+| `data.items` | `TrackTypeOption[]` | 可选运动类型列表。 |
+| `data.items[].name` | string | 运动类型名称。 |
+| `data.items[].icon_url` | string | 运动类型图标静态资源链接，路径位于 `/api/v1/static/track_type_icon/` 下。 |
 | `data.stats.total_distance` | number | 当前用户总里程，单位米。 |
 | `data.stats.track_count` | int64 | 当前用户轨迹次数。 |
 | `data.stats.total_duration` | int64 | 当前用户总耗时，单位秒。 |

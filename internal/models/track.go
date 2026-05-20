@@ -184,6 +184,12 @@ type TrackUserStats struct {
 	TotalCalories float64 `json:"total_calories" bson:"total_calories"` // TotalCalories 是总热量，单位千卡。
 }
 
+// TrackTypeOption 是运动类型选项。
+type TrackTypeOption struct {
+	Name    string `json:"name"`     // Name 是运动类型名称。
+	IconURL string `json:"icon_url"` // IconURL 是运动类型图标静态资源链接。
+}
+
 // TrackWaypointMediaType represents the media type of a waypoint node.
 type TrackWaypointMediaType int8
 
