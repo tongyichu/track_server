@@ -90,6 +90,7 @@ func (r *MongoTrackRepository) Update(ctx context.Context, t *models.Track) erro
 			"user_id":                        t.UserID,
 			"city_code":                      t.CityCode,
 			"track_type":                     t.TrackType,
+			"coordinate_system":              t.CoordinateSystem,
 			"title":                          t.Title,
 			"start_time":                     t.StartTime,
 			"end_time":                       t.EndTime,

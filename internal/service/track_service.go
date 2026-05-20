@@ -91,6 +91,7 @@ type CreateTrackInput struct {
 	CityCode                  *string    `json:"city_code"`
 	LocateAddr                *string    `json:"locate_addr"`
 	TrackType                 *string    `json:"track_type"`
+	CoordinateSystem          *string    `json:"coordinate_system"`
 	StartTime                 *time.Time `json:"start_time"`
 	EndTime                   *time.Time `json:"end_time"`
 	Distance                  *float64   `json:"distance"`
@@ -138,6 +139,7 @@ func (in CreateTrackInput) validate() error {
 type TrackInfoPatch struct {
 	CityCode                  *string  `json:"city_code"`
 	LocateAddr                *string  `json:"locate_addr"`
+	CoordinateSystem          *string  `json:"coordinate_system"`
 	Distance                  *float64 `json:"distance"`
 	Duration                  *uint32  `json:"duration"`
 	ElevationGain             *int     `json:"elevation_gain"`
@@ -160,6 +162,7 @@ func (p *TrackInfoPatch) normalize() {
 func (p TrackInfoPatch) empty() bool {
 	return p.CityCode == nil &&
 		p.LocateAddr == nil &&
+		p.CoordinateSystem == nil &&
 		p.Distance == nil &&
 		p.Duration == nil &&
 		p.ElevationGain == nil &&
@@ -299,6 +302,9 @@ func (s *TrackService) CreateTrack(ctx context.Context, userID int64, input Crea
 	}
 	if input.TrackType != nil {
 		track.TrackType = *input.TrackType
+	}
+	if input.CoordinateSystem != nil {
+		track.CoordinateSystem = *input.CoordinateSystem
 	}
 	if input.EndTime != nil {
 		track.EndTime = *input.EndTime
@@ -1000,6 +1006,10 @@ func (s *TrackService) UpdateTrackInfo(ctx context.Context, userID int64, trackI
 	}
 	if patch.LocateAddr != nil && track.LocateAddr == "" {
 		track.LocateAddr = *patch.LocateAddr
+		updated = true
+	}
+	if patch.CoordinateSystem != nil && track.CoordinateSystem == "" {
+		track.CoordinateSystem = *patch.CoordinateSystem
 		updated = true
 	}
 	if patch.Distance != nil && track.Distance == 0 {

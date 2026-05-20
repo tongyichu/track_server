@@ -31,6 +31,7 @@ type Track struct {
 	CityCode                  string       `json:"city_code" bson:"city_code"`                                           // CityCode 是轨迹所属的城市 Code（城市/省份映射由配置文件维护）。
 	LocateAddr                string       `json:"locate_addr" bson:"locate_addr"`                                       // LocateAddr 是轨迹的具体位置信息。
 	TrackType                 string       `json:"track_type" bson:"track_type"`                                         // TrackType 是轨迹类型，例如徒步、跑步、骑车、自驾。
+	CoordinateSystem          string       `json:"coordinate_system" bson:"coordinate_system"`                           // CoordinateSystem 是轨迹坐标系，例如 WGS84/GCJ02/BD09。
 	Title                     string       `json:"title" bson:"title"`                                                   // Title 是轨迹名称。
 	StartTime                 time.Time    `json:"start_time" bson:"start_time"`                                         // StartTime 是运动开始时间。
 	EndTime                   time.Time    `json:"end_time" bson:"end_time"`                                             // EndTime 是运动结束时间。

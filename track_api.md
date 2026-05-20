@@ -83,6 +83,7 @@ Token 的获取与说明参考 `login.md`。
 | `city_code` | string | 城市 Code（用于标识轨迹所属城市；城市/省份映射关系维护在配置文件中） |
 | `locate_addr` | string | 轨迹的具体位置信息 |
 | `track_type` | string | 轨迹类型，例如 `徒步` / `跑步` / `骑车` / `自驾` |
+| `coordinate_system` | string | 坐标系，例如 `WGS84` / `GCJ02` / `BD09` |
 | `title` | string | 轨迹标题 |
 | `start_time` | string | 开始时间（RFC3339/ISO8601，服务端序列化时间格式） |
 | `end_time` | string | 结束时间（RFC3339/ISO8601，服务端序列化时间格式） |
@@ -124,6 +125,7 @@ Authorization: Bearer <token>
   "city_code": "330100",
   "locate_addr": "杭州市西湖区",
   "track_type": "跑步",
+  "coordinate_system": "GCJ02",
   "start_time": "2026-04-20T12:00:00Z",
   "end_time": "2026-04-20T12:30:00Z",
   "distance": 1200.5,
@@ -144,6 +146,7 @@ Authorization: Bearer <token>
 | `city_code` | string | 否 | 城市 Code（标识轨迹所属城市） |
 | `locate_addr` | string | 否 | 轨迹的具体位置信息，最大长度 `128` |
 | `track_type` | string | 否 | 轨迹类型，例如 `徒步` / `跑步` / `骑车` / `自驾` |
+| `coordinate_system` | string | 否 | 坐标系，例如 `WGS84` / `GCJ02` / `BD09` |
 | `start_time` | string | 否 | 开始时间，RFC3339/ISO8601 格式 |
 | `end_time` | string | 否 | 结束时间，RFC3339/ISO8601 格式，必须 `>= start_time` |
 | `distance` | number | 否 | 距离（米），必须 `>= 0` |
@@ -171,6 +174,7 @@ Authorization: Bearer <token>
     "city_code": "330100",
     "locate_addr": "杭州市西湖区",
     "track_type": "跑步",
+    "coordinate_system": "GCJ02",
     "title": "傍晚夜跑",
     "start_time": "2026-04-20T12:00:00Z",
     "end_time": "2026-04-20T12:00:00Z",
@@ -361,6 +365,7 @@ Authorization: Bearer <token>
     "id": "trk-detail",
     "user_id": 1001,
     "track_type": "徒步",
+    "coordinate_system": "WGS84",
     "title": "详情轨迹",
     "start_time": "2026-04-20T12:00:00Z",
     "end_time": "2026-04-20T12:10:00Z",
@@ -1013,6 +1018,7 @@ Authorization: Bearer <token>
 {
   "city_code": "330100",
   "locate_addr": "杭州市西湖区",
+  "coordinate_system": "GCJ02",
   "raw_track_url": "https://<bucket>.oss-<region>.aliyuncs.com/prod/track/.../xxx.dat",
   "track_screenshot_url": "https://<bucket>.oss-<region>.aliyuncs.com/prod/track/.../xxx.jpg",
   "track_no_map_bg_screenshot_url": "https://<bucket>.oss-<region>.aliyuncs.com/prod/track/.../xxx_no_map_bg.jpg",
@@ -1027,6 +1033,7 @@ Authorization: Bearer <token>
 |------|------|------|------|
 | `city_code` | string | 否 | 城市 Code（仅当原值为空时才会写入） |
 | `locate_addr` | string | 否 | 轨迹的具体位置信息，最大长度 `128`（仅当原值为空时才会写入） |
+| `coordinate_system` | string | 否 | 坐标系，例如 `WGS84` / `GCJ02` / `BD09`（仅当原值为空时才会写入） |
 | `raw_track_url` | string | 否 | 原始轨迹文件 OSS 地址（仅当原值为空时才会写入） |
 | `track_screenshot_url` | string | 否 | 轨迹截图 OSS 地址（仅当原值为空时才会写入） |
 | `track_no_map_bg_screenshot_url` | string | 否 | 无地图背景的轨迹路线截图 OSS 地址（仅当原值为空时才会写入） |

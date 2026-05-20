@@ -207,6 +207,7 @@ func TestCreateTrack_WithBody(t *testing.T) {
 		"title":                "傍晚夜跑",
 		"city_code":            "330100",
 		"track_type":           "跑步",
+		"coordinate_system":    "GCJ02",
 		"start_time":           "2026-04-20T12:00:00Z",
 		"end_time":             "2026-04-20T12:30:00Z",
 		"distance":             1500.5,
@@ -240,6 +241,9 @@ func TestCreateTrack_WithBody(t *testing.T) {
 	}
 	if result.Data.TrackType != "跑步" {
 		t.Fatalf("unexpected track_type: %q", result.Data.TrackType)
+	}
+	if result.Data.CoordinateSystem != "GCJ02" {
+		t.Fatalf("unexpected coordinate_system: %q", result.Data.CoordinateSystem)
 	}
 	if result.Data.Duration != 1800 {
 		t.Fatalf("expected duration 1800, got %v", result.Data.Duration)
@@ -375,7 +379,7 @@ func TestGetTrackDetail_Success(t *testing.T) {
 	ctx := context.Background()
 	token := e.generateTestToken(1001)
 
-	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-detail", UserID: 1001, Title: "详情轨迹", IsRunning: false, Status: models.TrackStatusNormal})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "trk-detail", UserID: 1001, Title: "详情轨迹", CoordinateSystem: "WGS84", IsRunning: false, Status: models.TrackStatusNormal})
 
 	w := e.perform(http.MethodGet, "/api/v1/track/trk-detail/detail", nil, authHeader(token))
 	resp := w.Result()
@@ -389,6 +393,9 @@ func TestGetTrackDetail_Success(t *testing.T) {
 	}
 	if result.Data == nil || result.Data.ID != "trk-detail" {
 		t.Fatalf("unexpected data: %+v", result.Data)
+	}
+	if result.Data.CoordinateSystem != "WGS84" {
+		t.Fatalf("unexpected coordinate_system: %q", result.Data.CoordinateSystem)
 	}
 }
 
@@ -1016,6 +1023,7 @@ func TestUpdateTrackInfo_Success(t *testing.T) {
 	body, _ := json.Marshal(map[string]interface{}{
 		"city_code":                      "330100",
 		"locate_addr":                    "杭州市西湖区",
+		"coordinate_system":              "BD09",
 		"distance":                       200.5,
 		"is_running":                     false,
 		"avg_speed_kmh":                  12.3,
@@ -1067,6 +1075,9 @@ func TestUpdateTrackInfo_Success(t *testing.T) {
 	}
 	if result.Data.LocateAddr != "杭州市西湖区" {
 		t.Fatalf("expected locate_addr 杭州市西湖区, got %q", result.Data.LocateAddr)
+	}
+	if result.Data.CoordinateSystem != "BD09" {
+		t.Fatalf("expected coordinate_system BD09, got %q", result.Data.CoordinateSystem)
 	}
 	// is_running 静默忽略，应保持原值。
 	if !result.Data.IsRunning {

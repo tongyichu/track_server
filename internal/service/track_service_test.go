@@ -109,10 +109,12 @@ func TestCreateTrack_UsesProvidedFields(t *testing.T) {
 	isRunning := false
 	avgSpeed := 10.4
 	trackType := "跑步"
+	coordinateSystem := "GCJ02"
 
 	track, err := svc.CreateTrack(context.Background(), 1001, CreateTrackInput{
 		Title:              &title,
 		TrackType:          &trackType,
+		CoordinateSystem:   &coordinateSystem,
 		StartTime:          &start,
 		EndTime:            &end,
 		Distance:           &distance,
@@ -135,6 +137,9 @@ func TestCreateTrack_UsesProvidedFields(t *testing.T) {
 	}
 	if track.TrackType != trackType {
 		t.Fatalf("expected track_type %q, got %q", trackType, track.TrackType)
+	}
+	if track.CoordinateSystem != coordinateSystem {
+		t.Fatalf("expected coordinate_system %q, got %q", coordinateSystem, track.CoordinateSystem)
 	}
 	if !track.EndTime.Equal(end) {
 		t.Fatalf("expected end_time %v, got %v", end, track.EndTime)
@@ -266,12 +271,13 @@ func TestUpdateTrackInfo_PartialUpdate(t *testing.T) {
 
 	cityCode := "330100"
 	locateAddr := "杭州市西湖区"
+	coordinateSystem := "WGS84"
 	distance := 123.4
 	avg := 9.8
 	noMapBg := "https://<bucket>.oss-<region>.aliyuncs.com/prod/track/.../xxx_no_map_bg.jpg"
 	screenshot := "https://<bucket>.oss-<region>.aliyuncs.com/prod/track/.../xxx.jpg"
 	duration := uint32(99)
-	patch := TrackInfoPatch{CityCode: &cityCode, LocateAddr: &locateAddr, Distance: &distance, Duration: &duration, TrackScreenshotURL: &screenshot, TrackNoMapBgScreenshotURL: &noMapBg, AvgSpeedKmh: &avg}
+	patch := TrackInfoPatch{CityCode: &cityCode, LocateAddr: &locateAddr, CoordinateSystem: &coordinateSystem, Distance: &distance, Duration: &duration, TrackScreenshotURL: &screenshot, TrackNoMapBgScreenshotURL: &noMapBg, AvgSpeedKmh: &avg}
 
 	track, err := svc.UpdateTrackInfo(ctx, 1001, "trk1", patch)
 	if err != nil {
@@ -295,6 +301,9 @@ func TestUpdateTrackInfo_PartialUpdate(t *testing.T) {
 	}
 	if track.LocateAddr != locateAddr {
 		t.Fatalf("expected locate_addr %q, got %q", locateAddr, track.LocateAddr)
+	}
+	if track.CoordinateSystem != coordinateSystem {
+		t.Fatalf("expected coordinate_system %q, got %q", coordinateSystem, track.CoordinateSystem)
 	}
 	if track.AvgSpeedKmh != 9.8 {
 		t.Fatalf("expected avg_speed_kmh 9.8, got %v", track.AvgSpeedKmh)
