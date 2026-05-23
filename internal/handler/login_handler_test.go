@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/tongyichu/track_server/internal/handler"
 	"github.com/tongyichu/track_server/internal/models"
@@ -382,6 +383,75 @@ func TestLogout_TokenRevoked(t *testing.T) {
 	w2 := e.perform(http.MethodGet, "/api/v1/login/log?user_id=3002", nil, authHeader(token))
 	if w2.Result().StatusCode() != http.StatusUnauthorized {
 		t.Fatalf("revoked token should return 401, got %d", w2.Result().StatusCode())
+	}
+}
+
+func TestLogout_RevokesAllSameVersionTokens(t *testing.T) {
+	e := newTestEnv()
+	ctx := context.Background()
+	_, _ = e.userRepo.CreateIfNotExists(ctx, &models.User{ID: 3003, Phone: "13900003003", TokenVersion: 1})
+	tokenA := e.generateTestTokenWith(3003, 1, time.Hour)
+	tokenB := e.generateTestTokenWith(3003, 1, time.Hour)
+
+	w1 := e.perform(http.MethodPost, "/api/v1/logout", nil, authHeader(tokenA))
+	if w1.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("logout should succeed, got %d", w1.Result().StatusCode())
+	}
+
+	w2 := e.perform(http.MethodGet, "/api/v1/login/log?user_id=3003", nil, authHeader(tokenB))
+	if w2.Result().StatusCode() != http.StatusUnauthorized {
+		t.Fatalf("same-version token should be revoked after logout, got %d", w2.Result().StatusCode())
+	}
+
+	stored, err := e.userRepo.FindByID(ctx, 3003)
+	if err != nil {
+		t.Fatalf("find user failed: %v", err)
+	}
+	if stored.TokenVersion != 2 {
+		t.Fatalf("expected token_version bumped to 2, got %d", stored.TokenVersion)
+	}
+}
+
+func TestAuthMiddleware_RenewsTokenWhenNearExpiry(t *testing.T) {
+	e := newTestEnv()
+	ctx := context.Background()
+	_, _ = e.userRepo.CreateIfNotExists(ctx, &models.User{ID: 4001, Phone: "13900004001", TokenVersion: 1})
+	_ = e.loginLogRepo.Create(ctx, &models.LoginLog{UserID: 4001, LoginType: "sms"})
+	nearExpiryToken := e.generateTestTokenWith(4001, 1, time.Hour)
+
+	w := e.perform(http.MethodGet, "/api/v1/login/log?user_id=4001", nil, authHeader(nearExpiryToken))
+	resp := w.Result()
+	if resp.StatusCode() != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", resp.StatusCode())
+	}
+	renewed := string(resp.Header.Peek("X-Renewed-Token"))
+	if renewed == "" {
+		t.Fatalf("expected X-Renewed-Token header")
+	}
+	if renewed == nearExpiryToken {
+		t.Fatalf("expected renewed token to differ from old token")
+	}
+
+	w2 := e.perform(http.MethodGet, "/api/v1/login/log?user_id=4001", nil, authHeader(renewed))
+	if w2.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("renewed token should be accepted, got %d", w2.Result().StatusCode())
+	}
+}
+
+func TestAuthMiddleware_DoesNotRenewFreshToken(t *testing.T) {
+	e := newTestEnv()
+	ctx := context.Background()
+	_, _ = e.userRepo.CreateIfNotExists(ctx, &models.User{ID: 4002, Phone: "13900004002", TokenVersion: 1})
+	_ = e.loginLogRepo.Create(ctx, &models.LoginLog{UserID: 4002, LoginType: "sms"})
+	freshToken := e.generateTestTokenWith(4002, 1, 72*time.Hour)
+
+	w := e.perform(http.MethodGet, "/api/v1/login/log?user_id=4002", nil, authHeader(freshToken))
+	resp := w.Result()
+	if resp.StatusCode() != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", resp.StatusCode())
+	}
+	if renewed := string(resp.Header.Peek("X-Renewed-Token")); renewed != "" {
+		t.Fatalf("did not expect X-Renewed-Token header, got %q", renewed)
 	}
 }
 

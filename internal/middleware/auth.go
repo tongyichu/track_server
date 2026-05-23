@@ -5,14 +5,21 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/common/utils"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/tongyichu/track_server/internal/service"
 )
 
-func JWTAuthMiddleware(secret string, blacklist *TokenBlacklist) app.HandlerFunc {
+func JWTAuthMiddleware(loginSvc *service.LoginService, blacklist *TokenBlacklist) app.HandlerFunc {
 	return func(ctx context.Context, c *app.RequestContext) {
+		if loginSvc == nil {
+			c.JSON(http.StatusInternalServerError, utils.H{"error": "login service not configured"})
+			c.Abort()
+			return
+		}
 		authHeader := string(c.Request.Header.Peek("Authorization"))
 		if authHeader == "" {
 			c.JSON(http.StatusUnauthorized, utils.H{"error": "missing authorization header"})
@@ -37,7 +44,7 @@ func JWTAuthMiddleware(secret string, blacklist *TokenBlacklist) app.HandlerFunc
 			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, jwt.ErrSignatureInvalid
 			}
-			return []byte(secret), nil
+			return []byte(loginSvc.JWTSecret()), nil
 		})
 		if err != nil || !token.Valid {
 			c.JSON(http.StatusUnauthorized, utils.H{"error": "invalid or expired token"})
@@ -66,6 +73,34 @@ func JWTAuthMiddleware(secret string, blacklist *TokenBlacklist) app.HandlerFunc
 			return
 		}
 
+		tokenVersion := int64(1)
+		switch v := claims["token_version"].(type) {
+		case float64:
+			tokenVersion = int64(v)
+		case string:
+			if parsed, err := strconv.ParseInt(v, 10, 64); err == nil && parsed > 0 {
+				tokenVersion = parsed
+			}
+		}
+
+		currentVersion, err := loginSvc.GetUserTokenVersion(ctx, userID)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, utils.H{"error": "invalid or expired token"})
+			c.Abort()
+			return
+		}
+		if currentVersion != tokenVersion {
+			c.JSON(http.StatusUnauthorized, utils.H{"error": "token has been revoked"})
+			c.Abort()
+			return
+		}
+
+		var expiresAt time.Time
+		if exp, ok := claims["exp"].(float64); ok {
+			expiresAt = time.Unix(int64(exp), 0)
+		}
+		shouldRenew := !expiresAt.IsZero() && time.Until(expiresAt) <= loginSvc.RenewWindow()
+
 		meta := GetRequestMeta(c)
 		if meta != nil {
 			meta.AuthUserID = userID
@@ -73,5 +108,18 @@ func JWTAuthMiddleware(secret string, blacklist *TokenBlacklist) app.HandlerFunc
 		}
 
 		c.Next(ctx)
+
+		if string(c.Path()) == "/api/v1/logout" || c.Response.StatusCode() >= http.StatusBadRequest || !shouldRenew {
+			return
+		}
+		latestVersion, err := loginSvc.GetUserTokenVersion(ctx, userID)
+		if err != nil || latestVersion != tokenVersion {
+			return
+		}
+		renewedToken, err := loginSvc.GenerateToken(userID, tokenVersion)
+		if err != nil {
+			return
+		}
+		c.Response.Header.Set("X-Renewed-Token", renewedToken)
 	}
 }

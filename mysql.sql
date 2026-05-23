@@ -5,6 +5,7 @@ CREATE TABLE `users` (
                           `signature` text,
                           `phone` varchar(32) NOT NULL DEFAULT '' COMMENT '用户手机号',
                           `client_language` varchar(64) NOT NULL DEFAULT '' COMMENT '客户端语言',
+                          `token_version` bigint NOT NULL DEFAULT '1' COMMENT '登录令牌版本号',
                           `created_at` datetime(6) NOT NULL,
                           `updated_at` datetime(6) NOT NULL,
                           PRIMARY KEY (`id`),

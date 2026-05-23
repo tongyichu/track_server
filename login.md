@@ -101,11 +101,21 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 |------|------|
 | 签名算法 | HS256 |
 | 有效期 | **7 天** |
-| Payload 字段 | `user_id`（int64）、`exp`（过期时间戳）、`iat`（签发时间戳） |
+| Payload 字段 | `user_id`（int64）、`token_version`（int64）、`exp`（过期时间戳）、`iat`（签发时间戳） |
 
-### Token 过期处理
+### Token 自动续期与失效处理
 
-当 Token 过期或无效时，服务端返回：
+- Token 默认有效期仍为 **7 天**。
+- 当已登录用户正常访问鉴权接口且当前 Token **剩余有效期 <= 48 小时** 时，服务端会在响应头返回新的 Token：
+
+```
+X-Renewed-Token: <new-jwt-token>
+```
+
+- 客户端收到 `X-Renewed-Token` 后，应立即用新 Token 替换本地旧 Token。
+- 调用 `/api/v1/logout` 后，服务端会递增当前用户的 `token_version`，使该用户当前版本的所有旧 Token 立即失效。
+
+当 Token 过期、无效，或已因登出被撤销时，服务端返回：
 
 ```
 HTTP/1.1 401 Unauthorized
@@ -115,7 +125,15 @@ HTTP/1.1 401 Unauthorized
 }
 ```
 
-客户端收到 `401` 后应引导用户重新登录获取新的 Token。
+或：
+
+```json
+{
+  "error": "token has been revoked"
+}
+```
+
+客户端收到 `401` 后应引导用户重新登录获取新的 Token；若响应头中带有 `X-Renewed-Token`，则优先更新本地 Token，无需打断当前登录态。
 
 ---
 

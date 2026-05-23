@@ -75,10 +75,15 @@ func newTestEnv() *testEnv {
 }
 
 func (e *testEnv) generateTestToken(userID int64) string {
+	return e.generateTestTokenWith(userID, 1, time.Hour)
+}
+
+func (e *testEnv) generateTestTokenWith(userID int64, tokenVersion int64, ttl time.Duration) string {
 	claims := jwtlib.MapClaims{
-		"user_id": userID,
-		"exp":     time.Now().Add(time.Hour).Unix(),
-		"iat":     time.Now().Unix(),
+		"user_id":       userID,
+		"token_version": tokenVersion,
+		"exp":           time.Now().Add(ttl).Unix(),
+		"iat":           time.Now().Unix(),
 	}
 	token := jwtlib.NewWithClaims(jwtlib.SigningMethodHS256, claims)
 	tokenStr, _ := token.SignedString([]byte(testJWTSecret))

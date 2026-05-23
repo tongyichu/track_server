@@ -10,6 +10,7 @@ type User struct {
 	Signature      string    `json:"signature" bson:"signature"`
 	Phone          string    `json:"phone" bson:"phone"`
 	ClientLanguage string    `json:"client_language" bson:"client_language"`
+	TokenVersion   int64     `json:"-" bson:"token_version"`
 	CreatedAt      time.Time `json:"created_at" bson:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at" bson:"updated_at"`
 }

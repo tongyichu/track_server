@@ -355,10 +355,16 @@ func (r *InMemoryUserRepository) CreateIfNotExists(_ context.Context, u *models.
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if existing, ok := r.users[u.ID]; ok {
+		if existing.TokenVersion <= 0 {
+			existing.TokenVersion = 1
+		}
 		return existing, nil
 	}
 	if u.CreatedAt.IsZero() {
 		u.CreatedAt = time.Now()
+	}
+	if u.TokenVersion <= 0 {
+		u.TokenVersion = 1
 	}
 	u.UpdatedAt = u.CreatedAt
 	r.users[u.ID] = u
@@ -373,6 +379,9 @@ func (r *InMemoryUserRepository) FindByID(_ context.Context, id int64) (*models.
 	if !ok {
 		return nil, ErrNotFound
 	}
+	if u.TokenVersion <= 0 {
+		u.TokenVersion = 1
+	}
 	return u, nil
 }
 
@@ -382,6 +391,9 @@ func (r *InMemoryUserRepository) FindByPhone(_ context.Context, phone string) (*
 	defer r.mu.RUnlock()
 	for _, u := range r.users {
 		if u.Phone == phone {
+			if u.TokenVersion <= 0 {
+				u.TokenVersion = 1
+			}
 			return u, nil
 		}
 	}
@@ -394,6 +406,9 @@ func (r *InMemoryUserRepository) FindByNickname(_ context.Context, nickname stri
 	defer r.mu.RUnlock()
 	for _, u := range r.users {
 		if u.Nickname == nickname {
+			if u.TokenVersion <= 0 {
+				u.TokenVersion = 1
+			}
 			return u, nil
 		}
 	}
@@ -406,6 +421,9 @@ func (r *InMemoryUserRepository) Update(_ context.Context, u *models.User) error
 	defer r.mu.Unlock()
 	if _, ok := r.users[u.ID]; !ok {
 		return ErrNotFound
+	}
+	if u.TokenVersion <= 0 {
+		u.TokenVersion = 1
 	}
 	u.UpdatedAt = time.Now()
 	r.users[u.ID] = u

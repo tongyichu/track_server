@@ -73,7 +73,7 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 	}
 
 	// authenticated routes
-	auth := api.Group("", middleware.JWTAuthMiddleware(deps.JWTSecret, deps.TokenBlacklist))
+	auth := api.Group("", middleware.JWTAuthMiddleware(deps.LoginService, deps.TokenBlacklist))
 
 	// 静态资源下载（需要登录）
 	if deps.StaticRoot != "" {

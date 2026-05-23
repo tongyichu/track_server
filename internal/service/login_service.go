@@ -63,6 +63,12 @@ type LoginResult struct {
 
 const maxDefaultNicknameAttempts = 20
 
+const (
+	jwtTokenExpiry      = 7 * 24 * time.Hour
+	jwtRenewWindow      = 48 * time.Hour
+	defaultTokenVersion = int64(1)
+)
+
 func NewLoginService(users repository.UserRepository, loginLogs repository.LoginLogRepository, wechatAppID, wechatAppSecret, jwtSecret string) *LoginService {
 	return &LoginService{
 		users:           users,
@@ -75,16 +81,40 @@ func NewLoginService(users repository.UserRepository, loginLogs repository.Login
 	}
 }
 
-const jwtTokenExpiry = 7 * 24 * time.Hour
+func normalizeTokenVersion(v int64) int64 {
+	if v <= 0 {
+		return defaultTokenVersion
+	}
+	return v
+}
 
-func (s *LoginService) generateToken(userID int64) (string, error) {
+func (s *LoginService) GenerateToken(userID int64, tokenVersion int64) (string, error) {
 	claims := jwt.MapClaims{
-		"user_id": userID,
-		"exp":     time.Now().Add(jwtTokenExpiry).Unix(),
-		"iat":     time.Now().Unix(),
+		"user_id":       userID,
+		"token_version": normalizeTokenVersion(tokenVersion),
+		"exp":           time.Now().Add(jwtTokenExpiry).Unix(),
+		"iat":           time.Now().Unix(),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(s.jwtSecret))
+}
+
+func (s *LoginService) RenewWindow() time.Duration {
+	return jwtRenewWindow
+}
+
+func (s *LoginService) GetUserTokenVersion(ctx context.Context, userID int64) (int64, error) {
+	if userID <= 0 {
+		return 0, errors.New("user_id is required")
+	}
+	user, err := s.users.FindByID(ctx, userID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return defaultTokenVersion, nil
+		}
+		return 0, err
+	}
+	return normalizeTokenVersion(user.TokenVersion), nil
 }
 
 func (s *LoginService) JWTSecret() string {
@@ -239,7 +269,7 @@ func (s *LoginService) LoginBySMS(ctx context.Context, phone, code, ip, deviceID
 		Platform:  platform,
 	})
 
-	token, err := s.generateToken(user.ID)
+	token, err := s.GenerateToken(user.ID, user.TokenVersion)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate token: %w", err)
 	}
@@ -319,7 +349,7 @@ func (s *LoginService) LoginByWechat(ctx context.Context, code, ip, deviceID, pl
 		Platform:  platform,
 	})
 
-	token, err := s.generateToken(user.ID)
+	token, err := s.GenerateToken(user.ID, user.TokenVersion)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate token: %w", err)
 	}
@@ -348,7 +378,7 @@ func (s *LoginService) LoginByApple(ctx context.Context, appleUserID, identityTo
 		Platform:  platform,
 	})
 
-	token, err := s.generateToken(user.ID)
+	token, err := s.GenerateToken(user.ID, user.TokenVersion)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate token: %w", err)
 	}
@@ -359,6 +389,14 @@ func (s *LoginService) LoginByApple(ctx context.Context, appleUserID, identityTo
 func (s *LoginService) Logout(ctx context.Context, userID int64, ip, deviceID, platform string) error {
 	if userID <= 0 {
 		return errors.New("user_id is required")
+	}
+	user, err := s.users.FindByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+	user.TokenVersion = normalizeTokenVersion(user.TokenVersion) + 1
+	if err := s.users.Update(ctx, user); err != nil {
+		return err
 	}
 	return s.loginLogs.Create(ctx, &models.LoginLog{
 		UserID:    userID,
