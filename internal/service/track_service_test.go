@@ -85,11 +85,55 @@ func TestTrackServiceListTrackTypes(t *testing.T) {
 	if len(options) != 3 {
 		t.Fatalf("expected 3 track type options, got %#v", options)
 	}
-	if options[0].Name != "徒步" || options[0].IconURL != "/api/v1/static/track_type_icon/hiking.svg" {
+	if options[0].Type != "hiking" || options[0].Name != "徒步" || options[0].ThemeColor != "#345631" || options[0].IconURL != "/api/v1/static/track_type_icon/hiking.svg" || options[0].IconAnimURL != "" {
 		t.Fatalf("unexpected first track type option: %#v", options[0])
 	}
-	if options[2].Name != "滑雪" || options[2].IconURL != "/api/v1/static/track_type_icon/%E6%BB%91%E9%9B%AA.svg" {
+	if options[2].Type != "滑雪" || options[2].Name != "滑雪" || options[2].ThemeColor != "" || options[2].IconURL != "/api/v1/static/track_type_icon/%E6%BB%91%E9%9B%AA.svg" || options[2].IconAnimURL != "" {
 		t.Fatalf("unexpected third track type option: %#v", options[2])
+	}
+}
+
+func TestListTrackTypeOptionsWithStats(t *testing.T) {
+	trackRepo, _, collectRepo, _, _, _ := repository.NewInMemoryRepositories()
+	svc := NewTrackService(trackRepo, collectRepo)
+	ctx := context.Background()
+	now := time.Now()
+
+	_ = trackRepo.Create(ctx, &models.Track{ID: "hike-month", UserID: 1001, TrackType: "徒步", StartTime: now.AddDate(0, 0, -10), Distance: 100, Duration: 50, CaloriesBurned: 10, IsRunning: false, Status: models.TrackStatusNormal})
+	_ = trackRepo.Create(ctx, &models.Track{ID: "hike-year", UserID: 1001, TrackType: "徒步", StartTime: now.AddDate(0, -2, 0), Distance: 200, Duration: 80, CaloriesBurned: 20, IsRunning: false, Status: models.TrackStatusPrivate})
+	_ = trackRepo.Create(ctx, &models.Track{ID: "run-month", UserID: 1001, TrackType: "跑步", StartTime: now.AddDate(0, 0, -5), Distance: 300, Duration: 120, CaloriesBurned: 30, IsRunning: false, Status: models.TrackStatusNormal})
+	_ = trackRepo.Create(ctx, &models.Track{ID: "run-year", UserID: 1001, TrackType: "跑步", StartTime: now.AddDate(0, -6, 0), Distance: 400, Duration: 180, CaloriesBurned: 40, IsRunning: false, Status: models.TrackStatusNormal})
+	_ = trackRepo.Create(ctx, &models.Track{ID: "old", UserID: 1001, TrackType: "徒步", StartTime: now.AddDate(-2, 0, 0), Distance: 999, Duration: 999, CaloriesBurned: 999, IsRunning: false, Status: models.TrackStatusNormal})
+	_ = trackRepo.Create(ctx, &models.Track{ID: "running", UserID: 1001, TrackType: "徒步", StartTime: now.AddDate(0, 0, -1), Distance: 888, Duration: 888, CaloriesBurned: 888, IsRunning: true, Status: models.TrackStatusNormal})
+	_ = trackRepo.Create(ctx, &models.Track{ID: "other-user", UserID: 1002, TrackType: "徒步", StartTime: now.AddDate(0, 0, -1), Distance: 777, Duration: 777, CaloriesBurned: 777, IsRunning: false, Status: models.TrackStatusNormal})
+
+	items, err := svc.ListTrackTypeOptionsWithStats(ctx, 1001)
+	if err != nil {
+		t.Fatalf("ListTrackTypeOptionsWithStats returned error: %v", err)
+	}
+	if len(items) != 4 {
+		t.Fatalf("expected 4 track types, got %#v", items)
+	}
+	if items[0].Type != "hiking" || items[0].Name != "徒步" {
+		t.Fatalf("unexpected first track type: %#v", items[0])
+	}
+	if items[0].Milestone.Month.Distance != 100 || items[0].Milestone.Month.TrackCount != 1 || items[0].Milestone.Month.Duration != 50 || items[0].Milestone.Month.Calories != 10 {
+		t.Fatalf("unexpected hiking month stats: %#v", items[0].Milestone.Month)
+	}
+	if items[0].Milestone.Year.Distance != 300 || items[0].Milestone.Year.TrackCount != 2 || items[0].Milestone.Year.Duration != 130 || items[0].Milestone.Year.Calories != 30 {
+		t.Fatalf("unexpected hiking year stats: %#v", items[0].Milestone.Year)
+	}
+	if items[1].Type != "running" || items[1].Name != "跑步" {
+		t.Fatalf("unexpected second track type: %#v", items[1])
+	}
+	if items[1].Milestone.Month.Distance != 300 || items[1].Milestone.Month.TrackCount != 1 || items[1].Milestone.Month.Duration != 120 || items[1].Milestone.Month.Calories != 30 {
+		t.Fatalf("unexpected running month stats: %#v", items[1].Milestone.Month)
+	}
+	if items[1].Milestone.Year.Distance != 700 || items[1].Milestone.Year.TrackCount != 2 || items[1].Milestone.Year.Duration != 300 || items[1].Milestone.Year.Calories != 70 {
+		t.Fatalf("unexpected running year stats: %#v", items[1].Milestone.Year)
+	}
+	if items[2].Milestone.Month.TrackCount != 0 || items[2].Milestone.Year.TrackCount != 0 {
+		t.Fatalf("expected climbing stats empty, got %#v", items[2].Milestone)
 	}
 }
 

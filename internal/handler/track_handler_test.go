@@ -145,12 +145,15 @@ func TestListTrackTypes(t *testing.T) {
 	e := newTestEnv()
 	ctx := context.Background()
 	token := e.generateTestToken(1001)
-	start := time.Date(2026, 4, 20, 12, 0, 0, 0, time.UTC)
+	now := time.Now()
 
-	_ = e.trackRepo.Create(ctx, &models.Track{ID: "stats-1", UserID: 1001, Title: "统计1", StartTime: start, Distance: 1200.5, Duration: 600, CaloriesBurned: 80.5, IsRunning: false, Status: models.TrackStatusNormal})
-	_ = e.trackRepo.Create(ctx, &models.Track{ID: "stats-2", UserID: 1001, Title: "统计2", StartTime: start.Add(time.Hour), Distance: 800, Duration: 400, CaloriesBurned: 60, IsRunning: false, Status: models.TrackStatusPrivate})
-	_ = e.trackRepo.Create(ctx, &models.Track{ID: "stats-running", UserID: 1001, Title: "进行中", Distance: 999, Duration: 999, CaloriesBurned: 999, IsRunning: true, Status: models.TrackStatusNormal})
-	_ = e.trackRepo.Create(ctx, &models.Track{ID: "stats-other", UserID: 1002, Title: "他人", Distance: 999, Duration: 999, CaloriesBurned: 999, IsRunning: false, Status: models.TrackStatusNormal})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "hike-month", UserID: 1001, Title: "徒步月内", TrackType: "徒步", StartTime: now.AddDate(0, 0, -10), Distance: 120.5, Duration: 600, CaloriesBurned: 80.5, IsRunning: false, Status: models.TrackStatusNormal})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "hike-year", UserID: 1001, Title: "徒步年内", TrackType: "徒步", StartTime: now.AddDate(0, -2, 0), Distance: 80, Duration: 400, CaloriesBurned: 60, IsRunning: false, Status: models.TrackStatusPrivate})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "run-month", UserID: 1001, Title: "跑步月内", TrackType: "跑步", StartTime: now.AddDate(0, 0, -5), Distance: 300, Duration: 700, CaloriesBurned: 90, IsRunning: false, Status: models.TrackStatusNormal})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "run-year", UserID: 1001, Title: "跑步年内", TrackType: "跑步", StartTime: now.AddDate(0, -8, 0), Distance: 500, Duration: 900, CaloriesBurned: 100, IsRunning: false, Status: models.TrackStatusNormal})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "old", UserID: 1001, Title: "历史", TrackType: "徒步", StartTime: now.AddDate(-2, 0, 0), Distance: 999, Duration: 999, CaloriesBurned: 999, IsRunning: false, Status: models.TrackStatusNormal})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "stats-running", UserID: 1001, Title: "进行中", TrackType: "徒步", StartTime: now.AddDate(0, 0, -1), Distance: 999, Duration: 999, CaloriesBurned: 999, IsRunning: true, Status: models.TrackStatusNormal})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "stats-other", UserID: 1002, Title: "他人", TrackType: "徒步", StartTime: now.AddDate(0, 0, -1), Distance: 999, Duration: 999, CaloriesBurned: 999, IsRunning: false, Status: models.TrackStatusNormal})
 
 	// X-User-ID 即使被伪造成其他用户，也应以 token 解析出的 AuthUserID=1001 为准。
 	w := e.perform(http.MethodGet, "/api/v1/track/types", nil, authHeader(token), ut.Header{Key: middleware.HeaderUserID, Value: "1002"})
@@ -158,45 +161,56 @@ func TestListTrackTypes(t *testing.T) {
 	if resp.StatusCode() != http.StatusOK {
 		t.Fatalf("expected status 200, got %d, body=%s", resp.StatusCode(), string(resp.Body()))
 	}
-	var result handler.StandardResponse[handler.TrackTypesResult]
+	var result handler.StandardResponse[[]models.TrackTypeOption]
 	decodeJSON(t, resp.Body(), &result)
 	if result.Code != 0 {
 		t.Fatalf("expected code 0, got %d", result.Code)
 	}
 	expected := []struct {
-		name    string
-		iconURL string
+		typeCode   string
+		name       string
+		themeColor string
+		iconURL    string
 	}{
-		{name: "徒步", iconURL: "/api/v1/static/track_type_icon/hiking.svg"},
-		{name: "跑步", iconURL: "/api/v1/static/track_type_icon/running.svg"},
-		{name: "爬山", iconURL: "/api/v1/static/track_type_icon/climbing.svg"},
-		{name: "骑行", iconURL: "/api/v1/static/track_type_icon/riding.svg"},
+		{typeCode: "hiking", name: "徒步", themeColor: "#345631", iconURL: "/api/v1/static/track_type_icon/hiking.svg"},
+		{typeCode: "running", name: "跑步", themeColor: "#F26A4B", iconURL: "/api/v1/static/track_type_icon/running.svg"},
+		{typeCode: "climbing", name: "爬山", themeColor: "#6C4CE1", iconURL: "/api/v1/static/track_type_icon/climbing.svg"},
+		{typeCode: "riding", name: "骑行", themeColor: "#2F80ED", iconURL: "/api/v1/static/track_type_icon/riding.svg"},
 	}
-	if len(result.Data.Items) != len(expected) {
-		t.Fatalf("expected %d track types, got %#v", len(expected), result.Data.Items)
+	if len(result.Data) != len(expected) {
+		t.Fatalf("expected %d track types, got %#v", len(expected), result.Data)
 	}
 	for i, item := range expected {
-		if result.Data.Items[i].Name != item.name {
-			t.Fatalf("expected track type[%d].name=%q, got %q", i, item.name, result.Data.Items[i].Name)
+		if result.Data[i].Type != item.typeCode {
+			t.Fatalf("expected track type[%d].type=%q, got %q", i, item.typeCode, result.Data[i].Type)
 		}
-		if result.Data.Items[i].IconURL != item.iconURL {
-			t.Fatalf("expected track type[%d].icon_url=%q, got %q", i, item.iconURL, result.Data.Items[i].IconURL)
+		if result.Data[i].Name != item.name {
+			t.Fatalf("expected track type[%d].name=%q, got %q", i, item.name, result.Data[i].Name)
+		}
+		if result.Data[i].ThemeColor != item.themeColor {
+			t.Fatalf("expected track type[%d].theme_color=%q, got %q", i, item.themeColor, result.Data[i].ThemeColor)
+		}
+		if result.Data[i].IconURL != item.iconURL {
+			t.Fatalf("expected track type[%d].icon_url=%q, got %q", i, item.iconURL, result.Data[i].IconURL)
+		}
+		if result.Data[i].IconAnimURL != "" {
+			t.Fatalf("expected track type[%d].icon_anim_url empty, got %q", i, result.Data[i].IconAnimURL)
 		}
 	}
-	if result.Data.Stats == nil {
-		t.Fatalf("expected stats")
+	if got := result.Data[0].Milestone.Month; got.TrackCount != 1 || got.Distance != 120.5 || got.Duration != 600 || got.Calories != 80.5 {
+		t.Fatalf("unexpected hiking month milestone: %#v", got)
 	}
-	if result.Data.Stats.TrackCount != 2 {
-		t.Fatalf("expected track_count 2, got %d", result.Data.Stats.TrackCount)
+	if got := result.Data[0].Milestone.Year; got.TrackCount != 2 || got.Distance != 200.5 || got.Duration != 1000 || got.Calories != 140.5 {
+		t.Fatalf("unexpected hiking year milestone: %#v", got)
 	}
-	if result.Data.Stats.TotalDistance != 2000.5 {
-		t.Fatalf("expected total_distance 2000.5, got %v", result.Data.Stats.TotalDistance)
+	if got := result.Data[1].Milestone.Month; got.TrackCount != 1 || got.Distance != 300 || got.Duration != 700 || got.Calories != 90 {
+		t.Fatalf("unexpected running month milestone: %#v", got)
 	}
-	if result.Data.Stats.TotalDuration != 1000 {
-		t.Fatalf("expected total_duration 1000, got %d", result.Data.Stats.TotalDuration)
+	if got := result.Data[1].Milestone.Year; got.TrackCount != 2 || got.Distance != 800 || got.Duration != 1600 || got.Calories != 190 {
+		t.Fatalf("unexpected running year milestone: %#v", got)
 	}
-	if result.Data.Stats.TotalCalories != 140.5 {
-		t.Fatalf("expected total_calories 140.5, got %v", result.Data.Stats.TotalCalories)
+	if got := result.Data[2].Milestone; got.Month.TrackCount != 0 || got.Year.TrackCount != 0 {
+		t.Fatalf("expected climbing milestone empty, got %#v", got)
 	}
 }
 

@@ -1427,7 +1427,7 @@ X-Platform: android
 
 ## 16. 获取运动类型
 
-获取客户端创建/编辑轨迹时可选择的运动类型列表，并返回当前用户的轨迹统计数据。
+获取客户端创建/编辑轨迹时可选择的运动类型列表，并返回当前用户按运动类型拆分的最近一个月、最近一年统计数据。
 
 **需要认证**
 
@@ -1437,8 +1437,9 @@ X-Platform: android
 - 服务端可通过环境变量 `TRACK_TYPES` 配置运动类型，支持使用英文逗号、分号、中文逗号、顿号或竖线分隔，例如：`TRACK_TYPES=徒步,跑步,爬山,骑行,滑雪`。
 - 服务端会自动过滤空项和重复项；若未配置或配置为空，则使用默认列表。
 - 每个运动类型会返回一个图标链接 `icon_url`，图标文件来自服务端静态目录 `/api/v1/static/track_type_icon/`；默认对应关系为：`徒步 -> hiking.svg`、`跑步 -> running.svg`、`爬山 -> climbing.svg`、`骑行 -> riding.svg`。
+- 每个运动类型会额外返回：`type`（英文标识）、`theme_color`（主题色）、`icon_anim_url`（Lottie 动画文件链接；当前默认空字符串，后续可通过配置补充）。
 - 统计数据按 `Authorization` Token 解析出的当前用户统计 `track_records`：排除删除与进行中轨迹，仅统计 `正常/私密` 轨迹。
-- 统计字段包括：总里程、轨迹次数、总耗时、总热量。
+- 统计维度按运动类型拆分，并返回最近一个月（`month`）与最近一年（`year`）的总里程、轨迹次数、总耗时、总热量。
 
 ### 请求
 
@@ -1456,36 +1457,69 @@ Authorization: Bearer <token>
 ```json
 {
   "code": 0,
-  "data": {
-    "items": [
-      {
-        "name": "徒步",
-        "icon_url": "/api/v1/static/track_type_icon/hiking.svg"
-      },
-      {
-        "name": "跑步",
-        "icon_url": "/api/v1/static/track_type_icon/running.svg"
+  "data": [
+    {
+      "type": "hiking",
+      "name": "徒步",
+      "theme_color": "#345631",
+      "icon_url": "/api/v1/static/track_type_icon/hiking.svg",
+      "icon_anim_url": "",
+      "milestone": {
+        "month": {
+          "distance": 120.5,
+          "track_count": 1,
+          "duration": 600,
+          "calories": 80.5
+        },
+        "year": {
+          "distance": 200.5,
+          "track_count": 2,
+          "duration": 1000,
+          "calories": 140.5
+        }
       }
-    ],
-    "stats": {
-      "total_distance": 2000.5,
-      "track_count": 2,
-      "total_duration": 1000,
-      "total_calories": 140.5
+    },
+    {
+      "type": "running",
+      "name": "跑步",
+      "theme_color": "#F26A4B",
+      "icon_url": "/api/v1/static/track_type_icon/running.svg",
+      "icon_anim_url": "",
+      "milestone": {
+        "month": {
+          "distance": 300,
+          "track_count": 1,
+          "duration": 700,
+          "calories": 90
+        },
+        "year": {
+          "distance": 800,
+          "track_count": 2,
+          "duration": 1600,
+          "calories": 190
+        }
+      }
     }
-  }
+  ]
 }
 ```
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `data.items` | `TrackTypeOption[]` | 可选运动类型列表。 |
-| `data.items[].name` | string | 运动类型名称。 |
-| `data.items[].icon_url` | string | 运动类型图标静态资源链接，路径位于 `/api/v1/static/track_type_icon/` 下。 |
-| `data.stats.total_distance` | number | 当前用户总里程，单位米。 |
-| `data.stats.track_count` | int64 | 当前用户轨迹次数。 |
-| `data.stats.total_duration` | int64 | 当前用户总耗时，单位秒。 |
-| `data.stats.total_calories` | number | 当前用户总热量，单位千卡。 |
+| `data` | `TrackTypeOption[]` | 可选运动类型列表。 |
+| `data[].type` | string | 运动类型英文标识，例如 `hiking` / `running`。 |
+| `data[].name` | string | 运动类型名称。 |
+| `data[].theme_color` | string | 运动类型主题色。 |
+| `data[].icon_url` | string | 运动类型图标静态资源链接，路径位于 `/api/v1/static/track_type_icon/` 下。 |
+| `data[].icon_anim_url` | string | 运动类型 Lottie 动画文件链接；当前默认空字符串。 |
+| `data[].milestone.month.distance` | number | 当前用户该运动类型最近一个月总里程，单位米。 |
+| `data[].milestone.month.track_count` | int64 | 当前用户该运动类型最近一个月轨迹次数。 |
+| `data[].milestone.month.duration` | int64 | 当前用户该运动类型最近一个月总耗时，单位秒。 |
+| `data[].milestone.month.calories` | number | 当前用户该运动类型最近一个月总热量，单位千卡。 |
+| `data[].milestone.year.distance` | number | 当前用户该运动类型最近一年总里程，单位米。 |
+| `data[].milestone.year.track_count` | int64 | 当前用户该运动类型最近一年轨迹次数。 |
+| `data[].milestone.year.duration` | int64 | 当前用户该运动类型最近一年总耗时，单位秒。 |
+| `data[].milestone.year.calories` | number | 当前用户该运动类型最近一年总热量，单位千卡。 |
 
 ### 错误响应
 

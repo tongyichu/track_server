@@ -33,6 +33,7 @@ const (
 	defaultTrackPageSize   = 20
 	maxTrackPageSize       = 50
 	trackTypeIconURLPrefix = "/api/v1/static/track_type_icon/"
+	trackTypeAnimURLPrefix = "/api/v1/static/track_type_icon_anim/"
 )
 
 type ListRecommendInput struct {
@@ -196,12 +197,89 @@ func (s *TrackService) ListTrackTypeOptions() []models.TrackTypeOption {
 	types := s.ListTrackTypes()
 	items := make([]models.TrackTypeOption, 0, len(types))
 	for _, trackType := range types {
+		meta, ok := config.TrackTypeConfigByName(trackType)
+		typeCode := trackType
+		themeColor := ""
+		iconAnimURL := ""
+		if ok {
+			typeCode = meta.Type
+			themeColor = meta.ThemeColor
+			if meta.IconAnimFile != "" {
+				iconAnimURL = trackTypeAnimURLPrefix + meta.IconAnimFile
+			}
+		}
 		items = append(items, models.TrackTypeOption{
-			Name:    trackType,
-			IconURL: trackTypeIconURL(trackType),
+			Type:        typeCode,
+			Name:        trackType,
+			ThemeColor:  themeColor,
+			IconURL:     trackTypeIconURL(trackType),
+			IconAnimURL: iconAnimURL,
 		})
 	}
 	return items
+}
+
+// ListTrackTypeOptionsWithStats returns configured track types plus current user's month/year stats.
+func (s *TrackService) ListTrackTypeOptionsWithStats(ctx context.Context, userID int64) ([]models.TrackTypeOption, error) {
+	if userID <= 0 {
+		return nil, invalidArg("userID is required")
+	}
+	items := s.ListTrackTypeOptions()
+	if s.tracks == nil || len(items) == 0 {
+		return items, nil
+	}
+
+	statsByType := make(map[string]*models.TrackTypeMilestone, len(items))
+	for i := range items {
+		statsByType[items[i].Name] = &items[i].Milestone
+	}
+
+	now := time.Now()
+	monthSince := now.AddDate(0, -1, 0)
+	yearSince := now.AddDate(-1, 0, 0)
+
+	var cursor *models.TrackListCursor
+	for {
+		tracks, err := s.tracks.ListByUserID(ctx, userID, cursor, maxTrackPageSize)
+		if err != nil {
+			return nil, err
+		}
+		if len(tracks) == 0 {
+			break
+		}
+		for _, track := range tracks {
+			milestone := statsByType[track.TrackType]
+			if milestone == nil {
+				continue
+			}
+			trackTime := track.StartTime
+			if trackTime.IsZero() {
+				trackTime = track.CreatedAt
+			}
+			if !trackTime.Before(monthSince) {
+				accumulateTrackMilestone(&milestone.Month, track)
+			}
+			if !trackTime.Before(yearSince) {
+				accumulateTrackMilestone(&milestone.Year, track)
+			}
+		}
+		if len(tracks) < maxTrackPageSize {
+			break
+		}
+		last := tracks[len(tracks)-1]
+		cursor = &models.TrackListCursor{StartTime: last.StartTime, ID: last.ID}
+	}
+	return items, nil
+}
+
+func accumulateTrackMilestone(dst *models.TrackTypeMilestoneStats, track *models.Track) {
+	if dst == nil || track == nil {
+		return
+	}
+	dst.Distance += track.Distance
+	dst.TrackCount++
+	dst.Duration += int64(track.Duration)
+	dst.Calories += track.CaloriesBurned
 }
 
 func trackTypeIconURL(trackType string) string {

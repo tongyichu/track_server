@@ -187,8 +187,26 @@ type TrackUserStats struct {
 
 // TrackTypeOption 是运动类型选项。
 type TrackTypeOption struct {
-	Name    string `json:"name"`     // Name 是运动类型名称。
-	IconURL string `json:"icon_url"` // IconURL 是运动类型图标静态资源链接。
+	Type        string             `json:"type"`          // Type 是运动类型英文标识，例如 hiking/running。
+	Name        string             `json:"name"`          // Name 是运动类型名称。
+	ThemeColor  string             `json:"theme_color"`   // ThemeColor 是运动类型主题色。
+	IconURL     string             `json:"icon_url"`      // IconURL 是运动类型图标静态资源链接。
+	IconAnimURL string             `json:"icon_anim_url"` // IconAnimURL 是运动类型 Lottie 动画资源链接。
+	Milestone   TrackTypeMilestone `json:"milestone"`     // Milestone 是当前用户在该运动类型下的里程碑统计。
+}
+
+// TrackTypeMilestoneStats 是按时间窗口聚合的运动统计数据。
+type TrackTypeMilestoneStats struct {
+	Distance   float64 `json:"distance"`    // Distance 是总里程，单位米。
+	TrackCount int64   `json:"track_count"` // TrackCount 是轨迹次数。
+	Duration   int64   `json:"duration"`    // Duration 是总耗时，单位秒。
+	Calories   float64 `json:"calories"`    // Calories 是总热量，单位千卡。
+}
+
+// TrackTypeMilestone 是运动类型在不同时间窗口下的统计数据。
+type TrackTypeMilestone struct {
+	Month TrackTypeMilestoneStats `json:"month"` // Month 是最近一个月统计。
+	Year  TrackTypeMilestoneStats `json:"year"`  // Year 是最近一年统计。
 }
 
 // TrackWaypointMediaType represents the media type of a waypoint node.

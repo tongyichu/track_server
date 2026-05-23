@@ -18,18 +18,21 @@ const (
 	OSSFileBucketSize         = 2000 //所有用户的轨迹文件hash到2000个桶以内，该值不能轻易修改
 )
 
-// TrackTypeConfig defines one built-in track type and its static icon file.
+// TrackTypeConfig defines one built-in track type and its presentation metadata.
 type TrackTypeConfig struct {
-	Name     string
-	IconFile string
+	Type         string
+	Name         string
+	ThemeColor   string
+	IconFile     string
+	IconAnimFile string
 }
 
 // DefaultTrackTypeConfigs keeps built-in track type names and icons in one place.
 var DefaultTrackTypeConfigs = []TrackTypeConfig{
-	{Name: "徒步", IconFile: "hiking.svg"},
-	{Name: "跑步", IconFile: "running.svg"},
-	{Name: "爬山", IconFile: "climbing.svg"},
-	{Name: "骑行", IconFile: "riding.svg"},
+	{Type: "hiking", Name: "徒步", ThemeColor: "#345631", IconFile: "hiking.svg", IconAnimFile: ""},
+	{Type: "running", Name: "跑步", ThemeColor: "#F26A4B", IconFile: "running.svg", IconAnimFile: ""},
+	{Type: "climbing", Name: "爬山", ThemeColor: "#6C4CE1", IconFile: "climbing.svg", IconAnimFile: ""},
+	{Type: "riding", Name: "骑行", ThemeColor: "#2F80ED", IconFile: "riding.svg", IconAnimFile: ""},
 }
 
 // Config holds server configuration loaded from environment variables.
@@ -226,6 +229,16 @@ func TrackTypeIconFile(trackType string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// TrackTypeConfigByName returns built-in type metadata by display name.
+func TrackTypeConfigByName(trackType string) (TrackTypeConfig, bool) {
+	for _, item := range DefaultTrackTypeConfigs {
+		if item.Name == trackType {
+			return item, true
+		}
+	}
+	return TrackTypeConfig{}, false
 }
 
 // parseAdminAccounts 解析管理员账号配置，返回 username -> bcryptHash 的映射。
