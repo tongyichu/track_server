@@ -106,14 +106,22 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ### Token 自动续期与失效处理
 
 - Token 默认有效期仍为 **7 天**。
-- 当已登录用户正常访问鉴权接口且当前 Token **剩余有效期 <= 48 小时** 时，服务端会在响应头返回新的 Token：
+- 当客户端使用鉴权成功的 Token 访问 **需要认证的业务接口**，且当前 Token **剩余有效期 <= 48 小时** 时，服务端会在响应头返回新的 Token：
 
 ```
 X-Renewed-Token: <new-jwt-token>
 ```
 
-- 客户端收到 `X-Renewed-Token` 后，应立即用新 Token 替换本地旧 Token。
-- 调用 `/api/v1/logout` 后，服务端会递增当前用户的 `token_version`，使该用户当前版本的所有旧 Token 立即失效。
+- 自动续期仅在以下条件同时满足时触发：
+  - 当前请求通过 JWT 鉴权；
+  - 当前请求不是 `/api/v1/logout`；
+  - 当前业务接口响应状态码 `< 400`；
+  - 用户当前 `token_version` 未发生变化。
+- 客户端收到 `X-Renewed-Token` 后，应立即用新 Token 替换本地旧 Token；若响应头未返回该字段，则继续使用现有 Token。
+- 服务端签发的 JWT Payload 固定包含 `token_version`。鉴权时会校验 Token 中的 `token_version` 是否与当前用户最新版本一致；不一致则视为已撤销。
+- 调用 `/api/v1/logout` 后，服务端会执行两步撤销：
+  1. 递增当前用户的 `token_version`，使该用户当前版本的**所有旧 Token**立即失效；
+  2. 将本次请求携带的当前 Token 加入服务端黑名单，直至该 Token 自身过期。
 
 当 Token 过期、无效，或已因登出被撤销时，服务端返回：
 
@@ -133,7 +141,7 @@ HTTP/1.1 401 Unauthorized
 }
 ```
 
-客户端收到 `401` 后应引导用户重新登录获取新的 Token；若响应头中带有 `X-Renewed-Token`，则优先更新本地 Token，无需打断当前登录态。
+客户端收到 `401` 后应引导用户重新登录获取新的 Token；若一次成功响应中带有 `X-Renewed-Token`，则优先更新本地 Token，无需打断当前登录态。
 
 ---
 
@@ -363,7 +371,12 @@ Content-Type: application/json
 | `code` | int | 业务状态码，`0` 表示成功 |
 | `data.user_id` | int64 | 用户唯一 ID |
 | `data.user` | object | 用户详情对象，结构见 [User 对象](#user-对象) |
-| `data.token` | string | JWT 认证令牌，有效期 7 天 |
+| `data.token` | string | JWT 认证令牌，有效期 7 天，Payload 中包含 `user_id`、`token_version`、`exp`、`iat` |
+
+### 客户端登录态维护
+
+- 登录成功后，客户端应保存 `data.token`，并在后续鉴权请求头中携带：`Authorization: Bearer <token>`。
+- 后续调用任一鉴权接口时，若响应头返回 `X-Renewed-Token`，客户端应立即更新本地 Token。
 
 ### 错误响应
 
@@ -464,7 +477,7 @@ Content-Type: application/json
 
 ## 6. 登出
 
-记录用户登出日志。客户端在调用此接口后应清除本地保存的 Token。
+记录用户登出日志，并撤销当前登录态。客户端在调用此接口后应清除本地保存的 Token。
 
 **需要认证** 🔒
 
@@ -476,6 +489,13 @@ Authorization: Bearer <token>
 ```
 
 **请求体：** 无（用户身份从 JWT Token 中自动解析）
+
+### 服务端行为
+
+- 校验当前 `Authorization` 中的 JWT Token；
+- 递增当前用户的 `token_version`，使该用户当前版本下的旧 Token 全部失效；
+- 将本次请求携带的当前 Token 加入黑名单，直到该 Token 自身过期；
+- 写入一条 `login_type=logout` 的登录日志。
 
 ### 响应
 
@@ -496,12 +516,14 @@ Authorization: Bearer <token>
 |--------|-----------|------|
 | 401 | `"missing authorization header"` | 未携带 Authorization Header |
 | 401 | `"invalid or expired token"` | Token 无效或已过期 |
+| 401 | `"token has been revoked"` | Token 已被撤销（如已登出、版本失效或命中黑名单） |
 
 ### 客户端处理
 
 1. 调用登出接口
 2. 无论成功或失败，客户端均应清除本地 Token
-3. 引导用户返回登录页
+3. 客户端不应继续复用旧 Token（即使尚未到 JWT `exp` 时间）
+4. 引导用户返回登录页
 
 ---
 

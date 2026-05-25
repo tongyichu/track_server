@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/cloudwego/hertz/pkg/app/server"
 	"github.com/cloudwego/hertz/pkg/common/hlog"
@@ -46,30 +47,31 @@ func main() {
 	var loginLogRepo repository.LoginLogRepository
 	var navigationRepo repository.NavigationRepository
 	var appReleaseRepo repository.AppReleaseRepository
+	var companionRepo repository.CompanionRepository
 
 	if cfg.UseInMemory {
-		trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo = repository.NewInMemoryRepositories()
+		trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo, companionRepo = repository.NewInMemoryRepositories()
 		log.Println("using in-memory repositories")
 	} else if cfg.UseMySQL {
 		db, err := repository.OpenMySQL(cfg.MySQLDSN)
 		if err != nil {
 			log.Printf("failed to open mysql, fallback to memory: %v", err)
-			trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo = repository.NewInMemoryRepositories()
+			trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo, companionRepo = repository.NewInMemoryRepositories()
 		} else if err := db.PingContext(ctx); err != nil {
 			log.Printf("failed to ping mysql, fallback to memory: %v", err)
 			_ = db.Close()
-			trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo = repository.NewInMemoryRepositories()
+			trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo, companionRepo = repository.NewInMemoryRepositories()
 		} else {
-			tr, ur, cr, lr, nr, ar, err := repository.NewMySQLRepositories(ctx, db)
+			tr, ur, cr, lr, nr, ar, cor, err := repository.NewMySQLRepositories(ctx, db)
 			if err != nil {
 				log.Printf("failed to init mysql schema, fallback to memory: %v", err)
 				_ = db.Close()
-				trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo = repository.NewInMemoryRepositories()
+				trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo, companionRepo = repository.NewInMemoryRepositories()
 			} else {
 				defer func() {
 					_ = db.Close()
 				}()
-				trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo = tr, ur, cr, lr, nr, ar
+				trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo, companionRepo = tr, ur, cr, lr, nr, ar, cor
 				log.Println("using mysql repositories")
 			}
 		}
@@ -78,7 +80,7 @@ func main() {
 		client, err := mongo.Connect(ctx, options.Client().ApplyURI(cfg.MongoURI))
 		if err != nil {
 			log.Printf("failed to connect mongo, fallback to memory: %v", err)
-			trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo = repository.NewInMemoryRepositories()
+			trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo, companionRepo = repository.NewInMemoryRepositories()
 		} else {
 			db := client.Database(cfg.MongoDBName)
 			trackRepo = repository.NewMongoTrackRepository(db.Collection("tracks"))
@@ -87,6 +89,11 @@ func main() {
 			loginLogRepo = repository.NewMongoLoginLogRepository(db.Collection("login_log"))
 			navigationRepo = repository.NewMongoNavigationRepository(db.Collection("track_navigations"))
 			appReleaseRepo = repository.NewMongoAppReleaseRepository(db.Collection("app_releases"))
+			companionRepo = repository.NewMongoCompanionRepository(
+				db.Collection("companion_sessions"),
+				db.Collection("companion_session_members"),
+				db.Collection("companion_live_positions"),
+			)
 			log.Println("mongo repositories initialized")
 		}
 	}
@@ -100,6 +107,36 @@ func main() {
 	userSvc.SetNavigationRepository(navigationRepo)
 	loginSvc := service.NewLoginService(userRepo, loginLogRepo, cfg.WechatAppID, cfg.WechatAppSecret, cfg.JWTSecret)
 	appReleaseSvc := service.NewAppReleaseService(appReleaseRepo)
+	companionSvc := service.NewCompanionService(companionRepo, userRepo)
+	companionSvc.SetMQTTOptions(service.CompanionMQTTOptions{
+		BrokerURL:        cfg.EMQXBrokerURL,
+		WebsocketURL:     cfg.EMQXWebsocketURL,
+		TopicPrefix:      cfg.CompanionMQTTTopicPrefix,
+		CredentialTTL:    time.Duration(cfg.CompanionMQTTCredentialTTLSecond) * time.Second,
+		CredentialSecret: cfg.CompanionMQTTCredentialSecret,
+	})
+	if cfg.EMQXBrokerURL != "" || cfg.EMQXWebsocketURL != "" {
+		publisherBrokerURL := cfg.EMQXBrokerURL
+		if publisherBrokerURL == "" {
+			publisherBrokerURL = cfg.EMQXWebsocketURL
+		}
+		controlPublisher, err := service.NewMQTTCompanionControlPublisher(service.CompanionMQTTControlPublisherOptions{
+			BrokerURL:      publisherBrokerURL,
+			ClientID:       cfg.CompanionMQTTPublisherClientID,
+			Username:       cfg.CompanionMQTTPublisherUsername,
+			Password:       cfg.CompanionMQTTPublisherPassword,
+			PublishTimeout: time.Duration(cfg.CompanionMQTTPublishTimeoutSec) * time.Second,
+		})
+		if err != nil {
+			log.Printf("companion control publisher disabled: %v", err)
+		} else {
+			companionSvc.SetControlPublisher(controlPublisher)
+			defer func() {
+				_ = controlPublisher.Close()
+			}()
+			log.Printf("companion control publisher enabled: %s", publisherBrokerURL)
+		}
+	}
 
 	// 初始化本地资源缓存服务：把客户端上传到 OSS 的轨迹截图 / 原始轨迹文件，按需同步到服务器本地，
 	// 供列表/详情接口返回一个服务端可直接下载的 URL。
@@ -223,14 +260,16 @@ func main() {
 	defer tokenBlacklist.Close()
 
 	handler.RegisterRoutes(h, handler.Deps{
-		TrackService:      trackSvc,
-		UserService:       userSvc,
-		LoginService:      loginSvc,
-		OSSTokenService:   ossTokenSvc,
-		AppReleaseService: appReleaseSvc,
-		JWTSecret:         cfg.JWTSecret,
-		TokenBlacklist:    tokenBlacklist,
-		StaticRoot:        staticRoot,
+		TrackService:               trackSvc,
+		UserService:                userSvc,
+		LoginService:               loginSvc,
+		OSSTokenService:            ossTokenSvc,
+		AppReleaseService:          appReleaseSvc,
+		CompanionService:           companionSvc,
+		JWTSecret:                  cfg.JWTSecret,
+		TokenBlacklist:             tokenBlacklist,
+		CompanionMQTTInternalToken: cfg.CompanionMQTTInternalToken,
+		StaticRoot:                 staticRoot,
 	})
 
 	// 管理后台（独立于业务用户鉴权）。若未配置任何管理员账号，

@@ -36,14 +36,15 @@ track_server/
 │   ├── config/             # 环境变量加载；内置省市数据 + 昵称字典
 │   ├── handler/            # Hertz HTTP handler + router.go 路由表（权威）
 │   ├── middleware/         # JWT 鉴权、请求元信息、Token 黑名单
-│   ├── models/             # 领域模型（Track / User / 相关光标/子结构）
+│   ├── models/             # 领域模型（Track / User / Companion / 相关光标/子结构）
 │   ├── repository/         # 持久化接口 + mysql / mongo / memory 三实现
-│   └── service/            # 业务编排：登录、轨迹、用户、OSS STS、资源缓存
+│   └── service/            # 业务编排：登录、轨迹、用户、同行控制面、OSS STS、资源缓存
 ├── deploy/                 # Dockerfile / docker-compose / nginx / systemd
 ├── Makefile                # run / test / docker-build / compose-up/down
 ├── go.mod / go.sum
 ├── mysql.sql               # MySQL 初始化 SQL（表结构权威之一）
-├── track_api.md            # 业务接口文档（接口契约权威）
+├── track_api.md            # 业务接口文档（接口契约权威，含同行控制面 API）
+├── track_companion.md      # 同行能力技术方案设计（控制面 / MQTT 数据面规划）
 └── login.md                # 登录流程与协议说明
 ```
 
@@ -55,7 +56,7 @@ track_server/
 | Repository 接口契约 | `internal/repository/interfaces.go` |
 | 领域模型 | `internal/models/track.go`、`internal/models/user.go` |
 | MySQL 表结构 | `mysql.sql` |
-| 接口协议 | `track_api.md`、`login.md` |
+| 接口协议 | `track_api.md`、`login.md`、`track_companion.md` |
 
 ### 关键流程
 
@@ -84,7 +85,7 @@ HTTP Request
 - 全量测试：`make test`（等价 `go test ./...`）
 - 新增/修改路由：核对 `internal/handler/router.go` 是否挂载在正确的 `auth` 分组。
 - 新增 Repository 方法：`mysql.go` / `mongo.go` / `memory.go` 三实现必须同步。
-- 改动与协议相关（字段增删、登录流程、错误码）：同步更新 `track_api.md` 或 `login.md`。
+- 改动与协议相关（字段增删、登录流程、错误码、同行控制面）：同步更新 `track_api.md`、`login.md` 或 `track_companion.md`。
 
 ---
 

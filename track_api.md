@@ -26,6 +26,16 @@
 | 14 | [更新个人信息](#14-更新个人信息) | PUT | `/user/profile/update` | ✅ |
 | 15 | [App 升级检查](#15-app-升级检查) | GET | `/upgrade/check` | ❌ |
 | 16 | [获取运动类型](#16-获取运动类型) | GET | `/track/types` | ✅ |
+| 17 | [创建同行会话](#17-创建同行会话) | POST | `/companion/session/create` | ✅ |
+| 18 | [加入同行会话](#18-加入同行会话) | POST | `/companion/session/join` | ✅ |
+| 19 | [获取当前同行会话](#19-获取当前同行会话) | GET | `/companion/session/current` | ✅ |
+| 20 | [获取同行快照](#20-获取同行快照) | GET | `/companion/session/:session_id/snapshot` | ✅ |
+| 21 | [离开同行会话](#21-离开同行会话) | POST | `/companion/session/:session_id/leave` | ✅ |
+| 22 | [结束同行会话](#22-结束同行会话) | POST | `/companion/session/:session_id/end` | ✅ |
+| 23 | [获取同行 MQTT 凭证](#23-获取同行-mqtt-凭证) | POST | `/companion/session/:session_id/mqtt/credentials` | ✅ |
+| 24 | [EMQX HTTP AuthN 回调](#24-emqx-http-authn-回调) | POST | `/internal/mqtt/auth` | ❌（内部） |
+| 25 | [EMQX HTTP AuthZ 回调](#25-emqx-http-authz-回调) | POST | `/internal/mqtt/acl` | ❌（内部） |
+| 26 | [EMQX 数据面写回接口](#26-emqx-数据面写回接口) | POST | `/internal/companion/mqtt/*` | ❌（内部） |
 
 ---
 
@@ -193,6 +203,14 @@ Authorization: Bearer <token>
   }
 }
 ```
+
+补充说明：
+
+- 客户端连接 EMQX 后，应订阅 `topics.control_subscribe`；
+- 服务端会在该 topic 发布：
+  - `member_left`
+  - `session_ended`
+- 具体消息格式见 `track_companion.md` 的 control topic 说明。
 
 说明：`raw_track_url` / `track_screenshot_url` / `track_no_map_bg_screenshot_url` 在请求时是 OSS 地址，但响应会被服务端替换为可直接从业务服务器下载的本地链接（路径在 `/api/v1/static/...` 下，需要登录态）。
 
@@ -1426,6 +1444,418 @@ X-Platform: android
 ---
 
 ## 16. 获取运动类型
+
+---
+
+## 17. 创建同行会话
+
+创建一场新的“同行”会话，并返回 `join_token` 与初始 snapshot。
+
+**需要认证**
+
+### 请求
+
+```http
+POST /api/v1/companion/session/create
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+```json
+{
+  "title": "周末同行",
+  "max_members": 8
+}
+```
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `title` | string | 否 | 会话标题，默认 `与友同行` |
+| `max_members` | int | 否 | 最大成员数，默认 `8`，最小 `2`，最大 `32` |
+
+### 响应
+
+```json
+{
+  "code": 0,
+  "data": {
+    "session": {
+      "session_id": "sess_xxx",
+      "owner_user_id": 1001,
+      "status": "active",
+      "title": "周末同行",
+      "max_members": 8,
+      "started_at": "2026-05-23T16:00:00Z",
+      "created_at": "2026-05-23T16:00:00Z",
+      "updated_at": "2026-05-23T16:00:00Z"
+    },
+    "join": {
+      "join_token": "join_xxx",
+      "join_token_expire_at": "2026-05-23T18:00:00Z"
+    },
+    "snapshot": {
+      "snapshot_at": "2026-05-23T16:00:00Z",
+      "members": [],
+      "positions": []
+    }
+  }
+}
+```
+
+### 错误响应
+
+- `400 Bad Request`
+  - `active companion session already exists`
+  - `max_members must be >= 2`
+- `401 Unauthorized`
+- `404 Not Found`
+  - 当前用户不存在
+
+---
+
+## 18. 加入同行会话
+
+通过 `join_token` 加入一场 active session，并立即返回成员/位置 snapshot。
+
+**需要认证**
+
+### 请求
+
+```http
+POST /api/v1/companion/session/join
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+```json
+{
+  "join_token": "join_xxx"
+}
+```
+
+### 错误响应
+
+- `400 Bad Request`
+  - `join_token is required`
+  - `join_token expired`
+  - `companion session already ended`
+  - `companion session is full`
+  - `user already joined another active companion session`
+- `404 Not Found`
+  - `join_token` 对应 session 不存在
+
+---
+
+## 19. 获取当前同行会话
+
+返回当前登录用户已加入的 active session 及其 snapshot。
+
+**需要认证**
+
+### 请求
+
+```http
+GET /api/v1/companion/session/current
+Authorization: Bearer <token>
+```
+
+### 错误响应
+
+- `404 Not Found`
+  - 当前无 active session
+
+---
+
+## 20. 获取同行快照
+
+返回指定 session 的当前 snapshot，仅允许该 session 的 joined 成员访问。
+
+**需要认证**
+
+### 请求
+
+```http
+GET /api/v1/companion/session/:session_id/snapshot
+Authorization: Bearer <token>
+```
+
+### 错误响应
+
+- `400 Bad Request`
+  - `session_id is required`
+  - `companion session already ended`
+- `403 Forbidden`
+  - 当前用户不是该 session 的 joined 成员
+- `404 Not Found`
+  - session 不存在
+
+---
+
+## 21. 离开同行会话
+
+当前成员主动离开 session。owner 在仍有其他 joined 成员时不能直接离开，需调用结束接口。
+
+**需要认证**
+
+### 请求
+
+```http
+POST /api/v1/companion/session/:session_id/leave
+Authorization: Bearer <token>
+```
+
+### 成功响应
+
+```json
+{
+  "code": 0,
+  "data": {
+    "status": "ok"
+  }
+}
+```
+
+### 错误响应
+
+- `400 Bad Request`
+  - `owner cannot leave active session while other members are joined; end session instead`
+- `403 Forbidden`
+  - 当前用户不是该 session 的 joined 成员
+
+---
+
+## 22. 结束同行会话
+
+owner 主动结束一场 active session。
+
+**需要认证**
+
+### 请求
+
+```http
+POST /api/v1/companion/session/:session_id/end
+Authorization: Bearer <token>
+```
+
+### 成功响应
+
+```json
+{
+  "code": 0,
+  "data": {
+    "status": "ok"
+  }
+}
+```
+
+### 错误响应
+
+- `403 Forbidden`
+  - 当前用户不是 owner
+- `404 Not Found`
+  - session 不存在
+
+---
+
+## 23. 获取同行 MQTT 凭证
+
+为当前登录用户签发当前 session 的短期 MQTT 连接凭证。
+
+**需要认证**
+
+### 请求
+
+```http
+POST /api/v1/companion/session/:session_id/mqtt/credentials
+Authorization: Bearer <token>
+```
+
+### 响应
+
+```json
+{
+  "code": 0,
+  "data": {
+    "session_id": "sess_xxx",
+    "broker_url": "mqtt://emqx.example.com:1883",
+    "websocket_url": "wss://emqx.example.com:8084/mqtt",
+    "client_id": "cmp-sess_xxx-1001-abc123",
+    "username": "cmpv1:sess_xxx:1001:1770000000:abc123",
+    "password": "signed_password",
+    "expires_at": "2026-05-23T18:00:00Z",
+    "topics": {
+      "location_publish": "companion/sess_xxx/member/1001/location",
+      "location_subscribe": "companion/sess_xxx/member/+/location",
+      "presence_publish": "companion/sess_xxx/member/1001/presence",
+      "presence_subscribe": "companion/sess_xxx/member/+/presence",
+      "control_subscribe": "companion/sess_xxx/control"
+    }
+  }
+}
+```
+
+### 错误响应
+
+- `403 Forbidden`
+  - 当前用户不是该 session 的 joined 成员
+- `404 Not Found`
+  - session 不存在
+- `503 Service Unavailable`
+  - `companion mqtt not configured`
+
+---
+
+## 24. EMQX HTTP AuthN 回调
+
+供 EMQX 在客户端 CONNECT 时调用，校验 `clientid / username / password` 是否有效。
+
+**内部接口**
+
+### 请求
+
+```http
+POST /api/v1/internal/mqtt/auth
+X-Internal-Token: <internal-token>
+Content-Type: application/json
+```
+
+```json
+{
+  "clientid": "cmp-sess_xxx-1001-abc123",
+  "username": "cmpv1:sess_xxx:1001:1770000000:abc123",
+  "password": "signed_password"
+}
+```
+
+### 响应
+
+```json
+{
+  "result": "allow",
+  "is_superuser": false
+}
+```
+
+`result` 可能为 `allow` 或 `deny`。
+
+---
+
+## 25. EMQX HTTP AuthZ 回调
+
+供 EMQX 在 publish / subscribe 前调用，校验当前 MQTT 凭证是否允许访问指定 topic。
+
+**内部接口**
+
+### 请求
+
+```http
+POST /api/v1/internal/mqtt/acl
+X-Internal-Token: <internal-token>
+Content-Type: application/json
+```
+
+```json
+{
+  "clientid": "cmp-sess_xxx-1001-abc123",
+  "username": "cmpv1:sess_xxx:1001:1770000000:abc123",
+  "action": "publish",
+  "topic": "companion/sess_xxx/member/1001/location"
+}
+```
+
+### 响应
+
+```json
+{
+  "result": "allow"
+}
+```
+
+当前策略：
+
+- 允许 publish 自己的 `location` / `presence` topic；
+- 允许 subscribe 当前 session 的 `member/+/location`、`member/+/presence`、`control` topic；
+- 其他 topic 返回 `deny`。
+
+---
+
+## 26. EMQX 数据面写回接口
+
+供 EMQX Rule Engine / WebHook 将 MQTT 数据面事件写回 App Server。
+
+**内部接口**
+
+### 26.1 位置写回
+
+```http
+POST /api/v1/internal/companion/mqtt/location-ingest
+X-Internal-Token: <internal-token>
+Content-Type: application/json
+```
+
+```json
+{
+  "session_id": "sess_xxx",
+  "user_id": 1001,
+  "track_id": "NO.00000001",
+  "latitude": 30.123,
+  "longitude": 120.456,
+  "coordinate_system": "GCJ02",
+  "speed_kmh": 5.2,
+  "heading": 90,
+  "accuracy_m": 8,
+  "altitude": 100,
+  "recorded_at": "2026-05-23T16:19:58Z",
+  "seq": 1024,
+  "source": "mqtt_rule_engine",
+  "client_id": "cmp-sess_xxx-1001-abc123",
+  "username": "cmpv1:sess_xxx:1001:1770000000:abc123"
+}
+```
+
+成功响应：
+
+```json
+{
+  "result": "ok"
+}
+```
+
+说明：
+
+- 服务端会校验 `session_id / user_id` 是否与 MQTT principal 一致；
+- 仅保留每位成员最新一条位置快照；
+- 若 `seq` 更旧，或 `seq` 相同且 `recorded_at` 不更新，则忽略该消息。
+
+### 26.2 Presence 写回
+
+```http
+POST /api/v1/internal/companion/mqtt/presence-ingest
+X-Internal-Token: <internal-token>
+Content-Type: application/json
+```
+
+```json
+{
+  "session_id": "sess_xxx",
+  "user_id": 1001,
+  "presence_status": "online",
+  "last_seen_at": "2026-05-23T16:20:00Z",
+  "client_id": "cmp-sess_xxx-1001-abc123",
+  "username": "cmpv1:sess_xxx:1001:1770000000:abc123"
+}
+```
+
+成功响应：
+
+```json
+{
+  "result": "ok"
+}
+```
+
+---
+
 
 获取客户端创建/编辑轨迹时可选择的运动类型列表，并返回当前用户按运动类型拆分的最近一个月、最近一年统计数据。
 

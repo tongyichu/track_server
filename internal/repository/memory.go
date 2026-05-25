@@ -626,8 +626,8 @@ func (r *InMemoryLoginLogRepository) ListByUserID(_ context.Context, userID int6
 }
 
 // NewInMemoryRepositories is a helper to create a full set of in-memory repositories.
-func NewInMemoryRepositories() (TrackRepository, UserRepository, CollectRepository, LoginLogRepository, NavigationRepository, AppReleaseRepository) {
-	return NewInMemoryTrackRepository(), NewInMemoryUserRepository(), NewInMemoryCollectRepository(), NewInMemoryLoginLogRepository(), NewInMemoryNavigationRepository(), NewInMemoryAppReleaseRepository()
+func NewInMemoryRepositories() (TrackRepository, UserRepository, CollectRepository, LoginLogRepository, NavigationRepository, AppReleaseRepository, CompanionRepository) {
+	return NewInMemoryTrackRepository(), NewInMemoryUserRepository(), NewInMemoryCollectRepository(), NewInMemoryLoginLogRepository(), NewInMemoryNavigationRepository(), NewInMemoryAppReleaseRepository(), NewInMemoryCompanionRepository()
 }
 
 func (r *InMemoryNavigationRepository) AddNavigation(_ context.Context, navigatorUserID int64, trackID string) error {

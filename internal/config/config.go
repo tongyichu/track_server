@@ -10,12 +10,15 @@ import (
 )
 
 const (
-	DefaultOSSPathPrefix      = "prod/track/"
-	DefaultOSSBucket          = "track-resource"
-	DefaultSTSRegion          = "cn-hangzhou"
-	DefaultSTSDurationSeconds = 900
-	DefaultRoleSessionPref    = "trackapp-"
-	OSSFileBucketSize         = 2000 //所有用户的轨迹文件hash到2000个桶以内，该值不能轻易修改
+	DefaultOSSPathPrefix               = "prod/track/"
+	DefaultOSSBucket                   = "track-resource"
+	DefaultSTSRegion                   = "cn-hangzhou"
+	DefaultSTSDurationSeconds          = 900
+	DefaultRoleSessionPref             = "trackapp-"
+	DefaultCompanionMQTTTopic          = "companion"
+	DefaultCompanionMQTTTTL            = 3600
+	DefaultCompanionMQTTPublishTimeout = 5
+	OSSFileBucketSize                  = 2000 //所有用户的轨迹文件hash到2000个桶以内，该值不能轻易修改
 )
 
 // TrackTypeConfig defines one built-in track type and its presentation metadata.
@@ -53,6 +56,17 @@ type Config struct {
 	EnableTLS       bool
 	JWTSecret       string
 	TrackTypes      []string // 客户端可选运动类型列表，默认：徒步/跑步/爬山/骑行。
+
+	EMQXBrokerURL                    string
+	EMQXWebsocketURL                 string
+	CompanionMQTTTopicPrefix         string
+	CompanionMQTTCredentialTTLSecond int64
+	CompanionMQTTCredentialSecret    string
+	CompanionMQTTInternalToken       string
+	CompanionMQTTPublisherClientID   string
+	CompanionMQTTPublisherUsername   string
+	CompanionMQTTPublisherPassword   string
+	CompanionMQTTPublishTimeoutSec   int64
 
 	AliyunAccessKeyID     string // 服务端长期 AK（仅在服务端保存）。
 	AliyunAccessKeySecret string // 服务端长期 SK（仅在服务端保存）。
@@ -103,20 +117,30 @@ func Load() *Config {
 	aMapRestKey := os.Getenv("AMAP_REST_KEY")
 
 	cfg := &Config{
-		MongoURI:        getEnv("MONGO_URI", ""),
-		MongoDBName:     getEnv("MONGO_DB_NAME", "trackapp"),
-		MySQLDSN:        getEnv("MYSQL_DSN", ""),
-		ServerAddr:      serverAddr,
-		LogDir:          getEnv("LOG_DIR", "/var/log/track_server"),
-		WechatAppID:     os.Getenv("WECHAT_APP_ID"),
-		WechatAppSecret: os.Getenv("WECHAT_APP_SECRET"),
-		AMapWebKey:      aMapWebKey,
-		AMapRESTKey:     aMapRestKey,
-		TLSCertFile:     tlsCert,
-		TLSKeyFile:      tlsKey,
-		EnableTLS:       tlsCert != "" && tlsKey != "",
-		JWTSecret:       getEnv("JWT_SECRET", "track_server_default_jwt_secret"),
-		TrackTypes:      ParseTrackTypes(os.Getenv("TRACK_TYPES")),
+		MongoURI:                         getEnv("MONGO_URI", ""),
+		MongoDBName:                      getEnv("MONGO_DB_NAME", "trackapp"),
+		MySQLDSN:                         getEnv("MYSQL_DSN", ""),
+		ServerAddr:                       serverAddr,
+		LogDir:                           getEnv("LOG_DIR", "/var/log/track_server"),
+		WechatAppID:                      os.Getenv("WECHAT_APP_ID"),
+		WechatAppSecret:                  os.Getenv("WECHAT_APP_SECRET"),
+		AMapWebKey:                       aMapWebKey,
+		AMapRESTKey:                      aMapRestKey,
+		TLSCertFile:                      tlsCert,
+		TLSKeyFile:                       tlsKey,
+		EnableTLS:                        tlsCert != "" && tlsKey != "",
+		JWTSecret:                        getEnv("JWT_SECRET", "track_server_default_jwt_secret"),
+		TrackTypes:                       ParseTrackTypes(os.Getenv("TRACK_TYPES")),
+		EMQXBrokerURL:                    getEnv("EMQX_BROKER_URL", ""),
+		EMQXWebsocketURL:                 getEnv("EMQX_WEBSOCKET_URL", ""),
+		CompanionMQTTTopicPrefix:         getEnv("COMPANION_MQTT_TOPIC_PREFIX", DefaultCompanionMQTTTopic),
+		CompanionMQTTCredentialTTLSecond: getEnvInt64("COMPANION_MQTT_CREDENTIAL_TTL_SECONDS", DefaultCompanionMQTTTTL),
+		CompanionMQTTCredentialSecret:    os.Getenv("COMPANION_MQTT_CREDENTIAL_SECRET"),
+		CompanionMQTTInternalToken:       os.Getenv("COMPANION_MQTT_INTERNAL_TOKEN"),
+		CompanionMQTTPublisherClientID:   getEnv("COMPANION_MQTT_PUBLISHER_CLIENT_ID", "track-server-companion-publisher"),
+		CompanionMQTTPublisherUsername:   os.Getenv("COMPANION_MQTT_PUBLISHER_USERNAME"),
+		CompanionMQTTPublisherPassword:   os.Getenv("COMPANION_MQTT_PUBLISHER_PASSWORD"),
+		CompanionMQTTPublishTimeoutSec:   getEnvInt64("COMPANION_MQTT_PUBLISH_TIMEOUT_SECONDS", DefaultCompanionMQTTPublishTimeout),
 
 		// Aliyun OSS STS（客户端直传上传凭证）
 		// - ALIYUN_ACCESS_KEY_ID / ALIYUN_ACCESS_KEY_SECRET：服务端长期 AK/SK

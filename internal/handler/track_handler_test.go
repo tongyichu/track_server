@@ -22,6 +22,7 @@ import (
 )
 
 const testJWTSecret = "test_jwt_secret"
+const testInternalToken = "test_internal_token"
 
 // testEnv bundles server and in-memory dependencies for HTTP tests.
 type testEnv struct {
@@ -31,15 +32,17 @@ type testEnv struct {
 	collectRepo    repository.CollectRepository
 	loginLogRepo   repository.LoginLogRepository
 	navigationRepo repository.NavigationRepository
+	companionRepo  repository.CompanionRepository
 	loginSvc       *service.LoginService
 	tokenBlacklist *middleware.TokenBlacklist
+	internalToken  string
 	staticRoot     string
 	avatarCacheDir string
 }
 
 // newTestEnv creates a fresh Hertz server wired with in-memory repositories.
 func newTestEnv() *testEnv {
-	trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, _ := repository.NewInMemoryRepositories()
+	trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, _, companionRepo := repository.NewInMemoryRepositories()
 	trackSvc := service.NewTrackService(trackRepo, collectRepo)
 	trackSvc.SetUserRepository(userRepo)
 	trackSvc.SetNavigationRepository(navigationRepo)
@@ -47,6 +50,14 @@ func newTestEnv() *testEnv {
 	userSvc.SetTrackRepository(trackRepo)
 	userSvc.SetNavigationRepository(navigationRepo)
 	loginSvc := service.NewLoginService(userRepo, loginLogRepo, "", "", testJWTSecret)
+	companionSvc := service.NewCompanionService(companionRepo, userRepo)
+	companionSvc.SetMQTTOptions(service.CompanionMQTTOptions{
+		BrokerURL:        "mqtt://127.0.0.1:1883",
+		WebsocketURL:     "ws://127.0.0.1:8083/mqtt",
+		TopicPrefix:      "companion",
+		CredentialTTL:    time.Hour,
+		CredentialSecret: "test_companion_secret",
+	})
 	tokenBlacklist := middleware.NewTokenBlacklist()
 	staticRoot, _ := os.MkdirTemp("", "track_server_test_static_")
 	avatarCacheDir := filepath.Join(staticRoot, "avatars")
@@ -63,15 +74,17 @@ func newTestEnv() *testEnv {
 
 	h := server.Default()
 	handler.RegisterRoutes(h, handler.Deps{
-		TrackService:   trackSvc,
-		UserService:    userSvc,
-		LoginService:   loginSvc,
-		JWTSecret:      testJWTSecret,
-		TokenBlacklist: tokenBlacklist,
-		StaticRoot:     staticRoot,
+		TrackService:               trackSvc,
+		UserService:                userSvc,
+		LoginService:               loginSvc,
+		CompanionService:           companionSvc,
+		JWTSecret:                  testJWTSecret,
+		TokenBlacklist:             tokenBlacklist,
+		CompanionMQTTInternalToken: testInternalToken,
+		StaticRoot:                 staticRoot,
 	})
 
-	return &testEnv{h: h, trackRepo: trackRepo, userRepo: userRepo, collectRepo: collectRepo, loginLogRepo: loginLogRepo, navigationRepo: navigationRepo, loginSvc: loginSvc, tokenBlacklist: tokenBlacklist, staticRoot: staticRoot, avatarCacheDir: avatarCacheDir}
+	return &testEnv{h: h, trackRepo: trackRepo, userRepo: userRepo, collectRepo: collectRepo, loginLogRepo: loginLogRepo, navigationRepo: navigationRepo, companionRepo: companionRepo, loginSvc: loginSvc, tokenBlacklist: tokenBlacklist, internalToken: testInternalToken, staticRoot: staticRoot, avatarCacheDir: avatarCacheDir}
 }
 
 func (e *testEnv) generateTestToken(userID int64) string {

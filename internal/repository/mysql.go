@@ -15,11 +15,11 @@ import (
 )
 
 // NewMySQLRepositories wires MySQL-backed repositories and ensures schema exists.
-func NewMySQLRepositories(ctx context.Context, db *sql.DB) (TrackRepository, UserRepository, CollectRepository, LoginLogRepository, NavigationRepository, AppReleaseRepository, error) {
+func NewMySQLRepositories(ctx context.Context, db *sql.DB) (TrackRepository, UserRepository, CollectRepository, LoginLogRepository, NavigationRepository, AppReleaseRepository, CompanionRepository, error) {
 	if err := ensureMySQLSchema(ctx, db); err != nil {
-		return nil, nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, nil, err
 	}
-	return NewMySQLTrackRepository(db), NewMySQLUserRepository(db), NewMySQLCollectRepository(db), NewMySQLLoginLogRepository(db), NewMySQLNavigationRepository(db), NewMySQLAppReleaseRepository(db), nil
+	return NewMySQLTrackRepository(db), NewMySQLUserRepository(db), NewMySQLCollectRepository(db), NewMySQLLoginLogRepository(db), NewMySQLNavigationRepository(db), NewMySQLAppReleaseRepository(db), NewMySQLCompanionRepository(db), nil
 }
 
 func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
@@ -110,6 +110,56 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 			platform VARCHAR(10) COMMENT '客户端平台：ios / android，用于按平台统计和排查问题',
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
+		`CREATE TABLE IF NOT EXISTS companion_sessions (
+			session_id VARCHAR(64) NOT NULL,
+			owner_user_id BIGINT NOT NULL,
+			status VARCHAR(16) NOT NULL,
+			join_token VARCHAR(128) NOT NULL,
+			join_token_expire_at DATETIME(6) NOT NULL,
+			title VARCHAR(64) NOT NULL DEFAULT '',
+			max_members INT NOT NULL DEFAULT 8,
+			started_at DATETIME(6) NOT NULL,
+			ended_at DATETIME(6) NULL,
+			created_at DATETIME(6) NOT NULL,
+			updated_at DATETIME(6) NOT NULL,
+			PRIMARY KEY (session_id),
+			UNIQUE KEY uk_companion_join_token (join_token),
+			KEY idx_companion_owner_status (owner_user_id, status)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='同行会话表';`,
+		`CREATE TABLE IF NOT EXISTS companion_session_members (
+			session_id VARCHAR(64) NOT NULL,
+			user_id BIGINT NOT NULL,
+			role VARCHAR(16) NOT NULL,
+			member_status VARCHAR(16) NOT NULL,
+			presence_status VARCHAR(16) NOT NULL,
+			joined_at DATETIME(6) NOT NULL,
+			left_at DATETIME(6) NULL,
+			last_seen_at DATETIME(6) NULL,
+			mqtt_client_id VARCHAR(128) NOT NULL DEFAULT '',
+			mqtt_principal VARCHAR(128) NOT NULL DEFAULT '',
+			PRIMARY KEY (session_id, user_id),
+			KEY idx_companion_member_status (session_id, member_status),
+			KEY idx_companion_presence (session_id, presence_status)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='同行会话成员表';`,
+		`CREATE TABLE IF NOT EXISTS companion_live_positions (
+			session_id VARCHAR(64) NOT NULL,
+			user_id BIGINT NOT NULL,
+			track_id VARCHAR(64) NULL,
+			latitude DOUBLE NOT NULL,
+			longitude DOUBLE NOT NULL,
+			coordinate_system VARCHAR(16) NOT NULL,
+			speed_kmh DOUBLE NOT NULL DEFAULT 0,
+			heading DOUBLE NOT NULL DEFAULT 0,
+			accuracy_m DOUBLE NOT NULL DEFAULT 0,
+			altitude DOUBLE NOT NULL DEFAULT 0,
+			recorded_at DATETIME(6) NOT NULL,
+			seq BIGINT NOT NULL DEFAULT 0,
+			source VARCHAR(16) NOT NULL DEFAULT 'http',
+			created_at DATETIME(6) NOT NULL,
+			updated_at DATETIME(6) NOT NULL,
+			PRIMARY KEY (session_id, user_id),
+			KEY idx_companion_positions_recorded (session_id, recorded_at)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='同行会话最新位置快照表';`,
 		`CREATE TABLE IF NOT EXISTS app_releases (
 			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
 			platform VARCHAR(16) NOT NULL COMMENT 'android / ios',

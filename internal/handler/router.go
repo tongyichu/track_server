@@ -12,13 +12,15 @@ import (
 
 // Deps groups all handler dependencies.
 type Deps struct {
-	TrackService      *service.TrackService
-	UserService       *service.UserService
-	LoginService      *service.LoginService
-	OSSTokenService   *service.OSSTokenService
-	AppReleaseService *service.AppReleaseService
-	JWTSecret         string
-	TokenBlacklist    *middleware.TokenBlacklist
+	TrackService               *service.TrackService
+	UserService                *service.UserService
+	LoginService               *service.LoginService
+	OSSTokenService            *service.OSSTokenService
+	AppReleaseService          *service.AppReleaseService
+	CompanionService           *service.CompanionService
+	JWTSecret                  string
+	TokenBlacklist             *middleware.TokenBlacklist
+	CompanionMQTTInternalToken string
 
 	// StaticRoot 是服务端本地资源缓存根目录；若非空，会挂载到 /static
 	// 路由下统一提供下载（下层按 screenshots/raw_tracks 等子目录组织）。
@@ -39,6 +41,7 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 	loginHandler := NewLoginHandler(deps.LoginService, deps.TokenBlacklist)
 	ossHandler := NewOSSHandler(deps.OSSTokenService)
 	appReleaseHandler := NewAppReleaseHandler(deps.AppReleaseService)
+	companionHandler := NewCompanionHandler(deps.CompanionService, deps.CompanionMQTTInternalToken)
 
 	api := h.Group("/api/v1")
 
@@ -51,6 +54,10 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 	api.POST("/login/sms", loginHandler.LoginBySMS)
 	api.POST("/login/wechat", loginHandler.LoginByWechat)
 	api.POST("/login/apple", loginHandler.LoginByApple)
+	api.POST("/internal/mqtt/auth", companionHandler.MQTTAuth)
+	api.POST("/internal/mqtt/acl", companionHandler.MQTTACL)
+	api.POST("/internal/companion/mqtt/location-ingest", companionHandler.IngestMQTTLocation)
+	api.POST("/internal/companion/mqtt/presence-ingest", companionHandler.IngestMQTTPresence)
 
 	// public: upgrade check (客户端启动/切前台时调用，无需登录)
 	api.GET("/upgrade/check", appReleaseHandler.CheckUpgrade)
@@ -115,6 +122,13 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 
 	auth.POST("/logout", loginHandler.Logout)
 	auth.GET("/login/log", loginHandler.GetLoginLog)
+	auth.POST("/companion/session/create", companionHandler.CreateSession)
+	auth.POST("/companion/session/join", companionHandler.JoinSession)
+	auth.GET("/companion/session/current", companionHandler.GetCurrentSession)
+	auth.GET("/companion/session/:session_id/snapshot", companionHandler.GetSnapshot)
+	auth.POST("/companion/session/:session_id/leave", companionHandler.LeaveSession)
+	auth.POST("/companion/session/:session_id/end", companionHandler.EndSession)
+	auth.POST("/companion/session/:session_id/mqtt/credentials", companionHandler.IssueMQTTCredentials)
 
 	// oss upload
 	auth.GET("/oss/sts-token", ossHandler.GetSTSToken)

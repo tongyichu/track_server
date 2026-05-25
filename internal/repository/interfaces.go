@@ -157,3 +157,21 @@ type AppReleaseRepository interface {
 	GetLatestPublished(ctx context.Context, platform models.AppReleasePlatform) (*models.AppRelease, error)
 	Delete(ctx context.Context, id int64) error
 }
+
+// CompanionRepository defines persistence operations for companion session control plane.
+type CompanionRepository interface {
+	CreateSession(ctx context.Context, session *models.CompanionSession) error
+	UpdateSession(ctx context.Context, session *models.CompanionSession) error
+	FindSessionByID(ctx context.Context, sessionID string) (*models.CompanionSession, error)
+	FindSessionByJoinToken(ctx context.Context, joinToken string) (*models.CompanionSession, error)
+	FindActiveSessionByUserID(ctx context.Context, userID int64) (*models.CompanionSession, error)
+
+	UpsertMember(ctx context.Context, member *models.CompanionSessionMember) error
+	FindMember(ctx context.Context, sessionID string, userID int64) (*models.CompanionSessionMember, error)
+	ListMembers(ctx context.Context, sessionID string) ([]*models.CompanionSessionMember, error)
+	CountMembersByStatus(ctx context.Context, sessionID string, status models.CompanionMemberStatus) (int64, error)
+
+	UpsertPosition(ctx context.Context, position *models.CompanionLivePosition) error
+	ListPositions(ctx context.Context, sessionID string) ([]*models.CompanionLivePosition, error)
+	DeletePositions(ctx context.Context, sessionID string) error
+}

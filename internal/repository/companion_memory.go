@@ -1,0 +1,228 @@
+package repository
+
+import (
+	"context"
+	"sort"
+	"sync"
+	"time"
+
+	"github.com/tongyichu/track_server/internal/models"
+)
+
+// InMemoryCompanionRepository 是 CompanionRepository 的内存实现。
+type InMemoryCompanionRepository struct {
+	mu               sync.RWMutex
+	sessions         map[string]*models.CompanionSession
+	sessionByToken   map[string]string
+	members          map[string]map[int64]*models.CompanionSessionMember
+	positions        map[string]map[int64]*models.CompanionLivePosition
+}
+
+// NewInMemoryCompanionRepository creates an in-memory companion repository.
+func NewInMemoryCompanionRepository() *InMemoryCompanionRepository {
+	return &InMemoryCompanionRepository{
+		sessions:       make(map[string]*models.CompanionSession),
+		sessionByToken: make(map[string]string),
+		members:        make(map[string]map[int64]*models.CompanionSessionMember),
+		positions:      make(map[string]map[int64]*models.CompanionLivePosition),
+	}
+}
+
+func (r *InMemoryCompanionRepository) CreateSession(_ context.Context, session *models.CompanionSession) error {
+	if session == nil || session.SessionID == "" {
+		return ErrNotFound
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, ok := r.sessions[session.SessionID]; ok {
+		return ErrAlreadyExists
+	}
+	clone := *session
+	if clone.CreatedAt.IsZero() {
+		clone.CreatedAt = time.Now()
+	}
+	if clone.StartedAt.IsZero() {
+		clone.StartedAt = clone.CreatedAt
+	}
+	clone.UpdatedAt = clone.CreatedAt
+	r.sessions[clone.SessionID] = &clone
+	if clone.JoinToken != "" {
+		r.sessionByToken[clone.JoinToken] = clone.SessionID
+	}
+	return nil
+}
+
+func (r *InMemoryCompanionRepository) UpdateSession(_ context.Context, session *models.CompanionSession) error {
+	if session == nil || session.SessionID == "" {
+		return ErrNotFound
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, ok := r.sessions[session.SessionID]; !ok {
+		return ErrNotFound
+	}
+	clone := *session
+	clone.UpdatedAt = time.Now()
+	r.sessions[clone.SessionID] = &clone
+	if clone.JoinToken != "" {
+		r.sessionByToken[clone.JoinToken] = clone.SessionID
+	}
+	return nil
+}
+
+func (r *InMemoryCompanionRepository) FindSessionByID(_ context.Context, sessionID string) (*models.CompanionSession, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	session, ok := r.sessions[sessionID]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	clone := *session
+	return &clone, nil
+}
+
+func (r *InMemoryCompanionRepository) FindSessionByJoinToken(_ context.Context, joinToken string) (*models.CompanionSession, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	sessionID, ok := r.sessionByToken[joinToken]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	session, ok := r.sessions[sessionID]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	clone := *session
+	return &clone, nil
+}
+
+func (r *InMemoryCompanionRepository) FindActiveSessionByUserID(_ context.Context, userID int64) (*models.CompanionSession, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for sessionID, members := range r.members {
+		member, ok := members[userID]
+		if !ok || member.MemberStatus != models.CompanionMemberStatusJoined {
+			continue
+		}
+		session, ok := r.sessions[sessionID]
+		if !ok || session.Status != models.CompanionSessionStatusActive {
+			continue
+		}
+		clone := *session
+		return &clone, nil
+	}
+	return nil, ErrNotFound
+}
+
+func (r *InMemoryCompanionRepository) UpsertMember(_ context.Context, member *models.CompanionSessionMember) error {
+	if member == nil || member.SessionID == "" || member.UserID <= 0 {
+		return ErrNotFound
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, ok := r.members[member.SessionID]; !ok {
+		r.members[member.SessionID] = make(map[int64]*models.CompanionSessionMember)
+	}
+	clone := *member
+	if clone.JoinedAt.IsZero() {
+		clone.JoinedAt = time.Now()
+	}
+	if clone.MemberStatus == models.CompanionMemberStatusJoined && clone.PresenceStatus == "" {
+		clone.PresenceStatus = models.CompanionPresenceStatusOffline
+	}
+	r.members[member.SessionID][member.UserID] = &clone
+	return nil
+}
+
+func (r *InMemoryCompanionRepository) FindMember(_ context.Context, sessionID string, userID int64) (*models.CompanionSessionMember, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	members, ok := r.members[sessionID]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	member, ok := members[userID]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	clone := *member
+	return &clone, nil
+}
+
+func (r *InMemoryCompanionRepository) ListMembers(_ context.Context, sessionID string) ([]*models.CompanionSessionMember, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	members := r.members[sessionID]
+	items := make([]*models.CompanionSessionMember, 0, len(members))
+	for _, member := range members {
+		clone := *member
+		items = append(items, &clone)
+	}
+	sort.SliceStable(items, func(i, j int) bool {
+		if items[i].Role != items[j].Role {
+			return items[i].Role == models.CompanionMemberRoleOwner
+		}
+		if items[i].JoinedAt.Equal(items[j].JoinedAt) {
+			return items[i].UserID < items[j].UserID
+		}
+		return items[i].JoinedAt.Before(items[j].JoinedAt)
+	})
+	return items, nil
+}
+
+func (r *InMemoryCompanionRepository) CountMembersByStatus(_ context.Context, sessionID string, status models.CompanionMemberStatus) (int64, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var count int64
+	for _, member := range r.members[sessionID] {
+		if member.MemberStatus == status {
+			count++
+		}
+	}
+	return count, nil
+}
+
+func (r *InMemoryCompanionRepository) UpsertPosition(_ context.Context, position *models.CompanionLivePosition) error {
+	if position == nil || position.SessionID == "" || position.UserID <= 0 {
+		return ErrNotFound
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, ok := r.positions[position.SessionID]; !ok {
+		r.positions[position.SessionID] = make(map[int64]*models.CompanionLivePosition)
+	}
+	clone := *position
+	now := time.Now()
+	if clone.CreatedAt.IsZero() {
+		clone.CreatedAt = now
+	}
+	clone.UpdatedAt = now
+	r.positions[position.SessionID][position.UserID] = &clone
+	return nil
+}
+
+func (r *InMemoryCompanionRepository) ListPositions(_ context.Context, sessionID string) ([]*models.CompanionLivePosition, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	positions := r.positions[sessionID]
+	items := make([]*models.CompanionLivePosition, 0, len(positions))
+	for _, position := range positions {
+		clone := *position
+		items = append(items, &clone)
+	}
+	sort.SliceStable(items, func(i, j int) bool {
+		if items[i].RecordedAt.Equal(items[j].RecordedAt) {
+			return items[i].UserID < items[j].UserID
+		}
+		return items[i].RecordedAt.After(items[j].RecordedAt)
+	})
+	return items, nil
+}
+
+func (r *InMemoryCompanionRepository) DeletePositions(_ context.Context, sessionID string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.positions, sessionID)
+	return nil
+}
+

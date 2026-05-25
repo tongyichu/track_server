@@ -116,3 +116,59 @@ CREATE TABLE `login_log` (
                              `created_at` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
                              PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户登录日志表';
+
+
+CREATE TABLE `companion_sessions` (
+                                     `session_id` VARCHAR(64) NOT NULL COMMENT '同行会话ID',
+                                     `owner_user_id` BIGINT NOT NULL COMMENT '发起人用户ID',
+                                     `status` VARCHAR(16) NOT NULL COMMENT 'active / ended',
+                                     `join_token` VARCHAR(128) NOT NULL COMMENT '加入凭证',
+                                     `join_token_expire_at` DATETIME(6) NOT NULL COMMENT '加入凭证过期时间',
+                                     `title` VARCHAR(64) NOT NULL DEFAULT '' COMMENT '会话标题',
+                                     `max_members` INT NOT NULL DEFAULT '8' COMMENT '最大成员数',
+                                     `started_at` DATETIME(6) NOT NULL COMMENT '开始时间',
+                                     `ended_at` DATETIME(6) DEFAULT NULL COMMENT '结束时间',
+                                     `created_at` DATETIME(6) NOT NULL,
+                                     `updated_at` DATETIME(6) NOT NULL,
+                                     PRIMARY KEY (`session_id`),
+                                     UNIQUE KEY `uk_companion_join_token` (`join_token`),
+                                     KEY `idx_companion_owner_status` (`owner_user_id`, `status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='同行会话表';
+
+
+CREATE TABLE `companion_session_members` (
+                                            `session_id` VARCHAR(64) NOT NULL COMMENT '同行会话ID',
+                                            `user_id` BIGINT NOT NULL COMMENT '成员用户ID',
+                                            `role` VARCHAR(16) NOT NULL COMMENT 'owner / member',
+                                            `member_status` VARCHAR(16) NOT NULL COMMENT 'joined / left / kicked / ended',
+                                            `presence_status` VARCHAR(16) NOT NULL COMMENT 'online / offline',
+                                            `joined_at` DATETIME(6) NOT NULL COMMENT '加入时间',
+                                            `left_at` DATETIME(6) DEFAULT NULL COMMENT '离开时间',
+                                            `last_seen_at` DATETIME(6) DEFAULT NULL COMMENT '最近活跃时间',
+                                            `mqtt_client_id` VARCHAR(128) NOT NULL DEFAULT '' COMMENT '后续 MQTT client_id 预留',
+                                            `mqtt_principal` VARCHAR(128) NOT NULL DEFAULT '' COMMENT '后续 MQTT principal 预留',
+                                            PRIMARY KEY (`session_id`, `user_id`),
+                                            KEY `idx_companion_member_status` (`session_id`, `member_status`),
+                                            KEY `idx_companion_presence` (`session_id`, `presence_status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='同行会话成员表';
+
+
+CREATE TABLE `companion_live_positions` (
+                                           `session_id` VARCHAR(64) NOT NULL COMMENT '同行会话ID',
+                                           `user_id` BIGINT NOT NULL COMMENT '成员用户ID',
+                                           `track_id` VARCHAR(64) DEFAULT NULL COMMENT '关联轨迹ID（可空）',
+                                           `latitude` DOUBLE NOT NULL COMMENT '纬度',
+                                           `longitude` DOUBLE NOT NULL COMMENT '经度',
+                                           `coordinate_system` VARCHAR(16) NOT NULL COMMENT '坐标系',
+                                           `speed_kmh` DOUBLE NOT NULL DEFAULT '0' COMMENT '速度km/h',
+                                           `heading` DOUBLE NOT NULL DEFAULT '0' COMMENT '朝向',
+                                           `accuracy_m` DOUBLE NOT NULL DEFAULT '0' COMMENT '精度(米)',
+                                           `altitude` DOUBLE NOT NULL DEFAULT '0' COMMENT '海拔',
+                                           `recorded_at` DATETIME(6) NOT NULL COMMENT '采样时间',
+                                           `seq` BIGINT NOT NULL DEFAULT '0' COMMENT '客户端单调序号',
+                                           `source` VARCHAR(16) NOT NULL DEFAULT 'http' COMMENT '快照来源：http / mqtt',
+                                           `created_at` DATETIME(6) NOT NULL,
+                                           `updated_at` DATETIME(6) NOT NULL,
+                                           PRIMARY KEY (`session_id`, `user_id`),
+                                           KEY `idx_companion_positions_recorded` (`session_id`, `recorded_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='同行会话最新位置快照表';
