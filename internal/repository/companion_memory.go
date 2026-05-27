@@ -114,6 +114,53 @@ func (r *InMemoryCompanionRepository) FindActiveSessionByUserID(_ context.Contex
 	return nil, ErrNotFound
 }
 
+func (r *InMemoryCompanionRepository) ListSessionsByUserID(_ context.Context, userID int64, cursor *models.CompanionSessionListCursor, limit int) ([]*models.CompanionSession, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	items := make([]*models.CompanionSession, 0)
+	for sessionID, members := range r.members {
+		if _, ok := members[userID]; !ok {
+			continue
+		}
+		session, ok := r.sessions[sessionID]
+		if !ok {
+			continue
+		}
+		if cursor != nil {
+			if session.StartedAt.After(cursor.StartedAt) {
+				continue
+			}
+			if session.StartedAt.Equal(cursor.StartedAt) && session.SessionID >= cursor.SessionID {
+				continue
+			}
+		}
+		clone := *session
+		items = append(items, &clone)
+	}
+	sort.SliceStable(items, func(i, j int) bool {
+		if items[i].StartedAt.Equal(items[j].StartedAt) {
+			return items[i].SessionID > items[j].SessionID
+		}
+		return items[i].StartedAt.After(items[j].StartedAt)
+	})
+	if limit > 0 && len(items) > limit {
+		items = items[:limit]
+	}
+	return items, nil
+}
+
+func (r *InMemoryCompanionRepository) CountSessionsByUserID(_ context.Context, userID int64) (int64, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var count int64
+	for _, members := range r.members {
+		if _, ok := members[userID]; ok {
+			count++
+		}
+	}
+	return count, nil
+}
+
 func (r *InMemoryCompanionRepository) UpsertMember(_ context.Context, member *models.CompanionSessionMember) error {
 	if member == nil || member.SessionID == "" || member.UserID <= 0 {
 		return ErrNotFound
@@ -225,4 +272,3 @@ func (r *InMemoryCompanionRepository) DeletePositions(_ context.Context, session
 	delete(r.positions, sessionID)
 	return nil
 }
-

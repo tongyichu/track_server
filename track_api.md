@@ -32,10 +32,11 @@
 | 20 | [获取同行快照](#20-获取同行快照) | GET | `/companion/session/:session_id/snapshot` | ✅ |
 | 21 | [离开同行会话](#21-离开同行会话) | POST | `/companion/session/:session_id/leave` | ✅ |
 | 22 | [结束同行会话](#22-结束同行会话) | POST | `/companion/session/:session_id/end` | ✅ |
-| 23 | [获取同行 MQTT 凭证](#23-获取同行-mqtt-凭证) | POST | `/companion/session/:session_id/mqtt/credentials` | ✅ |
-| 24 | [EMQX HTTP AuthN 回调](#24-emqx-http-authn-回调) | POST | `/internal/mqtt/auth` | ❌（内部） |
-| 25 | [EMQX HTTP AuthZ 回调](#25-emqx-http-authz-回调) | POST | `/internal/mqtt/acl` | ❌（内部） |
-| 26 | [EMQX 数据面写回接口](#26-emqx-数据面写回接口) | POST | `/internal/companion/mqtt/*` | ❌（内部） |
+| 23 | [当前用户参与过的同行记录列表](#23-当前用户参与过的同行记录列表) | GET | `/companion/session/history` | ✅ |
+| 24 | [获取同行 MQTT 凭证](#24-获取同行-mqtt-凭证) | POST | `/companion/session/:session_id/mqtt/credentials` | ✅ |
+| 25 | [EMQX HTTP AuthN 回调](#25-emqx-http-authn-回调) | POST | `/internal/mqtt/auth` | ❌（内部） |
+| 26 | [EMQX HTTP AuthZ 回调](#26-emqx-http-authz-回调) | POST | `/internal/mqtt/acl` | ❌（内部） |
+| 27 | [EMQX 数据面写回接口](#27-emqx-数据面写回接口) | POST | `/internal/companion/mqtt/*` | ❌（内部） |
 
 ---
 
@@ -1755,7 +1756,89 @@ Authorization: Bearer <token>
 
 ---
 
-## 23. 获取同行 MQTT 凭证
+## 23. 当前用户参与过的同行记录列表
+
+返回当前登录用户参与过的同行记录列表，支持分页。
+
+**需要认证**
+
+### 请求
+
+```http
+GET /api/v1/companion/session/history?limit=20&cursor=<cursor>
+Authorization: Bearer <token>
+```
+
+### Query 参数
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `limit` | int | 否 | 每页数量，默认 `20`，最大 `50` |
+| `cursor` | string | 否 | 分页游标，首次请求不传；后续将上次返回的 `next_cursor` 原样透传 |
+
+### 响应
+
+```json
+{
+  "code": 0,
+  "data": {
+    "items": [
+      {
+        "session_id": "sess_xxx",
+        "title": "周末同行",
+        "participant_count": 3,
+        "started_at": "2026-05-23T16:00:00Z",
+        "status": "active",
+        "participants": [
+          {
+            "user_id": 1001,
+            "nickname": "Tom",
+            "avatar_url": "/api/v1/static/default_avatars/boy_01.png"
+          },
+          {
+            "user_id": 1002,
+            "nickname": "Jerry",
+            "avatar_url": "https://example.com/avatar/1002.png"
+          }
+        ]
+      }
+    ],
+    "total_count": 12,
+    "next_cursor": "eyJzdGFydGVkX2F0IjoiMjAyNi0wNS0yM1QxNjowMDowMFoiLCJzZXNzaW9uX2lkIjoic2Vzc194eHgifQ",
+    "has_more": true
+  }
+}
+```
+
+### 字段说明
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `data.items` | `CompanionHistoryItem[]` | 当前页记录列表，按 `started_at DESC, session_id DESC` 排序。 |
+| `data.items[].session_id` | string | 同行会话 ID。 |
+| `data.items[].title` | string | 同行标题。 |
+| `data.items[].participant_count` | int64 | 该场同行人数：若 `status=ended`，返回参与过的人数；若 `status=active`，返回当前仍为 `joined` 的人数。 |
+| `data.items[].started_at` | string(datetime) | 同行开始时间。 |
+| `data.items[].status` | string | 同行状态：`active` / `ended`。 |
+| `data.items[].participants` | `CompanionHistoryParticipant[]` | 人员列表口径与 `participant_count` 一致：若 `status=ended` 返回参与过的人员；若 `status=active` 返回当前仍为 `joined` 的人员。 |
+| `data.items[].participants[].user_id` | int64 | 参与人 user_id。 |
+| `data.items[].participants[].nickname` | string | 参与人昵称。 |
+| `data.items[].participants[].avatar_url` | string | 参与人头像链接；若用户未设置头像，则返回默认头像。 |
+| `data.total_count` | int64 | 当前用户参与过的同行总数。 |
+| `data.next_cursor` | string | 下一页游标；若为空表示没有下一页。 |
+| `data.has_more` | bool | 是否还有下一页。 |
+
+### 错误响应
+
+- `400 Bad Request`
+  - `invalid limit`
+  - `invalid cursor`
+- `401 Unauthorized`
+  - 缺少/无效/过期的 Token
+
+---
+
+## 24. 获取同行 MQTT 凭证
 
 为当前登录用户签发当前 session 的短期 MQTT 连接凭证。
 
@@ -1803,7 +1886,7 @@ Authorization: Bearer <token>
 
 ---
 
-## 24. EMQX HTTP AuthN 回调
+## 25. EMQX HTTP AuthN 回调
 
 供 EMQX 在客户端 CONNECT 时调用，校验 `clientid / username / password` 是否有效。
 
@@ -1838,7 +1921,7 @@ Content-Type: application/json
 
 ---
 
-## 25. EMQX HTTP AuthZ 回调
+## 26. EMQX HTTP AuthZ 回调
 
 供 EMQX 在 publish / subscribe 前调用，校验当前 MQTT 凭证是否允许访问指定 topic。
 
@@ -1877,13 +1960,13 @@ Content-Type: application/json
 
 ---
 
-## 26. EMQX 数据面写回接口
+## 27. EMQX 数据面写回接口
 
 供 EMQX Rule Engine / WebHook 将 MQTT 数据面事件写回 App Server。
 
 **内部接口**
 
-### 26.1 位置写回
+### 27.1 位置写回
 
 ```http
 POST /api/v1/internal/companion/mqtt/location-ingest
@@ -1925,7 +2008,7 @@ Content-Type: application/json
 - 仅保留每位成员最新一条位置快照；
 - 若 `seq` 更旧，或 `seq` 相同且 `recorded_at` 不更新，则忽略该消息。
 
-### 26.2 Presence 写回
+### 27.2 Presence 写回
 
 ```http
 POST /api/v1/internal/companion/mqtt/presence-ingest

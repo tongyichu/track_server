@@ -114,3 +114,36 @@ type CompanionSnapshot struct {
 	Positions  []*CompanionLivePosition    `json:"positions"`
 }
 
+// CompanionSessionListCursor is the cursor used for paging companion history list.
+//
+// Order: started_at desc, session_id desc.
+// Next page condition: (started_at, session_id) strictly less than cursor.
+type CompanionSessionListCursor struct {
+	StartedAt time.Time `json:"started_at"`
+	SessionID string    `json:"session_id"`
+}
+
+// CompanionHistoryParticipant is the simplified participant info in history list.
+type CompanionHistoryParticipant struct {
+	UserID    int64  `json:"user_id"`
+	Nickname  string `json:"nickname"`
+	AvatarURL string `json:"avatar_url"`
+}
+
+// CompanionHistoryItem is one history record of a companion session.
+type CompanionHistoryItem struct {
+	SessionID         string                       `json:"session_id"`
+	Title             string                       `json:"title"`
+	ParticipantCount  int64                        `json:"participant_count"`
+	StartedAt         time.Time                    `json:"started_at"`
+	Status            CompanionSessionStatus       `json:"status"`
+	Participants      []CompanionHistoryParticipant `json:"participants"`
+}
+
+// CompanionHistoryPage is the paging response of current user's companion history list.
+type CompanionHistoryPage struct {
+	Items      []*CompanionHistoryItem `json:"items"`
+	TotalCount int64                   `json:"total_count"`
+	NextCursor string                  `json:"next_cursor,omitempty"`
+	HasMore    bool                    `json:"has_more"`
+}

@@ -44,6 +44,14 @@ func (r *MongoCompanionRepository) FindActiveSessionByUserID(context.Context, in
 	return nil, errors.New("MongoCompanionRepository.FindActiveSessionByUserID not implemented")
 }
 
+func (r *MongoCompanionRepository) ListSessionsByUserID(context.Context, int64, *models.CompanionSessionListCursor, int) ([]*models.CompanionSession, error) {
+	return nil, errors.New("MongoCompanionRepository.ListSessionsByUserID not implemented")
+}
+
+func (r *MongoCompanionRepository) CountSessionsByUserID(context.Context, int64) (int64, error) {
+	return 0, errors.New("MongoCompanionRepository.CountSessionsByUserID not implemented")
+}
+
 func (r *MongoCompanionRepository) UpsertMember(context.Context, *models.CompanionSessionMember) error {
 	return errors.New("MongoCompanionRepository.UpsertMember not implemented")
 }
@@ -71,4 +79,3 @@ func (r *MongoCompanionRepository) ListPositions(context.Context, string) ([]*mo
 func (r *MongoCompanionRepository) DeletePositions(context.Context, string) error {
 	return errors.New("MongoCompanionRepository.DeletePositions not implemented")
 }
-

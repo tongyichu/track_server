@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/cloudwego/hertz/pkg/app"
@@ -51,6 +52,32 @@ func (h *CompanionHandler) authorizeInternal(c *app.RequestContext) bool {
 		return false
 	}
 	return true
+}
+
+// ListHistory handles GET /api/v1/companion/session/history.
+func (h *CompanionHandler) ListHistory(ctx context.Context, c *app.RequestContext) {
+	userID, ok := h.authUserID(c)
+	if !ok {
+		return
+	}
+	limit := 0
+	if rawLimit := string(c.Query("limit")); rawLimit != "" {
+		parsed, err := strconv.Atoi(rawLimit)
+		if err != nil || parsed <= 0 {
+			c.JSON(http.StatusBadRequest, utils.H{"error": "invalid limit"})
+			return
+		}
+		limit = parsed
+	}
+	result, err := h.svc.ListHistory(ctx, userID, service.ListCompanionHistoryInput{
+		Cursor: string(c.Query("cursor")),
+		Limit:  limit,
+	})
+	if err != nil {
+		h.writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, successResponse(result))
 }
 
 // CreateSession handles POST /api/v1/companion/session/create.

@@ -134,3 +134,83 @@ func TestNormalizeCompanionMQTTBrokerURL(t *testing.T) {
 		}
 	}
 }
+
+func TestCompanionServiceListHistory(t *testing.T) {
+	svc, _, userRepo := newCompanionServiceForTest(t)
+	ctx := context.Background()
+	if _, err := userRepo.CreateIfNotExists(ctx, &models.User{ID: 1003, Nickname: "third", AvatarURL: "https://example.com/third.png"}); err != nil {
+		t.Fatalf("CreateIfNotExists failed: %v", err)
+	}
+
+	created1, err := svc.CreateSession(ctx, 1001, CreateCompanionSessionInput{Title: "第一场"})
+	if err != nil {
+		t.Fatalf("CreateSession #1 returned error: %v", err)
+	}
+	if _, err := svc.JoinSession(ctx, 1002, JoinCompanionSessionInput{JoinToken: created1.Join.JoinToken}); err != nil {
+		t.Fatalf("JoinSession #1 returned error: %v", err)
+	}
+	if err := svc.EndSession(ctx, 1001, created1.Session.SessionID); err != nil {
+		t.Fatalf("EndSession #1 returned error: %v", err)
+	}
+
+	time.Sleep(10 * time.Millisecond)
+	created2, err := svc.CreateSession(ctx, 1002, CreateCompanionSessionInput{Title: "第二场"})
+	if err != nil {
+		t.Fatalf("CreateSession #2 returned error: %v", err)
+	}
+	if _, err := svc.JoinSession(ctx, 1001, JoinCompanionSessionInput{JoinToken: created2.Join.JoinToken}); err != nil {
+		t.Fatalf("JoinSession #2 returned error: %v", err)
+	}
+	if _, err := svc.JoinSession(ctx, 1003, JoinCompanionSessionInput{JoinToken: created2.Join.JoinToken}); err != nil {
+		t.Fatalf("JoinSession #2 third returned error: %v", err)
+	}
+	if err := svc.LeaveSession(ctx, 1003, created2.Session.SessionID); err != nil {
+		t.Fatalf("LeaveSession #2 third returned error: %v", err)
+	}
+
+	page1, err := svc.ListHistory(ctx, 1001, ListCompanionHistoryInput{Limit: 1})
+	if err != nil {
+		t.Fatalf("ListHistory page1 returned error: %v", err)
+	}
+	if page1.TotalCount != 2 {
+		t.Fatalf("expected total_count=2, got %d", page1.TotalCount)
+	}
+	if len(page1.Items) != 1 || page1.Items[0].SessionID != created2.Session.SessionID {
+		t.Fatalf("unexpected page1 items: %+v", page1.Items)
+	}
+	if page1.Items[0].ParticipantCount != 2 {
+		t.Fatalf("expected active participant_count=2, got %d", page1.Items[0].ParticipantCount)
+	}
+	if len(page1.Items[0].Participants) != 2 {
+		t.Fatalf("expected 2 active participants, got %d", len(page1.Items[0].Participants))
+	}
+	for _, p := range page1.Items[0].Participants {
+		if p.UserID == 1003 {
+			t.Fatalf("expected left participant 1003 excluded from active participants: %+v", page1.Items[0].Participants)
+		}
+	}
+	if !page1.HasMore || page1.NextCursor == "" {
+		t.Fatalf("expected page1 has_more with next cursor, got %+v", page1)
+	}
+
+	page2, err := svc.ListHistory(ctx, 1001, ListCompanionHistoryInput{Limit: 1, Cursor: page1.NextCursor})
+	if err != nil {
+		t.Fatalf("ListHistory page2 returned error: %v", err)
+	}
+	if len(page2.Items) != 1 || page2.Items[0].SessionID != created1.Session.SessionID {
+		t.Fatalf("unexpected page2 items: %+v", page2.Items)
+	}
+	if page2.Items[0].Status != models.CompanionSessionStatusEnded {
+		t.Fatalf("expected ended status, got %q", page2.Items[0].Status)
+	}
+	if page2.Items[0].ParticipantCount != 2 || len(page2.Items[0].Participants) != 2 {
+		t.Fatalf("expected ended participant history preserved, got %+v", page2.Items[0])
+	}
+	if page2.HasMore || page2.NextCursor != "" {
+		t.Fatalf("expected page2 end, got %+v", page2)
+	}
+
+	if _, err := svc.ListHistory(ctx, 1001, ListCompanionHistoryInput{Cursor: "bad-cursor"}); err == nil {
+		t.Fatalf("expected invalid cursor error")
+	}
+}

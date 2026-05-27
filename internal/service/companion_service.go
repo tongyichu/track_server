@@ -24,6 +24,8 @@ const (
 	defaultCompanionTitle          = "与友同行"
 	defaultCompanionMaxMembers     = 8
 	maxCompanionMaxMembers         = 32
+	defaultCompanionPageSize       = 20
+	maxCompanionPageSize           = 50
 	defaultCompanionJoinTokenTTL   = 2 * time.Hour
 	defaultCompanionMQTTTopicRoot  = "companion"
 	defaultCompanionMQTTTTL        = time.Hour
@@ -139,6 +141,12 @@ type CompanionSessionState struct {
 	Session  *models.CompanionSession  `json:"session"`
 	Join     *CompanionJoinInfo        `json:"join,omitempty"`
 	Snapshot *models.CompanionSnapshot `json:"snapshot"`
+}
+
+// ListCompanionHistoryInput describes paging input for companion history list.
+type ListCompanionHistoryInput struct {
+	Cursor string
+	Limit  int
 }
 
 // CompanionPositionUpsertInput is reserved for future EMQX / HTTP ingest integration.
@@ -584,6 +592,50 @@ func (s *CompanionService) GetCurrentSession(ctx context.Context, userID int64) 
 	return s.buildSessionState(ctx, session, userID, userID == session.OwnerUserID)
 }
 
+// ListHistory returns paged companion records that current user has participated in.
+func (s *CompanionService) ListHistory(ctx context.Context, userID int64, input ListCompanionHistoryInput) (*models.CompanionHistoryPage, error) {
+	if s == nil || s.repo == nil || s.users == nil {
+		return nil, errors.New("companion service not configured")
+	}
+	if userID <= 0 {
+		return nil, invalidArg("user_id is required")
+	}
+	limit := normalizeCompanionPageLimit(input.Limit)
+	cursor, err := decodeCompanionSessionListCursor(input.Cursor)
+	if err != nil {
+		return nil, err
+	}
+	totalCount, err := s.repo.CountSessionsByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	sessions, err := s.repo.ListSessionsByUserID(ctx, userID, cursor, limit+1)
+	if err != nil {
+		return nil, err
+	}
+	hasMore := len(sessions) > limit
+	if hasMore {
+		sessions = sessions[:limit]
+	}
+	items := make([]*models.CompanionHistoryItem, 0, len(sessions))
+	for _, session := range sessions {
+		item, err := s.buildHistoryItem(ctx, session)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	page := &models.CompanionHistoryPage{Items: items, TotalCount: totalCount, HasMore: hasMore}
+	if hasMore && len(sessions) > 0 {
+		nextCursor, err := encodeCompanionSessionListCursor(sessions[len(sessions)-1].StartedAt, sessions[len(sessions)-1].SessionID)
+		if err != nil {
+			return nil, err
+		}
+		page.NextCursor = nextCursor
+	}
+	return page, nil
+}
+
 // GetSnapshot returns the latest session snapshot for a joined member.
 func (s *CompanionService) GetSnapshot(ctx context.Context, userID int64, sessionID string) (*models.CompanionSnapshot, error) {
 	if s == nil || s.repo == nil {
@@ -764,6 +816,49 @@ func (s *CompanionService) buildSessionState(ctx context.Context, session *model
 	return state, nil
 }
 
+func (s *CompanionService) buildHistoryItem(ctx context.Context, session *models.CompanionSession) (*models.CompanionHistoryItem, error) {
+	if session == nil {
+		return nil, repository.ErrNotFound
+	}
+	members, err := s.repo.ListMembers(ctx, session.SessionID)
+	if err != nil {
+		return nil, err
+	}
+	participants := make([]models.CompanionHistoryParticipant, 0, len(members))
+	var participantCount int64
+	for _, member := range members {
+		if member == nil {
+			continue
+		}
+		include := session.Status == models.CompanionSessionStatusEnded || member.MemberStatus == models.CompanionMemberStatusJoined
+		if !include {
+			continue
+		}
+		participantCount++
+		user, err := s.users.FindByID(ctx, member.UserID)
+		if err != nil {
+			if !errors.Is(err, repository.ErrNotFound) {
+				return nil, err
+			}
+			user = &models.User{ID: member.UserID}
+		}
+		participants = append(participants, models.CompanionHistoryParticipant{
+			UserID:    member.UserID,
+			Nickname:  user.Nickname,
+			AvatarURL: fallbackAvatarURL(user.ID, user.AvatarURL),
+		})
+	}
+	clone := *session
+	return &models.CompanionHistoryItem{
+		SessionID:        clone.SessionID,
+		Title:            clone.Title,
+		ParticipantCount: participantCount,
+		StartedAt:        clone.StartedAt,
+		Status:           clone.Status,
+		Participants:     participants,
+	}, nil
+}
+
 func (s *CompanionService) requireMQTTConfigured() error {
 	if s == nil || s.repo == nil || s.users == nil {
 		return errors.New("companion service not configured")
@@ -827,6 +922,42 @@ func (s *CompanionService) signMQTTCredentials(principal, clientID string) strin
 	_, _ = mac.Write([]byte("\n"))
 	_, _ = mac.Write([]byte(clientID))
 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+}
+
+func normalizeCompanionPageLimit(limit int) int {
+	if limit <= 0 {
+		return defaultCompanionPageSize
+	}
+	if limit > maxCompanionPageSize {
+		return maxCompanionPageSize
+	}
+	return limit
+}
+
+func decodeCompanionSessionListCursor(raw string) (*models.CompanionSessionListCursor, error) {
+	if strings.TrimSpace(raw) == "" {
+		return nil, nil
+	}
+	buf, err := base64.RawURLEncoding.DecodeString(raw)
+	if err != nil {
+		return nil, invalidArg("invalid cursor")
+	}
+	var cursor models.CompanionSessionListCursor
+	if err := json.Unmarshal(buf, &cursor); err != nil {
+		return nil, invalidArg("invalid cursor")
+	}
+	if cursor.SessionID == "" || cursor.StartedAt.IsZero() {
+		return nil, invalidArg("invalid cursor")
+	}
+	return &cursor, nil
+}
+
+func encodeCompanionSessionListCursor(startedAt time.Time, sessionID string) (string, error) {
+	buf, err := json.Marshal(models.CompanionSessionListCursor{StartedAt: startedAt, SessionID: sessionID})
+	if err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(buf), nil
 }
 
 func parseCompanionMQTTPrincipal(principal string) (*companionMQTTPrincipalClaims, error) {

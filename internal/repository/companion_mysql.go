@@ -100,6 +100,52 @@ func (r *MySQLCompanionRepository) FindActiveSessionByUserID(ctx context.Context
 	return scanCompanionSessionRow(row)
 }
 
+func (r *MySQLCompanionRepository) ListSessionsByUserID(ctx context.Context, userID int64, cursor *models.CompanionSessionListCursor, limit int) ([]*models.CompanionSession, error) {
+	query := companionSessionSelectSQL() + ` WHERE EXISTS (
+			SELECT 1 FROM companion_session_members m
+			 WHERE m.session_id = companion_sessions.session_id AND m.user_id=?
+		)`
+	args := []any{userID}
+	if cursor != nil {
+		query += ` AND (companion_sessions.started_at < ? OR (companion_sessions.started_at = ? AND companion_sessions.session_id < ?))`
+		args = append(args, cursor.StartedAt, cursor.StartedAt, cursor.SessionID)
+	}
+	query += ` ORDER BY companion_sessions.started_at DESC, companion_sessions.session_id DESC`
+	if limit > 0 {
+		query += ` LIMIT ?`
+		args = append(args, limit)
+	}
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := make([]*models.CompanionSession, 0)
+	for rows.Next() {
+		item, err := scanCompanionSession(rows)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+func (r *MySQLCompanionRepository) CountSessionsByUserID(ctx context.Context, userID int64) (int64, error) {
+	row := r.db.QueryRowContext(ctx,
+		`SELECT COUNT(DISTINCT session_id) FROM companion_session_members WHERE user_id=?`,
+		userID,
+	)
+	var count int64
+	if err := row.Scan(&count); err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
 func (r *MySQLCompanionRepository) UpsertMember(ctx context.Context, member *models.CompanionSessionMember) error {
 	if member == nil || member.SessionID == "" || member.UserID <= 0 {
 		return errors.New("invalid companion member")

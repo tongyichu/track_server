@@ -326,3 +326,104 @@ func TestCompanionInternalMQTTRoutesRequireToken(t *testing.T) {
 		t.Fatalf("expected missing internal token status 401, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
 	}
 }
+
+func TestCompanionListHistory(t *testing.T) {
+	e := newTestEnv()
+	ensureTestUser(t, e, 1001, "owner")
+	ensureTestUser(t, e, 1002, "guest")
+	ctx := context.Background()
+	_, err := e.userRepo.CreateIfNotExists(ctx, &models.User{ID: 1003, Nickname: "third", AvatarURL: "https://example.com/third.png"})
+	if err != nil {
+		t.Fatalf("create third user failed: %v", err)
+	}
+	ownerToken := e.generateTestToken(1001)
+	guestToken := e.generateTestToken(1002)
+	thirdToken := e.generateTestToken(1003)
+
+	w := e.perform(http.MethodPost, "/api/v1/companion/session/create", []byte(`{"title":"第一场"}`), authHeader(ownerToken))
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected create1 status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+	var created1 handler.StandardResponse[*service.CompanionSessionState]
+	decodeJSON(t, w.Body.Bytes(), &created1)
+	joinBody1, _ := json.Marshal(map[string]string{"join_token": created1.Data.Join.JoinToken})
+	w = e.perform(http.MethodPost, "/api/v1/companion/session/join", joinBody1, authHeader(guestToken))
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected join1 status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+	w = e.perform(http.MethodPost, "/api/v1/companion/session/"+created1.Data.Session.SessionID+"/end", nil, authHeader(ownerToken))
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected end1 status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+
+	w = e.perform(http.MethodPost, "/api/v1/companion/session/create", []byte(`{"title":"第二场"}`), authHeader(guestToken))
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected create2 status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+	var created2 handler.StandardResponse[*service.CompanionSessionState]
+	decodeJSON(t, w.Body.Bytes(), &created2)
+	joinBody2, _ := json.Marshal(map[string]string{"join_token": created2.Data.Join.JoinToken})
+	w = e.perform(http.MethodPost, "/api/v1/companion/session/join", joinBody2, authHeader(ownerToken))
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected join2 owner status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+	w = e.perform(http.MethodPost, "/api/v1/companion/session/join", joinBody2, authHeader(thirdToken))
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected join2 third status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+	w = e.perform(http.MethodPost, "/api/v1/companion/session/"+created2.Data.Session.SessionID+"/leave", nil, authHeader(thirdToken))
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected leave2 third status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+
+	w = e.perform(http.MethodGet, "/api/v1/companion/session/history?limit=1", nil, authHeader(ownerToken))
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected history page1 status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+	var page1 handler.StandardResponse[*models.CompanionHistoryPage]
+	decodeJSON(t, w.Body.Bytes(), &page1)
+	if page1.Data == nil {
+		t.Fatalf("expected history page1 data")
+	}
+	if page1.Data.TotalCount != 2 {
+		t.Fatalf("expected total_count=2, got %d", page1.Data.TotalCount)
+	}
+	if len(page1.Data.Items) != 1 || page1.Data.Items[0].SessionID != created2.Data.Session.SessionID {
+		t.Fatalf("unexpected history page1 items: %+v", page1.Data.Items)
+	}
+	if page1.Data.Items[0].ParticipantCount != 2 {
+		t.Fatalf("expected active participant_count=2, got %d", page1.Data.Items[0].ParticipantCount)
+	}
+	if len(page1.Data.Items[0].Participants) != 2 {
+		t.Fatalf("expected 2 active participants, got %d", len(page1.Data.Items[0].Participants))
+	}
+	for _, p := range page1.Data.Items[0].Participants {
+		if p.UserID == 1003 {
+			t.Fatalf("expected left participant 1003 excluded from active participants: %+v", page1.Data.Items[0].Participants)
+		}
+	}
+	if !page1.Data.HasMore || page1.Data.NextCursor == "" {
+		t.Fatalf("expected page1 has more, got %+v", page1.Data)
+	}
+
+	w = e.perform(http.MethodGet, "/api/v1/companion/session/history?limit=1&cursor="+page1.Data.NextCursor, nil, authHeader(ownerToken))
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected history page2 status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+	var page2 handler.StandardResponse[*models.CompanionHistoryPage]
+	decodeJSON(t, w.Body.Bytes(), &page2)
+	if page2.Data == nil || len(page2.Data.Items) != 1 || page2.Data.Items[0].SessionID != created1.Data.Session.SessionID {
+		t.Fatalf("unexpected history page2 items: %+v", page2.Data)
+	}
+	if page2.Data.Items[0].ParticipantCount != 2 || len(page2.Data.Items[0].Participants) != 2 {
+		t.Fatalf("expected ended history to keep all participants, got %+v", page2.Data.Items[0])
+	}
+	if page2.Data.HasMore || page2.Data.NextCursor != "" {
+		t.Fatalf("expected page2 end, got %+v", page2.Data)
+	}
+
+	w = e.perform(http.MethodGet, "/api/v1/companion/session/history?cursor=bad-cursor", nil, authHeader(ownerToken))
+	if w.Result().StatusCode() != http.StatusBadRequest {
+		t.Fatalf("expected invalid cursor status 400, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+}

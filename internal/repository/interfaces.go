@@ -165,6 +165,8 @@ type CompanionRepository interface {
 	FindSessionByID(ctx context.Context, sessionID string) (*models.CompanionSession, error)
 	FindSessionByJoinToken(ctx context.Context, joinToken string) (*models.CompanionSession, error)
 	FindActiveSessionByUserID(ctx context.Context, userID int64) (*models.CompanionSession, error)
+	ListSessionsByUserID(ctx context.Context, userID int64, cursor *models.CompanionSessionListCursor, limit int) ([]*models.CompanionSession, error)
+	CountSessionsByUserID(ctx context.Context, userID int64) (int64, error)
 
 	UpsertMember(ctx context.Context, member *models.CompanionSessionMember) error
 	FindMember(ctx context.Context, sessionID string, userID int64) (*models.CompanionSessionMember, error)
