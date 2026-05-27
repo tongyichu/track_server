@@ -175,8 +175,8 @@ func (r *MySQLCompanionRepository) UpsertMember(ctx context.Context, member *mod
 		member.JoinedAt,
 		nullableTimeValue(member.LeftAt),
 		nullableTimeValue(member.LastSeenAt),
-		nullableStringValue(member.MQTTClientID),
-		nullableStringValue(member.MQTTPrincipal),
+		member.MQTTClientID,
+		member.MQTTPrincipal,
 	)
 	return err
 }
