@@ -62,6 +62,105 @@ func TestCompanionCreateAndGetCurrent(t *testing.T) {
 	}
 }
 
+func TestCompanionCreateRejectsExistingOwnedActiveSession(t *testing.T) {
+	e := newTestEnv()
+	ensureTestUser(t, e, 1001, "owner")
+	token := e.generateTestToken(1001)
+
+	w := e.perform(http.MethodPost, "/api/v1/companion/session/create", []byte(`{"title":"我的同行"}`), authHeader(token))
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected first create status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+
+	w = e.perform(http.MethodPost, "/api/v1/companion/session/create", []byte(`{"title":"新的同行"}`), authHeader(token))
+	if w.Result().StatusCode() != http.StatusBadRequest {
+		t.Fatalf("expected second create status 400, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+	var resp struct {
+		Error string `json:"error"`
+	}
+	decodeJSON(t, w.Body.Bytes(), &resp)
+	if resp.Error != "you already have an active companion session: 我的同行" {
+		t.Fatalf("unexpected error response: %+v", resp)
+	}
+}
+
+func TestCompanionCreateRejectsWhenAlreadyJoinedAnotherSession(t *testing.T) {
+	e := newTestEnv()
+	ensureTestUser(t, e, 1001, "owner")
+	ensureTestUser(t, e, 1002, "guest")
+	ownerToken := e.generateTestToken(1001)
+	guestToken := e.generateTestToken(1002)
+
+	w := e.perform(http.MethodPost, "/api/v1/companion/session/create", []byte(`{"title":"别人的同行"}`), authHeader(ownerToken))
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected owner create status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+	var created handler.StandardResponse[*service.CompanionSessionState]
+	decodeJSON(t, w.Body.Bytes(), &created)
+
+	body, _ := json.Marshal(map[string]string{"join_token": created.Data.Join.JoinToken})
+	w = e.perform(http.MethodPost, "/api/v1/companion/session/join", body, authHeader(guestToken))
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected join status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+
+	w = e.perform(http.MethodPost, "/api/v1/companion/session/create", []byte(`{"title":"我也想开一个"}`), authHeader(guestToken))
+	if w.Result().StatusCode() != http.StatusBadRequest {
+		t.Fatalf("expected create status 400, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+	var resp struct {
+		Error string `json:"error"`
+	}
+	decodeJSON(t, w.Body.Bytes(), &resp)
+	if resp.Error != "you already joined an active companion session: 别人的同行" {
+		t.Fatalf("unexpected error response: %+v", resp)
+	}
+}
+
+func TestCompanionJoinRejectsWhenAlreadyJoinedAnotherActiveSession(t *testing.T) {
+	e := newTestEnv()
+	ensureTestUser(t, e, 1001, "owner")
+	ensureTestUser(t, e, 1002, "guest")
+	ensureTestUser(t, e, 1003, "third")
+	ownerToken := e.generateTestToken(1001)
+	guestToken := e.generateTestToken(1002)
+	thirdToken := e.generateTestToken(1003)
+
+	w := e.perform(http.MethodPost, "/api/v1/companion/session/create", []byte(`{"title":"第一场同行"}`), authHeader(ownerToken))
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected first create status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+	var created1 handler.StandardResponse[*service.CompanionSessionState]
+	decodeJSON(t, w.Body.Bytes(), &created1)
+
+	joinBody1, _ := json.Marshal(map[string]string{"join_token": created1.Data.Join.JoinToken})
+	w = e.perform(http.MethodPost, "/api/v1/companion/session/join", joinBody1, authHeader(guestToken))
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected first join status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+
+	w = e.perform(http.MethodPost, "/api/v1/companion/session/create", []byte(`{"title":"第二场同行"}`), authHeader(thirdToken))
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected second create status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+	var created2 handler.StandardResponse[*service.CompanionSessionState]
+	decodeJSON(t, w.Body.Bytes(), &created2)
+
+	joinBody2, _ := json.Marshal(map[string]string{"join_token": created2.Data.Join.JoinToken})
+	w = e.perform(http.MethodPost, "/api/v1/companion/session/join", joinBody2, authHeader(guestToken))
+	if w.Result().StatusCode() != http.StatusBadRequest {
+		t.Fatalf("expected second join status 400, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+	var resp struct {
+		Error string `json:"error"`
+	}
+	decodeJSON(t, w.Body.Bytes(), &resp)
+	if resp.Error != "you already joined an active companion session: 第一场同行" {
+		t.Fatalf("unexpected error response: %+v", resp)
+	}
+}
+
 func TestCompanionJoinIncludesSnapshotPositions(t *testing.T) {
 	e := newTestEnv()
 	ensureTestUser(t, e, 1001, "owner")

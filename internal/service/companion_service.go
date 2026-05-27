@@ -459,8 +459,15 @@ func (s *CompanionService) CreateSession(ctx context.Context, ownerUserID int64,
 	if _, err := s.users.FindByID(ctx, ownerUserID); err != nil {
 		return nil, err
 	}
-	if _, err := s.repo.FindActiveSessionByUserID(ctx, ownerUserID); err == nil {
-		return nil, invalidArg("active companion session already exists")
+	if existing, err := s.repo.FindActiveSessionByUserID(ctx, ownerUserID); err == nil {
+		title := strings.TrimSpace(existing.Title)
+		if title == "" {
+			title = defaultCompanionTitle
+		}
+		if existing.OwnerUserID == ownerUserID {
+			return nil, invalidArg(fmt.Sprintf("you already have an active companion session: %s", title))
+		}
+		return nil, invalidArg(fmt.Sprintf("you already joined an active companion session: %s", title))
 	} else if !errors.Is(err, repository.ErrNotFound) {
 		return nil, err
 	}
@@ -545,7 +552,11 @@ func (s *CompanionService) JoinSession(ctx context.Context, userID int64, in Joi
 		if active.SessionID == session.SessionID {
 			return s.buildSessionState(ctx, session, userID, userID == session.OwnerUserID)
 		}
-		return nil, invalidArg("user already joined another active companion session")
+		title := strings.TrimSpace(active.Title)
+		if title == "" {
+			title = defaultCompanionTitle
+		}
+		return nil, invalidArg(fmt.Sprintf("you already joined an active companion session: %s", title))
 	} else if !errors.Is(err, repository.ErrNotFound) {
 		return nil, err
 	}

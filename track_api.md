@@ -1604,7 +1604,8 @@ Content-Type: application/json
 ### 错误响应
 
 - `400 Bad Request`
-  - `active companion session already exists`
+  - `you already have an active companion session: {title}`
+  - `you already joined an active companion session: {title}`
   - `max_members must be >= 2`
 - `401 Unauthorized`
 - `404 Not Found`
@@ -1639,7 +1640,7 @@ Content-Type: application/json
   - `join_token expired`
   - `companion session already ended`
   - `companion session is full`
-  - `user already joined another active companion session`
+  - `you already joined an active companion session: {title}`
 - `404 Not Found`
   - `join_token` 对应 session 不存在
 

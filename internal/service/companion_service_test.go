@@ -121,6 +121,73 @@ func TestCompanionServiceAutoEndPublishesSessionEndedAfterLastLeave(t *testing.T
 	}
 }
 
+func TestCompanionServiceCreateSessionRejectsExistingOwnedActiveSession(t *testing.T) {
+	svc, _, _ := newCompanionServiceForTest(t)
+	ctx := context.Background()
+
+	if _, err := svc.CreateSession(ctx, 1001, CreateCompanionSessionInput{Title: "我的同行"}); err != nil {
+		t.Fatalf("CreateSession returned error: %v", err)
+	}
+
+	_, err := svc.CreateSession(ctx, 1001, CreateCompanionSessionInput{Title: "新的同行"})
+	if err == nil {
+		t.Fatalf("expected create session to be rejected")
+	}
+	if err.Error() != "you already have an active companion session: 我的同行" {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestCompanionServiceCreateSessionRejectsWhenAlreadyJoinedAnotherSession(t *testing.T) {
+	svc, _, _ := newCompanionServiceForTest(t)
+	ctx := context.Background()
+
+	created, err := svc.CreateSession(ctx, 1001, CreateCompanionSessionInput{Title: "别人的同行"})
+	if err != nil {
+		t.Fatalf("CreateSession returned error: %v", err)
+	}
+	if _, err := svc.JoinSession(ctx, 1002, JoinCompanionSessionInput{JoinToken: created.Join.JoinToken}); err != nil {
+		t.Fatalf("JoinSession returned error: %v", err)
+	}
+
+	_, err = svc.CreateSession(ctx, 1002, CreateCompanionSessionInput{Title: "我也想开一个"})
+	if err == nil {
+		t.Fatalf("expected create session to be rejected")
+	}
+	if err.Error() != "you already joined an active companion session: 别人的同行" {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestCompanionServiceJoinSessionRejectsWhenAlreadyJoinedAnotherActiveSession(t *testing.T) {
+	svc, _, userRepo := newCompanionServiceForTest(t)
+	ctx := context.Background()
+	if _, err := userRepo.CreateIfNotExists(ctx, &models.User{ID: 1003, Nickname: "third"}); err != nil {
+		t.Fatalf("CreateIfNotExists failed: %v", err)
+	}
+
+	created1, err := svc.CreateSession(ctx, 1001, CreateCompanionSessionInput{Title: "第一场同行"})
+	if err != nil {
+		t.Fatalf("CreateSession #1 returned error: %v", err)
+	}
+	if _, err := svc.JoinSession(ctx, 1002, JoinCompanionSessionInput{JoinToken: created1.Join.JoinToken}); err != nil {
+		t.Fatalf("JoinSession #1 returned error: %v", err)
+	}
+
+	created2, err := svc.CreateSession(ctx, 1003, CreateCompanionSessionInput{Title: "第二场同行"})
+	if err != nil {
+		t.Fatalf("CreateSession #2 returned error: %v", err)
+	}
+
+	_, err = svc.JoinSession(ctx, 1002, JoinCompanionSessionInput{JoinToken: created2.Join.JoinToken})
+	if err == nil {
+		t.Fatalf("expected join session to be rejected")
+	}
+	if err.Error() != "you already joined an active companion session: 第一场同行" {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestNormalizeCompanionMQTTBrokerURL(t *testing.T) {
 	cases := map[string]string{
 		"mqtt://127.0.0.1:1883":      "tcp://127.0.0.1:1883",
