@@ -108,9 +108,17 @@ func main() {
 	loginSvc := service.NewLoginService(userRepo, loginLogRepo, cfg.WechatAppID, cfg.WechatAppSecret, cfg.JWTSecret)
 	appReleaseSvc := service.NewAppReleaseService(appReleaseRepo)
 	companionSvc := service.NewCompanionService(companionRepo, userRepo)
+	clientBrokerURL := cfg.EMQXClientBrokerURL
+	if clientBrokerURL == "" {
+		clientBrokerURL = cfg.EMQXBrokerURL
+	}
+	clientWebsocketURL := cfg.EMQXClientWebsocketURL
+	if clientWebsocketURL == "" {
+		clientWebsocketURL = cfg.EMQXWebsocketURL
+	}
 	companionSvc.SetMQTTOptions(service.CompanionMQTTOptions{
-		BrokerURL:        cfg.EMQXBrokerURL,
-		WebsocketURL:     cfg.EMQXWebsocketURL,
+		BrokerURL:        clientBrokerURL,
+		WebsocketURL:     clientWebsocketURL,
 		TopicPrefix:      cfg.CompanionMQTTTopicPrefix,
 		CredentialTTL:    time.Duration(cfg.CompanionMQTTCredentialTTLSecond) * time.Second,
 		CredentialSecret: cfg.CompanionMQTTCredentialSecret,

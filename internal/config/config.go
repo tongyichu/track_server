@@ -59,6 +59,8 @@ type Config struct {
 
 	EMQXBrokerURL                    string
 	EMQXWebsocketURL                 string
+	EMQXClientBrokerURL              string
+	EMQXClientWebsocketURL           string
 	CompanionMQTTTopicPrefix         string
 	CompanionMQTTCredentialTTLSecond int64
 	CompanionMQTTCredentialSecret    string
@@ -133,6 +135,8 @@ func Load() *Config {
 		TrackTypes:                       ParseTrackTypes(os.Getenv("TRACK_TYPES")),
 		EMQXBrokerURL:                    getEnv("EMQX_BROKER_URL", ""),
 		EMQXWebsocketURL:                 getEnv("EMQX_WEBSOCKET_URL", ""),
+		EMQXClientBrokerURL:              getEnv("EMQX_CLIENT_BROKER_URL", ""),
+		EMQXClientWebsocketURL:           getEnv("EMQX_CLIENT_WEBSOCKET_URL", ""),
 		CompanionMQTTTopicPrefix:         getEnv("COMPANION_MQTT_TOPIC_PREFIX", DefaultCompanionMQTTTopic),
 		CompanionMQTTCredentialTTLSecond: getEnvInt64("COMPANION_MQTT_CREDENTIAL_TTL_SECONDS", DefaultCompanionMQTTTTL),
 		CompanionMQTTCredentialSecret:    os.Getenv("COMPANION_MQTT_CREDENTIAL_SECRET"),

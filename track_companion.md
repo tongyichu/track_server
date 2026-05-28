@@ -520,8 +520,10 @@ App Server 作为一个普通 MQTT client 连接 EMQX，使用单独客户端身
 
 ### 8.7 建议的环境变量
 
-- `EMQX_BROKER_URL`
-- `EMQX_WEBSOCKET_URL`
+- `EMQX_BROKER_URL`（服务端 publisher 自用，建议内网）
+- `EMQX_WEBSOCKET_URL`（服务端备用，建议内网）
+- `EMQX_CLIENT_BROKER_URL`（下发给客户端连接 EMQX 的地址，建议公网；未配置时回落到 `EMQX_BROKER_URL`）
+- `EMQX_CLIENT_WEBSOCKET_URL`（下发给客户端的 WSS 地址，建议公网；未配置时回落到 `EMQX_WEBSOCKET_URL`）
 - `COMPANION_MQTT_TOPIC_PREFIX`（默认 `companion`）
 - `COMPANION_MQTT_CREDENTIAL_TTL_SECONDS`（默认 `3600`）
 - `COMPANION_MQTT_CREDENTIAL_SECRET`

@@ -92,8 +92,10 @@ EMQX 在本项目中的职责是：
 
 App Server 中建议配置：
 
-- `EMQX_BROKER_URL=mqtts://mqtt.example.com:8883`
-- `EMQX_WEBSOCKET_URL=wss://mqtt.example.com:8084/mqtt`
+- `EMQX_BROKER_URL=tcp://emqx-internal.svc:1883`（服务端 publisher 走内网）
+- `EMQX_WEBSOCKET_URL=ws://emqx-internal.svc:8083/mqtt`（可选，服务端备用通道）
+- `EMQX_CLIENT_BROKER_URL=mqtts://mqtt.example.com:8883`（下发给客户端的公网地址）
+- `EMQX_CLIENT_WEBSOCKET_URL=wss://mqtt.example.com:8084/mqtt`（下发给客户端的公网 WSS 地址）
 
 ---
 
@@ -120,8 +122,10 @@ EMQX 需要能访问 App Server 的以下内部接口：
 
 App Server 侧至少应配置：
 
-- `EMQX_BROKER_URL`
-- `EMQX_WEBSOCKET_URL`
+- `EMQX_BROKER_URL`（服务端 publisher 自用，建议内网）
+- `EMQX_WEBSOCKET_URL`（服务端备用，建议内网）
+- `EMQX_CLIENT_BROKER_URL`（下发给客户端连接 EMQX 的地址，建议公网；未配置时回落到 `EMQX_BROKER_URL`）
+- `EMQX_CLIENT_WEBSOCKET_URL`（下发给客户端的 WSS 地址，建议公网；未配置时回落到 `EMQX_WEBSOCKET_URL`）
 - `COMPANION_MQTT_TOPIC_PREFIX`
 - `COMPANION_MQTT_CREDENTIAL_SECRET`
 - `COMPANION_MQTT_INTERNAL_TOKEN`
@@ -741,8 +745,10 @@ password: <强随机密码>
 与上面 publisher 账号对应，App Server 侧填写：
 
 ```env
-EMQX_BROKER_URL=mqtts://mqtt.example.com:8883
-EMQX_WEBSOCKET_URL=wss://mqtt.example.com:8084/mqtt
+EMQX_BROKER_URL=tcp://emqx-internal.svc:1883
+EMQX_WEBSOCKET_URL=ws://emqx-internal.svc:8083/mqtt
+EMQX_CLIENT_BROKER_URL=mqtts://mqtt.example.com:8883
+EMQX_CLIENT_WEBSOCKET_URL=wss://mqtt.example.com:8084/mqtt
 COMPANION_MQTT_TOPIC_PREFIX=companion
 COMPANION_MQTT_CREDENTIAL_TTL_SECONDS=3600
 COMPANION_MQTT_CREDENTIAL_SECRET=<签发短期凭证用密钥>
@@ -1186,7 +1192,7 @@ Topic：
 
 优先检查：
 
-- `EMQX_BROKER_URL` / `EMQX_WEBSOCKET_URL` 是否正确；
+- `EMQX_CLIENT_BROKER_URL` / `EMQX_CLIENT_WEBSOCKET_URL`（下发给客户端的公网地址）是否正确，未配置时是否回落到了内网的 `EMQX_BROKER_URL` / `EMQX_WEBSOCKET_URL`；
 - EMQX 公开端口是否放通；
 - AuthN 回调 URL 是否能从 EMQX 所在机器访问；
 - `COMPANION_MQTT_INTERNAL_TOKEN` 是否与 App Server 一致。
