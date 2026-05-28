@@ -186,7 +186,7 @@ App Server 提供以下职责：
 
 ```json
 {
-  "join_token": "join_xxx"
+  "join_token": "abcd1234EFGH5678"
 }
 ```
 

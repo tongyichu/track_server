@@ -1589,7 +1589,7 @@ Content-Type: application/json
       "updated_at": "2026-05-23T16:00:00Z"
     },
     "join": {
-      "join_token": "join_xxx",
+      "join_token": "abcd1234EFGH5678",
       "join_token_expire_at": "2026-05-23T18:00:00Z"
     },
     "snapshot": {
@@ -1629,7 +1629,7 @@ Content-Type: application/json
 
 ```json
 {
-  "join_token": "join_xxx"
+  "join_token": "abcd1234EFGH5678"
 }
 ```
 

@@ -486,7 +486,7 @@ func (s *CompanionService) CreateSession(ctx context.Context, ownerUserID int64,
 	if err != nil {
 		return nil, err
 	}
-	joinToken, err := randomToken("join_", 18)
+	joinToken, err := randomToken("", 12)
 	if err != nil {
 		return nil, err
 	}
