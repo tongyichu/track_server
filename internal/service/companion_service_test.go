@@ -236,7 +236,7 @@ func TestCompanionServiceListHistory(t *testing.T) {
 		t.Fatalf("CreateIfNotExists failed: %v", err)
 	}
 
-	created1, err := svc.CreateSession(ctx, 1001, CreateCompanionSessionInput{Title: "第一场", TrackType: "徒步"})
+	created1, err := svc.CreateSession(ctx, 1001, CreateCompanionSessionInput{Title: "第一场", TrackType: "徒步", LocateAddr: "北京市海淀区颐和园"})
 	if err != nil {
 		t.Fatalf("CreateSession #1 returned error: %v", err)
 	}
@@ -309,6 +309,9 @@ func TestCompanionServiceListHistory(t *testing.T) {
 	}
 	if page2.Items[0].TrackType != "徒步" {
 		t.Fatalf("expected ended track_type=徒步, got %q", page2.Items[0].TrackType)
+	}
+	if page2.Items[0].LocateAddr != "北京市海淀区颐和园" {
+		t.Fatalf("expected ended locate_addr=北京市海淀区颐和园, got %q", page2.Items[0].LocateAddr)
 	}
 	if page2.Items[0].DurationSeconds <= 0 {
 		t.Fatalf("expected positive ended duration_seconds, got %d", page2.Items[0].DurationSeconds)

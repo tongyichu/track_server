@@ -895,6 +895,7 @@ func (s *CompanionService) buildHistoryItem(ctx context.Context, session *models
 		SessionID:        clone.SessionID,
 		Title:            clone.Title,
 		TrackType:        clone.TrackType,
+		LocateAddr:       clone.LocateAddr,
 		ParticipantCount: participantCount,
 		StartedAt:        clone.StartedAt,
 		DurationSeconds:  durationSeconds,

@@ -1794,6 +1794,7 @@ Authorization: Bearer <token>
         "session_id": "sess_xxx",
         "title": "周末同行",
         "track_type": "徒步",
+        "locate_addr": "北京市海淀区颐和园",
         "participant_count": 3,
         "started_at": "2026-05-23T16:00:00Z",
         "duration_seconds": 7200,
@@ -1827,6 +1828,7 @@ Authorization: Bearer <token>
 | `data.items[].session_id` | string | 同行会话 ID。 |
 | `data.items[].title` | string | 同行标题。 |
 | `data.items[].track_type` | string | 运动类型（徒步 / 跑步 / 爬山 / 骑行 等），创建会话时传入；若未设置则为空字符串。 |
+| `data.items[].locate_addr` | string | 创建会话时的位置信息文本（由客户端逆地理获取）；若未设置则为空字符串。 |
 | `data.items[].participant_count` | int64 | 该场同行人数：若 `status=ended`，返回参与过的人数；若 `status=active`，返回当前仍为 `joined` 的人数。 |
 | `data.items[].started_at` | string(datetime) | 同行开始时间。 |
 | `data.items[].duration_seconds` | int64 | 同行总耗时（秒）：`status=ended` 取 `ended_at - started_at`；`status=active` 取 `now - started_at`。 |

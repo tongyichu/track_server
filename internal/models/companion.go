@@ -137,6 +137,7 @@ type CompanionHistoryItem struct {
 	SessionID         string                       `json:"session_id"`
 	Title             string                       `json:"title"`
 	TrackType         string                       `json:"track_type"`
+	LocateAddr        string                       `json:"locate_addr"`
 	ParticipantCount  int64                        `json:"participant_count"`
 	StartedAt         time.Time                    `json:"started_at"`
 	DurationSeconds   int64                        `json:"duration_seconds"`
