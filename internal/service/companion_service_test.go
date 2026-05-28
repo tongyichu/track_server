@@ -3,6 +3,10 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -18,6 +22,29 @@ type publishedControlMessage struct {
 type mockCompanionControlPublisher struct {
 	messages []publishedControlMessage
 	err      error
+}
+
+type blockingAssetDownloader struct {
+	called  atomic.Int32
+	started chan struct{}
+	release chan struct{}
+}
+
+func (d *blockingAssetDownloader) DownloadObject(_ int64, _ string, localPath string) error {
+	if d.called.Add(1) == 1 {
+		close(d.started)
+	}
+	<-d.release
+	return os.WriteFile(localPath, []byte("avatar"), 0o644)
+}
+
+type panicAssetDownloader struct {
+	called atomic.Int32
+}
+
+func (d *panicAssetDownloader) DownloadObject(_ int64, _ string, _ string) error {
+	d.called.Add(1)
+	panic("boom")
 }
 
 func (m *mockCompanionControlPublisher) Publish(_ context.Context, topic string, payload []byte) error {
@@ -279,5 +306,160 @@ func TestCompanionServiceListHistory(t *testing.T) {
 
 	if _, err := svc.ListHistory(ctx, 1001, ListCompanionHistoryInput{Cursor: "bad-cursor"}); err == nil {
 		t.Fatalf("expected invalid cursor error")
+	}
+}
+
+func TestCompanionServiceListHistoryRewritesAvatarURLToStaticAsset(t *testing.T) {
+	svc, _, userRepo := newCompanionServiceForTest(t)
+	ctx := context.Background()
+	avatarURL := "https://track-avatar.oss-cn-beijing.aliyuncs.com/avatar/1002.png"
+	guest, err := userRepo.FindByID(ctx, 1002)
+	if err != nil {
+		t.Fatalf("FindByID failed: %v", err)
+	}
+	guest.AvatarURL = avatarURL
+	if err := userRepo.Update(ctx, guest); err != nil {
+		t.Fatalf("Update failed: %v", err)
+	}
+
+	cacheDir := t.TempDir()
+	cache, err := NewAssetCacheService(cacheDir, "/api/v1/static/avatars", []string{".png", ".jpg", ".jpeg", ".webp"}, ".png")
+	if err != nil {
+		t.Fatalf("NewAssetCacheService failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(cacheDir, "1002.png"), []byte("avatar"), 0o644); err != nil {
+		t.Fatalf("seed avatar cache failed: %v", err)
+	}
+	svc.SetAvatarCache(cache)
+
+	created, err := svc.CreateSession(ctx, 1001, CreateCompanionSessionInput{Title: "头像同行"})
+	if err != nil {
+		t.Fatalf("CreateSession returned error: %v", err)
+	}
+	if _, err := svc.JoinSession(ctx, 1002, JoinCompanionSessionInput{JoinToken: created.Join.JoinToken}); err != nil {
+		t.Fatalf("JoinSession returned error: %v", err)
+	}
+
+	page, err := svc.ListHistory(ctx, 1001, ListCompanionHistoryInput{Limit: 1})
+	if err != nil {
+		t.Fatalf("ListHistory returned error: %v", err)
+	}
+	if len(page.Items) != 1 || len(page.Items[0].Participants) != 2 {
+		t.Fatalf("unexpected history page: %+v", page)
+	}
+	for _, p := range page.Items[0].Participants {
+		if p.UserID == 1002 {
+			if p.AvatarURL != "/api/v1/static/avatars/1002.png" {
+				t.Fatalf("expected rewritten avatar url, got %q", p.AvatarURL)
+			}
+			return
+		}
+	}
+	t.Fatalf("expected participant 1002 in history page: %+v", page.Items[0].Participants)
+}
+
+func TestAssetCacheEnsureCachedConcurrentSameKeySingleDownload(t *testing.T) {
+	cacheDir := t.TempDir()
+	cache, err := NewAssetCacheService(cacheDir, "/api/v1/static/avatars", []string{".png", ".jpg", ".jpeg", ".webp"}, ".png")
+	if err != nil {
+		t.Fatalf("NewAssetCacheService failed: %v", err)
+	}
+	downloader := &blockingAssetDownloader{started: make(chan struct{}), release: make(chan struct{})}
+	cache.SetDownloader(downloader)
+
+	const workers = 8
+	results := make(chan string, workers)
+	errs := make(chan error, workers)
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			results <- cache.EnsureCached(ctx, 1001, "1001", "https://track-avatar.oss-cn-beijing.aliyuncs.com/avatar/1001.png")
+			errs <- ctx.Err()
+		}()
+	}
+
+	select {
+	case <-downloader.started:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("expected downloader to start")
+	}
+	close(downloader.release)
+
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("concurrent EnsureCached calls did not finish")
+	}
+	close(results)
+	close(errs)
+
+	if downloader.called.Load() != 1 {
+		t.Fatalf("expected downloader called once, got %d", downloader.called.Load())
+	}
+	for err := range errs {
+		if err != nil {
+			t.Fatalf("unexpected context error: %v", err)
+		}
+	}
+	for result := range results {
+		if result != "/api/v1/static/avatars/1001.png" {
+			t.Fatalf("unexpected cached url: %q", result)
+		}
+	}
+	if _, ok := cache.Exists("1001"); !ok {
+		t.Fatalf("expected avatar cache file exists")
+	}
+}
+
+func TestAssetCacheEnsureCachedRecoversPanicWithoutDeadlock(t *testing.T) {
+	cacheDir := t.TempDir()
+	cache, err := NewAssetCacheService(cacheDir, "/api/v1/static/avatars", []string{".png", ".jpg", ".jpeg", ".webp"}, ".png")
+	if err != nil {
+		t.Fatalf("NewAssetCacheService failed: %v", err)
+	}
+	downloader := &panicAssetDownloader{}
+	cache.SetDownloader(downloader)
+
+	const workers = 4
+	results := make(chan string, workers)
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			results <- cache.EnsureCached(ctx, 1001, "1002", "https://track-avatar.oss-cn-beijing.aliyuncs.com/avatar/1002.png")
+		}()
+	}
+
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("EnsureCached should not deadlock when downloader panics")
+	}
+	close(results)
+
+	if downloader.called.Load() < 1 {
+		t.Fatalf("expected downloader to be called at least once")
+	}
+	for result := range results {
+		if result != "" {
+			t.Fatalf("expected empty result on panic, got %q", result)
+		}
 	}
 }

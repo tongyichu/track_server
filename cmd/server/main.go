@@ -170,6 +170,7 @@ func main() {
 	} else {
 		trackSvc.SetAvatarCache(avatarCache)
 		userSvc.SetAvatarCache(avatarCache)
+		companionSvc.SetAvatarCache(avatarCache)
 		log.Printf("avatar cache enabled: %s", avatarCacheDir)
 	}
 

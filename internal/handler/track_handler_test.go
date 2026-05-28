@@ -70,6 +70,7 @@ func newTestEnv() *testEnv {
 	if err == nil {
 		trackSvc.SetAvatarCache(avatarCache)
 		userSvc.SetAvatarCache(avatarCache)
+		companionSvc.SetAvatarCache(avatarCache)
 	}
 
 	h := server.Default()

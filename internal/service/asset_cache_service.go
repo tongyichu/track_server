@@ -200,7 +200,7 @@ func (s *AssetCacheService) RemoveTempCached(key string) error {
 }
 
 // downloadOnce 合并同 key 的并发下载，确保只下载一次。
-func (s *AssetCacheService) downloadOnce(ctx context.Context, userID int64, key, ext, sourceURL string) error {
+func (s *AssetCacheService) downloadOnce(ctx context.Context, userID int64, key, ext, sourceURL string) (err error) {
 	s.mu.Lock()
 	if task, ok := s.inflight[key]; ok {
 		s.mu.Unlock()
@@ -214,13 +214,18 @@ func (s *AssetCacheService) downloadOnce(ctx context.Context, userID int64, key,
 	task := &downloadTask{done: make(chan struct{})}
 	s.inflight[key] = task
 	s.mu.Unlock()
+	defer func() {
+		if r := recover(); r != nil {
+			task.err = fmt.Errorf("asset cache download panic: %v", r)
+		}
+		err = task.err
+		close(task.done)
+		s.mu.Lock()
+		delete(s.inflight, key)
+		s.mu.Unlock()
+	}()
 
 	task.err = s.doDownload(userID, key, ext, sourceURL)
-	close(task.done)
-
-	s.mu.Lock()
-	delete(s.inflight, key)
-	s.mu.Unlock()
 	return task.err
 }
 

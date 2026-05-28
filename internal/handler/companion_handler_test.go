@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -431,7 +433,18 @@ func TestCompanionListHistory(t *testing.T) {
 	ensureTestUser(t, e, 1001, "owner")
 	ensureTestUser(t, e, 1002, "guest")
 	ctx := context.Background()
-	_, err := e.userRepo.CreateIfNotExists(ctx, &models.User{ID: 1003, Nickname: "third", AvatarURL: "https://example.com/third.png"})
+	guest, err := e.userRepo.FindByID(ctx, 1002)
+	if err != nil {
+		t.Fatalf("find guest user failed: %v", err)
+	}
+	guest.AvatarURL = "https://track-avatar.oss-cn-beijing.aliyuncs.com/avatar/1002.png"
+	if err := e.userRepo.Update(ctx, guest); err != nil {
+		t.Fatalf("update guest avatar failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(e.avatarCacheDir, "1002.png"), []byte("avatar"), 0o644); err != nil {
+		t.Fatalf("seed avatar cache failed: %v", err)
+	}
+	_, err = e.userRepo.CreateIfNotExists(ctx, &models.User{ID: 1003, Nickname: "third", AvatarURL: "https://example.com/third.png"})
 	if err != nil {
 		t.Fatalf("create third user failed: %v", err)
 	}
@@ -496,10 +509,17 @@ func TestCompanionListHistory(t *testing.T) {
 	if len(page1.Data.Items[0].Participants) != 2 {
 		t.Fatalf("expected 2 active participants, got %d", len(page1.Data.Items[0].Participants))
 	}
+	guestAvatarRewritten := false
 	for _, p := range page1.Data.Items[0].Participants {
 		if p.UserID == 1003 {
 			t.Fatalf("expected left participant 1003 excluded from active participants: %+v", page1.Data.Items[0].Participants)
 		}
+		if p.UserID == 1002 {
+			guestAvatarRewritten = p.AvatarURL == "/api/v1/static/avatars/1002.png"
+		}
+	}
+	if !guestAvatarRewritten {
+		t.Fatalf("expected guest avatar_url rewritten, got %+v", page1.Data.Items[0].Participants)
 	}
 	if !page1.Data.HasMore || page1.Data.NextCursor == "" {
 		t.Fatalf("expected page1 has more, got %+v", page1.Data)

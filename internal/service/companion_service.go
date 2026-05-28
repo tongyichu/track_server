@@ -35,10 +35,11 @@ const (
 
 // CompanionService 实现“同行”控制面的业务逻辑。
 type CompanionService struct {
-	repo      repository.CompanionRepository
-	users     repository.UserRepository
-	mqtt      CompanionMQTTOptions
-	publisher CompanionControlPublisher
+	repo        repository.CompanionRepository
+	users       repository.UserRepository
+	mqtt        CompanionMQTTOptions
+	avatarCache *AssetCacheService
+	publisher   CompanionControlPublisher
 }
 
 // CompanionMQTTOptions defines MQTT / EMQX integration options.
@@ -117,6 +118,14 @@ func (s *CompanionService) SetControlPublisher(publisher CompanionControlPublish
 		return
 	}
 	s.publisher = publisher
+}
+
+// SetAvatarCache injects avatar cache for rewriting participant avatar URLs.
+func (s *CompanionService) SetAvatarCache(cache *AssetCacheService) {
+	if s == nil {
+		return
+	}
+	s.avatarCache = cache
 }
 
 // CreateCompanionSessionInput describes the payload to create a companion session.
@@ -854,9 +863,19 @@ func (s *CompanionService) buildHistoryItem(ctx context.Context, session *models
 			user = &models.User{ID: member.UserID}
 		}
 		participants = append(participants, models.CompanionHistoryParticipant{
-			UserID:    member.UserID,
-			Nickname:  user.Nickname,
-			AvatarURL: fallbackAvatarURL(user.ID, user.AvatarURL),
+			UserID:   member.UserID,
+			Nickname: user.Nickname,
+			AvatarURL: func() string {
+				avatar := fallbackAvatarURL(user.ID, user.AvatarURL)
+				if s.avatarCache != nil && shouldRewriteAvatarURL(avatar) {
+					cacheCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+					defer cancel()
+					if local := s.avatarCache.EnsureCached(cacheCtx, member.UserID, formatUserAvatarCacheKey(member.UserID), avatar); local != "" {
+						avatar = local
+					}
+				}
+				return avatar
+			}(),
 		})
 	}
 	clone := *session
