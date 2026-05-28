@@ -258,6 +258,27 @@ func (h *CompanionHandler) IngestMQTTPresence(ctx context.Context, c *app.Reques
 	c.JSON(http.StatusOK, utils.H{"result": "ok"})
 }
 
+// IngestMQTTDanmaku handles POST /api/v1/internal/companion/mqtt/danmaku-ingest.
+//
+// 由 EMQX Rule Engine 在收到上行弹幕消息（companion/{sid}/member/{uid}/danmaku）后回调，
+// 服务端完成校验、限速、持久化，并通过 sessionDanmakuBroadcastTopic 广播给所有成员。
+func (h *CompanionHandler) IngestMQTTDanmaku(ctx context.Context, c *app.RequestContext) {
+	if !h.authorizeInternal(c) {
+		return
+	}
+	var req service.CompanionMQTTDanmakuIngestInput
+	data, err := c.Body()
+	if err != nil || json.Unmarshal(data, &req) != nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid payload"})
+		return
+	}
+	if err := h.svc.IngestDanmakuFromMQTT(ctx, req); err != nil {
+		h.writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, utils.H{"result": "ok"})
+}
+
 func (h *CompanionHandler) writeError(c *app.RequestContext, err error) {
 	var iae *service.InvalidArgumentError
 	switch {

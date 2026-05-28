@@ -479,3 +479,168 @@ func TestAssetCacheEnsureCachedRecoversPanicWithoutDeadlock(t *testing.T) {
 		}
 	}
 }
+
+// rawPublishedMessage 用于 danmaku 等非 ControlEvent 的广播 payload，
+// 因为 mockCompanionControlPublisher 会强制把 payload 反序列化成 CompanionControlEvent，
+// 这里用一个独立的“原始 bytes”记录器以避免类型耦合。
+type rawPublishedMessage struct {
+	topic   string
+	payload []byte
+}
+
+type rawMockPublisher struct {
+	messages []rawPublishedMessage
+	err      error
+}
+
+func (m *rawMockPublisher) Publish(_ context.Context, topic string, payload []byte) error {
+	if m.err != nil {
+		return m.err
+	}
+	clone := make([]byte, len(payload))
+	copy(clone, payload)
+	m.messages = append(m.messages, rawPublishedMessage{topic: topic, payload: clone})
+	return nil
+}
+
+func (m *rawMockPublisher) Close() error { return nil }
+
+// danmakuTestSetup 创建一个 owner 已 create + member 已 join 的会话，
+// 并为指定 user 颁发 MQTT 凭证，供 ingest 测试用 client_id/username 复核 principal。
+func danmakuTestSetup(t *testing.T, svc *CompanionService, ownerID, joinerID int64) (sessionID string, joinerCreds *CompanionMQTTCredentials) {
+	t.Helper()
+	svc.SetMQTTOptions(CompanionMQTTOptions{
+		BrokerURL:        "mqtt://127.0.0.1:1883",
+		TopicPrefix:      "companion",
+		CredentialSecret: "test_companion_secret",
+	})
+	ctx := context.Background()
+	created, err := svc.CreateSession(ctx, ownerID, CreateCompanionSessionInput{Title: "danmaku"})
+	if err != nil {
+		t.Fatalf("CreateSession failed: %v", err)
+	}
+	if _, err := svc.JoinSession(ctx, joinerID, JoinCompanionSessionInput{JoinToken: created.Join.JoinToken}); err != nil {
+		t.Fatalf("JoinSession failed: %v", err)
+	}
+	creds, err := svc.IssueMQTTCredentials(ctx, joinerID, created.Session.SessionID)
+	if err != nil {
+		t.Fatalf("IssueMQTTCredentials failed: %v", err)
+	}
+	return created.Session.SessionID, creds
+}
+
+func TestCompanionServiceIngestDanmakuPublishesBroadcast(t *testing.T) {
+	svc, _, _ := newCompanionServiceForTest(t)
+	pub := &rawMockPublisher{}
+	svc.SetDanmakuPublisher(pub)
+	sessionID, creds := danmakuTestSetup(t, svc, 1001, 1002)
+
+	if err := svc.IngestDanmakuFromMQTT(context.Background(), CompanionMQTTDanmakuIngestInput{
+		SessionID: sessionID,
+		UserID:    1002,
+		Content:   "hello world",
+		ClientID:  creds.ClientID,
+		Username:  creds.Username,
+	}); err != nil {
+		t.Fatalf("IngestDanmakuFromMQTT returned error: %v", err)
+	}
+	if len(pub.messages) != 1 {
+		t.Fatalf("expected 1 published broadcast, got %d", len(pub.messages))
+	}
+	expectedTopic := "companion/" + sessionID + "/danmaku"
+	if pub.messages[0].topic != expectedTopic {
+		t.Fatalf("unexpected broadcast topic %q (want %q)", pub.messages[0].topic, expectedTopic)
+	}
+	var event CompanionDanmakuBroadcast
+	if err := json.Unmarshal(pub.messages[0].payload, &event); err != nil {
+		t.Fatalf("unmarshal danmaku payload failed: %v", err)
+	}
+	if event.SessionID != sessionID || event.UserID != 1002 || event.Content != "hello world" {
+		t.Fatalf("unexpected broadcast payload: %+v", event)
+	}
+	if event.MessageID == 0 {
+		t.Fatalf("expected non-zero message_id assigned by repo")
+	}
+}
+
+func TestCompanionServiceIngestDanmakuRejectsPrincipalMismatch(t *testing.T) {
+	svc, _, _ := newCompanionServiceForTest(t)
+	pub := &rawMockPublisher{}
+	svc.SetDanmakuPublisher(pub)
+	sessionID, creds := danmakuTestSetup(t, svc, 1001, 1002)
+
+	// principal 绑定的是 1002，但 ingest 声明 user_id=1001 -> 拒绝。
+	err := svc.IngestDanmakuFromMQTT(context.Background(), CompanionMQTTDanmakuIngestInput{
+		SessionID: sessionID,
+		UserID:    1001,
+		Content:   "spoofed",
+		ClientID:  creds.ClientID,
+		Username:  creds.Username,
+	})
+	if err == nil {
+		t.Fatalf("expected forbidden error for principal mismatch, got nil")
+	}
+	if len(pub.messages) != 0 {
+		t.Fatalf("expected no broadcast for rejected ingest, got %d", len(pub.messages))
+	}
+}
+
+func TestCompanionServiceIngestDanmakuRejectsOversizedContent(t *testing.T) {
+	svc, _, _ := newCompanionServiceForTest(t)
+	pub := &rawMockPublisher{}
+	svc.SetDanmakuPublisher(pub)
+	sessionID, creds := danmakuTestSetup(t, svc, 1001, 1002)
+
+	long := make([]rune, companionDanmakuMaxContentLength+1)
+	for i := range long {
+		long[i] = '中'
+	}
+	err := svc.IngestDanmakuFromMQTT(context.Background(), CompanionMQTTDanmakuIngestInput{
+		SessionID: sessionID,
+		UserID:    1002,
+		Content:   string(long),
+		ClientID:  creds.ClientID,
+		Username:  creds.Username,
+	})
+	if err == nil {
+		t.Fatalf("expected oversized content to be rejected")
+	}
+	if len(pub.messages) != 0 {
+		t.Fatalf("expected no broadcast for rejected ingest, got %d", len(pub.messages))
+	}
+}
+
+func TestCompanionServiceIngestDanmakuEnforcesRateLimit(t *testing.T) {
+	svc, _, _ := newCompanionServiceForTest(t)
+	pub := &rawMockPublisher{}
+	svc.SetDanmakuPublisher(pub)
+	sessionID, creds := danmakuTestSetup(t, svc, 1001, 1002)
+
+	for i := 0; i < companionDanmakuRateLimitMax; i++ {
+		if err := svc.IngestDanmakuFromMQTT(context.Background(), CompanionMQTTDanmakuIngestInput{
+			SessionID: sessionID,
+			UserID:    1002,
+			Content:   "msg",
+			ClientID:  creds.ClientID,
+			Username:  creds.Username,
+		}); err != nil {
+			t.Fatalf("ingest #%d failed: %v", i, err)
+		}
+	}
+	if len(pub.messages) != companionDanmakuRateLimitMax {
+		t.Fatalf("expected %d broadcasts, got %d", companionDanmakuRateLimitMax, len(pub.messages))
+	}
+	err := svc.IngestDanmakuFromMQTT(context.Background(), CompanionMQTTDanmakuIngestInput{
+		SessionID: sessionID,
+		UserID:    1002,
+		Content:   "msg",
+		ClientID:  creds.ClientID,
+		Username:  creds.Username,
+	})
+	if err == nil {
+		t.Fatalf("expected rate limit error, got nil")
+	}
+	if len(pub.messages) != companionDanmakuRateLimitMax {
+		t.Fatalf("expected broadcast count to remain %d after rate limit, got %d", companionDanmakuRateLimitMax, len(pub.messages))
+	}
+}

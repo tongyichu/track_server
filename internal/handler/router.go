@@ -58,6 +58,7 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 	api.POST("/internal/mqtt/acl", companionHandler.MQTTACL)
 	api.POST("/internal/companion/mqtt/location-ingest", companionHandler.IngestMQTTLocation)
 	api.POST("/internal/companion/mqtt/presence-ingest", companionHandler.IngestMQTTPresence)
+	api.POST("/internal/companion/mqtt/danmaku-ingest", companionHandler.IngestMQTTDanmaku)
 
 	// public: upgrade check (客户端启动/切前台时调用，无需登录)
 	api.GET("/upgrade/check", appReleaseHandler.CheckUpgrade)

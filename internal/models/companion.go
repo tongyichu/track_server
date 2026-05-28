@@ -116,6 +116,21 @@ type CompanionSnapshot struct {
 	Positions  []*CompanionLivePosition    `json:"positions"`
 }
 
+// CompanionDanmaku 表示一条同行文字弹幕。
+//
+// 设计说明：
+// - 服务端只持久化最终落库的弹幕，不存客户端 publish 失败/超时的中间态；
+// - id 由 MySQL 自增分配，作为消息全局唯一序号；
+// - content 长度上限 200 字符，由 service 层校验；
+// - 没有 sender 资料字段（昵称/头像）—— 这些在广播时由服务端实时拼装，避免改名后历史消息也要回填。
+type CompanionDanmaku struct {
+	ID        int64     `json:"id" bson:"id"`
+	SessionID string    `json:"session_id" bson:"session_id"`
+	UserID    int64     `json:"user_id" bson:"user_id"`
+	Content   string    `json:"content" bson:"content"`
+	CreatedAt time.Time `json:"created_at" bson:"created_at"`
+}
+
 // CompanionSessionListCursor is the cursor used for paging companion history list.
 //
 // Order: started_at desc, session_id desc.

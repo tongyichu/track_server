@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/tongyichu/track_server/internal/models"
 )
@@ -176,4 +177,10 @@ type CompanionRepository interface {
 	UpsertPosition(ctx context.Context, position *models.CompanionLivePosition) error
 	ListPositions(ctx context.Context, sessionID string) ([]*models.CompanionLivePosition, error)
 	DeletePositions(ctx context.Context, sessionID string) error
+
+	// InsertDanmaku inserts one danmaku record and assigns its auto-incremented ID into d.ID.
+	InsertDanmaku(ctx context.Context, d *models.CompanionDanmaku) error
+	// CountDanmakuByMemberSince returns how many danmakus the given member has sent in [since, now].
+	// Used for per-member rate limiting (e.g., max N msgs / window seconds).
+	CountDanmakuByMemberSince(ctx context.Context, sessionID string, userID int64, since time.Time) (int64, error)
 }

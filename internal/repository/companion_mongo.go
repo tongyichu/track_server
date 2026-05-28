@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/tongyichu/track_server/internal/models"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -78,4 +79,12 @@ func (r *MongoCompanionRepository) ListPositions(context.Context, string) ([]*mo
 
 func (r *MongoCompanionRepository) DeletePositions(context.Context, string) error {
 	return errors.New("MongoCompanionRepository.DeletePositions not implemented")
+}
+
+func (r *MongoCompanionRepository) InsertDanmaku(context.Context, *models.CompanionDanmaku) error {
+	return errors.New("MongoCompanionRepository.InsertDanmaku not implemented")
+}
+
+func (r *MongoCompanionRepository) CountDanmakuByMemberSince(context.Context, string, int64, time.Time) (int64, error) {
+	return 0, errors.New("MongoCompanionRepository.CountDanmakuByMemberSince not implemented")
 }

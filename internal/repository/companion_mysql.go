@@ -309,6 +309,40 @@ func (r *MySQLCompanionRepository) DeletePositions(ctx context.Context, sessionI
 	return err
 }
 
+func (r *MySQLCompanionRepository) InsertDanmaku(ctx context.Context, d *models.CompanionDanmaku) error {
+	if d == nil || d.SessionID == "" || d.UserID <= 0 {
+		return errors.New("invalid companion danmaku")
+	}
+	if d.CreatedAt.IsZero() {
+		d.CreatedAt = time.Now()
+	}
+	res, err := r.db.ExecContext(ctx,
+		`INSERT INTO companion_danmakus (session_id, user_id, content, created_at) VALUES (?,?,?,?)`,
+		d.SessionID, d.UserID, d.Content, d.CreatedAt,
+	)
+	if err != nil {
+		return err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return err
+	}
+	d.ID = id
+	return nil
+}
+
+func (r *MySQLCompanionRepository) CountDanmakuByMemberSince(ctx context.Context, sessionID string, userID int64, since time.Time) (int64, error) {
+	row := r.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM companion_danmakus WHERE session_id=? AND user_id=? AND created_at>=?`,
+		sessionID, userID, since,
+	)
+	var count int64
+	if err := row.Scan(&count); err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
 func companionSessionSelectSQL() string {
 	return `SELECT companion_sessions.session_id, companion_sessions.owner_user_id, companion_sessions.status, companion_sessions.join_token, companion_sessions.join_token_expire_at, companion_sessions.title, companion_sessions.track_type, companion_sessions.locate_addr, companion_sessions.max_members, companion_sessions.started_at, companion_sessions.ended_at, companion_sessions.created_at, companion_sessions.updated_at FROM companion_sessions`
 }

@@ -16,6 +16,8 @@ type InMemoryCompanionRepository struct {
 	sessionByToken   map[string]string
 	members          map[string]map[int64]*models.CompanionSessionMember
 	positions        map[string]map[int64]*models.CompanionLivePosition
+	danmakus         []*models.CompanionDanmaku
+	danmakuNextID    int64
 }
 
 // NewInMemoryCompanionRepository creates an in-memory companion repository.
@@ -25,6 +27,8 @@ func NewInMemoryCompanionRepository() *InMemoryCompanionRepository {
 		sessionByToken: make(map[string]string),
 		members:        make(map[string]map[int64]*models.CompanionSessionMember),
 		positions:      make(map[string]map[int64]*models.CompanionLivePosition),
+		danmakus:       make([]*models.CompanionDanmaku, 0),
+		danmakuNextID:  0,
 	}
 }
 
@@ -271,4 +275,41 @@ func (r *InMemoryCompanionRepository) DeletePositions(_ context.Context, session
 	defer r.mu.Unlock()
 	delete(r.positions, sessionID)
 	return nil
+}
+
+func (r *InMemoryCompanionRepository) InsertDanmaku(_ context.Context, d *models.CompanionDanmaku) error {
+	if d == nil || d.SessionID == "" || d.UserID <= 0 {
+		return ErrNotFound
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.danmakuNextID++
+	clone := *d
+	clone.ID = r.danmakuNextID
+	if clone.CreatedAt.IsZero() {
+		clone.CreatedAt = time.Now()
+	}
+	r.danmakus = append(r.danmakus, &clone)
+	d.ID = clone.ID
+	d.CreatedAt = clone.CreatedAt
+	return nil
+}
+
+func (r *InMemoryCompanionRepository) CountDanmakuByMemberSince(_ context.Context, sessionID string, userID int64, since time.Time) (int64, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var count int64
+	for _, d := range r.danmakus {
+		if d == nil {
+			continue
+		}
+		if d.SessionID != sessionID || d.UserID != userID {
+			continue
+		}
+		if !since.IsZero() && d.CreatedAt.Before(since) {
+			continue
+		}
+		count++
+	}
+	return count, nil
 }

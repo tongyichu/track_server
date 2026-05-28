@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 
@@ -31,15 +32,23 @@ const (
 	defaultCompanionMQTTTTL        = time.Hour
 	defaultCompanionMQTTPublishTTL = 5 * time.Second
 	companionMQTTPrincipalV1       = "cmpv1"
+
+	// 弹幕：内容长度上限（按 UTF-8 字符数计算）。
+	companionDanmakuMaxContentLength = 200
+	// 弹幕：单成员限速窗口长度。
+	companionDanmakuRateLimitWindow = 10 * time.Second
+	// 弹幕：单成员在 companionDanmakuRateLimitWindow 内允许发送的最大条数。
+	companionDanmakuRateLimitMax = 5
 )
 
 // CompanionService 实现“同行”控制面的业务逻辑。
 type CompanionService struct {
-	repo        repository.CompanionRepository
-	users       repository.UserRepository
-	mqtt        CompanionMQTTOptions
-	avatarCache *AssetCacheService
-	publisher   CompanionControlPublisher
+	repo             repository.CompanionRepository
+	users            repository.UserRepository
+	mqtt             CompanionMQTTOptions
+	avatarCache      *AssetCacheService
+	publisher        CompanionControlPublisher
+	danmakuPublisher CompanionControlPublisher
 }
 
 // CompanionMQTTOptions defines MQTT / EMQX integration options.
@@ -120,6 +129,18 @@ func (s *CompanionService) SetControlPublisher(publisher CompanionControlPublish
 	s.publisher = publisher
 }
 
+// SetDanmakuPublisher injects the server-side danmaku broadcast publisher.
+//
+// 弹幕广播 topic 与控制 topic 的语义不同（前者高频、面向所有成员；后者低频、用于会话生命周期事件），
+// 因此独立持有一个 publisher，便于上层在需要时为其分配独立的 MQTT 客户端 / 限速策略。
+// 若不单独设置，IngestDanmakuFromMQTT 会回退使用 controlPublisher。
+func (s *CompanionService) SetDanmakuPublisher(publisher CompanionControlPublisher) {
+	if s == nil {
+		return
+	}
+	s.danmakuPublisher = publisher
+}
+
 // SetAvatarCache injects avatar cache for rewriting participant avatar URLs.
 func (s *CompanionService) SetAvatarCache(cache *AssetCacheService) {
 	if s == nil {
@@ -182,6 +203,8 @@ type CompanionMQTTTopicBindings struct {
 	PresencePublish   string `json:"presence_publish"`
 	PresenceSubscribe string `json:"presence_subscribe"`
 	ControlSubscribe  string `json:"control_subscribe"`
+	DanmakuPublish    string `json:"danmaku_publish"`
+	DanmakuSubscribe  string `json:"danmaku_subscribe"`
 }
 
 // CompanionMQTTCredentials is returned to app clients so they can connect to EMQX.
@@ -249,6 +272,35 @@ type CompanionMQTTPresenceIngestInput struct {
 	LastSeenAt time.Time                      `json:"last_seen_at"`
 	ClientID   string                         `json:"client_id"`
 	Username   string                         `json:"username"`
+}
+
+// CompanionMQTTDanmakuIngestInput is the HTTP callback payload from EMQX rule engine when a member publishes a danmaku.
+//
+// 字段来源：
+//   - SessionID / UserID 由 EMQX rule SQL 从 topic 中提取；
+//   - Content 来自客户端 publish payload；
+//   - ClientID / Username 用于服务端复核 MQTT principal。
+type CompanionMQTTDanmakuIngestInput struct {
+	SessionID string `json:"session_id"`
+	UserID    int64  `json:"user_id"`
+	Content   string `json:"content"`
+	ClientID  string `json:"client_id"`
+	Username  string `json:"username"`
+}
+
+// CompanionDanmakuBroadcast 是服务端向 companion/{session_id}/danmaku 广播的消息体。
+//
+// 客户端约定：
+//   - 收到 message_id 等于本次客户端发送的对应记录时（通常通过 user_id+content 自匹配，或服务端在客户端连接元信息中预占 message_id），视为发送成功；
+//   - 客户端启动 publish 后开启超时（建议 3s），超时未收到自身广播则展示发送失败。
+type CompanionDanmakuBroadcast struct {
+	MessageID int64     `json:"message_id"`
+	SessionID string    `json:"session_id"`
+	UserID    int64     `json:"user_id"`
+	Nickname  string    `json:"nickname"`
+	AvatarURL string    `json:"avatar_url"`
+	Content   string    `json:"content"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type companionMQTTPrincipalClaims struct {
@@ -401,11 +453,11 @@ func (s *CompanionService) AuthorizeMQTTOperation(ctx context.Context, in Compan
 	}
 	switch action {
 	case "publish", "pub":
-		if topic == s.memberLocationTopic(claims.SessionID, claims.UserID) || topic == s.memberPresenceTopic(claims.SessionID, claims.UserID) {
+		if topic == s.memberLocationTopic(claims.SessionID, claims.UserID) || topic == s.memberPresenceTopic(claims.SessionID, claims.UserID) || topic == s.memberDanmakuUplinkTopic(claims.SessionID, claims.UserID) {
 			return CompanionMQTTACLResult{Result: "allow"}
 		}
 	case "subscribe", "sub":
-		if topic == s.sessionLocationWildcard(claims.SessionID) || topic == s.sessionPresenceWildcard(claims.SessionID) || topic == s.controlTopic(claims.SessionID) || topic == s.memberLocationTopic(claims.SessionID, claims.UserID) || topic == s.memberPresenceTopic(claims.SessionID, claims.UserID) {
+		if topic == s.sessionLocationWildcard(claims.SessionID) || topic == s.sessionPresenceWildcard(claims.SessionID) || topic == s.controlTopic(claims.SessionID) || topic == s.memberLocationTopic(claims.SessionID, claims.UserID) || topic == s.memberPresenceTopic(claims.SessionID, claims.UserID) || topic == s.sessionDanmakuBroadcastTopic(claims.SessionID) {
 			return CompanionMQTTACLResult{Result: "allow"}
 		}
 	}
@@ -457,6 +509,102 @@ func (s *CompanionService) IngestPresenceFromMQTT(ctx context.Context, in Compan
 		}
 	}
 	return s.UpdatePresence(ctx, strings.TrimSpace(in.SessionID), in.UserID, in.Status, in.LastSeenAt)
+}
+
+// IngestDanmakuFromMQTT ingests one danmaku message from EMQX rule engine.
+//
+// 流程（方案 A）：
+//  1. 通过 client_id / username 复核 MQTT principal，确保上行身份未被伪造；
+//  2. 校验 session 仍为 active 且当前用户为 joined 成员；
+//  3. 内容做 UTF-8 长度限制 (≤ companionDanmakuMaxContentLength)，去掉两端空白；
+//  4. 滚动窗口限速：单成员在 companionDanmakuRateLimitWindow 内最多
+//     companionDanmakuRateLimitMax 条；
+//  5. 落库（持久化用于审计 / 回溯，不在 snapshot 返回）；
+//  6. 服务端向 sessionDanmakuBroadcastTopic 广播给所有成员（包括发送者，
+//     发送者据此判定“发送成功”，超时未收到则展示失败）。
+func (s *CompanionService) IngestDanmakuFromMQTT(ctx context.Context, in CompanionMQTTDanmakuIngestInput) error {
+	if s == nil || s.repo == nil {
+		return errors.New("companion service not configured")
+	}
+	sessionID := strings.TrimSpace(in.SessionID)
+	if sessionID == "" {
+		return invalidArg("session_id is required")
+	}
+	if in.UserID <= 0 {
+		return invalidArg("user_id is required")
+	}
+	// 1. principal 复核：上行 ingest 必须由 EMQX rule engine 携带，
+	// 否则任何外部调用都可以伪造 session_id / user_id 直接广播。
+	if strings.TrimSpace(in.Username) == "" && strings.TrimSpace(in.ClientID) == "" {
+		return repository.ErrForbidden
+	}
+	claims, _, err := s.verifyMQTTBinding(ctx, in.Username, in.ClientID, "", false)
+	if err != nil {
+		return err
+	}
+	if claims.SessionID != sessionID || claims.UserID != in.UserID {
+		return repository.ErrForbidden
+	}
+	// 2. session active + member joined 由 verifyMQTTBinding 内部保证（断言一次）。
+	session, err := s.requireJoinedActiveSession(ctx, in.UserID, sessionID)
+	if err != nil {
+		return err
+	}
+	// 3. 内容校验。
+	content := strings.TrimSpace(in.Content)
+	if content == "" {
+		return invalidArg("content is required")
+	}
+	if utf8.RuneCountInString(content) > companionDanmakuMaxContentLength {
+		return invalidArg(fmt.Sprintf("content exceeds %d characters", companionDanmakuMaxContentLength))
+	}
+	// 4. 限速。
+	since := time.Now().Add(-companionDanmakuRateLimitWindow)
+	count, err := s.repo.CountDanmakuByMemberSince(ctx, sessionID, in.UserID, since)
+	if err != nil {
+		return err
+	}
+	if count >= companionDanmakuRateLimitMax {
+		return invalidArg("danmaku rate limit exceeded")
+	}
+	// 5. 持久化。
+	now := time.Now()
+	record := &models.CompanionDanmaku{
+		SessionID: sessionID,
+		UserID:    in.UserID,
+		Content:   content,
+		CreatedAt: now,
+	}
+	if err := s.repo.InsertDanmaku(ctx, record); err != nil {
+		return err
+	}
+	// 6. 广播（best-effort）。
+	user, err := s.users.FindByID(ctx, in.UserID)
+	if err != nil && !errors.Is(err, repository.ErrNotFound) {
+		return err
+	}
+	if user == nil {
+		user = &models.User{ID: in.UserID}
+	}
+	avatar := fallbackAvatarURL(user.ID, user.AvatarURL)
+	if s.avatarCache != nil && shouldRewriteAvatarURL(avatar) {
+		cacheCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		if local := s.avatarCache.EnsureCached(cacheCtx, user.ID, formatUserAvatarCacheKey(user.ID), avatar); local != "" {
+			avatar = local
+		}
+		cancel()
+	}
+	broadcast := CompanionDanmakuBroadcast{
+		MessageID: record.ID,
+		SessionID: session.SessionID,
+		UserID:    in.UserID,
+		Nickname:  user.Nickname,
+		AvatarURL: avatar,
+		Content:   content,
+		CreatedAt: record.CreatedAt,
+	}
+	s.publishDanmakuBroadcast(ctx, session.SessionID, broadcast)
+	return nil
 }
 
 // CreateSession creates a new active companion session owned by the user.
@@ -921,6 +1069,8 @@ func (s *CompanionService) buildMQTTTopicBindings(sessionID string, userID int64
 		PresencePublish:   s.memberPresenceTopic(sessionID, userID),
 		PresenceSubscribe: s.sessionPresenceWildcard(sessionID),
 		ControlSubscribe:  s.controlTopic(sessionID),
+		DanmakuPublish:    s.memberDanmakuUplinkTopic(sessionID, userID),
+		DanmakuSubscribe:  s.sessionDanmakuBroadcastTopic(sessionID),
 	}
 }
 
@@ -1055,6 +1205,21 @@ func (s *CompanionService) sessionPresenceWildcard(sessionID string) string {
 
 func (s *CompanionService) controlTopic(sessionID string) string {
 	return fmt.Sprintf("%s/%s/control", s.mqttTopicPrefix(), sessionID)
+}
+
+// memberDanmakuUplinkTopic 是单个成员上行弹幕的 topic（client publish only）。
+//
+// 客户端流程：发出弹幕时 publish 到该 topic，由 EMQX Rule Engine 触发服务端 ingest。
+func (s *CompanionService) memberDanmakuUplinkTopic(sessionID string, userID int64) string {
+	return fmt.Sprintf("%s/%s/member/%d/danmaku", s.mqttTopicPrefix(), sessionID, userID)
+}
+
+// sessionDanmakuBroadcastTopic 是会话级弹幕广播 topic（client subscribe only，服务端 publish）。
+//
+// 客户端流程：subscribe 该 topic 接收所有人的弹幕（包括自己——用于发送成功确认）。
+// 客户端禁止 publish 到该 topic。
+func (s *CompanionService) sessionDanmakuBroadcastTopic(sessionID string) string {
+	return fmt.Sprintf("%s/%s/danmaku", s.mqttTopicPrefix(), sessionID)
 }
 
 func (s *CompanionService) shouldIgnoreIncomingPosition(ctx context.Context, sessionID string, userID int64, seq int64, recordedAt time.Time) bool {
@@ -1193,6 +1358,37 @@ func (s *CompanionService) publishControlEvent(ctx context.Context, sessionID st
 	defer cancel()
 	if err := s.publisher.Publish(publishCtx, s.controlTopic(sessionID), payload); err != nil {
 		log.Printf("companion control event publish failed for session %s topic %s: %v", sessionID, s.controlTopic(sessionID), err)
+	}
+}
+
+// publishDanmakuBroadcast 通过 best-effort 将弹幕广播到 sessionDanmakuBroadcastTopic。
+//
+// publisher 选择优先级：
+//  1. SetDanmakuPublisher 注入的独立发布器；
+//  2. 回退到 SetControlPublisher 注入的发布器；
+//  3. 都未配置则只记日志，不阻塞 ingest 主流程（客户端会在超时后展示失败）。
+func (s *CompanionService) publishDanmakuBroadcast(ctx context.Context, sessionID string, event CompanionDanmakuBroadcast) {
+	if s == nil {
+		return
+	}
+	publisher := s.danmakuPublisher
+	if publisher == nil {
+		publisher = s.publisher
+	}
+	if publisher == nil {
+		log.Printf("companion danmaku publisher not configured, drop broadcast for session %s", sessionID)
+		return
+	}
+	payload, err := json.Marshal(event)
+	if err != nil {
+		log.Printf("companion danmaku marshal failed for session %s: %v", sessionID, err)
+		return
+	}
+	topic := s.sessionDanmakuBroadcastTopic(sessionID)
+	publishCtx, cancel := context.WithTimeout(ctx, defaultCompanionMQTTPublishTTL)
+	defer cancel()
+	if err := publisher.Publish(publishCtx, topic, payload); err != nil {
+		log.Printf("companion danmaku publish failed for session %s topic %s: %v", sessionID, topic, err)
 	}
 }
 

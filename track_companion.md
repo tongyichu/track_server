@@ -262,6 +262,8 @@ Snapshot 是控制面的关键输出，结构为：
 
 - `companion/{session_id}/member/{user_id}/location`
 - `companion/{session_id}/member/{user_id}/presence`
+- `companion/{session_id}/member/{user_id}/danmaku`（**客户端上行**：仅本人 publish）
+- `companion/{session_id}/danmaku`（**服务端下行**：仅服务端 publisher publish，客户端 subscribe）
 - `companion/{session_id}/control`
 
 ### 8.2 鉴权边界
@@ -303,7 +305,9 @@ Snapshot 是控制面的关键输出，结构为：
       "location_subscribe": "companion/sess_xxx/member/+/location",
       "presence_publish": "companion/sess_xxx/member/1001/presence",
       "presence_subscribe": "companion/sess_xxx/member/+/presence",
-      "control_subscribe": "companion/sess_xxx/control"
+      "control_subscribe": "companion/sess_xxx/control",
+      "danmaku_publish": "companion/sess_xxx/member/1001/danmaku",
+      "danmaku_subscribe": "companion/sess_xxx/danmaku"
     }
   }
 }
@@ -327,8 +331,9 @@ Snapshot 是控制面的关键输出，结构为：
 
 - 供 EMQX 在 publish / subscribe 时调用；
 - 当前允许：
-  - 成员 publish 自己的 `location` / `presence` topic；
-  - 成员 subscribe 当前 session 的位置通配 topic、presence 通配 topic、control topic。
+  - 成员 publish 自己的 `location` / `presence` / `danmaku`（上行）topic；
+  - 成员 subscribe 当前 session 的位置通配 topic、presence 通配 topic、control topic、`danmaku` 广播 topic；
+  - 成员 **不允许** publish `companion/{session_id}/danmaku`（广播 topic 仅服务端可发）。
 
 #### 8.3.4 位置写回接口
 
@@ -370,13 +375,113 @@ Snapshot 是控制面的关键输出，结构为：
 - 推荐 control 消息使用 **QoS 1**；
 - control 消息 **不使用 retained**。
 
+#### 8.3.7 弹幕上行写回接口
+
+- `POST /api/v1/internal/companion/mqtt/danmaku-ingest`
+
+说明：
+
+- 供 EMQX Rule Engine 在收到上行弹幕消息（`companion/{session_id}/member/{user_id}/danmaku`）后回调；
+- 服务端会通过 `client_id / username` 复核 MQTT principal，确保 `session_id / user_id` 与凭证绑定一致，否则返回 403；
+- 校验 session 仍为 `active`、当前用户为 `joined` 成员；
+- 内容做 UTF-8 长度限制（≤ 200 字符），并做滚动窗口限速（单成员 10 秒内最多 5 条）；
+- 校验通过后落库，并通过服务端 publisher 向 `companion/{session_id}/danmaku` 广播；
+- 入参字段：`session_id / user_id / content / client_id / username`。
+
+请求体示例：
+
+```json
+{
+  "session_id": "sess_xxx",
+  "user_id": 1001,
+  "content": "加油！",
+  "client_id": "cmp-sess_xxx-1001-abc123",
+  "username": "cmpv1:sess_xxx:1001:1770000000:abc123"
+}
+```
+
 ### 8.4 快照与实时流的关系
 
 - 新成员加入：先拉 HTTP Snapshot；
 - 再连接 EMQX 订阅增量流；
 - `seq` / `recorded_at` 由客户端做去重和乱序保护。
 
-### 8.5 control topic 消息格式
+### 8.5 弹幕（同行文字弹幕）
+
+#### 8.5.1 设计目标
+
+- 在 session 内任意成员之间相互发送短文本弹幕；
+- 服务端做内容校验、限速、持久化（用于审计/回溯，不出现在 snapshot 中）；
+- 失败检测采用 **方案 A**：客户端 publish 后启动超时（建议 3s），收到自身广播即判定成功，超时未收到则视为失败。
+
+#### 8.5.2 数据流（Plan A）
+
+```
+Client publish → companion/{sid}/member/{uid}/danmaku
+  → EMQX Rule Engine → POST /api/v1/internal/companion/mqtt/danmaku-ingest
+  → Server 校验/限速/落库
+  → Server publisher publish → companion/{sid}/danmaku
+  → 所有成员（含发送者）subscribe 收到
+```
+
+#### 8.5.3 服务端约束
+
+- 内容长度：≤ 200 字符（按 UTF-8 rune 计数），首尾空白会被去除；
+- 限速：单成员在 10 秒滚动窗口内最多 5 条，超出返回 `400 danmaku rate limit exceeded`；
+- principal 复核：`session_id / user_id` 必须与 `client_id / username` 绑定一致，否则返回 403；
+- 必须为 `active` session 中的 `joined` 成员，否则返回 404 / 403；
+- 广播 publisher 回退顺序：`SetDanmakuPublisher` 注入的 publisher → `controlPublisher` → 仅记日志（best-effort）；
+- 落库表：`companion_danmaku`，主键 `id`，索引 `(session_id, user_id, created_at)`。
+
+#### 8.5.4 客户端广播消息格式
+
+Topic：`companion/{session_id}/danmaku`
+
+```json
+{
+  "message_id": 12345,
+  "session_id": "sess_xxx",
+  "user_id": 1001,
+  "nickname": "Tom",
+  "avatar_url": "/api/v1/static/avatars/1001.png",
+  "content": "加油！",
+  "created_at": "2026-05-23T18:10:00Z"
+}
+```
+
+字段说明：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `message_id` | int64 | 服务端落库自增 ID，可用于客户端去重 |
+| `session_id` | string | 同行会话 ID |
+| `user_id` | int64 | 发送者 user_id |
+| `nickname` | string | 发送者昵称（服务端从用户信息取） |
+| `avatar_url` | string | 发送者头像 URL（按现有头像缓存策略改写） |
+| `content` | string | 弹幕文本 |
+| `created_at` | string | 服务端落库时间，RFC3339 |
+
+#### 8.5.5 客户端约定（Plan A 失败检测）
+
+1. 用户输入文本，本地先做长度（≤ 200）和频率预校验；
+2. 客户端 publish 到 `companion/{session_id}/member/{user_id}/danmaku`，QoS 1；
+3. 同时启动 **3s** 超时计时器；
+4. 在订阅的 `companion/{session_id}/danmaku` 上等待：
+   - 收到 `user_id == 当前用户` 且 `content` 与本次发送匹配的消息 → 标记发送成功；
+   - 超时未收到 → 标记发送失败，UI 提示用户重试；
+5. 发送过程中其它成员的弹幕正常实时上屏；
+6. 不要将 `companion/{sid}/danmaku` 设为 retained，断线重连后只展示新到的弹幕，历史弹幕不补发。
+
+#### 8.5.6 EMQX Rule Engine 配置（弹幕）
+
+推荐从 topic 抽取后回调：
+
+- topic 模式：`companion/+/member/+/danmaku`
+- URL：`POST http://<app-server>/api/v1/internal/companion/mqtt/danmaku-ingest`
+- Header：`X-Internal-Token: ${COMPANION_MQTT_INTERNAL_TOKEN}`
+- 透传字段：`session_id / user_id / content / client_id / username`
+
+### 8.6 control topic 消息格式
 
 Topic：
 
@@ -425,11 +530,11 @@ Topic：
 - 若 `session_ended` 先于某些滞后 location 消息到达，以 `session_ended` 为准；
 - control 消息只做会话控制，不作为快照真值来源；冷启动真值仍来自 HTTP Snapshot。
 
-### 8.6 EMQX 推荐配置样例
+### 8.7 EMQX 推荐配置样例
 
 以下为 **推荐联调方式**，重点是说明字段映射与回调方向；具体语法可按实际 EMQX 版本微调。
 
-#### 8.6.1 HTTP AuthN
+#### 8.7.1 HTTP AuthN
 
 EMQX 在客户端 CONNECT 时回调：
 
@@ -446,7 +551,7 @@ EMQX 在客户端 CONNECT 时回调：
 }
 ```
 
-#### 8.6.2 HTTP AuthZ
+#### 8.7.2 HTTP AuthZ
 
 EMQX 在 publish / subscribe 前回调：
 
@@ -464,7 +569,7 @@ EMQX 在 publish / subscribe 前回调：
 }
 ```
 
-#### 8.6.3 Rule Engine：位置消息写回
+#### 8.7.3 Rule Engine：位置消息写回
 
 推荐从 topic：
 
@@ -493,7 +598,7 @@ EMQX 在 publish / subscribe 前回调：
 - `client_id`
 - `username`
 
-#### 8.6.4 Rule Engine：连接 / 断开事件写回
+#### 8.7.4 Rule Engine：连接 / 断开事件写回
 
 推荐监听连接生命周期事件：
 
@@ -505,7 +610,7 @@ EMQX 在 publish / subscribe 前回调：
 - URL: `POST http://<app-server>/api/v1/internal/companion/mqtt/presence-ingest`
 - Header: `X-Internal-Token: ${COMPANION_MQTT_INTERNAL_TOKEN}`
 
-#### 8.6.5 服务端 control publisher
+#### 8.7.5 服务端 control / 弹幕 publisher
 
 App Server 作为一个普通 MQTT client 连接 EMQX，使用单独客户端身份：
 
@@ -513,12 +618,13 @@ App Server 作为一个普通 MQTT client 连接 EMQX，使用单独客户端身
 - `COMPANION_MQTT_PUBLISHER_USERNAME`
 - `COMPANION_MQTT_PUBLISHER_PASSWORD`
 
-其职责仅为：
+其职责为：
 
 - 向 `companion/{session_id}/control` 发布 `member_left` / `session_ended`；
+- 向 `companion/{session_id}/danmaku` 发布弹幕广播（默认复用 `controlPublisher`，亦可通过 `SetDanmakuPublisher` 注入独立 publisher）；
 - 不参与位置订阅与快照真值判断。
 
-### 8.7 建议的环境变量
+### 8.8 建议的环境变量
 
 - `EMQX_BROKER_URL`（服务端 publisher 自用，建议内网）
 - `EMQX_WEBSOCKET_URL`（服务端备用，建议内网）
@@ -550,6 +656,7 @@ App Server 作为一个普通 MQTT client 连接 EMQX，使用单独客户端身
 - EMQX HTTP AuthN / AuthZ 回调接口
 - MQTT 位置写回 / presence 写回内部接口
 - 服务端主动发布 `member_left` / `session_ended` control 消息
+- 同行文字弹幕：上行 ingest（限速/校验/落库）+ 服务端广播（Plan A 失败检测）
 
 ### 暂未实现
 

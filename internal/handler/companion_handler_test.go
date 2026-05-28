@@ -428,6 +428,72 @@ func TestCompanionInternalMQTTRoutesRequireToken(t *testing.T) {
 	}
 }
 
+func TestCompanionMQTTDanmakuIngest(t *testing.T) {
+	e := newTestEnv()
+	ensureTestUser(t, e, 1001, "owner")
+	ownerToken := e.generateTestToken(1001)
+
+	w := e.perform(http.MethodPost, "/api/v1/companion/session/create", []byte(`{"title":"弹幕测试"}`), authHeader(ownerToken))
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected create status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+	var created handler.StandardResponse[*service.CompanionSessionState]
+	decodeJSON(t, w.Body.Bytes(), &created)
+	sessionID := created.Data.Session.SessionID
+
+	w = e.perform(http.MethodPost, "/api/v1/companion/session/"+sessionID+"/mqtt/credentials", nil, authHeader(ownerToken))
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected mqtt credentials status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+	var credsResp handler.StandardResponse[*service.CompanionMQTTCredentials]
+	decodeJSON(t, w.Body.Bytes(), &credsResp)
+
+	// Happy path: 内部 token + 有效 principal + 内容合法 → 200。
+	body, _ := json.Marshal(service.CompanionMQTTDanmakuIngestInput{
+		SessionID: sessionID,
+		UserID:    1001,
+		Content:   "hello danmaku",
+		ClientID:  credsResp.Data.ClientID,
+		Username:  credsResp.Data.Username,
+	})
+	w = e.perform(http.MethodPost, "/api/v1/internal/companion/mqtt/danmaku-ingest", body, ut.Header{Key: "X-Internal-Token", Value: e.internalToken})
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected danmaku ingest status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+
+	// 缺少内部 token → 401。
+	w = e.perform(http.MethodPost, "/api/v1/internal/companion/mqtt/danmaku-ingest", body)
+	if w.Result().StatusCode() != http.StatusUnauthorized {
+		t.Fatalf("expected danmaku ingest missing token status 401, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+
+	// principal 不一致 → 403。
+	mismatchBody, _ := json.Marshal(service.CompanionMQTTDanmakuIngestInput{
+		SessionID: sessionID,
+		UserID:    1002,
+		Content:   "spoofed",
+		ClientID:  credsResp.Data.ClientID,
+		Username:  credsResp.Data.Username,
+	})
+	w = e.perform(http.MethodPost, "/api/v1/internal/companion/mqtt/danmaku-ingest", mismatchBody, ut.Header{Key: "X-Internal-Token", Value: e.internalToken})
+	if w.Result().StatusCode() != http.StatusForbidden {
+		t.Fatalf("expected danmaku ingest principal mismatch status 403, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+
+	// 空内容 → 400。
+	emptyBody, _ := json.Marshal(service.CompanionMQTTDanmakuIngestInput{
+		SessionID: sessionID,
+		UserID:    1001,
+		Content:   "   ",
+		ClientID:  credsResp.Data.ClientID,
+		Username:  credsResp.Data.Username,
+	})
+	w = e.perform(http.MethodPost, "/api/v1/internal/companion/mqtt/danmaku-ingest", emptyBody, ut.Header{Key: "X-Internal-Token", Value: e.internalToken})
+	if w.Result().StatusCode() != http.StatusBadRequest {
+		t.Fatalf("expected danmaku ingest empty content status 400, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+}
+
 func TestCompanionListHistory(t *testing.T) {
 	e := newTestEnv()
 	ensureTestUser(t, e, 1001, "owner")

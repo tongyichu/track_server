@@ -15,8 +15,9 @@ EMQX 在本项目中的职责是：
 - 承担“同行”实时位置消息分发；
 - 承担成员 presence（在线/离线）事件分发；
 - 在 `control` topic 上向客户端广播 `member_left` / `session_ended`；
+- 在 `danmaku` topic 上向同 session 成员广播文字弹幕；
 - 通过 HTTP AuthN / AuthZ 与 App Server 联动做动态鉴权；
-- 通过 Rule Engine / Webhook 将位置与连接事件写回 App Server。
+- 通过 Rule Engine / Webhook 将位置、连接事件、弹幕上行写回 App Server。
 
 对应 App Server 已实现的接口：
 
@@ -25,6 +26,7 @@ EMQX 在本项目中的职责是：
 - `POST /api/v1/internal/mqtt/acl`
 - `POST /api/v1/internal/companion/mqtt/location-ingest`
 - `POST /api/v1/internal/companion/mqtt/presence-ingest`
+- `POST /api/v1/internal/companion/mqtt/danmaku-ingest`
 
 ---
 
@@ -390,11 +392,13 @@ Dashboard 路径：
 如果你没有给 `track_server_control_publisher` superuser 权限，则需要额外给它加授权规则，只允许：
 
 - publish: `companion/+/control`
+- publish: `companion/+/danmaku`（用于弹幕广播）
 
 不允许：
 
 - 订阅成员位置 topic
 - 发布成员位置 topic
+- 发布成员上行弹幕 topic（`companion/+/member/+/danmaku`）
 
 #### 第 8 步：创建位置写回 HTTP Connector（推荐）
 
@@ -662,7 +666,79 @@ FROM
 
 然后由 App Server 结合 `username/client_id` 做校验和归属判断。
 
-#### 第 12 步：用 Dashboard 逐项验证
+#### 第 12 步：创建弹幕上行写回 Rule + HTTP Action
+
+弹幕（danmaku）走的是「客户端 publish 上行 topic → EMQX Rule → App Server ingest → 服务端 publisher 广播」的方案 A 链路。本步只配置上行写回，不要为弹幕广播 topic 配置任何回调。
+
+Dashboard 路径：
+
+- `Integration` → `Rules` → `Create`
+
+Connector 选择：
+
+- 推荐 **复用** 第 8 步创建的 `companion_location_connector`（同一个 App Server 基础地址）；
+- 也可新建 `companion_danmaku_connector`，URL 仍填 App Server 基础地址。
+
+填写：
+
+```text
+Rule Name: companion_danmaku_rule
+Action Type: HTTP Server
+Connector: companion_location_connector  (或新建的 companion_danmaku_connector)
+Method: POST
+URL Path: /api/v1/internal/companion/mqtt/danmaku-ingest
+Headers:
+  Content-Type: application/json
+  X-Internal-Token: <COMPANION_MQTT_INTERNAL_TOKEN>
+```
+
+推荐 SQL（从 topic 抽取 `session_id` / `user_id`，更稳，不依赖客户端 payload 字段）：
+
+```sql
+SELECT
+  nth(2, tokens(topic, '/')) AS session_id,
+  nth(4, tokens(topic, '/')) AS user_id,
+  payload.content AS content,
+  clientid AS client_id,
+  username AS username
+FROM
+  "companion/+/member/+/danmaku"
+```
+
+对应 Request Body（直接引用 SQL 中的别名）：
+
+```json
+{
+  "session_id": "${session_id}",
+  "user_id": ${user_id},
+  "content": "${content}",
+  "client_id": "${client_id}",
+  "username": "${username}"
+}
+```
+
+如客户端 payload 已带 `session_id` / `user_id`，也可改为：
+
+```sql
+SELECT
+  payload.session_id AS session_id,
+  payload.user_id AS user_id,
+  payload.content AS content,
+  clientid AS client_id,
+  username AS username
+FROM
+  "companion/+/member/+/danmaku"
+```
+
+注意事项：
+
+- **不要为弹幕广播 topic（`companion/{sid}/danmaku`）配置 Rule 回调**：广播由服务端 publisher 发出，再回调一次会形成不必要的重复处理；
+- **不要开启 retained**：客户端 publish 与服务端 publish 都不要带 retained 标记，断线重连时不应补发历史弹幕；
+- **QoS 建议 1**：客户端上行与服务端广播都建议 QoS 1，与现有 location / control 一致；
+- **重试与限流**：Action 启用重试 + 死信队列；服务端弹幕 ingest 接口本身有“10 秒滚动窗口 5 条”限速，超过会返回 `400 danmaku rate limit exceeded`，不会击穿后端；
+- **Webhook 不推荐**：仍建议使用 `Connector + Rule Action`，原因同第 10 节（需要自定义 Header 与 Body 模板）。
+
+#### 第 13 步：用 Dashboard 逐项验证
 
 验证顺序建议：
 
@@ -674,9 +750,13 @@ FROM
    - 观察 HTTP AuthZ 是否命中
 4. 再验证位置写回：
    - 发布一条 location，看 App Server snapshot 是否更新
-5. 最后验证 control topic：
+5. 再验证 control topic：
    - 成员 leave 时是否收到 `member_left`
    - owner end 时是否收到 `session_ended`
+6. 最后验证弹幕：
+   - 客户端 publish 一条弹幕，3 秒内能收到自身广播（Plan A 失败检测）；
+   - 同 session 其他成员能实时收到弹幕；
+   - 超长（> 200 字符）/ 高频（10 秒内 > 5 条）会被服务端拦截。
 
 ---
 
@@ -716,11 +796,12 @@ FROM
 仅允许该账号：
 
 - publish：`companion/+/control`
+- publish：`companion/+/danmaku`（用于弹幕广播）
 
 不允许：
 
 - 订阅成员位置 topic
-- 发布成员位置 topic
+- 发布成员位置 / 成员上行弹幕 topic
 
 如果团队更偏向最小权限原则，可以采用该方案。
 
@@ -871,10 +952,16 @@ No Match: deny
 - publish 自己的：
   - `companion/{session_id}/member/{user_id}/location`
   - `companion/{session_id}/member/{user_id}/presence`
+  - `companion/{session_id}/member/{user_id}/danmaku`
 - subscribe 当前 session 的：
   - `companion/{session_id}/member/+/location`
   - `companion/{session_id}/member/+/presence`
   - `companion/{session_id}/control`
+  - `companion/{session_id}/danmaku`
+
+明确拒绝：
+
+- 客户端 publish 弹幕广播 topic `companion/{session_id}/danmaku`（仅服务端 publisher 可发）。
 
 ---
 
@@ -1049,7 +1136,42 @@ Request Body(JSON):
   }
 ```
 
-### 10.3 推荐的客户端上报 payload 模板
+### 10.3 弹幕上行写回
+
+监听 topic：
+
+- `companion/+/member/+/danmaku`
+
+下游回调：
+
+- `POST http://<app-server-inner>/api/v1/internal/companion/mqtt/danmaku-ingest`
+
+Header：
+
+- `Content-Type: application/json`
+- `X-Internal-Token: <COMPANION_MQTT_INTERNAL_TOKEN>`
+
+建议透传字段（推荐从 topic 抽取 session/user，避免依赖客户端 payload）：
+
+```json
+{
+  "session_id": "<从 topic 第 2 段提取>",
+  "user_id": "<从 topic 第 4 段提取>",
+  "content": "<payload.content>",
+  "client_id": "${clientid}",
+  "username": "${username}"
+}
+```
+
+注意：
+
+- **不要为弹幕广播 topic（`companion/+/danmaku`，无 `member/+`）配置任何 Rule 回调**：广播由服务端 publisher 发出，再回调一次会形成不必要的重复处理；
+- 客户端 publish 与服务端 publish 都不要带 `retained=true`，断线重连时不应补发历史弹幕；
+- App Server ingest 接口本身有“10 秒滚动窗口 5 条”限速与 200 字符长度限制，超过返回 `400`。
+
+详细 Dashboard 操作步骤见第 6.3 节「第 12 步」。
+
+### 10.4 推荐的客户端上报 payload 模板
 
 为了让 Rule Engine 配置最简单，推荐客户端发布 location 时使用如下 JSON：
 
@@ -1073,6 +1195,22 @@ Request Body(JSON):
 对应 publish topic：
 
 - `companion/{session_id}/member/{user_id}/location`
+
+弹幕（danmaku）的客户端上行 payload 推荐：
+
+```json
+{
+  "session_id": "sess_xxx",
+  "user_id": 1001,
+  "content": "加油！"
+}
+```
+
+对应 publish topic：
+
+- `companion/{session_id}/member/{user_id}/danmaku`
+- QoS：`1`
+- Retained：`false`
 
 ---
 
@@ -1153,6 +1291,10 @@ Topic：
 - [ ] `/api/v1/internal/mqtt/acl` 可返回 allow/deny
 - [ ] `/api/v1/internal/companion/mqtt/location-ingest` 写回成功
 - [ ] `/api/v1/internal/companion/mqtt/presence-ingest` 写回成功
+- [ ] `/api/v1/internal/companion/mqtt/danmaku-ingest` 写回成功
+- [ ] `companion_danmaku_rule` 已创建并启用，且仅匹配 `companion/+/member/+/danmaku`
+- [ ] 未为弹幕广播 topic（`companion/+/danmaku`）配置任何 Rule 回调
+- [ ] 若 publisher 走最小权限 ACL，已追加 `companion/+/danmaku` 的 publish 放行
 
 ### 12.4 业务联调层
 
@@ -1161,6 +1303,10 @@ Topic：
 - [ ] 成员离开时客户端能收到 `member_left`
 - [ ] owner 结束时客户端能收到 `session_ended`
 - [ ] 所有人离开后能 auto-end
+- [ ] 客户端发送弹幕能在 3 秒内收到自身广播（Plan A 失败检测）
+- [ ] 同 session 其他成员能实时收到弹幕
+- [ ] 超长（> 200 字符）/ 高频（10 秒内 > 5 条）弹幕被服务端拦截，日志可见 `400 danmaku rate limit exceeded` / `content exceeds ...`
+- [ ] 伪造 `session_id / user_id` 的 ingest 请求被服务端 `403` 拦截
 
 ---
 
@@ -1174,7 +1320,8 @@ Topic：
 4. 配 HTTP AuthZ，验证 publish/subscribe 权限；
 5. 配位置写回规则，验证 snapshot 可更新；
 6. 配 presence 写回规则，验证在线状态同步；
-7. 最后联调 `control` topic 的 `member_left` / `session_ended`。
+7. 联调 `control` topic 的 `member_left` / `session_ended`；
+8. 最后配弹幕上行写回规则（`companion_danmaku_rule`），验证客户端能收到自身广播 + 其他成员广播。
 
 ---
 
@@ -1215,6 +1362,31 @@ Topic：
 - EMQX 是否真的配置了连接/断开事件规则；
 - 回调 payload 中是否包含 `client_id` / `username`；
 - App Server 是否能根据 principal 校验到对应 session/member。
+
+### 14.5 客户端发送了弹幕，但所有人都收不到
+
+优先检查：
+
+- EMQX 中 `companion_danmaku_rule` 是否启用、SQL 是否匹配 `companion/+/member/+/danmaku`；
+- HTTP Action 的回调 URL Path 是否为 `/api/v1/internal/companion/mqtt/danmaku-ingest`；
+- App Server 日志中是否出现 `companion danmaku publisher not configured`：表示 `controlPublisher` / `danmakuPublisher` 都未注入，广播被丢弃；
+- App Server 日志中是否出现 `403` / `principal mismatch`：通常是 SQL 中 `session_id` / `user_id` 抽取错位，或客户端用了过期凭证。
+
+### 14.6 客户端发送弹幕后只有自己能看到（或反之）
+
+优先检查：
+
+- `companion/{sid}/danmaku` 的 subscribe 是否在 AuthZ 中被允许（应允许，由 App Server 控制）；
+- 是否误把广播 topic（`companion/+/danmaku`，无 `member/+`）也加进了 Rule，导致服务端发的广播又被回调到 ingest 接口造成混乱；
+- 客户端是否真的订阅了 `companion/{sid}/danmaku`，而不是只订阅了某个 `member/+/danmaku`。
+
+### 14.7 高频压测时部分弹幕丢失
+
+属于预期行为：
+
+- 服务端对单成员有 10 秒滚动窗口 5 条的限速；
+- 超出会以 `400 danmaku rate limit exceeded` 返回，对应消息不会广播；
+- 客户端按 Plan A 等待 3 秒收不到自己的广播即可视为发送失败，由 UI 提示用户重试。
 
 ---
 

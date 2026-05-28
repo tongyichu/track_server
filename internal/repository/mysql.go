@@ -162,6 +162,16 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 			PRIMARY KEY (session_id, user_id),
 			KEY idx_companion_positions_recorded (session_id, recorded_at)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='同行会话最新位置快照表';`,
+		`CREATE TABLE IF NOT EXISTS companion_danmakus (
+			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+			session_id VARCHAR(64) NOT NULL,
+			user_id BIGINT NOT NULL,
+			content VARCHAR(200) NOT NULL,
+			created_at DATETIME(6) NOT NULL,
+			PRIMARY KEY (id),
+			KEY idx_companion_danmaku_session_time (session_id, created_at),
+			KEY idx_companion_danmaku_session_user_time (session_id, user_id, created_at)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='同行文字弹幕表';`,
 		`CREATE TABLE IF NOT EXISTS app_releases (
 			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
 			platform VARCHAR(16) NOT NULL COMMENT 'android / ios',
