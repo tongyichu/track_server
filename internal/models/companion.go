@@ -50,6 +50,8 @@ type CompanionSession struct {
 	JoinToken          string                 `json:"-" bson:"join_token"`
 	JoinTokenExpireAt  time.Time              `json:"-" bson:"join_token_expire_at"`
 	Title              string                 `json:"title" bson:"title"`
+	TrackType          string                 `json:"track_type" bson:"track_type"`
+	LocateAddr         string                 `json:"locate_addr" bson:"locate_addr"`
 	MaxMembers         int                    `json:"max_members" bson:"max_members"`
 	StartedAt          time.Time              `json:"started_at" bson:"started_at"`
 	EndedAt            time.Time              `json:"ended_at,omitempty" bson:"ended_at,omitempty"`
@@ -134,8 +136,10 @@ type CompanionHistoryParticipant struct {
 type CompanionHistoryItem struct {
 	SessionID         string                       `json:"session_id"`
 	Title             string                       `json:"title"`
+	TrackType         string                       `json:"track_type"`
 	ParticipantCount  int64                        `json:"participant_count"`
 	StartedAt         time.Time                    `json:"started_at"`
+	DurationSeconds   int64                        `json:"duration_seconds"`
 	Status            CompanionSessionStatus       `json:"status"`
 	Participants      []CompanionHistoryParticipant `json:"participants"`
 }

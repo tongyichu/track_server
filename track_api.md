@@ -1563,6 +1563,8 @@ Content-Type: application/json
 ```json
 {
   "title": "周末同行",
+  "track_type": "徒步",
+  "locate_addr": "北京市海淀区颐和园",
   "max_members": 8
 }
 ```
@@ -1570,6 +1572,8 @@ Content-Type: application/json
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | `title` | string | 否 | 会话标题，默认 `与友同行` |
+| `track_type` | string | 否 | 运动类型（徒步 / 跑步 / 爬山 / 骑行 等，与 `track_types` 接口返回的类型一致），默认空字符串 |
+| `locate_addr` | string | 否 | 创建会话时的位置信息文本（由客户端逆地理获取），默认空字符串，最大 255 字符 |
 | `max_members` | int | 否 | 最大成员数，默认 `8`，最小 `2`，最大 `32` |
 
 ### 响应
@@ -1583,6 +1587,8 @@ Content-Type: application/json
       "owner_user_id": 1001,
       "status": "active",
       "title": "周末同行",
+      "track_type": "徒步",
+      "locate_addr": "北京市海淀区颐和园",
       "max_members": 8,
       "started_at": "2026-05-23T16:00:00Z",
       "created_at": "2026-05-23T16:00:00Z",
@@ -1787,8 +1793,10 @@ Authorization: Bearer <token>
       {
         "session_id": "sess_xxx",
         "title": "周末同行",
+        "track_type": "徒步",
         "participant_count": 3,
         "started_at": "2026-05-23T16:00:00Z",
+        "duration_seconds": 7200,
         "status": "active",
         "participants": [
           {
@@ -1818,8 +1826,10 @@ Authorization: Bearer <token>
 | `data.items` | `CompanionHistoryItem[]` | 当前页记录列表，按 `started_at DESC, session_id DESC` 排序。 |
 | `data.items[].session_id` | string | 同行会话 ID。 |
 | `data.items[].title` | string | 同行标题。 |
+| `data.items[].track_type` | string | 运动类型（徒步 / 跑步 / 爬山 / 骑行 等），创建会话时传入；若未设置则为空字符串。 |
 | `data.items[].participant_count` | int64 | 该场同行人数：若 `status=ended`，返回参与过的人数；若 `status=active`，返回当前仍为 `joined` 的人数。 |
 | `data.items[].started_at` | string(datetime) | 同行开始时间。 |
+| `data.items[].duration_seconds` | int64 | 同行总耗时（秒）：`status=ended` 取 `ended_at - started_at`；`status=active` 取 `now - started_at`。 |
 | `data.items[].status` | string | 同行状态：`active` / `ended`。 |
 | `data.items[].participants` | `CompanionHistoryParticipant[]` | 人员列表口径与 `participant_count` 一致：若 `status=ended` 返回参与过的人员；若 `status=active` 返回当前仍为 `joined` 的人员。 |
 | `data.items[].participants[].user_id` | int64 | 参与人 user_id。 |

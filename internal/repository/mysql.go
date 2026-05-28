@@ -117,6 +117,8 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 			join_token VARCHAR(128) NOT NULL,
 			join_token_expire_at DATETIME(6) NOT NULL,
 			title VARCHAR(64) NOT NULL DEFAULT '',
+			track_type VARCHAR(32) NOT NULL DEFAULT '',
+			locate_addr VARCHAR(255) NOT NULL DEFAULT '',
 			max_members INT NOT NULL DEFAULT 8,
 			started_at DATETIME(6) NOT NULL,
 			ended_at DATETIME(6) NULL,
@@ -227,6 +229,12 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 	if err := ensureMySQLTrackWaypointTrackIDColumn(ctx, db); err != nil {
+		return err
+	}
+	if err := ensureMySQLCompanionSessionTrackTypeColumn(ctx, db); err != nil {
+		return err
+	}
+	if err := ensureMySQLCompanionSessionLocateAddrColumn(ctx, db); err != nil {
 		return err
 	}
 	return nil
@@ -480,6 +488,46 @@ func ensureMySQLTrackTypeColumn(ctx context.Context, db *sql.DB) error {
 	_, err = db.ExecContext(ctx, `ALTER TABLE track_records ADD COLUMN track_type VARCHAR(32) NOT NULL DEFAULT '' COMMENT '轨迹类型' AFTER city_code`)
 	if err != nil {
 		return fmt.Errorf("add track_records.track_type column: %w", err)
+	}
+	return nil
+}
+
+func ensureMySQLCompanionSessionTrackTypeColumn(ctx context.Context, db *sql.DB) error {
+	var count int
+	err := db.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM information_schema.COLUMNS
+		WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'companion_sessions' AND COLUMN_NAME = 'track_type'`,
+	).Scan(&count)
+	if err != nil {
+		return fmt.Errorf("check companion_sessions.track_type column: %w", err)
+	}
+	if count > 0 {
+		return nil
+	}
+	_, err = db.ExecContext(ctx, `ALTER TABLE companion_sessions ADD COLUMN track_type VARCHAR(32) NOT NULL DEFAULT '' COMMENT '运动类型' AFTER title`)
+	if err != nil {
+		return fmt.Errorf("add companion_sessions.track_type column: %w", err)
+	}
+	return nil
+}
+
+func ensureMySQLCompanionSessionLocateAddrColumn(ctx context.Context, db *sql.DB) error {
+	var count int
+	err := db.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM information_schema.COLUMNS
+		WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'companion_sessions' AND COLUMN_NAME = 'locate_addr'`,
+	).Scan(&count)
+	if err != nil {
+		return fmt.Errorf("check companion_sessions.locate_addr column: %w", err)
+	}
+	if count > 0 {
+		return nil
+	}
+	_, err = db.ExecContext(ctx, `ALTER TABLE companion_sessions ADD COLUMN locate_addr VARCHAR(255) NOT NULL DEFAULT '' COMMENT '位置信息' AFTER track_type`)
+	if err != nil {
+		return fmt.Errorf("add companion_sessions.locate_addr column: %w", err)
 	}
 	return nil
 }

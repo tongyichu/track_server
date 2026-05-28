@@ -125,6 +125,8 @@ CREATE TABLE `companion_sessions` (
                                      `join_token` VARCHAR(128) NOT NULL COMMENT '加入凭证',
                                      `join_token_expire_at` DATETIME(6) NOT NULL COMMENT '加入凭证过期时间',
                                      `title` VARCHAR(64) NOT NULL DEFAULT '' COMMENT '会话标题',
+                                     `track_type` VARCHAR(32) NOT NULL DEFAULT '' COMMENT '运动类型',
+                                     `locate_addr` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '位置信息',
                                      `max_members` INT NOT NULL DEFAULT '8' COMMENT '最大成员数',
                                      `started_at` DATETIME(6) NOT NULL COMMENT '开始时间',
                                      `ended_at` DATETIME(6) DEFAULT NULL COMMENT '结束时间',

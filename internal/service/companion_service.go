@@ -131,6 +131,8 @@ func (s *CompanionService) SetAvatarCache(cache *AssetCacheService) {
 // CreateCompanionSessionInput describes the payload to create a companion session.
 type CreateCompanionSessionInput struct {
 	Title      string `json:"title"`
+	TrackType  string `json:"track_type"`
+	LocateAddr string `json:"locate_addr"`
 	MaxMembers int    `json:"max_members"`
 }
 
@@ -512,6 +514,8 @@ func (s *CompanionService) CreateSession(ctx context.Context, ownerUserID int64,
 		JoinToken:         joinToken,
 		JoinTokenExpireAt: now.Add(defaultCompanionJoinTokenTTL),
 		Title:             title,
+		TrackType:         strings.TrimSpace(in.TrackType),
+		LocateAddr:        strings.TrimSpace(in.LocateAddr),
 		MaxMembers:        maxMembers,
 		StartedAt:         now,
 		CreatedAt:         now,
@@ -879,11 +883,21 @@ func (s *CompanionService) buildHistoryItem(ctx context.Context, session *models
 		})
 	}
 	clone := *session
+	endAt := clone.EndedAt
+	if endAt.IsZero() {
+		endAt = time.Now()
+	}
+	var durationSeconds int64
+	if !clone.StartedAt.IsZero() && endAt.After(clone.StartedAt) {
+		durationSeconds = int64(endAt.Sub(clone.StartedAt) / time.Second)
+	}
 	return &models.CompanionHistoryItem{
 		SessionID:        clone.SessionID,
 		Title:            clone.Title,
+		TrackType:        clone.TrackType,
 		ParticipantCount: participantCount,
 		StartedAt:        clone.StartedAt,
+		DurationSeconds:  durationSeconds,
 		Status:           clone.Status,
 		Participants:     participants,
 	}, nil
