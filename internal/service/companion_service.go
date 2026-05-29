@@ -17,6 +17,7 @@ import (
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 
+	"github.com/tongyichu/track_server/internal/config"
 	"github.com/tongyichu/track_server/internal/models"
 	"github.com/tongyichu/track_server/internal/repository"
 )
@@ -39,6 +40,10 @@ const (
 	companionDanmakuRateLimitWindow = 10 * time.Second
 	// 弹幕：单成员在 companionDanmakuRateLimitWindow 内允许发送的最大条数。
 	companionDanmakuRateLimitMax = 5
+	// 弹幕：session 级总量限速窗口长度（与单成员窗口一致即可）。
+	companionDanmakuSessionRateLimitWindow = 10 * time.Second
+	// 弹幕：session 级在窗口内允许发送的最大条数（所有成员合计）。
+	companionDanmakuSessionRateLimitMax = 30
 )
 
 // CompanionService 实现“同行”控制面的业务逻辑。
@@ -73,7 +78,10 @@ type CompanionControlEvent struct {
 	MemberUserID   int64     `json:"member_user_id,omitempty"`
 	OperatorUserID int64     `json:"operator_user_id,omitempty"`
 	Reason         string    `json:"reason,omitempty"`
-	At             time.Time `json:"at"`
+	// Enabled 仅用于 danmaku_toggled 事件：true=已开启，false=已关闭。
+	// 用指针以便在不携带该字段的事件中通过 omitempty 隐藏。
+	Enabled *bool     `json:"enabled,omitempty"`
+	At      time.Time `json:"at"`
 }
 
 // CompanionMQTTControlPublisherOptions defines server-side MQTT publishing options.
@@ -311,8 +319,9 @@ type companionMQTTPrincipalClaims struct {
 }
 
 const (
-	CompanionControlEventMemberLeft   = "member_left"
-	CompanionControlEventSessionEnded = "session_ended"
+	CompanionControlEventMemberLeft     = "member_left"
+	CompanionControlEventSessionEnded   = "session_ended"
+	CompanionControlEventDanmakuToggled = "danmaku_toggled"
 )
 
 // NewMQTTCompanionControlPublisher creates a best-effort MQTT publisher for companion control events.
@@ -550,6 +559,10 @@ func (s *CompanionService) IngestDanmakuFromMQTT(ctx context.Context, in Compani
 	if err != nil {
 		return err
 	}
+	// 2.5 会话级弹幕开关：owner 关闭后所有成员均不可发送。
+	if !session.DanmakuEnabled {
+		return invalidArg("danmaku disabled")
+	}
 	// 3. 内容校验。
 	content := strings.TrimSpace(in.Content)
 	if content == "" {
@@ -558,7 +571,12 @@ func (s *CompanionService) IngestDanmakuFromMQTT(ctx context.Context, in Compani
 	if utf8.RuneCountInString(content) > companionDanmakuMaxContentLength {
 		return invalidArg(fmt.Sprintf("content exceeds %d characters", companionDanmakuMaxContentLength))
 	}
-	// 4. 限速。
+	// 3.5 本地敏感词审核：命中即整条拒绝；不向客户端暴露具体词，仅服务端日志记录。
+	if matched, hit := config.MatchSensitive(content); hit {
+		log.Printf("companion danmaku rejected by sensitive word: session=%s user=%d matched=%q", sessionID, in.UserID, matched)
+		return invalidArg("content contains sensitive content")
+	}
+	// 4. 单成员限速。
 	since := time.Now().Add(-companionDanmakuRateLimitWindow)
 	count, err := s.repo.CountDanmakuByMemberSince(ctx, sessionID, in.UserID, since)
 	if err != nil {
@@ -566,6 +584,15 @@ func (s *CompanionService) IngestDanmakuFromMQTT(ctx context.Context, in Compani
 	}
 	if count >= companionDanmakuRateLimitMax {
 		return invalidArg("danmaku rate limit exceeded")
+	}
+	// 4.5 session 级总量限速。
+	sessionSince := time.Now().Add(-companionDanmakuSessionRateLimitWindow)
+	sessionCount, err := s.repo.CountDanmakuBySessionSince(ctx, sessionID, sessionSince)
+	if err != nil {
+		return err
+	}
+	if sessionCount >= companionDanmakuSessionRateLimitMax {
+		return invalidArg("session danmaku rate limit exceeded")
 	}
 	// 5. 持久化。
 	now := time.Now()
@@ -605,6 +632,58 @@ func (s *CompanionService) IngestDanmakuFromMQTT(ctx context.Context, in Compani
 	}
 	s.publishDanmakuBroadcast(ctx, session.SessionID, broadcast)
 	return nil
+}
+
+// SetSessionDanmakuEnabled toggles danmaku on/off for a session.
+//
+//   - 仅会话 owner 可调用；
+//   - 会话必须处于 active 状态；
+//   - 状态等于目标值时幂等返回当前 state，不广播事件；
+//   - 状态变更后通过 control topic 广播 `danmaku_toggled` 事件，所有订阅成员实时感知。
+func (s *CompanionService) SetSessionDanmakuEnabled(ctx context.Context, operatorUserID int64, sessionID string, enabled bool) (*CompanionSessionState, error) {
+	if s == nil || s.repo == nil {
+		return nil, errors.New("companion service not configured")
+	}
+	if operatorUserID <= 0 {
+		return nil, invalidArg("user_id is required")
+	}
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return nil, invalidArg("session_id is required")
+	}
+	session, err := s.repo.FindSessionByID(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	if session.Status != models.CompanionSessionStatusActive {
+		return nil, invalidArg("companion session already ended")
+	}
+	if session.OwnerUserID != operatorUserID {
+		return nil, repository.ErrForbidden
+	}
+	if session.DanmakuEnabled == enabled {
+		// 幂等：状态未变化，不更新、不广播。
+		return s.buildSessionState(ctx, session, operatorUserID, true)
+	}
+	session.DanmakuEnabled = enabled
+	if err := s.repo.UpdateSession(ctx, session); err != nil {
+		return nil, err
+	}
+	now := time.Now()
+	reason := "danmaku_disabled"
+	if enabled {
+		reason = "danmaku_enabled"
+	}
+	enabledCopy := enabled
+	s.publishControlEvent(ctx, sessionID, CompanionControlEvent{
+		Event:          CompanionControlEventDanmakuToggled,
+		SessionID:      sessionID,
+		OperatorUserID: operatorUserID,
+		Reason:         reason,
+		Enabled:        &enabledCopy,
+		At:             now,
+	})
+	return s.buildSessionState(ctx, session, operatorUserID, true)
 }
 
 // CreateSession creates a new active companion session owned by the user.
@@ -665,6 +744,7 @@ func (s *CompanionService) CreateSession(ctx context.Context, ownerUserID int64,
 		TrackType:         strings.TrimSpace(in.TrackType),
 		LocateAddr:        strings.TrimSpace(in.LocateAddr),
 		MaxMembers:        maxMembers,
+		DanmakuEnabled:    true,
 		StartedAt:         now,
 		CreatedAt:         now,
 		UpdatedAt:         now,

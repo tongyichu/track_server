@@ -494,6 +494,91 @@ func TestCompanionMQTTDanmakuIngest(t *testing.T) {
 	}
 }
 
+func TestCompanionToggleSessionDanmakuHappyPath(t *testing.T) {
+	e := newTestEnv()
+	ensureTestUser(t, e, 1001, "owner")
+	ownerToken := e.generateTestToken(1001)
+
+	w := e.perform(http.MethodPost, "/api/v1/companion/session/create", []byte(`{"title":"toggle"}`), authHeader(ownerToken))
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected create status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+	var created handler.StandardResponse[*service.CompanionSessionState]
+	decodeJSON(t, w.Body.Bytes(), &created)
+	sessionID := created.Data.Session.SessionID
+	if !created.Data.Session.DanmakuEnabled {
+		t.Fatalf("expected newly created session to have danmaku enabled by default")
+	}
+
+	body, _ := json.Marshal(map[string]any{"enabled": false})
+	w = e.perform(http.MethodPost, "/api/v1/companion/session/"+sessionID+"/danmaku/toggle", body, authHeader(ownerToken))
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected toggle status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+	var toggled handler.StandardResponse[*service.CompanionSessionState]
+	decodeJSON(t, w.Body.Bytes(), &toggled)
+	if toggled.Data == nil || toggled.Data.Session == nil {
+		t.Fatalf("expected toggle response to carry session state")
+	}
+	if toggled.Data.Session.DanmakuEnabled {
+		t.Fatalf("expected danmaku_enabled=false after toggle, got true")
+	}
+}
+
+func TestCompanionToggleSessionDanmakuNonOwnerForbidden(t *testing.T) {
+	e := newTestEnv()
+	ensureTestUser(t, e, 1001, "owner")
+	ensureTestUser(t, e, 1002, "guest")
+	ownerToken := e.generateTestToken(1001)
+	guestToken := e.generateTestToken(1002)
+
+	w := e.perform(http.MethodPost, "/api/v1/companion/session/create", []byte(`{"title":"toggle"}`), authHeader(ownerToken))
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected create status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+	var created handler.StandardResponse[*service.CompanionSessionState]
+	decodeJSON(t, w.Body.Bytes(), &created)
+	sessionID := created.Data.Session.SessionID
+
+	joinBody, _ := json.Marshal(map[string]string{"join_token": created.Data.Join.JoinToken})
+	w = e.perform(http.MethodPost, "/api/v1/companion/session/join", joinBody, authHeader(guestToken))
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected join status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+
+	body, _ := json.Marshal(map[string]any{"enabled": false})
+	w = e.perform(http.MethodPost, "/api/v1/companion/session/"+sessionID+"/danmaku/toggle", body, authHeader(guestToken))
+	if w.Result().StatusCode() != http.StatusForbidden {
+		t.Fatalf("expected toggle status 403 for non-owner, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+}
+
+func TestCompanionToggleSessionDanmakuBadBody(t *testing.T) {
+	e := newTestEnv()
+	ensureTestUser(t, e, 1001, "owner")
+	ownerToken := e.generateTestToken(1001)
+
+	w := e.perform(http.MethodPost, "/api/v1/companion/session/create", []byte(`{"title":"toggle"}`), authHeader(ownerToken))
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected create status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+	var created handler.StandardResponse[*service.CompanionSessionState]
+	decodeJSON(t, w.Body.Bytes(), &created)
+	sessionID := created.Data.Session.SessionID
+
+	// 缺 enabled 字段。
+	w = e.perform(http.MethodPost, "/api/v1/companion/session/"+sessionID+"/danmaku/toggle", []byte(`{}`), authHeader(ownerToken))
+	if w.Result().StatusCode() != http.StatusBadRequest {
+		t.Fatalf("expected toggle missing enabled status 400, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+
+	// 空请求体。
+	w = e.perform(http.MethodPost, "/api/v1/companion/session/"+sessionID+"/danmaku/toggle", nil, authHeader(ownerToken))
+	if w.Result().StatusCode() != http.StatusBadRequest {
+		t.Fatalf("expected toggle empty body status 400, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+}
+
 func TestCompanionListHistory(t *testing.T) {
 	e := newTestEnv()
 	ensureTestUser(t, e, 1001, "owner")

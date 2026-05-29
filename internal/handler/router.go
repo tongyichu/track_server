@@ -130,6 +130,7 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 	auth.GET("/companion/session/:session_id/snapshot", companionHandler.GetSnapshot)
 	auth.POST("/companion/session/:session_id/leave", companionHandler.LeaveSession)
 	auth.POST("/companion/session/:session_id/end", companionHandler.EndSession)
+	auth.POST("/companion/session/:session_id/danmaku/toggle", companionHandler.ToggleSessionDanmaku)
 	auth.POST("/companion/session/:session_id/mqtt/credentials", companionHandler.IssueMQTTCredentials)
 
 	// oss upload

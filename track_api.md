@@ -37,6 +37,7 @@
 | 25 | [EMQX HTTP AuthN 回调](#25-emqx-http-authn-回调) | POST | `/internal/mqtt/auth` | ❌（内部） |
 | 26 | [EMQX HTTP AuthZ 回调](#26-emqx-http-authz-回调) | POST | `/internal/mqtt/acl` | ❌（内部） |
 | 27 | [EMQX 数据面写回接口](#27-emqx-数据面写回接口) | POST | `/internal/companion/mqtt/*` | ❌（内部） |
+| 28 | [同行弹幕开关切换](#274-弹幕开关切换owner) | POST | `/companion/session/:session_id/danmaku/toggle` | ✅ |
 
 ---
 
@@ -2121,7 +2122,10 @@ Content-Type: application/json
 - `400 Bad Request`
   - `session_id is required` / `user_id is required` / `content is required`
   - `content exceeds 200 characters`
+  - `content contains sensitive content`（命中本地敏感词词库；命中词不向客户端暴露）
   - `danmaku rate limit exceeded`（单成员 10 秒滚动窗口内最多 5 条）
+  - `session danmaku rate limit exceeded`（整个 session 10 秒滚动窗口内最多 30 条）
+  - `danmaku disabled`（owner 已通过 27.4 接口关闭弹幕）
 - `401 Unauthorized` / `403 Forbidden`
   - 缺少或无效 `X-Internal-Token`
   - `client_id / username` 与 `session_id / user_id` 不匹配（principal 复核失败）
@@ -2133,8 +2137,69 @@ Content-Type: application/json
 
 - 客户端 publish 后启动 **3s** 超时计时器；
 - 在订阅的 `companion/{session_id}/danmaku` 上收到 `user_id` 等于自身且 `content` 与本次匹配的消息 → 标记发送成功；
-- 超时未收到 → 标记发送失败，UI 提示用户重试；
+- 超时未收到 → 标记发送失败，UI 提示用户重试（失败原因可能是开关已关闭 / 命中敏感词 / 限速 / 网络抖动，UI 文案保持通用）；
 - 广播 topic 不使用 retained，断线重连后只展示新到的弹幕，历史不补发。
+
+### 27.4 弹幕开关切换（owner）
+
+供同行会话 owner 开启或关闭整场会话的弹幕能力。关闭后所有成员均无法发送，
+服务端通过 `companion/{session_id}/control` topic 广播 `danmaku_toggled` 事件，
+客户端据此即时更新 UI（禁用/恢复输入框）。
+
+```http
+POST /api/v1/companion/session/:session_id/danmaku/toggle
+Authorization: Bearer <jwt>
+Content-Type: application/json
+```
+
+```json
+{
+  "enabled": false
+}
+```
+
+请求字段：
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `enabled` | bool | 是 | 目标状态：true=开启，false=关闭 |
+
+成功响应：返回标准 `CompanionSessionState`，其中 `session.danmaku_enabled` 已是更新后的值。
+
+广播事件（服务端发布到 `companion/{session_id}/control`）：
+
+```json
+{
+  "event": "danmaku_toggled",
+  "session_id": "sess_xxx",
+  "operator_user_id": 1001,
+  "reason": "danmaku_disabled",
+  "enabled": false,
+  "at": "2026-05-23T18:10:00Z"
+}
+```
+
+字段说明：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `event` | string | 固定为 `danmaku_toggled` |
+| `operator_user_id` | int64 | 操作者 user_id（owner） |
+| `reason` | string | `danmaku_enabled` / `danmaku_disabled` |
+| `enabled` | bool | 切换后的目标状态 |
+
+错误响应：
+
+- `400 Bad Request`
+  - `enabled is required`（请求体缺失或字段为 null）
+  - `companion session already ended`（session 非 active）
+- `403 Forbidden`：调用者不是 session owner
+- `404 Not Found`：session 不存在
+
+幂等：当 `enabled` 与当前状态一致时，服务端不更新 DB、不广播事件，直接返回当前 state。
+
+会话 snapshot / state 中的 `danmaku_enabled` 字段（位于 `session` 对象内）反映当前开关状态，
+客户端进入会话时可据此初始化 UI。
 
 ---
 

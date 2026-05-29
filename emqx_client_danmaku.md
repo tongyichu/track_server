@@ -89,6 +89,15 @@
 
 订阅成功后，客户端就能收到包括自己发送的弹幕在内的所有 session 弹幕广播。
 
+### 第 2.5 步：根据 session 状态决定输入框是否可用
+
+进入同行页面拉取 session 状态（`/api/v1/companion/session/:session_id` 等返回 `CompanionSessionState` 的接口）时，**必须读取 `danmaku_enabled` 字段**作为弹幕输入框的初始状态：
+
+- `danmaku_enabled == true`：输入框可用；
+- `danmaku_enabled == false`：输入框置灰、提示「房主已关闭弹幕」。
+
+订阅 `control_subscribe` 时同时处理 `danmaku_toggled` 控制事件（详见第 4.5 节），收到后实时切换 UI 状态。
+
 ### 第 3 步：发送弹幕
 
 #### 3.1 客户端预校验（强烈建议）
@@ -217,6 +226,9 @@ EMQX → App Server 的 ingest 是后端链路，**客户端不会直接看到 H
 
 - `content` 超过 200 字符 → `400 content exceeds 200 characters`；
 - 单成员 10 秒内发了超过 5 条 → `400 danmaku rate limit exceeded`；
+- session 10 秒内全员合计超过 30 条 → `400 session danmaku rate limit exceeded`；
+- 命中本地敏感词词库 → `400 content contains sensitive content`；
+- 房主关闭了弹幕 → `400 danmaku disabled`；
 - 上行 payload 与 principal（client_id / username）不匹配 → `403`；
 - session 已结束 → `404`。
 
@@ -238,6 +250,28 @@ EMQX → App Server 的 ingest 是后端链路，**客户端不会直接看到 H
 
 由 QoS 1 + 重连导致的重复在 MQTT 中是正常现象。客户端必须用 `message_id` 做幂等去重，**不要用 `(user_id, content)` 去重**，否则会把短时间内重复发送的相同文字误判为重复。
 
+### 4.5 处理 `danmaku_toggled` 控制事件
+
+订阅 `topics.control_subscribe` 的客户端会在房主切换弹幕开关时收到下列消息：
+
+```json
+{
+  "event": "danmaku_toggled",
+  "session_id": "sess_xxx",
+  "operator_user_id": 1001,
+  "enabled": false,
+  "reason": "danmaku_disabled",
+  "at": "2026-05-29T10:20:30Z"
+}
+```
+
+处理建议：
+
+- 收到 `enabled == false`：立即禁用本地输入框；已经处于 `pending` 的发送可以等其自然 3s 超时；
+- 收到 `enabled == true`：恢复输入框；
+- 不要依赖 HTTP 接口轮询，控制事件以 MQTT 推送为唯一权威入口；
+- `operator_user_id` 可用于在房间内提示「房主 XX 已关闭/开启弹幕」。
+
 ---
 
 ## 5. 客户端最小联调清单
@@ -254,6 +288,11 @@ EMQX → App Server 的 ingest 是后端链路，**客户端不会直接看到 H
 - [ ] A 设备发弹幕，A 设备自己也能在 3 秒内收到（Plan A 成功路径）
 - [ ] A 设备发送超长（> 200 字符）弹幕：本地拦截或 3 秒后超时显示失败
 - [ ] A 设备 11 秒内连发 6 条：第 6 条超时显示失败
+- [ ] 不同成员合计 11 秒内发出 31 条：第 31 条超时显示失败（session 级限速）
+- [ ] 弹幕命中本地敏感词词库：3 秒后超时显示失败
+- [ ] 房主调用 toggle 接口关闭弹幕：所有成员收到 `danmaku_toggled(enabled=false)` 并立即禁用输入框
+- [ ] 房主再次开启弹幕：所有成员收到 `danmaku_toggled(enabled=true)` 并恢复输入框
+- [ ] 进入会话时 snapshot 中的 `danmaku_enabled` 与当前实际开关状态一致
 - [ ] A 设备 publish 广播 topic `companion/{sid}/danmaku` 被 broker 拒绝
 - [ ] 收到 `session_ended` 后，弹幕订阅能随会话退出一起释放
 

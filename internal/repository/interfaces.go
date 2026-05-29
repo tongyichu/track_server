@@ -183,4 +183,7 @@ type CompanionRepository interface {
 	// CountDanmakuByMemberSince returns how many danmakus the given member has sent in [since, now].
 	// Used for per-member rate limiting (e.g., max N msgs / window seconds).
 	CountDanmakuByMemberSince(ctx context.Context, sessionID string, userID int64, since time.Time) (int64, error)
+	// CountDanmakuBySessionSince returns how many danmakus were sent in the session in [since, now].
+	// Used for session-level aggregate rate limiting.
+	CountDanmakuBySessionSince(ctx context.Context, sessionID string, since time.Time) (int64, error)
 }

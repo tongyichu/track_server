@@ -128,6 +128,7 @@ CREATE TABLE `companion_sessions` (
                                      `track_type` VARCHAR(32) NOT NULL DEFAULT '' COMMENT '运动类型',
                                      `locate_addr` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '位置信息',
                                      `max_members` INT NOT NULL DEFAULT '8' COMMENT '最大成员数',
+                                     `danmaku_enabled` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '弹幕开关：1=开启 0=关闭',
                                      `started_at` DATETIME(6) NOT NULL COMMENT '开始时间',
                                      `ended_at` DATETIME(6) DEFAULT NULL COMMENT '结束时间',
                                      `created_at` DATETIME(6) NOT NULL,

@@ -53,6 +53,7 @@ type CompanionSession struct {
 	TrackType          string                 `json:"track_type" bson:"track_type"`
 	LocateAddr         string                 `json:"locate_addr" bson:"locate_addr"`
 	MaxMembers         int                    `json:"max_members" bson:"max_members"`
+	DanmakuEnabled     bool                   `json:"danmaku_enabled" bson:"danmaku_enabled"`
 	StartedAt          time.Time              `json:"started_at" bson:"started_at"`
 	EndedAt            time.Time              `json:"ended_at,omitempty" bson:"ended_at,omitempty"`
 	CreatedAt          time.Time              `json:"created_at" bson:"created_at"`

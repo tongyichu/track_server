@@ -644,3 +644,225 @@ func TestCompanionServiceIngestDanmakuEnforcesRateLimit(t *testing.T) {
 		t.Fatalf("expected broadcast count to remain %d after rate limit, got %d", companionDanmakuRateLimitMax, len(pub.messages))
 	}
 }
+
+func TestCompanionServiceIngestDanmakuRejectsSensitiveWord(t *testing.T) {
+	svc, _, _ := newCompanionServiceForTest(t)
+	pub := &rawMockPublisher{}
+	svc.SetDanmakuPublisher(pub)
+	sessionID, creds := danmakuTestSetup(t, svc, 1001, 1002)
+
+	// "badword" / "test_block_word" 来自内置词库占位项，命中即整条拒绝。
+	err := svc.IngestDanmakuFromMQTT(context.Background(), CompanionMQTTDanmakuIngestInput{
+		SessionID: sessionID,
+		UserID:    1002,
+		Content:   "hello BadWord here", // 大小写不敏感
+		ClientID:  creds.ClientID,
+		Username:  creds.Username,
+	})
+	if err == nil {
+		t.Fatalf("expected sensitive word rejection, got nil")
+	}
+	if err.Error() != "content contains sensitive content" {
+		t.Fatalf("unexpected error message: %v", err)
+	}
+	if len(pub.messages) != 0 {
+		t.Fatalf("expected no broadcast for rejected ingest, got %d", len(pub.messages))
+	}
+}
+
+func TestCompanionServiceIngestDanmakuRejectsWhenDisabled(t *testing.T) {
+	svc, _, _ := newCompanionServiceForTest(t)
+	pub := &rawMockPublisher{}
+	svc.SetDanmakuPublisher(pub)
+	ctrl := &mockCompanionControlPublisher{}
+	svc.SetControlPublisher(ctrl)
+	sessionID, creds := danmakuTestSetup(t, svc, 1001, 1002)
+
+	// owner 关闭弹幕开关。
+	if _, err := svc.SetSessionDanmakuEnabled(context.Background(), 1001, sessionID, false); err != nil {
+		t.Fatalf("SetSessionDanmakuEnabled returned error: %v", err)
+	}
+
+	err := svc.IngestDanmakuFromMQTT(context.Background(), CompanionMQTTDanmakuIngestInput{
+		SessionID: sessionID,
+		UserID:    1002,
+		Content:   "hi",
+		ClientID:  creds.ClientID,
+		Username:  creds.Username,
+	})
+	if err == nil {
+		t.Fatalf("expected danmaku disabled error, got nil")
+	}
+	if err.Error() != "danmaku disabled" {
+		t.Fatalf("unexpected error message: %v", err)
+	}
+	if len(pub.messages) != 0 {
+		t.Fatalf("expected no broadcast when danmaku disabled, got %d", len(pub.messages))
+	}
+}
+
+func TestCompanionServiceIngestDanmakuEnforcesSessionRateLimit(t *testing.T) {
+	svc, repo, _ := newCompanionServiceForTest(t)
+	pub := &rawMockPublisher{}
+	svc.SetDanmakuPublisher(pub)
+	sessionID, creds := danmakuTestSetup(t, svc, 1001, 1002)
+
+	// 直接预置 30 条 session 记录 (UserID=9999 非 ingest 调用方，
+	// 避免触发单成员限速)，之后第 31 条由当前成员发起即触发 session 级限速。
+	now := time.Now()
+	for i := 0; i < companionDanmakuSessionRateLimitMax; i++ {
+		if err := repo.InsertDanmaku(context.Background(), &models.CompanionDanmaku{
+			SessionID: sessionID,
+			UserID:    9999,
+			Content:   "preset",
+			CreatedAt: now,
+		}); err != nil {
+			t.Fatalf("seed danmaku #%d failed: %v", i, err)
+		}
+	}
+
+	err := svc.IngestDanmakuFromMQTT(context.Background(), CompanionMQTTDanmakuIngestInput{
+		SessionID: sessionID,
+		UserID:    1002,
+		Content:   "msg",
+		ClientID:  creds.ClientID,
+		Username:  creds.Username,
+	})
+	if err == nil {
+		t.Fatalf("expected session rate limit error, got nil")
+	}
+	if err.Error() != "session danmaku rate limit exceeded" {
+		t.Fatalf("unexpected error message: %v", err)
+	}
+	if len(pub.messages) != 0 {
+		t.Fatalf("expected no broadcast after session limit, got %d", len(pub.messages))
+	}
+}
+
+func TestCompanionServiceSetSessionDanmakuEnabledOwnerOnly(t *testing.T) {
+	svc, _, _ := newCompanionServiceForTest(t)
+	ctrl := &mockCompanionControlPublisher{}
+	svc.SetControlPublisher(ctrl)
+	ctx := context.Background()
+
+	created, err := svc.CreateSession(ctx, 1001, CreateCompanionSessionInput{Title: "toggle"})
+	if err != nil {
+		t.Fatalf("CreateSession returned error: %v", err)
+	}
+	if _, err := svc.JoinSession(ctx, 1002, JoinCompanionSessionInput{JoinToken: created.Join.JoinToken}); err != nil {
+		t.Fatalf("JoinSession returned error: %v", err)
+	}
+
+	// 非 owner 调用 → forbidden。
+	if _, err := svc.SetSessionDanmakuEnabled(ctx, 1002, created.Session.SessionID, false); err == nil {
+		t.Fatalf("expected forbidden error for non-owner")
+	} else if err != repository.ErrForbidden {
+		t.Fatalf("expected ErrForbidden, got %v", err)
+	}
+	if len(ctrl.messages) != 0 {
+		t.Fatalf("expected no control event published for non-owner, got %d", len(ctrl.messages))
+	}
+}
+
+func TestCompanionServiceSetSessionDanmakuEnabledNotActive(t *testing.T) {
+	svc, _, _ := newCompanionServiceForTest(t)
+	ctrl := &mockCompanionControlPublisher{}
+	svc.SetControlPublisher(ctrl)
+	ctx := context.Background()
+
+	created, err := svc.CreateSession(ctx, 1001, CreateCompanionSessionInput{Title: "toggle"})
+	if err != nil {
+		t.Fatalf("CreateSession returned error: %v", err)
+	}
+	if err := svc.EndSession(ctx, 1001, created.Session.SessionID); err != nil {
+		t.Fatalf("EndSession returned error: %v", err)
+	}
+	beforeCount := len(ctrl.messages)
+
+	if _, err := svc.SetSessionDanmakuEnabled(ctx, 1001, created.Session.SessionID, false); err == nil {
+		t.Fatalf("expected error when session ended")
+	} else if err.Error() != "companion session already ended" {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(ctrl.messages) != beforeCount {
+		t.Fatalf("expected no extra control events, got delta=%d", len(ctrl.messages)-beforeCount)
+	}
+}
+
+func TestCompanionServiceSetSessionDanmakuEnabledIdempotent(t *testing.T) {
+	svc, _, _ := newCompanionServiceForTest(t)
+	ctrl := &mockCompanionControlPublisher{}
+	svc.SetControlPublisher(ctrl)
+	ctx := context.Background()
+
+	created, err := svc.CreateSession(ctx, 1001, CreateCompanionSessionInput{Title: "toggle"})
+	if err != nil {
+		t.Fatalf("CreateSession returned error: %v", err)
+	}
+
+	// 默认 enabled=true，再次设置 true → 幂等，不广播。
+	state, err := svc.SetSessionDanmakuEnabled(ctx, 1001, created.Session.SessionID, true)
+	if err != nil {
+		t.Fatalf("SetSessionDanmakuEnabled returned error: %v", err)
+	}
+	if state == nil || state.Session == nil || !state.Session.DanmakuEnabled {
+		t.Fatalf("expected danmaku still enabled, got %+v", state)
+	}
+	if len(ctrl.messages) != 0 {
+		t.Fatalf("expected no control event for idempotent toggle, got %d", len(ctrl.messages))
+	}
+}
+
+func TestCompanionServiceSetSessionDanmakuEnabledPublishesControlEvent(t *testing.T) {
+	svc, _, _ := newCompanionServiceForTest(t)
+	ctrl := &mockCompanionControlPublisher{}
+	svc.SetControlPublisher(ctrl)
+	ctx := context.Background()
+
+	created, err := svc.CreateSession(ctx, 1001, CreateCompanionSessionInput{Title: "toggle"})
+	if err != nil {
+		t.Fatalf("CreateSession returned error: %v", err)
+	}
+
+	state, err := svc.SetSessionDanmakuEnabled(ctx, 1001, created.Session.SessionID, false)
+	if err != nil {
+		t.Fatalf("SetSessionDanmakuEnabled returned error: %v", err)
+	}
+	if state == nil || state.Session == nil || state.Session.DanmakuEnabled {
+		t.Fatalf("expected danmaku disabled in returned state, got %+v", state)
+	}
+	if len(ctrl.messages) != 1 {
+		t.Fatalf("expected 1 control event published, got %d", len(ctrl.messages))
+	}
+	msg := ctrl.messages[0]
+	if msg.topic != "companion/"+created.Session.SessionID+"/control" {
+		t.Fatalf("unexpected control topic %q", msg.topic)
+	}
+	if msg.event.Event != CompanionControlEventDanmakuToggled {
+		t.Fatalf("unexpected control event: %+v", msg.event)
+	}
+	if msg.event.OperatorUserID != 1001 || msg.event.SessionID != created.Session.SessionID {
+		t.Fatalf("unexpected event metadata: %+v", msg.event)
+	}
+	if msg.event.Reason != "danmaku_disabled" {
+		t.Fatalf("unexpected reason: %q", msg.event.Reason)
+	}
+	if msg.event.Enabled == nil || *msg.event.Enabled != false {
+		t.Fatalf("expected enabled=false in event, got %+v", msg.event.Enabled)
+	}
+
+	// 再次切到 true，应再发布一条事件，reason=danmaku_enabled。
+	if _, err := svc.SetSessionDanmakuEnabled(ctx, 1001, created.Session.SessionID, true); err != nil {
+		t.Fatalf("SetSessionDanmakuEnabled returned error: %v", err)
+	}
+	if len(ctrl.messages) != 2 {
+		t.Fatalf("expected 2 control events after re-enable, got %d", len(ctrl.messages))
+	}
+	last := ctrl.messages[1]
+	if last.event.Reason != "danmaku_enabled" {
+		t.Fatalf("unexpected re-enable reason: %q", last.event.Reason)
+	}
+	if last.event.Enabled == nil || *last.event.Enabled != true {
+		t.Fatalf("expected enabled=true in re-enable event, got %+v", last.event.Enabled)
+	}
+}

@@ -427,11 +427,14 @@ Client publish → companion/{sid}/member/{uid}/danmaku
 #### 8.5.3 服务端约束
 
 - 内容长度：≤ 200 字符（按 UTF-8 rune 计数），首尾空白会被去除；
-- 限速：单成员在 10 秒滚动窗口内最多 5 条，超出返回 `400 danmaku rate limit exceeded`；
+- 内容审核：通过 `internal/config/sensitive_words.json` 内置敏感词词库（go:embed）做大小写不敏感的子串扫描，命中即整条拒绝（`400 content contains sensitive content`）；命中词只写服务端日志，不向客户端暴露，避免被反向枚举；
+- 单成员限速：10 秒滚动窗口内最多 5 条，超出返回 `400 danmaku rate limit exceeded`；
+- session 级限速：整个会话所有成员合计 10 秒滚动窗口内最多 30 条，超出返回 `400 session danmaku rate limit exceeded`；
+- 会话开关：owner 可通过 `POST /api/v1/companion/session/:session_id/danmaku/toggle` 关闭整场会话的弹幕，关闭状态下 ingest 直接返回 `400 danmaku disabled`，并通过 control topic 广播 `danmaku_toggled` 事件；
 - principal 复核：`session_id / user_id` 必须与 `client_id / username` 绑定一致，否则返回 403；
 - 必须为 `active` session 中的 `joined` 成员，否则返回 404 / 403；
 - 广播 publisher 回退顺序：`SetDanmakuPublisher` 注入的 publisher → `controlPublisher` → 仅记日志（best-effort）；
-- 落库表：`companion_danmaku`，主键 `id`，索引 `(session_id, user_id, created_at)`。
+- 落库表：`companion_danmaku`，主键 `id`，索引 `(session_id, user_id, created_at)`，session 级限速复用 `idx_companion_danmaku_session_time(session_id, created_at)`。
 
 #### 8.5.4 客户端广播消息格式
 
@@ -512,15 +515,29 @@ Topic：
 }
 ```
 
+或（弹幕开关变更，由 owner 调用 `POST /companion/session/:session_id/danmaku/toggle` 触发）：
+
+```json
+{
+  "event": "danmaku_toggled",
+  "session_id": "sess_xxx",
+  "operator_user_id": 1001,
+  "reason": "danmaku_disabled",
+  "enabled": false,
+  "at": "2026-05-23T18:10:00Z"
+}
+```
+
 字段说明：
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
-| `event` | string | 事件类型：`member_left` / `session_ended` |
+| `event` | string | 事件类型：`member_left` / `session_ended` / `danmaku_toggled` |
 | `session_id` | string | 同行会话 ID |
 | `member_user_id` | int64 | 被影响成员 user_id，仅 `member_left` 必有 |
 | `operator_user_id` | int64 | 发起操作的用户；auto-end 时可为 `0` |
-| `reason` | string | 原因，当前可能为 `member_left` / `owner_ended` / `all_members_left` |
+| `reason` | string | 原因，当前可能为 `member_left` / `owner_ended` / `all_members_left` / `danmaku_enabled` / `danmaku_disabled` |
+| `enabled` | bool | 仅 `danmaku_toggled` 携带，反映切换后的目标状态 |
 | `at` | string | 事件时间，RFC3339 |
 
 客户端约定：

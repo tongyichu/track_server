@@ -180,6 +180,37 @@ func (h *CompanionHandler) EndSession(ctx context.Context, c *app.RequestContext
 	c.JSON(http.StatusOK, successResponse(StatusResult{Status: "ok"}))
 }
 
+type toggleDanmakuRequest struct {
+	Enabled *bool `json:"enabled"`
+}
+
+// ToggleSessionDanmaku handles POST /api/v1/companion/session/:session_id/danmaku/toggle.
+//
+// 仅会话 owner 可调用。请求体必须显式携带 `enabled` 字段（true/false），
+// 服务端会持久化开关状态并通过 control topic 广播 `danmaku_toggled` 事件。
+func (h *CompanionHandler) ToggleSessionDanmaku(ctx context.Context, c *app.RequestContext) {
+	userID, ok := h.authUserID(c)
+	if !ok {
+		return
+	}
+	var req toggleDanmakuRequest
+	body := c.Request.Body()
+	if len(bytes.TrimSpace(body)) == 0 {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "enabled is required"})
+		return
+	}
+	if err := json.Unmarshal(body, &req); err != nil || req.Enabled == nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "enabled is required"})
+		return
+	}
+	state, err := h.svc.SetSessionDanmakuEnabled(ctx, userID, c.Param("session_id"), *req.Enabled)
+	if err != nil {
+		h.writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, successResponse(state))
+}
+
 // IssueMQTTCredentials handles POST /api/v1/companion/session/:session_id/mqtt/credentials.
 func (h *CompanionHandler) IssueMQTTCredentials(ctx context.Context, c *app.RequestContext) {
 	userID, ok := h.authUserID(c)

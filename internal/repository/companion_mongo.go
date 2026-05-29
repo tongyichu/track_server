@@ -88,3 +88,7 @@ func (r *MongoCompanionRepository) InsertDanmaku(context.Context, *models.Compan
 func (r *MongoCompanionRepository) CountDanmakuByMemberSince(context.Context, string, int64, time.Time) (int64, error) {
 	return 0, errors.New("MongoCompanionRepository.CountDanmakuByMemberSince not implemented")
 }
+
+func (r *MongoCompanionRepository) CountDanmakuBySessionSince(context.Context, string, time.Time) (int64, error) {
+	return 0, errors.New("MongoCompanionRepository.CountDanmakuBySessionSince not implemented")
+}

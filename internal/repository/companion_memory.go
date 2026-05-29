@@ -313,3 +313,22 @@ func (r *InMemoryCompanionRepository) CountDanmakuByMemberSince(_ context.Contex
 	}
 	return count, nil
 }
+
+func (r *InMemoryCompanionRepository) CountDanmakuBySessionSince(_ context.Context, sessionID string, since time.Time) (int64, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var count int64
+	for _, d := range r.danmakus {
+		if d == nil {
+			continue
+		}
+		if d.SessionID != sessionID {
+			continue
+		}
+		if !since.IsZero() && d.CreatedAt.Before(since) {
+			continue
+		}
+		count++
+	}
+	return count, nil
+}
