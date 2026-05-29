@@ -158,6 +158,8 @@ type CompanionHistoryItem struct {
 	StartedAt         time.Time                    `json:"started_at"`
 	DurationSeconds   int64                        `json:"duration_seconds"`
 	Status            CompanionSessionStatus       `json:"status"`
+	JoinToken         string                       `json:"join_token,omitempty"`
+	JoinTokenExpireAt time.Time                    `json:"join_token_expire_at,omitempty"`
 	Participants      []CompanionHistoryParticipant `json:"participants"`
 }
 

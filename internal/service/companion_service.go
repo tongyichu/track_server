@@ -1119,7 +1119,7 @@ func (s *CompanionService) buildHistoryItem(ctx context.Context, session *models
 	if !clone.StartedAt.IsZero() && endAt.After(clone.StartedAt) {
 		durationSeconds = int64(endAt.Sub(clone.StartedAt) / time.Second)
 	}
-	return &models.CompanionHistoryItem{
+	item := &models.CompanionHistoryItem{
 		SessionID:        clone.SessionID,
 		Title:            clone.Title,
 		TrackType:        clone.TrackType,
@@ -1129,7 +1129,12 @@ func (s *CompanionService) buildHistoryItem(ctx context.Context, session *models
 		DurationSeconds:  durationSeconds,
 		Status:           clone.Status,
 		Participants:     participants,
-	}, nil
+	}
+	if clone.Status == models.CompanionSessionStatusActive {
+		item.JoinToken = clone.JoinToken
+		item.JoinTokenExpireAt = clone.JoinTokenExpireAt
+	}
+	return item, nil
 }
 
 func (s *CompanionService) requireMQTTConfigured() error {
@@ -1360,9 +1365,19 @@ func (s *CompanionService) buildSnapshot(ctx context.Context, session *models.Co
 			MemberStatus:   member.MemberStatus,
 			PresenceStatus: member.PresenceStatus,
 			Nickname:       user.Nickname,
-			AvatarURL:      fallbackAvatarURL(user.ID, user.AvatarURL),
-			JoinedAt:       member.JoinedAt,
-			LastSeenAt:     member.LastSeenAt,
+			AvatarURL: func() string {
+				avatar := fallbackAvatarURL(user.ID, user.AvatarURL)
+				if s.avatarCache != nil && shouldRewriteAvatarURL(avatar) {
+					cacheCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+					defer cancel()
+					if local := s.avatarCache.EnsureCached(cacheCtx, member.UserID, formatUserAvatarCacheKey(member.UserID), avatar); local != "" {
+						avatar = local
+					}
+				}
+				return avatar
+			}(),
+			JoinedAt:   member.JoinedAt,
+			LastSeenAt: member.LastSeenAt,
 		})
 	}
 	visiblePositions := make([]*models.CompanionLivePosition, 0, len(positions))

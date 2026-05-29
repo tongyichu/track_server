@@ -1800,6 +1800,8 @@ Authorization: Bearer <token>
         "started_at": "2026-05-23T16:00:00Z",
         "duration_seconds": 7200,
         "status": "active",
+        "join_token": "ab12cd34",
+        "join_token_expire_at": "2026-05-23T18:00:00Z",
         "participants": [
           {
             "user_id": 1001,
@@ -1834,6 +1836,8 @@ Authorization: Bearer <token>
 | `data.items[].started_at` | string(datetime) | 同行开始时间。 |
 | `data.items[].duration_seconds` | int64 | 同行总耗时（秒）：`status=ended` 取 `ended_at - started_at`；`status=active` 取 `now - started_at`。 |
 | `data.items[].status` | string | 同行状态：`active` / `ended`。 |
+| `data.items[].join_token` | string | 加入口令；仅 `status=active` 时返回，可用于邀请他人加入；`ended` 时不返回此字段。 |
+| `data.items[].join_token_expire_at` | string(datetime) | 加入口令过期时间；仅 `status=active` 时返回。 |
 | `data.items[].participants` | `CompanionHistoryParticipant[]` | 人员列表口径与 `participant_count` 一致：若 `status=ended` 返回参与过的人员；若 `status=active` 返回当前仍为 `joined` 的人员。 |
 | `data.items[].participants[].user_id` | int64 | 参与人 user_id。 |
 | `data.items[].participants[].nickname` | string | 参与人昵称。 |
