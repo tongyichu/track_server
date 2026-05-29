@@ -707,8 +707,8 @@ func TestCompanionServiceIngestDanmakuEnforcesSessionRateLimit(t *testing.T) {
 	svc.SetDanmakuPublisher(pub)
 	sessionID, creds := danmakuTestSetup(t, svc, 1001, 1002)
 
-	// 直接预置 30 条 session 记录 (UserID=9999 非 ingest 调用方，
-	// 避免触发单成员限速)，之后第 31 条由当前成员发起即触发 session 级限速。
+	// 直接预置上限条数的 session 记录 (UserID=9999 非 ingest 调用方，
+	// 避免触发单成员限速)，之后下一条由当前成员发起即触发 session 级限速。
 	now := time.Now()
 	for i := 0; i < companionDanmakuSessionRateLimitMax; i++ {
 		if err := repo.InsertDanmaku(context.Background(), &models.CompanionDanmaku{

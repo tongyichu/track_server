@@ -1597,7 +1597,7 @@ Content-Type: application/json
     },
     "join": {
       "join_token": "abcd1234EFGH5678",
-      "join_token_expire_at": "2026-05-23T18:00:00Z"
+      "join_token_expire_at": "0001-01-01T00:00:00Z"
     },
     "snapshot": {
       "snapshot_at": "2026-05-23T16:00:00Z",
@@ -1644,7 +1644,6 @@ Content-Type: application/json
 
 - `400 Bad Request`
   - `join_token is required`
-  - `join_token expired`
   - `companion session already ended`
   - `companion session is full`
   - `you already joined an active companion session: {title}`
@@ -2128,7 +2127,7 @@ Content-Type: application/json
   - `content exceeds 200 characters`
   - `content contains sensitive content`（命中本地敏感词词库；命中词不向客户端暴露）
   - `danmaku rate limit exceeded`（单成员 10 秒滚动窗口内最多 5 条）
-  - `session danmaku rate limit exceeded`（整个 session 10 秒滚动窗口内最多 30 条）
+  - `session danmaku rate limit exceeded`（整个 session 10 秒滚动窗口内最多 50 条）
   - `danmaku disabled`（owner 已通过 27.4 接口关闭弹幕）
 - `401 Unauthorized` / `403 Forbidden`
   - 缺少或无效 `X-Internal-Token`

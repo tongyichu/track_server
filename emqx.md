@@ -1306,7 +1306,7 @@ Topic：
 - [ ] 客户端发送弹幕能在 3 秒内收到自身广播（Plan A 失败检测）
 - [ ] 同 session 其他成员能实时收到弹幕
 - [ ] 超长（> 200 字符）/ 高频（单成员 10 秒内 > 5 条）弹幕被服务端拦截，日志可见 `400 danmaku rate limit exceeded` / `content exceeds ...`
-- [ ] session 级总量超限（10 秒内 > 30 条）的弹幕被服务端拦截，日志可见 `400 session danmaku rate limit exceeded`
+- [ ] session 级总量超限（10 秒内 > 50 条）的弹幕被服务端拦截，日志可见 `400 session danmaku rate limit exceeded`
 - [ ] 命中本地敏感词词库（`internal/config/sensitive_words.json`）的弹幕被服务端拦截，日志可见 `companion danmaku rejected by sensitive word: ...`
 - [ ] owner 调用 `POST /companion/session/:session_id/danmaku/toggle` 关闭弹幕后，所有成员收到 `danmaku_toggled` + `enabled=false` control 事件，再次 publish 上行弹幕被 ingest 以 `400 danmaku disabled` 拒绝；切回 `enabled=true` 后恢复
 - [ ] 伪造 `session_id / user_id` 的 ingest 请求被服务端 `403` 拦截
@@ -1388,7 +1388,7 @@ Topic：
 属于预期行为：
 
 - 服务端对单成员有 10 秒滚动窗口 5 条的限速；
-- 服务端对整场 session 还有 10 秒滚动窗口 30 条的总量限速；
+- 服务端对整场 session 还有 10 秒滚动窗口 50 条的总量限速；
 - 超出会分别以 `400 danmaku rate limit exceeded` / `400 session danmaku rate limit exceeded` 返回，对应消息不会广播；
 - 客户端按 Plan A 等待 3 秒收不到自己的广播即可视为发送失败，由 UI 提示用户重试。
 
@@ -1398,7 +1398,7 @@ Topic：
 
 1. **owner 已关闭弹幕开关**：客户端是否在 `companion/{sid}/control` 上收到过 `event=danmaku_toggled` + `enabled=false`；可调用 snapshot 接口确认 `session.danmaku_enabled` 当前值；
 2. **命中本地敏感词**：服务端日志会出现 `companion danmaku rejected by sensitive word: ...`，词库见 `internal/config/sensitive_words.json`；
-3. **session 级总量限速**：日志中会出现 `400 session danmaku rate limit exceeded`，10 秒窗口内合计 30 条；
+3. **session 级总量限速**：日志中会出现 `400 session danmaku rate limit exceeded`，10 秒窗口内合计 50 条；
 4. **单成员限速 / 内容超长**：参见 14.7；
 5. 网络抖动 / EMQX 不可达：客户端 publish 直接失败，控制台多半已打印异常。
 

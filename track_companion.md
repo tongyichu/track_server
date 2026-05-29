@@ -110,7 +110,7 @@ App Server 提供以下职责：
 - `owner_user_id`
 - `status`
 - `join_token`
-- `join_token_expire_at`
+- `join_token_expire_at`（保留字段；当前实现固定为零值，token 仅在 session `status=active` 期间有效，会话结束自动失效）
 - `title`
 - `max_members`
 - `started_at`
@@ -429,7 +429,7 @@ Client publish → companion/{sid}/member/{uid}/danmaku
 - 内容长度：≤ 200 字符（按 UTF-8 rune 计数），首尾空白会被去除；
 - 内容审核：通过 `internal/config/sensitive_words.json` 内置敏感词词库（go:embed）做大小写不敏感的子串扫描，命中即整条拒绝（`400 content contains sensitive content`）；命中词只写服务端日志，不向客户端暴露，避免被反向枚举；
 - 单成员限速：10 秒滚动窗口内最多 5 条，超出返回 `400 danmaku rate limit exceeded`；
-- session 级限速：整个会话所有成员合计 10 秒滚动窗口内最多 30 条，超出返回 `400 session danmaku rate limit exceeded`；
+- session 级限速：整个会话所有成员合计 10 秒滚动窗口内最多 50 条，超出返回 `400 session danmaku rate limit exceeded`；
 - 会话开关：owner 可通过 `POST /api/v1/companion/session/:session_id/danmaku/toggle` 关闭整场会话的弹幕，关闭状态下 ingest 直接返回 `400 danmaku disabled`，并通过 control topic 广播 `danmaku_toggled` 事件；
 - principal 复核：`session_id / user_id` 必须与 `client_id / username` 绑定一致，否则返回 403；
 - 必须为 `active` session 中的 `joined` 成员，否则返回 404 / 403；

@@ -28,7 +28,6 @@ const (
 	maxCompanionMaxMembers         = 32
 	defaultCompanionPageSize       = 20
 	maxCompanionPageSize           = 50
-	defaultCompanionJoinTokenTTL   = 2 * time.Hour
 	defaultCompanionMQTTTopicRoot  = "companion"
 	defaultCompanionMQTTTTL        = time.Hour
 	defaultCompanionMQTTPublishTTL = 5 * time.Second
@@ -43,7 +42,7 @@ const (
 	// 弹幕：session 级总量限速窗口长度（与单成员窗口一致即可）。
 	companionDanmakuSessionRateLimitWindow = 10 * time.Second
 	// 弹幕：session 级在窗口内允许发送的最大条数（所有成员合计）。
-	companionDanmakuSessionRateLimitMax = 30
+	companionDanmakuSessionRateLimitMax = 50
 )
 
 // CompanionService 实现“同行”控制面的业务逻辑。
@@ -739,7 +738,7 @@ func (s *CompanionService) CreateSession(ctx context.Context, ownerUserID int64,
 		OwnerUserID:       ownerUserID,
 		Status:            models.CompanionSessionStatusActive,
 		JoinToken:         joinToken,
-		JoinTokenExpireAt: now.Add(defaultCompanionJoinTokenTTL),
+		JoinTokenExpireAt: time.Time{},
 		Title:             title,
 		TrackType:         strings.TrimSpace(in.TrackType),
 		LocateAddr:        strings.TrimSpace(in.LocateAddr),
@@ -785,9 +784,6 @@ func (s *CompanionService) JoinSession(ctx context.Context, userID int64, in Joi
 	}
 	if session.Status != models.CompanionSessionStatusActive {
 		return nil, invalidArg("companion session already ended")
-	}
-	if !session.JoinTokenExpireAt.IsZero() && time.Now().After(session.JoinTokenExpireAt) {
-		return nil, invalidArg("join_token expired")
 	}
 	if active, err := s.repo.FindActiveSessionByUserID(ctx, userID); err == nil {
 		if active.SessionID == session.SessionID {

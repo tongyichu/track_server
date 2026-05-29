@@ -226,7 +226,7 @@ EMQX → App Server 的 ingest 是后端链路，**客户端不会直接看到 H
 
 - `content` 超过 200 字符 → `400 content exceeds 200 characters`；
 - 单成员 10 秒内发了超过 5 条 → `400 danmaku rate limit exceeded`；
-- session 10 秒内全员合计超过 30 条 → `400 session danmaku rate limit exceeded`；
+- session 10 秒内全员合计超过 50 条 → `400 session danmaku rate limit exceeded`；
 - 命中本地敏感词词库 → `400 content contains sensitive content`；
 - 房主关闭了弹幕 → `400 danmaku disabled`；
 - 上行 payload 与 principal（client_id / username）不匹配 → `403`；
