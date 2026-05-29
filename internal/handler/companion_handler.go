@@ -211,6 +211,58 @@ func (h *CompanionHandler) ToggleSessionDanmaku(ctx context.Context, c *app.Requ
 	c.JSON(http.StatusOK, successResponse(state))
 }
 
+// ListNearby handles GET /api/v1/companion/session/nearby.
+//
+// 查询参数：
+//   - latitude / longitude（必填，WGS84，浮点）；
+//   - radius_m（可选，米；默认 5000，最大 20000）；
+//   - limit（可选；默认/最大 50）。
+func (h *CompanionHandler) ListNearby(ctx context.Context, c *app.RequestContext) {
+	userID, ok := h.authUserID(c)
+	if !ok {
+		return
+	}
+	latStr := strings.TrimSpace(string(c.Query("latitude")))
+	lonStr := strings.TrimSpace(string(c.Query("longitude")))
+	if latStr == "" || lonStr == "" {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "latitude and longitude are required"})
+		return
+	}
+	lat, err := strconv.ParseFloat(latStr, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid latitude"})
+		return
+	}
+	lon, err := strconv.ParseFloat(lonStr, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid longitude"})
+		return
+	}
+	in := service.ListCompanionNearbyInput{Latitude: lat, Longitude: lon}
+	if rawRadius := strings.TrimSpace(string(c.Query("radius_m"))); rawRadius != "" {
+		radius, err := strconv.ParseFloat(rawRadius, 64)
+		if err != nil || radius <= 0 {
+			c.JSON(http.StatusBadRequest, utils.H{"error": "invalid radius_m"})
+			return
+		}
+		in.RadiusMeters = radius
+	}
+	if rawLimit := strings.TrimSpace(string(c.Query("limit"))); rawLimit != "" {
+		limit, err := strconv.Atoi(rawLimit)
+		if err != nil || limit <= 0 {
+			c.JSON(http.StatusBadRequest, utils.H{"error": "invalid limit"})
+			return
+		}
+		in.Limit = limit
+	}
+	result, err := h.svc.ListNearbySessions(ctx, userID, in)
+	if err != nil {
+		h.writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, successResponse(result))
+}
+
 // IssueMQTTCredentials handles POST /api/v1/companion/session/:session_id/mqtt/credentials.
 func (h *CompanionHandler) IssueMQTTCredentials(ctx context.Context, c *app.RequestContext) {
 	userID, ok := h.authUserID(c)

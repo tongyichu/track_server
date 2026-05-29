@@ -697,3 +697,57 @@ func TestCompanionListHistory(t *testing.T) {
 		t.Fatalf("expected invalid cursor status 400, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
 	}
 }
+
+func TestCompanionListNearby(t *testing.T) {
+	e := newTestEnv()
+	ensureTestUser(t, e, 1001, "owner")
+	ensureTestUser(t, e, 1002, "viewer")
+	ownerToken := e.generateTestToken(1001)
+	viewerToken := e.generateTestToken(1002)
+
+	w := e.perform(http.MethodPost, "/api/v1/companion/session/create", []byte(`{"title":"near room"}`), authHeader(ownerToken))
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected create status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+	var created handler.StandardResponse[*service.CompanionSessionState]
+	decodeJSON(t, w.Body.Bytes(), &created)
+	sessionID := created.Data.Session.SessionID
+
+	if err := e.companionRepo.UpsertPosition(context.Background(), &models.CompanionLivePosition{
+		SessionID:        sessionID,
+		UserID:           1001,
+		Latitude:         39.9087,
+		Longitude:        116.3975,
+		CoordinateSystem: "wgs84",
+		RecordedAt:       time.Now(),
+		Source:           "test",
+	}); err != nil {
+		t.Fatalf("upsert owner position: %v", err)
+	}
+
+	// Missing latitude/longitude -> 400.
+	w = e.perform(http.MethodGet, "/api/v1/companion/session/nearby", nil, authHeader(viewerToken))
+	if w.Result().StatusCode() != http.StatusBadRequest {
+		t.Fatalf("expected missing coord status 400, got %d", w.Result().StatusCode())
+	}
+
+	w = e.perform(http.MethodGet, "/api/v1/companion/session/nearby?latitude=39.9090&longitude=116.3980", nil, authHeader(viewerToken))
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected nearby status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+	var resp handler.StandardResponse[*models.CompanionNearbyPage]
+	decodeJSON(t, w.Body.Bytes(), &resp)
+	if resp.Data == nil || len(resp.Data.Items) != 1 {
+		t.Fatalf("expected 1 nearby item, got %+v", resp.Data)
+	}
+	item := resp.Data.Items[0]
+	if item.SessionID != sessionID {
+		t.Fatalf("unexpected session_id %q", item.SessionID)
+	}
+	if item.JoinToken == "" {
+		t.Fatalf("expected join_token in nearby item")
+	}
+	if item.Anchor == nil || item.Anchor.DistanceM <= 0 {
+		t.Fatalf("expected anchor with distance, got %+v", item.Anchor)
+	}
+}

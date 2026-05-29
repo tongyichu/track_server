@@ -171,3 +171,41 @@ type CompanionHistoryPage struct {
 	NextCursor string                  `json:"next_cursor,omitempty"`
 	HasMore    bool                    `json:"has_more"`
 }
+
+// CompanionNearbyMember 是附近会话卡片中的成员展示信息。
+type CompanionNearbyMember struct {
+	UserID    int64               `json:"user_id"`
+	Role      CompanionMemberRole `json:"role"`
+	Nickname  string              `json:"nickname"`
+	AvatarURL string              `json:"avatar_url"`
+}
+
+// CompanionNearbyAnchor 是附近会话用于估算距离的锚点（owner 最新位置）。
+//
+// 设计说明：
+// - 不暴露经纬度，只返回距离米数与采样时间，避免反向定位他人房间。
+type CompanionNearbyAnchor struct {
+	DistanceM  float64   `json:"distance_m"`
+	RecordedAt time.Time `json:"recorded_at"`
+}
+
+// CompanionNearbyItem 是附近 active 会话的轮播卡片项。
+type CompanionNearbyItem struct {
+	SessionID    string                  `json:"session_id"`
+	Title        string                  `json:"title"`
+	TrackType    string                  `json:"track_type"`
+	LocateAddr   string                  `json:"locate_addr"`
+	JoinToken    string                  `json:"join_token"`
+	MaxMembers   int                     `json:"max_members"`
+	MemberCount  int                     `json:"member_count"`
+	StartedAt    time.Time               `json:"started_at"`
+	Anchor       *CompanionNearbyAnchor  `json:"anchor,omitempty"`
+	Members      []CompanionNearbyMember `json:"members"`
+}
+
+// CompanionNearbyPage 是附近会话列表的响应。
+type CompanionNearbyPage struct {
+	Items    []*CompanionNearbyItem `json:"items"`
+	RadiusM  float64                `json:"radius_m"`
+	CenterAt time.Time              `json:"center_at"`
+}

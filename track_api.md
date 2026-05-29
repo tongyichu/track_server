@@ -38,6 +38,7 @@
 | 26 | [EMQX HTTP AuthZ 回调](#26-emqx-http-authz-回调) | POST | `/internal/mqtt/acl` | ❌（内部） |
 | 27 | [EMQX 数据面写回接口](#27-emqx-数据面写回接口) | POST | `/internal/companion/mqtt/*` | ❌（内部） |
 | 28 | [同行弹幕开关切换](#274-弹幕开关切换owner) | POST | `/companion/session/:session_id/danmaku/toggle` | ✅ |
+| 29 | [附近 active 同行房间列表](#29-附近-active-同行房间列表) | GET | `/companion/session/nearby` | ✅ |
 
 ---
 
@@ -2226,6 +2227,114 @@ Content-Type: application/json
 
 会话 snapshot / state 中的 `danmaku_enabled` 字段（位于 `session` 对象内）反映当前开关状态，
 客户端进入会话时可据此初始化 UI。
+
+---
+
+## 29. 附近 active 同行房间列表
+
+返回当前位置附近所有 `status=active` 的同行房间，供客户端「同行首页」轮播卡片展示。
+
+设计要点：
+
+- 锚点位置：服务端取每个 session 中 owner 的最新位置（来自 EMQX 上行的 `companion_live_positions`）作为该房间的定位锚点；owner 尚未上传任何位置的房间会被跳过。
+- 距离估算：使用 Haversine 公式计算锚点与请求位置的球面距离，过滤超过半径的房间。
+- 隐私保护：响应只返回 `distance_m + recorded_at`，不暴露房间锚点经纬度，避免反向定位。
+- 全量返回：不过滤已满 / 当前用户已加入的房间，由前端展示已满灰态、跳过自己已加入的房间。
+
+**需要认证**
+
+### 请求
+
+```http
+GET /api/v1/companion/session/nearby?latitude=39.9087&longitude=116.3975&radius_m=5000&limit=50
+Authorization: Bearer <token>
+```
+
+### Query 参数
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `latitude` | float | 是 | 客户端当前纬度（WGS84），范围 `[-90, 90]`。 |
+| `longitude` | float | 是 | 客户端当前经度（WGS84），范围 `[-180, 180]`。 |
+| `radius_m` | float | 否 | 搜索半径（米），默认 `5000`，最大 `20000`；超过最大值时按 `20000` 处理。 |
+| `limit` | int | 否 | 返回上限，默认 / 最大 `50`；超过最大值时按 `50` 处理。 |
+
+### 响应
+
+```json
+{
+  "code": 0,
+  "data": {
+    "items": [
+      {
+        "session_id": "sess_xxx",
+        "title": "周末同行",
+        "track_type": "徒步",
+        "locate_addr": "北京市海淀区颐和园",
+        "join_token": "ab12cd34",
+        "max_members": 8,
+        "member_count": 3,
+        "started_at": "2026-05-23T16:00:00Z",
+        "anchor": {
+          "distance_m": 1234.56,
+          "recorded_at": "2026-05-23T16:19:58Z"
+        },
+        "members": [
+          {
+            "user_id": 1001,
+            "role": "owner",
+            "nickname": "Tom",
+            "avatar_url": "/api/v1/static/avatars/1001.png"
+          },
+          {
+            "user_id": 1002,
+            "role": "member",
+            "nickname": "Jerry",
+            "avatar_url": "/api/v1/static/default_avatars/boy_01.png"
+          }
+        ]
+      }
+    ],
+    "radius_m": 5000,
+    "center_at": "2026-05-23T18:30:00Z"
+  }
+}
+```
+
+### 字段说明
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `data.items` | `CompanionNearbyItem[]` | 命中半径的 active 房间列表，按 `distance_m` 升序。 |
+| `data.items[].session_id` | string | 同行会话 ID。 |
+| `data.items[].title` | string | 同行标题。 |
+| `data.items[].track_type` | string | 运动类型（徒步 / 跑步 / 爬山 / 骑行 等），创建会话时传入；若未设置则为空字符串。 |
+| `data.items[].locate_addr` | string | 创建会话时的位置文本；若未设置则为空字符串。 |
+| `data.items[].join_token` | string | 加入口令，可用于直接调用 `/companion/session/join`。 |
+| `data.items[].max_members` | int | 房间最大人数。 |
+| `data.items[].member_count` | int | 当前 `member_status=joined` 的成员数；前端可结合 `max_members` 判断是否已满。 |
+| `data.items[].started_at` | string(datetime) | 会话开始时间。 |
+| `data.items[].anchor` | object | 距离锚点信息（owner 最新位置投影后的距离 + 采样时间）；若 owner 尚未上传位置，该房间不会出现在列表中。 |
+| `data.items[].anchor.distance_m` | float | 锚点与请求位置的球面距离（米）。 |
+| `data.items[].anchor.recorded_at` | string(datetime) | 锚点对应位置的采样时间，客户端可据此评估锚点新鲜度。 |
+| `data.items[].members` | `CompanionNearbyMember[]` | 当前 `joined` 成员列表，owner 排在前。 |
+| `data.items[].members[].user_id` | int64 | 成员 user_id。 |
+| `data.items[].members[].role` | string | `owner` / `member`，前端可据此在卡片上标注房主。 |
+| `data.items[].members[].nickname` | string | 成员昵称。 |
+| `data.items[].members[].avatar_url` | string | 成员头像；若用户未设置头像，则返回默认头像。 |
+| `data.radius_m` | float | 服务端实际使用的搜索半径（米）；用于客户端展示。 |
+| `data.center_at` | string(datetime) | 服务端处理本次请求的时间，可与 `anchor.recorded_at` 结合判断锚点滞后。 |
+
+### 错误响应
+
+- `400 Bad Request`
+  - `latitude and longitude are required`
+  - `invalid latitude` / `invalid longitude`
+  - `latitude must be in [-90, 90]` / `longitude must be in [-180, 180]`
+  - `invalid radius_m`
+  - `invalid limit`
+- `401 Unauthorized`
+  - 缺少 / 无效 / 过期的 Token
 
 ---
 

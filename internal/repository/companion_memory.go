@@ -153,6 +153,29 @@ func (r *InMemoryCompanionRepository) ListSessionsByUserID(_ context.Context, us
 	return items, nil
 }
 
+func (r *InMemoryCompanionRepository) ListActiveSessions(_ context.Context, limit int) ([]*models.CompanionSession, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	items := make([]*models.CompanionSession, 0)
+	for _, session := range r.sessions {
+		if session == nil || session.Status != models.CompanionSessionStatusActive {
+			continue
+		}
+		clone := *session
+		items = append(items, &clone)
+	}
+	sort.SliceStable(items, func(i, j int) bool {
+		if items[i].StartedAt.Equal(items[j].StartedAt) {
+			return items[i].SessionID > items[j].SessionID
+		}
+		return items[i].StartedAt.After(items[j].StartedAt)
+	})
+	if limit > 0 && len(items) > limit {
+		items = items[:limit]
+	}
+	return items, nil
+}
+
 func (r *InMemoryCompanionRepository) CountSessionsByUserID(_ context.Context, userID int64) (int64, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

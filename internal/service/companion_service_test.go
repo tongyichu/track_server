@@ -866,3 +866,117 @@ func TestCompanionServiceSetSessionDanmakuEnabledPublishesControlEvent(t *testin
 		t.Fatalf("expected enabled=true in re-enable event, got %+v", last.event.Enabled)
 	}
 }
+
+func TestCompanionServiceListNearbySessions(t *testing.T) {
+	svc, repo, userRepo := newCompanionServiceForTest(t)
+	ctx := context.Background()
+
+	// 准备远端房间的 owner 用户。
+	if _, err := userRepo.CreateIfNotExists(ctx, &models.User{ID: 2001, Nickname: "远端 owner"}); err != nil {
+		t.Fatalf("create far owner failed: %v", err)
+	}
+
+	// owner=1001 创建房间（近：北京天安门）。
+	near, err := svc.CreateSession(ctx, 1001, CreateCompanionSessionInput{Title: "近的房间"})
+	if err != nil {
+		t.Fatalf("CreateSession near returned error: %v", err)
+	}
+	if err := repo.UpsertPosition(ctx, &models.CompanionLivePosition{
+		SessionID:        near.Session.SessionID,
+		UserID:           1001,
+		Latitude:         39.9087,
+		Longitude:        116.3975,
+		CoordinateSystem: "wgs84",
+		RecordedAt:       time.Now(),
+		Source:           "test",
+	}); err != nil {
+		t.Fatalf("UpsertPosition near failed: %v", err)
+	}
+
+	// owner=2001 创建房间（远：上海外滩，距北京 ~1000km）。
+	far, err := svc.CreateSession(ctx, 2001, CreateCompanionSessionInput{Title: "远的房间"})
+	if err != nil {
+		t.Fatalf("CreateSession far returned error: %v", err)
+	}
+	if err := repo.UpsertPosition(ctx, &models.CompanionLivePosition{
+		SessionID:        far.Session.SessionID,
+		UserID:           2001,
+		Latitude:         31.2397,
+		Longitude:        121.4990,
+		CoordinateSystem: "wgs84",
+		RecordedAt:       time.Now(),
+		Source:           "test",
+	}); err != nil {
+		t.Fatalf("UpsertPosition far failed: %v", err)
+	}
+
+	// 查询者站在天安门附近，半径 5km：只应返回近的房间。
+	page, err := svc.ListNearbySessions(ctx, 1002, ListCompanionNearbyInput{
+		Latitude:  39.9090,
+		Longitude: 116.3980,
+	})
+	if err != nil {
+		t.Fatalf("ListNearbySessions returned error: %v", err)
+	}
+	if page == nil || len(page.Items) != 1 {
+		t.Fatalf("expected 1 nearby item, got %+v", page)
+	}
+	item := page.Items[0]
+	if item.SessionID != near.Session.SessionID {
+		t.Fatalf("unexpected session_id: %q", item.SessionID)
+	}
+	if item.JoinToken == "" {
+		t.Fatalf("expected join_token to be returned")
+	}
+	if item.Anchor == nil || item.Anchor.DistanceM <= 0 || item.Anchor.DistanceM > 5000 {
+		t.Fatalf("unexpected anchor: %+v", item.Anchor)
+	}
+	if item.MaxMembers == 0 {
+		t.Fatalf("expected max_members to be set, got %d", item.MaxMembers)
+	}
+	if item.MemberCount != 1 || len(item.Members) != 1 || item.Members[0].Role != models.CompanionMemberRoleOwner {
+		t.Fatalf("unexpected members: count=%d, %+v", item.MemberCount, item.Members)
+	}
+	if page.RadiusM != defaultCompanionNearbyRadiusMeters {
+		t.Fatalf("unexpected default radius: %v", page.RadiusM)
+	}
+
+	// 扩大半径到 2000km：远房间也应被包含。
+	page, err = svc.ListNearbySessions(ctx, 1002, ListCompanionNearbyInput{
+		Latitude:     39.9090,
+		Longitude:    116.3980,
+		RadiusMeters: maxCompanionNearbyRadiusMeters,
+	})
+	if err != nil {
+		t.Fatalf("ListNearbySessions wide returned error: %v", err)
+	}
+	// 上海距离北京约 1000km，远超 maxCompanionNearbyRadiusMeters(20km)，仍应被过滤。
+	if len(page.Items) != 1 {
+		t.Fatalf("expected only the near item within max radius, got %d", len(page.Items))
+	}
+	if page.RadiusM != maxCompanionNearbyRadiusMeters {
+		t.Fatalf("expected radius capped to max, got %v", page.RadiusM)
+	}
+}
+
+func TestCompanionServiceListNearbySessionsRejectsInvalidLatitude(t *testing.T) {
+	svc, _, _ := newCompanionServiceForTest(t)
+	if _, err := svc.ListNearbySessions(context.Background(), 1001, ListCompanionNearbyInput{Latitude: 100}); err == nil {
+		t.Fatalf("expected error for out-of-range latitude")
+	}
+}
+
+func TestCompanionServiceListNearbySessionsSkipsWithoutOwnerPosition(t *testing.T) {
+	svc, _, _ := newCompanionServiceForTest(t)
+	ctx := context.Background()
+	if _, err := svc.CreateSession(ctx, 1001, CreateCompanionSessionInput{Title: "未上传位置"}); err != nil {
+		t.Fatalf("CreateSession returned error: %v", err)
+	}
+	page, err := svc.ListNearbySessions(ctx, 1002, ListCompanionNearbyInput{Latitude: 39.9, Longitude: 116.4})
+	if err != nil {
+		t.Fatalf("ListNearbySessions returned error: %v", err)
+	}
+	if page == nil || len(page.Items) != 0 {
+		t.Fatalf("expected empty page when owner has no position, got %+v", page)
+	}
+}

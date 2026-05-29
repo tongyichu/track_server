@@ -10,6 +10,8 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -43,6 +45,14 @@ const (
 	companionDanmakuSessionRateLimitWindow = 10 * time.Second
 	// 弹幕：session 级在窗口内允许发送的最大条数（所有成员合计）。
 	companionDanmakuSessionRateLimitMax = 50
+
+	// 附近房间：默认 / 最大搜索半径（米）。
+	defaultCompanionNearbyRadiusMeters = 5000.0
+	maxCompanionNearbyRadiusMeters     = 20000.0
+	// 附近房间：单次返回的最大房间数；轮播卡片场景已绰绰有余。
+	maxCompanionNearbyItems = 50
+	// 地球平均半径（米），Haversine 距离计算用。
+	earthRadiusMeters = 6371000.0
 )
 
 // CompanionService 实现“同行”控制面的业务逻辑。
@@ -186,6 +196,18 @@ type CompanionSessionState struct {
 type ListCompanionHistoryInput struct {
 	Cursor string
 	Limit  int
+}
+
+// ListCompanionNearbyInput 描述查询附近 active 同行房间的入参。
+//
+//   - Latitude / Longitude：客户端定位（WGS84）。
+//   - RadiusMeters：可选，默认 defaultCompanionNearbyRadiusMeters，最大 maxCompanionNearbyRadiusMeters。
+//   - Limit：可选，默认 / 最大 maxCompanionNearbyItems。
+type ListCompanionNearbyInput struct {
+	Latitude     float64
+	Longitude    float64
+	RadiusMeters float64
+	Limit        int
 }
 
 // CompanionPositionUpsertInput is reserved for future EMQX / HTTP ingest integration.
@@ -882,6 +904,162 @@ func (s *CompanionService) ListHistory(ctx context.Context, userID int64, input 
 		page.NextCursor = nextCursor
 	}
 	return page, nil
+}
+
+// ListNearbySessions 返回客户端附近的 active 同行房间列表。
+//
+// 设计要点：
+//   - 用户提供经纬度（WGS84）；
+//   - 服务端取每个 active session 中 owner 的最新位置作为定位锚点；
+//   - 用 Haversine 公式估算锚点与请求位置的球面距离，过滤超过半径的房间；
+//   - 返回信息只包含距离米数 + 采样时间，不暴露房间锚点经纬度，避免反向定位；
+//   - 不过滤已满 / 已加入的房间，由前端展示状态（已满灰态、已加入跳过）；
+//   - 没有定位数据的 active 房间无法估算距离，跳过。
+func (s *CompanionService) ListNearbySessions(ctx context.Context, userID int64, in ListCompanionNearbyInput) (*models.CompanionNearbyPage, error) {
+	if s == nil || s.repo == nil || s.users == nil {
+		return nil, errors.New("companion service not configured")
+	}
+	if userID <= 0 {
+		return nil, invalidArg("user_id is required")
+	}
+	if in.Latitude < -90 || in.Latitude > 90 {
+		return nil, invalidArg("latitude must be in [-90, 90]")
+	}
+	if in.Longitude < -180 || in.Longitude > 180 {
+		return nil, invalidArg("longitude must be in [-180, 180]")
+	}
+	radius := in.RadiusMeters
+	if radius <= 0 {
+		radius = defaultCompanionNearbyRadiusMeters
+	}
+	if radius > maxCompanionNearbyRadiusMeters {
+		radius = maxCompanionNearbyRadiusMeters
+	}
+	limit := in.Limit
+	if limit <= 0 || limit > maxCompanionNearbyItems {
+		limit = maxCompanionNearbyItems
+	}
+	// 拉取所有 active session（数量受 maxCompanionNearbyItems*4 限制，足以覆盖即使大半被半径过滤掉的场景）。
+	sessions, err := s.repo.ListActiveSessions(ctx, maxCompanionNearbyItems*4)
+	if err != nil {
+		return nil, err
+	}
+	type candidate struct {
+		item     *models.CompanionNearbyItem
+		distance float64
+	}
+	candidates := make([]candidate, 0, len(sessions))
+	for _, session := range sessions {
+		if session == nil {
+			continue
+		}
+		positions, err := s.repo.ListPositions(ctx, session.SessionID)
+		if err != nil {
+			return nil, err
+		}
+		var ownerPos *models.CompanionLivePosition
+		for _, position := range positions {
+			if position == nil || position.UserID != session.OwnerUserID {
+				continue
+			}
+			clone := *position
+			ownerPos = &clone
+			break
+		}
+		if ownerPos == nil {
+			// owner 尚未上传过位置，无法估算距离，跳过。
+			continue
+		}
+		distance := haversineMeters(in.Latitude, in.Longitude, ownerPos.Latitude, ownerPos.Longitude)
+		if distance > radius {
+			continue
+		}
+		members, err := s.repo.ListMembers(ctx, session.SessionID)
+		if err != nil {
+			return nil, err
+		}
+		nearbyMembers := make([]models.CompanionNearbyMember, 0, len(members))
+		var memberCount int
+		for _, member := range members {
+			if member == nil || member.MemberStatus != models.CompanionMemberStatusJoined {
+				continue
+			}
+			memberCount++
+			user, err := s.users.FindByID(ctx, member.UserID)
+			if err != nil {
+				if !errors.Is(err, repository.ErrNotFound) {
+					return nil, err
+				}
+				user = &models.User{ID: member.UserID}
+			}
+			avatar := fallbackAvatarURL(user.ID, user.AvatarURL)
+			if s.avatarCache != nil && shouldRewriteAvatarURL(avatar) {
+				cacheCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+				if local := s.avatarCache.EnsureCached(cacheCtx, member.UserID, formatUserAvatarCacheKey(member.UserID), avatar); local != "" {
+					avatar = local
+				}
+				cancel()
+			}
+			nearbyMembers = append(nearbyMembers, models.CompanionNearbyMember{
+				UserID:    member.UserID,
+				Role:      member.Role,
+				Nickname:  user.Nickname,
+				AvatarURL: avatar,
+			})
+		}
+		// owner 优先排在前。
+		sort.SliceStable(nearbyMembers, func(i, j int) bool {
+			if nearbyMembers[i].Role != nearbyMembers[j].Role {
+				return nearbyMembers[i].Role == models.CompanionMemberRoleOwner
+			}
+			return nearbyMembers[i].UserID < nearbyMembers[j].UserID
+		})
+		candidates = append(candidates, candidate{
+			item: &models.CompanionNearbyItem{
+				SessionID:   session.SessionID,
+				Title:       session.Title,
+				TrackType:   session.TrackType,
+				LocateAddr:  session.LocateAddr,
+				JoinToken:   session.JoinToken,
+				MaxMembers:  session.MaxMembers,
+				MemberCount: memberCount,
+				StartedAt:   session.StartedAt,
+				Anchor: &models.CompanionNearbyAnchor{
+					DistanceM:  distance,
+					RecordedAt: ownerPos.RecordedAt,
+				},
+				Members: nearbyMembers,
+			},
+			distance: distance,
+		})
+	}
+	sort.SliceStable(candidates, func(i, j int) bool {
+		return candidates[i].distance < candidates[j].distance
+	})
+	if len(candidates) > limit {
+		candidates = candidates[:limit]
+	}
+	items := make([]*models.CompanionNearbyItem, 0, len(candidates))
+	for _, c := range candidates {
+		items = append(items, c.item)
+	}
+	return &models.CompanionNearbyPage{
+		Items:    items,
+		RadiusM:  radius,
+		CenterAt: time.Now(),
+	}, nil
+}
+
+// haversineMeters 计算两个经纬度（度）之间的球面距离（米）。
+func haversineMeters(lat1, lon1, lat2, lon2 float64) float64 {
+	rlat1 := lat1 * math.Pi / 180
+	rlat2 := lat2 * math.Pi / 180
+	dLat := (lat2 - lat1) * math.Pi / 180
+	dLon := (lon2 - lon1) * math.Pi / 180
+	a := math.Sin(dLat/2)*math.Sin(dLat/2) +
+		math.Cos(rlat1)*math.Cos(rlat2)*math.Sin(dLon/2)*math.Sin(dLon/2)
+	c := 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
+	return earthRadiusMeters * c
 }
 
 // GetSnapshot returns the latest session snapshot for a joined member.

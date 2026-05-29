@@ -168,6 +168,9 @@ type CompanionRepository interface {
 	FindActiveSessionByUserID(ctx context.Context, userID int64) (*models.CompanionSession, error)
 	ListSessionsByUserID(ctx context.Context, userID int64, cursor *models.CompanionSessionListCursor, limit int) ([]*models.CompanionSession, error)
 	CountSessionsByUserID(ctx context.Context, userID int64) (int64, error)
+	// ListActiveSessions returns all sessions whose status is active, capped by limit.
+	// Used by the nearby companion listing.
+	ListActiveSessions(ctx context.Context, limit int) ([]*models.CompanionSession, error)
 
 	UpsertMember(ctx context.Context, member *models.CompanionSessionMember) error
 	FindMember(ctx context.Context, sessionID string, userID int64) (*models.CompanionSessionMember, error)

@@ -211,6 +211,20 @@ App Server 提供以下职责：
 
 - `POST /api/v1/companion/session/:session_id/end`
 
+### 6.7 附近 active 房间列表
+
+- `GET /api/v1/companion/session/nearby`
+
+用于客户端「同行首页」轮播卡片：
+
+- 入参：`latitude` / `longitude`（WGS84 必填）；`radius_m` 可选，默认 5km，最大 20km；`limit` 可选，默认/最大 50；
+- 返回半径内所有 `status=active` 的房间，按距离升序：
+  - 锚点 = owner 最新位置（来自 EMQX 上行的 `companion_live_positions`），用 Haversine 估算距离；
+  - owner 尚未上传位置的房间无法估算距离，跳过；
+  - 不暴露锚点经纬度，仅返回 `anchor.distance_m + anchor.recorded_at`，避免反向定位；
+  - 不过滤已满 / 已加入的房间，由前端展示已满灰态、跳过自己已加入的房间；
+- 每条记录返回 `session_id` / `title` / `track_type` / `locate_addr` / `join_token` / `max_members` / `member_count` / `started_at` / `anchor` / `members`，`members` 中标注 `role=owner` 用于客户端展示房主。
+
 ---
 
 ## 7. Snapshot 设计
