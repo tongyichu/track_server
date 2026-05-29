@@ -75,6 +75,7 @@ func (m *Module) Close() {
 // - GET  /admin/api/users                  用户列表（鉴权，cursor 翻页）
 // - GET  /admin/api/tracks                 轨迹列表（鉴权，cursor 翻页）
 // - GET  /admin/api/companions             同行会话列表（鉴权，cursor 翻页）
+// - GET  /admin/api/companions/:session_id  同行会话详情：会话/成员/位置/弹幕（鉴权）
 //
 // 当 m == nil 或 m.Auth == nil 时，整个 /admin 不会被挂载。
 func (m *Module) RegisterRoutes(h *server.Hertz) {
@@ -94,6 +95,7 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	g.GET("/users.html", serveEmbedded("static/users.html", "text/html; charset=utf-8"))
 	g.GET("/tracks.html", serveEmbedded("static/tracks.html", "text/html; charset=utf-8"))
 	g.GET("/companions.html", serveEmbedded("static/companions.html", "text/html; charset=utf-8"))
+	g.GET("/companion_detail.html", serveEmbedded("static/companion_detail.html", "text/html; charset=utf-8"))
 	g.GET("/static/*filepath", serveEmbeddedDir())
 
 	// 公开 API
@@ -113,6 +115,7 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	api.GET("/users", m.Handler.ListUsers)
 	api.GET("/tracks", m.Handler.ListTracks)
 	api.GET("/companions", m.Handler.ListCompanions)
+	api.GET("/companions/:session_id", m.Handler.GetCompanionDetail)
 }
 
 func redirectToLogin(_ context.Context, c *app.RequestContext) {

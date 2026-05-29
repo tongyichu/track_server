@@ -217,6 +217,9 @@ type CompanionRepository interface {
 	// CountDanmakuBySessionSince returns how many danmakus were sent in the session in [since, now].
 	// Used for session-level aggregate rate limiting.
 	CountDanmakuBySessionSince(ctx context.Context, sessionID string, since time.Time) (int64, error)
+	// ListDanmakusBySessionID 按 created_at desc, id desc 返回某场会话最近的弹幕，
+	// limit<=0 时实现应使用合理默认值（建议 200）。仅供管理后台使用。
+	ListDanmakusBySessionID(ctx context.Context, sessionID string, limit int) ([]*models.CompanionDanmaku, error)
 	// DeleteDanmakusBySessionEndedBefore 删除「status=ended 且 ended_at < deadline」对应 session 的所有弹幕，返回删除行数。
 	//
 	// 约定：

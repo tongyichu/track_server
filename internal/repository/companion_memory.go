@@ -401,6 +401,35 @@ func (r *InMemoryCompanionRepository) CountDanmakuBySessionSince(_ context.Conte
 	return count, nil
 }
 
+func (r *InMemoryCompanionRepository) ListDanmakusBySessionID(_ context.Context, sessionID string, limit int) ([]*models.CompanionDanmaku, error) {
+	if sessionID == "" {
+		return nil, ErrNotFound
+	}
+	if limit <= 0 {
+		limit = 200
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	items := make([]*models.CompanionDanmaku, 0)
+	for _, d := range r.danmakus {
+		if d == nil || d.SessionID != sessionID {
+			continue
+		}
+		clone := *d
+		items = append(items, &clone)
+	}
+	sort.SliceStable(items, func(i, j int) bool {
+		if items[i].CreatedAt.Equal(items[j].CreatedAt) {
+			return items[i].ID > items[j].ID
+		}
+		return items[i].CreatedAt.After(items[j].CreatedAt)
+	})
+	if len(items) > limit {
+		items = items[:limit]
+	}
+	return items, nil
+}
+
 func (r *InMemoryCompanionRepository) DeleteDanmakusBySessionEndedBefore(_ context.Context, deadline time.Time) (int64, error) {
 	if deadline.IsZero() {
 		return 0, nil

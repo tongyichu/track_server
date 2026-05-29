@@ -105,6 +105,10 @@ func (r *MongoCompanionRepository) CountDanmakuBySessionSince(context.Context, s
 	return 0, errors.New("MongoCompanionRepository.CountDanmakuBySessionSince not implemented")
 }
 
+func (r *MongoCompanionRepository) ListDanmakusBySessionID(context.Context, string, int) ([]*models.CompanionDanmaku, error) {
+	return nil, errors.New("MongoCompanionRepository.ListDanmakusBySessionID not implemented")
+}
+
 func (r *MongoCompanionRepository) DeleteDanmakusBySessionEndedBefore(context.Context, time.Time) (int64, error) {
 	return 0, errors.New("MongoCompanionRepository.DeleteDanmakusBySessionEndedBefore not implemented")
 }

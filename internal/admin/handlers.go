@@ -472,6 +472,96 @@ func (h *Handler) ListCompanions(ctx context.Context, c *app.RequestContext) {
 	c.JSON(http.StatusOK, utils.H{"code": 0, "data": resp})
 }
 
+// companionMemberDetail 是同行详情中的成员展示信息（包含头像、昵称等）。
+type companionMemberDetail struct {
+	UserID         int64                          `json:"user_id"`
+	Nickname       string                         `json:"nickname"`
+	AvatarURL      string                         `json:"avatar_url"`
+	Role           models.CompanionMemberRole     `json:"role"`
+	MemberStatus   models.CompanionMemberStatus   `json:"member_status"`
+	PresenceStatus models.CompanionPresenceStatus `json:"presence_status"`
+	JoinedAt       time.Time                      `json:"joined_at"`
+	LeftAt         time.Time                      `json:"left_at,omitempty"`
+	LastSeenAt     time.Time                      `json:"last_seen_at,omitempty"`
+}
+
+// GetCompanionDetail 处理 GET /admin/api/companions/:session_id
+//
+// 返回：
+//
+//	{
+//	  session:        CompanionSession,
+//	  members:        []companionMemberDetail,    // 含昵称/头像（已改写为本地缓存地址）
+//	  live_positions: []*CompanionLivePosition,
+//	  danmakus:       []*CompanionDanmaku,         // 最近 200 条
+//	}
+func (h *Handler) GetCompanionDetail(ctx context.Context, c *app.RequestContext) {
+	if h == nil || h.companionRepo == nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "companion repository not configured"})
+		return
+	}
+	sessionID := strings.TrimSpace(c.Param("session_id"))
+	if sessionID == "" {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "session_id is required"})
+		return
+	}
+	session, err := h.companionRepo.FindSessionByID(ctx, sessionID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			c.JSON(http.StatusNotFound, utils.H{"error": "session not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	rawMembers, err := h.companionRepo.ListMembers(ctx, sessionID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	members := make([]companionMemberDetail, 0, len(rawMembers))
+	for _, m := range rawMembers {
+		if m == nil {
+			continue
+		}
+		detail := companionMemberDetail{
+			UserID:         m.UserID,
+			Role:           m.Role,
+			MemberStatus:   m.MemberStatus,
+			PresenceStatus: m.PresenceStatus,
+			JoinedAt:       m.JoinedAt,
+			LeftAt:         m.LeftAt,
+			LastSeenAt:     m.LastSeenAt,
+		}
+		if h.userRepo != nil {
+			if u, uerr := h.userRepo.FindByID(ctx, m.UserID); uerr == nil && u != nil {
+				if h.userSvc != nil {
+					h.userSvc.DecorateAvatar(ctx, u)
+				}
+				detail.Nickname = u.Nickname
+				detail.AvatarURL = u.AvatarURL
+			}
+		}
+		members = append(members, detail)
+	}
+	positions, err := h.companionRepo.ListPositions(ctx, sessionID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	danmakus, err := h.companionRepo.ListDanmakusBySessionID(ctx, sessionID, 200)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{
+		"session":        session,
+		"members":        members,
+		"live_positions": positions,
+		"danmakus":       danmakus,
+	}})
+}
+
 // GetReleaseUploadCredential 处理 GET /admin/api/releases/upload-token
 //
 // 用于浏览器直传 APK 到 OSS：返回的是仅允许写入 release/ 目录的临时凭证。

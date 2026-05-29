@@ -413,6 +413,39 @@ func (r *MySQLCompanionRepository) CountDanmakuByMemberSince(ctx context.Context
 	return count, nil
 }
 
+func (r *MySQLCompanionRepository) ListDanmakusBySessionID(ctx context.Context, sessionID string, limit int) ([]*models.CompanionDanmaku, error) {
+	if sessionID == "" {
+		return nil, errors.New("sessionID is required")
+	}
+	if limit <= 0 {
+		limit = 200
+	}
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT id, session_id, user_id, content, created_at
+		   FROM companion_danmakus
+		  WHERE session_id=?
+		  ORDER BY created_at DESC, id DESC
+		  LIMIT ?`,
+		sessionID, limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := make([]*models.CompanionDanmaku, 0, limit)
+	for rows.Next() {
+		var d models.CompanionDanmaku
+		if err := rows.Scan(&d.ID, &d.SessionID, &d.UserID, &d.Content, &d.CreatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, &d)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 func (r *MySQLCompanionRepository) CountDanmakuBySessionSince(ctx context.Context, sessionID string, since time.Time) (int64, error) {
 	row := r.db.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM companion_danmakus WHERE session_id=? AND created_at>=?`,

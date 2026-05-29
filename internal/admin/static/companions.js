@@ -76,8 +76,10 @@
 
     tbody.innerHTML = '';
     items.forEach(function (it) {
+      var sid = esc(it.session_id);
+      var detailHref = '/admin/companion_detail.html?session_id=' + encodeURIComponent(it.session_id || '');
       var tr = document.createElement('tr');
-      tr.innerHTML = '<td title="' + esc(it.session_id) + '">' + esc(it.session_id) + '</td>' +
+      tr.innerHTML = '<td title="' + sid + '"><a href="' + detailHref + '">' + sid + '</a></td>' +
         '<td>' + (it.owner_user_id || 0) + '</td>' +
         '<td>' + esc(it.title || '') + '</td>' +
         '<td>' + esc(it.track_type || '') + '</td>' +
