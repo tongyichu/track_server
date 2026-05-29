@@ -122,6 +122,7 @@ CREATE TABLE `companion_sessions` (
                                      `session_id` VARCHAR(64) NOT NULL COMMENT '同行会话ID',
                                      `owner_user_id` BIGINT NOT NULL COMMENT '发起人用户ID',
                                      `status` VARCHAR(16) NOT NULL COMMENT 'active / ended',
+                                     `visibility` VARCHAR(16) NOT NULL DEFAULT 'private' COMMENT 'private 私密（需 join_token） / public 公开（凭 session_id 即可加入，并出现在附近列表）',
                                      `join_token` VARCHAR(128) NOT NULL COMMENT '加入凭证',
                                      `join_token_expire_at` DATETIME(6) NOT NULL COMMENT '加入凭证过期时间',
                                      `title` VARCHAR(64) NOT NULL DEFAULT '' COMMENT '会话标题',

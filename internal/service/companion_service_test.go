@@ -877,7 +877,7 @@ func TestCompanionServiceListNearbySessions(t *testing.T) {
 	}
 
 	// owner=1001 创建房间（近：北京天安门）。
-	near, err := svc.CreateSession(ctx, 1001, CreateCompanionSessionInput{Title: "近的房间"})
+	near, err := svc.CreateSession(ctx, 1001, CreateCompanionSessionInput{Title: "近的房间", Visibility: "public"})
 	if err != nil {
 		t.Fatalf("CreateSession near returned error: %v", err)
 	}
@@ -894,7 +894,7 @@ func TestCompanionServiceListNearbySessions(t *testing.T) {
 	}
 
 	// owner=2001 创建房间（远：上海外滩，距北京 ~1000km）。
-	far, err := svc.CreateSession(ctx, 2001, CreateCompanionSessionInput{Title: "远的房间"})
+	far, err := svc.CreateSession(ctx, 2001, CreateCompanionSessionInput{Title: "远的房间", Visibility: "public"})
 	if err != nil {
 		t.Fatalf("CreateSession far returned error: %v", err)
 	}
@@ -978,5 +978,101 @@ func TestCompanionServiceListNearbySessionsSkipsWithoutOwnerPosition(t *testing.
 	}
 	if page == nil || len(page.Items) != 0 {
 		t.Fatalf("expected empty page when owner has no position, got %+v", page)
+	}
+}
+
+func TestCompanionServiceCreateSessionDefaultsPrivate(t *testing.T) {
+	svc, _, _ := newCompanionServiceForTest(t)
+	ctx := context.Background()
+	state, err := svc.CreateSession(ctx, 1001, CreateCompanionSessionInput{Title: "默认私密"})
+	if err != nil {
+		t.Fatalf("CreateSession returned error: %v", err)
+	}
+	if state.Session.Visibility != models.CompanionSessionVisibilityPrivate {
+		t.Fatalf("expected default visibility=private, got %q", state.Session.Visibility)
+	}
+}
+
+func TestCompanionServiceCreateSessionRejectsInvalidVisibility(t *testing.T) {
+	svc, _, _ := newCompanionServiceForTest(t)
+	if _, err := svc.CreateSession(context.Background(), 1001, CreateCompanionSessionInput{Visibility: "secret"}); err == nil {
+		t.Fatalf("expected error for invalid visibility")
+	}
+}
+
+func TestCompanionServiceJoinSessionByIDPublic(t *testing.T) {
+	svc, _, userRepo := newCompanionServiceForTest(t)
+	ctx := context.Background()
+	if _, err := userRepo.CreateIfNotExists(ctx, &models.User{ID: 1002, Nickname: "joiner"}); err != nil {
+		t.Fatalf("create joiner failed: %v", err)
+	}
+	created, err := svc.CreateSession(ctx, 1001, CreateCompanionSessionInput{Title: "公开房间", Visibility: "public"})
+	if err != nil {
+		t.Fatalf("CreateSession returned error: %v", err)
+	}
+	state, err := svc.JoinSession(ctx, 1002, JoinCompanionSessionInput{SessionID: created.Session.SessionID})
+	if err != nil {
+		t.Fatalf("JoinSession by session_id returned error: %v", err)
+	}
+	if state.Session.SessionID != created.Session.SessionID {
+		t.Fatalf("unexpected session id after join")
+	}
+}
+
+func TestCompanionServiceJoinSessionByIDPrivateForbidden(t *testing.T) {
+	svc, _, userRepo := newCompanionServiceForTest(t)
+	ctx := context.Background()
+	if _, err := userRepo.CreateIfNotExists(ctx, &models.User{ID: 1002, Nickname: "joiner"}); err != nil {
+		t.Fatalf("create joiner failed: %v", err)
+	}
+	created, err := svc.CreateSession(ctx, 1001, CreateCompanionSessionInput{Title: "私密房间"})
+	if err != nil {
+		t.Fatalf("CreateSession returned error: %v", err)
+	}
+	_, err = svc.JoinSession(ctx, 1002, JoinCompanionSessionInput{SessionID: created.Session.SessionID})
+	if err == nil {
+		t.Fatalf("expected error joining private room by session_id")
+	}
+	// 仍可凭 join_token 加入私密房间。
+	if _, err := svc.JoinSession(ctx, 1002, JoinCompanionSessionInput{JoinToken: created.Session.JoinToken}); err != nil {
+		t.Fatalf("JoinSession by join_token to private room failed: %v", err)
+	}
+}
+
+func TestCompanionServiceJoinSessionRequiresTokenOrID(t *testing.T) {
+	svc, _, _ := newCompanionServiceForTest(t)
+	if _, err := svc.JoinSession(context.Background(), 1001, JoinCompanionSessionInput{}); err == nil {
+		t.Fatalf("expected error when neither join_token nor session_id provided")
+	}
+}
+
+func TestCompanionServiceListNearbyExcludesPrivate(t *testing.T) {
+	svc, repo, userRepo := newCompanionServiceForTest(t)
+	ctx := context.Background()
+	if _, err := userRepo.CreateIfNotExists(ctx, &models.User{ID: 2001, Nickname: "私密 owner"}); err != nil {
+		t.Fatalf("create private owner failed: %v", err)
+	}
+	// 私密房间在附近不出现。
+	private, err := svc.CreateSession(ctx, 2001, CreateCompanionSessionInput{Title: "私密房间"})
+	if err != nil {
+		t.Fatalf("CreateSession private returned error: %v", err)
+	}
+	if err := repo.UpsertPosition(ctx, &models.CompanionLivePosition{
+		SessionID:        private.Session.SessionID,
+		UserID:           2001,
+		Latitude:         39.9087,
+		Longitude:        116.3975,
+		CoordinateSystem: "wgs84",
+		RecordedAt:       time.Now(),
+		Source:           "test",
+	}); err != nil {
+		t.Fatalf("UpsertPosition private failed: %v", err)
+	}
+	page, err := svc.ListNearbySessions(ctx, 1002, ListCompanionNearbyInput{Latitude: 39.9090, Longitude: 116.3980})
+	if err != nil {
+		t.Fatalf("ListNearbySessions returned error: %v", err)
+	}
+	if page == nil || len(page.Items) != 0 {
+		t.Fatalf("expected nearby to exclude private rooms, got %+v", page)
 	}
 }

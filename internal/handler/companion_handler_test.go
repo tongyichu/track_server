@@ -705,7 +705,7 @@ func TestCompanionListNearby(t *testing.T) {
 	ownerToken := e.generateTestToken(1001)
 	viewerToken := e.generateTestToken(1002)
 
-	w := e.perform(http.MethodPost, "/api/v1/companion/session/create", []byte(`{"title":"near room"}`), authHeader(ownerToken))
+	w := e.perform(http.MethodPost, "/api/v1/companion/session/create", []byte(`{"title":"near room","visibility":"public"}`), authHeader(ownerToken))
 	if w.Result().StatusCode() != http.StatusOK {
 		t.Fatalf("expected create status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
 	}

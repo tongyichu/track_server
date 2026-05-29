@@ -172,11 +172,17 @@ type CreateCompanionSessionInput struct {
 	TrackType  string `json:"track_type"`
 	LocateAddr string `json:"locate_addr"`
 	MaxMembers int    `json:"max_members"`
+	// Visibility 可选；默认 private（向后兼容）。
+	// public 房间凭 session_id 即可加入，并会出现在附近房间列表中。
+	Visibility string `json:"visibility"`
 }
 
 // JoinCompanionSessionInput describes the payload to join a companion session.
+//
+// 私密房间必须填写 join_token；公开房间可填写 session_id。两者二选一。
 type JoinCompanionSessionInput struct {
 	JoinToken string `json:"join_token"`
+	SessionID string `json:"session_id"`
 }
 
 // CompanionJoinInfo is the owner-only invitation info returned by control plane APIs.
@@ -755,10 +761,21 @@ func (s *CompanionService) CreateSession(ctx context.Context, ownerUserID int64,
 		maxMembers = maxCompanionMaxMembers
 	}
 
+	visibility := models.CompanionSessionVisibility(strings.TrimSpace(in.Visibility))
+	switch visibility {
+	case "":
+		visibility = models.CompanionSessionVisibilityPrivate
+	case models.CompanionSessionVisibilityPrivate, models.CompanionSessionVisibilityPublic:
+		// ok
+	default:
+		return nil, invalidArg("visibility must be private or public")
+	}
+
 	session := &models.CompanionSession{
 		SessionID:         sessionID,
 		OwnerUserID:       ownerUserID,
 		Status:            models.CompanionSessionStatusActive,
+		Visibility:        visibility,
 		JoinToken:         joinToken,
 		JoinTokenExpireAt: time.Time{},
 		Title:             title,
@@ -786,7 +803,11 @@ func (s *CompanionService) CreateSession(ctx context.Context, ownerUserID int64,
 	return s.buildSessionState(ctx, session, ownerUserID, true)
 }
 
-// JoinSession joins an existing active companion session using join token.
+// JoinSession joins an existing active companion session.
+//
+// 入参 join_token / session_id 二选一：
+//   - join_token：私密 / 公开房间均可使用；
+//   - session_id：仅公开（visibility=public）房间可凭此加入；私密房间将返回 forbidden。
 func (s *CompanionService) JoinSession(ctx context.Context, userID int64, in JoinCompanionSessionInput) (*CompanionSessionState, error) {
 	if s == nil || s.repo == nil || s.users == nil {
 		return nil, errors.New("companion service not configured")
@@ -794,18 +815,32 @@ func (s *CompanionService) JoinSession(ctx context.Context, userID int64, in Joi
 	if userID <= 0 {
 		return nil, invalidArg("user_id is required")
 	}
-	if strings.TrimSpace(in.JoinToken) == "" {
-		return nil, invalidArg("join_token is required")
+	joinToken := strings.TrimSpace(in.JoinToken)
+	sessionIDInput := strings.TrimSpace(in.SessionID)
+	if joinToken == "" && sessionIDInput == "" {
+		return nil, invalidArg("join_token or session_id is required")
 	}
 	if _, err := s.users.FindByID(ctx, userID); err != nil {
 		return nil, err
 	}
-	session, err := s.repo.FindSessionByJoinToken(ctx, strings.TrimSpace(in.JoinToken))
+	var (
+		session *models.CompanionSession
+		err     error
+	)
+	if joinToken != "" {
+		session, err = s.repo.FindSessionByJoinToken(ctx, joinToken)
+	} else {
+		session, err = s.repo.FindSessionByID(ctx, sessionIDInput)
+	}
 	if err != nil {
 		return nil, err
 	}
 	if session.Status != models.CompanionSessionStatusActive {
 		return nil, invalidArg("companion session already ended")
+	}
+	// 仅 session_id 入口需要校验可见性：私密房间不允许凭 session_id 加入。
+	if joinToken == "" && session.Visibility != models.CompanionSessionVisibilityPublic {
+		return nil, repository.ErrForbidden
 	}
 	if active, err := s.repo.FindActiveSessionByUserID(ctx, userID); err == nil {
 		if active.SessionID == session.SessionID {
@@ -951,6 +986,10 @@ func (s *CompanionService) ListNearbySessions(ctx context.Context, userID int64,
 	candidates := make([]candidate, 0, len(sessions))
 	for _, session := range sessions {
 		if session == nil {
+			continue
+		}
+		// 只返回公开房间，避免向陌生用户暴露私密房间的 session_id / join_token。
+		if session.Visibility != models.CompanionSessionVisibilityPublic {
 			continue
 		}
 		positions, err := s.repo.ListPositions(ctx, session.SessionID)

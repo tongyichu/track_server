@@ -10,6 +10,17 @@ const (
 	CompanionSessionStatusEnded  CompanionSessionStatus = "ended"
 )
 
+// CompanionSessionVisibility 表示同行会话的可见性。
+//
+// - private：私密房间，必须凭 join_token 加入；
+// - public：公开房间，仅凭 session_id 即可加入，且会出现在附近房间列表中。
+type CompanionSessionVisibility string
+
+const (
+	CompanionSessionVisibilityPrivate CompanionSessionVisibility = "private"
+	CompanionSessionVisibilityPublic  CompanionSessionVisibility = "public"
+)
+
 // CompanionMemberRole 表示会话成员角色。
 type CompanionMemberRole string
 
@@ -44,20 +55,21 @@ const (
 // - status 只区分 active / ended；
 // - owner_user_id 是会话发起人，也是默认的结束权限拥有者。
 type CompanionSession struct {
-	SessionID          string                 `json:"session_id" bson:"session_id"`
-	OwnerUserID        int64                  `json:"owner_user_id" bson:"owner_user_id"`
-	Status             CompanionSessionStatus `json:"status" bson:"status"`
-	JoinToken          string                 `json:"-" bson:"join_token"`
-	JoinTokenExpireAt  time.Time              `json:"-" bson:"join_token_expire_at"`
-	Title              string                 `json:"title" bson:"title"`
-	TrackType          string                 `json:"track_type" bson:"track_type"`
-	LocateAddr         string                 `json:"locate_addr" bson:"locate_addr"`
-	MaxMembers         int                    `json:"max_members" bson:"max_members"`
-	DanmakuEnabled     bool                   `json:"danmaku_enabled" bson:"danmaku_enabled"`
-	StartedAt          time.Time              `json:"started_at" bson:"started_at"`
-	EndedAt            time.Time              `json:"ended_at,omitempty" bson:"ended_at,omitempty"`
-	CreatedAt          time.Time              `json:"created_at" bson:"created_at"`
-	UpdatedAt          time.Time              `json:"updated_at" bson:"updated_at"`
+	SessionID          string                     `json:"session_id" bson:"session_id"`
+	OwnerUserID        int64                      `json:"owner_user_id" bson:"owner_user_id"`
+	Status             CompanionSessionStatus     `json:"status" bson:"status"`
+	Visibility         CompanionSessionVisibility `json:"visibility" bson:"visibility"`
+	JoinToken          string                     `json:"-" bson:"join_token"`
+	JoinTokenExpireAt  time.Time                  `json:"-" bson:"join_token_expire_at"`
+	Title              string                     `json:"title" bson:"title"`
+	TrackType          string                     `json:"track_type" bson:"track_type"`
+	LocateAddr         string                     `json:"locate_addr" bson:"locate_addr"`
+	MaxMembers         int                        `json:"max_members" bson:"max_members"`
+	DanmakuEnabled     bool                       `json:"danmaku_enabled" bson:"danmaku_enabled"`
+	StartedAt          time.Time                  `json:"started_at" bson:"started_at"`
+	EndedAt            time.Time                  `json:"ended_at,omitempty" bson:"ended_at,omitempty"`
+	CreatedAt          time.Time                  `json:"created_at" bson:"created_at"`
+	UpdatedAt          time.Time                  `json:"updated_at" bson:"updated_at"`
 }
 
 // CompanionSessionMember 表示用户在某个“同行”会话中的成员资格与连接状态。

@@ -48,6 +48,9 @@ func (r *InMemoryCompanionRepository) CreateSession(_ context.Context, session *
 	if clone.StartedAt.IsZero() {
 		clone.StartedAt = clone.CreatedAt
 	}
+	if clone.Visibility == "" {
+		clone.Visibility = models.CompanionSessionVisibilityPrivate
+	}
 	clone.UpdatedAt = clone.CreatedAt
 	r.sessions[clone.SessionID] = &clone
 	if clone.JoinToken != "" {

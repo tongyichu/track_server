@@ -109,6 +109,7 @@ App Server 提供以下职责：
 - `session_id`
 - `owner_user_id`
 - `status`
+- `visibility`（`private` / `public`，默认 `private`；公开房间会出现在「附近房间」列表中，且允许凭 `session_id` 加入）
 - `join_token`
 - `join_token_expire_at`（保留字段；当前实现固定为零值，token 仅在 session `status=active` 期间有效，会话结束自动失效）
 - `title`
@@ -168,13 +169,19 @@ App Server 提供以下职责：
 ```json
 {
   "title": "周末同行",
-  "max_members": 8
+  "max_members": 8,
+  "visibility": "private"
 }
 ```
 
+`visibility` 可选，默认 `private`：
+
+- `private`：私密房间，必须凭 `join_token` 加入；不会出现在「附近房间」列表中。
+- `public`：公开房间，可凭 `session_id` 直接加入；同时会进入「附近房间」列表。
+
 返回：
 
-- `session`
+- `session`（包含 `visibility`）
 - `join`（包含 `join_token`）
 - `snapshot`
 
@@ -182,13 +189,26 @@ App Server 提供以下职责：
 
 - `POST /api/v1/companion/session/join`
 
-入参：
+入参（`join_token` / `session_id` 二选一，至少填一个）：
 
 ```json
 {
   "join_token": "abcd1234EFGH5678"
 }
 ```
+
+或：
+
+```json
+{
+  "session_id": "sess_xxx"
+}
+```
+
+加入规则：
+
+- 私密房间必须凭 `join_token` 加入；用 `session_id` 加入私密房间会返回 `403 Forbidden`。
+- 公开房间可凭 `session_id` 加入（典型场景：从「附近房间」卡片点击加入）；也支持继续凭 `join_token` 加入。
 
 返回：
 
@@ -218,7 +238,8 @@ App Server 提供以下职责：
 用于客户端「同行首页」轮播卡片：
 
 - 入参：`latitude` / `longitude`（WGS84 必填）；`radius_m` 可选，默认 5km，最大 20km；`limit` 可选，默认/最大 50；
-- 返回半径内所有 `status=active` 的房间，按距离升序：
+- 返回半径内所有 `status=active` 且 `visibility=public` 的房间，按距离升序：
+  - 仅公开房间：`visibility=private` 不会出现在该列表中，避免向陌生用户暴露私密房间；
   - 锚点 = owner 最新位置（来自 EMQX 上行的 `companion_live_positions`），用 Haversine 估算距离；
   - owner 尚未上传位置的房间无法估算距离，跳过；
   - 不暴露锚点经纬度，仅返回 `anchor.distance_m + anchor.recorded_at`，避免反向定位；

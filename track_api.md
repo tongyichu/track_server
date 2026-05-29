@@ -1567,7 +1567,8 @@ Content-Type: application/json
   "title": "周末同行",
   "track_type": "徒步",
   "locate_addr": "北京市海淀区颐和园",
-  "max_members": 8
+  "max_members": 8,
+  "visibility": "private"
 }
 ```
 
@@ -1577,6 +1578,7 @@ Content-Type: application/json
 | `track_type` | string | 否 | 运动类型（徒步 / 跑步 / 爬山 / 骑行 等，与 `track_types` 接口返回的类型一致），默认空字符串 |
 | `locate_addr` | string | 否 | 创建会话时的位置信息文本（由客户端逆地理获取），默认空字符串，最大 255 字符 |
 | `max_members` | int | 否 | 最大成员数，默认 `8`，最小 `2`，最大 `32` |
+| `visibility` | string | 否 | 可见性：`private`（默认，私密房间，必须凭 `join_token` 加入） / `public`（公开房间，可凭 `session_id` 加入，且会出现在「附近房间」列表中） |
 
 ### 响应
 
@@ -1588,6 +1590,7 @@ Content-Type: application/json
       "session_id": "sess_xxx",
       "owner_user_id": 1001,
       "status": "active",
+      "visibility": "private",
       "title": "周末同行",
       "track_type": "徒步",
       "locate_addr": "北京市海淀区颐和园",
@@ -1615,6 +1618,7 @@ Content-Type: application/json
   - `you already have an active companion session: {title}`
   - `you already joined an active companion session: {title}`
   - `max_members must be >= 2`
+  - `visibility must be private or public`
 - `401 Unauthorized`
 - `404 Not Found`
   - 当前用户不存在
@@ -1623,7 +1627,12 @@ Content-Type: application/json
 
 ## 18. 加入同行会话
 
-通过 `join_token` 加入一场 active session，并立即返回成员/位置 snapshot。
+通过 `join_token` 或 `session_id` 加入一场 active session，并立即返回成员/位置 snapshot。
+
+- 私密房间（`visibility=private`）必须凭 `join_token` 加入；
+- 公开房间（`visibility=public`）可凭 `session_id` 直接加入（典型场景：从「附近房间」卡片点击加入）；也支持继续凭 `join_token` 加入。
+
+`join_token` 与 `session_id` 二选一，至少填一个。
 
 **需要认证**
 
@@ -1641,15 +1650,25 @@ Content-Type: application/json
 }
 ```
 
+或：
+
+```json
+{
+  "session_id": "sess_xxx"
+}
+```
+
 ### 错误响应
 
 - `400 Bad Request`
-  - `join_token is required`
+  - `join_token or session_id is required`
   - `companion session already ended`
   - `companion session is full`
   - `you already joined an active companion session: {title}`
+- `403 Forbidden`
+  - 凭 `session_id` 试图加入私密房间
 - `404 Not Found`
-  - `join_token` 对应 session 不存在
+  - `join_token` / `session_id` 对应 session 不存在
 
 ---
 
@@ -2232,10 +2251,11 @@ Content-Type: application/json
 
 ## 29. 附近 active 同行房间列表
 
-返回当前位置附近所有 `status=active` 的同行房间，供客户端「同行首页」轮播卡片展示。
+返回当前位置附近所有 `status=active` 且 `visibility=public` 的同行房间，供客户端「同行首页」轮播卡片展示。
 
 设计要点：
 
+- 仅公开房间：`visibility=private` 的房间不会出现在该列表中，避免向陌生用户暴露私密房间的 `session_id` / `join_token`。
 - 锚点位置：服务端取每个 session 中 owner 的最新位置（来自 EMQX 上行的 `companion_live_positions`）作为该房间的定位锚点；owner 尚未上传任何位置的房间会被跳过。
 - 距离估算：使用 Haversine 公式计算锚点与请求位置的球面距离，过滤超过半径的房间。
 - 隐私保护：响应只返回 `distance_m + recorded_at`，不暴露房间锚点经纬度，避免反向定位。
