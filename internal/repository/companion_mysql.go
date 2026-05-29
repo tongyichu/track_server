@@ -178,6 +178,48 @@ func (r *MySQLCompanionRepository) CountSessionsByUserID(ctx context.Context, us
 	return count, nil
 }
 
+// ListAllSessions 返回全量同行会话（按 started_at desc, session_id desc）。仅供管理后台使用。
+func (r *MySQLCompanionRepository) ListAllSessions(ctx context.Context, cursor *models.CompanionSessionListCursor, limit int) ([]*models.CompanionSession, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	query := companionSessionSelectSQL()
+	args := []any{}
+	if cursor != nil && !cursor.StartedAt.IsZero() {
+		query += ` WHERE (companion_sessions.started_at < ? OR (companion_sessions.started_at = ? AND companion_sessions.session_id < ?))`
+		args = append(args, cursor.StartedAt, cursor.StartedAt, cursor.SessionID)
+	}
+	query += ` ORDER BY companion_sessions.started_at DESC, companion_sessions.session_id DESC LIMIT ?`
+	args = append(args, limit)
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := make([]*models.CompanionSession, 0)
+	for rows.Next() {
+		item, err := scanCompanionSession(rows)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+// CountAllSessions 返回全量会话数量。仅供管理后台使用。
+func (r *MySQLCompanionRepository) CountAllSessions(ctx context.Context) (int64, error) {
+	row := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM companion_sessions`)
+	var count int64
+	if err := row.Scan(&count); err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
 func (r *MySQLCompanionRepository) UpsertMember(ctx context.Context, member *models.CompanionSessionMember) error {
 	if member == nil || member.SessionID == "" || member.UserID <= 0 {
 		return errors.New("invalid companion member")

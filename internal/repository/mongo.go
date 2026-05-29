@@ -287,6 +287,29 @@ func (r *MongoTrackRepository) Search(ctx context.Context, keyword string, curso
 	)
 }
 
+// ListAll 返回全量未删除轨迹（按 start_time desc, id desc）。仅供管理后台使用。
+func (r *MongoTrackRepository) ListAll(ctx context.Context, cursor *models.TrackListCursor, limit int) ([]*models.Track, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	filter := bson.M{"status": bson.M{"$ne": models.TrackStatusDeleted}}
+	if cursor != nil && !cursor.StartTime.IsZero() {
+		filter["$or"] = []bson.M{
+			{"start_time": bson.M{"$lt": cursor.StartTime}},
+			{"start_time": cursor.StartTime, "id": bson.M{"$lt": cursor.ID}},
+		}
+	}
+	return r.listTracks(ctx,
+		filter,
+		options.Find().SetSort(bson.D{{Key: "start_time", Value: -1}, {Key: "id", Value: -1}}).SetLimit(int64(limit)),
+	)
+}
+
+// CountAll 返回全量未删除轨迹数量。仅供管理后台使用。
+func (r *MongoTrackRepository) CountAll(ctx context.Context) (int64, error) {
+	return r.collection.CountDocuments(ctx, bson.M{"status": bson.M{"$ne": models.TrackStatusDeleted}})
+}
+
 func (r *MongoTrackRepository) listTracks(ctx context.Context, filter interface{}, opts ...*options.FindOptions) ([]*models.Track, error) {
 	cur, err := r.collection.Find(ctx, filter, opts...)
 	if err != nil {
@@ -382,6 +405,16 @@ func (r *MongoUserRepository) FindByNickname(context.Context, string) (*models.U
 // Update is not implemented in this demo and returns an error.
 func (r *MongoUserRepository) Update(context.Context, *models.User) error {
 	return errors.New("MongoUserRepository.Update not implemented")
+}
+
+// ListAll is not implemented in this demo and returns an error.
+func (r *MongoUserRepository) ListAll(context.Context, *models.UserListCursor, int) ([]*models.User, error) {
+	return nil, errors.New("MongoUserRepository.ListAll not implemented")
+}
+
+// CountAll is not implemented in this demo and returns an error.
+func (r *MongoUserRepository) CountAll(context.Context) (int64, error) {
+	return 0, errors.New("MongoUserRepository.CountAll not implemented")
 }
 
 // MongoCollectRepository is a stub of CollectRepository backed by MongoDB.

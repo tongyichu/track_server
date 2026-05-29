@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>用户管理 - Track</title>
+  <link rel="stylesheet" href="/admin/static/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="title">Track 管理后台</div>
+    <nav class="nav">
+      <a href="/admin/index.html">App 发布</a>
+      <a class="active" href="/admin/users.html">用户管理</a>
+      <a href="/admin/tracks.html">轨迹管理</a>
+      <a href="/admin/companions.html">同行管理</a>
+    </nav>
+    <div class="spacer"></div>
+    <div class="user">
+      <span id="userName"></span>
+      <button id="logoutBtn">退出</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="panel">
+      <h2>用户列表 <span class="hint" id="totalHint"></span></h2>
+      <div class="row">
+        <button id="refreshBtn">刷新</button>
+        <button id="prevBtn" disabled>上一页</button>
+        <button id="nextBtn" disabled>下一页</button>
+        <span class="hint" id="pageHint"></span>
+      </div>
+      <table class="data">
+        <thead>
+          <tr>
+            <th>ID</th><th>头像</th><th>昵称</th><th>手机号</th>
+            <th>客户端语言</th><th>个性签名</th>
+            <th>创建时间</th><th>更新时间</th>
+          </tr>
+        </thead>
+        <tbody id="userList"></tbody>
+      </table>
+    </section>
+  </main>
+
+  <script src="/admin/static/users.js"></script>
+</body>
+</html>

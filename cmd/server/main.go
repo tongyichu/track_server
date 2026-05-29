@@ -285,7 +285,7 @@ func main() {
 
 	// 管理后台（独立于业务用户鉴权）。若未配置任何管理员账号，
 	// NewModule 创建出的 auth 为 nil，RegisterRoutes 会直接跳过。
-	adminModule := admin.NewModule(cfg.AdminAccounts, appReleaseSvc, ossTokenSvc, staticRoot)
+	adminModule := admin.NewModule(cfg.AdminAccounts, appReleaseSvc, ossTokenSvc, staticRoot, userRepo, trackRepo, companionRepo)
 	defer adminModule.Close()
 	adminModule.RegisterRoutes(h)
 	if adminModule != nil && adminModule.Auth != nil {

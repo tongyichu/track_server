@@ -191,6 +191,48 @@ func (r *InMemoryCompanionRepository) CountSessionsByUserID(_ context.Context, u
 	return count, nil
 }
 
+// ListAllSessions 返回全量会话（按 started_at desc, session_id desc）。仅供管理后台使用。
+func (r *InMemoryCompanionRepository) ListAllSessions(_ context.Context, cursor *models.CompanionSessionListCursor, limit int) ([]*models.CompanionSession, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	items := make([]*models.CompanionSession, 0, len(r.sessions))
+	for _, session := range r.sessions {
+		if session == nil {
+			continue
+		}
+		if cursor != nil && !cursor.StartedAt.IsZero() {
+			if session.StartedAt.After(cursor.StartedAt) {
+				continue
+			}
+			if session.StartedAt.Equal(cursor.StartedAt) && session.SessionID >= cursor.SessionID {
+				continue
+			}
+		}
+		clone := *session
+		items = append(items, &clone)
+	}
+	sort.SliceStable(items, func(i, j int) bool {
+		if items[i].StartedAt.Equal(items[j].StartedAt) {
+			return items[i].SessionID > items[j].SessionID
+		}
+		return items[i].StartedAt.After(items[j].StartedAt)
+	})
+	if len(items) > limit {
+		items = items[:limit]
+	}
+	return items, nil
+}
+
+// CountAllSessions 返回全量会话数量。仅供管理后台使用。
+func (r *InMemoryCompanionRepository) CountAllSessions(_ context.Context) (int64, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return int64(len(r.sessions)), nil
+}
+
 func (r *InMemoryCompanionRepository) UpsertMember(_ context.Context, member *models.CompanionSessionMember) error {
 	if member == nil || member.SessionID == "" || member.UserID <= 0 {
 		return ErrNotFound

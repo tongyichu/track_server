@@ -296,6 +296,61 @@ func (r *InMemoryTrackRepository) Search(_ context.Context, keyword string, curs
 	return res, nil
 }
 
+// ListAll 返回全量未删除轨迹（按 start_time desc, id desc）。仅供管理后台使用。
+func (r *InMemoryTrackRepository) ListAll(_ context.Context, cursor *models.TrackListCursor, limit int) ([]*models.Track, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	res := make([]*models.Track, 0, len(r.tracks))
+	for _, t := range r.tracks {
+		if t == nil {
+			continue
+		}
+		if t.Status == models.TrackStatusDeleted {
+			continue
+		}
+		if cursor != nil && !cursor.StartTime.IsZero() {
+			if t.StartTime.After(cursor.StartTime) {
+				continue
+			}
+			if t.StartTime.Equal(cursor.StartTime) && t.ID >= cursor.ID {
+				continue
+			}
+		}
+		clone := *t
+		res = append(res, &clone)
+	}
+	sort.SliceStable(res, func(i, j int) bool {
+		if res[i].StartTime.Equal(res[j].StartTime) {
+			return res[i].ID > res[j].ID
+		}
+		return res[i].StartTime.After(res[j].StartTime)
+	})
+	if len(res) > limit {
+		res = res[:limit]
+	}
+	return res, nil
+}
+
+// CountAll 返回全量未删除轨迹数量。仅供管理后台使用。
+func (r *InMemoryTrackRepository) CountAll(_ context.Context) (int64, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var count int64
+	for _, t := range r.tracks {
+		if t == nil {
+			continue
+		}
+		if t.Status == models.TrackStatusDeleted {
+			continue
+		}
+		count++
+	}
+	return count, nil
+}
+
 // Create stores a new waypoint.
 func (r *InMemoryTrackWaypointRepository) Create(_ context.Context, waypoint *models.TrackWaypoint) error {
 	r.mu.Lock()
@@ -428,6 +483,51 @@ func (r *InMemoryUserRepository) Update(_ context.Context, u *models.User) error
 	u.UpdatedAt = time.Now()
 	r.users[u.ID] = u
 	return nil
+}
+
+// ListAll 返回全量用户列表，按 created_at desc, id desc 排序，支持游标翻页。
+func (r *InMemoryUserRepository) ListAll(_ context.Context, cursor *models.UserListCursor, limit int) ([]*models.User, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	items := make([]*models.User, 0, len(r.users))
+	for _, u := range r.users {
+		if u == nil {
+			continue
+		}
+		if cursor != nil && !cursor.CreatedAt.IsZero() {
+			if u.CreatedAt.After(cursor.CreatedAt) {
+				continue
+			}
+			if u.CreatedAt.Equal(cursor.CreatedAt) && u.ID >= cursor.ID {
+				continue
+			}
+		}
+		clone := *u
+		if clone.TokenVersion <= 0 {
+			clone.TokenVersion = 1
+		}
+		items = append(items, &clone)
+	}
+	sort.SliceStable(items, func(i, j int) bool {
+		if items[i].CreatedAt.Equal(items[j].CreatedAt) {
+			return items[i].ID > items[j].ID
+		}
+		return items[i].CreatedAt.After(items[j].CreatedAt)
+	})
+	if len(items) > limit {
+		items = items[:limit]
+	}
+	return items, nil
+}
+
+// CountAll 返回全量用户数量。
+func (r *InMemoryUserRepository) CountAll(_ context.Context) (int64, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return int64(len(r.users)), nil
 }
 
 // InMemoryCollectRepository is an in-memory implementation of CollectRepository.

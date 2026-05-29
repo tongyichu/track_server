@@ -23,9 +23,12 @@ import (
 
 // Handler 聚合管理后台需要的业务依赖。
 type Handler struct {
-	releaseSvc *service.AppReleaseService
-	stsSvc     *service.OSSTokenService
-	auth       *Authenticator
+	releaseSvc    *service.AppReleaseService
+	stsSvc        *service.OSSTokenService
+	auth          *Authenticator
+	userRepo      repository.UserRepository
+	trackRepo     repository.TrackRepository
+	companionRepo repository.CompanionRepository
 	// staticRoot 是服务端本地静态资源根目录（通常为 <LogDir>/static）。
 	// 管理后台上传的安装包会落到 <staticRoot>/release/<platform>/ 下，
 	// 并通过 /api/v1/static/release/<platform>/<file> 对外下发。
@@ -33,8 +36,24 @@ type Handler struct {
 }
 
 // NewHandler 构造管理后台 Handler。
-func NewHandler(releaseSvc *service.AppReleaseService, stsSvc *service.OSSTokenService, auth *Authenticator, staticRoot string) *Handler {
-	return &Handler{releaseSvc: releaseSvc, stsSvc: stsSvc, auth: auth, staticRoot: staticRoot}
+func NewHandler(
+	releaseSvc *service.AppReleaseService,
+	stsSvc *service.OSSTokenService,
+	auth *Authenticator,
+	staticRoot string,
+	userRepo repository.UserRepository,
+	trackRepo repository.TrackRepository,
+	companionRepo repository.CompanionRepository,
+) *Handler {
+	return &Handler{
+		releaseSvc:    releaseSvc,
+		stsSvc:        stsSvc,
+		auth:          auth,
+		staticRoot:    staticRoot,
+		userRepo:      userRepo,
+		trackRepo:     trackRepo,
+		companionRepo: companionRepo,
+	}
 }
 
 // ----- 发布列表 -----
@@ -258,6 +277,189 @@ func sanitizeFileName(name string) string {
 		}
 	}
 	return b.String()
+}
+
+// ----- 用户管理 -----
+
+// adminListLimit 是管理后台列表接口的默认/最大每页条数。
+const (
+	adminListDefaultLimit = 20
+	adminListMaxLimit     = 100
+)
+
+// parseAdminListLimit 解析管理后台 list 接口的 limit query。
+func parseAdminListLimit(raw string) int {
+	if strings.TrimSpace(raw) == "" {
+		return adminListDefaultLimit
+	}
+	v, err := strconv.Atoi(raw)
+	if err != nil || v <= 0 {
+		return adminListDefaultLimit
+	}
+	if v > adminListMaxLimit {
+		return adminListMaxLimit
+	}
+	return v
+}
+
+// ListUsers 处理 GET /admin/api/users
+//
+// query：
+//   - cursor_created_at: RFC3339 时间，上一页最后一条的 created_at；
+//   - cursor_id:         上一页最后一条的用户 ID；
+//   - limit:             每页条数（默认 20，最大 100）。
+//
+// 返回：{ items: []User, total, next_cursor: {created_at, id}, has_more }
+func (h *Handler) ListUsers(ctx context.Context, c *app.RequestContext) {
+	if h == nil || h.userRepo == nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "user repository not configured"})
+		return
+	}
+	limit := parseAdminListLimit(string(c.Query("limit")))
+	var cursor *models.UserListCursor
+	if rawAt := strings.TrimSpace(string(c.Query("cursor_created_at"))); rawAt != "" {
+		t, err := time.Parse(time.RFC3339Nano, rawAt)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, utils.H{"error": "invalid cursor_created_at"})
+			return
+		}
+		idStr := strings.TrimSpace(string(c.Query("cursor_id")))
+		id, err := strconv.ParseInt(idStr, 10, 64)
+		if err != nil || id <= 0 {
+			c.JSON(http.StatusBadRequest, utils.H{"error": "invalid cursor_id"})
+			return
+		}
+		cursor = &models.UserListCursor{CreatedAt: t, ID: id}
+	}
+	items, err := h.userRepo.ListAll(ctx, cursor, limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	total, err := h.userRepo.CountAll(ctx)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	resp := utils.H{
+		"items":    items,
+		"total":    total,
+		"has_more": len(items) == limit,
+	}
+	if len(items) == limit {
+		last := items[len(items)-1]
+		resp["next_cursor"] = utils.H{
+			"created_at": last.CreatedAt.Format(time.RFC3339Nano),
+			"id":         last.ID,
+		}
+	}
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": resp})
+}
+
+// ----- 轨迹管理 -----
+
+// ListTracks 处理 GET /admin/api/tracks
+//
+// query：
+//   - cursor_start_time: RFC3339 时间，上一页最后一条的 start_time；
+//   - cursor_id:         上一页最后一条轨迹 ID；
+//   - limit:             每页条数（默认 20，最大 100）。
+func (h *Handler) ListTracks(ctx context.Context, c *app.RequestContext) {
+	if h == nil || h.trackRepo == nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "track repository not configured"})
+		return
+	}
+	limit := parseAdminListLimit(string(c.Query("limit")))
+	var cursor *models.TrackListCursor
+	if rawAt := strings.TrimSpace(string(c.Query("cursor_start_time"))); rawAt != "" {
+		t, err := time.Parse(time.RFC3339Nano, rawAt)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, utils.H{"error": "invalid cursor_start_time"})
+			return
+		}
+		id := strings.TrimSpace(string(c.Query("cursor_id")))
+		if id == "" {
+			c.JSON(http.StatusBadRequest, utils.H{"error": "invalid cursor_id"})
+			return
+		}
+		cursor = &models.TrackListCursor{StartTime: t, ID: id}
+	}
+	items, err := h.trackRepo.ListAll(ctx, cursor, limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	total, err := h.trackRepo.CountAll(ctx)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	resp := utils.H{
+		"items":    items,
+		"total":    total,
+		"has_more": len(items) == limit,
+	}
+	if len(items) == limit {
+		last := items[len(items)-1]
+		resp["next_cursor"] = utils.H{
+			"start_time": last.StartTime.Format(time.RFC3339Nano),
+			"id":         last.ID,
+		}
+	}
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": resp})
+}
+
+// ----- 同行管理 -----
+
+// ListCompanions 处理 GET /admin/api/companions
+//
+// query：
+//   - cursor_started_at: RFC3339 时间，上一页最后一条的 started_at；
+//   - cursor_session_id: 上一页最后一条会话的 session_id；
+//   - limit:             每页条数（默认 20，最大 100）。
+func (h *Handler) ListCompanions(ctx context.Context, c *app.RequestContext) {
+	if h == nil || h.companionRepo == nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "companion repository not configured"})
+		return
+	}
+	limit := parseAdminListLimit(string(c.Query("limit")))
+	var cursor *models.CompanionSessionListCursor
+	if rawAt := strings.TrimSpace(string(c.Query("cursor_started_at"))); rawAt != "" {
+		t, err := time.Parse(time.RFC3339Nano, rawAt)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, utils.H{"error": "invalid cursor_started_at"})
+			return
+		}
+		sid := strings.TrimSpace(string(c.Query("cursor_session_id")))
+		if sid == "" {
+			c.JSON(http.StatusBadRequest, utils.H{"error": "invalid cursor_session_id"})
+			return
+		}
+		cursor = &models.CompanionSessionListCursor{StartedAt: t, SessionID: sid}
+	}
+	items, err := h.companionRepo.ListAllSessions(ctx, cursor, limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	total, err := h.companionRepo.CountAllSessions(ctx)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	resp := utils.H{
+		"items":    items,
+		"total":    total,
+		"has_more": len(items) == limit,
+	}
+	if len(items) == limit {
+		last := items[len(items)-1]
+		resp["next_cursor"] = utils.H{
+			"started_at": last.StartedAt.Format(time.RFC3339Nano),
+			"session_id": last.SessionID,
+		}
+	}
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": resp})
 }
 
 // GetReleaseUploadCredential 处理 GET /admin/api/releases/upload-token

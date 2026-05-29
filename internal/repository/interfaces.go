@@ -54,6 +54,16 @@ type TrackRepository interface {
 	ListByUserID(ctx context.Context, userID int64, cursor *models.TrackListCursor, limit int) ([]*models.Track, error)
 	ListRecommend(ctx context.Context, userID int64, cursor *models.TrackListCursor, limit int) ([]*models.Track, error)
 	Search(ctx context.Context, keyword string, cursor *models.TrackListCursor, limit int) ([]*models.Track, error)
+	// ListAll 返回全量轨迹列表（按 start_time desc, id desc）。
+	//
+	// 约定：
+	// - 仅返回未删除的轨迹（status != deleted），但不区分 is_running，便于管理后台一窥全貌；
+	// - cursor==nil 表示首页；非 nil 时取 (start_time, id) 严格小于游标的记录；
+	// - limit<=0 时实现应使用合理默认值（建议 20）；
+	// - 仅供管理后台使用。
+	ListAll(ctx context.Context, cursor *models.TrackListCursor, limit int) ([]*models.Track, error)
+	// CountAll 返回全量未删除轨迹数量。仅供管理后台使用。
+	CountAll(ctx context.Context) (int64, error)
 }
 
 // encodeTrackID 将全局递增序列编码成业务侧使用的轨迹 ID。
@@ -98,6 +108,15 @@ type UserRepository interface {
 	FindByPhone(ctx context.Context, phone string) (*models.User, error)
 	FindByNickname(ctx context.Context, nickname string) (*models.User, error)
 	Update(ctx context.Context, u *models.User) error
+	// ListAll 返回全量用户列表（按 created_at desc, id desc）。
+	//
+	// 约定：
+	// - cursor==nil 表示首页；非 nil 时取 (created_at, id) 严格小于游标的记录；
+	// - limit<=0 时实现应使用一个合理默认值（建议 20）；
+	// - 仅供管理后台使用，不应被业务接口调用。
+	ListAll(ctx context.Context, cursor *models.UserListCursor, limit int) ([]*models.User, error)
+	// CountAll 返回全量用户数量。仅供管理后台使用。
+	CountAll(ctx context.Context) (int64, error)
 }
 
 // CollectRepository defines persistence operations for track collections.
@@ -171,6 +190,15 @@ type CompanionRepository interface {
 	// ListActiveSessions returns all sessions whose status is active, capped by limit.
 	// Used by the nearby companion listing.
 	ListActiveSessions(ctx context.Context, limit int) ([]*models.CompanionSession, error)
+	// ListAllSessions 返回全量同行会话（按 started_at desc, session_id desc），不区分 status。
+	//
+	// 约定：
+	// - cursor==nil 表示首页；非 nil 时取 (started_at, session_id) 严格小于游标的记录；
+	// - limit<=0 时实现应使用合理默认值（建议 20）；
+	// - 仅供管理后台使用。
+	ListAllSessions(ctx context.Context, cursor *models.CompanionSessionListCursor, limit int) ([]*models.CompanionSession, error)
+	// CountAllSessions 返回全量会话数量。仅供管理后台使用。
+	CountAllSessions(ctx context.Context) (int64, error)
 
 	UpsertMember(ctx context.Context, member *models.CompanionSessionMember) error
 	FindMember(ctx context.Context, sessionID string, userID int64) (*models.CompanionSessionMember, error)

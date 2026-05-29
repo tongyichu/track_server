@@ -2,6 +2,17 @@ package models
 
 import "time"
 
+// UserListCursor 表示按 created_at 倒序翻页用户列表时使用的游标。
+//
+// 约定：
+// - 排序：created_at desc, id desc；
+// - 下一页查询条件为 "(created_at, id) 严格小于该游标"；
+// - 仅供管理后台等"全量列表"场景使用，不影响业务接口。
+type UserListCursor struct {
+	CreatedAt time.Time `json:"created_at"`
+	ID        int64     `json:"id"`
+}
+
 // User represents a basic user profile of the track application.
 type User struct {
 	ID             int64     `json:"id" bson:"_id,omitempty"`

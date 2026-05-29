@@ -13,6 +13,7 @@ import (
 	"github.com/cloudwego/hertz/pkg/app/server"
 	"github.com/cloudwego/hertz/pkg/common/utils"
 
+	"github.com/tongyichu/track_server/internal/repository"
 	"github.com/tongyichu/track_server/internal/service"
 )
 
@@ -38,10 +39,10 @@ type Module struct {
 // 管理后台上传的安装包会落盘到 <staticRoot>/release/<platform>/，
 // 并通过 /api/v1/static/release/<platform>/<file> 对外下发。
 // 留空表示禁用本地上传接口（接口会返回 500）。
-func NewModule(accounts map[string]string, releaseSvc *service.AppReleaseService, stsSvc *service.OSSTokenService, staticRoot string) *Module {
+func NewModule(accounts map[string]string, releaseSvc *service.AppReleaseService, stsSvc *service.OSSTokenService, staticRoot string, userRepo repository.UserRepository, trackRepo repository.TrackRepository, companionRepo repository.CompanionRepository) *Module {
 	store := NewSessionStore(12 * time.Hour)
 	auth := NewAuthenticator(accounts, store)
-	handler := NewHandler(releaseSvc, stsSvc, auth, staticRoot)
+	handler := NewHandler(releaseSvc, stsSvc, auth, staticRoot, userRepo, trackRepo, companionRepo)
 	return &Module{
 		Auth:    auth,
 		Handler: handler,
@@ -71,6 +72,9 @@ func (m *Module) Close() {
 // - DELETE /admin/api/releases/:id    删除版本（鉴权）
 // - POST /admin/api/releases/upload-package 上传安装包到本机静态目录（鉴权）
 // - GET  /admin/api/releases/upload-token  旧 OSS 直传凭证接口（鉴权，前端不再使用）
+// - GET  /admin/api/users                  用户列表（鉴权，cursor 翻页）
+// - GET  /admin/api/tracks                 轨迹列表（鉴权，cursor 翻页）
+// - GET  /admin/api/companions             同行会话列表（鉴权，cursor 翻页）
 //
 // 当 m == nil 或 m.Auth == nil 时，整个 /admin 不会被挂载。
 func (m *Module) RegisterRoutes(h *server.Hertz) {
@@ -87,6 +91,9 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	// 静态资源：直接从 embed.FS 读出来返回
 	g.GET("/login.html", serveEmbedded("static/login.html", "text/html; charset=utf-8"))
 	g.GET("/index.html", serveEmbedded("static/index.html", "text/html; charset=utf-8"))
+	g.GET("/users.html", serveEmbedded("static/users.html", "text/html; charset=utf-8"))
+	g.GET("/tracks.html", serveEmbedded("static/tracks.html", "text/html; charset=utf-8"))
+	g.GET("/companions.html", serveEmbedded("static/companions.html", "text/html; charset=utf-8"))
 	g.GET("/static/*filepath", serveEmbeddedDir())
 
 	// 公开 API
@@ -101,6 +108,11 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	api.DELETE("/releases/:id", m.Handler.DeleteRelease)
 	api.GET("/releases/upload-token", m.Handler.GetReleaseUploadCredential)
 	api.POST("/releases/upload-package", m.Handler.UploadPackage)
+
+	// 用户 / 轨迹 / 同行 列表（仅查询，提供基础翻页）
+	api.GET("/users", m.Handler.ListUsers)
+	api.GET("/tracks", m.Handler.ListTracks)
+	api.GET("/companions", m.Handler.ListCompanions)
 }
 
 func redirectToLogin(_ context.Context, c *app.RequestContext) {

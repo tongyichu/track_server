@@ -1103,6 +1103,63 @@ func (r *MySQLTrackRepository) Search(ctx context.Context, keyword string, curso
 	return res, nil
 }
 
+// ListAll 返回全量未删除轨迹（按 start_time desc, id desc）。仅供管理后台使用。
+func (r *MySQLTrackRepository) ListAll(ctx context.Context, cursor *models.TrackListCursor, limit int) ([]*models.Track, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	query := `SELECT id FROM track_records WHERE (deleted_at IS NULL) AND status <> ?`
+	args := make([]interface{}, 0, 4)
+	args = append(args, models.TrackStatusDeleted)
+	if cursor != nil && !cursor.StartTime.IsZero() {
+		query += ` AND (start_time < ? OR (start_time = ? AND id < ?))`
+		args = append(args, cursor.StartTime, cursor.StartTime, cursor.ID)
+	}
+	query += ` ORDER BY start_time DESC, id DESC LIMIT ?`
+	args = append(args, limit)
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	ids := make([]string, 0, limit)
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	res := make([]*models.Track, 0, len(ids))
+	for _, id := range ids {
+		t, err := r.FindByID(ctx, id)
+		if err != nil {
+			if errors.Is(err, ErrNotFound) {
+				continue
+			}
+			return nil, err
+		}
+		res = append(res, t)
+	}
+	return res, nil
+}
+
+// CountAll 返回全量未删除轨迹数量。仅供管理后台使用。
+func (r *MySQLTrackRepository) CountAll(ctx context.Context) (int64, error) {
+	row := r.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM track_records WHERE (deleted_at IS NULL) AND status <> ?`,
+		models.TrackStatusDeleted,
+	)
+	var count int64
+	if err := row.Scan(&count); err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
 func (r *MySQLTrackWaypointRepository) Create(ctx context.Context, waypoint *models.TrackWaypoint) error {
 	if waypoint.TrackID == "" {
 		return errors.New("track waypoint track_id is required")
@@ -1315,6 +1372,61 @@ func (r *MySQLUserRepository) Update(ctx context.Context, u *models.User) error 
 		return ErrNotFound
 	}
 	return nil
+}
+
+// ListAll 返回全量用户列表，按 created_at desc, id desc 排序。
+func (r *MySQLUserRepository) ListAll(ctx context.Context, cursor *models.UserListCursor, limit int) ([]*models.User, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	query := `SELECT id, nickname, avatar_url, signature, phone, client_language, token_version, created_at, updated_at FROM users`
+	args := make([]interface{}, 0, 4)
+	if cursor != nil && !cursor.CreatedAt.IsZero() {
+		query += ` WHERE (created_at < ? OR (created_at = ? AND id < ?))`
+		args = append(args, cursor.CreatedAt, cursor.CreatedAt, cursor.ID)
+	}
+	query += ` ORDER BY created_at DESC, id DESC LIMIT ?`
+	args = append(args, limit)
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	users := make([]*models.User, 0, limit)
+	for rows.Next() {
+		var (
+			u         models.User
+			avatarURL sql.NullString
+			signature sql.NullString
+		)
+		if err := rows.Scan(&u.ID, &u.Nickname, &avatarURL, &signature, &u.Phone, &u.ClientLanguage, &u.TokenVersion, &u.CreatedAt, &u.UpdatedAt); err != nil {
+			return nil, err
+		}
+		if avatarURL.Valid {
+			u.AvatarURL = avatarURL.String
+		}
+		if signature.Valid {
+			u.Signature = signature.String
+		}
+		if u.TokenVersion <= 0 {
+			u.TokenVersion = 1
+		}
+		users = append(users, &u)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return users, nil
+}
+
+// CountAll 返回全量用户总数。
+func (r *MySQLUserRepository) CountAll(ctx context.Context) (int64, error) {
+	row := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM users`)
+	var count int64
+	if err := row.Scan(&count); err != nil {
+		return 0, err
+	}
+	return count, nil
 }
 
 // MySQLCollectRepository implements CollectRepository on top of MySQL.

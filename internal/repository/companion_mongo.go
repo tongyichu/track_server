@@ -57,6 +57,14 @@ func (r *MongoCompanionRepository) ListActiveSessions(context.Context, int) ([]*
 	return nil, errors.New("MongoCompanionRepository.ListActiveSessions not implemented")
 }
 
+func (r *MongoCompanionRepository) ListAllSessions(context.Context, *models.CompanionSessionListCursor, int) ([]*models.CompanionSession, error) {
+	return nil, errors.New("MongoCompanionRepository.ListAllSessions not implemented")
+}
+
+func (r *MongoCompanionRepository) CountAllSessions(context.Context) (int64, error) {
+	return 0, errors.New("MongoCompanionRepository.CountAllSessions not implemented")
+}
+
 func (r *MongoCompanionRepository) UpsertMember(context.Context, *models.CompanionSessionMember) error {
 	return errors.New("MongoCompanionRepository.UpsertMember not implemented")
 }
