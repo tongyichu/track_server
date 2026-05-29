@@ -111,7 +111,6 @@ App Server 提供以下职责：
 - `status`
 - `visibility`（`private` / `public`，默认 `private`；公开房间会出现在「附近房间」列表中，且允许凭 `session_id` 加入）
 - `join_token`
-- `join_token_expire_at`（保留字段；当前实现固定为零值，token 仅在 session `status=active` 期间有效，会话结束自动失效）
 - `title`
 - `max_members`
 - `started_at`

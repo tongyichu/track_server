@@ -60,7 +60,6 @@ type CompanionSession struct {
 	Status             CompanionSessionStatus     `json:"status" bson:"status"`
 	Visibility         CompanionSessionVisibility `json:"visibility" bson:"visibility"`
 	JoinToken          string                     `json:"-" bson:"join_token"`
-	JoinTokenExpireAt  time.Time                  `json:"-" bson:"join_token_expire_at"`
 	Title              string                     `json:"title" bson:"title"`
 	TrackType          string                     `json:"track_type" bson:"track_type"`
 	LocateAddr         string                     `json:"locate_addr" bson:"locate_addr"`
@@ -172,7 +171,6 @@ type CompanionHistoryItem struct {
 	DurationSeconds   int64                        `json:"duration_seconds"`
 	Status            CompanionSessionStatus       `json:"status"`
 	JoinToken         string                       `json:"join_token,omitempty"`
-	JoinTokenExpireAt time.Time                    `json:"join_token_expire_at,omitempty"`
 	Participants      []CompanionHistoryParticipant `json:"participants"`
 }
 

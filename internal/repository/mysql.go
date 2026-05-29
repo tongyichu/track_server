@@ -115,7 +115,6 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 			owner_user_id BIGINT NOT NULL,
 			status VARCHAR(16) NOT NULL,
 			join_token VARCHAR(128) NOT NULL,
-			join_token_expire_at DATETIME(6) NOT NULL,
 			title VARCHAR(64) NOT NULL DEFAULT '',
 			track_type VARCHAR(32) NOT NULL DEFAULT '',
 			locate_addr VARCHAR(255) NOT NULL DEFAULT '',

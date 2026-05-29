@@ -124,7 +124,6 @@ CREATE TABLE `companion_sessions` (
                                      `status` VARCHAR(16) NOT NULL COMMENT 'active / ended',
                                      `visibility` VARCHAR(16) NOT NULL DEFAULT 'private' COMMENT 'private 私密（需 join_token） / public 公开（凭 session_id 即可加入，并出现在附近列表）',
                                      `join_token` VARCHAR(128) NOT NULL COMMENT '加入凭证',
-                                     `join_token_expire_at` DATETIME(6) NOT NULL COMMENT '加入凭证过期时间',
                                      `title` VARCHAR(64) NOT NULL DEFAULT '' COMMENT '会话标题',
                                      `track_type` VARCHAR(32) NOT NULL DEFAULT '' COMMENT '运动类型',
                                      `locate_addr` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '位置信息',

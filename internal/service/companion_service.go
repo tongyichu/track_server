@@ -187,8 +187,7 @@ type JoinCompanionSessionInput struct {
 
 // CompanionJoinInfo is the owner-only invitation info returned by control plane APIs.
 type CompanionJoinInfo struct {
-	JoinToken         string    `json:"join_token"`
-	JoinTokenExpireAt time.Time `json:"join_token_expire_at"`
+	JoinToken string `json:"join_token"`
 }
 
 // CompanionSessionState is the standard control-plane response envelope.
@@ -777,7 +776,6 @@ func (s *CompanionService) CreateSession(ctx context.Context, ownerUserID int64,
 		Status:            models.CompanionSessionStatusActive,
 		Visibility:        visibility,
 		JoinToken:         joinToken,
-		JoinTokenExpireAt: time.Time{},
 		Title:             title,
 		TrackType:         strings.TrimSpace(in.TrackType),
 		LocateAddr:        strings.TrimSpace(in.LocateAddr),
@@ -1275,7 +1273,7 @@ func (s *CompanionService) buildSessionState(ctx context.Context, session *model
 	}
 	state := &CompanionSessionState{Session: session, Snapshot: snapshot}
 	if includeJoin {
-		state.Join = &CompanionJoinInfo{JoinToken: session.JoinToken, JoinTokenExpireAt: session.JoinTokenExpireAt}
+		state.Join = &CompanionJoinInfo{JoinToken: session.JoinToken}
 	}
 	_ = userID
 	return state, nil
@@ -1345,7 +1343,6 @@ func (s *CompanionService) buildHistoryItem(ctx context.Context, session *models
 	}
 	if clone.Status == models.CompanionSessionStatusActive {
 		item.JoinToken = clone.JoinToken
-		item.JoinTokenExpireAt = clone.JoinTokenExpireAt
 	}
 	return item, nil
 }
