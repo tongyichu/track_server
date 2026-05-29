@@ -33,7 +33,7 @@
 track_server/
 ├── cmd/server/             # main 入口：加载配置 → 选仓储 → 注入 service → 注册路由
 ├── internal/
-│   ├── config/             # 环境变量加载；内置省市数据 + 昵称字典
+│   ├── config/             # 环境变量加载；内置省市数据 + 昵称字典 + 同行弹幕敏感词词库
 │   ├── handler/            # Hertz HTTP handler + router.go 路由表（权威）
 │   ├── middleware/         # JWT 鉴权、请求元信息、Token 黑名单
 │   ├── models/             # 领域模型（Track / User / Companion / 相关光标/子结构）
@@ -96,6 +96,7 @@ HTTP Request
 | --- | --- |
 | `internal/config/china_city_raw.json` / `china_province_raw.json` | 外部数据源，批量导入 |
 | `internal/config/nickname.go` | 昵称词库，顺序与索引参与随机分配 |
+| `internal/config/sensitive_words.json` | 同行弹幕敏感词词库，由 `go:embed` 加载，运维维护，不要逐行手改 |
 | `mysql.sql` | 线上表结构基线，仅在正式变更表结构时同步修改 |
 
 ### 工程惯例
