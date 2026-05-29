@@ -38,6 +38,7 @@ track_server/
 │   ├── middleware/         # JWT 鉴权、请求元信息、Token 黑名单
 │   ├── models/             # 领域模型（Track / User / Companion / 相关光标/子结构）
 │   ├── repository/         # 持久化接口 + mysql / mongo / memory 三实现
+│   ├── scheduler/          # 进程内定时任务（基于 robfig/cron/v3，按 SCHEDULER_ENABLED 启停）
 │   └── service/            # 业务编排：登录、轨迹、用户、同行控制面、OSS STS、资源缓存
 ├── deploy/                 # Dockerfile / docker-compose / nginx / systemd
 ├── Makefile                # run / test / docker-build / compose-up/down
@@ -66,7 +67,9 @@ Load Config → 选择 Repository（Memory/MySQL/Mongo，失败降级为 Memory�
 → 构造 Service（Track / User / Login / OSSToken / AssetCache×3）
 → 将 OSSTokenService 作为 downloader 注入 AssetCache
 → （可选）加载 TLS 证书
-→ RegisterRoutes(Hertz, Deps) → h.Spin()
+→ RegisterRoutes(Hertz, Deps)
+→ （可选）SCHEDULER_ENABLED=true 时启动 Scheduler（注册 danmaku_cleanup 等任务）
+→ h.Spin()
 ```
 
 **典型业务调用链**：

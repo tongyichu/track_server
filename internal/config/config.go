@@ -96,6 +96,14 @@ type Config struct {
 	// 任一来源解析为非空账号集时后台启用；否则后台禁用。
 	// 哈希生成示例：htpasswd -nbBC 10 "" "<plain>" | tr -d ':\n' | sed 's/^$2y/$2a/'
 	AdminAccounts map[string]string
+
+	// 定时任务调度器（基于 robfig/cron/v3）
+	// - SCHEDULER_ENABLED=true 时启动，便于后续把 API 集群与定时任务集群拆开部署；
+	// - DANMAKU_CLEANUP_CRON：弹幕清理任务的 cron 表达式（5 段，默认每天 03:00）；
+	// - DANMAKU_RETENTION_DAYS：会话结束后弹幕保留天数（默认 7 天）。
+	SchedulerEnabled     bool
+	DanmakuCleanupCron   string
+	DanmakuRetentionDays int
 }
 
 // Load reads configuration from environment variables with sensible defaults.
@@ -171,6 +179,11 @@ func Load() *Config {
 
 		// 管理后台登录凭证（独立于业务用户鉴权）
 		AdminAccounts: parseAdminAccounts(os.Getenv("ADMIN_ACCOUNTS"), os.Getenv("ADMIN_USERNAME"), os.Getenv("ADMIN_PASSWORD_HASH")),
+
+		// 定时任务调度器
+		SchedulerEnabled:     os.Getenv("SCHEDULER_ENABLED") == "true",
+		DanmakuCleanupCron:   getEnv("DANMAKU_CLEANUP_CRON", "0 3 * * *"),
+		DanmakuRetentionDays: int(getEnvInt64("DANMAKU_RETENTION_DAYS", 7)),
 	}
 
 	// Priority:

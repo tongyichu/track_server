@@ -383,6 +383,40 @@ func (r *MySQLCompanionRepository) CountDanmakuBySessionSince(ctx context.Contex
 	return count, nil
 }
 
+// DeleteDanmakusBySessionEndedBefore 通过 DELETE ... JOIN 一次性筛掉「session 已结束且超过 deadline」的弹幕。
+//
+// 实现要点：
+//   - 用 LIMIT 1000 分批删除，避免单次大事务锁表；
+//   - 每批返回的受影响行数 < 1000 时表示已经删尽；
+//   - 中途若 ctx 被取消，会立即返回，已经删除的部分仍计入 total。
+func (r *MySQLCompanionRepository) DeleteDanmakusBySessionEndedBefore(ctx context.Context, deadline time.Time) (int64, error) {
+	if deadline.IsZero() {
+		return 0, errors.New("deadline is required")
+	}
+	const batch = 1000
+	var total int64
+	for {
+		if err := ctx.Err(); err != nil {
+			return total, err
+		}
+		res, err := r.db.ExecContext(ctx,
+			`DELETE d FROM companion_danmakus d
+			 INNER JOIN companion_sessions s ON s.session_id = d.session_id
+			 WHERE s.status = ? AND s.ended_at IS NOT NULL AND s.ended_at < ?
+			 LIMIT ?`,
+			models.CompanionSessionStatusEnded, deadline, batch,
+		)
+		if err != nil {
+			return total, err
+		}
+		n, _ := res.RowsAffected()
+		total += n
+		if n < batch {
+			return total, nil
+		}
+	}
+}
+
 func companionSessionSelectSQL() string {
 	return `SELECT companion_sessions.session_id, companion_sessions.owner_user_id, companion_sessions.status, companion_sessions.visibility, companion_sessions.join_token, companion_sessions.title, companion_sessions.track_type, companion_sessions.locate_addr, companion_sessions.max_members, companion_sessions.danmaku_enabled, companion_sessions.started_at, companion_sessions.ended_at, companion_sessions.created_at, companion_sessions.updated_at FROM companion_sessions`
 }

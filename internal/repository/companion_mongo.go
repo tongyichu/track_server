@@ -96,3 +96,7 @@ func (r *MongoCompanionRepository) CountDanmakuByMemberSince(context.Context, st
 func (r *MongoCompanionRepository) CountDanmakuBySessionSince(context.Context, string, time.Time) (int64, error) {
 	return 0, errors.New("MongoCompanionRepository.CountDanmakuBySessionSince not implemented")
 }
+
+func (r *MongoCompanionRepository) DeleteDanmakusBySessionEndedBefore(context.Context, time.Time) (int64, error) {
+	return 0, errors.New("MongoCompanionRepository.DeleteDanmakusBySessionEndedBefore not implemented")
+}

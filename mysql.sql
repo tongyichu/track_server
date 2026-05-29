@@ -135,7 +135,8 @@ CREATE TABLE `companion_sessions` (
                                      `updated_at` DATETIME(6) NOT NULL,
                                      PRIMARY KEY (`session_id`),
                                      UNIQUE KEY `uk_companion_join_token` (`join_token`),
-                                     KEY `idx_companion_owner_status` (`owner_user_id`, `status`)
+                                     KEY `idx_companion_owner_status` (`owner_user_id`, `status`),
+                                     KEY `idx_companion_session_status_ended` (`status`, `ended_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='同行会话表';
 
 

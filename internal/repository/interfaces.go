@@ -189,4 +189,12 @@ type CompanionRepository interface {
 	// CountDanmakuBySessionSince returns how many danmakus were sent in the session in [since, now].
 	// Used for session-level aggregate rate limiting.
 	CountDanmakuBySessionSince(ctx context.Context, sessionID string, since time.Time) (int64, error)
+	// DeleteDanmakusBySessionEndedBefore 删除「status=ended 且 ended_at < deadline」对应 session 的所有弹幕，返回删除行数。
+	//
+	// 约定：
+	// - active session 的弹幕不会被清理；
+	// - 找不到符合条件的 session 视为正常情况，返回 (0, nil)；
+	// - MySQL 实现按 LIMIT 分批删除，避免长事务；
+	// - Mongo 暂未实现，返回 not implemented。
+	DeleteDanmakusBySessionEndedBefore(ctx context.Context, deadline time.Time) (int64, error)
 }

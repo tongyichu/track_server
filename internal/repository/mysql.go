@@ -125,7 +125,8 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 			updated_at DATETIME(6) NOT NULL,
 			PRIMARY KEY (session_id),
 			UNIQUE KEY uk_companion_join_token (join_token),
-			KEY idx_companion_owner_status (owner_user_id, status)
+			KEY idx_companion_owner_status (owner_user_id, status),
+			KEY idx_companion_session_status_ended (status, ended_at)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='同行会话表';`,
 		`CREATE TABLE IF NOT EXISTS companion_session_members (
 			session_id VARCHAR(64) NOT NULL,
@@ -244,6 +245,9 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 	if err := ensureMySQLCompanionSessionLocateAddrColumn(ctx, db); err != nil {
+		return err
+	}
+	if err := ensureMySQLCompanionSessionStatusEndedIndex(ctx, db); err != nil {
 		return err
 	}
 	return nil
@@ -537,6 +541,28 @@ func ensureMySQLCompanionSessionLocateAddrColumn(ctx context.Context, db *sql.DB
 	_, err = db.ExecContext(ctx, `ALTER TABLE companion_sessions ADD COLUMN locate_addr VARCHAR(255) NOT NULL DEFAULT '' COMMENT '位置信息' AFTER track_type`)
 	if err != nil {
 		return fmt.Errorf("add companion_sessions.locate_addr column: %w", err)
+	}
+	return nil
+}
+
+// ensureMySQLCompanionSessionStatusEndedIndex 在已有部署上补齐 (status, ended_at) 复合索引，
+// 用于支持「弹幕清理」按已结束会话过滤的扫描。
+func ensureMySQLCompanionSessionStatusEndedIndex(ctx context.Context, db *sql.DB) error {
+	var count int
+	err := db.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM information_schema.STATISTICS
+		WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'companion_sessions' AND INDEX_NAME = 'idx_companion_session_status_ended'`,
+	).Scan(&count)
+	if err != nil {
+		return fmt.Errorf("check companion_sessions.idx_companion_session_status_ended: %w", err)
+	}
+	if count > 0 {
+		return nil
+	}
+	_, err = db.ExecContext(ctx, `ALTER TABLE companion_sessions ADD INDEX idx_companion_session_status_ended (status, ended_at)`)
+	if err != nil {
+		return fmt.Errorf("add companion_sessions.idx_companion_session_status_ended: %w", err)
 	}
 	return nil
 }

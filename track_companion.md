@@ -468,7 +468,8 @@ Client publish → companion/{sid}/member/{uid}/danmaku
 - principal 复核：`session_id / user_id` 必须与 `client_id / username` 绑定一致，否则返回 403；
 - 必须为 `active` session 中的 `joined` 成员，否则返回 404 / 403；
 - 广播 publisher 回退顺序：`SetDanmakuPublisher` 注入的 publisher → `controlPublisher` → 仅记日志（best-effort）；
-- 落库表：`companion_danmaku`，主键 `id`，索引 `(session_id, user_id, created_at)`，session 级限速复用 `idx_companion_danmaku_session_time(session_id, created_at)`。
+- 落库表：`companion_danmaku`，主键 `id`，索引 `(session_id, user_id, created_at)`，session 级限速复用 `idx_companion_danmaku_session_time(session_id, created_at)`；
+- 数据保留：会话结束（`status=ended`）后弹幕默认保留 7 天，由 `internal/scheduler/jobs.DanmakuCleanup` 任务每天 03:00 批量清理（可通过 `DANMAKU_CLEANUP_CRON` / `DANMAKU_RETENTION_DAYS` 调整；调度器自身受 `SCHEDULER_ENABLED=true` 控制）。
 
 #### 8.5.4 客户端广播消息格式
 

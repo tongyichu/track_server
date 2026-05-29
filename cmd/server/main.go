@@ -20,6 +20,8 @@ import (
 	"github.com/tongyichu/track_server/internal/handler"
 	"github.com/tongyichu/track_server/internal/middleware"
 	"github.com/tongyichu/track_server/internal/repository"
+	"github.com/tongyichu/track_server/internal/scheduler"
+	"github.com/tongyichu/track_server/internal/scheduler/jobs"
 	"github.com/tongyichu/track_server/internal/service"
 )
 
@@ -290,6 +292,27 @@ func main() {
 		log.Printf("admin console enabled at /admin/ (%d account(s))", adminModule.Auth.AccountCount())
 	} else {
 		log.Println("admin console disabled: ADMIN_ACCOUNTS / ADMIN_USERNAME / ADMIN_PASSWORD_HASH not set")
+	}
+
+	// 定时任务调度器：仅在 SCHEDULER_ENABLED=true 时启动，方便后续把 API 集群与定时任务集群拆分部署。
+	if cfg.SchedulerEnabled {
+		sch := scheduler.New()
+		danmakuJob := jobs.NewDanmakuCleanup(companionRepo, cfg.DanmakuRetentionDays, cfg.DanmakuCleanupCron)
+		if err := sch.Register(danmakuJob); err != nil {
+			log.Printf("scheduler register failed, scheduler disabled: %v", err)
+		} else {
+			sch.Start()
+			defer func() {
+				stopCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				defer cancel()
+				if err := sch.Stop(stopCtx); err != nil {
+					log.Printf("scheduler stop error: %v", err)
+				}
+			}()
+			log.Printf("scheduler enabled: %d job(s)", len(sch.Jobs()))
+		}
+	} else {
+		log.Println("scheduler disabled (SCHEDULER_ENABLED != true)")
 	}
 
 	h.Spin()

@@ -358,3 +358,41 @@ func (r *InMemoryCompanionRepository) CountDanmakuBySessionSince(_ context.Conte
 	}
 	return count, nil
 }
+
+func (r *InMemoryCompanionRepository) DeleteDanmakusBySessionEndedBefore(_ context.Context, deadline time.Time) (int64, error) {
+	if deadline.IsZero() {
+		return 0, nil
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	targets := make(map[string]struct{})
+	for sid, s := range r.sessions {
+		if s == nil {
+			continue
+		}
+		if s.Status != models.CompanionSessionStatusEnded {
+			continue
+		}
+		if s.EndedAt.IsZero() || !s.EndedAt.Before(deadline) {
+			continue
+		}
+		targets[sid] = struct{}{}
+	}
+	if len(targets) == 0 {
+		return 0, nil
+	}
+	filtered := r.danmakus[:0]
+	var affected int64
+	for _, d := range r.danmakus {
+		if d == nil {
+			continue
+		}
+		if _, hit := targets[d.SessionID]; hit {
+			affected++
+			continue
+		}
+		filtered = append(filtered, d)
+	}
+	r.danmakus = filtered
+	return affected, nil
+}
