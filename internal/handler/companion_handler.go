@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -312,11 +313,18 @@ func (h *CompanionHandler) IngestMQTTLocation(ctx context.Context, c *app.Reques
 	}
 	var req service.CompanionMQTTLocationIngestInput
 	data, err := c.Body()
-	if err != nil || json.Unmarshal(data, &req) != nil {
+	if err != nil {
+		log.Printf("[location-ingest] read body failed: %v", err)
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid payload"})
+		return
+	}
+	if jerr := json.Unmarshal(data, &req); jerr != nil {
+		log.Printf("[location-ingest] unmarshal failed: %v body=%s", jerr, string(data))
 		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid payload"})
 		return
 	}
 	if err := h.svc.IngestLocationFromMQTT(ctx, req); err != nil {
+		log.Printf("[location-ingest] ingest failed: %v sid=%s uid=%d seq=%d", err, req.SessionID, req.UserID, req.Seq)
 		h.writeError(c, err)
 		return
 	}
@@ -330,11 +338,18 @@ func (h *CompanionHandler) IngestMQTTPresence(ctx context.Context, c *app.Reques
 	}
 	var req service.CompanionMQTTPresenceIngestInput
 	data, err := c.Body()
-	if err != nil || json.Unmarshal(data, &req) != nil {
+	if err != nil {
+		log.Printf("[presence-ingest] read body failed: %v", err)
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid payload"})
+		return
+	}
+	if jerr := json.Unmarshal(data, &req); jerr != nil {
+		log.Printf("[presence-ingest] unmarshal failed: %v body=%s", jerr, string(data))
 		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid payload"})
 		return
 	}
 	if err := h.svc.IngestPresenceFromMQTT(ctx, req); err != nil {
+		log.Printf("[presence-ingest] ingest failed: %v sid=%s uid=%d status=%s", err, req.SessionID, req.UserID, req.Status)
 		h.writeError(c, err)
 		return
 	}
@@ -351,11 +366,18 @@ func (h *CompanionHandler) IngestMQTTDanmaku(ctx context.Context, c *app.Request
 	}
 	var req service.CompanionMQTTDanmakuIngestInput
 	data, err := c.Body()
-	if err != nil || json.Unmarshal(data, &req) != nil {
+	if err != nil {
+		log.Printf("[danmaku-ingest] read body failed: %v", err)
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid payload"})
+		return
+	}
+	if jerr := json.Unmarshal(data, &req); jerr != nil {
+		log.Printf("[danmaku-ingest] unmarshal failed: %v body=%s", jerr, string(data))
 		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid payload"})
 		return
 	}
 	if err := h.svc.IngestDanmakuFromMQTT(ctx, req); err != nil {
+		log.Printf("[danmaku-ingest] ingest failed: %v sid=%s uid=%d", err, req.SessionID, req.UserID)
 		h.writeError(c, err)
 		return
 	}
