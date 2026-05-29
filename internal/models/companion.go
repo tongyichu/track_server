@@ -113,6 +113,7 @@ type CompanionMemberSnapshot struct {
 // CompanionSnapshot 是“同行”会话的当前快照。
 type CompanionSnapshot struct {
 	SnapshotAt time.Time                   `json:"snapshot_at"`
+	JoinToken  string                      `json:"join_token,omitempty"`
 	Members    []CompanionMemberSnapshot   `json:"members"`
 	Positions  []*CompanionLivePosition    `json:"positions"`
 }

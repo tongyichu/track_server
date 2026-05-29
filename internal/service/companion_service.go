@@ -1387,11 +1387,15 @@ func (s *CompanionService) buildSnapshot(ctx context.Context, session *models.Co
 		clone := *position
 		visiblePositions = append(visiblePositions, &clone)
 	}
-	return &models.CompanionSnapshot{
+	snapshot := &models.CompanionSnapshot{
 		SnapshotAt: time.Now(),
 		Members:    memberSnapshots,
 		Positions:  visiblePositions,
-	}, nil
+	}
+	if session.Status == models.CompanionSessionStatusActive {
+		snapshot.JoinToken = session.JoinToken
+	}
+	return snapshot, nil
 }
 
 func (s *CompanionService) endSessionInternal(ctx context.Context, session *models.CompanionSession, operatorUserID int64) error {

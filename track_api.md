@@ -1685,6 +1685,29 @@ GET /api/v1/companion/session/:session_id/snapshot
 Authorization: Bearer <token>
 ```
 
+### 成功响应
+
+```json
+{
+  "code": 0,
+  "data": {
+    "snapshot_at": "2026-05-23T16:00:00Z",
+    "join_token": "ab12cd34",
+    "members": [],
+    "positions": []
+  }
+}
+```
+
+### 字段说明
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `data.snapshot_at` | string(datetime) | 快照生成时间。 |
+| `data.join_token` | string | 加入口令；仅 `status=active` 时返回，可用于邀请他人加入；会话结束自动失效。 |
+| `data.members` | `CompanionMemberSnapshot[]` | 当前 `joined` 成员列表。 |
+| `data.positions` | `CompanionLivePosition[]` | 当前 `joined` 成员的最近一条上报位置。 |
+
 ### 错误响应
 
 - `400 Bad Request`
