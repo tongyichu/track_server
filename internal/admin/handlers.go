@@ -27,6 +27,7 @@ type Handler struct {
 	stsSvc        *service.OSSTokenService
 	auth          *Authenticator
 	userRepo      repository.UserRepository
+	userSvc       *service.UserService
 	trackRepo     repository.TrackRepository
 	companionRepo repository.CompanionRepository
 	// staticRoot 是服务端本地静态资源根目录（通常为 <LogDir>/static）。
@@ -44,6 +45,7 @@ func NewHandler(
 	userRepo repository.UserRepository,
 	trackRepo repository.TrackRepository,
 	companionRepo repository.CompanionRepository,
+	userSvc *service.UserService,
 ) *Handler {
 	return &Handler{
 		releaseSvc:    releaseSvc,
@@ -51,6 +53,7 @@ func NewHandler(
 		auth:          auth,
 		staticRoot:    staticRoot,
 		userRepo:      userRepo,
+		userSvc:       userSvc,
 		trackRepo:     trackRepo,
 		companionRepo: companionRepo,
 	}
@@ -335,6 +338,13 @@ func (h *Handler) ListUsers(ctx context.Context, c *app.RequestContext) {
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
 		return
+	}
+	// 与业务接口口径保持一致：把 OSS 上的 avatar_url 改写为服务器本地缓存地址
+	// （/api/v1/static/avatars/...），未配置头像的用户回退到默认头像。
+	if h.userSvc != nil {
+		for _, u := range items {
+			h.userSvc.DecorateAvatar(ctx, u)
+		}
 	}
 	total, err := h.userRepo.CountAll(ctx)
 	if err != nil {

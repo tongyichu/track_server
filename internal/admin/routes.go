@@ -39,10 +39,10 @@ type Module struct {
 // 管理后台上传的安装包会落盘到 <staticRoot>/release/<platform>/，
 // 并通过 /api/v1/static/release/<platform>/<file> 对外下发。
 // 留空表示禁用本地上传接口（接口会返回 500）。
-func NewModule(accounts map[string]string, releaseSvc *service.AppReleaseService, stsSvc *service.OSSTokenService, staticRoot string, userRepo repository.UserRepository, trackRepo repository.TrackRepository, companionRepo repository.CompanionRepository) *Module {
+func NewModule(accounts map[string]string, releaseSvc *service.AppReleaseService, stsSvc *service.OSSTokenService, staticRoot string, userRepo repository.UserRepository, trackRepo repository.TrackRepository, companionRepo repository.CompanionRepository, userSvc *service.UserService) *Module {
 	store := NewSessionStore(12 * time.Hour)
 	auth := NewAuthenticator(accounts, store)
-	handler := NewHandler(releaseSvc, stsSvc, auth, staticRoot, userRepo, trackRepo, companionRepo)
+	handler := NewHandler(releaseSvc, stsSvc, auth, staticRoot, userRepo, trackRepo, companionRepo, userSvc)
 	return &Module{
 		Auth:    auth,
 		Handler: handler,

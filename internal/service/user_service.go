@@ -266,6 +266,13 @@ func (s *UserService) UpdateProfile(ctx context.Context, userID int64, patch Use
 	return user, nil
 }
 
+// DecorateAvatar 把单个用户的头像 URL 改写为服务器本地缓存地址，
+// 与 GetUserProfile 中的处理保持一致：未设置 avatarCache 时返回原值，
+// 用户头像为空时回退到默认头像。供管理后台等批量场景按列表逐个调用。
+func (s *UserService) DecorateAvatar(ctx context.Context, user *models.User) {
+	s.decorateUserAvatar(ctx, user)
+}
+
 func (s *UserService) decorateUserAvatar(ctx context.Context, user *models.User) {
 	if user == nil {
 		return
