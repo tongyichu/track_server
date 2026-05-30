@@ -48,6 +48,37 @@ func TestCreateTrackAssignsRecordFields(t *testing.T) {
 	}
 }
 
+func TestCreateRunningTrackRejectsActiveCompanionSession(t *testing.T) {
+	trackRepo, userRepo, collectRepo, _, _, _, companionRepo := repository.NewInMemoryRepositories()
+	svc := NewTrackService(trackRepo, collectRepo)
+	svc.SetCompanionRepository(companionRepo)
+	ctx := context.Background()
+	if _, err := userRepo.CreateIfNotExists(ctx, &models.User{ID: 1001, Nickname: "owner"}); err != nil {
+		t.Fatalf("CreateIfNotExists returned error: %v", err)
+	}
+	companionSvc := NewCompanionService(companionRepo, userRepo)
+	created, err := companionSvc.CreateSession(ctx, 1001, CreateCompanionSessionInput{Title: "同行中"})
+	if err != nil {
+		t.Fatalf("CreateSession returned error: %v", err)
+	}
+
+	if _, err := svc.CreateTrack(ctx, 1001, CreateTrackInput{}); err == nil || err.Error() != "you already joined an active companion session: 同行中" {
+		t.Fatalf("expected active companion rejection, got %v", err)
+	}
+	running := true
+	if _, err := svc.CreateTrack(ctx, 1001, CreateTrackInput{IsRunning: &running}); err == nil || err.Error() != "you already joined an active companion session: 同行中" {
+		t.Fatalf("expected explicit running rejection, got %v", err)
+	}
+	notRunning := false
+	track, err := svc.CreateTrack(ctx, 1001, CreateTrackInput{IsRunning: &notRunning, SessionID: &created.Session.SessionID})
+	if err != nil {
+		t.Fatalf("expected completed track to be allowed, got %v", err)
+	}
+	if track.IsRunning || track.SessionID != created.Session.SessionID {
+		t.Fatalf("unexpected completed track: %+v", track)
+	}
+}
+
 func TestGenerateTrackID_FormatAndUniqueness(t *testing.T) {
 	const total = 10
 	// 使用内存仓储的本地序列模拟连续发号，验证编码格式和短序列范围内的不重复性。

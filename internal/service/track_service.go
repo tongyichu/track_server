@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"math"
 	"net/url"
@@ -23,6 +24,7 @@ type TrackService struct {
 	collects        repository.CollectRepository
 	navigations     repository.NavigationRepository
 	users           repository.UserRepository
+	companions      repository.CompanionRepository
 	screenshotCache *AssetCacheService
 	avatarCache     *AssetCacheService
 	rawTrackCache   *AssetCacheService
@@ -332,6 +334,11 @@ func (s *TrackService) SetNavigationRepository(navigations repository.Navigation
 	s.navigations = navigations
 }
 
+// SetCompanionRepository 注入同行仓储，用于约束普通轨迹与同行同时只能参与一个。
+func (s *TrackService) SetCompanionRepository(companions repository.CompanionRepository) {
+	s.companions = companions
+}
+
 // SetScreenshotCache 设置截图本地缓存服务。
 // 独立于构造函数是为了避免破坏既有单测/调用方；在未设置时，相关逻辑会直接跳过。
 func (s *TrackService) SetScreenshotCache(cache *AssetCacheService) {
@@ -375,6 +382,11 @@ func (s *TrackService) CreateTrack(ctx context.Context, userID int64, input Crea
 	isRunning := true
 	if input.IsRunning != nil {
 		isRunning = *input.IsRunning
+	}
+	if isRunning {
+		if err := s.ensureNoActiveCompanionSession(ctx, userID); err != nil {
+			return nil, err
+		}
 	}
 	track := &models.Track{
 		ID:        trackID,
@@ -459,6 +471,24 @@ func (s *TrackService) CreateTrack(ctx context.Context, userID int64, input Crea
 		track.RawTrackURL = s.rawTrackCache.GuessLocalURL(track.ID, src)
 	}
 	return track, nil
+}
+
+func (s *TrackService) ensureNoActiveCompanionSession(ctx context.Context, userID int64) error {
+	if s == nil || s.companions == nil {
+		return nil
+	}
+	session, err := s.companions.FindActiveSessionByUserID(ctx, userID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil
+		}
+		return err
+	}
+	title := strings.TrimSpace(session.Title)
+	if title == "" {
+		title = defaultCompanionTitle
+	}
+	return invalidArg(fmt.Sprintf("you already joined an active companion session: %s", title))
 }
 
 // GetTrackDetail returns detailed information of a track.

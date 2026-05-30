@@ -104,12 +104,14 @@ func main() {
 	trackSvc.SetTrackTypes(cfg.TrackTypes)
 	trackSvc.SetUserRepository(userRepo)
 	trackSvc.SetNavigationRepository(navigationRepo)
+	trackSvc.SetCompanionRepository(companionRepo)
 	userSvc := service.NewUserService(userRepo)
 	userSvc.SetTrackRepository(trackRepo)
 	userSvc.SetNavigationRepository(navigationRepo)
 	loginSvc := service.NewLoginService(userRepo, loginLogRepo, cfg.WechatAppID, cfg.WechatAppSecret, cfg.JWTSecret)
 	appReleaseSvc := service.NewAppReleaseService(appReleaseRepo)
 	companionSvc := service.NewCompanionService(companionRepo, userRepo)
+	companionSvc.SetTrackRepository(trackRepo)
 	clientBrokerURL := cfg.EMQXClientBrokerURL
 	if clientBrokerURL == "" {
 		clientBrokerURL = cfg.EMQXBrokerURL

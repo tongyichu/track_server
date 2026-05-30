@@ -174,7 +174,7 @@ Authorization: Bearer <token>
 | `raw_track_url` | string | 否 | 原始轨迹文件 OSS 地址（建议传 OSS HTTP URL，可带签名参数） |
 | `track_screenshot_url` | string | 否 | 轨迹截图 OSS 地址（建议传 OSS HTTP URL，可带签名参数） |
 | `track_no_map_bg_screenshot_url` | string | 否 | 无地图背景的轨迹路线截图 OSS 地址（建议传 OSS HTTP URL，可带签名参数） |
-| `is_running` | bool | 否 | 是否进行中，默认 `true` |
+| `is_running` | bool | 否 | 是否进行中，默认 `true`；当为 `true` 或未传时，当前用户不能已处于 active 同行中 |
 | `avg_speed_kmh` | number | 否 | 平均速度（km/h），必须 `>= 0` |
 
 ### 响应
@@ -223,6 +223,16 @@ Authorization: Bearer <token>
 - 具体消息格式见 `track_companion.md` 的 control topic 说明。
 
 说明：`raw_track_url` / `track_screenshot_url` / `track_no_map_bg_screenshot_url` 在请求时是 OSS 地址，但响应会被服务端替换为可直接从业务服务器下载的本地链接（路径在 `/api/v1/static/...` 下，需要登录态）。
+
+约束：同一用户同一时间只能处于一种进行中状态。创建普通进行中轨迹（`is_running=true` 或未传）时，若用户已经加入 active 同行，会返回 `400`；创建已完成轨迹（`is_running=false`）不受该限制，可用于同行结束后上传个人轨迹并携带 `session_id`。
+
+### 错误响应
+
+- `400 Bad Request`
+  - `you already joined an active companion session: {title}`
+  - `end_time must be >= start_time`
+  - `session_id is required` / `session_id is too long`
+  - `distance must be >= 0` / `elevation_gain must be >= 0` / `avg_speed_kmh must be >= 0`
 
 ### 示例（curl）
 
@@ -1631,6 +1641,7 @@ Content-Type: application/json
 ### 错误响应
 
 - `400 Bad Request`
+  - `you already have a running track: {track_id}`
   - `you already have an active companion session: {title}`
   - `you already joined an active companion session: {title}`
   - `max_members must be >= 2`
@@ -1680,6 +1691,7 @@ Content-Type: application/json
   - `join_token or session_id is required`
   - `companion session already ended`
   - `companion session is full`
+  - `you already have a running track: {track_id}`
   - `you already joined an active companion session: {title}`
 - `403 Forbidden`
   - 凭 `session_id` 试图加入私密房间

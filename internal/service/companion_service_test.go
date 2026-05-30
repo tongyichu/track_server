@@ -182,6 +182,58 @@ func TestCompanionServiceKickMemberRejectsNonOwnerAndSelf(t *testing.T) {
 	}
 }
 
+func TestCompanionServiceCreateAndJoinRejectRunningTrack(t *testing.T) {
+	trackRepo, userRepo, _, _, _, _, companionRepo := repository.NewInMemoryRepositories()
+	ctx := context.Background()
+	for _, user := range []*models.User{{ID: 1001, Nickname: "owner"}, {ID: 1002, Nickname: "guest"}, {ID: 1003, Nickname: "runner"}} {
+		if _, err := userRepo.CreateIfNotExists(ctx, user); err != nil {
+			t.Fatalf("CreateIfNotExists returned error: %v", err)
+		}
+	}
+	svc := NewCompanionService(companionRepo, userRepo)
+	svc.SetTrackRepository(trackRepo)
+
+	if err := trackRepo.Create(ctx, &models.Track{ID: "trk-running", UserID: 1001, Title: "running", IsRunning: true, Status: models.TrackStatusNormal}); err != nil {
+		t.Fatalf("Create running track returned error: %v", err)
+	}
+	if _, err := svc.CreateSession(ctx, 1001, CreateCompanionSessionInput{Title: "同行"}); err == nil || err.Error() != "you already have a running track: trk-running" {
+		t.Fatalf("expected running track create rejection, got %v", err)
+	}
+
+	created, err := svc.CreateSession(ctx, 1002, CreateCompanionSessionInput{Title: "可加入同行"})
+	if err != nil {
+		t.Fatalf("CreateSession returned error: %v", err)
+	}
+	if err := trackRepo.Create(ctx, &models.Track{ID: "trk-runner", UserID: 1003, Title: "running", IsRunning: true, Status: models.TrackStatusNormal}); err != nil {
+		t.Fatalf("Create runner track returned error: %v", err)
+	}
+	if _, err := svc.JoinSession(ctx, 1003, JoinCompanionSessionInput{JoinToken: created.Join.JoinToken}); err == nil || err.Error() != "you already have a running track: trk-runner" {
+		t.Fatalf("expected running track join rejection, got %v", err)
+	}
+}
+
+func TestCompanionServiceJoinAllowsCompletedTrack(t *testing.T) {
+	trackRepo, userRepo, _, _, _, _, companionRepo := repository.NewInMemoryRepositories()
+	ctx := context.Background()
+	for _, user := range []*models.User{{ID: 1001, Nickname: "owner"}, {ID: 1002, Nickname: "guest"}} {
+		if _, err := userRepo.CreateIfNotExists(ctx, user); err != nil {
+			t.Fatalf("CreateIfNotExists returned error: %v", err)
+		}
+	}
+	svc := NewCompanionService(companionRepo, userRepo)
+	svc.SetTrackRepository(trackRepo)
+	created, err := svc.CreateSession(ctx, 1001, CreateCompanionSessionInput{Title: "同行"})
+	if err != nil {
+		t.Fatalf("CreateSession returned error: %v", err)
+	}
+	if err := trackRepo.Create(ctx, &models.Track{ID: "trk-done", UserID: 1002, Title: "done", IsRunning: false, Status: models.TrackStatusNormal}); err != nil {
+		t.Fatalf("Create completed track returned error: %v", err)
+	}
+	if _, err := svc.JoinSession(ctx, 1002, JoinCompanionSessionInput{JoinToken: created.Join.JoinToken}); err != nil {
+		t.Fatalf("expected completed track to allow join, got %v", err)
+	}
+}
+
 func TestCompanionServiceEndPublishesSessionEnded(t *testing.T) {
 	svc, _, _ := newCompanionServiceForTest(t)
 	pub := &mockCompanionControlPublisher{}

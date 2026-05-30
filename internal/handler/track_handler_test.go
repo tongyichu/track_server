@@ -46,11 +46,13 @@ func newTestEnv() *testEnv {
 	trackSvc := service.NewTrackService(trackRepo, collectRepo)
 	trackSvc.SetUserRepository(userRepo)
 	trackSvc.SetNavigationRepository(navigationRepo)
+	trackSvc.SetCompanionRepository(companionRepo)
 	userSvc := service.NewUserService(userRepo)
 	userSvc.SetTrackRepository(trackRepo)
 	userSvc.SetNavigationRepository(navigationRepo)
 	loginSvc := service.NewLoginService(userRepo, loginLogRepo, "", "", testJWTSecret)
 	companionSvc := service.NewCompanionService(companionRepo, userRepo)
+	companionSvc.SetTrackRepository(trackRepo)
 	companionSvc.SetMQTTOptions(service.CompanionMQTTOptions{
 		BrokerURL:        "mqtt://127.0.0.1:1883",
 		WebsocketURL:     "ws://127.0.0.1:8083/mqtt",
@@ -311,6 +313,34 @@ func TestCreateTrack_WithBody(t *testing.T) {
 	}
 	if got := result.Data.EndTime.Format(time.RFC3339); got != "2026-04-20T12:30:00Z" {
 		t.Fatalf("expected end_time 2026-04-20T12:30:00Z, got %s", got)
+	}
+}
+
+func TestCreateTrackRejectsActiveCompanionSession(t *testing.T) {
+	e := newTestEnv()
+	ensureTestUser(t, e, 1001, "owner")
+	token := e.generateTestToken(1001)
+
+	w := e.perform(http.MethodPost, "/api/v1/companion/session/create", []byte(`{"title":"同行中"}`), authHeader(token))
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected create companion status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+
+	w = e.perform(http.MethodPost, "/api/v1/track/create", []byte(`{}`), authHeader(token))
+	if w.Result().StatusCode() != http.StatusBadRequest {
+		t.Fatalf("expected create running track status 400, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+	var resp struct {
+		Error string `json:"error"`
+	}
+	decodeJSON(t, w.Body.Bytes(), &resp)
+	if resp.Error != "you already joined an active companion session: 同行中" {
+		t.Fatalf("unexpected error response: %+v", resp)
+	}
+
+	w = e.perform(http.MethodPost, "/api/v1/track/create", []byte(`{"is_running":false,"session_id":"sess_done"}`), authHeader(token))
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected completed track status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
 	}
 }
 

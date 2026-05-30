@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -216,6 +217,39 @@ func TestCompanionJoinRejectsWhenAlreadyJoinedAnotherActiveSession(t *testing.T)
 	}
 	decodeJSON(t, w.Body.Bytes(), &resp)
 	if resp.Error != "you already joined an active companion session: 第一场同行" {
+		t.Fatalf("unexpected error response: %+v", resp)
+	}
+}
+
+func TestCompanionJoinRejectsRunningTrack(t *testing.T) {
+	e := newTestEnv()
+	ensureTestUser(t, e, 1001, "owner")
+	ensureTestUser(t, e, 1002, "guest")
+	ownerToken := e.generateTestToken(1001)
+	guestToken := e.generateTestToken(1002)
+
+	w := e.perform(http.MethodPost, "/api/v1/companion/session/create", []byte(`{"title":"同行"}`), authHeader(ownerToken))
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected create companion status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+	var created handler.StandardResponse[*service.CompanionSessionState]
+	decodeJSON(t, w.Body.Bytes(), &created)
+
+	w = e.perform(http.MethodPost, "/api/v1/track/create", []byte(`{"title":"running"}`), authHeader(guestToken))
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected create running track status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+
+	body, _ := json.Marshal(map[string]string{"join_token": created.Data.Join.JoinToken})
+	w = e.perform(http.MethodPost, "/api/v1/companion/session/join", body, authHeader(guestToken))
+	if w.Result().StatusCode() != http.StatusBadRequest {
+		t.Fatalf("expected join companion status 400, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+	var resp struct {
+		Error string `json:"error"`
+	}
+	decodeJSON(t, w.Body.Bytes(), &resp)
+	if !strings.HasPrefix(resp.Error, "you already have a running track:") {
 		t.Fatalf("unexpected error response: %+v", resp)
 	}
 }

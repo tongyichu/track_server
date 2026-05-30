@@ -59,6 +59,7 @@ const (
 type CompanionService struct {
 	repo             repository.CompanionRepository
 	users            repository.UserRepository
+	tracks           repository.TrackRepository
 	mqtt             CompanionMQTTOptions
 	avatarCache      *AssetCacheService
 	publisher        CompanionControlPublisher
@@ -82,11 +83,11 @@ type CompanionControlPublisher interface {
 
 // CompanionControlEvent represents one control message delivered on companion/{session_id}/control.
 type CompanionControlEvent struct {
-	Event          string    `json:"event"`
-	SessionID      string    `json:"session_id"`
-	MemberUserID   int64     `json:"member_user_id,omitempty"`
-	OperatorUserID int64     `json:"operator_user_id,omitempty"`
-	Reason         string    `json:"reason,omitempty"`
+	Event          string `json:"event"`
+	SessionID      string `json:"session_id"`
+	MemberUserID   int64  `json:"member_user_id,omitempty"`
+	OperatorUserID int64  `json:"operator_user_id,omitempty"`
+	Reason         string `json:"reason,omitempty"`
 	// Enabled 仅用于 danmaku_toggled 事件：true=已开启，false=已关闭。
 	// 用指针以便在不携带该字段的事件中通过 omitempty 隐藏。
 	Enabled *bool     `json:"enabled,omitempty"`
@@ -117,6 +118,14 @@ func NewCompanionService(repo repository.CompanionRepository, users repository.U
 			CredentialTTL: defaultCompanionMQTTTTL,
 		},
 	}
+}
+
+// SetTrackRepository injects track repository for enforcing running-track/companion exclusivity.
+func (s *CompanionService) SetTrackRepository(repo repository.TrackRepository) {
+	if s == nil {
+		return
+	}
+	s.tracks = repo
 }
 
 // SetMQTTOptions updates MQTT / EMQX integration options.
@@ -730,6 +739,9 @@ func (s *CompanionService) CreateSession(ctx context.Context, ownerUserID int64,
 	if _, err := s.users.FindByID(ctx, ownerUserID); err != nil {
 		return nil, err
 	}
+	if err := s.ensureNoRunningTrack(ctx, ownerUserID); err != nil {
+		return nil, err
+	}
 	if existing, err := s.repo.FindActiveSessionByUserID(ctx, ownerUserID); err == nil {
 		title := strings.TrimSpace(existing.Title)
 		if title == "" {
@@ -778,19 +790,19 @@ func (s *CompanionService) CreateSession(ctx context.Context, ownerUserID int64,
 	}
 
 	session := &models.CompanionSession{
-		SessionID:         sessionID,
-		OwnerUserID:       ownerUserID,
-		Status:            models.CompanionSessionStatusActive,
-		Visibility:        visibility,
-		JoinToken:         joinToken,
-		Title:             title,
-		TrackType:         strings.TrimSpace(in.TrackType),
-		LocateAddr:        strings.TrimSpace(in.LocateAddr),
-		MaxMembers:        maxMembers,
-		DanmakuEnabled:    true,
-		StartedAt:         now,
-		CreatedAt:         now,
-		UpdatedAt:         now,
+		SessionID:      sessionID,
+		OwnerUserID:    ownerUserID,
+		Status:         models.CompanionSessionStatusActive,
+		Visibility:     visibility,
+		JoinToken:      joinToken,
+		Title:          title,
+		TrackType:      strings.TrimSpace(in.TrackType),
+		LocateAddr:     strings.TrimSpace(in.LocateAddr),
+		MaxMembers:     maxMembers,
+		DanmakuEnabled: true,
+		StartedAt:      now,
+		CreatedAt:      now,
+		UpdatedAt:      now,
 	}
 	if err := s.repo.CreateSession(ctx, session); err != nil {
 		return nil, err
@@ -826,6 +838,9 @@ func (s *CompanionService) JoinSession(ctx context.Context, userID int64, in Joi
 		return nil, invalidArg("join_token or session_id is required")
 	}
 	if _, err := s.users.FindByID(ctx, userID); err != nil {
+		return nil, err
+	}
+	if err := s.ensureNoRunningTrack(ctx, userID); err != nil {
 		return nil, err
 	}
 	var (
@@ -920,6 +935,20 @@ func (s *CompanionService) PreviewSessionByJoinToken(ctx context.Context, userID
 		Session:  session,
 		Snapshot: snapshot,
 	}, nil
+}
+
+func (s *CompanionService) ensureNoRunningTrack(ctx context.Context, userID int64) error {
+	if s == nil || s.tracks == nil {
+		return nil
+	}
+	track, err := s.tracks.FindRunningByUserID(ctx, userID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil
+		}
+		return err
+	}
+	return invalidArg(fmt.Sprintf("you already have a running track: %s", track.ID))
 }
 
 // GetCurrentSession returns the active companion session current user joined, if any.

@@ -93,10 +93,12 @@ App Server 提供以下职责：
 ### 4.4 关键业务规则
 
 1. 同一用户同一时间只允许加入 **一个 active companion session**。
-2. owner 掉线不自动结束 session。
-3. owner 在有其他 `joined` 成员时**不能直接 leave**，只能调用 `end`。
-4. 当 session 中 `member_status=joined` 的成员数变为 0 时，服务端自动结束 session。
-5. 新成员加入时，服务端必须返回当前快照，不依赖 MQTT retained 消息。
+2. 同一用户同一时间只能处于一种进行中状态：不能一边有 active companion session，一边开始普通 running track；已有普通 running track 时也不能创建 / 加入同行。
+3. `track/create` 中 `is_running=false` 表示上传已完成轨迹，不受上一条互斥限制，可用于同行结束后上传个人轨迹并携带 `session_id`。
+4. owner 掉线不自动结束 session。
+5. owner 在有其他 `joined` 成员时**不能直接 leave**，只能调用 `end`。
+6. 当 session 中 `member_status=joined` 的成员数变为 0 时，服务端自动结束 session。
+7. 新成员加入时，服务端必须返回当前快照，不依赖 MQTT retained 消息。
 
 ---
 
@@ -178,6 +180,10 @@ App Server 提供以下职责：
 - `private`：私密房间，必须凭 `join_token` 加入；不会出现在「附近房间」列表中。
 - `public`：公开房间，可凭 `session_id` 直接加入；同时会进入「附近房间」列表。
 
+创建规则：
+
+- 当前用户已有普通 running track 时，不允许创建同行。
+
 返回：
 
 - `session`（包含 `visibility`）
@@ -208,6 +214,7 @@ App Server 提供以下职责：
 
 - 私密房间必须凭 `join_token` 加入；用 `session_id` 加入私密房间会返回 `403 Forbidden`。
 - 公开房间可凭 `session_id` 加入（典型场景：从「附近房间」卡片点击加入）；也支持继续凭 `join_token` 加入。
+- 当前用户已有普通 running track 时，不允许加入同行。
 
 返回：
 
