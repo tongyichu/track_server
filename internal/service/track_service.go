@@ -89,6 +89,7 @@ func invalidArg(msg string) error { return &InvalidArgumentError{Msg: msg} }
 // CreateTrackInput describes optional fields accepted by track creation.
 type CreateTrackInput struct {
 	Title                     *string    `json:"title"`
+	SessionID                 *string    `json:"session_id"`
 	CityCode                  *string    `json:"city_code"`
 	LocateAddr                *string    `json:"locate_addr"`
 	TrackType                 *string    `json:"track_type"`
@@ -111,9 +112,21 @@ func (in *CreateTrackInput) normalize() {
 	if in.TrackScreenshotURL == nil && in.LegacyScreenshotURL != nil {
 		in.TrackScreenshotURL = in.LegacyScreenshotURL
 	}
+	if in.SessionID != nil {
+		v := strings.TrimSpace(*in.SessionID)
+		in.SessionID = &v
+	}
 }
 
 func (in CreateTrackInput) validate() error {
+	if in.SessionID != nil {
+		if *in.SessionID == "" {
+			return invalidArg("session_id is required")
+		}
+		if len(*in.SessionID) > 64 {
+			return invalidArg("session_id is too long")
+		}
+	}
 	if in.Distance != nil && *in.Distance < 0 {
 		return invalidArg("distance must be >= 0")
 	}
@@ -138,6 +151,7 @@ func (in CreateTrackInput) validate() error {
 // TrackInfoPatch describes which track summary fields should be updated.
 // Nil means the field is not provided and should remain unchanged.
 type TrackInfoPatch struct {
+	SessionID                 *string  `json:"session_id"`
 	CityCode                  *string  `json:"city_code"`
 	LocateAddr                *string  `json:"locate_addr"`
 	CoordinateSystem          *string  `json:"coordinate_system"`
@@ -158,10 +172,15 @@ func (p *TrackInfoPatch) normalize() {
 	if p.TrackScreenshotURL == nil && p.LegacyScreenshotURL != nil {
 		p.TrackScreenshotURL = p.LegacyScreenshotURL
 	}
+	if p.SessionID != nil {
+		v := strings.TrimSpace(*p.SessionID)
+		p.SessionID = &v
+	}
 }
 
 func (p TrackInfoPatch) empty() bool {
-	return p.CityCode == nil &&
+	return p.SessionID == nil &&
+		p.CityCode == nil &&
 		p.LocateAddr == nil &&
 		p.CoordinateSystem == nil &&
 		p.Distance == nil &&
@@ -360,6 +379,7 @@ func (s *TrackService) CreateTrack(ctx context.Context, userID int64, input Crea
 	track := &models.Track{
 		ID:        trackID,
 		UserID:    userID,
+		SessionID: "",
 		CityCode:  "",
 		TrackType: "",
 		Title:     "新的轨迹",
@@ -371,6 +391,9 @@ func (s *TrackService) CreateTrack(ctx context.Context, userID int64, input Crea
 	}
 	if input.Title != nil {
 		track.Title = *input.Title
+	}
+	if input.SessionID != nil {
+		track.SessionID = *input.SessionID
 	}
 	if input.CityCode != nil {
 		track.CityCode = *input.CityCode
@@ -990,6 +1013,7 @@ func (s *TrackService) ListCollectedTracks(ctx context.Context, userID int64, in
 		items = append(items, &models.CollectedTrackSummary{
 			ID:                        s.ID,
 			UserID:                    s.UserID,
+			SessionID:                 s.SessionID,
 			CityCode:                  s.CityCode,
 			LocateAddr:                s.LocateAddr,
 			TrackType:                 s.TrackType,
@@ -1064,6 +1088,14 @@ func (s *TrackService) UpdateTrackInfo(ctx context.Context, userID int64, trackI
 	if patch.AvgSpeedKmh != nil && *patch.AvgSpeedKmh < 0 {
 		return nil, invalidArg("avg_speed_kmh must be >= 0")
 	}
+	if patch.SessionID != nil {
+		if *patch.SessionID == "" {
+			return nil, invalidArg("session_id is required")
+		}
+		if len(*patch.SessionID) > 64 {
+			return nil, invalidArg("session_id is too long")
+		}
+	}
 	track, err := s.tracks.FindByID(ctx, trackID)
 	if err != nil {
 		return nil, err
@@ -1078,6 +1110,10 @@ func (s *TrackService) UpdateTrackInfo(ctx context.Context, userID int64, trackI
 	updatedNoMapBgScreenshot := false
 
 	// 只允许“补全”空字段：若数据库已有值，则忽略该字段更新。
+	if patch.SessionID != nil && track.SessionID == "" {
+		track.SessionID = *patch.SessionID
+		updated = true
+	}
 	if patch.CityCode != nil && track.CityCode == "" {
 		track.CityCode = *patch.CityCode
 		updated = true
@@ -1264,6 +1300,7 @@ func toSummaries(tracks []*models.Track) []*models.TrackSummary {
 		res = append(res, &models.TrackSummary{
 			ID:             t.ID,
 			UserID:         t.UserID,
+			SessionID:      t.SessionID,
 			CityCode:       t.CityCode,
 			LocateAddr:     t.LocateAddr,
 			TrackType:      t.TrackType,
@@ -1287,6 +1324,7 @@ func toMySummaries(tracks []*models.Track) []*models.MyTrackSummary {
 		res = append(res, &models.MyTrackSummary{
 			ID:             t.ID,
 			UserID:         t.UserID,
+			SessionID:      t.SessionID,
 			CityCode:       t.CityCode,
 			LocateAddr:     t.LocateAddr,
 			TrackType:      t.TrackType,

@@ -238,6 +238,7 @@ func TestCreateTrack_WithBody(t *testing.T) {
 	token := e.generateTestToken(1001)
 	body, _ := json.Marshal(map[string]interface{}{
 		"title":                "傍晚夜跑",
+		"session_id":           "sess_create_001",
 		"city_code":            "330100",
 		"track_type":           "跑步",
 		"coordinate_system":    "GCJ02",
@@ -271,6 +272,9 @@ func TestCreateTrack_WithBody(t *testing.T) {
 	}
 	if result.Data.Title != "傍晚夜跑" {
 		t.Fatalf("expected title 傍晚夜跑, got %q", result.Data.Title)
+	}
+	if result.Data.SessionID != "sess_create_001" {
+		t.Fatalf("expected session_id sess_create_001, got %q", result.Data.SessionID)
 	}
 	if result.Data.TrackType != "跑步" {
 		t.Fatalf("unexpected track_type: %q", result.Data.TrackType)
@@ -1054,6 +1058,7 @@ func TestUpdateTrackInfo_Success(t *testing.T) {
 	})
 
 	body, _ := json.Marshal(map[string]interface{}{
+		"session_id":                     "sess_update_001",
 		"city_code":                      "330100",
 		"locate_addr":                    "杭州市西湖区",
 		"coordinate_system":              "BD09",
@@ -1085,6 +1090,9 @@ func TestUpdateTrackInfo_Success(t *testing.T) {
 	}
 	if result.Data.Distance != 200.5 {
 		t.Fatalf("expected distance 200.5, got %v", result.Data.Distance)
+	}
+	if result.Data.SessionID != "sess_update_001" {
+		t.Fatalf("expected session_id sess_update_001, got %q", result.Data.SessionID)
 	}
 	// 只有当字段为空时才允许更新：duration 非空应保持原值。
 	if result.Data.Duration != 10 {

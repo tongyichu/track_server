@@ -16,6 +16,7 @@ CREATE TABLE `users` (
 CREATE TABLE `track_records` (
                                  `id` VARCHAR(64) NOT NULL,
                                  `user_id` bigint unsigned NOT NULL COMMENT '用户ID',
+                                 `session_id` varchar(64) NOT NULL DEFAULT '' COMMENT '关联的同行会话ID',
                                  `city_code` varchar(16) NOT NULL DEFAULT '' COMMENT '城市Code',
                                  `locate_addr` varchar(128) NOT NULL DEFAULT '' COMMENT '轨迹的具体位置信息',
                                 `track_type` varchar(32) NOT NULL DEFAULT '' COMMENT '轨迹类型，如徒步/跑步/骑车/自驾',
@@ -35,8 +36,9 @@ CREATE TABLE `track_records` (
                                  `avg_speed_kmh` double NOT NULL DEFAULT '1' COMMENT '平均速度，单位 km/h',
                                  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
 							 `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-							 `deleted_at` datetime DEFAULT NULL COMMENT '删除时间',
+                                 `deleted_at` datetime DEFAULT NULL COMMENT '删除时间',
                                  PRIMARY KEY (`id`),
+                                 KEY `idx_track_session` (`session_id`),
                                  KEY `idx_user_time` (`user_id`,`start_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='轨迹概要信息表';
 

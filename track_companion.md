@@ -256,7 +256,29 @@ App Server 提供以下职责：
 - 被踢成员的 `member_status` 变为 `kicked`，`presence_status` 变为 `offline`，并从 snapshot 成员与位置集合中移除；
 - 服务端通过 `companion/{session_id}/control` 广播 `member_kicked` 事件。
 
-### 6.9 附近 active 房间列表
+### 6.9 同行结束后的个人轨迹上传
+
+同行结束后，每个成员仍通过普通轨迹接口上传自己的完整轨迹：
+
+- `POST /api/v1/track/create`
+- `PUT /api/v1/track/:track_id/update`
+
+客户端应在请求体中携带本次同行的 `session_id`：
+
+```json
+{
+  "session_id": "sess_xxx"
+}
+```
+
+规则：
+
+- `session_id` 是 `track_records` 上的可选关联字段；
+- 同一次同行的各成员轨迹使用相同 `session_id`，后续即可按该字段串联一次同行内所有人的轨迹；
+- `track/create` 可在创建轨迹时直接写入 `session_id`；
+- `/track/:track_id/update` 可在轨迹创建后补写 `session_id`，但与其它补全字段一致，仅当原值为空时写入。
+
+### 6.10 附近 active 房间列表
 
 - `GET /api/v1/companion/session/nearby`
 

@@ -95,6 +95,7 @@ Token 的获取与说明参考 `login.md`。
 |------|------|------|
 | `id` | string | 轨迹 ID |
 | `user_id` | int64 | 用户 ID |
+| `session_id` | string | 关联的同行会话 ID；非同行轨迹为空字符串 |
 | `city_code` | string | 城市 Code（用于标识轨迹所属城市；城市/省份映射关系维护在配置文件中） |
 | `locate_addr` | string | 轨迹的具体位置信息 |
 | `track_type` | string | 轨迹类型，例如 `徒步` / `跑步` / `骑车` / `自驾` |
@@ -137,6 +138,7 @@ Authorization: Bearer <token>
 ```json
 {
   "title": "傍晚夜跑",
+  "session_id": "sess_xxx",
   "city_code": "330100",
   "locate_addr": "杭州市西湖区",
   "track_type": "跑步",
@@ -158,6 +160,7 @@ Authorization: Bearer <token>
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | `title` | string | 否 | 轨迹标题，默认 `新的轨迹` |
+| `session_id` | string | 否 | 关联的同行会话 ID；参加同行结束后上传个人轨迹时传同一个 `session_id`，用于把本次同行内多人轨迹串联起来 |
 | `city_code` | string | 否 | 城市 Code（标识轨迹所属城市） |
 | `locate_addr` | string | 否 | 轨迹的具体位置信息，最大长度 `128` |
 | `track_type` | string | 否 | 轨迹类型，例如 `徒步` / `跑步` / `骑车` / `自驾` |
@@ -186,6 +189,7 @@ Authorization: Bearer <token>
   "data": {
     "id": "No.1713520800123456789",
     "user_id": 1001,
+    "session_id": "sess_xxx",
     "city_code": "330100",
     "locate_addr": "杭州市西湖区",
     "track_type": "跑步",
@@ -229,6 +233,7 @@ curl -X POST "http://<host>:<port>/api/v1/track/create" \
   -H "X-User-ID: 1001" \
   -d '{
     "title": "傍晚夜跑",
+    "session_id": "sess_xxx",
     "city_code": "330100",
     "locate_addr": "杭州市西湖区",
     "track_type": "跑步",
@@ -303,6 +308,7 @@ Authorization: Bearer <token>
       {
         "id": "trk1",
         "user_id": 1001,
+        "session_id": "sess_xxx",
         "city_code": "330100",
         "locate_addr": "杭州市西湖区",
         "track_type": "徒步",
@@ -388,6 +394,7 @@ Authorization: Bearer <token>
   "data": {
     "id": "trk-detail",
     "user_id": 1001,
+    "session_id": "sess_xxx",
     "track_type": "徒步",
     "coordinate_system": "WGS84",
     "title": "详情轨迹",
@@ -648,6 +655,7 @@ Authorization: Bearer <token>
       {
         "id": "trk1",
         "user_id": 1001,
+        "session_id": "sess_xxx",
         "city_code": "330100",
         "locate_addr": "杭州市西湖区",
         "track_type": "徒步",
@@ -837,6 +845,7 @@ Authorization: Bearer <token>
       {
         "id": "trk1",
         "user_id": 1001,
+        "session_id": "sess_xxx",
         "city_code": "330100",
         "locate_addr": "杭州市西湖区",
         "track_type": "徒步",
@@ -872,6 +881,7 @@ Authorization: Bearer <token>
 | `data.has_more` | bool | 是否还有下一页数据。 |
 | `data.items[].id` | string | 轨迹 ID。 |
 | `data.items[].user_id` | int64 | 当前轨迹所属用户 ID。 |
+| `data.items[].session_id` | string | 关联的同行会话 ID；非同行轨迹为空字符串。 |
 | `data.items[].city_code` | string | 城市 Code。 |
 | `data.items[].locate_addr` | string | 轨迹的具体位置信息。 |
 | `data.items[].track_type` | string | 轨迹类型，例如 `徒步` / `跑步` / `骑车` / `自驾`。 |
@@ -1040,6 +1050,7 @@ Authorization: Bearer <token>
 
 ```json
 {
+  "session_id": "sess_xxx",
   "city_code": "330100",
   "locate_addr": "杭州市西湖区",
   "coordinate_system": "GCJ02",
@@ -1055,6 +1066,7 @@ Authorization: Bearer <token>
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
+| `session_id` | string | 否 | 关联的同行会话 ID，仅当原值为空时才会写入；用于把同一次同行结束后各成员上传的个人轨迹串联起来 |
 | `city_code` | string | 否 | 城市 Code（仅当原值为空时才会写入） |
 | `locate_addr` | string | 否 | 轨迹的具体位置信息，最大长度 `128`（仅当原值为空时才会写入） |
 | `coordinate_system` | string | 否 | 坐标系，例如 `WGS84` / `GCJ02` / `BD09`（仅当原值为空时才会写入） |
@@ -1079,6 +1091,7 @@ curl -X PUT "http://<host>:<port>/api/v1/track/trk1/update" \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{
+    "session_id": "sess_xxx",
     "city_code": "330100",
     "locate_addr": "杭州市西湖区",
     "track_no_map_bg_screenshot_url": "https://<bucket>.oss-<region>.aliyuncs.com/prod/track/.../xxx_no_map_bg.jpg"
@@ -1090,6 +1103,7 @@ curl -X PUT "http://<host>:<port>/api/v1/track/trk1/update" \
 - `400 Bad Request`
   - 请求体不是合法 JSON（返回 `{"error":"invalid payload"}`）
   - 请求体未包含任何字段（返回 `{"error":"no fields to update"}`）
+  - `session_id` 为空或超过最大长度（返回 `{"error":"session_id is required"}` / `{"error":"session_id is too long"}`）
   - `locate_addr` 超过最大长度（返回 `{"error":"locate_addr is too long"}`）
   - `distance` / `elevation_gain` / `avg_speed_kmh` 为负数
 - `401 Unauthorized`

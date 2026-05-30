@@ -154,9 +154,11 @@ func TestCreateTrack_UsesProvidedFields(t *testing.T) {
 	avgSpeed := 10.4
 	trackType := "跑步"
 	coordinateSystem := "GCJ02"
+	sessionID := "sess_companion_001"
 
 	track, err := svc.CreateTrack(context.Background(), 1001, CreateTrackInput{
 		Title:              &title,
+		SessionID:          &sessionID,
 		TrackType:          &trackType,
 		CoordinateSystem:   &coordinateSystem,
 		StartTime:          &start,
@@ -178,6 +180,9 @@ func TestCreateTrack_UsesProvidedFields(t *testing.T) {
 	}
 	if track.Title != title {
 		t.Fatalf("expected title %q, got %q", title, track.Title)
+	}
+	if track.SessionID != sessionID {
+		t.Fatalf("expected session_id %q, got %q", sessionID, track.SessionID)
 	}
 	if track.TrackType != trackType {
 		t.Fatalf("expected track_type %q, got %q", trackType, track.TrackType)
@@ -313,6 +318,7 @@ func TestUpdateTrackInfo_PartialUpdate(t *testing.T) {
 
 	_ = trackRepo.Create(ctx, &models.Track{ID: "trk1", UserID: 1001, Title: "t", Distance: 0, Duration: 2, ElevationGain: 0, TrackScreenshotURL: "already.jpg", IsRunning: true})
 
+	sessionID := "sess_update_001"
 	cityCode := "330100"
 	locateAddr := "杭州市西湖区"
 	coordinateSystem := "WGS84"
@@ -321,7 +327,7 @@ func TestUpdateTrackInfo_PartialUpdate(t *testing.T) {
 	noMapBg := "https://<bucket>.oss-<region>.aliyuncs.com/prod/track/.../xxx_no_map_bg.jpg"
 	screenshot := "https://<bucket>.oss-<region>.aliyuncs.com/prod/track/.../xxx.jpg"
 	duration := uint32(99)
-	patch := TrackInfoPatch{CityCode: &cityCode, LocateAddr: &locateAddr, CoordinateSystem: &coordinateSystem, Distance: &distance, Duration: &duration, TrackScreenshotURL: &screenshot, TrackNoMapBgScreenshotURL: &noMapBg, AvgSpeedKmh: &avg}
+	patch := TrackInfoPatch{SessionID: &sessionID, CityCode: &cityCode, LocateAddr: &locateAddr, CoordinateSystem: &coordinateSystem, Distance: &distance, Duration: &duration, TrackScreenshotURL: &screenshot, TrackNoMapBgScreenshotURL: &noMapBg, AvgSpeedKmh: &avg}
 
 	track, err := svc.UpdateTrackInfo(ctx, 1001, "trk1", patch)
 	if err != nil {
@@ -330,6 +336,9 @@ func TestUpdateTrackInfo_PartialUpdate(t *testing.T) {
 	// 只有当字段为空时才允许补全。
 	if track.Distance != 123.4 {
 		t.Fatalf("expected distance 123.4, got %v", track.Distance)
+	}
+	if track.SessionID != sessionID {
+		t.Fatalf("expected session_id %q, got %q", sessionID, track.SessionID)
 	}
 	if track.Duration != 2 {
 		t.Fatalf("expected duration unchanged 2, got %v", track.Duration)
