@@ -125,6 +125,7 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 	auth.GET("/login/log", loginHandler.GetLoginLog)
 	auth.POST("/companion/session/create", companionHandler.CreateSession)
 	auth.POST("/companion/session/join", companionHandler.JoinSession)
+	auth.GET("/companion/session/preview", companionHandler.PreviewSession)
 	auth.GET("/companion/session/current", companionHandler.GetCurrentSession)
 	auth.GET("/companion/session/history", companionHandler.ListHistory)
 	auth.GET("/companion/session/nearby", companionHandler.ListNearby)

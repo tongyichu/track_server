@@ -64,6 +64,63 @@ func TestCompanionCreateAndGetCurrent(t *testing.T) {
 	}
 }
 
+func TestCompanionPreviewByJoinTokenDoesNotJoin(t *testing.T) {
+	e := newTestEnv()
+	ensureTestUser(t, e, 1001, "owner")
+	ensureTestUser(t, e, 1002, "guest")
+	ownerToken := e.generateTestToken(1001)
+	guestToken := e.generateTestToken(1002)
+
+	w := e.perform(http.MethodPost, "/api/v1/companion/session/create", []byte(`{"title":"预览房间"}`), authHeader(ownerToken))
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected create status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+	var created handler.StandardResponse[*service.CompanionSessionState]
+	decodeJSON(t, w.Body.Bytes(), &created)
+	if created.Data == nil || created.Data.Join == nil {
+		t.Fatalf("expected create response with join token")
+	}
+	if err := e.companionRepo.UpsertPosition(context.Background(), &models.CompanionLivePosition{
+		SessionID:        created.Data.Session.SessionID,
+		UserID:           1001,
+		Latitude:         39.9,
+		Longitude:        116.3,
+		CoordinateSystem: "wgs84",
+		RecordedAt:       time.Now(),
+		Seq:              1,
+		Source:           "test",
+	}); err != nil {
+		t.Fatalf("upsert position failed: %v", err)
+	}
+
+	w = e.perform(http.MethodGet, "/api/v1/companion/session/preview?join_token="+created.Data.Join.JoinToken, nil, authHeader(guestToken))
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected preview status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+	var preview handler.StandardResponse[*service.CompanionSessionPreview]
+	decodeJSON(t, w.Body.Bytes(), &preview)
+	if preview.Data == nil || preview.Data.Session == nil || preview.Data.Snapshot == nil {
+		t.Fatalf("expected preview data")
+	}
+	if preview.Data.Session.SessionID != created.Data.Session.SessionID {
+		t.Fatalf("expected session_id %q, got %q", created.Data.Session.SessionID, preview.Data.Session.SessionID)
+	}
+	if len(preview.Data.Snapshot.Members) != 1 {
+		t.Fatalf("expected owner in preview members, got %d", len(preview.Data.Snapshot.Members))
+	}
+	if len(preview.Data.Snapshot.Positions) != 0 {
+		t.Fatalf("expected preview to omit positions, got %d", len(preview.Data.Snapshot.Positions))
+	}
+	if preview.Data.Snapshot.JoinToken != "" {
+		t.Fatalf("expected preview to omit join_token")
+	}
+
+	w = e.perform(http.MethodGet, "/api/v1/companion/session/current", nil, authHeader(guestToken))
+	if w.Result().StatusCode() != http.StatusNotFound {
+		t.Fatalf("expected guest current status 404 after preview, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+}
+
 func TestCompanionCreateRejectsExistingOwnedActiveSession(t *testing.T) {
 	e := newTestEnv()
 	ensureTestUser(t, e, 1001, "owner")

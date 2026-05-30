@@ -197,6 +197,12 @@ type CompanionSessionState struct {
 	Snapshot *models.CompanionSnapshot `json:"snapshot"`
 }
 
+// CompanionSessionPreview is returned when a user previews a room by join token without joining it.
+type CompanionSessionPreview struct {
+	Session  *models.CompanionSession  `json:"session"`
+	Snapshot *models.CompanionSnapshot `json:"snapshot"`
+}
+
 // ListCompanionHistoryInput describes paging input for companion history list.
 type ListCompanionHistoryInput struct {
 	Cursor string
@@ -880,6 +886,41 @@ func (s *CompanionService) JoinSession(ctx context.Context, userID int64, in Joi
 	return s.buildSessionState(ctx, session, userID, false)
 }
 
+// PreviewSessionByJoinToken returns active room information for a join token without changing membership.
+func (s *CompanionService) PreviewSessionByJoinToken(ctx context.Context, userID int64, joinToken string) (*CompanionSessionPreview, error) {
+	if s == nil || s.repo == nil || s.users == nil {
+		return nil, errors.New("companion service not configured")
+	}
+	if userID <= 0 {
+		return nil, invalidArg("user_id is required")
+	}
+	joinToken = strings.TrimSpace(joinToken)
+	if joinToken == "" {
+		return nil, invalidArg("join_token is required")
+	}
+	if _, err := s.users.FindByID(ctx, userID); err != nil {
+		return nil, err
+	}
+	session, err := s.repo.FindSessionByJoinToken(ctx, joinToken)
+	if err != nil {
+		return nil, err
+	}
+	if session.Status != models.CompanionSessionStatusActive {
+		return nil, invalidArg("companion session already ended")
+	}
+	snapshot, err := s.buildSnapshot(ctx, session)
+	if err != nil {
+		return nil, err
+	}
+	// Preview is intentionally read-only and omits invitation and live position details.
+	snapshot.JoinToken = ""
+	snapshot.Positions = nil
+	return &CompanionSessionPreview{
+		Session:  session,
+		Snapshot: snapshot,
+	}, nil
+}
+
 // GetCurrentSession returns the active companion session current user joined, if any.
 func (s *CompanionService) GetCurrentSession(ctx context.Context, userID int64) (*CompanionSessionState, error) {
 	if s == nil || s.repo == nil {
@@ -1373,7 +1414,9 @@ func (s *CompanionService) verifyMQTTBinding(ctx context.Context, principal, cli
 	if err := s.requireMQTTConfigured(); err != nil {
 		return nil, nil, err
 	}
-	claims, err := parseCompanionMQTTPrincipal(strings.TrimSpace(principal))
+	trimmedPrincipal := strings.TrimSpace(principal)
+	trimmedClientID := strings.TrimSpace(clientID)
+	claims, err := parseCompanionMQTTPrincipal(trimmedPrincipal)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1394,11 +1437,11 @@ func (s *CompanionService) verifyMQTTBinding(ctx context.Context, principal, cli
 	if member.MemberStatus != models.CompanionMemberStatusJoined {
 		return nil, nil, repository.ErrForbidden
 	}
-	if member.MQTTPrincipal != strings.TrimSpace(principal) || member.MQTTClientID != strings.TrimSpace(clientID) {
+	if member.MQTTPrincipal != trimmedPrincipal || member.MQTTClientID != trimmedClientID {
 		return nil, nil, repository.ErrForbidden
 	}
 	if verifyPassword {
-		expected := s.signMQTTCredentials(strings.TrimSpace(principal), strings.TrimSpace(clientID))
+		expected := s.signMQTTCredentials(trimmedPrincipal, trimmedClientID)
 		if !hmac.Equal([]byte(expected), []byte(password)) {
 			return nil, nil, repository.ErrForbidden
 		}

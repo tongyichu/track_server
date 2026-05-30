@@ -214,15 +214,27 @@ App Server 提供以下职责：
 - `session`
 - `snapshot`
 
-### 6.3 获取当前 active session
+### 6.3 预览 session（不加入）
+
+- `GET /api/v1/companion/session/preview?join_token=abcd1234EFGH5678`
+
+规则：
+
+- 必须登录；
+- 只通过 `join_token` 查询；
+- 只返回 active session；
+- 不创建 / 更新成员资格，不影响当前用户已有 active session；
+- 返回 `session` 与 `snapshot`，其中 `snapshot` 只包含 joined 成员资料，不返回实时位置与 `join_token`。
+
+### 6.4 获取当前 active session
 
 - `GET /api/v1/companion/session/current`
 
-### 6.4 获取指定 session 快照
+### 6.5 获取指定 session 快照
 
 - `GET /api/v1/companion/session/:session_id/snapshot`
 
-### 6.5 成员主动离开
+### 6.6 成员主动离开
 
 - `POST /api/v1/companion/session/:session_id/leave`
 

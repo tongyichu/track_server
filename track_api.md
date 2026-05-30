@@ -28,6 +28,7 @@
 | 16 | [获取运动类型](#16-获取运动类型) | GET | `/track/types` | ✅ |
 | 17 | [创建同行会话](#17-创建同行会话) | POST | `/companion/session/create` | ✅ |
 | 18 | [加入同行会话](#18-加入同行会话) | POST | `/companion/session/join` | ✅ |
+| 18.1 | [预览同行会话](#181-预览同行会话) | GET | `/companion/session/preview` | ✅ |
 | 19 | [获取当前同行会话](#19-获取当前同行会话) | GET | `/companion/session/current` | ✅ |
 | 20 | [获取同行快照](#20-获取同行快照) | GET | `/companion/session/:session_id/snapshot` | ✅ |
 | 21 | [离开同行会话](#21-离开同行会话) | POST | `/companion/session/:session_id/leave` | ✅ |
@@ -1668,6 +1669,37 @@ Content-Type: application/json
   - 凭 `session_id` 试图加入私密房间
 - `404 Not Found`
   - `join_token` / `session_id` 对应 session 不存在
+
+---
+
+## 18.1 预览同行会话
+
+通过 `join_token` 查询一场 active session 的房间预览，但不加入 session、不写入成员资格，也不返回实时位置。
+
+**需要认证**
+
+### 请求
+
+```http
+GET /api/v1/companion/session/preview?join_token=abcd1234EFGH5678
+Authorization: Bearer <token>
+```
+
+### 响应
+
+返回：
+
+- `session`
+- `snapshot`：只包含当前 joined 成员资料；`positions` 与 `join_token` 不返回
+
+### 错误响应
+
+- `400 Bad Request`
+  - `join_token is required`
+  - `companion session already ended`
+- `401 Unauthorized`
+- `404 Not Found`
+  - `join_token` 对应 session 不存在
 
 ---
 

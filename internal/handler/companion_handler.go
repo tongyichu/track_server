@@ -127,6 +127,20 @@ func (h *CompanionHandler) JoinSession(ctx context.Context, c *app.RequestContex
 	c.JSON(http.StatusOK, successResponse(result))
 }
 
+// PreviewSession handles GET /api/v1/companion/session/preview?join_token=xxx.
+func (h *CompanionHandler) PreviewSession(ctx context.Context, c *app.RequestContext) {
+	userID, ok := h.authUserID(c)
+	if !ok {
+		return
+	}
+	result, err := h.svc.PreviewSessionByJoinToken(ctx, userID, string(c.Query("join_token")))
+	if err != nil {
+		h.writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, successResponse(result))
+}
+
 // GetCurrentSession handles GET /api/v1/companion/session/current.
 func (h *CompanionHandler) GetCurrentSession(ctx context.Context, c *app.RequestContext) {
 	userID, ok := h.authUserID(c)
