@@ -195,6 +195,25 @@ func (h *CompanionHandler) EndSession(ctx context.Context, c *app.RequestContext
 	c.JSON(http.StatusOK, successResponse(StatusResult{Status: "ok"}))
 }
 
+// KickSessionMember handles POST /api/v1/companion/session/:session_id/members/:user_id/kick.
+func (h *CompanionHandler) KickSessionMember(ctx context.Context, c *app.RequestContext) {
+	userID, ok := h.authUserID(c)
+	if !ok {
+		return
+	}
+	targetUserID, err := strconv.ParseInt(strings.TrimSpace(c.Param("user_id")), 10, 64)
+	if err != nil || targetUserID <= 0 {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "user_id is required"})
+		return
+	}
+	state, err := h.svc.KickSessionMember(ctx, userID, c.Param("session_id"), targetUserID)
+	if err != nil {
+		h.writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, successResponse(state))
+}
+
 type toggleDanmakuRequest struct {
 	Enabled *bool `json:"enabled"`
 }

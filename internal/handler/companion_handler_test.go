@@ -314,6 +314,69 @@ func TestCompanionOwnerCannotLeaveWhileOthersJoined(t *testing.T) {
 	}
 }
 
+func TestCompanionOwnerCanKickMember(t *testing.T) {
+	e := newTestEnv()
+	ensureTestUser(t, e, 1001, "owner")
+	ensureTestUser(t, e, 1002, "guest")
+	ownerToken := e.generateTestToken(1001)
+	guestToken := e.generateTestToken(1002)
+
+	w := e.perform(http.MethodPost, "/api/v1/companion/session/create", []byte(`{"title":"一起走"}`), authHeader(ownerToken))
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected create status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+	var created handler.StandardResponse[*service.CompanionSessionState]
+	decodeJSON(t, w.Body.Bytes(), &created)
+	body, _ := json.Marshal(map[string]string{"join_token": created.Data.Join.JoinToken})
+	w = e.perform(http.MethodPost, "/api/v1/companion/session/join", body, authHeader(guestToken))
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected join status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+
+	w = e.perform(http.MethodPost, "/api/v1/companion/session/"+created.Data.Session.SessionID+"/members/1002/kick", nil, authHeader(ownerToken))
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected kick status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+	var kicked handler.StandardResponse[*service.CompanionSessionState]
+	decodeJSON(t, w.Body.Bytes(), &kicked)
+	if kicked.Data == nil || kicked.Data.Snapshot == nil {
+		t.Fatalf("expected kick response data")
+	}
+	if len(kicked.Data.Snapshot.Members) != 1 || kicked.Data.Snapshot.Members[0].UserID != 1001 {
+		t.Fatalf("expected only owner after kick, got %+v", kicked.Data.Snapshot.Members)
+	}
+
+	w = e.perform(http.MethodGet, "/api/v1/companion/session/current", nil, authHeader(guestToken))
+	if w.Result().StatusCode() != http.StatusNotFound {
+		t.Fatalf("expected kicked guest current status 404, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+}
+
+func TestCompanionKickMemberNonOwnerForbidden(t *testing.T) {
+	e := newTestEnv()
+	ensureTestUser(t, e, 1001, "owner")
+	ensureTestUser(t, e, 1002, "guest")
+	ownerToken := e.generateTestToken(1001)
+	guestToken := e.generateTestToken(1002)
+
+	w := e.perform(http.MethodPost, "/api/v1/companion/session/create", []byte(`{"title":"一起走"}`), authHeader(ownerToken))
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected create status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+	var created handler.StandardResponse[*service.CompanionSessionState]
+	decodeJSON(t, w.Body.Bytes(), &created)
+	body, _ := json.Marshal(map[string]string{"join_token": created.Data.Join.JoinToken})
+	w = e.perform(http.MethodPost, "/api/v1/companion/session/join", body, authHeader(guestToken))
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected join status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+
+	w = e.perform(http.MethodPost, "/api/v1/companion/session/"+created.Data.Session.SessionID+"/members/1001/kick", nil, authHeader(guestToken))
+	if w.Result().StatusCode() != http.StatusForbidden {
+		t.Fatalf("expected non-owner kick status 403, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+}
+
 func TestCompanionIssueMQTTCredentialsAndAuthACL(t *testing.T) {
 	e := newTestEnv()
 	ensureTestUser(t, e, 1001, "owner")

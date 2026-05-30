@@ -33,6 +33,7 @@
 | 20 | [获取同行快照](#20-获取同行快照) | GET | `/companion/session/:session_id/snapshot` | ✅ |
 | 21 | [离开同行会话](#21-离开同行会话) | POST | `/companion/session/:session_id/leave` | ✅ |
 | 22 | [结束同行会话](#22-结束同行会话) | POST | `/companion/session/:session_id/end` | ✅ |
+| 22.1 | [踢出同行成员](#221-踢出同行成员) | POST | `/companion/session/:session_id/members/:user_id/kick` | ✅ |
 | 23 | [当前用户参与过的同行记录列表](#23-当前用户参与过的同行记录列表) | GET | `/companion/session/history` | ✅ |
 | 24 | [获取同行 MQTT 凭证](#24-获取同行-mqtt-凭证) | POST | `/companion/session/:session_id/mqtt/credentials` | ✅ |
 | 25 | [EMQX HTTP AuthN 回调](#25-emqx-http-authn-回调) | POST | `/internal/mqtt/auth` | ❌（内部） |
@@ -213,6 +214,7 @@ Authorization: Bearer <token>
 - 客户端连接 EMQX 后，应订阅 `topics.control_subscribe`；
 - 服务端会在该 topic 发布：
   - `member_left`
+  - `member_kicked`
   - `session_ended`
 - 具体消息格式见 `track_companion.md` 的 control topic 说明。
 
@@ -1834,6 +1836,69 @@ Authorization: Bearer <token>
   - 当前用户不是 owner
 - `404 Not Found`
   - session 不存在
+
+---
+
+## 22.1 踢出同行成员
+
+owner 将某个 joined 成员踢出本次 active session。踢出成功后，服务端会通过 `companion/{session_id}/control` 广播 `member_kicked` 事件；被踢用户后续不能继续获取当前 session、snapshot 或 MQTT 凭证。
+
+**需要认证**
+
+### 请求
+
+```http
+POST /api/v1/companion/session/:session_id/members/:user_id/kick
+Authorization: Bearer <token>
+```
+
+### 成功响应
+
+返回标准 `CompanionSessionState`，其中 `snapshot.members` 与 `snapshot.positions` 已不包含被踢成员。
+
+```json
+{
+  "code": 0,
+  "data": {
+    "session": {
+      "session_id": "sess_xxx",
+      "owner_user_id": 1001,
+      "status": "active",
+      "visibility": "private",
+      "title": "周末同行",
+      "track_type": "徒步",
+      "locate_addr": "北京市海淀区颐和园",
+      "max_members": 8,
+      "danmaku_enabled": true,
+      "started_at": "2026-05-23T16:00:00Z",
+      "created_at": "2026-05-23T16:00:00Z",
+      "updated_at": "2026-05-23T16:00:00Z"
+    },
+    "join": {
+      "join_token": "abcd1234EFGH5678"
+    },
+    "snapshot": {
+      "snapshot_at": "2026-05-23T16:20:00Z",
+      "join_token": "abcd1234EFGH5678",
+      "members": [],
+      "positions": []
+    }
+  }
+}
+```
+
+### 错误响应
+
+- `400 Bad Request`
+  - `session_id is required`
+  - `user_id is required`
+  - `owner cannot kick self`
+  - `companion session already ended`
+  - `companion member is not joined`
+- `403 Forbidden`
+  - 当前用户不是 owner
+- `404 Not Found`
+  - session 不存在或被踢成员不存在
 
 ---
 

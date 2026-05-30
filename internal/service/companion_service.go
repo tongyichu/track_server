@@ -353,6 +353,7 @@ type companionMQTTPrincipalClaims struct {
 const (
 	CompanionControlEventMemberLeft     = "member_left"
 	CompanionControlEventSessionEnded   = "session_ended"
+	CompanionControlEventMemberKicked   = "member_kicked"
 	CompanionControlEventDanmakuToggled = "danmaku_toggled"
 )
 
@@ -1196,6 +1197,66 @@ func (s *CompanionService) LeaveSession(ctx context.Context, userID int64, sessi
 		return s.endSessionInternal(ctx, session, 0)
 	}
 	return nil
+}
+
+// KickSessionMember removes a joined member from an active session. Only the owner can kick members.
+func (s *CompanionService) KickSessionMember(ctx context.Context, ownerUserID int64, sessionID string, targetUserID int64) (*CompanionSessionState, error) {
+	if s == nil || s.repo == nil {
+		return nil, errors.New("companion service not configured")
+	}
+	if ownerUserID <= 0 {
+		return nil, invalidArg("user_id is required")
+	}
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return nil, invalidArg("session_id is required")
+	}
+	if targetUserID <= 0 {
+		return nil, invalidArg("user_id is required")
+	}
+	if targetUserID == ownerUserID {
+		return nil, invalidArg("owner cannot kick self")
+	}
+	session, err := s.repo.FindSessionByID(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	if session.Status != models.CompanionSessionStatusActive {
+		return nil, invalidArg("companion session already ended")
+	}
+	if session.OwnerUserID != ownerUserID {
+		return nil, repository.ErrForbidden
+	}
+	if _, err := s.requireJoinedActiveSession(ctx, ownerUserID, sessionID); err != nil {
+		return nil, err
+	}
+	member, err := s.repo.FindMember(ctx, sessionID, targetUserID)
+	if err != nil {
+		return nil, err
+	}
+	if member.Role == models.CompanionMemberRoleOwner {
+		return nil, invalidArg("owner cannot kick self")
+	}
+	if member.MemberStatus != models.CompanionMemberStatusJoined {
+		return nil, invalidArg("companion member is not joined")
+	}
+	now := time.Now()
+	member.MemberStatus = models.CompanionMemberStatusKicked
+	member.PresenceStatus = models.CompanionPresenceStatusOffline
+	member.LeftAt = now
+	member.LastSeenAt = now
+	if err := s.repo.UpsertMember(ctx, member); err != nil {
+		return nil, err
+	}
+	s.publishControlEvent(ctx, sessionID, CompanionControlEvent{
+		Event:          CompanionControlEventMemberKicked,
+		SessionID:      sessionID,
+		MemberUserID:   targetUserID,
+		OperatorUserID: ownerUserID,
+		Reason:         "member_kicked",
+		At:             now,
+	})
+	return s.buildSessionState(ctx, session, ownerUserID, true)
 }
 
 // EndSession ends an active session. Only owner can perform this operation.

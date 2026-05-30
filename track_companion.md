@@ -238,11 +238,25 @@ App Server 提供以下职责：
 
 - `POST /api/v1/companion/session/:session_id/leave`
 
-### 6.6 owner 主动结束
+### 6.7 owner 主动结束
 
 - `POST /api/v1/companion/session/:session_id/end`
 
-### 6.7 附近 active 房间列表
+### 6.8 owner 踢出成员
+
+- `POST /api/v1/companion/session/:session_id/members/:user_id/kick`
+
+规则：
+
+- 必须登录；
+- 仅 session owner 可调用；
+- 仅 active session 可踢人；
+- 仅可踢出当前 `joined` 成员；
+- owner 不能踢自己；
+- 被踢成员的 `member_status` 变为 `kicked`，`presence_status` 变为 `offline`，并从 snapshot 成员与位置集合中移除；
+- 服务端通过 `companion/{session_id}/control` 广播 `member_kicked` 事件。
+
+### 6.9 附近 active 房间列表
 
 - `GET /api/v1/companion/session/nearby`
 
@@ -554,6 +568,19 @@ Topic：
 
 ```json
 {
+  "event": "member_kicked",
+  "session_id": "sess_xxx",
+  "member_user_id": 1002,
+  "operator_user_id": 1001,
+  "reason": "member_kicked",
+  "at": "2026-05-23T18:03:00Z"
+}
+```
+
+或：
+
+```json
+{
   "event": "session_ended",
   "session_id": "sess_xxx",
   "operator_user_id": 1001,
@@ -579,17 +606,20 @@ Topic：
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
-| `event` | string | 事件类型：`member_left` / `session_ended` / `danmaku_toggled` |
+| `event` | string | 事件类型：`member_left` / `member_kicked` / `session_ended` / `danmaku_toggled` |
 | `session_id` | string | 同行会话 ID |
-| `member_user_id` | int64 | 被影响成员 user_id，仅 `member_left` 必有 |
+| `member_user_id` | int64 | 被影响成员 user_id，仅 `member_left` / `member_kicked` 必有 |
 | `operator_user_id` | int64 | 发起操作的用户；auto-end 时可为 `0` |
-| `reason` | string | 原因，当前可能为 `member_left` / `owner_ended` / `all_members_left` / `danmaku_enabled` / `danmaku_disabled` |
+| `reason` | string | 原因，当前可能为 `member_left` / `member_kicked` / `owner_ended` / `all_members_left` / `danmaku_enabled` / `danmaku_disabled` |
 | `enabled` | bool | 仅 `danmaku_toggled` 携带，反映切换后的目标状态 |
 | `at` | string | 事件时间，RFC3339 |
 
 客户端约定：
 
 - 收到 `member_left`：将对应成员从当前实时展示集合移除，并停止展示其最后位置；
+- 收到 `member_kicked`：
+  - 若 `member_user_id` 是当前用户：立即停止位置 / presence / 弹幕上行，取消所有 companion topic 订阅，退出同行 UI，并提示已被房主移出；
+  - 若 `member_user_id` 是其他成员：将该成员从当前实时展示集合移除，并停止展示其最后位置；
 - 收到 `session_ended`：立即停止当前位置上传、取消所有 companion topic 订阅、退出同行 UI，并回退到普通地图态；
 - 若 `session_ended` 先于某些滞后 location 消息到达，以 `session_ended` 为准；
 - control 消息只做会话控制，不作为快照真值来源；冷启动真值仍来自 HTTP Snapshot。

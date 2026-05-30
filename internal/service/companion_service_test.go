@@ -101,6 +101,87 @@ func TestCompanionServiceLeavePublishesMemberLeft(t *testing.T) {
 	}
 }
 
+func TestCompanionServiceKickMemberPublishesMemberKicked(t *testing.T) {
+	svc, repo, _ := newCompanionServiceForTest(t)
+	pub := &mockCompanionControlPublisher{}
+	svc.SetControlPublisher(pub)
+	ctx := context.Background()
+
+	created, err := svc.CreateSession(ctx, 1001, CreateCompanionSessionInput{Title: "一起走"})
+	if err != nil {
+		t.Fatalf("CreateSession returned error: %v", err)
+	}
+	if _, err := svc.JoinSession(ctx, 1002, JoinCompanionSessionInput{JoinToken: created.Join.JoinToken}); err != nil {
+		t.Fatalf("JoinSession returned error: %v", err)
+	}
+	if err := repo.UpsertPosition(ctx, &models.CompanionLivePosition{
+		SessionID:        created.Session.SessionID,
+		UserID:           1002,
+		Latitude:         39.9,
+		Longitude:        116.3,
+		CoordinateSystem: "wgs84",
+		RecordedAt:       time.Now(),
+		Seq:              1,
+		Source:           "test",
+	}); err != nil {
+		t.Fatalf("UpsertPosition returned error: %v", err)
+	}
+
+	state, err := svc.KickSessionMember(ctx, 1001, created.Session.SessionID, 1002)
+	if err != nil {
+		t.Fatalf("KickSessionMember returned error: %v", err)
+	}
+	if state == nil || state.Snapshot == nil {
+		t.Fatalf("expected kick response to carry session state")
+	}
+	if len(state.Snapshot.Members) != 1 || state.Snapshot.Members[0].UserID != 1001 {
+		t.Fatalf("expected only owner in snapshot after kick, got %+v", state.Snapshot.Members)
+	}
+	if len(state.Snapshot.Positions) != 0 {
+		t.Fatalf("expected kicked member position to be hidden, got %d", len(state.Snapshot.Positions))
+	}
+	member, err := repo.FindMember(ctx, created.Session.SessionID, 1002)
+	if err != nil {
+		t.Fatalf("FindMember returned error: %v", err)
+	}
+	if member.MemberStatus != models.CompanionMemberStatusKicked || member.PresenceStatus != models.CompanionPresenceStatusOffline {
+		t.Fatalf("expected kicked/offline member, got %+v", member)
+	}
+	if len(pub.messages) != 1 {
+		t.Fatalf("expected 1 published control message, got %d", len(pub.messages))
+	}
+	msg := pub.messages[0]
+	if msg.topic != "companion/"+created.Session.SessionID+"/control" {
+		t.Fatalf("unexpected topic %q", msg.topic)
+	}
+	if msg.event.Event != CompanionControlEventMemberKicked || msg.event.MemberUserID != 1002 || msg.event.OperatorUserID != 1001 || msg.event.Reason != "member_kicked" {
+		t.Fatalf("unexpected member_kicked event: %+v", msg.event)
+	}
+	if _, err := svc.GetCurrentSession(ctx, 1002); err == nil {
+		t.Fatalf("expected kicked member to have no current session")
+	}
+}
+
+func TestCompanionServiceKickMemberRejectsNonOwnerAndSelf(t *testing.T) {
+	svc, _, _ := newCompanionServiceForTest(t)
+	ctx := context.Background()
+
+	created, err := svc.CreateSession(ctx, 1001, CreateCompanionSessionInput{Title: "一起走"})
+	if err != nil {
+		t.Fatalf("CreateSession returned error: %v", err)
+	}
+	if _, err := svc.JoinSession(ctx, 1002, JoinCompanionSessionInput{JoinToken: created.Join.JoinToken}); err != nil {
+		t.Fatalf("JoinSession returned error: %v", err)
+	}
+
+	if _, err := svc.KickSessionMember(ctx, 1002, created.Session.SessionID, 1001); err == nil || err != repository.ErrForbidden {
+		t.Fatalf("expected non-owner kick to be forbidden, got %v", err)
+	}
+	if _, err := svc.KickSessionMember(ctx, 1001, created.Session.SessionID, 1001); err == nil || err.Error() != "owner cannot kick self" {
+		t.Fatalf("expected owner cannot kick self, got %v", err)
+	}
+}
+
 func TestCompanionServiceEndPublishesSessionEnded(t *testing.T) {
 	svc, _, _ := newCompanionServiceForTest(t)
 	pub := &mockCompanionControlPublisher{}
