@@ -36,16 +36,18 @@ track_server/
 │   ├── config/             # 环境变量加载；内置省市数据 + 昵称字典 + 同行弹幕敏感词词库
 │   ├── handler/            # Hertz HTTP handler + router.go 路由表（权威）
 │   ├── middleware/         # JWT 鉴权、请求元信息、Token 黑名单
-│   ├── models/             # 领域模型（Track / User / Companion / 相关光标/子结构）
+│   ├── models/             # 领域模型（Track / User / Companion / Achievement / 相关光标/子结构）
 │   ├── repository/         # 持久化接口 + mysql / mongo / memory 三实现
 │   ├── scheduler/          # 进程内定时任务（基于 robfig/cron/v3，按 SCHEDULER_ENABLED 启停）
-│   └── service/            # 业务编排：登录、轨迹、用户、同行控制面、OSS STS、资源缓存
+│   └── service/            # 业务编排：登录、轨迹、用户、同行控制面、成就、OSS STS、资源缓存
 ├── deploy/                 # Dockerfile / docker-compose / nginx / systemd
 ├── Makefile                # run / test / docker-build / compose-up/down
 ├── go.mod / go.sum
 ├── mysql.sql               # MySQL 初始化 SQL（表结构权威之一）
 ├── track_api.md            # 业务接口文档（接口契约权威，含同行控制面 API）
 ├── track_companion.md      # 同行能力技术方案设计（控制面 / MQTT 数据面规划）
+├── track_achievement.md    # 轨迹成就产品/规则方案（等级、XP、勋章、会员边界）
+├── track_achievement_client.md # 成就系统客户端对接文档
 └── login.md                # 登录流程与协议说明
 ```
 
@@ -55,9 +57,10 @@ track_server/
 | HTTP 路由清单 | `internal/handler/router.go` |
 | 配置项与默认值 | `internal/config/config.go` |
 | Repository 接口契约 | `internal/repository/interfaces.go` |
-| 领域模型 | `internal/models/track.go`、`internal/models/user.go` |
+| 领域模型 | `internal/models/track.go`、`internal/models/user.go`、`internal/models/achievement.go` |
 | MySQL 表结构 | `mysql.sql` |
-| 接口协议 | `track_api.md`、`login.md`、`track_companion.md` |
+| 接口协议 | `track_api.md`、`login.md`、`track_companion.md`、`track_achievement_client.md` |
+| 成就规则方案 | `track_achievement.md` |
 
 ### 关键流程
 
@@ -70,6 +73,15 @@ Load Config → 选择 Repository（Memory/MySQL/Mongo，失败降级为 Memory�
 → RegisterRoutes(Hertz, Deps)
 → （可选）SCHEDULER_ENABLED=true 时启动 Scheduler（注册 danmaku_cleanup 等任务）
 → h.Spin()
+```
+
+**成就结算流程**：
+```
+track/create(is_running=false) 或 track upload/update 完成轨迹
+  → TrackService 调用 AchievementService.SettleTrackCompleted
+  → AchievementService 基于有效轨迹实时聚合 XP / 进度
+  → AchievementRepository 幂等写入 user_achievement_rewards
+  → 客户端通过 /achievement/summary 或 /achievement/rewards 拉取展示
 ```
 
 **典型业务调用链**：
@@ -88,7 +100,7 @@ HTTP Request
 - 全量测试：`make test`（等价 `go test ./...`）
 - 新增/修改路由：核对 `internal/handler/router.go` 是否挂载在正确的 `auth` 分组。
 - 新增 Repository 方法：`mysql.go` / `mongo.go` / `memory.go` 三实现必须同步。
-- 改动与协议相关（字段增删、登录流程、错误码、同行控制面）：同步更新 `track_api.md`、`login.md` 或 `track_companion.md`。
+- 改动与协议相关（字段增删、登录流程、错误码、同行控制面、成就系统）：同步更新 `track_api.md`、`login.md`、`track_companion.md` 或 `track_achievement_client.md`。
 
 ---
 
