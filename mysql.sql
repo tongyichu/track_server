@@ -86,6 +86,20 @@ CREATE TABLE `track_navigations` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='轨迹导航使用记录表';
 
 
+CREATE TABLE `user_achievement_rewards` (
+                                            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                                            `user_id` BIGINT NOT NULL COMMENT '用户ID',
+                                            `reward_code` VARCHAR(64) NOT NULL COMMENT '成就奖励编码',
+                                            `source_track_id` VARCHAR(64) NOT NULL DEFAULT '' COMMENT '触发轨迹ID',
+                                            `source_session_id` VARCHAR(64) NOT NULL DEFAULT '' COMMENT '触发同行会话ID',
+                                            `progress_snapshot` TEXT COMMENT '发放时进度快照',
+                                            `earned_at` DATETIME(6) NOT NULL COMMENT '获得时间',
+                                            PRIMARY KEY (`id`),
+                                            UNIQUE KEY `uk_user_reward` (`user_id`, `reward_code`),
+                                            KEY `idx_user_achievement_earned` (`user_id`, `earned_at`, `id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户成就奖励记录表';
+
+
 CREATE TABLE `app_releases` (
                                 `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
                                 `platform` VARCHAR(16) NOT NULL COMMENT 'android / ios',

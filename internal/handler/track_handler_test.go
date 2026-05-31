@@ -26,27 +26,31 @@ const testInternalToken = "test_internal_token"
 
 // testEnv bundles server and in-memory dependencies for HTTP tests.
 type testEnv struct {
-	h              *server.Hertz
-	trackRepo      repository.TrackRepository
-	userRepo       repository.UserRepository
-	collectRepo    repository.CollectRepository
-	loginLogRepo   repository.LoginLogRepository
-	navigationRepo repository.NavigationRepository
-	companionRepo  repository.CompanionRepository
-	loginSvc       *service.LoginService
-	tokenBlacklist *middleware.TokenBlacklist
-	internalToken  string
-	staticRoot     string
-	avatarCacheDir string
+	h               *server.Hertz
+	trackRepo       repository.TrackRepository
+	userRepo        repository.UserRepository
+	collectRepo     repository.CollectRepository
+	loginLogRepo    repository.LoginLogRepository
+	navigationRepo  repository.NavigationRepository
+	companionRepo   repository.CompanionRepository
+	achievementRepo repository.AchievementRepository
+	loginSvc        *service.LoginService
+	tokenBlacklist  *middleware.TokenBlacklist
+	internalToken   string
+	staticRoot      string
+	avatarCacheDir  string
 }
 
 // newTestEnv creates a fresh Hertz server wired with in-memory repositories.
 func newTestEnv() *testEnv {
 	trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, _, companionRepo := repository.NewInMemoryRepositories()
+	achievementRepo := repository.NewInMemoryAchievementRepository()
 	trackSvc := service.NewTrackService(trackRepo, collectRepo)
 	trackSvc.SetUserRepository(userRepo)
 	trackSvc.SetNavigationRepository(navigationRepo)
 	trackSvc.SetCompanionRepository(companionRepo)
+	achievementSvc := service.NewAchievementService(achievementRepo, trackRepo)
+	trackSvc.SetAchievementService(achievementSvc)
 	userSvc := service.NewUserService(userRepo)
 	userSvc.SetTrackRepository(trackRepo)
 	userSvc.SetNavigationRepository(navigationRepo)
@@ -81,13 +85,14 @@ func newTestEnv() *testEnv {
 		UserService:                userSvc,
 		LoginService:               loginSvc,
 		CompanionService:           companionSvc,
+		AchievementService:         achievementSvc,
 		JWTSecret:                  testJWTSecret,
 		TokenBlacklist:             tokenBlacklist,
 		CompanionMQTTInternalToken: testInternalToken,
 		StaticRoot:                 staticRoot,
 	})
 
-	return &testEnv{h: h, trackRepo: trackRepo, userRepo: userRepo, collectRepo: collectRepo, loginLogRepo: loginLogRepo, navigationRepo: navigationRepo, companionRepo: companionRepo, loginSvc: loginSvc, tokenBlacklist: tokenBlacklist, internalToken: testInternalToken, staticRoot: staticRoot, avatarCacheDir: avatarCacheDir}
+	return &testEnv{h: h, trackRepo: trackRepo, userRepo: userRepo, collectRepo: collectRepo, loginLogRepo: loginLogRepo, navigationRepo: navigationRepo, companionRepo: companionRepo, achievementRepo: achievementRepo, loginSvc: loginSvc, tokenBlacklist: tokenBlacklist, internalToken: testInternalToken, staticRoot: staticRoot, avatarCacheDir: avatarCacheDir}
 }
 
 func (e *testEnv) generateTestToken(userID int64) string {
@@ -341,6 +346,41 @@ func TestCreateTrackRejectsActiveCompanionSession(t *testing.T) {
 	w = e.perform(http.MethodPost, "/api/v1/track/create", []byte(`{"is_running":false,"session_id":"sess_done"}`), authHeader(token))
 	if w.Result().StatusCode() != http.StatusOK {
 		t.Fatalf("expected completed track status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+}
+
+func TestAchievementRewardsAfterCompletedTrack(t *testing.T) {
+	e := newTestEnv()
+	token := e.generateTestToken(1001)
+
+	body := []byte(`{"track_type":"跑步","distance":6000,"duration":1800,"is_running":false}`)
+	w := e.perform(http.MethodPost, "/api/v1/track/create", body, authHeader(token))
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected create completed track status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+
+	w = e.perform(http.MethodGet, "/api/v1/achievement/rewards", nil, authHeader(token))
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected achievement rewards status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+	var resp handler.StandardResponse[*models.AchievementRewardList]
+	decodeJSON(t, w.Body.Bytes(), &resp)
+	if resp.Data == nil {
+		t.Fatalf("expected response data")
+	}
+	if resp.Data.Stats.QualifiedTrackCount != 1 {
+		t.Fatalf("expected qualified track count 1, got %d", resp.Data.Stats.QualifiedTrackCount)
+	}
+	earned := map[string]bool{}
+	for _, reward := range resp.Data.Rewards {
+		if reward.Earned {
+			earned[reward.Code] = true
+		}
+	}
+	for _, code := range []string{"first_track", "run_5k"} {
+		if !earned[code] {
+			t.Fatalf("expected reward %s to be earned", code)
+		}
 	}
 }
 

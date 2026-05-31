@@ -25,6 +25,7 @@ type TrackService struct {
 	navigations     repository.NavigationRepository
 	users           repository.UserRepository
 	companions      repository.CompanionRepository
+	achievements    *AchievementService
 	screenshotCache *AssetCacheService
 	avatarCache     *AssetCacheService
 	rawTrackCache   *AssetCacheService
@@ -339,6 +340,11 @@ func (s *TrackService) SetCompanionRepository(companions repository.CompanionRep
 	s.companions = companions
 }
 
+// SetAchievementService injects achievement settlement service.
+func (s *TrackService) SetAchievementService(achievements *AchievementService) {
+	s.achievements = achievements
+}
+
 // SetScreenshotCache 设置截图本地缓存服务。
 // 独立于构造函数是为了避免破坏既有单测/调用方；在未设置时，相关逻辑会直接跳过。
 func (s *TrackService) SetScreenshotCache(cache *AssetCacheService) {
@@ -469,6 +475,11 @@ func (s *TrackService) CreateTrack(ctx context.Context, userID int64, input Crea
 		}
 		s.rawTrackCache.PrefetchAsync(userID, track.ID, src)
 		track.RawTrackURL = s.rawTrackCache.GuessLocalURL(track.ID, src)
+	}
+	if !track.IsRunning && s.achievements != nil {
+		if _, err := s.achievements.SettleTrackCompleted(ctx, track); err != nil {
+			return nil, err
+		}
 	}
 	return track, nil
 }
@@ -1091,7 +1102,14 @@ func (s *TrackService) MarkUploadedToCloud(ctx context.Context, trackID string) 
 	if track.EndTime.Before(track.StartTime) {
 		track.EndTime = time.Now()
 	}
-	return s.tracks.Update(ctx, track)
+	if err := s.tracks.Update(ctx, track); err != nil {
+		return err
+	}
+	if s.achievements != nil {
+		_, err := s.achievements.SettleTrackCompleted(ctx, track)
+		return err
+	}
+	return nil
 }
 
 // UpdateTrackInfo updates a track with partially provided fields.
@@ -1191,6 +1209,11 @@ func (s *TrackService) UpdateTrackInfo(ctx context.Context, userID int64, trackI
 	if updated {
 		if err := s.tracks.Update(ctx, track); err != nil {
 			return nil, err
+		}
+		if !track.IsRunning && s.achievements != nil {
+			if _, err := s.achievements.SettleTrackCompleted(ctx, track); err != nil {
+				return nil, err
+			}
 		}
 	}
 

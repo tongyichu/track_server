@@ -157,6 +157,15 @@ type NavigationRepository interface {
 	CountByTrackIDs(ctx context.Context, trackIDs []string) (map[string]int64, error)
 }
 
+// AchievementRepository defines persistence operations for earned achievement rewards.
+type AchievementRepository interface {
+	// UpsertUserReward stores an earned reward if the user has not earned it yet.
+	// It returns true when a new record is created and false when the reward already exists.
+	UpsertUserReward(ctx context.Context, reward *models.UserAchievementReward) (bool, error)
+	ListUserRewards(ctx context.Context, userID int64) ([]*models.UserAchievementReward, error)
+	ListRecentUserRewards(ctx context.Context, userID int64, limit int) ([]*models.UserAchievementReward, error)
+}
+
 // LoginLogRepository defines persistence operations for login logs.
 type LoginLogRepository interface {
 	Create(ctx context.Context, log *models.LoginLog) error

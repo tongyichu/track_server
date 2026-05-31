@@ -41,6 +41,8 @@
 | 27 | [EMQX 数据面写回接口](#27-emqx-数据面写回接口) | POST | `/internal/companion/mqtt/*` | ❌（内部） |
 | 28 | [同行弹幕开关切换](#274-弹幕开关切换owner) | POST | `/companion/session/:session_id/danmaku/toggle` | ✅ |
 | 29 | [附近 active 同行房间列表](#29-附近-active-同行房间列表) | GET | `/companion/session/nearby` | ✅ |
+| 30 | [成就中心摘要](#30-成就中心摘要) | GET | `/achievement/summary` | ✅ |
+| 31 | [成就奖励列表](#31-成就奖励列表) | GET | `/achievement/rewards` | ✅ |
 
 ---
 
@@ -541,6 +543,146 @@ Authorization: Bearer <token>
   - `track_id` 缺失
 - `401 Unauthorized`
   - 缺少/无效/过期的 Token
+
+---
+
+## 30. 成就中心摘要
+
+获取当前用户成就首页数据，包括总 XP、等级、统计数据和最近获得奖励。
+
+### 请求
+
+```http
+GET /api/v1/achievement/summary
+Authorization: Bearer <token>
+```
+
+### 响应
+
+```json
+{
+  "code": 0,
+  "data": {
+    "stats": {
+      "total_xp": 120,
+      "current_level": {"level": 1, "name": "初上路", "xp": 0},
+      "next_level": {"level": 2, "name": "熟悉路线", "xp": 300},
+      "level_progress": 0.4,
+      "qualified_track_count": 1,
+      "total_distance": 6000,
+      "total_duration": 1800,
+      "total_elevation_gain": 0,
+      "companion_count": 0,
+      "type_stats": {
+        "跑步": {
+          "distance": 6000,
+          "duration": 1800,
+          "elevation_gain": 0,
+          "track_count": 1,
+          "xp": 120,
+          "max_distance": 6000,
+          "max_elevation_gain": 0
+        }
+      }
+    },
+    "recent_rewards": [
+      {
+        "code": "first_track",
+        "type": "milestone",
+        "category": "通用",
+        "name": "第一条轨迹",
+        "description": "完成首条有效轨迹",
+        "rarity": "common",
+        "icon_url": "",
+        "target_value": 1,
+        "earned": true,
+        "earned_at": "2026-05-31T12:00:00Z",
+        "current_value": 1,
+        "progress": 1
+      }
+    ]
+  }
+}
+```
+
+### 字段说明
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `stats.total_xp` | int64 | 当前用户总成就 XP |
+| `stats.current_level` | object | 当前等级 |
+| `stats.next_level` | object/null | 下一等级；满级时为空 |
+| `stats.level_progress` | number | 当前等级到下一等级的进度，范围 `0-1` |
+| `stats.qualified_track_count` | int64 | 参与成就计算的有效轨迹数 |
+| `stats.type_stats` | object | 按运动类型聚合的统计，key 为 `跑步` / `徒步` / `爬山` / `骑行` / `自驾` |
+| `recent_rewards` | array | 最近获得的奖励，最多 10 条 |
+
+---
+
+## 31. 成就奖励列表
+
+获取当前用户所有 MVP 成就定义、进度和获得状态。
+
+### 请求
+
+```http
+GET /api/v1/achievement/rewards
+Authorization: Bearer <token>
+```
+
+### 响应
+
+```json
+{
+  "code": 0,
+  "data": {
+    "stats": {
+      "total_xp": 120,
+      "current_level": {"level": 1, "name": "初上路", "xp": 0},
+      "level_progress": 0.4,
+      "qualified_track_count": 1,
+      "type_stats": {}
+    },
+    "rewards": [
+      {
+        "code": "run_5k",
+        "type": "badge",
+        "category": "跑步",
+        "name": "5K 完成",
+        "description": "单次跑步距离达到 5km",
+        "rarity": "common",
+        "icon_url": "",
+        "target_value": 5,
+        "earned": true,
+        "earned_at": "2026-05-31T12:00:00Z",
+        "current_value": 5,
+        "progress": 1
+      }
+    ]
+  }
+}
+```
+
+### 字段说明
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `rewards[].code` | string | 成就唯一编码，客户端可用于本地图标映射 |
+| `rewards[].type` | string | `badge` 或 `milestone` |
+| `rewards[].category` | string | 成就分类，如 `跑步` / `徒步` / `爬山` / `骑行` / `自驾` / `通用` / `同行` |
+| `rewards[].rarity` | string | `common` / `rare` / `epic` / `legendary` |
+| `rewards[].target_value` | number | 达成目标值 |
+| `rewards[].current_value` | number | 当前进度值；已获得奖励会返回目标值 |
+| `rewards[].progress` | number | 进度比例，范围 `0-1` |
+| `rewards[].earned` | bool | 是否已获得 |
+| `rewards[].earned_at` | string/null | 获得时间，未获得时不返回 |
+
+### 结算说明
+
+- `track/create` 创建已完成轨迹（`is_running=false`）后会触发成就结算。
+- `/track/:track_id/upload_cloud` 将进行中轨迹标记完成后会触发成就结算。
+- `/track/:track_id/update` 更新已完成轨迹的补充字段后会尝试幂等结算。
+- 同一用户同一成就只会发放一次。
 - `404 Not Found`
   - `track_id` 对应轨迹不存在
 - `500 Internal Server Error`

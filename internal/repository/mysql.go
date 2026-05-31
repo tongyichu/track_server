@@ -103,6 +103,18 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 			INDEX idx_nav_track (track_id),
 			INDEX idx_nav_user (navigator_user_id)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='轨迹导航使用记录表';`,
+		`CREATE TABLE IF NOT EXISTS user_achievement_rewards (
+			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+			user_id BIGINT NOT NULL,
+			reward_code VARCHAR(64) NOT NULL,
+			source_track_id VARCHAR(64) NOT NULL DEFAULT '',
+			source_session_id VARCHAR(64) NOT NULL DEFAULT '',
+			progress_snapshot TEXT,
+			earned_at DATETIME(6) NOT NULL,
+			PRIMARY KEY (id),
+			UNIQUE KEY uk_user_reward (user_id, reward_code),
+			KEY idx_user_achievement_earned (user_id, earned_at, id)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户成就奖励记录表';`,
 		`CREATE TABLE IF NOT EXISTS login_log (
 			id BIGINT PRIMARY KEY AUTO_INCREMENT,
 			user_id BIGINT NOT NULL,

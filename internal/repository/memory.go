@@ -32,8 +32,22 @@ type InMemoryNavigationRepository struct {
 	byTrack map[string][]int64
 }
 
+// InMemoryAchievementRepository is an in-memory implementation of AchievementRepository.
+type InMemoryAchievementRepository struct {
+	mu      sync.RWMutex
+	nextID  int64
+	rewards map[int64]map[string]*models.UserAchievementReward
+}
+
 func NewInMemoryNavigationRepository() *InMemoryNavigationRepository {
 	return &InMemoryNavigationRepository{byTrack: make(map[string][]int64)}
+}
+
+func NewInMemoryAchievementRepository() *InMemoryAchievementRepository {
+	return &InMemoryAchievementRepository{
+		nextID:  1,
+		rewards: make(map[int64]map[string]*models.UserAchievementReward),
+	}
 }
 
 // NewInMemoryTrackRepository creates a new in-memory track repository.
@@ -768,6 +782,58 @@ func (r *InMemoryNavigationRepository) CountByTrackIDs(_ context.Context, trackI
 		res[id] = int64(len(r.byTrack[id]))
 	}
 	return res, nil
+}
+
+func (r *InMemoryAchievementRepository) UpsertUserReward(_ context.Context, reward *models.UserAchievementReward) (bool, error) {
+	if reward == nil || reward.UserID <= 0 || reward.RewardCode == "" {
+		return false, nil
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.rewards[reward.UserID] == nil {
+		r.rewards[reward.UserID] = make(map[string]*models.UserAchievementReward)
+	}
+	if _, exists := r.rewards[reward.UserID][reward.RewardCode]; exists {
+		return false, nil
+	}
+	clone := *reward
+	if clone.ID == 0 {
+		clone.ID = r.nextID
+		r.nextID++
+	}
+	if clone.EarnedAt.IsZero() {
+		clone.EarnedAt = time.Now()
+	}
+	r.rewards[reward.UserID][reward.RewardCode] = &clone
+	return true, nil
+}
+
+func (r *InMemoryAchievementRepository) ListUserRewards(_ context.Context, userID int64) ([]*models.UserAchievementReward, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	items := make([]*models.UserAchievementReward, 0, len(r.rewards[userID]))
+	for _, reward := range r.rewards[userID] {
+		clone := *reward
+		items = append(items, &clone)
+	}
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].EarnedAt.Equal(items[j].EarnedAt) {
+			return items[i].RewardCode > items[j].RewardCode
+		}
+		return items[i].EarnedAt.After(items[j].EarnedAt)
+	})
+	return items, nil
+}
+
+func (r *InMemoryAchievementRepository) ListRecentUserRewards(ctx context.Context, userID int64, limit int) ([]*models.UserAchievementReward, error) {
+	items, err := r.ListUserRewards(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if limit <= 0 || limit > len(items) {
+		return items, nil
+	}
+	return items[:limit], nil
 }
 
 func containsIgnoreCase(s, sub string) bool {

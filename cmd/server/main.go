@@ -50,30 +50,36 @@ func main() {
 	var navigationRepo repository.NavigationRepository
 	var appReleaseRepo repository.AppReleaseRepository
 	var companionRepo repository.CompanionRepository
+	var achievementRepo repository.AchievementRepository
 
 	if cfg.UseInMemory {
 		trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo, companionRepo = repository.NewInMemoryRepositories()
+		achievementRepo = repository.NewInMemoryAchievementRepository()
 		log.Println("using in-memory repositories")
 	} else if cfg.UseMySQL {
 		db, err := repository.OpenMySQL(cfg.MySQLDSN)
 		if err != nil {
 			log.Printf("failed to open mysql, fallback to memory: %v", err)
 			trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo, companionRepo = repository.NewInMemoryRepositories()
+			achievementRepo = repository.NewInMemoryAchievementRepository()
 		} else if err := db.PingContext(ctx); err != nil {
 			log.Printf("failed to ping mysql, fallback to memory: %v", err)
 			_ = db.Close()
 			trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo, companionRepo = repository.NewInMemoryRepositories()
+			achievementRepo = repository.NewInMemoryAchievementRepository()
 		} else {
 			tr, ur, cr, lr, nr, ar, cor, err := repository.NewMySQLRepositories(ctx, db)
 			if err != nil {
 				log.Printf("failed to init mysql schema, fallback to memory: %v", err)
 				_ = db.Close()
 				trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo, companionRepo = repository.NewInMemoryRepositories()
+				achievementRepo = repository.NewInMemoryAchievementRepository()
 			} else {
 				defer func() {
 					_ = db.Close()
 				}()
 				trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo, companionRepo = tr, ur, cr, lr, nr, ar, cor
+				achievementRepo = repository.NewMySQLAchievementRepository(db)
 				log.Println("using mysql repositories")
 			}
 		}
@@ -83,6 +89,7 @@ func main() {
 		if err != nil {
 			log.Printf("failed to connect mongo, fallback to memory: %v", err)
 			trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo, companionRepo = repository.NewInMemoryRepositories()
+			achievementRepo = repository.NewInMemoryAchievementRepository()
 		} else {
 			db := client.Database(cfg.MongoDBName)
 			trackRepo = repository.NewMongoTrackRepository(db.Collection("tracks"))
@@ -91,6 +98,7 @@ func main() {
 			loginLogRepo = repository.NewMongoLoginLogRepository(db.Collection("login_log"))
 			navigationRepo = repository.NewMongoNavigationRepository(db.Collection("track_navigations"))
 			appReleaseRepo = repository.NewMongoAppReleaseRepository(db.Collection("app_releases"))
+			achievementRepo = repository.NewMongoAchievementRepository(db.Collection("user_achievement_rewards"))
 			companionRepo = repository.NewMongoCompanionRepository(
 				db.Collection("companion_sessions"),
 				db.Collection("companion_session_members"),
@@ -105,6 +113,8 @@ func main() {
 	trackSvc.SetUserRepository(userRepo)
 	trackSvc.SetNavigationRepository(navigationRepo)
 	trackSvc.SetCompanionRepository(companionRepo)
+	achievementSvc := service.NewAchievementService(achievementRepo, trackRepo)
+	trackSvc.SetAchievementService(achievementSvc)
 	userSvc := service.NewUserService(userRepo)
 	userSvc.SetTrackRepository(trackRepo)
 	userSvc.SetNavigationRepository(navigationRepo)
@@ -279,6 +289,7 @@ func main() {
 		OSSTokenService:            ossTokenSvc,
 		AppReleaseService:          appReleaseSvc,
 		CompanionService:           companionSvc,
+		AchievementService:         achievementSvc,
 		JWTSecret:                  cfg.JWTSecret,
 		TokenBlacklist:             tokenBlacklist,
 		CompanionMQTTInternalToken: cfg.CompanionMQTTInternalToken,

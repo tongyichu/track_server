@@ -18,6 +18,7 @@ type Deps struct {
 	OSSTokenService            *service.OSSTokenService
 	AppReleaseService          *service.AppReleaseService
 	CompanionService           *service.CompanionService
+	AchievementService         *service.AchievementService
 	JWTSecret                  string
 	TokenBlacklist             *middleware.TokenBlacklist
 	CompanionMQTTInternalToken string
@@ -42,6 +43,7 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 	ossHandler := NewOSSHandler(deps.OSSTokenService)
 	appReleaseHandler := NewAppReleaseHandler(deps.AppReleaseService)
 	companionHandler := NewCompanionHandler(deps.CompanionService, deps.CompanionMQTTInternalToken)
+	achievementHandler := NewAchievementHandler(deps.AchievementService)
 
 	api := h.Group("/api/v1")
 
@@ -155,6 +157,10 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 	auth.POST("/track/:track_id/navigation/report", trackHandler.ReportTrackNavigation)
 	auth.GET("/track/:track_id/detail", trackHandler.GetTrackDetail)
 	auth.GET("/track/:track_id/summary", trackHandler.GetTrackDetail)
+
+	// achievement center
+	auth.GET("/achievement/summary", achievementHandler.Summary)
+	auth.GET("/achievement/rewards", achievementHandler.Rewards)
 
 	// collection
 	auth.GET("/user/:user_id/collect", trackHandler.GetCollectStatus)
