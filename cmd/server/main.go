@@ -311,7 +311,8 @@ func main() {
 	if cfg.SchedulerEnabled {
 		sch := scheduler.New()
 		danmakuJob := jobs.NewDanmakuCleanup(companionRepo, cfg.DanmakuRetentionDays, cfg.DanmakuCleanupCron)
-		if err := sch.Register(danmakuJob); err != nil {
+		companionAutoCloseJob := jobs.NewCompanionAutoClose(companionSvc)
+		if err := sch.Register(danmakuJob, companionAutoCloseJob); err != nil {
 			log.Printf("scheduler register failed, scheduler disabled: %v", err)
 		} else {
 			sch.Start()

@@ -53,7 +53,43 @@ const (
 	maxCompanionNearbyItems = 50
 	// 地球平均半径（米），Haversine 距离计算用。
 	earthRadiusMeters = 6371000.0
+
+	// 自动收尾：单次扫描 active session 的上限。
+	companionAutoCloseScanLimit = 1000
 )
+
+type companionAutoCloseRule struct {
+	InactiveTimeout time.Duration
+	MaxDuration     time.Duration
+}
+
+var defaultCompanionAutoCloseRule = companionAutoCloseRule{
+	InactiveTimeout: 45 * time.Minute,
+	MaxDuration:     24 * time.Hour,
+}
+
+var companionAutoCloseRules = map[string]companionAutoCloseRule{
+	"跑步": {
+		InactiveTimeout: 30 * time.Minute,
+		MaxDuration:     8 * time.Hour,
+	},
+	"徒步": {
+		InactiveTimeout: 30 * time.Minute,
+		MaxDuration:     16 * time.Hour,
+	},
+	"爬山": {
+		InactiveTimeout: 45 * time.Minute,
+		MaxDuration:     24 * time.Hour,
+	},
+	"骑行": {
+		InactiveTimeout: 30 * time.Minute,
+		MaxDuration:     24 * time.Hour,
+	},
+	"自驾": {
+		InactiveTimeout: 60 * time.Minute,
+		MaxDuration:     72 * time.Hour,
+	},
+}
 
 // CompanionService 实现“同行”控制面的业务逻辑。
 type CompanionService struct {
@@ -64,6 +100,11 @@ type CompanionService struct {
 	avatarCache      *AssetCacheService
 	publisher        CompanionControlPublisher
 	danmakuPublisher CompanionControlPublisher
+}
+
+type CompanionAutoCloseResult struct {
+	Scanned int `json:"scanned"`
+	Closed  int `json:"closed"`
 }
 
 // CompanionMQTTOptions defines MQTT / EMQX integration options.
@@ -1223,7 +1264,7 @@ func (s *CompanionService) LeaveSession(ctx context.Context, userID int64, sessi
 		return err
 	}
 	if joinedCount == 0 {
-		return s.endSessionInternal(ctx, session, 0)
+		return s.endSessionInternalWithReason(ctx, session, 0, "all_members_left", models.CompanionSessionEndSourceMemberFlow, time.Now())
 	}
 	return nil
 }
@@ -1311,6 +1352,106 @@ func (s *CompanionService) EndSession(ctx context.Context, operatorUserID int64,
 		return err
 	}
 	return s.endSessionInternal(ctx, session, operatorUserID)
+}
+
+// AutoCloseInactiveSessions ends active sessions that have no recent member activity
+// or exceed the hard maximum duration for their track type.
+func (s *CompanionService) AutoCloseInactiveSessions(ctx context.Context, now time.Time) (*CompanionAutoCloseResult, error) {
+	if s == nil || s.repo == nil {
+		return nil, errors.New("companion service not configured")
+	}
+	if now.IsZero() {
+		now = time.Now()
+	}
+	sessions, err := s.repo.ListActiveSessions(ctx, companionAutoCloseScanLimit)
+	if err != nil {
+		return nil, err
+	}
+	result := &CompanionAutoCloseResult{Scanned: len(sessions)}
+	for _, session := range sessions {
+		if session == nil || session.Status != models.CompanionSessionStatusActive {
+			continue
+		}
+		reason, shouldClose, err := s.shouldAutoCloseSession(ctx, session, now)
+		if err != nil {
+			return result, err
+		}
+		if !shouldClose {
+			continue
+		}
+		if err := s.endSessionInternalWithReason(ctx, session, 0, reason, models.CompanionSessionEndSourceAutoClose, now); err != nil {
+			var iae *InvalidArgumentError
+			if errors.As(err, &iae) && strings.Contains(iae.Error(), "already ended") {
+				continue
+			}
+			return result, err
+		}
+		result.Closed++
+		log.Printf("companion auto close: session=%s reason=%s track_type=%s", session.SessionID, reason, session.TrackType)
+	}
+	return result, nil
+}
+
+func (s *CompanionService) shouldAutoCloseSession(ctx context.Context, session *models.CompanionSession, now time.Time) (string, bool, error) {
+	rule := companionAutoCloseRuleForTrackType(session.TrackType)
+	if !session.StartedAt.IsZero() && now.Sub(session.StartedAt) >= rule.MaxDuration {
+		return "max_duration_exceeded", true, nil
+	}
+	members, err := s.repo.ListMembers(ctx, session.SessionID)
+	if err != nil {
+		return "", false, err
+	}
+	joinedMembers := make([]*models.CompanionSessionMember, 0, len(members))
+	for _, member := range members {
+		if member != nil && member.MemberStatus == models.CompanionMemberStatusJoined {
+			joinedMembers = append(joinedMembers, member)
+		}
+	}
+	if len(joinedMembers) == 0 {
+		return "all_members_left", true, nil
+	}
+	positions, err := s.repo.ListPositions(ctx, session.SessionID)
+	if err != nil {
+		return "", false, err
+	}
+	positionByUser := make(map[int64]*models.CompanionLivePosition, len(positions))
+	for _, position := range positions {
+		if position == nil {
+			continue
+		}
+		prev := positionByUser[position.UserID]
+		if prev == nil || position.RecordedAt.After(prev.RecordedAt) {
+			positionByUser[position.UserID] = position
+		}
+	}
+	for _, member := range joinedMembers {
+		lastActivity := companionMemberLastActivity(member, positionByUser[member.UserID])
+		if lastActivity.IsZero() || now.Sub(lastActivity) < rule.InactiveTimeout {
+			return "", false, nil
+		}
+	}
+	return "inactive_timeout", true, nil
+}
+
+func companionMemberLastActivity(member *models.CompanionSessionMember, position *models.CompanionLivePosition) time.Time {
+	if member == nil {
+		return time.Time{}
+	}
+	last := member.JoinedAt
+	if member.LastSeenAt.After(last) {
+		last = member.LastSeenAt
+	}
+	if position != nil && position.RecordedAt.After(last) {
+		last = position.RecordedAt
+	}
+	return last
+}
+
+func companionAutoCloseRuleForTrackType(trackType string) companionAutoCloseRule {
+	if rule, ok := companionAutoCloseRules[strings.TrimSpace(trackType)]; ok {
+		return rule
+	}
+	return defaultCompanionAutoCloseRule
 }
 
 // UpdatePresence updates member online/offline status, reserved for future EMQX integration.
@@ -1746,9 +1887,31 @@ func (s *CompanionService) buildSnapshot(ctx context.Context, session *models.Co
 }
 
 func (s *CompanionService) endSessionInternal(ctx context.Context, session *models.CompanionSession, operatorUserID int64) error {
-	now := time.Now()
+	reason := "all_members_left"
+	source := models.CompanionSessionEndSourceMemberFlow
+	if operatorUserID > 0 {
+		reason = "owner_ended"
+		source = models.CompanionSessionEndSourceOwner
+	}
+	return s.endSessionInternalWithReason(ctx, session, operatorUserID, reason, source, time.Now())
+}
+
+func (s *CompanionService) endSessionInternalWithReason(ctx context.Context, session *models.CompanionSession, operatorUserID int64, reason string, source models.CompanionSessionEndSource, now time.Time) error {
+	if now.IsZero() {
+		now = time.Now()
+	}
+	if strings.TrimSpace(reason) == "" {
+		reason = "all_members_left"
+	}
+	if strings.TrimSpace(string(source)) == "" {
+		source = models.CompanionSessionEndSourceMemberFlow
+	}
 	session.Status = models.CompanionSessionStatusEnded
 	session.EndedAt = now
+	session.EndReason = reason
+	session.EndSource = source
+	session.EndOperatorUserID = operatorUserID
+	session.UpdatedAt = now
 	if err := s.repo.UpdateSession(ctx, session); err != nil {
 		return err
 	}
@@ -1772,10 +1935,6 @@ func (s *CompanionService) endSessionInternal(ctx context.Context, session *mode
 		if err := s.repo.UpsertMember(ctx, member); err != nil {
 			return err
 		}
-	}
-	reason := "all_members_left"
-	if operatorUserID > 0 {
-		reason = "owner_ended"
 	}
 	s.publishControlEvent(ctx, session.SessionID, CompanionControlEvent{
 		Event:          CompanionControlEventSessionEnded,

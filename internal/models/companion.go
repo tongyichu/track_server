@@ -10,6 +10,15 @@ const (
 	CompanionSessionStatusEnded  CompanionSessionStatus = "ended"
 )
 
+// CompanionSessionEndSource 表示会话由哪类流程结束，用于后台审计。
+type CompanionSessionEndSource string
+
+const (
+	CompanionSessionEndSourceOwner      CompanionSessionEndSource = "owner"
+	CompanionSessionEndSourceMemberFlow CompanionSessionEndSource = "member_flow"
+	CompanionSessionEndSourceAutoClose  CompanionSessionEndSource = "auto_close"
+)
+
 // CompanionSessionVisibility 表示同行会话的可见性。
 //
 // - private：私密房间，必须凭 join_token 加入；
@@ -55,20 +64,23 @@ const (
 // - status 只区分 active / ended；
 // - owner_user_id 是会话发起人，也是默认的结束权限拥有者。
 type CompanionSession struct {
-	SessionID          string                     `json:"session_id" bson:"session_id"`
-	OwnerUserID        int64                      `json:"owner_user_id" bson:"owner_user_id"`
-	Status             CompanionSessionStatus     `json:"status" bson:"status"`
-	Visibility         CompanionSessionVisibility `json:"visibility" bson:"visibility"`
-	JoinToken          string                     `json:"-" bson:"join_token"`
-	Title              string                     `json:"title" bson:"title"`
-	TrackType          string                     `json:"track_type" bson:"track_type"`
-	LocateAddr         string                     `json:"locate_addr" bson:"locate_addr"`
-	MaxMembers         int                        `json:"max_members" bson:"max_members"`
-	DanmakuEnabled     bool                       `json:"danmaku_enabled" bson:"danmaku_enabled"`
-	StartedAt          time.Time                  `json:"started_at" bson:"started_at"`
-	EndedAt            time.Time                  `json:"ended_at,omitempty" bson:"ended_at,omitempty"`
-	CreatedAt          time.Time                  `json:"created_at" bson:"created_at"`
-	UpdatedAt          time.Time                  `json:"updated_at" bson:"updated_at"`
+	SessionID         string                     `json:"session_id" bson:"session_id"`
+	OwnerUserID       int64                      `json:"owner_user_id" bson:"owner_user_id"`
+	Status            CompanionSessionStatus     `json:"status" bson:"status"`
+	Visibility        CompanionSessionVisibility `json:"visibility" bson:"visibility"`
+	JoinToken         string                     `json:"-" bson:"join_token"`
+	Title             string                     `json:"title" bson:"title"`
+	TrackType         string                     `json:"track_type" bson:"track_type"`
+	LocateAddr        string                     `json:"locate_addr" bson:"locate_addr"`
+	MaxMembers        int                        `json:"max_members" bson:"max_members"`
+	DanmakuEnabled    bool                       `json:"danmaku_enabled" bson:"danmaku_enabled"`
+	StartedAt         time.Time                  `json:"started_at" bson:"started_at"`
+	EndedAt           time.Time                  `json:"ended_at,omitempty" bson:"ended_at,omitempty"`
+	EndReason         string                     `json:"end_reason,omitempty" bson:"end_reason,omitempty"`
+	EndSource         CompanionSessionEndSource  `json:"end_source,omitempty" bson:"end_source,omitempty"`
+	EndOperatorUserID int64                      `json:"end_operator_user_id,omitempty" bson:"end_operator_user_id,omitempty"`
+	CreatedAt         time.Time                  `json:"created_at" bson:"created_at"`
+	UpdatedAt         time.Time                  `json:"updated_at" bson:"updated_at"`
 }
 
 // CompanionSessionMember 表示用户在某个“同行”会话中的成员资格与连接状态。
@@ -123,10 +135,10 @@ type CompanionMemberSnapshot struct {
 
 // CompanionSnapshot 是“同行”会话的当前快照。
 type CompanionSnapshot struct {
-	SnapshotAt time.Time                   `json:"snapshot_at"`
-	JoinToken  string                      `json:"join_token,omitempty"`
-	Members    []CompanionMemberSnapshot   `json:"members"`
-	Positions  []*CompanionLivePosition    `json:"positions"`
+	SnapshotAt time.Time                 `json:"snapshot_at"`
+	JoinToken  string                    `json:"join_token,omitempty"`
+	Members    []CompanionMemberSnapshot `json:"members"`
+	Positions  []*CompanionLivePosition  `json:"positions"`
 }
 
 // CompanionDanmaku 表示一条同行文字弹幕。
@@ -162,16 +174,16 @@ type CompanionHistoryParticipant struct {
 
 // CompanionHistoryItem is one history record of a companion session.
 type CompanionHistoryItem struct {
-	SessionID         string                       `json:"session_id"`
-	Title             string                       `json:"title"`
-	TrackType         string                       `json:"track_type"`
-	LocateAddr        string                       `json:"locate_addr"`
-	ParticipantCount  int64                        `json:"participant_count"`
-	StartedAt         time.Time                    `json:"started_at"`
-	DurationSeconds   int64                        `json:"duration_seconds"`
-	Status            CompanionSessionStatus       `json:"status"`
-	JoinToken         string                       `json:"join_token,omitempty"`
-	Participants      []CompanionHistoryParticipant `json:"participants"`
+	SessionID        string                        `json:"session_id"`
+	Title            string                        `json:"title"`
+	TrackType        string                        `json:"track_type"`
+	LocateAddr       string                        `json:"locate_addr"`
+	ParticipantCount int64                         `json:"participant_count"`
+	StartedAt        time.Time                     `json:"started_at"`
+	DurationSeconds  int64                         `json:"duration_seconds"`
+	Status           CompanionSessionStatus        `json:"status"`
+	JoinToken        string                        `json:"join_token,omitempty"`
+	Participants     []CompanionHistoryParticipant `json:"participants"`
 }
 
 // CompanionHistoryPage is the paging response of current user's companion history list.
@@ -201,16 +213,16 @@ type CompanionNearbyAnchor struct {
 
 // CompanionNearbyItem 是附近 active 会话的轮播卡片项。
 type CompanionNearbyItem struct {
-	SessionID    string                  `json:"session_id"`
-	Title        string                  `json:"title"`
-	TrackType    string                  `json:"track_type"`
-	LocateAddr   string                  `json:"locate_addr"`
-	JoinToken    string                  `json:"join_token"`
-	MaxMembers   int                     `json:"max_members"`
-	MemberCount  int                     `json:"member_count"`
-	StartedAt    time.Time               `json:"started_at"`
-	Anchor       *CompanionNearbyAnchor  `json:"anchor,omitempty"`
-	Members      []CompanionNearbyMember `json:"members"`
+	SessionID   string                  `json:"session_id"`
+	Title       string                  `json:"title"`
+	TrackType   string                  `json:"track_type"`
+	LocateAddr  string                  `json:"locate_addr"`
+	JoinToken   string                  `json:"join_token"`
+	MaxMembers  int                     `json:"max_members"`
+	MemberCount int                     `json:"member_count"`
+	StartedAt   time.Time               `json:"started_at"`
+	Anchor      *CompanionNearbyAnchor  `json:"anchor,omitempty"`
+	Members     []CompanionNearbyMember `json:"members"`
 }
 
 // CompanionNearbyPage 是附近会话列表的响应。

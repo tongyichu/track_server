@@ -125,18 +125,23 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
 		`CREATE TABLE IF NOT EXISTS companion_sessions (
-			session_id VARCHAR(64) NOT NULL,
-			owner_user_id BIGINT NOT NULL,
-			status VARCHAR(16) NOT NULL,
-			join_token VARCHAR(128) NOT NULL,
-			title VARCHAR(64) NOT NULL DEFAULT '',
-			track_type VARCHAR(32) NOT NULL DEFAULT '',
-			locate_addr VARCHAR(255) NOT NULL DEFAULT '',
-			max_members INT NOT NULL DEFAULT 8,
-			started_at DATETIME(6) NOT NULL,
-			ended_at DATETIME(6) NULL,
-			created_at DATETIME(6) NOT NULL,
-			updated_at DATETIME(6) NOT NULL,
+				session_id VARCHAR(64) NOT NULL,
+				owner_user_id BIGINT NOT NULL,
+				status VARCHAR(16) NOT NULL,
+				visibility VARCHAR(16) NOT NULL DEFAULT 'private',
+				join_token VARCHAR(128) NOT NULL,
+				title VARCHAR(64) NOT NULL DEFAULT '',
+				track_type VARCHAR(32) NOT NULL DEFAULT '',
+				locate_addr VARCHAR(255) NOT NULL DEFAULT '',
+				max_members INT NOT NULL DEFAULT 8,
+				danmaku_enabled TINYINT(1) NOT NULL DEFAULT 1,
+				started_at DATETIME(6) NOT NULL,
+				ended_at DATETIME(6) NULL,
+				end_reason VARCHAR(32) NOT NULL DEFAULT '',
+				end_source VARCHAR(32) NOT NULL DEFAULT '',
+				end_operator_user_id BIGINT NOT NULL DEFAULT 0,
+				created_at DATETIME(6) NOT NULL,
+				updated_at DATETIME(6) NOT NULL,
 			PRIMARY KEY (session_id),
 			UNIQUE KEY uk_companion_join_token (join_token),
 			KEY idx_companion_owner_status (owner_user_id, status),
@@ -265,6 +270,15 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 	if err := ensureMySQLCompanionSessionLocateAddrColumn(ctx, db); err != nil {
+		return err
+	}
+	if err := ensureMySQLCompanionSessionVisibilityColumn(ctx, db); err != nil {
+		return err
+	}
+	if err := ensureMySQLCompanionSessionDanmakuEnabledColumn(ctx, db); err != nil {
+		return err
+	}
+	if err := ensureMySQLCompanionSessionEndAuditColumns(ctx, db); err != nil {
 		return err
 	}
 	if err := ensureMySQLCompanionSessionStatusEndedIndex(ctx, db); err != nil {
@@ -608,6 +622,85 @@ func ensureMySQLCompanionSessionLocateAddrColumn(ctx context.Context, db *sql.DB
 	_, err = db.ExecContext(ctx, `ALTER TABLE companion_sessions ADD COLUMN locate_addr VARCHAR(255) NOT NULL DEFAULT '' COMMENT '位置信息' AFTER track_type`)
 	if err != nil {
 		return fmt.Errorf("add companion_sessions.locate_addr column: %w", err)
+	}
+	return nil
+}
+
+func ensureMySQLCompanionSessionVisibilityColumn(ctx context.Context, db *sql.DB) error {
+	var count int
+	err := db.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM information_schema.COLUMNS
+		WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'companion_sessions' AND COLUMN_NAME = 'visibility'`,
+	).Scan(&count)
+	if err != nil {
+		return fmt.Errorf("check companion_sessions.visibility column: %w", err)
+	}
+	if count > 0 {
+		return nil
+	}
+	_, err = db.ExecContext(ctx, `ALTER TABLE companion_sessions ADD COLUMN visibility VARCHAR(16) NOT NULL DEFAULT 'private' COMMENT 'private / public' AFTER status`)
+	if err != nil {
+		return fmt.Errorf("add companion_sessions.visibility column: %w", err)
+	}
+	return nil
+}
+
+func ensureMySQLCompanionSessionDanmakuEnabledColumn(ctx context.Context, db *sql.DB) error {
+	var count int
+	err := db.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM information_schema.COLUMNS
+		WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'companion_sessions' AND COLUMN_NAME = 'danmaku_enabled'`,
+	).Scan(&count)
+	if err != nil {
+		return fmt.Errorf("check companion_sessions.danmaku_enabled column: %w", err)
+	}
+	if count > 0 {
+		return nil
+	}
+	_, err = db.ExecContext(ctx, `ALTER TABLE companion_sessions ADD COLUMN danmaku_enabled TINYINT(1) NOT NULL DEFAULT 1 COMMENT '弹幕开关：1=开启 0=关闭' AFTER max_members`)
+	if err != nil {
+		return fmt.Errorf("add companion_sessions.danmaku_enabled column: %w", err)
+	}
+	return nil
+}
+
+func ensureMySQLCompanionSessionEndAuditColumns(ctx context.Context, db *sql.DB) error {
+	columns := []struct {
+		name       string
+		definition string
+	}{
+		{
+			name:       "end_reason",
+			definition: "ALTER TABLE companion_sessions ADD COLUMN end_reason VARCHAR(32) NOT NULL DEFAULT '' COMMENT '结束原因：owner_ended / all_members_left / inactive_timeout / max_duration_exceeded' AFTER ended_at",
+		},
+		{
+			name:       "end_source",
+			definition: "ALTER TABLE companion_sessions ADD COLUMN end_source VARCHAR(32) NOT NULL DEFAULT '' COMMENT '结束来源：owner / member_flow / auto_close' AFTER end_reason",
+		},
+		{
+			name:       "end_operator_user_id",
+			definition: "ALTER TABLE companion_sessions ADD COLUMN end_operator_user_id BIGINT NOT NULL DEFAULT 0 COMMENT '结束操作用户ID；自动收尾为0' AFTER end_source",
+		},
+	}
+	for _, column := range columns {
+		var count int
+		err := db.QueryRowContext(ctx, `
+			SELECT COUNT(*)
+			FROM information_schema.COLUMNS
+			WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'companion_sessions' AND COLUMN_NAME = ?`,
+			column.name,
+		).Scan(&count)
+		if err != nil {
+			return fmt.Errorf("check companion_sessions.%s column: %w", column.name, err)
+		}
+		if count > 0 {
+			continue
+		}
+		if _, err := db.ExecContext(ctx, column.definition); err != nil {
+			return fmt.Errorf("add companion_sessions.%s column: %w", column.name, err)
+		}
 	}
 	return nil
 }

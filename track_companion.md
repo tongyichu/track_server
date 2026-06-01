@@ -98,7 +98,8 @@ App Server 提供以下职责：
 4. owner 掉线不自动结束 session。
 5. owner 在有其他 `joined` 成员时**不能直接 leave**，只能调用 `end`。
 6. 当 session 中 `member_status=joined` 的成员数变为 0 时，服务端自动结束 session。
-7. 新成员加入时，服务端必须返回当前快照，不依赖 MQTT retained 消息。
+7. 若 owner 忘记结束 session，服务端通过 `companion_session_autoclose` 定时任务兜底自动结束超时 session。
+8. 新成员加入时，服务端必须返回当前快照，不依赖 MQTT retained 消息。
 
 ---
 
@@ -450,7 +451,8 @@ Snapshot 是控制面的关键输出，结构为：
 
 - 成员离开时，服务端向 `companion/{session_id}/control` 发布 `member_left`；
 - owner 主动结束时，服务端向 `companion/{session_id}/control` 发布 `session_ended`；
-- 所有人离开导致 auto-end 时，也会发布 `session_ended`。
+- 所有人离开导致 auto-end 时，也会发布 `session_ended`；
+- `companion_session_autoclose` 兜底结束 session 时，也会发布 `session_ended`。
 
 实现位置：
 
@@ -574,7 +576,48 @@ Topic：`companion/{session_id}/danmaku`
 - Header：`X-Internal-Token: ${COMPANION_MQTT_INTERNAL_TOKEN}`
 - 透传字段：`session_id / user_id / content / client_id / username`
 
-### 8.6 control topic 消息格式
+### 8.6 同行自动收尾任务
+
+`internal/scheduler/jobs.CompanionAutoClose` 注册任务名为 `companion_session_autoclose`，默认每 10 分钟执行一次；调度器本身仍受 `SCHEDULER_ENABLED=true` 控制。
+
+自动结束条件：
+
+1. active session 超过运动类型最大持续时间；
+2. 或所有 `member_status=joined` 成员都超过运动类型无活动阈值；
+3. 或 session 已无任何 `joined` 成员。
+
+成员最后活跃时间：
+
+```text
+last_activity_at = max(member.last_seen_at, latest_position.recorded_at, member.joined_at)
+```
+
+内置策略写在代码中，不通过启动参数配置：
+
+| 运动类型 | 无活动阈值 | 最大持续时间 |
+| --- | --- | --- |
+| 跑步 | 30 分钟 | 8 小时 |
+| 徒步 | 30 分钟 | 16 小时 |
+| 爬山 | 45 分钟 | 24 小时 |
+| 骑行 | 30 分钟 | 24 小时 |
+| 自驾 | 60 分钟 | 72 小时 |
+| 未知类型 | 45 分钟 | 24 小时 |
+
+自动结束会复用同行结束逻辑，更新 session / member 状态并发布 `session_ended` control 事件：
+
+- 全员无活动：`reason=inactive_timeout`
+- 超过最大持续时间：`reason=max_duration_exceeded`
+- 无 joined 成员：`reason=all_members_left`
+
+为便于后台审计，`companion_sessions` 会持久化结束审计字段：
+
+| 字段 | 说明 |
+| --- | --- |
+| `end_reason` | 结束原因：`owner_ended` / `all_members_left` / `inactive_timeout` / `max_duration_exceeded` |
+| `end_source` | 结束来源：`owner` / `member_flow` / `auto_close`；自动收尾任务关闭的会话固定为 `auto_close` |
+| `end_operator_user_id` | 结束操作用户 ID；自动收尾任务为 `0` |
+
+### 8.7 control topic 消息格式
 
 Topic：
 
@@ -639,7 +682,7 @@ Topic：
 | `session_id` | string | 同行会话 ID |
 | `member_user_id` | int64 | 被影响成员 user_id，仅 `member_left` / `member_kicked` 必有 |
 | `operator_user_id` | int64 | 发起操作的用户；auto-end 时可为 `0` |
-| `reason` | string | 原因，当前可能为 `member_left` / `member_kicked` / `owner_ended` / `all_members_left` / `danmaku_enabled` / `danmaku_disabled` |
+| `reason` | string | 原因，当前可能为 `member_left` / `member_kicked` / `owner_ended` / `all_members_left` / `inactive_timeout` / `max_duration_exceeded` / `danmaku_enabled` / `danmaku_disabled` |
 | `enabled` | bool | 仅 `danmaku_toggled` 携带，反映切换后的目标状态 |
 | `at` | string | 事件时间，RFC3339 |
 
@@ -653,11 +696,11 @@ Topic：
 - 若 `session_ended` 先于某些滞后 location 消息到达，以 `session_ended` 为准；
 - control 消息只做会话控制，不作为快照真值来源；冷启动真值仍来自 HTTP Snapshot。
 
-### 8.7 EMQX 推荐配置样例
+### 8.8 EMQX 推荐配置样例
 
 以下为 **推荐联调方式**，重点是说明字段映射与回调方向；具体语法可按实际 EMQX 版本微调。
 
-#### 8.7.1 HTTP AuthN
+#### 8.8.1 HTTP AuthN
 
 EMQX 在客户端 CONNECT 时回调：
 
@@ -674,7 +717,7 @@ EMQX 在客户端 CONNECT 时回调：
 }
 ```
 
-#### 8.7.2 HTTP AuthZ
+#### 8.8.2 HTTP AuthZ
 
 EMQX 在 publish / subscribe 前回调：
 
@@ -692,7 +735,7 @@ EMQX 在 publish / subscribe 前回调：
 }
 ```
 
-#### 8.7.3 Rule Engine：位置消息写回
+#### 8.8.3 Rule Engine：位置消息写回
 
 推荐从 topic：
 
@@ -721,7 +764,7 @@ EMQX 在 publish / subscribe 前回调：
 - `client_id`
 - `username`
 
-#### 8.7.4 Rule Engine：连接 / 断开事件写回
+#### 8.8.4 Rule Engine：连接 / 断开事件写回
 
 推荐监听连接生命周期事件：
 
@@ -733,7 +776,7 @@ EMQX 在 publish / subscribe 前回调：
 - URL: `POST http://<app-server>/api/v1/internal/companion/mqtt/presence-ingest`
 - Header: `X-Internal-Token: ${COMPANION_MQTT_INTERNAL_TOKEN}`
 
-#### 8.7.5 服务端 control / 弹幕 publisher
+#### 8.8.5 服务端 control / 弹幕 publisher
 
 App Server 作为一个普通 MQTT client 连接 EMQX，使用单独客户端身份：
 
@@ -747,7 +790,7 @@ App Server 作为一个普通 MQTT client 连接 EMQX，使用单独客户端身
 - 向 `companion/{session_id}/danmaku` 发布弹幕广播（默认复用 `controlPublisher`，亦可通过 `SetDanmakuPublisher` 注入独立 publisher）；
 - 不参与位置订阅与快照真值判断。
 
-### 8.8 建议的环境变量
+### 8.9 建议的环境变量
 
 - `EMQX_BROKER_URL`（服务端 publisher 自用，建议内网）
 - `EMQX_WEBSOCKET_URL`（服务端备用，建议内网）

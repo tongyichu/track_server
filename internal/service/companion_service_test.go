@@ -234,8 +234,162 @@ func TestCompanionServiceJoinAllowsCompletedTrack(t *testing.T) {
 	}
 }
 
+func TestCompanionServiceAutoCloseInactiveSession(t *testing.T) {
+	svc, repo, _ := newCompanionServiceForTest(t)
+	pub := &mockCompanionControlPublisher{}
+	svc.SetControlPublisher(pub)
+	ctx := context.Background()
+	now := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
+
+	created, err := svc.CreateSession(ctx, 1001, CreateCompanionSessionInput{Title: "忘记关闭", TrackType: "跑步"})
+	if err != nil {
+		t.Fatalf("CreateSession returned error: %v", err)
+	}
+	sessionID := created.Session.SessionID
+	session, err := repo.FindSessionByID(ctx, sessionID)
+	if err != nil {
+		t.Fatalf("FindSessionByID returned error: %v", err)
+	}
+	session.StartedAt = now.Add(-1 * time.Hour)
+	if err := repo.UpdateSession(ctx, session); err != nil {
+		t.Fatalf("UpdateSession returned error: %v", err)
+	}
+	_, err = svc.JoinSession(ctx, 1002, JoinCompanionSessionInput{JoinToken: created.Join.JoinToken})
+	if err != nil {
+		t.Fatalf("JoinSession returned error: %v", err)
+	}
+	for _, userID := range []int64{1001, 1002} {
+		member, err := repo.FindMember(ctx, sessionID, userID)
+		if err != nil {
+			t.Fatalf("FindMember(%d): %v", userID, err)
+		}
+		member.LastSeenAt = now.Add(-31 * time.Minute)
+		member.PresenceStatus = models.CompanionPresenceStatusOffline
+		if err := repo.UpsertMember(ctx, member); err != nil {
+			t.Fatalf("UpsertMember(%d): %v", userID, err)
+		}
+	}
+
+	result, err := svc.AutoCloseInactiveSessions(ctx, now)
+	if err != nil {
+		t.Fatalf("AutoCloseInactiveSessions returned error: %v", err)
+	}
+	if result.Closed != 1 {
+		t.Fatalf("expected one closed session, got %+v", result)
+	}
+	session, err = repo.FindSessionByID(ctx, sessionID)
+	if err != nil {
+		t.Fatalf("FindSessionByID returned error: %v", err)
+	}
+	if session.Status != models.CompanionSessionStatusEnded {
+		t.Fatalf("expected session ended, got %s", session.Status)
+	}
+	if session.EndReason != "inactive_timeout" || session.EndSource != models.CompanionSessionEndSourceAutoClose || session.EndOperatorUserID != 0 {
+		t.Fatalf("unexpected end audit fields: reason=%q source=%q operator=%d", session.EndReason, session.EndSource, session.EndOperatorUserID)
+	}
+	if len(pub.messages) == 0 || pub.messages[len(pub.messages)-1].event.Reason != "inactive_timeout" {
+		t.Fatalf("expected inactive_timeout event, got %+v", pub.messages)
+	}
+}
+
+func TestCompanionServiceAutoCloseUsesLatestPositionAsActivity(t *testing.T) {
+	svc, repo, _ := newCompanionServiceForTest(t)
+	ctx := context.Background()
+	now := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
+
+	created, err := svc.CreateSession(ctx, 1001, CreateCompanionSessionInput{Title: "仍在活动", TrackType: "徒步"})
+	if err != nil {
+		t.Fatalf("CreateSession returned error: %v", err)
+	}
+	sessionID := created.Session.SessionID
+	session, err := repo.FindSessionByID(ctx, sessionID)
+	if err != nil {
+		t.Fatalf("FindSessionByID returned error: %v", err)
+	}
+	session.StartedAt = now.Add(-1 * time.Hour)
+	if err := repo.UpdateSession(ctx, session); err != nil {
+		t.Fatalf("UpdateSession returned error: %v", err)
+	}
+	member, err := repo.FindMember(ctx, sessionID, 1001)
+	if err != nil {
+		t.Fatalf("FindMember returned error: %v", err)
+	}
+	member.LastSeenAt = now.Add(-2 * time.Hour)
+	member.PresenceStatus = models.CompanionPresenceStatusOffline
+	if err := repo.UpsertMember(ctx, member); err != nil {
+		t.Fatalf("UpsertMember returned error: %v", err)
+	}
+	if err := repo.UpsertPosition(ctx, &models.CompanionLivePosition{
+		SessionID:        sessionID,
+		UserID:           1001,
+		Latitude:         30,
+		Longitude:        120,
+		CoordinateSystem: "GCJ02",
+		RecordedAt:       now.Add(-10 * time.Minute),
+		CreatedAt:        now.Add(-10 * time.Minute),
+		UpdatedAt:        now.Add(-10 * time.Minute),
+	}); err != nil {
+		t.Fatalf("UpsertPosition returned error: %v", err)
+	}
+
+	result, err := svc.AutoCloseInactiveSessions(ctx, now)
+	if err != nil {
+		t.Fatalf("AutoCloseInactiveSessions returned error: %v", err)
+	}
+	if result.Closed != 0 {
+		t.Fatalf("expected no closed sessions, got %+v", result)
+	}
+}
+
+func TestCompanionServiceAutoCloseMaxDuration(t *testing.T) {
+	svc, repo, _ := newCompanionServiceForTest(t)
+	pub := &mockCompanionControlPublisher{}
+	svc.SetControlPublisher(pub)
+	ctx := context.Background()
+	now := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
+
+	created, err := svc.CreateSession(ctx, 1001, CreateCompanionSessionInput{Title: "超长同行", TrackType: "跑步"})
+	if err != nil {
+		t.Fatalf("CreateSession returned error: %v", err)
+	}
+	session, err := repo.FindSessionByID(ctx, created.Session.SessionID)
+	if err != nil {
+		t.Fatalf("FindSessionByID returned error: %v", err)
+	}
+	session.StartedAt = now.Add(-9 * time.Hour)
+	if err := repo.UpdateSession(ctx, session); err != nil {
+		t.Fatalf("UpdateSession returned error: %v", err)
+	}
+	member, err := repo.FindMember(ctx, session.SessionID, 1001)
+	if err != nil {
+		t.Fatalf("FindMember returned error: %v", err)
+	}
+	member.LastSeenAt = now
+	if err := repo.UpsertMember(ctx, member); err != nil {
+		t.Fatalf("UpsertMember returned error: %v", err)
+	}
+
+	result, err := svc.AutoCloseInactiveSessions(ctx, now)
+	if err != nil {
+		t.Fatalf("AutoCloseInactiveSessions returned error: %v", err)
+	}
+	if result.Closed != 1 {
+		t.Fatalf("expected one closed session, got %+v", result)
+	}
+	if len(pub.messages) == 0 || pub.messages[len(pub.messages)-1].event.Reason != "max_duration_exceeded" {
+		t.Fatalf("expected max_duration_exceeded event, got %+v", pub.messages)
+	}
+	session, err = repo.FindSessionByID(ctx, created.Session.SessionID)
+	if err != nil {
+		t.Fatalf("FindSessionByID returned error: %v", err)
+	}
+	if session.EndReason != "max_duration_exceeded" || session.EndSource != models.CompanionSessionEndSourceAutoClose || session.EndOperatorUserID != 0 {
+		t.Fatalf("unexpected end audit fields: reason=%q source=%q operator=%d", session.EndReason, session.EndSource, session.EndOperatorUserID)
+	}
+}
+
 func TestCompanionServiceEndPublishesSessionEnded(t *testing.T) {
-	svc, _, _ := newCompanionServiceForTest(t)
+	svc, repo, _ := newCompanionServiceForTest(t)
 	pub := &mockCompanionControlPublisher{}
 	svc.SetControlPublisher(pub)
 
@@ -253,10 +407,17 @@ func TestCompanionServiceEndPublishesSessionEnded(t *testing.T) {
 	if msg.event.Event != CompanionControlEventSessionEnded || msg.event.OperatorUserID != 1001 || msg.event.Reason != "owner_ended" {
 		t.Fatalf("unexpected session_ended event: %+v", msg.event)
 	}
+	session, err := repo.FindSessionByID(context.Background(), created.Session.SessionID)
+	if err != nil {
+		t.Fatalf("FindSessionByID returned error: %v", err)
+	}
+	if session.EndReason != "owner_ended" || session.EndSource != models.CompanionSessionEndSourceOwner || session.EndOperatorUserID != 1001 {
+		t.Fatalf("unexpected end audit fields: reason=%q source=%q operator=%d", session.EndReason, session.EndSource, session.EndOperatorUserID)
+	}
 }
 
 func TestCompanionServiceAutoEndPublishesSessionEndedAfterLastLeave(t *testing.T) {
-	svc, _, _ := newCompanionServiceForTest(t)
+	svc, repo, _ := newCompanionServiceForTest(t)
 	pub := &mockCompanionControlPublisher{}
 	svc.SetControlPublisher(pub)
 
@@ -278,6 +439,13 @@ func TestCompanionServiceAutoEndPublishesSessionEndedAfterLastLeave(t *testing.T
 	}
 	if pub.messages[1].event.At.Before(pub.messages[0].event.At.Add(-time.Second)) {
 		t.Fatalf("expected session_ended timestamp to be close to member_left timestamp")
+	}
+	session, err := repo.FindSessionByID(context.Background(), created.Session.SessionID)
+	if err != nil {
+		t.Fatalf("FindSessionByID returned error: %v", err)
+	}
+	if session.EndReason != "all_members_left" || session.EndSource != models.CompanionSessionEndSourceMemberFlow || session.EndOperatorUserID != 0 {
+		t.Fatalf("unexpected end audit fields: reason=%q source=%q operator=%d", session.EndReason, session.EndSource, session.EndOperatorUserID)
 	}
 }
 

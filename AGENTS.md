@@ -91,7 +91,7 @@ Load Config → 选择 Repository（Memory/MySQL/Mongo，失败降级为 Memory�
 → 将 OSSTokenService 作为 downloader 注入 AssetCache
 → （可选）加载 TLS 证书
 → RegisterRoutes(Hertz, Deps)
-→ （可选）SCHEDULER_ENABLED=true 时启动 Scheduler（注册 danmaku_cleanup 等任务）
+→ （可选）SCHEDULER_ENABLED=true 时启动 Scheduler（注册 danmaku_cleanup、companion_session_autoclose 等任务）
 → h.Spin()
 ```
 
@@ -103,6 +103,16 @@ track/create(is_running=false) 或 track upload/update 完成轨迹
   → AchievementRepository 幂等写入 user_achievement_rewards
   → 客户端通过 /achievement/summary 或 /achievement/rewards 拉取展示
 ```
+
+**同行自动收尾流程**：
+```
+Scheduler(companion_session_autoclose，每 10 分钟)
+  → CompanionService.AutoCloseInactiveSessions
+  → 按运动类型内置策略判断 active session 是否全员无活动 / 超过最大持续时间 / 无 joined 成员
+  → 复用同行结束逻辑更新 session、members 及 end_reason / end_source / end_operator_user_id
+  → 通过 companion control topic 广播 session_ended
+```
+同行自动收尾策略写在 `internal/service/companion_service.go` 代码常量中，不通过环境变量或启动参数配置；调整该策略时同步更新 `track_companion.md`。
 
 **典型业务调用链**：
 ```

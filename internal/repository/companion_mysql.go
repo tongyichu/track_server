@@ -29,9 +29,10 @@ func (r *MySQLCompanionRepository) CreateSession(ctx context.Context, session *m
 	session.UpdatedAt = session.CreatedAt
 	_, err := r.db.ExecContext(ctx,
 		`INSERT INTO companion_sessions (
-			session_id, owner_user_id, status, visibility, join_token,
-			title, track_type, locate_addr, max_members, danmaku_enabled, started_at, ended_at, created_at, updated_at
-		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+				session_id, owner_user_id, status, visibility, join_token,
+				title, track_type, locate_addr, max_members, danmaku_enabled, started_at, ended_at,
+				end_reason, end_source, end_operator_user_id, created_at, updated_at
+			) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		session.SessionID,
 		session.OwnerUserID,
 		session.Status,
@@ -44,6 +45,9 @@ func (r *MySQLCompanionRepository) CreateSession(ctx context.Context, session *m
 		session.DanmakuEnabled,
 		session.StartedAt,
 		nullableTimeValue(session.EndedAt),
+		session.EndReason,
+		session.EndSource,
+		session.EndOperatorUserID,
 		session.CreatedAt,
 		session.UpdatedAt,
 	)
@@ -60,7 +64,7 @@ func (r *MySQLCompanionRepository) UpdateSession(ctx context.Context, session *m
 	session.UpdatedAt = time.Now()
 	res, err := r.db.ExecContext(ctx,
 		`UPDATE companion_sessions
-		 SET owner_user_id=?, status=?, visibility=?, join_token=?, title=?, track_type=?, locate_addr=?, max_members=?, danmaku_enabled=?, started_at=?, ended_at=?, updated_at=?
+		 SET owner_user_id=?, status=?, visibility=?, join_token=?, title=?, track_type=?, locate_addr=?, max_members=?, danmaku_enabled=?, started_at=?, ended_at=?, end_reason=?, end_source=?, end_operator_user_id=?, updated_at=?
 		 WHERE session_id=?`,
 		session.OwnerUserID,
 		session.Status,
@@ -73,6 +77,9 @@ func (r *MySQLCompanionRepository) UpdateSession(ctx context.Context, session *m
 		session.DanmakuEnabled,
 		session.StartedAt,
 		nullableTimeValue(session.EndedAt),
+		session.EndReason,
+		session.EndSource,
+		session.EndOperatorUserID,
 		session.UpdatedAt,
 		session.SessionID,
 	)
@@ -493,17 +500,17 @@ func (r *MySQLCompanionRepository) DeleteDanmakusBySessionEndedBefore(ctx contex
 }
 
 func companionSessionSelectSQL() string {
-	return `SELECT companion_sessions.session_id, companion_sessions.owner_user_id, companion_sessions.status, companion_sessions.visibility, companion_sessions.join_token, companion_sessions.title, companion_sessions.track_type, companion_sessions.locate_addr, companion_sessions.max_members, companion_sessions.danmaku_enabled, companion_sessions.started_at, companion_sessions.ended_at, companion_sessions.created_at, companion_sessions.updated_at FROM companion_sessions`
+	return `SELECT companion_sessions.session_id, companion_sessions.owner_user_id, companion_sessions.status, companion_sessions.visibility, companion_sessions.join_token, companion_sessions.title, companion_sessions.track_type, companion_sessions.locate_addr, companion_sessions.max_members, companion_sessions.danmaku_enabled, companion_sessions.started_at, companion_sessions.ended_at, companion_sessions.end_reason, companion_sessions.end_source, companion_sessions.end_operator_user_id, companion_sessions.created_at, companion_sessions.updated_at FROM companion_sessions`
 }
 
-type companionSessionRowScanner interface { Scan(dest ...any) error }
+type companionSessionRowScanner interface{ Scan(dest ...any) error }
 
 func scanCompanionSession(row companionSessionRowScanner) (*models.CompanionSession, error) {
 	var (
 		item    models.CompanionSession
 		endedAt sql.NullTime
 	)
-	if err := row.Scan(&item.SessionID, &item.OwnerUserID, &item.Status, &item.Visibility, &item.JoinToken, &item.Title, &item.TrackType, &item.LocateAddr, &item.MaxMembers, &item.DanmakuEnabled, &item.StartedAt, &endedAt, &item.CreatedAt, &item.UpdatedAt); err != nil {
+	if err := row.Scan(&item.SessionID, &item.OwnerUserID, &item.Status, &item.Visibility, &item.JoinToken, &item.Title, &item.TrackType, &item.LocateAddr, &item.MaxMembers, &item.DanmakuEnabled, &item.StartedAt, &endedAt, &item.EndReason, &item.EndSource, &item.EndOperatorUserID, &item.CreatedAt, &item.UpdatedAt); err != nil {
 		return nil, err
 	}
 	if endedAt.Valid {
@@ -523,7 +530,7 @@ func scanCompanionSessionRow(row *sql.Row) (*models.CompanionSession, error) {
 	return item, nil
 }
 
-type companionMemberRowScanner interface { Scan(dest ...any) error }
+type companionMemberRowScanner interface{ Scan(dest ...any) error }
 
 func scanCompanionMember(row companionMemberRowScanner) (*models.CompanionSessionMember, error) {
 	var (
@@ -536,10 +543,18 @@ func scanCompanionMember(row companionMemberRowScanner) (*models.CompanionSessio
 	if err := row.Scan(&item.SessionID, &item.UserID, &item.Role, &item.MemberStatus, &item.PresenceStatus, &item.JoinedAt, &leftAt, &lastSeenAt, &mqttClientID, &mqttPrincipal); err != nil {
 		return nil, err
 	}
-	if leftAt.Valid { item.LeftAt = leftAt.Time }
-	if lastSeenAt.Valid { item.LastSeenAt = lastSeenAt.Time }
-	if mqttClientID.Valid { item.MQTTClientID = mqttClientID.String }
-	if mqttPrincipal.Valid { item.MQTTPrincipal = mqttPrincipal.String }
+	if leftAt.Valid {
+		item.LeftAt = leftAt.Time
+	}
+	if lastSeenAt.Valid {
+		item.LastSeenAt = lastSeenAt.Time
+	}
+	if mqttClientID.Valid {
+		item.MQTTClientID = mqttClientID.String
+	}
+	if mqttPrincipal.Valid {
+		item.MQTTPrincipal = mqttPrincipal.String
+	}
 	return &item, nil
 }
 
@@ -554,7 +569,7 @@ func scanCompanionMemberRow(row *sql.Row) (*models.CompanionSessionMember, error
 	return item, nil
 }
 
-type companionPositionRowScanner interface { Scan(dest ...any) error }
+type companionPositionRowScanner interface{ Scan(dest ...any) error }
 
 func scanCompanionPosition(row companionPositionRowScanner) (*models.CompanionLivePosition, error) {
 	var (
