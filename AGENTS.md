@@ -131,6 +131,7 @@ HTTP Request
 - 新增/修改路由：核对 `internal/handler/router.go` 是否挂载在正确的 `auth` 分组。
 - 新增 Repository 方法：`mysql.go` / `mongo.go` / `memory.go` 三实现必须同步。
 - 改动与协议相关（字段增删、登录流程、错误码、同行控制面、成就系统）：同步更新 `track_api.md`、`login.md`、`track_companion.md` 或 `track_achievement_client.md`。
+- 用户要求提交代码时，commit message 必须使用中文，并尽量详细说明：做了什么、为什么做、影响哪些模块、是否包含数据结构/协议/文档/测试变更。
 
 ---
 
