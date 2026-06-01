@@ -61,6 +61,7 @@ track_server/
 ├── go.mod / go.sum
 ├── mysql.sql               # MySQL 初始化 SQL（表结构权威之一）
 ├── track_api.md            # 业务接口文档（接口契约权威，含同行控制面 API）
+├── track_map.md            # 首页地图模式与路线发现能力方案（路线组 / 附近与城市地图查询 / 客户端交互草案）
 ├── track_companion.md      # 同行能力技术方案设计（控制面 / MQTT 数据面规划）
 ├── track_achievement.md    # 轨迹成就产品/规则方案（等级、XP、勋章、会员边界）
 ├── track_achievement_client.md # 成就系统客户端对接文档
@@ -75,7 +76,7 @@ track_server/
 | Repository 接口契约 | `internal/repository/interfaces.go` |
 | 领域模型 | `internal/models/track.go`、`internal/models/user.go`、`internal/models/achievement.go` |
 | MySQL 表结构 | `mysql.sql` |
-| 接口协议 | `track_api.md`、`login.md`、`track_companion.md`、`track_achievement_client.md` |
+| 接口协议 | `track_api.md`、`login.md`、`track_companion.md`、`track_achievement_client.md`、`track_map.md` |
 | 成就规则方案 | `track_achievement.md` |
 
 ### 稳定默认值
