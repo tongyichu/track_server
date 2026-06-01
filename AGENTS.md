@@ -78,6 +78,10 @@ track_server/
 | 接口协议 | `track_api.md`、`login.md`、`track_companion.md`、`track_achievement_client.md` |
 | 成就规则方案 | `track_achievement.md` |
 
+### 稳定默认值
+
+- 默认运动类型由 `internal/config/config.go:DefaultTrackTypeConfigs` 维护，当前为 `徒步`、`跑步`、`爬山`、`骑行`、`自驾`；`GET /api/v1/track/types`、运动类型图标元信息和成就系统类型口径应保持一致。
+
 ### 关键流程
 
 **启动流程**（`cmd/server/main.go`）：

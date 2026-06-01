@@ -202,6 +202,7 @@ func TestListTrackTypes(t *testing.T) {
 		{typeCode: "running", name: "跑步", themeColor: "#F26A4B", iconURL: "/api/v1/static/track_type_icon/running.svg"},
 		{typeCode: "climbing", name: "爬山", themeColor: "#6C4CE1", iconURL: "/api/v1/static/track_type_icon/climbing.svg"},
 		{typeCode: "riding", name: "骑行", themeColor: "#2F80ED", iconURL: "/api/v1/static/track_type_icon/riding.svg"},
+		{typeCode: "driving", name: "自驾", themeColor: "#F5A623", iconURL: "/api/v1/static/track_type_icon/driving.svg"},
 	}
 	if len(result.Data) != len(expected) {
 		t.Fatalf("expected %d track types, got %#v", len(expected), result.Data)

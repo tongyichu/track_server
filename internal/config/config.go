@@ -36,6 +36,7 @@ var DefaultTrackTypeConfigs = []TrackTypeConfig{
 	{Type: "running", Name: "跑步", ThemeColor: "#F26A4B", IconFile: "running.svg", IconAnimFile: ""},
 	{Type: "climbing", Name: "爬山", ThemeColor: "#6C4CE1", IconFile: "climbing.svg", IconAnimFile: ""},
 	{Type: "riding", Name: "骑行", ThemeColor: "#2F80ED", IconFile: "riding.svg", IconAnimFile: ""},
+	{Type: "driving", Name: "自驾", ThemeColor: "#F5A623", IconFile: "driving.svg", IconAnimFile: ""},
 }
 
 // Config holds server configuration loaded from environment variables.
@@ -55,7 +56,7 @@ type Config struct {
 	TLSKeyFile      string
 	EnableTLS       bool
 	JWTSecret       string
-	TrackTypes      []string // 客户端可选运动类型列表，默认：徒步/跑步/爬山/骑行。
+	TrackTypes      []string // 客户端可选运动类型列表，默认：徒步/跑步/爬山/骑行/自驾。
 
 	EMQXBrokerURL                    string
 	EMQXWebsocketURL                 string

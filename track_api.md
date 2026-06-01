@@ -1623,10 +1623,10 @@ X-Platform: android
 
 ### 说明
 
-- 默认返回：`徒步`、`跑步`、`爬山`、`骑行`。
-- 服务端可通过环境变量 `TRACK_TYPES` 配置运动类型，支持使用英文逗号、分号、中文逗号、顿号或竖线分隔，例如：`TRACK_TYPES=徒步,跑步,爬山,骑行,滑雪`。
+- 默认返回：`徒步`、`跑步`、`爬山`、`骑行`、`自驾`。
+- 服务端可通过环境变量 `TRACK_TYPES` 配置运动类型，支持使用英文逗号、分号、中文逗号、顿号或竖线分隔，例如：`TRACK_TYPES=徒步,跑步,爬山,骑行,自驾,滑雪`。
 - 服务端会自动过滤空项和重复项；若未配置或配置为空，则使用默认列表。
-- 每个运动类型会返回一个图标链接 `icon_url`，图标文件来自服务端静态目录 `/api/v1/static/track_type_icon/`；默认对应关系为：`徒步 -> hiking.svg`、`跑步 -> running.svg`、`爬山 -> climbing.svg`、`骑行 -> riding.svg`。
+- 每个运动类型会返回一个图标链接 `icon_url`，图标文件来自服务端静态目录 `/api/v1/static/track_type_icon/`；默认对应关系为：`徒步 -> hiking.svg`、`跑步 -> running.svg`、`爬山 -> climbing.svg`、`骑行 -> riding.svg`、`自驾 -> driving.svg`。
 - 每个运动类型会额外返回：`type`（英文标识）、`theme_color`（主题色）、`icon_anim_url`（Lottie 动画文件链接；当前默认空字符串，后续可通过配置补充）。
 - 统计数据按 `Authorization` Token 解析出的当前用户统计 `track_records`：排除删除与进行中轨迹，仅统计 `正常/私密` 轨迹。
 - 统计维度按运动类型拆分，并返回最近一个月（`month`）与最近一年（`year`）的总里程、轨迹次数、总耗时、总热量。
@@ -1744,7 +1744,7 @@ Content-Type: application/json
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | `title` | string | 否 | 会话标题，默认 `与友同行` |
-| `track_type` | string | 否 | 运动类型（徒步 / 跑步 / 爬山 / 骑行 等，与 `track_types` 接口返回的类型一致），默认空字符串 |
+| `track_type` | string | 否 | 运动类型（徒步 / 跑步 / 爬山 / 骑行 / 自驾 等，与 `track_types` 接口返回的类型一致），默认空字符串 |
 | `locate_addr` | string | 否 | 创建会话时的位置信息文本（由客户端逆地理获取），默认空字符串，最大 255 字符 |
 | `max_members` | int | 否 | 最大成员数，默认 `8`，最小 `2`，最大 `32` |
 | `visibility` | string | 否 | 可见性：`private`（默认，私密房间，必须凭 `join_token` 加入） / `public`（公开房间，可凭 `session_id` 加入，且会出现在「附近房间」列表中） |
@@ -2135,7 +2135,7 @@ Authorization: Bearer <token>
 | `data.items` | `CompanionHistoryItem[]` | 当前页记录列表，按 `started_at DESC, session_id DESC` 排序。 |
 | `data.items[].session_id` | string | 同行会话 ID。 |
 | `data.items[].title` | string | 同行标题。 |
-| `data.items[].track_type` | string | 运动类型（徒步 / 跑步 / 爬山 / 骑行 等），创建会话时传入；若未设置则为空字符串。 |
+| `data.items[].track_type` | string | 运动类型（徒步 / 跑步 / 爬山 / 骑行 / 自驾 等），创建会话时传入；若未设置则为空字符串。 |
 | `data.items[].locate_addr` | string | 创建会话时的位置信息文本（由客户端逆地理获取）；若未设置则为空字符串。 |
 | `data.items[].participant_count` | int64 | 该场同行人数：若 `status=ended`，返回参与过的人数；若 `status=active`，返回当前仍为 `joined` 的人数。 |
 | `data.items[].started_at` | string(datetime) | 同行开始时间。 |
@@ -2590,7 +2590,7 @@ Authorization: Bearer <token>
 | `data.items` | `CompanionNearbyItem[]` | 命中半径的 active 房间列表，按 `distance_m` 升序。 |
 | `data.items[].session_id` | string | 同行会话 ID。 |
 | `data.items[].title` | string | 同行标题。 |
-| `data.items[].track_type` | string | 运动类型（徒步 / 跑步 / 爬山 / 骑行 等），创建会话时传入；若未设置则为空字符串。 |
+| `data.items[].track_type` | string | 运动类型（徒步 / 跑步 / 爬山 / 骑行 / 自驾 等），创建会话时传入；若未设置则为空字符串。 |
 | `data.items[].locate_addr` | string | 创建会话时的位置文本；若未设置则为空字符串。 |
 | `data.items[].join_token` | string | 加入口令，可用于直接调用 `/companion/session/join`。 |
 | `data.items[].max_members` | int | 房间最大人数。 |
@@ -2627,10 +2627,10 @@ Authorization: Bearer <token>
 
 ### 说明
 
-- 默认返回：`徒步`、`跑步`、`爬山`、`骑行`。
-- 服务端可通过环境变量 `TRACK_TYPES` 配置运动类型，支持使用英文逗号、分号、中文逗号、顿号或竖线分隔，例如：`TRACK_TYPES=徒步,跑步,爬山,骑行,滑雪`。
+- 默认返回：`徒步`、`跑步`、`爬山`、`骑行`、`自驾`。
+- 服务端可通过环境变量 `TRACK_TYPES` 配置运动类型，支持使用英文逗号、分号、中文逗号、顿号或竖线分隔，例如：`TRACK_TYPES=徒步,跑步,爬山,骑行,自驾,滑雪`。
 - 服务端会自动过滤空项和重复项；若未配置或配置为空，则使用默认列表。
-- 每个运动类型会返回一个图标链接 `icon_url`，图标文件来自服务端静态目录 `/api/v1/static/track_type_icon/`；默认对应关系为：`徒步 -> hiking.svg`、`跑步 -> running.svg`、`爬山 -> climbing.svg`、`骑行 -> riding.svg`。
+- 每个运动类型会返回一个图标链接 `icon_url`，图标文件来自服务端静态目录 `/api/v1/static/track_type_icon/`；默认对应关系为：`徒步 -> hiking.svg`、`跑步 -> running.svg`、`爬山 -> climbing.svg`、`骑行 -> riding.svg`、`自驾 -> driving.svg`。
 - 每个运动类型会额外返回：`type`（英文标识）、`theme_color`（主题色）、`icon_anim_url`（Lottie 动画文件链接；当前默认空字符串，后续可通过配置补充）。
 - 统计数据按 `Authorization` Token 解析出的当前用户统计 `track_records`：排除删除与进行中轨迹，仅统计 `正常/私密` 轨迹。
 - 统计维度按运动类型拆分，并返回最近一个月（`month`）与最近一年（`year`）的总里程、轨迹次数、总耗时、总热量。

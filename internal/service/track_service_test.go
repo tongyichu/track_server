@@ -104,7 +104,7 @@ func TestTrackServiceListTrackTypes(t *testing.T) {
 	trackRepo, _, collectRepo, _, _, _, _ := repository.NewInMemoryRepositories()
 	svc := NewTrackService(trackRepo, collectRepo)
 
-	if got := svc.ListTrackTypes(); !slices.Equal(got, []string{"徒步", "跑步", "爬山", "骑行"}) {
+	if got := svc.ListTrackTypes(); !slices.Equal(got, []string{"徒步", "跑步", "爬山", "骑行", "自驾"}) {
 		t.Fatalf("expected default track types, got %#v", got)
 	}
 
@@ -142,8 +142,8 @@ func TestListTrackTypeOptionsWithStats(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListTrackTypeOptionsWithStats returned error: %v", err)
 	}
-	if len(items) != 4 {
-		t.Fatalf("expected 4 track types, got %#v", items)
+	if len(items) != 5 {
+		t.Fatalf("expected 5 track types, got %#v", items)
 	}
 	if items[0].Type != "hiking" || items[0].Name != "徒步" {
 		t.Fatalf("unexpected first track type: %#v", items[0])
