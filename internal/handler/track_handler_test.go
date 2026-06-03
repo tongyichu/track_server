@@ -383,6 +383,11 @@ func TestAchievementRewardsAfterCompletedTrack(t *testing.T) {
 			t.Fatalf("expected reward %s to be earned", code)
 		}
 	}
+	for _, reward := range resp.Data.Rewards {
+		if reward.Type == models.AchievementRewardTypeMilestone {
+			t.Fatalf("expected MVP rewards to exclude milestones, got %+v", reward)
+		}
+	}
 }
 
 func TestCreateTrack_InvalidTimeRange(t *testing.T) {

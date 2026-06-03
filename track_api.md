@@ -548,7 +548,7 @@ Authorization: Bearer <token>
 
 ## 30. 成就中心摘要
 
-获取当前用户成就首页数据，包括总 XP、等级、统计数据和最近获得奖励。
+获取当前用户成就首页数据，包括总 XP、等级、统计数据和最近获得的勋章奖励。当前 MVP 暂不返回里程碑奖励。
 
 ### 请求
 
@@ -588,8 +588,8 @@ Authorization: Bearer <token>
     "recent_rewards": [
       {
         "code": "first_track",
-        "type": "milestone",
-        "category": "通用",
+        "type": "badge",
+        "category": "新手",
         "name": "第一条轨迹",
         "description": "完成首条有效轨迹",
         "rarity": "common",
@@ -621,7 +621,7 @@ Authorization: Bearer <token>
 
 ## 31. 成就奖励列表
 
-获取当前用户所有 MVP 成就定义、进度和获得状态。
+获取当前用户所有 MVP 勋章定义、进度和获得状态。当前 MVP 只返回 `type=badge`，里程碑体系暂不实现。
 
 ### 请求
 
@@ -668,8 +668,8 @@ Authorization: Bearer <token>
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | `rewards[].code` | string | 成就唯一编码，客户端可用于本地图标映射 |
-| `rewards[].type` | string | `badge` 或 `milestone` |
-| `rewards[].category` | string | 成就分类，如 `跑步` / `徒步` / `爬山` / `骑行` / `自驾` / `通用` / `同行` |
+| `rewards[].type` | string | 当前 MVP 固定为 `badge`；`milestone` 为后续里程碑体系预留 |
+| `rewards[].category` | string | 成就分类，如 `新手` / `跑步` / `徒步` / `爬山` / `骑行` / `自驾` / `同行` |
 | `rewards[].rarity` | string | `common` / `rare` / `epic` / `legendary` |
 | `rewards[].target_value` | number | 达成目标值 |
 | `rewards[].current_value` | number | 当前进度值；已获得奖励会返回目标值 |

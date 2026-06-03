@@ -298,10 +298,6 @@ func achievementProgress(def models.AchievementDefinition, stats *models.UserAch
 	switch def.Code {
 	case "first_track":
 		return float64(stats.QualifiedTrackCount)
-	case "track_count_10":
-		return float64(stats.QualifiedTrackCount)
-	case "track_count_100":
-		return float64(stats.QualifiedTrackCount)
 	case "first_companion":
 		return float64(stats.CompanionCount)
 	case "run_5k", "run_10k":
@@ -367,9 +363,7 @@ var achievementLevels = []models.AchievementLevel{
 }
 
 var achievementDefinitions = []models.AchievementDefinition{
-	{Code: "first_track", Type: models.AchievementRewardTypeMilestone, Category: "通用", Name: "第一条轨迹", Description: "完成首条有效轨迹", Rarity: models.AchievementRarityCommon, TargetValue: 1},
-	{Code: "track_count_10", Type: models.AchievementRewardTypeMilestone, Category: "通用", Name: "第 10 条轨迹", Description: "累计完成 10 条有效轨迹", Rarity: models.AchievementRarityRare, TargetValue: 10},
-	{Code: "track_count_100", Type: models.AchievementRewardTypeMilestone, Category: "通用", Name: "第 100 条轨迹", Description: "累计完成 100 条有效轨迹", Rarity: models.AchievementRarityEpic, TargetValue: 100},
+	{Code: "first_track", Type: models.AchievementRewardTypeBadge, Category: "新手", Name: "第一条轨迹", Description: "完成首条有效轨迹", Rarity: models.AchievementRarityCommon, TargetValue: 1},
 	{Code: "first_companion", Type: models.AchievementRewardTypeBadge, Category: "同行", Name: "首次同行", Description: "完成首条关联同行的有效轨迹", Rarity: models.AchievementRarityCommon, TargetValue: 1},
 
 	{Code: "run_5k", Type: models.AchievementRewardTypeBadge, Category: "跑步", Name: "5K 完成", Description: "单次跑步距离达到 5km", Rarity: models.AchievementRarityCommon, TargetValue: 5},

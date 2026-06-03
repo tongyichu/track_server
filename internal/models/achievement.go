@@ -90,7 +90,7 @@ type AchievementSummary struct {
 	RecentRewards []*AchievementRewardView `json:"recent_rewards"`
 }
 
-// AchievementRewardList is the achievement center badge/milestone response.
+// AchievementRewardList is the achievement center reward response.
 type AchievementRewardList struct {
 	Stats   UserAchievementStats     `json:"stats"`
 	Rewards []*AchievementRewardView `json:"rewards"`

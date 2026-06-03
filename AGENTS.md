@@ -104,6 +104,7 @@ track/create(is_running=false) 或 track upload/update 完成轨迹
   → AchievementRepository 幂等写入 user_achievement_rewards
   → 客户端通过 /achievement/summary 或 /achievement/rewards 拉取展示
 ```
+成就系统 MVP 只实现成长等级与勋章体系；里程碑体系暂不结算、不下发 `type=milestone` 奖励。调整成就定义时同步更新 `track_achievement.md`、`track_achievement_client.md` 和 `track_api.md`。
 
 **同行自动收尾流程**：
 ```

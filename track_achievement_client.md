@@ -11,8 +11,8 @@
 1. 总 XP 与总等级。
 2. 有效轨迹统计。
 3. 跑步、徒步、爬山、骑行、自驾五类基础勋章。
-4. 通用里程碑：第一条轨迹、第 10 条轨迹、第 100 条轨迹。
-5. 同行基础奖励：首次完成关联同行的有效轨迹。
+4. 新手基础勋章：第一条轨迹。
+5. 同行基础勋章：首次完成关联同行的有效轨迹。
 6. 成就中心摘要接口。
 7. 成就奖励列表接口。
 
@@ -23,6 +23,7 @@
 3. 节日挑战。
 4. 复杂路线相似度和地点级探索。
 5. 会员专属荣誉结算。
+6. 里程碑体系；服务端一期不会下发 `type=milestone` 的奖励定义或新增记录。
 
 ## 2. 成就结算时机
 
@@ -106,8 +107,8 @@ Authorization: Bearer <token>
     "recent_rewards": [
       {
         "code": "first_track",
-        "type": "milestone",
-        "category": "通用",
+        "type": "badge",
+        "category": "新手",
         "name": "第一条轨迹",
         "description": "完成首条有效轨迹",
         "rarity": "common",
@@ -173,7 +174,7 @@ Authorization: Bearer <token>
 2. 总 XP：`stats.total_xp`。
 3. 升级进度：`stats.level_progress`。
 4. 最近获得：`recent_rewards` 前 3-5 个。
-5. 分类入口：跑步、徒步、爬山、骑行、自驾、通用、同行。
+5. 分类入口：新手、跑步、徒步、爬山、骑行、自驾、同行。
 
 ### 6.2 勋章墙
 
@@ -225,7 +226,7 @@ Authorization: Bearer <token>
 | 字段 | 说明 |
 | --- | --- |
 | `code` | 成就唯一编码，客户端可用来映射本地图标 |
-| `type` | `badge` 或 `milestone` |
+| `type` | 一期固定为 `badge`；`milestone` 为后续里程碑体系预留 |
 | `category` | 分类 |
 | `rarity` | `common` / `rare` / `epic` / `legendary` |
 | `target_value` | 目标值 |
@@ -238,9 +239,7 @@ Authorization: Bearer <token>
 
 | code | 分类 | 名称 |
 | --- | --- | --- |
-| `first_track` | 通用 | 第一条轨迹 |
-| `track_count_10` | 通用 | 第 10 条轨迹 |
-| `track_count_100` | 通用 | 第 100 条轨迹 |
+| `first_track` | 新手 | 第一条轨迹 |
 | `first_companion` | 同行 | 首次同行 |
 | `run_5k` | 跑步 | 5K 完成 |
 | `run_10k` | 跑步 | 10K 完成 |

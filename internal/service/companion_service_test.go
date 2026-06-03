@@ -263,6 +263,7 @@ func TestCompanionServiceAutoCloseInactiveSession(t *testing.T) {
 		if err != nil {
 			t.Fatalf("FindMember(%d): %v", userID, err)
 		}
+		member.JoinedAt = now.Add(-1 * time.Hour)
 		member.LastSeenAt = now.Add(-31 * time.Minute)
 		member.PresenceStatus = models.CompanionPresenceStatusOffline
 		if err := repo.UpsertMember(ctx, member); err != nil {
@@ -314,6 +315,7 @@ func TestCompanionServiceAutoCloseUsesLatestPositionAsActivity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FindMember returned error: %v", err)
 	}
+	member.JoinedAt = now.Add(-2 * time.Hour)
 	member.LastSeenAt = now.Add(-2 * time.Hour)
 	member.PresenceStatus = models.CompanionPresenceStatusOffline
 	if err := repo.UpsertMember(ctx, member); err != nil {
