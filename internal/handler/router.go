@@ -64,6 +64,8 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 
 	// public: upgrade check (客户端启动/切前台时调用，无需登录)
 	api.GET("/upgrade/check", appReleaseHandler.CheckUpgrade)
+	// public: achievement level rule H5 page for app WebView.
+	api.GET("/achievement/level-rules.html", achievementHandler.LevelRulesPage)
 	// public: app release package download.
 	// 升级检查接口本身无需登录，因此其返回的安装包 URL 也必须能被系统下载器直接访问。
 	// 只公开 static/release 子目录；轨迹截图、头像、原始轨迹文件仍在下方 auth.StaticFS 里鉴权访问。

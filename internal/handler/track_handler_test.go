@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -136,6 +137,26 @@ func decodeJSON(t *testing.T, respBody []byte, v interface{}) {
 	t.Helper()
 	if err := json.Unmarshal(respBody, v); err != nil {
 		t.Fatalf("failed to decode json: %v", err)
+	}
+}
+
+func TestAchievementLevelRulesPage_PublicHTML(t *testing.T) {
+	e := newTestEnv()
+
+	w := e.perform(http.MethodGet, "/api/v1/achievement/level-rules.html", nil)
+	resp := w.Result()
+	if resp.StatusCode() != http.StatusOK {
+		t.Fatalf("expected status 200, got %d body=%s", resp.StatusCode(), string(w.Body.Bytes()))
+	}
+	contentType := string(resp.Header.Get("Content-Type"))
+	if !strings.Contains(contentType, "text/html") {
+		t.Fatalf("expected text/html content type, got %q", contentType)
+	}
+	body := string(resp.Body())
+	for _, want := range []string{"成长等级规则", "单次 XP = 距离 XP + 时长 XP + 爬升 XP + 内容奖励 XP", "Lv.10"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("expected level rules page to contain %q", want)
+		}
 	}
 }
 

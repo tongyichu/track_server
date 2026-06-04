@@ -43,6 +43,7 @@
 | 29 | [附近 active 同行房间列表](#29-附近-active-同行房间列表) | GET | `/companion/session/nearby` | ✅ |
 | 30 | [成就中心摘要](#30-成就中心摘要) | GET | `/achievement/summary` | ✅ |
 | 31 | [成就奖励列表](#31-成就奖励列表) | GET | `/achievement/rewards` | ✅ |
+| 32 | [成长等级规则 H5](#32-成长等级规则-h5) | GET | `/achievement/level-rules.html` | ❌ |
 
 ---
 
@@ -546,6 +547,37 @@ Authorization: Bearer <token>
 
 ---
 
+## 32. 成长等级规则 H5
+
+获取成长等级计算方式说明页。该接口返回 HTML，供客户端 WebView 嵌入到“等级规则”页面中。
+
+### 请求
+
+```http
+GET /api/v1/achievement/level-rules.html
+```
+
+### 响应
+
+- `200 OK`
+- `Content-Type: text/html; charset=utf-8`
+
+页面内容包括：
+
+1. 有效轨迹口径。
+2. 单次 XP 计算公式。
+3. 不同运动类型的距离 XP 权重和单次上限。
+4. 时长、爬升、内容完整度和同行奖励 XP。
+5. Lv.1 至 Lv.10 的等级阈值。
+
+### 客户端说明
+
+- 该页面不需要登录态。
+- 客户端可直接加载：`<Base URL>/achievement/level-rules.html`。
+- 页面为服务端内置静态 HTML，不依赖外部 JS/CSS 资源。
+
+---
+
 ## 30. 成就中心摘要
 
 获取当前用户成就首页数据，包括总 XP、等级、统计数据和最近获得的勋章奖励。当前 MVP 暂不返回里程碑奖励。
@@ -686,7 +718,7 @@ Authorization: Bearer <token>
 - `404 Not Found`
   - `track_id` 对应轨迹不存在
 - `500 Internal Server Error`
-  - 服务端执行收藏失败
+  - 服务端执行成就统计或奖励查询失败
 
 ### 示例（curl）
 

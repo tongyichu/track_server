@@ -195,6 +195,21 @@ Authorization: Bearer <token>
 
 服务端 MVP 暂未在 `track/create` 响应里直接返回 `earned_rewards`，客户端通过成就摘要刷新实现。
 
+### 6.4 等级规则页
+
+客户端等级规则页面可直接嵌入服务端 H5：
+
+```text
+GET /api/v1/achievement/level-rules.html
+```
+
+说明：
+
+1. 该页面不需要登录态。
+2. 返回 `text/html; charset=utf-8`。
+3. 页面说明有效轨迹口径、XP 计算方式、各运动类型权重、单次上限和等级阈值。
+4. 页面为服务端内置静态 HTML，不依赖外部 JS/CSS 资源。
+
 ## 7. 字段说明
 
 ### 7.1 等级字段
