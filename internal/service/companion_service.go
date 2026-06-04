@@ -973,7 +973,7 @@ func (s *CompanionService) PreviewSessionByJoinToken(ctx context.Context, userID
 	snapshot.JoinToken = ""
 	snapshot.Positions = nil
 	return &CompanionSessionPreview{
-		Session:  session,
+		Session:  companionSessionForResponse(session),
 		Snapshot: snapshot,
 	}, nil
 }
@@ -1173,6 +1173,7 @@ func (s *CompanionService) ListNearbySessions(ctx context.Context, userID int64,
 				MaxMembers:  session.MaxMembers,
 				MemberCount: memberCount,
 				StartedAt:   session.StartedAt,
+				ExpiresAt:   companionSessionExpiresAt(session),
 				Anchor: &models.CompanionNearbyAnchor{
 					DistanceM:  distance,
 					RecordedAt: ownerPos.RecordedAt,
@@ -1543,12 +1544,29 @@ func (s *CompanionService) buildSessionState(ctx context.Context, session *model
 	if err != nil {
 		return nil, err
 	}
-	state := &CompanionSessionState{Session: session, Snapshot: snapshot}
+	state := &CompanionSessionState{Session: companionSessionForResponse(session), Snapshot: snapshot}
 	if includeJoin {
 		state.Join = &CompanionJoinInfo{JoinToken: session.JoinToken}
 	}
 	_ = userID
 	return state, nil
+}
+
+func companionSessionForResponse(session *models.CompanionSession) *models.CompanionSession {
+	if session == nil {
+		return nil
+	}
+	item := *session
+	item.ExpiresAt = companionSessionExpiresAt(session)
+	return &item
+}
+
+func companionSessionExpiresAt(session *models.CompanionSession) time.Time {
+	if session == nil || session.StartedAt.IsZero() {
+		return time.Time{}
+	}
+	rule := companionAutoCloseRuleForTrackType(session.TrackType)
+	return session.StartedAt.Add(rule.MaxDuration)
 }
 
 func (s *CompanionService) buildHistoryItem(ctx context.Context, session *models.CompanionSession) (*models.CompanionHistoryItem, error) {

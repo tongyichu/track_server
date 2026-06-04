@@ -75,6 +75,7 @@ type CompanionSession struct {
 	MaxMembers        int                        `json:"max_members" bson:"max_members"`
 	DanmakuEnabled    bool                       `json:"danmaku_enabled" bson:"danmaku_enabled"`
 	StartedAt         time.Time                  `json:"started_at" bson:"started_at"`
+	ExpiresAt         time.Time                  `json:"expires_at" bson:"-"`
 	EndedAt           time.Time                  `json:"ended_at,omitempty" bson:"ended_at,omitempty"`
 	EndReason         string                     `json:"end_reason,omitempty" bson:"end_reason,omitempty"`
 	EndSource         CompanionSessionEndSource  `json:"end_source,omitempty" bson:"end_source,omitempty"`
@@ -221,6 +222,7 @@ type CompanionNearbyItem struct {
 	MaxMembers  int                     `json:"max_members"`
 	MemberCount int                     `json:"member_count"`
 	StartedAt   time.Time               `json:"started_at"`
+	ExpiresAt   time.Time               `json:"expires_at"`
 	Anchor      *CompanionNearbyAnchor  `json:"anchor,omitempty"`
 	Members     []CompanionNearbyMember `json:"members"`
 }

@@ -115,6 +115,7 @@ Scheduler(companion_session_autoclose，每 10 分钟)
   → 通过 companion control topic 广播 session_ended
 ```
 同行自动收尾策略写在 `internal/service/companion_service.go` 代码常量中，不通过环境变量或启动参数配置；调整该策略时同步更新 `track_companion.md`。
+同行控制面返回的 `session.expires_at`、附近房间列表的 `expires_at` 均由 `session.started_at + 运动类型最大持续时间` 派生，不落库；调整最大持续时间或返回字段时同步更新 `track_api.md` 与 `track_companion.md`。
 
 **典型业务调用链**：
 ```

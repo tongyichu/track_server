@@ -117,6 +117,7 @@ App Server 提供以下职责：
 - `title`
 - `max_members`
 - `started_at`
+- `expires_at`（由 `started_at + track_type 对应最大持续时间` 派生，不入库，用于客户端 session 过期倒计时）
 - `ended_at`
 
 ### 5.2 CompanionSessionMember
@@ -187,7 +188,7 @@ App Server 提供以下职责：
 
 返回：
 
-- `session`（包含 `visibility`）
+- `session`（包含 `visibility` / `expires_at`）
 - `join`（包含 `join_token`）
 - `snapshot`
 
@@ -219,7 +220,7 @@ App Server 提供以下职责：
 
 返回：
 
-- `session`
+- `session`（包含 `expires_at`）
 - `snapshot`
 
 ### 6.3 预览 session（不加入）
@@ -237,6 +238,8 @@ App Server 提供以下职责：
 ### 6.4 获取当前 active session
 
 - `GET /api/v1/companion/session/current`
+
+返回当前用户已加入的 active session 及其 snapshot；`session.expires_at` 用于客户端展示 session 过期倒计时，重连后也以该字段恢复倒计时。
 
 ### 6.5 获取指定 session 快照
 
@@ -299,7 +302,7 @@ App Server 提供以下职责：
   - owner 尚未上传位置的房间无法估算距离，跳过；
   - 不暴露锚点经纬度，仅返回 `anchor.distance_m + anchor.recorded_at`，避免反向定位；
   - 不过滤已满 / 已加入的房间，由前端展示已满灰态、跳过自己已加入的房间；
-- 每条记录返回 `session_id` / `title` / `track_type` / `locate_addr` / `join_token` / `max_members` / `member_count` / `started_at` / `anchor` / `members`，`members` 中标注 `role=owner` 用于客户端展示房主。
+- 每条记录返回 `session_id` / `title` / `track_type` / `locate_addr` / `join_token` / `max_members` / `member_count` / `started_at` / `expires_at` / `anchor` / `members`，`members` 中标注 `role=owner` 用于客户端展示房主。
 
 ---
 
@@ -602,6 +605,14 @@ last_activity_at = max(member.last_seen_at, latest_position.recorded_at, member.
 | 骑行 | 30 分钟 | 24 小时 |
 | 自驾 | 60 分钟 | 72 小时 |
 | 未知类型 | 45 分钟 | 24 小时 |
+
+控制面返回的 `session.expires_at` 与附近房间列表的 `expires_at` 使用同一套最大持续时间规则计算：
+
+```text
+expires_at = session.started_at + MaxDuration(track_type)
+```
+
+`expires_at` 仅表示 session 的硬到期时间，不等同于 MQTT credentials 的 `expires_at`。
 
 自动结束会复用同行结束逻辑，更新 session / member 状态并发布 `session_ended` control 事件：
 

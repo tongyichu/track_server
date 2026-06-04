@@ -1765,6 +1765,7 @@ Content-Type: application/json
       "locate_addr": "北京市海淀区颐和园",
       "max_members": 8,
       "started_at": "2026-05-23T16:00:00Z",
+      "expires_at": "2026-05-24T08:00:00Z",
       "created_at": "2026-05-23T16:00:00Z",
       "updated_at": "2026-05-23T16:00:00Z"
     },
@@ -1779,6 +1780,14 @@ Content-Type: application/json
   }
 }
 ```
+
+### `session` 字段补充
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `session.expires_at` | string(datetime) | 同行会话硬到期时间，用于客户端展示 session 过期倒计时；由 `started_at + track_type 对应最大持续时间` 派生，不是 MQTT 凭证过期时间。 |
+
+创建、加入、预览、获取当前会话、踢出成员、弹幕开关切换等返回 `session` 的同行控制面接口均包含 `expires_at`。附近公开房间列表在每条房间记录中也返回 `expires_at`。
 
 ### 错误响应
 
@@ -1859,7 +1868,7 @@ Authorization: Bearer <token>
 
 返回：
 
-- `session`
+- `session`：包含 `expires_at`，客户端可据此展示 session 过期倒计时
 - `snapshot`：只包含当前 joined 成员资料；`positions` 与 `join_token` 不返回
 
 ### 错误响应
@@ -1875,7 +1884,7 @@ Authorization: Bearer <token>
 
 ## 19. 获取当前同行会话
 
-返回当前登录用户已加入的 active session 及其 snapshot。
+返回当前登录用户已加入的 active session 及其 snapshot；`session.expires_at` 可用于客户端重连后恢复 session 过期倒计时。
 
 **需要认证**
 
@@ -2039,6 +2048,7 @@ Authorization: Bearer <token>
       "max_members": 8,
       "danmaku_enabled": true,
       "started_at": "2026-05-23T16:00:00Z",
+      "expires_at": "2026-05-24T08:00:00Z",
       "created_at": "2026-05-23T16:00:00Z",
       "updated_at": "2026-05-23T16:00:00Z"
     },
@@ -2557,6 +2567,7 @@ Authorization: Bearer <token>
         "max_members": 8,
         "member_count": 3,
         "started_at": "2026-05-23T16:00:00Z",
+        "expires_at": "2026-05-24T08:00:00Z",
         "anchor": {
           "distance_m": 1234.56,
           "recorded_at": "2026-05-23T16:19:58Z"
@@ -2596,6 +2607,7 @@ Authorization: Bearer <token>
 | `data.items[].max_members` | int | 房间最大人数。 |
 | `data.items[].member_count` | int | 当前 `member_status=joined` 的成员数；前端可结合 `max_members` 判断是否已满。 |
 | `data.items[].started_at` | string(datetime) | 会话开始时间。 |
+| `data.items[].expires_at` | string(datetime) | 同行会话硬到期时间；由 `started_at + track_type 对应最大持续时间` 派生，用于房间卡片展示过期倒计时。 |
 | `data.items[].anchor` | object | 距离锚点信息（owner 最新位置投影后的距离 + 采样时间）；若 owner 尚未上传位置，该房间不会出现在列表中。 |
 | `data.items[].anchor.distance_m` | float | 锚点与请求位置的球面距离（米）。 |
 | `data.items[].anchor.recorded_at` | string(datetime) | 锚点对应位置的采样时间，客户端可据此评估锚点新鲜度。 |

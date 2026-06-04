@@ -26,6 +26,19 @@ func ensureTestUser(t *testing.T, e *testEnv, userID int64, nickname string) {
 	}
 }
 
+func assertCompanionSessionExpiresAfter(t *testing.T, session *models.CompanionSession, want time.Duration) {
+	t.Helper()
+	if session == nil {
+		t.Fatalf("expected session")
+	}
+	if session.ExpiresAt.IsZero() {
+		t.Fatalf("expected expires_at to be set")
+	}
+	if got := session.ExpiresAt.Sub(session.StartedAt); got != want {
+		t.Fatalf("expected expires_at-started_at %s, got %s", want, got)
+	}
+}
+
 func TestCompanionCreateAndGetCurrent(t *testing.T) {
 	e := newTestEnv()
 	ensureTestUser(t, e, 1001, "owner")
@@ -47,6 +60,7 @@ func TestCompanionCreateAndGetCurrent(t *testing.T) {
 	if created.Data.Session.OwnerUserID != 1001 {
 		t.Fatalf("expected owner 1001, got %d", created.Data.Session.OwnerUserID)
 	}
+	assertCompanionSessionExpiresAfter(t, created.Data.Session, 24*time.Hour)
 	if len(created.Data.Snapshot.Members) != 1 {
 		t.Fatalf("expected 1 member in snapshot, got %d", len(created.Data.Snapshot.Members))
 	}
@@ -63,6 +77,7 @@ func TestCompanionCreateAndGetCurrent(t *testing.T) {
 	if current.Data.Session.SessionID != created.Data.Session.SessionID {
 		t.Fatalf("expected current session_id %q, got %q", created.Data.Session.SessionID, current.Data.Session.SessionID)
 	}
+	assertCompanionSessionExpiresAfter(t, current.Data.Session, 24*time.Hour)
 }
 
 func TestCompanionPreviewByJoinTokenDoesNotJoin(t *testing.T) {
@@ -106,6 +121,7 @@ func TestCompanionPreviewByJoinTokenDoesNotJoin(t *testing.T) {
 	if preview.Data.Session.SessionID != created.Data.Session.SessionID {
 		t.Fatalf("expected session_id %q, got %q", created.Data.Session.SessionID, preview.Data.Session.SessionID)
 	}
+	assertCompanionSessionExpiresAfter(t, preview.Data.Session, 24*time.Hour)
 	if len(preview.Data.Snapshot.Members) != 1 {
 		t.Fatalf("expected owner in preview members, got %d", len(preview.Data.Snapshot.Members))
 	}
@@ -859,7 +875,7 @@ func TestCompanionListNearby(t *testing.T) {
 	ownerToken := e.generateTestToken(1001)
 	viewerToken := e.generateTestToken(1002)
 
-	w := e.perform(http.MethodPost, "/api/v1/companion/session/create", []byte(`{"title":"near room","visibility":"public"}`), authHeader(ownerToken))
+	w := e.perform(http.MethodPost, "/api/v1/companion/session/create", []byte(`{"title":"near room","visibility":"public","track_type":"跑步"}`), authHeader(ownerToken))
 	if w.Result().StatusCode() != http.StatusOK {
 		t.Fatalf("expected create status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
 	}
@@ -900,6 +916,12 @@ func TestCompanionListNearby(t *testing.T) {
 	}
 	if item.JoinToken == "" {
 		t.Fatalf("expected join_token in nearby item")
+	}
+	if item.ExpiresAt.IsZero() {
+		t.Fatalf("expected expires_at in nearby item")
+	}
+	if got := item.ExpiresAt.Sub(item.StartedAt); got != 8*time.Hour {
+		t.Fatalf("expected nearby expires_at-started_at 8h, got %s", got)
 	}
 	if item.Anchor == nil || item.Anchor.DistanceM <= 0 {
 		t.Fatalf("expected anchor with distance, got %+v", item.Anchor)
