@@ -82,6 +82,7 @@ track_server/
 ### 稳定默认值
 
 - 默认运动类型由 `internal/config/config.go:DefaultTrackTypeConfigs` 维护，当前为 `徒步`、`跑步`、`爬山`、`骑行`、`自驾`；`GET /api/v1/track/types`、运动类型图标元信息和成就系统类型口径应保持一致。
+- 轨迹 `locate_addr` 最大长度为 255 字符，对应 `track_records.locate_addr VARCHAR(255)`；修改该字段长度时同步更新 `mysql.sql`、`internal/repository/mysql.go` 与 `track_api.md`。
 
 ### 关键流程
 

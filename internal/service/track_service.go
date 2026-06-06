@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/tongyichu/track_server/internal/config"
 	"github.com/tongyichu/track_server/internal/models"
@@ -35,6 +36,7 @@ type TrackService struct {
 const (
 	defaultTrackPageSize   = 20
 	maxTrackPageSize       = 50
+	maxTrackLocateAddrLen  = 255
 	trackTypeIconURLPrefix = "/api/v1/static/track_type_icon/"
 	trackTypeAnimURLPrefix = "/api/v1/static/track_type_icon_anim/"
 )
@@ -133,7 +135,7 @@ func (in CreateTrackInput) validate() error {
 	if in.Distance != nil && *in.Distance < 0 {
 		return invalidArg("distance must be >= 0")
 	}
-	if in.LocateAddr != nil && len(*in.LocateAddr) > 128 {
+	if in.LocateAddr != nil && utf8.RuneCountInString(*in.LocateAddr) > maxTrackLocateAddrLen {
 		return invalidArg("locate_addr is too long")
 	}
 	if in.ElevationGain != nil && *in.ElevationGain < 0 {
@@ -1127,7 +1129,7 @@ func (s *TrackService) UpdateTrackInfo(ctx context.Context, userID int64, trackI
 	if patch.Distance != nil && *patch.Distance < 0 {
 		return nil, invalidArg("distance must be >= 0")
 	}
-	if patch.LocateAddr != nil && len(*patch.LocateAddr) > 128 {
+	if patch.LocateAddr != nil && utf8.RuneCountInString(*patch.LocateAddr) > maxTrackLocateAddrLen {
 		return nil, invalidArg("locate_addr is too long")
 	}
 	if patch.ElevationGain != nil && *patch.ElevationGain < 0 {

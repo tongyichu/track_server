@@ -342,6 +342,30 @@ func TestCreateTrack_InvalidTimeRange(t *testing.T) {
 	}
 }
 
+func TestCreateTrack_LocateAddrAllows255Runes(t *testing.T) {
+	trackRepo, _, collectRepo, _, _, _, _ := repository.NewInMemoryRepositories()
+	svc := NewTrackService(trackRepo, collectRepo)
+	ctx := context.Background()
+
+	locateAddr := strings.Repeat("京", 255)
+	track, err := svc.CreateTrack(ctx, 1001, CreateTrackInput{LocateAddr: &locateAddr})
+	if err != nil {
+		t.Fatalf("CreateTrack returned error: %v", err)
+	}
+	if track.LocateAddr != locateAddr {
+		t.Fatalf("expected locate_addr length %d, got %d", len([]rune(locateAddr)), len([]rune(track.LocateAddr)))
+	}
+
+	tooLong := locateAddr + "京"
+	_, err = svc.CreateTrack(ctx, 1001, CreateTrackInput{LocateAddr: &tooLong})
+	if err == nil {
+		t.Fatalf("expected locate_addr too long error")
+	}
+	if err.Error() != "locate_addr is too long" {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestUpdateTrackInfo_PartialUpdate(t *testing.T) {
 	trackRepo, _, collectRepo, _, _, _, _ := repository.NewInMemoryRepositories()
 	svc := NewTrackService(trackRepo, collectRepo)

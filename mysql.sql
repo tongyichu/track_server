@@ -18,7 +18,7 @@ CREATE TABLE `track_records` (
                                  `user_id` bigint unsigned NOT NULL COMMENT '用户ID',
                                  `session_id` varchar(64) NOT NULL DEFAULT '' COMMENT '关联的同行会话ID',
                                  `city_code` varchar(16) NOT NULL DEFAULT '' COMMENT '城市Code',
-                                 `locate_addr` varchar(128) NOT NULL DEFAULT '' COMMENT '轨迹的具体位置信息',
+                                 `locate_addr` varchar(255) NOT NULL DEFAULT '' COMMENT '轨迹的具体位置信息',
                                 `track_type` varchar(32) NOT NULL DEFAULT '' COMMENT '轨迹类型，如徒步/跑步/骑车/自驾',
                                 `coordinate_system` varchar(32) NOT NULL DEFAULT '' COMMENT '坐标系',
                                  `title` varchar(128) NOT NULL DEFAULT '' COMMENT '轨迹名称',

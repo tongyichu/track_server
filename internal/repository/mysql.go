@@ -41,7 +41,7 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 			user_id BIGINT UNSIGNED NOT NULL,
 			session_id VARCHAR(64) NOT NULL DEFAULT '' COMMENT '关联的同行会话ID',
 			city_code VARCHAR(16) NOT NULL DEFAULT '' COMMENT '城市Code',
-			locate_addr VARCHAR(128) NOT NULL DEFAULT '' COMMENT '轨迹的具体位置信息',
+			locate_addr VARCHAR(255) NOT NULL DEFAULT '' COMMENT '轨迹的具体位置信息',
 			track_type VARCHAR(32) NOT NULL DEFAULT '' COMMENT '轨迹类型',
 			coordinate_system VARCHAR(32) NOT NULL DEFAULT '' COMMENT '坐标系',
 			title VARCHAR(128) NOT NULL DEFAULT '',
@@ -388,18 +388,24 @@ func ensureMySQLTrackNoMapBgScreenshotURLColumn(ctx context.Context, db *sql.DB)
 
 func ensureMySQLTrackLocateAddrColumn(ctx context.Context, db *sql.DB) error {
 	var count int
+	var maxLength sql.NullInt64
 	err := db.QueryRowContext(ctx, `
-		SELECT COUNT(*)
+		SELECT COUNT(*), MAX(CHARACTER_MAXIMUM_LENGTH)
 		FROM information_schema.COLUMNS
 		WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'track_records' AND COLUMN_NAME = 'locate_addr'`,
-	).Scan(&count)
+	).Scan(&count, &maxLength)
 	if err != nil {
 		return fmt.Errorf("check track_records.locate_addr column: %w", err)
 	}
 	if count > 0 {
+		if maxLength.Valid && maxLength.Int64 < 255 {
+			if _, err := db.ExecContext(ctx, `ALTER TABLE track_records MODIFY COLUMN locate_addr VARCHAR(255) NOT NULL DEFAULT '' COMMENT '轨迹的具体位置信息'`); err != nil {
+				return fmt.Errorf("modify track_records.locate_addr column: %w", err)
+			}
+		}
 		return nil
 	}
-	_, err = db.ExecContext(ctx, `ALTER TABLE track_records ADD COLUMN locate_addr VARCHAR(128) NOT NULL DEFAULT '' COMMENT '轨迹的具体位置信息' AFTER city_code`)
+	_, err = db.ExecContext(ctx, `ALTER TABLE track_records ADD COLUMN locate_addr VARCHAR(255) NOT NULL DEFAULT '' COMMENT '轨迹的具体位置信息' AFTER city_code`)
 	if err != nil {
 		return fmt.Errorf("add track_records.locate_addr column: %w", err)
 	}

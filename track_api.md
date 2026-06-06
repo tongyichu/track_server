@@ -165,7 +165,7 @@ Authorization: Bearer <token>
 | `title` | string | 否 | 轨迹标题，默认 `新的轨迹` |
 | `session_id` | string | 否 | 关联的同行会话 ID；参加同行结束后上传个人轨迹时传同一个 `session_id`，用于把本次同行内多人轨迹串联起来 |
 | `city_code` | string | 否 | 城市 Code（标识轨迹所属城市） |
-| `locate_addr` | string | 否 | 轨迹的具体位置信息，最大长度 `128` |
+| `locate_addr` | string | 否 | 轨迹的具体位置信息，最大长度 `255` 字符 |
 | `track_type` | string | 否 | 轨迹类型，例如 `徒步` / `跑步` / `骑车` / `自驾` |
 | `coordinate_system` | string | 否 | 坐标系，例如 `WGS84` / `GCJ02` / `BD09` |
 | `start_time` | string | 否 | 开始时间，RFC3339/ISO8601 格式 |
@@ -1252,7 +1252,7 @@ Authorization: Bearer <token>
 |------|------|------|------|
 | `session_id` | string | 否 | 关联的同行会话 ID，仅当原值为空时才会写入；用于把同一次同行结束后各成员上传的个人轨迹串联起来 |
 | `city_code` | string | 否 | 城市 Code（仅当原值为空时才会写入） |
-| `locate_addr` | string | 否 | 轨迹的具体位置信息，最大长度 `128`（仅当原值为空时才会写入） |
+| `locate_addr` | string | 否 | 轨迹的具体位置信息，最大长度 `255` 字符（仅当原值为空时才会写入） |
 | `coordinate_system` | string | 否 | 坐标系，例如 `WGS84` / `GCJ02` / `BD09`（仅当原值为空时才会写入） |
 | `raw_track_url` | string | 否 | 原始轨迹文件 OSS 地址（仅当原值为空时才会写入） |
 | `track_screenshot_url` | string | 否 | 轨迹截图 OSS 地址（仅当原值为空时才会写入） |
