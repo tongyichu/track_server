@@ -56,9 +56,10 @@ type WechatSessionResponse struct {
 }
 
 type LoginResult struct {
-	UserID int64        `json:"user_id"`
-	User   *models.User `json:"user"`
-	Token  string       `json:"token"`
+	UserID           int64                        `json:"user_id"`
+	User             *models.User                 `json:"user"`
+	Token            string                       `json:"token"`
+	AchievementLevel *models.AchievementLevelInfo `json:"achievement_level,omitempty"`
 }
 
 const maxDefaultNicknameAttempts = 20

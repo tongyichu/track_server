@@ -39,7 +39,7 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 
 	trackHandler := NewTrackHandler(deps.TrackService)
 	userHandler := NewUserHandler(deps.UserService)
-	loginHandler := NewLoginHandler(deps.LoginService, deps.TokenBlacklist)
+	loginHandler := NewLoginHandler(deps.LoginService, deps.TokenBlacklist, deps.AchievementService)
 	ossHandler := NewOSSHandler(deps.OSSTokenService)
 	appReleaseHandler := NewAppReleaseHandler(deps.AppReleaseService)
 	companionHandler := NewCompanionHandler(deps.CompanionService, deps.CompanionMQTTInternalToken)

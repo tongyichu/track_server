@@ -149,6 +149,67 @@ func TestLoginBySMS_Success(t *testing.T) {
 	if result.Data.Token == "" {
 		t.Fatalf("expected non-empty token")
 	}
+	if result.Data.AchievementLevel == nil {
+		t.Fatalf("expected achievement_level")
+	}
+	if result.Data.AchievementLevel.TotalXP != 0 || result.Data.AchievementLevel.CurrentLevel.Level != 1 {
+		t.Fatalf("unexpected default achievement level: %+v", result.Data.AchievementLevel)
+	}
+	if result.Data.AchievementLevel.NextLevel == nil || result.Data.AchievementLevel.NextLevel.Level != 2 {
+		t.Fatalf("expected next level 2, got %+v", result.Data.AchievementLevel.NextLevel)
+	}
+}
+
+func TestLoginBySMS_ReturnsCurrentAchievementLevel(t *testing.T) {
+	e := newTestEnv()
+	phone := "13800001112"
+	code := sendSMSCodeViaService(t, e, phone)
+
+	body, _ := json.Marshal(map[string]string{"phone": phone, "code": code})
+	w := e.perform(http.MethodPost, "/api/v1/login/sms", body)
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected first login status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+	var first handler.StandardResponse[*service.LoginResult]
+	decodeJSON(t, w.Body.Bytes(), &first)
+	if first.Data == nil || first.Data.UserID <= 0 {
+		t.Fatalf("expected first login user, got %+v", first.Data)
+	}
+
+	if err := e.trackRepo.Create(context.Background(), &models.Track{
+		ID:                 "NO.achlvl1",
+		UserID:             first.Data.UserID,
+		TrackType:          "跑步",
+		Title:              "长距离跑步",
+		Distance:           25000,
+		Duration:           7200,
+		IsRunning:          false,
+		Status:             models.TrackStatusNormal,
+		RawTrackURL:        "oss://raw/run.json",
+		TrackScreenshotURL: "oss://screenshots/run.png",
+		StartTime:          time.Now().Add(-2 * time.Hour),
+		EndTime:            time.Now(),
+	}); err != nil {
+		t.Fatalf("Create track returned error: %v", err)
+	}
+
+	code = sendSMSCodeViaService(t, e, phone)
+	body, _ = json.Marshal(map[string]string{"phone": phone, "code": code})
+	w = e.perform(http.MethodPost, "/api/v1/login/sms", body)
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected second login status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+	var second handler.StandardResponse[*service.LoginResult]
+	decodeJSON(t, w.Body.Bytes(), &second)
+	if second.Data == nil || second.Data.AchievementLevel == nil {
+		t.Fatalf("expected second login achievement level, got %+v", second.Data)
+	}
+	if second.Data.AchievementLevel.TotalXP <= 300 {
+		t.Fatalf("expected total_xp above level 2 threshold, got %+v", second.Data.AchievementLevel)
+	}
+	if second.Data.AchievementLevel.CurrentLevel.Level != 2 {
+		t.Fatalf("expected current level 2, got %+v", second.Data.AchievementLevel.CurrentLevel)
+	}
 }
 
 func TestLoginBySMS_DuplicateNicknameAppendsRandomNumber(t *testing.T) {

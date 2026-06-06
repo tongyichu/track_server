@@ -334,13 +334,15 @@ Content-Type: application/json
 
 ```json
 {
-  "code": "0b1Zpa000XXXXXXXXX"
+  "phone": "13800001111",
+  "code": "123456"
 }
 ```
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `code` | string | 是 | 微信客户端 SDK 授权获得的临时 code |
+| `phone` | string | 是 | 手机号 |
+| `code` | string | 是 | 短信验证码 |
 
 ### 响应
 
@@ -361,7 +363,21 @@ Content-Type: application/json
       "created_at": "2026-04-19T10:30:00.000000Z",
       "updated_at": "2026-04-19T10:30:00.000000Z"
     },
-    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "achievement_level": {
+      "total_xp": 420,
+      "current_level": {
+        "level": 2,
+        "name": "熟悉路线",
+        "xp": 300
+      },
+      "next_level": {
+        "level": 3,
+        "name": "周末行者",
+        "xp": 1000
+      },
+      "level_progress": 0.1714
+    }
   }
 }
 ```
@@ -372,6 +388,11 @@ Content-Type: application/json
 | `data.user_id` | int64 | 用户唯一 ID |
 | `data.user` | object | 用户详情对象，结构见 [User 对象](#user-对象) |
 | `data.token` | string | JWT 认证令牌，有效期 7 天，Payload 中包含 `user_id`、`token_version`、`exp`、`iat` |
+| `data.achievement_level` | object | 当前用户等级信息；当前仅短信登录返回 |
+| `data.achievement_level.total_xp` | int64 | 当前累计 XP |
+| `data.achievement_level.current_level` | object | 当前等级 |
+| `data.achievement_level.next_level` | object/null | 下一等级；满级时为空 |
+| `data.achievement_level.level_progress` | number | 当前等级到下一等级的进度，范围 `0-1` |
 
 ### 客户端登录态维护
 

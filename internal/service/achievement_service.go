@@ -41,6 +41,22 @@ func (s *AchievementService) GetSummary(ctx context.Context, userID int64) (*mod
 	return &models.AchievementSummary{Stats: *stats, RecentRewards: recent}, nil
 }
 
+func (s *AchievementService) GetLevelInfo(ctx context.Context, userID int64) (*models.AchievementLevelInfo, error) {
+	if userID <= 0 {
+		return nil, invalidArg("userID is required")
+	}
+	stats, err := s.aggregateStats(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	return &models.AchievementLevelInfo{
+		TotalXP:       stats.TotalXP,
+		CurrentLevel:  stats.CurrentLevel,
+		NextLevel:     stats.NextLevel,
+		LevelProgress: stats.LevelProgress,
+	}, nil
+}
+
 func (s *AchievementService) ListRewards(ctx context.Context, userID int64) (*models.AchievementRewardList, error) {
 	stats, earned, err := s.buildUserState(ctx, userID)
 	if err != nil {

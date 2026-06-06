@@ -14,8 +14,9 @@ import (
 )
 
 type LoginHandler struct {
-	loginSvc   *service.LoginService
-	blacklist  *middleware.TokenBlacklist
+	loginSvc       *service.LoginService
+	achievementSvc *service.AchievementService
+	blacklist      *middleware.TokenBlacklist
 }
 
 type StandardResponse[T any] struct {
@@ -34,8 +35,8 @@ func successResponse[T any](data T) StandardResponse[T] {
 	}
 }
 
-func NewLoginHandler(loginSvc *service.LoginService, blacklist *middleware.TokenBlacklist) *LoginHandler {
-	return &LoginHandler{loginSvc: loginSvc, blacklist: blacklist}
+func NewLoginHandler(loginSvc *service.LoginService, blacklist *middleware.TokenBlacklist, achievementSvc *service.AchievementService) *LoginHandler {
+	return &LoginHandler{loginSvc: loginSvc, achievementSvc: achievementSvc, blacklist: blacklist}
 }
 
 func (h *LoginHandler) GetCaptcha(ctx context.Context, c *app.RequestContext) {
@@ -86,6 +87,14 @@ func (h *LoginHandler) LoginBySMS(ctx context.Context, c *app.RequestContext) {
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, utils.H{"error": err.Error()})
 		return
+	}
+	if h.achievementSvc != nil {
+		levelInfo, err := h.achievementSvc.GetLevelInfo(ctx, result.UserID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+			return
+		}
+		result.AchievementLevel = levelInfo
 	}
 	c.JSON(http.StatusOK, successResponse(result))
 }

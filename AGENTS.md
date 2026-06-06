@@ -107,6 +107,8 @@ track/create(is_running=false) 或 track upload/update 完成轨迹
 ```
 成就系统 MVP 只实现成长等级与勋章体系；里程碑体系暂不结算、不下发 `type=milestone` 奖励。调整成就定义时同步更新 `track_achievement.md`、`track_achievement_client.md` 和 `track_api.md`。
 
+**短信登录等级信息**：`POST /api/v1/login/sms` 成功响应会附带 `achievement_level`，由 `LoginHandler` 调用 `AchievementService.GetLevelInfo` 基于当前有效轨迹实时计算；修改登录响应或等级字段时同步更新 `login.md`。
+
 **同行自动收尾流程**：
 ```
 Scheduler(companion_session_autoclose，每 10 分钟)

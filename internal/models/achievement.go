@@ -50,6 +50,14 @@ type AchievementLevel struct {
 	XP    int64  `json:"xp"`
 }
 
+// AchievementLevelInfo is a compact level summary used by lightweight entry points.
+type AchievementLevelInfo struct {
+	TotalXP       int64             `json:"total_xp"`
+	CurrentLevel  AchievementLevel  `json:"current_level"`
+	NextLevel     *AchievementLevel `json:"next_level,omitempty"`
+	LevelProgress float64           `json:"level_progress"`
+}
+
 // UserAchievementStats is the aggregated achievement stats of a user.
 type UserAchievementStats struct {
 	TotalXP             int64                                `json:"total_xp"`
