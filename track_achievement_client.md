@@ -203,6 +203,19 @@ Authorization: Bearer <token>
 GET /api/v1/achievement/level-rules.html
 ```
 
+支持 query 参数：
+
+| 参数 | 说明 |
+| --- | --- |
+| `lang` | 页面语言；默认中文，传 `english` 时显示英文 |
+| `is_dark` | 页面色调；默认日间模式，传 `true` 时显示夜间模式 |
+
+示例：
+
+```text
+GET /api/v1/achievement/level-rules.html?lang=english&is_dark=true
+```
+
 说明：
 
 1. 该页面不需要登录态。

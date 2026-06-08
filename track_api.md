@@ -557,6 +557,13 @@ Authorization: Bearer <token>
 GET /api/v1/achievement/level-rules.html
 ```
 
+### Query 参数
+
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| `lang` | string | 否 | 中文 | 页面语言；传 `english` 时显示英文，其它值均按中文处理 |
+| `is_dark` | string | 否 | `false` | 色调；传 `true` 时使用夜间模式，其它值均按日间模式处理 |
+
 ### 响应
 
 - `200 OK`
@@ -574,6 +581,7 @@ GET /api/v1/achievement/level-rules.html
 
 - 该页面不需要登录态。
 - 客户端可直接加载：`<Base URL>/achievement/level-rules.html`。
+- 英文夜间模式示例：`<Base URL>/achievement/level-rules.html?lang=english&is_dark=true`。
 - 页面为服务端内置静态 HTML，不依赖外部 JS/CSS 资源。
 
 ---

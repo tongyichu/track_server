@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-lang="zh" data-theme="light">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -12,22 +12,35 @@
       --text: #1f2933;
       --muted: #667085;
       --line: #e5e7eb;
-      --brand: #2563eb;
-      --brand-soft: #e8f0ff;
+      --soft: #e8f0ff;
+      --soft-line: #c7d8ff;
+      --subtle: #f9fafb;
+      --accent: #1d4ed8;
       --good: #0f8a5f;
-      --warn: #b45309;
       --radius: 8px;
     }
 
-    * {
-      box-sizing: border-box;
+    html[data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #0f172a;
+      --panel: #111827;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --line: #263244;
+      --soft: #172554;
+      --soft-line: #1d4ed8;
+      --subtle: #1f2937;
+      --accent: #93c5fd;
+      --good: #6ee7b7;
     }
+
+    * { box-sizing: border-box; }
 
     body {
       margin: 0;
       background: var(--bg);
       color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Arial, sans-serif;
       font-size: 15px;
       line-height: 1.65;
     }
@@ -38,9 +51,11 @@
       padding: 20px 16px 32px;
     }
 
-    header {
-      padding: 8px 0 14px;
-    }
+    [data-lang-panel] { display: none; }
+    html[data-lang="zh"] [data-lang-panel="zh"] { display: block; }
+    html[data-lang="en"] [data-lang-panel="en"] { display: block; }
+
+    header { padding: 8px 0 14px; }
 
     h1 {
       margin: 0 0 8px;
@@ -80,23 +95,14 @@
       letter-spacing: 0;
     }
 
-    p {
-      margin: 8px 0;
-    }
-
-    ul, ol {
-      margin: 8px 0;
-      padding-left: 22px;
-    }
-
-    li {
-      margin: 4px 0;
-    }
+    p { margin: 8px 0; }
+    ul { margin: 8px 0; padding-left: 22px; }
+    li { margin: 4px 0; }
 
     .note {
-      background: var(--brand-soft);
-      border: 1px solid #c7d8ff;
-      color: #1d4ed8;
+      background: var(--soft);
+      border: 1px solid var(--soft-line);
+      color: var(--accent);
       border-radius: var(--radius);
       padding: 10px 12px;
       margin: 10px 0 0;
@@ -104,8 +110,8 @@
     }
 
     .formula {
-      background: #f9fafb;
-      border: 1px dashed #cbd5e1;
+      background: var(--subtle);
+      border: 1px dashed var(--line);
       border-radius: var(--radius);
       padding: 10px 12px;
       overflow-wrap: anywhere;
@@ -127,32 +133,15 @@
     }
 
     th {
-      color: #344054;
-      background: #f9fafb;
+      color: var(--text);
+      background: var(--subtle);
       font-weight: 700;
     }
 
-    tr:last-child td {
-      border-bottom: 0;
-    }
-
-    .pill {
-      display: inline-block;
-      padding: 1px 8px;
-      border-radius: 999px;
-      background: #eef2f7;
-      color: #344054;
-      font-size: 12px;
-      white-space: nowrap;
-    }
+    tr:last-child td { border-bottom: 0; }
 
     .positive {
       color: var(--good);
-      font-weight: 650;
-    }
-
-    .warn {
-      color: var(--warn);
       font-weight: 650;
     }
 
@@ -163,9 +152,20 @@
       padding: 10px 0 0;
     }
   </style>
+  <script>
+    (function () {
+      var params = new URLSearchParams(window.location.search);
+      var isEnglish = params.get("lang") === "english";
+      var isDark = params.get("is_dark") === "true";
+      document.documentElement.dataset.lang = isEnglish ? "en" : "zh";
+      document.documentElement.dataset.theme = isDark ? "dark" : "light";
+      document.documentElement.lang = isEnglish ? "en" : "zh-CN";
+      document.title = isEnglish ? "Level Rules" : "成长等级规则";
+    })();
+  </script>
 </head>
 <body>
-  <main class="page">
+  <main class="page" data-lang-panel="zh">
     <header>
       <h1>成长等级规则</h1>
       <p class="lead">成长等级使用累计 XP 计算。XP 来自有效轨迹，距离、时长、爬升、内容完整度和同行记录都会影响单次 XP。</p>
@@ -175,13 +175,7 @@
       <h2>1. 什么轨迹会计入等级</h2>
       <p>只有完成后的有效轨迹会计入 XP。进行中的轨迹、已删除或异常状态轨迹不会计入。</p>
       <table>
-        <thead>
-          <tr>
-            <th>类型</th>
-            <th>最短距离</th>
-            <th>最短时长</th>
-          </tr>
-        </thead>
+        <thead><tr><th>类型</th><th>最短距离</th><th>最短时长</th></tr></thead>
         <tbody>
           <tr><td>跑步</td><td>500 米</td><td>3 分钟</td></tr>
           <tr><td>徒步</td><td>500 米</td><td>5 分钟</td></tr>
@@ -196,17 +190,10 @@
     <section>
       <h2>2. 单次轨迹 XP 怎么算</h2>
       <p class="formula">单次 XP = 距离 XP + 时长 XP + 爬升 XP + 内容奖励 XP</p>
-
       <h3>距离 XP</h3>
       <p>距离是 XP 的重要来源，但不同类型采用不同权重，并且设置单次上限，避免某类运动因为距离天然更长而过度拉开等级。</p>
       <table>
-        <thead>
-          <tr>
-            <th>类型</th>
-            <th>每公里 XP</th>
-            <th>单次距离 XP 上限</th>
-          </tr>
-        </thead>
+        <thead><tr><th>类型</th><th>每公里 XP</th><th>单次距离 XP 上限</th></tr></thead>
         <tbody>
           <tr><td>跑步</td><td>15</td><td>800</td></tr>
           <tr><td>徒步</td><td>18</td><td>900</td></tr>
@@ -215,18 +202,11 @@
           <tr><td>自驾</td><td>1</td><td>600</td></tr>
         </tbody>
       </table>
-
       <h3>时长 XP</h3>
       <p>每 10 分钟获得 5 XP，单次最多 120 XP。时长用于鼓励持续完成，但不会无限叠加。</p>
-
       <h3>爬升 XP</h3>
       <table>
-        <thead>
-          <tr>
-            <th>类型</th>
-            <th>规则</th>
-          </tr>
-        </thead>
+        <thead><tr><th>类型</th><th>规则</th></tr></thead>
         <tbody>
           <tr><td>爬山</td><td>每 100 米爬升 12 XP</td></tr>
           <tr><td>骑行</td><td>每 100 米爬升 6 XP</td></tr>
@@ -234,7 +214,6 @@
           <tr><td>跑步 / 自驾</td><td>当前不额外计算爬升 XP</td></tr>
         </tbody>
       </table>
-
       <h3>内容奖励 XP</h3>
       <ul>
         <li>上传原始轨迹文件：<span class="positive">+20 XP</span></li>
@@ -246,13 +225,7 @@
     <section>
       <h2>3. 等级阈值</h2>
       <table>
-        <thead>
-          <tr>
-            <th>等级</th>
-            <th>称号</th>
-            <th>累计 XP</th>
-          </tr>
-        </thead>
+        <thead><tr><th>等级</th><th>称号</th><th>累计 XP</th></tr></thead>
         <tbody>
           <tr><td>Lv.1</td><td>初上路</td><td>0</td></tr>
           <tr><td>Lv.2</td><td>熟悉路线</td><td>300</td></tr>
@@ -281,6 +254,97 @@
     </section>
 
     <p class="footer">规则会根据产品策略和反作弊策略适度调整，以服务端当前计算结果为准。</p>
+  </main>
+
+  <main class="page" data-lang-panel="en">
+    <header>
+      <h1>Level Rules</h1>
+      <p class="lead">Your level is calculated from total XP. XP comes from valid tracks, and each track may gain XP from distance, duration, elevation, content completeness, and companion sessions.</p>
+    </header>
+
+    <section>
+      <h2>1. Tracks That Count</h2>
+      <p>Only completed valid tracks count toward XP. Running tracks, deleted tracks, and abnormal tracks are not counted.</p>
+      <table>
+        <thead><tr><th>Type</th><th>Minimum Distance</th><th>Minimum Duration</th></tr></thead>
+        <tbody>
+          <tr><td>Running</td><td>500 m</td><td>3 min</td></tr>
+          <tr><td>Hiking</td><td>500 m</td><td>5 min</td></tr>
+          <tr><td>Climbing</td><td>300 m</td><td>5 min</td></tr>
+          <tr><td>Cycling</td><td>1000 m</td><td>5 min</td></tr>
+          <tr><td>Driving</td><td>3000 m</td><td>5 min</td></tr>
+        </tbody>
+      </table>
+      <p class="note">Different thresholds reduce accidental records and reflect the natural differences between running, hiking, cycling, and driving.</p>
+    </section>
+
+    <section>
+      <h2>2. Track XP Formula</h2>
+      <p class="formula">Track XP = Distance XP + Duration XP + Elevation XP + Content Bonus XP</p>
+      <h3>Distance XP</h3>
+      <p>Distance is an important XP source. Each activity type has its own weight and per-track cap, so long-distance types do not create an unfair level advantage.</p>
+      <table>
+        <thead><tr><th>Type</th><th>XP per km</th><th>Distance XP Cap per Track</th></tr></thead>
+        <tbody>
+          <tr><td>Running</td><td>15</td><td>800</td></tr>
+          <tr><td>Hiking</td><td>18</td><td>900</td></tr>
+          <tr><td>Climbing</td><td>12</td><td>700</td></tr>
+          <tr><td>Cycling</td><td>6</td><td>1200</td></tr>
+          <tr><td>Driving</td><td>1</td><td>600</td></tr>
+        </tbody>
+      </table>
+      <h3>Duration XP</h3>
+      <p>Every 10 minutes grants 5 XP, up to 120 XP per track. Duration rewards sustained activity without unlimited stacking.</p>
+      <h3>Elevation XP</h3>
+      <table>
+        <thead><tr><th>Type</th><th>Rule</th></tr></thead>
+        <tbody>
+          <tr><td>Climbing</td><td>12 XP per 100 m elevation gain</td></tr>
+          <tr><td>Cycling</td><td>6 XP per 100 m elevation gain</td></tr>
+          <tr><td>Hiking</td><td>3 XP per 100 m elevation gain</td></tr>
+          <tr><td>Running / Driving</td><td>No extra elevation XP for now</td></tr>
+        </tbody>
+      </table>
+      <h3>Content Bonus XP</h3>
+      <ul>
+        <li>Upload raw track file: <span class="positive">+20 XP</span></li>
+        <li>Generate track screenshot or no-map screenshot: <span class="positive">+10 XP</span></li>
+        <li>Track linked to a companion session: <span class="positive">+30 XP</span></li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>3. Level Thresholds</h2>
+      <table>
+        <thead><tr><th>Level</th><th>Title</th><th>Total XP</th></tr></thead>
+        <tbody>
+          <tr><td>Lv.1</td><td>First Steps</td><td>0</td></tr>
+          <tr><td>Lv.2</td><td>Route Learner</td><td>300</td></tr>
+          <tr><td>Lv.3</td><td>Weekend Mover</td><td>1000</td></tr>
+          <tr><td>Lv.4</td><td>Route Explorer</td><td>3000</td></tr>
+          <tr><td>Lv.5</td><td>Long Route Player</td><td>8000</td></tr>
+          <tr><td>Lv.6</td><td>Trail Regular</td><td>18000</td></tr>
+          <tr><td>Lv.7</td><td>Track Expert</td><td>40000</td></tr>
+          <tr><td>Lv.8</td><td>Route Master</td><td>80000</td></tr>
+          <tr><td>Lv.9</td><td>Expeditioner</td><td>150000</td></tr>
+          <tr><td>Lv.10</td><td>Legendary Tracker</td><td>300000</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>4. Notes</h2>
+      <ul>
+        <li>Levels are based on total XP, not total distance alone.</li>
+        <li>Driving usually has longer distance, so it has lower XP per km and a per-track cap.</li>
+        <li>Running, hiking, climbing, cycling, and driving XP all contribute to the total level.</li>
+        <li>Updating a completed track may update stats, while earned badges remain idempotent and are not granted repeatedly.</li>
+        <li>Membership benefits do not directly multiply general XP, to avoid pay-to-level advantages.</li>
+      </ul>
+      <p class="note">If track data is clearly abnormal, the server may exclude it from valid tracks or achievement progress.</p>
+    </section>
+
+    <p class="footer">Rules may be adjusted for product and anti-abuse reasons. The current server calculation is authoritative.</p>
   </main>
 </body>
 </html>

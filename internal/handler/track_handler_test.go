@@ -158,6 +158,18 @@ func TestAchievementLevelRulesPage_PublicHTML(t *testing.T) {
 			t.Fatalf("expected level rules page to contain %q", want)
 		}
 	}
+
+	w = e.perform(http.MethodGet, "/api/v1/achievement/level-rules.html?lang=english&is_dark=true", nil)
+	resp = w.Result()
+	if resp.StatusCode() != http.StatusOK {
+		t.Fatalf("expected query page status 200, got %d body=%s", resp.StatusCode(), string(w.Body.Bytes()))
+	}
+	body = string(resp.Body())
+	for _, want := range []string{`params.get("lang") === "english"`, `params.get("is_dark") === "true"`, `data-lang-panel="en"`, "Level Rules"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("expected level rules page with query support to contain %q", want)
+		}
+	}
 }
 
 // TestCreateTrack_Success verifies POST /api/track/create succeeds with valid headers.
