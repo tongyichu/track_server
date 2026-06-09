@@ -44,6 +44,7 @@
 | 30 | [成就中心摘要](#30-成就中心摘要) | GET | `/achievement/summary` | ✅ |
 | 31 | [成就奖励列表](#31-成就奖励列表) | GET | `/achievement/rewards` | ✅ |
 | 32 | [成长等级规则 H5](#32-成长等级规则-h5) | GET | `/achievement/level-rules.html` | ❌ |
+| 33 | [运维刷新用户成就](#33-运维刷新用户成就) | POST | `/ops/achievement/refresh` | ❌（运维内部） |
 
 ---
 
@@ -735,6 +736,83 @@ Authorization: Bearer <token>
 curl -X POST "http://<host>:<port>/api/v1/track_collect?track_id=trk2" \
   -H "Authorization: Bearer <token>"
 ```
+
+---
+
+## 33. 运维刷新用户成就
+
+按用户手机号手动触发成就系统刷新，用于历史轨迹因 `track_type` 口径不一致等原因未写入 `user_achievement_rewards` 时，运维侧对单个用户进行幂等补齐。
+
+该接口不使用业务 JWT。服务端需配置环境变量 `OPS_INTERNAL_TOKEN`，调用方通过请求头 `X-Internal-Token` 传入相同 token；未配置时返回 `503 Service Unavailable`。
+
+### 请求
+
+```http
+POST /api/v1/ops/achievement/refresh
+Content-Type: application/json
+X-Internal-Token: <ops-internal-token>
+```
+
+### 请求体
+
+```json
+{
+  "phone": "13900002001"
+}
+```
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `phone` | string | 是 | 用户手机号，服务端会按该手机号查找用户并刷新该用户成就 |
+
+### 响应
+
+```json
+{
+  "code": 0,
+  "data": {
+    "user_id": 2001,
+    "phone": "13900002001",
+    "new_reward_count": 2,
+    "earned_reward_count": 2,
+    "qualified_track_count": 1,
+    "total_xp": 105,
+    "current_level": {"level": 1, "name": "初上路", "xp": 0},
+    "next_level": {"level": 2, "name": "熟悉路线", "xp": 300},
+    "new_rewards": [
+      {
+        "code": "first_track",
+        "type": "badge",
+        "category": "新手",
+        "name": "第一条轨迹",
+        "earned": true,
+        "current_value": 1,
+        "progress": 1
+      }
+    ]
+  }
+}
+```
+
+### 字段说明
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `new_reward_count` | int | 本次刷新新写入的奖励数量；重复调用应为 `0` |
+| `earned_reward_count` | int | 刷新后该用户已获得的奖励总数 |
+| `qualified_track_count` | int | 刷新后参与成就计算的有效轨迹数量 |
+| `total_xp` | int | 刷新后按当前规则实时计算的总 XP |
+| `new_rewards` | array | 本次新获得的奖励列表，结构与 `/achievement/rewards` 中单条奖励一致 |
+
+### 错误码
+
+| HTTP 状态码 | 场景 |
+| --- | --- |
+| `400` | 请求体非法或缺少 `phone` |
+| `401` | 缺少 `X-Internal-Token` |
+| `403` | `X-Internal-Token` 不匹配 |
+| `404` | 手机号对应用户不存在 |
+| `503` | 服务端未配置 `OPS_INTERNAL_TOKEN` |
 
 ---
 

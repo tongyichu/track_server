@@ -66,6 +66,7 @@ type Config struct {
 	CompanionMQTTCredentialTTLSecond int64
 	CompanionMQTTCredentialSecret    string
 	CompanionMQTTInternalToken       string
+	OpsInternalToken                 string
 	CompanionMQTTPublisherClientID   string
 	CompanionMQTTPublisherUsername   string
 	CompanionMQTTPublisherPassword   string
@@ -150,6 +151,7 @@ func Load() *Config {
 		CompanionMQTTCredentialTTLSecond: getEnvInt64("COMPANION_MQTT_CREDENTIAL_TTL_SECONDS", DefaultCompanionMQTTTTL),
 		CompanionMQTTCredentialSecret:    os.Getenv("COMPANION_MQTT_CREDENTIAL_SECRET"),
 		CompanionMQTTInternalToken:       os.Getenv("COMPANION_MQTT_INTERNAL_TOKEN"),
+		OpsInternalToken:                 os.Getenv("OPS_INTERNAL_TOKEN"),
 		CompanionMQTTPublisherClientID:   getEnv("COMPANION_MQTT_PUBLISHER_CLIENT_ID", "track-server-companion-publisher"),
 		CompanionMQTTPublisherUsername:   os.Getenv("COMPANION_MQTT_PUBLISHER_USERNAME"),
 		CompanionMQTTPublisherPassword:   os.Getenv("COMPANION_MQTT_PUBLISHER_PASSWORD"),

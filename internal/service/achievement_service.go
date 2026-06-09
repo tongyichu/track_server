@@ -82,18 +82,22 @@ func (s *AchievementService) SettleTrackCompleted(ctx context.Context, track *mo
 }
 
 func (s *AchievementService) SettleUserCompletedTracks(ctx context.Context, userID int64) error {
+	_, err := s.SettleUserCompletedTracksWithRewards(ctx, userID)
+	return err
+}
+
+func (s *AchievementService) SettleUserCompletedTracksWithRewards(ctx context.Context, userID int64) ([]*models.AchievementRewardView, error) {
 	if s == nil || s.rewards == nil || s.tracks == nil {
-		return nil
+		return nil, nil
 	}
 	if userID <= 0 {
-		return invalidArg("userID is required")
+		return nil, invalidArg("userID is required")
 	}
 	sourceTrack, err := s.findAnyQualifiedTrack(ctx, userID)
 	if err != nil || sourceTrack == nil {
-		return err
+		return nil, err
 	}
-	_, err = s.settleUserRewards(ctx, userID, sourceTrack)
-	return err
+	return s.settleUserRewards(ctx, userID, sourceTrack)
 }
 
 func (s *AchievementService) settleUserRewards(ctx context.Context, userID int64, sourceTrack *models.Track) ([]*models.AchievementRewardView, error) {

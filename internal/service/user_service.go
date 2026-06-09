@@ -44,6 +44,16 @@ func NewUserService(users repository.UserRepository) *UserService {
 	return &UserService{users: users}
 }
 
+func (s *UserService) FindByPhone(ctx context.Context, phone string) (*models.User, error) {
+	if s == nil || s.users == nil {
+		return nil, errors.New("user service not configured")
+	}
+	if phone == "" {
+		return nil, errors.New("phone is required")
+	}
+	return s.users.FindByPhone(ctx, phone)
+}
+
 // SetTrackRepository 设置轨迹仓储，用于用户统计信息（里程/轨迹数等）。
 func (s *UserService) SetTrackRepository(repo repository.TrackRepository) {
 	s.tracks = repo

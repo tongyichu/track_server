@@ -293,6 +293,7 @@ func main() {
 		JWTSecret:                  cfg.JWTSecret,
 		TokenBlacklist:             tokenBlacklist,
 		CompanionMQTTInternalToken: cfg.CompanionMQTTInternalToken,
+		OpsInternalToken:           cfg.OpsInternalToken,
 		StaticRoot:                 staticRoot,
 	})
 

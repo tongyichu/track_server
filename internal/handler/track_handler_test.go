@@ -90,6 +90,7 @@ func newTestEnv() *testEnv {
 		JWTSecret:                  testJWTSecret,
 		TokenBlacklist:             tokenBlacklist,
 		CompanionMQTTInternalToken: testInternalToken,
+		OpsInternalToken:           testInternalToken,
 		StaticRoot:                 staticRoot,
 	})
 
@@ -499,6 +500,80 @@ func TestAchievementRewardsLazyBackfillHistoricalEnglishType(t *testing.T) {
 		if !earned[code] {
 			t.Fatalf("expected reward %s after lazy backfill", code)
 		}
+	}
+}
+
+func TestOpsRefreshAchievementByPhone(t *testing.T) {
+	e := newTestEnv()
+	ctx := context.Background()
+	_, _ = e.userRepo.CreateIfNotExists(ctx, &models.User{ID: 2001, Phone: "13900002001", Nickname: "ops-user"})
+	if err := e.trackRepo.Create(ctx, &models.Track{
+		ID:        "trk-ops-ach-refresh",
+		UserID:    2001,
+		Title:     "历史跑步",
+		TrackType: "跑步",
+		Distance:  6000,
+		Duration:  1800,
+		StartTime: time.Now().Add(-time.Hour),
+		EndTime:   time.Now(),
+		IsRunning: false,
+		Status:    models.TrackStatusNormal,
+	}); err != nil {
+		t.Fatalf("create historical track failed: %v", err)
+	}
+	before, err := e.achievementRepo.ListUserRewards(ctx, 2001)
+	if err != nil {
+		t.Fatalf("list rewards before refresh failed: %v", err)
+	}
+	if len(before) != 0 {
+		t.Fatalf("expected no rewards before ops refresh, got %d", len(before))
+	}
+
+	body := []byte(`{"phone":"13900002001"}`)
+	w := e.perform(http.MethodPost, "/api/v1/ops/achievement/refresh", body, ut.Header{Key: "X-Internal-Token", Value: e.internalToken})
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected ops refresh status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+	var resp handler.StandardResponse[handler.OpsAchievementRefreshResult]
+	decodeJSON(t, w.Body.Bytes(), &resp)
+	if resp.Data.UserID != 2001 {
+		t.Fatalf("expected user_id 2001, got %d", resp.Data.UserID)
+	}
+	if resp.Data.NewRewardCount != 2 {
+		t.Fatalf("expected 2 new rewards, got %d data=%+v", resp.Data.NewRewardCount, resp.Data)
+	}
+	if resp.Data.EarnedRewardCount != 2 {
+		t.Fatalf("expected 2 earned rewards, got %d", resp.Data.EarnedRewardCount)
+	}
+	if resp.Data.QualifiedTrackCount != 1 {
+		t.Fatalf("expected qualified track count 1, got %d", resp.Data.QualifiedTrackCount)
+	}
+	if resp.Data.TotalXP <= 0 {
+		t.Fatalf("expected total_xp > 0, got %d", resp.Data.TotalXP)
+	}
+	after, err := e.achievementRepo.ListUserRewards(ctx, 2001)
+	if err != nil {
+		t.Fatalf("list rewards after refresh failed: %v", err)
+	}
+	if len(after) != 2 {
+		t.Fatalf("expected 2 stored rewards after refresh, got %d", len(after))
+	}
+
+	w = e.perform(http.MethodPost, "/api/v1/ops/achievement/refresh", body, ut.Header{Key: "X-Internal-Token", Value: e.internalToken})
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected second ops refresh status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+	decodeJSON(t, w.Body.Bytes(), &resp)
+	if resp.Data.NewRewardCount != 0 {
+		t.Fatalf("expected idempotent second refresh new_reward_count 0, got %d", resp.Data.NewRewardCount)
+	}
+}
+
+func TestOpsRefreshAchievementRequiresInternalToken(t *testing.T) {
+	e := newTestEnv()
+	w := e.perform(http.MethodPost, "/api/v1/ops/achievement/refresh", []byte(`{"phone":"13900002001"}`))
+	if w.Result().StatusCode() != http.StatusUnauthorized {
+		t.Fatalf("expected missing token status 401, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
 	}
 }
 
