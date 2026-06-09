@@ -135,6 +135,10 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 				locate_addr VARCHAR(255) NOT NULL DEFAULT '',
 				max_members INT NOT NULL DEFAULT 8,
 				danmaku_enabled TINYINT(1) NOT NULL DEFAULT 1,
+				total_distance DOUBLE NOT NULL DEFAULT 0 COMMENT '同行总里程，单位米',
+				total_duration BIGINT NOT NULL DEFAULT 0 COMMENT '同行总耗时，单位秒',
+				track_screenshot_url VARCHAR(255) NOT NULL DEFAULT '' COMMENT '同行轨迹截图文件在对象存储中的地址',
+				actual_participant_count BIGINT NOT NULL DEFAULT 0 COMMENT '实际参与同行人数',
 				started_at DATETIME(6) NOT NULL,
 				ended_at DATETIME(6) NULL,
 				end_reason VARCHAR(32) NOT NULL DEFAULT '',
@@ -276,6 +280,9 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 	if err := ensureMySQLCompanionSessionDanmakuEnabledColumn(ctx, db); err != nil {
+		return err
+	}
+	if err := ensureMySQLCompanionSessionStatsColumns(ctx, db); err != nil {
 		return err
 	}
 	if err := ensureMySQLCompanionSessionEndAuditColumns(ctx, db); err != nil {
@@ -668,6 +675,49 @@ func ensureMySQLCompanionSessionDanmakuEnabledColumn(ctx context.Context, db *sq
 	_, err = db.ExecContext(ctx, `ALTER TABLE companion_sessions ADD COLUMN danmaku_enabled TINYINT(1) NOT NULL DEFAULT 1 COMMENT '弹幕开关：1=开启 0=关闭' AFTER max_members`)
 	if err != nil {
 		return fmt.Errorf("add companion_sessions.danmaku_enabled column: %w", err)
+	}
+	return nil
+}
+
+func ensureMySQLCompanionSessionStatsColumns(ctx context.Context, db *sql.DB) error {
+	columns := []struct {
+		name       string
+		definition string
+	}{
+		{
+			name:       "total_distance",
+			definition: "ALTER TABLE companion_sessions ADD COLUMN total_distance DOUBLE NOT NULL DEFAULT 0 COMMENT '同行总里程，单位米' AFTER danmaku_enabled",
+		},
+		{
+			name:       "total_duration",
+			definition: "ALTER TABLE companion_sessions ADD COLUMN total_duration BIGINT NOT NULL DEFAULT 0 COMMENT '同行总耗时，单位秒' AFTER total_distance",
+		},
+		{
+			name:       "track_screenshot_url",
+			definition: "ALTER TABLE companion_sessions ADD COLUMN track_screenshot_url VARCHAR(255) NOT NULL DEFAULT '' COMMENT '同行轨迹截图文件在对象存储中的地址' AFTER total_duration",
+		},
+		{
+			name:       "actual_participant_count",
+			definition: "ALTER TABLE companion_sessions ADD COLUMN actual_participant_count BIGINT NOT NULL DEFAULT 0 COMMENT '实际参与同行人数' AFTER track_screenshot_url",
+		},
+	}
+	for _, column := range columns {
+		var count int
+		err := db.QueryRowContext(ctx, `
+			SELECT COUNT(*)
+			FROM information_schema.COLUMNS
+			WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'companion_sessions' AND COLUMN_NAME = ?`,
+			column.name,
+		).Scan(&count)
+		if err != nil {
+			return fmt.Errorf("check companion_sessions.%s column: %w", column.name, err)
+		}
+		if count > 0 {
+			continue
+		}
+		if _, err := db.ExecContext(ctx, column.definition); err != nil {
+			return fmt.Errorf("add companion_sessions.%s column: %w", column.name, err)
+		}
 	}
 	return nil
 }

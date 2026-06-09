@@ -27,19 +27,20 @@ const testInternalToken = "test_internal_token"
 
 // testEnv bundles server and in-memory dependencies for HTTP tests.
 type testEnv struct {
-	h               *server.Hertz
-	trackRepo       repository.TrackRepository
-	userRepo        repository.UserRepository
-	collectRepo     repository.CollectRepository
-	loginLogRepo    repository.LoginLogRepository
-	navigationRepo  repository.NavigationRepository
-	companionRepo   repository.CompanionRepository
-	achievementRepo repository.AchievementRepository
-	loginSvc        *service.LoginService
-	tokenBlacklist  *middleware.TokenBlacklist
-	internalToken   string
-	staticRoot      string
-	avatarCacheDir  string
+	h                  *server.Hertz
+	trackRepo          repository.TrackRepository
+	userRepo           repository.UserRepository
+	collectRepo        repository.CollectRepository
+	loginLogRepo       repository.LoginLogRepository
+	navigationRepo     repository.NavigationRepository
+	companionRepo      repository.CompanionRepository
+	achievementRepo    repository.AchievementRepository
+	loginSvc           *service.LoginService
+	tokenBlacklist     *middleware.TokenBlacklist
+	internalToken      string
+	staticRoot         string
+	avatarCacheDir     string
+	screenshotCacheDir string
 }
 
 // newTestEnv creates a fresh Hertz server wired with in-memory repositories.
@@ -79,6 +80,16 @@ func newTestEnv() *testEnv {
 		userSvc.SetAvatarCache(avatarCache)
 		companionSvc.SetAvatarCache(avatarCache)
 	}
+	screenshotCacheDir := filepath.Join(staticRoot, "screenshots")
+	screenshotCache, err := service.NewAssetCacheService(
+		screenshotCacheDir,
+		"/api/v1/static/screenshots",
+		[]string{".png", ".jpg", ".jpeg", ".webp", ".svg"},
+		".png",
+	)
+	if err == nil {
+		companionSvc.SetScreenshotCache(screenshotCache)
+	}
 
 	h := server.Default()
 	handler.RegisterRoutes(h, handler.Deps{
@@ -94,7 +105,7 @@ func newTestEnv() *testEnv {
 		StaticRoot:                 staticRoot,
 	})
 
-	return &testEnv{h: h, trackRepo: trackRepo, userRepo: userRepo, collectRepo: collectRepo, loginLogRepo: loginLogRepo, navigationRepo: navigationRepo, companionRepo: companionRepo, achievementRepo: achievementRepo, loginSvc: loginSvc, tokenBlacklist: tokenBlacklist, internalToken: testInternalToken, staticRoot: staticRoot, avatarCacheDir: avatarCacheDir}
+	return &testEnv{h: h, trackRepo: trackRepo, userRepo: userRepo, collectRepo: collectRepo, loginLogRepo: loginLogRepo, navigationRepo: navigationRepo, companionRepo: companionRepo, achievementRepo: achievementRepo, loginSvc: loginSvc, tokenBlacklist: tokenBlacklist, internalToken: testInternalToken, staticRoot: staticRoot, avatarCacheDir: avatarCacheDir, screenshotCacheDir: screenshotCacheDir}
 }
 
 func (e *testEnv) generateTestToken(userID int64) string {

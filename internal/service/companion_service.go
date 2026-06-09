@@ -98,6 +98,7 @@ type CompanionService struct {
 	tracks           repository.TrackRepository
 	mqtt             CompanionMQTTOptions
 	avatarCache      *AssetCacheService
+	screenshotCache  *AssetCacheService
 	publisher        CompanionControlPublisher
 	danmakuPublisher CompanionControlPublisher
 }
@@ -216,6 +217,14 @@ func (s *CompanionService) SetAvatarCache(cache *AssetCacheService) {
 	s.avatarCache = cache
 }
 
+// SetScreenshotCache injects screenshot cache for rewriting companion session screenshot URLs.
+func (s *CompanionService) SetScreenshotCache(cache *AssetCacheService) {
+	if s == nil {
+		return
+	}
+	s.screenshotCache = cache
+}
+
 // CreateCompanionSessionInput describes the payload to create a companion session.
 type CreateCompanionSessionInput struct {
 	Title      string `json:"title"`
@@ -233,6 +242,15 @@ type CreateCompanionSessionInput struct {
 type JoinCompanionSessionInput struct {
 	JoinToken string `json:"join_token"`
 	SessionID string `json:"session_id"`
+}
+
+// UpdateCompanionSessionStatsInput describes owner-updatable summary data after a session ends.
+type UpdateCompanionSessionStatsInput struct {
+	LocateAddr             *string  `json:"locate_addr"`
+	TotalDistance          *float64 `json:"total_distance"`
+	TotalDuration          *int64   `json:"total_duration"`
+	TrackScreenshotURL     *string  `json:"track_screenshot_url"`
+	ActualParticipantCount *int64   `json:"actual_participant_count"`
 }
 
 // CompanionJoinInfo is the owner-only invitation info returned by control plane APIs.
@@ -1165,15 +1183,19 @@ func (s *CompanionService) ListNearbySessions(ctx context.Context, userID int64,
 		})
 		candidates = append(candidates, candidate{
 			item: &models.CompanionNearbyItem{
-				SessionID:   session.SessionID,
-				Title:       session.Title,
-				TrackType:   session.TrackType,
-				LocateAddr:  session.LocateAddr,
-				JoinToken:   session.JoinToken,
-				MaxMembers:  session.MaxMembers,
-				MemberCount: memberCount,
-				StartedAt:   session.StartedAt,
-				ExpiresAt:   companionSessionExpiresAt(session),
+				SessionID:              session.SessionID,
+				Title:                  session.Title,
+				TrackType:              session.TrackType,
+				LocateAddr:             session.LocateAddr,
+				JoinToken:              session.JoinToken,
+				MaxMembers:             session.MaxMembers,
+				MemberCount:            memberCount,
+				TotalDistance:          session.TotalDistance,
+				TotalDuration:          session.TotalDuration,
+				TrackScreenshotURL:     s.rewriteCompanionScreenshotURL(ctx, userID, session),
+				ActualParticipantCount: session.ActualParticipantCount,
+				StartedAt:              session.StartedAt,
+				ExpiresAt:              companionSessionExpiresAt(session),
 				Anchor: &models.CompanionNearbyAnchor{
 					DistanceM:  distance,
 					RecordedAt: ownerPos.RecordedAt,
@@ -1353,6 +1375,70 @@ func (s *CompanionService) EndSession(ctx context.Context, operatorUserID int64,
 		return err
 	}
 	return s.endSessionInternal(ctx, session, operatorUserID)
+}
+
+// UpdateSessionStats updates owner-provided summary data after a companion session ends.
+func (s *CompanionService) UpdateSessionStats(ctx context.Context, ownerUserID int64, sessionID string, in UpdateCompanionSessionStatsInput) (*models.CompanionSession, error) {
+	if s == nil || s.repo == nil {
+		return nil, errors.New("companion service not configured")
+	}
+	if ownerUserID <= 0 {
+		return nil, invalidArg("user_id is required")
+	}
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return nil, invalidArg("session_id is required")
+	}
+	if in.LocateAddr == nil && in.TotalDistance == nil && in.TotalDuration == nil && in.TrackScreenshotURL == nil && in.ActualParticipantCount == nil {
+		return nil, invalidArg("nothing to update")
+	}
+	session, err := s.repo.FindSessionByID(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	if session.OwnerUserID != ownerUserID {
+		return nil, repository.ErrForbidden
+	}
+	if session.Status != models.CompanionSessionStatusEnded {
+		return nil, invalidArg("companion session is not ended")
+	}
+	if in.LocateAddr != nil {
+		session.LocateAddr = strings.TrimSpace(*in.LocateAddr)
+	}
+	if in.TotalDistance != nil {
+		if *in.TotalDistance < 0 {
+			return nil, invalidArg("total_distance must be >= 0")
+		}
+		session.TotalDistance = *in.TotalDistance
+	}
+	if in.TotalDuration != nil {
+		if *in.TotalDuration < 0 {
+			return nil, invalidArg("total_duration must be >= 0")
+		}
+		session.TotalDuration = *in.TotalDuration
+	}
+	if in.TrackScreenshotURL != nil {
+		src := strings.TrimSpace(*in.TrackScreenshotURL)
+		session.TrackScreenshotURL = src
+		if s.screenshotCache != nil && src != "" {
+			key := companionScreenshotCacheKey(session.SessionID)
+			if err := s.screenshotCache.RemoveTempCached(key); err != nil {
+				log.Printf("remove temp companion screenshot cache failed: session=%s err=%v", session.SessionID, err)
+			}
+			s.screenshotCache.PrefetchAsync(ownerUserID, key, src)
+			session.TrackScreenshotURL = s.screenshotCache.GuessLocalURL(key, src)
+		}
+	}
+	if in.ActualParticipantCount != nil {
+		if *in.ActualParticipantCount < 0 {
+			return nil, invalidArg("actual_participant_count must be >= 0")
+		}
+		session.ActualParticipantCount = *in.ActualParticipantCount
+	}
+	if err := s.repo.UpdateSession(ctx, session); err != nil {
+		return nil, err
+	}
+	return companionSessionForResponse(session), nil
 }
 
 // AutoCloseInactiveSessions ends active sessions that have no recent member activity
@@ -1569,6 +1655,27 @@ func companionSessionExpiresAt(session *models.CompanionSession) time.Time {
 	return session.StartedAt.Add(rule.MaxDuration)
 }
 
+func companionScreenshotCacheKey(sessionID string) string {
+	return "companion_" + strings.TrimSpace(sessionID)
+}
+
+func (s *CompanionService) rewriteCompanionScreenshotURL(ctx context.Context, userID int64, session *models.CompanionSession) string {
+	if session == nil || strings.TrimSpace(session.TrackScreenshotURL) == "" {
+		return ""
+	}
+	src := strings.TrimSpace(session.TrackScreenshotURL)
+	if strings.HasPrefix(src, "/api/v1/static/") || s.screenshotCache == nil {
+		return src
+	}
+	key := companionScreenshotCacheKey(session.SessionID)
+	cacheCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if local := s.screenshotCache.EnsureCached(cacheCtx, userID, key, src); local != "" {
+		return local
+	}
+	return s.screenshotCache.GuessLocalURL(key, src)
+}
+
 func (s *CompanionService) buildHistoryItem(ctx context.Context, session *models.CompanionSession) (*models.CompanionHistoryItem, error) {
 	if session == nil {
 		return nil, repository.ErrNotFound
@@ -1621,15 +1728,19 @@ func (s *CompanionService) buildHistoryItem(ctx context.Context, session *models
 		durationSeconds = int64(endAt.Sub(clone.StartedAt) / time.Second)
 	}
 	item := &models.CompanionHistoryItem{
-		SessionID:        clone.SessionID,
-		Title:            clone.Title,
-		TrackType:        clone.TrackType,
-		LocateAddr:       clone.LocateAddr,
-		ParticipantCount: participantCount,
-		StartedAt:        clone.StartedAt,
-		DurationSeconds:  durationSeconds,
-		Status:           clone.Status,
-		Participants:     participants,
+		SessionID:              clone.SessionID,
+		Title:                  clone.Title,
+		TrackType:              clone.TrackType,
+		LocateAddr:             clone.LocateAddr,
+		ParticipantCount:       participantCount,
+		StartedAt:              clone.StartedAt,
+		DurationSeconds:        durationSeconds,
+		TotalDistance:          clone.TotalDistance,
+		TotalDuration:          clone.TotalDuration,
+		TrackScreenshotURL:     s.rewriteCompanionScreenshotURL(ctx, clone.OwnerUserID, &clone),
+		ActualParticipantCount: clone.ActualParticipantCount,
+		Status:                 clone.Status,
+		Participants:           participants,
 	}
 	if clone.Status == models.CompanionSessionStatusActive {
 		item.JoinToken = clone.JoinToken

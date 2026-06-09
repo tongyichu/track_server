@@ -34,6 +34,7 @@
 | 21 | [离开同行会话](#21-离开同行会话) | POST | `/companion/session/:session_id/leave` | ✅ |
 | 22 | [结束同行会话](#22-结束同行会话) | POST | `/companion/session/:session_id/end` | ✅ |
 | 22.1 | [踢出同行成员](#221-踢出同行成员) | POST | `/companion/session/:session_id/members/:user_id/kick` | ✅ |
+| 22.2 | [更新已结束同行摘要](#222-更新已结束同行摘要owner) | PUT | `/companion/session/:session_id/update` | ✅ |
 | 23 | [当前用户参与过的同行记录列表](#23-当前用户参与过的同行记录列表) | GET | `/companion/session/history` | ✅ |
 | 24 | [获取同行 MQTT 凭证](#24-获取同行-mqtt-凭证) | POST | `/companion/session/:session_id/mqtt/credentials` | ✅ |
 | 25 | [EMQX HTTP AuthN 回调](#25-emqx-http-authn-回调) | POST | `/internal/mqtt/auth` | ❌（内部） |
@@ -2201,6 +2202,75 @@ Authorization: Bearer <token>
 
 ---
 
+## 22.2 更新已结束同行摘要（owner）
+
+owner 在同行结束后补写本次同行的汇总数据。该接口只允许 session owner 调用，且仅允许更新 `status=ended` 的会话。
+
+**需要认证**
+
+### 请求
+
+```http
+PUT /api/v1/companion/session/:session_id/update
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+请求体至少携带一个字段：
+
+```json
+{
+  "locate_addr": "北京市海淀区颐和园",
+  "total_distance": 12345.6,
+  "total_duration": 3661,
+  "track_screenshot_url": "https://<bucket>.oss-<region>.aliyuncs.com/prod/companion/.../xxx.png",
+  "actual_participant_count": 2
+}
+```
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `locate_addr` | string | 否 | 本次同行地点文本，类似 `track_records.locate_addr`。 |
+| `total_distance` | number | 否 | 本次同行总里程，单位米，必须 `>= 0`。 |
+| `total_duration` | int64 | 否 | 本次同行总耗时，单位秒，必须 `>= 0`。 |
+| `track_screenshot_url` | string | 否 | 本次同行轨迹截图 OSS 地址；响应会改写为服务端本地静态下载链接。 |
+| `actual_participant_count` | int64 | 否 | 本次实际参与同行的成员人数，必须 `>= 0`。 |
+
+### 成功响应
+
+返回更新后的 `CompanionSession`：
+
+```json
+{
+  "code": 0,
+  "data": {
+    "session_id": "sess_xxx",
+    "owner_user_id": 1001,
+    "status": "ended",
+    "locate_addr": "北京市海淀区颐和园",
+    "total_distance": 12345.6,
+    "total_duration": 3661,
+    "track_screenshot_url": "/api/v1/static/screenshots/companion_sess_xxx.png",
+    "actual_participant_count": 2
+  }
+}
+```
+
+### 错误响应
+
+- `400 Bad Request`
+  - `nothing to update`
+  - `total_distance must be >= 0`
+  - `total_duration must be >= 0`
+  - `actual_participant_count must be >= 0`
+  - `companion session is not ended`
+- `403 Forbidden`
+  - 当前用户不是 owner
+- `404 Not Found`
+  - session 不存在
+
+---
+
 ## 23. 当前用户参与过的同行记录列表
 
 返回当前登录用户参与过的同行记录列表，支持分页。
@@ -2236,6 +2306,10 @@ Authorization: Bearer <token>
         "participant_count": 3,
         "started_at": "2026-05-23T16:00:00Z",
         "duration_seconds": 7200,
+        "total_distance": 12345.6,
+        "total_duration": 3661,
+        "track_screenshot_url": "/api/v1/static/screenshots/companion_sess_xxx.png",
+        "actual_participant_count": 2,
         "status": "active",
         "join_token": "ab12cd34",
         "participants": [
@@ -2267,10 +2341,14 @@ Authorization: Bearer <token>
 | `data.items[].session_id` | string | 同行会话 ID。 |
 | `data.items[].title` | string | 同行标题。 |
 | `data.items[].track_type` | string | 运动类型 code（`hiking` / `running` / `climbing` / `riding` / `driving` 等），创建会话时传入；若未设置则为空字符串。 |
-| `data.items[].locate_addr` | string | 创建会话时的位置信息文本（由客户端逆地理获取）；若未设置则为空字符串。 |
+| `data.items[].locate_addr` | string | 同行地点文本；创建会话时可传入，owner 也可在结束后通过更新接口补写。 |
 | `data.items[].participant_count` | int64 | 该场同行人数：若 `status=ended`，返回参与过的人数；若 `status=active`，返回当前仍为 `joined` 的人数。 |
 | `data.items[].started_at` | string(datetime) | 同行开始时间。 |
 | `data.items[].duration_seconds` | int64 | 同行总耗时（秒）：`status=ended` 取 `ended_at - started_at`；`status=active` 取 `now - started_at`。 |
+| `data.items[].total_distance` | number | owner 通过更新接口补写的本次同行总里程，单位米；未补写时为 `0`。 |
+| `data.items[].total_duration` | int64 | owner 通过更新接口补写的本次同行总耗时，单位秒；未补写时为 `0`。 |
+| `data.items[].track_screenshot_url` | string | owner 通过更新接口补写的轨迹截图，返回服务端本地静态下载链接 `/api/v1/static/screenshots/...`；未补写时为空字符串。 |
+| `data.items[].actual_participant_count` | int64 | owner 通过更新接口补写的实际参与同行人数；未补写时为 `0`。 |
 | `data.items[].status` | string | 同行状态：`active` / `ended`。 |
 | `data.items[].join_token` | string | 加入口令；仅 `status=active` 时返回，可用于邀请他人加入；`ended` 时不返回此字段。 |
 | `data.items[].participants` | `CompanionHistoryParticipant[]` | 人员列表口径与 `participant_count` 一致：若 `status=ended` 返回参与过的人员；若 `status=active` 返回当前仍为 `joined` 的人员。 |
@@ -2687,6 +2765,10 @@ Authorization: Bearer <token>
         "join_token": "ab12cd34",
         "max_members": 8,
         "member_count": 3,
+        "total_distance": 0,
+        "total_duration": 0,
+        "track_screenshot_url": "",
+        "actual_participant_count": 0,
         "started_at": "2026-05-23T16:00:00Z",
         "expires_at": "2026-05-24T08:00:00Z",
         "anchor": {
@@ -2723,10 +2805,14 @@ Authorization: Bearer <token>
 | `data.items[].session_id` | string | 同行会话 ID。 |
 | `data.items[].title` | string | 同行标题。 |
 | `data.items[].track_type` | string | 运动类型 code（`hiking` / `running` / `climbing` / `riding` / `driving` 等），创建会话时传入；若未设置则为空字符串。 |
-| `data.items[].locate_addr` | string | 创建会话时的位置文本；若未设置则为空字符串。 |
+| `data.items[].locate_addr` | string | 同行地点文本；创建会话时可传入，owner 也可在结束后通过更新接口补写。 |
 | `data.items[].join_token` | string | 加入口令，可用于直接调用 `/companion/session/join`。 |
 | `data.items[].max_members` | int | 房间最大人数。 |
 | `data.items[].member_count` | int | 当前 `member_status=joined` 的成员数；前端可结合 `max_members` 判断是否已满。 |
+| `data.items[].total_distance` | number | 本次同行总里程，单位米；通常由 owner 在会话结束后补写，active 房间未补写时为 `0`。 |
+| `data.items[].total_duration` | int64 | 本次同行总耗时，单位秒；通常由 owner 在会话结束后补写，active 房间未补写时为 `0`。 |
+| `data.items[].track_screenshot_url` | string | 本次同行轨迹截图，返回服务端本地静态下载链接 `/api/v1/static/screenshots/...`；未补写时为空字符串。 |
+| `data.items[].actual_participant_count` | int64 | 本次实际参与同行人数；通常由 owner 在会话结束后补写，未补写时为 `0`。 |
 | `data.items[].started_at` | string(datetime) | 会话开始时间。 |
 | `data.items[].expires_at` | string(datetime) | 同行会话硬到期时间；由 `started_at + track_type 对应最大持续时间` 派生，用于房间卡片展示过期倒计时。 |
 | `data.items[].anchor` | object | 距离锚点信息（owner 最新位置投影后的距离 + 采样时间）；若 owner 尚未上传位置，该房间不会出现在列表中。 |

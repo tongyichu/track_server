@@ -122,6 +122,8 @@ Scheduler(companion_session_autoclose，每 10 分钟)
 同行自动收尾策略写在 `internal/service/companion_service.go` 代码常量中，不通过环境变量或启动参数配置；调整该策略时同步更新 `track_companion.md`。
 同行控制面返回的 `session.expires_at`、附近房间列表的 `expires_at` 均由 `session.started_at + 运动类型最大持续时间` 派生，不落库；调整最大持续时间或返回字段时同步更新 `track_api.md` 与 `track_companion.md`。
 
+**同行结束摘要更新**：owner 可在同行结束后调用 `PUT /api/v1/companion/session/:session_id/update` 补写 `locate_addr`、`total_distance`、`total_duration`、`track_screenshot_url`、`actual_participant_count`；该接口只允许 owner 操作 `status=ended` 的 session。`companion/session/history` 与 `companion/session/nearby` 都返回这些字段，其中截图响应应通过截图资源缓存改写为 `/api/v1/static/screenshots/...`。
+
 **典型业务调用链**：
 ```
 HTTP Request
@@ -131,7 +133,7 @@ HTTP Request
   → repository.<Xxx>Repository（数据持久化）
 ```
 
-**资源缓存与静态发布包**：客户端经 OSS 直传（头像 / 轨迹截图 / 原始轨迹文件），列表/详情接口返回时由 `AssetCacheService` 按需从 OSS 拉回本地 `<LogDir>/static/<category>/`，对外走 `GET /api/v1/static/<category>/<file>`（需登录）。管理后台上传的 App 发布包直接写入 `<LogDir>/static/release/<platform>/`，对外走公开的 `GET /api/v1/static/release/<platform>/<file>`，供升级下载使用。
+**资源缓存与静态发布包**：客户端经 OSS 直传（头像 / 轨迹截图 / 同行轨迹截图 / 原始轨迹文件），列表/详情/同行历史/附近房间接口返回时由 `AssetCacheService` 按需从 OSS 拉回本地 `<LogDir>/static/<category>/`，对外走 `GET /api/v1/static/<category>/<file>`（需登录）。管理后台上传的 App 发布包直接写入 `<LogDir>/static/release/<platform>/`，对外走公开的 `GET /api/v1/static/release/<platform>/<file>`，供升级下载使用。
 
 **内置 H5 页面**：客户端等级规则页使用公开路由 `GET /api/v1/achievement/level-rules.html`，HTML 文件内置在 `internal/handler/static/achievement_level_rules.html` 并通过 `go:embed` 打包；页面支持 `lang=english` 切英文、`is_dark=true` 切夜间模式。修改等级 XP 规则、等级阈值、语言或主题参数时，同步更新该页面、`track_achievement_client.md` 和 `track_api.md`。
 

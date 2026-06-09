@@ -253,7 +253,19 @@ App Server 提供以下职责：
 
 - `POST /api/v1/companion/session/:session_id/end`
 
-### 6.8 owner 踢出成员
+### 6.8 owner 更新已结束同行摘要
+
+- `PUT /api/v1/companion/session/:session_id/update`
+
+规则：
+
+- 必须登录；
+- 仅 session owner 可调用；
+- 仅 `status=ended` 的 session 可更新；
+- 可补写 `locate_addr`（同行地点文本）、`total_distance`（米）、`total_duration`（秒）、`track_screenshot_url`（OSS 截图地址）、`actual_participant_count`（实际参与人数）；
+- `companion/session/history` 和 `companion/session/nearby` 都返回这些字段，其中截图会改写为服务端 `/api/v1/static/screenshots/...` 下载链接。
+
+### 6.9 owner 踢出成员
 
 - `POST /api/v1/companion/session/:session_id/members/:user_id/kick`
 
@@ -267,7 +279,7 @@ App Server 提供以下职责：
 - 被踢成员的 `member_status` 变为 `kicked`，`presence_status` 变为 `offline`，并从 snapshot 成员与位置集合中移除；
 - 服务端通过 `companion/{session_id}/control` 广播 `member_kicked` 事件。
 
-### 6.9 同行结束后的个人轨迹上传
+### 6.10 同行结束后的个人轨迹上传
 
 同行结束后，每个成员仍通过普通轨迹接口上传自己的完整轨迹：
 
@@ -289,7 +301,7 @@ App Server 提供以下职责：
 - `track/create` 可在创建轨迹时直接写入 `session_id`；
 - `/track/:track_id/update` 可在轨迹创建后补写 `session_id`，但与其它补全字段一致，仅当原值为空时写入。
 
-### 6.10 附近 active 房间列表
+### 6.11 附近 active 房间列表
 
 - `GET /api/v1/companion/session/nearby`
 
@@ -302,7 +314,7 @@ App Server 提供以下职责：
   - owner 尚未上传位置的房间无法估算距离，跳过；
   - 不暴露锚点经纬度，仅返回 `anchor.distance_m + anchor.recorded_at`，避免反向定位；
   - 不过滤已满 / 已加入的房间，由前端展示已满灰态、跳过自己已加入的房间；
-- 每条记录返回 `session_id` / `title` / `track_type` / `locate_addr` / `join_token` / `max_members` / `member_count` / `started_at` / `expires_at` / `anchor` / `members`，`members` 中标注 `role=owner` 用于客户端展示房主。
+- 每条记录返回 `session_id` / `title` / `track_type` / `locate_addr` / `join_token` / `max_members` / `member_count` / `total_distance` / `total_duration` / `track_screenshot_url` / `actual_participant_count` / `started_at` / `expires_at` / `anchor` / `members`，`members` 中标注 `role=owner` 用于客户端展示房主。
 
 ---
 

@@ -195,6 +195,30 @@ func (h *CompanionHandler) EndSession(ctx context.Context, c *app.RequestContext
 	c.JSON(http.StatusOK, successResponse(StatusResult{Status: "ok"}))
 }
 
+// UpdateSessionStats handles PUT /api/v1/companion/session/:session_id/update.
+func (h *CompanionHandler) UpdateSessionStats(ctx context.Context, c *app.RequestContext) {
+	userID, ok := h.authUserID(c)
+	if !ok {
+		return
+	}
+	var req service.UpdateCompanionSessionStatsInput
+	body := c.Request.Body()
+	if len(bytes.TrimSpace(body)) == 0 {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid payload"})
+		return
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid payload"})
+		return
+	}
+	session, err := h.svc.UpdateSessionStats(ctx, userID, c.Param("session_id"), req)
+	if err != nil {
+		h.writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, successResponse(session))
+}
+
 // KickSessionMember handles POST /api/v1/companion/session/:session_id/members/:user_id/kick.
 func (h *CompanionHandler) KickSessionMember(ctx context.Context, c *app.RequestContext) {
 	userID, ok := h.authUserID(c)

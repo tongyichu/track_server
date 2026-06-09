@@ -788,6 +788,32 @@ func TestCompanionListHistory(t *testing.T) {
 	if w.Result().StatusCode() != http.StatusOK {
 		t.Fatalf("expected end1 status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
 	}
+	updateBody, _ := json.Marshal(map[string]any{
+		"locate_addr":              "北京市海淀区颐和园",
+		"total_distance":           12345.6,
+		"total_duration":           3661,
+		"track_screenshot_url":     "https://track-avatar.oss-cn-beijing.aliyuncs.com/screenshots/companion.png",
+		"actual_participant_count": 2,
+	})
+	w = e.perform(http.MethodPut, "/api/v1/companion/session/"+created1.Data.Session.SessionID+"/update", updateBody, authHeader(guestToken))
+	if w.Result().StatusCode() != http.StatusForbidden {
+		t.Fatalf("expected non-owner update status 403, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+	w = e.perform(http.MethodPut, "/api/v1/companion/session/"+created1.Data.Session.SessionID+"/update", updateBody, authHeader(ownerToken))
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected owner update status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+	var updated handler.StandardResponse[*models.CompanionSession]
+	decodeJSON(t, w.Body.Bytes(), &updated)
+	if updated.Data == nil || updated.Data.TotalDistance != 12345.6 || updated.Data.TotalDuration != 3661 {
+		t.Fatalf("unexpected updated companion session stats: %+v", updated.Data)
+	}
+	if updated.Data.LocateAddr != "北京市海淀区颐和园" || updated.Data.ActualParticipantCount != 2 {
+		t.Fatalf("unexpected updated companion extra stats: %+v", updated.Data)
+	}
+	if updated.Data.TrackScreenshotURL != "/api/v1/static/screenshots/companion_"+created1.Data.Session.SessionID+".png" {
+		t.Fatalf("expected local screenshot URL, got %q", updated.Data.TrackScreenshotURL)
+	}
 
 	w = e.perform(http.MethodPost, "/api/v1/companion/session/create", []byte(`{"title":"第二场"}`), authHeader(guestToken))
 	if w.Result().StatusCode() != http.StatusOK {
@@ -858,6 +884,15 @@ func TestCompanionListHistory(t *testing.T) {
 	if page2.Data.Items[0].ParticipantCount != 2 || len(page2.Data.Items[0].Participants) != 2 {
 		t.Fatalf("expected ended history to keep all participants, got %+v", page2.Data.Items[0])
 	}
+	if page2.Data.Items[0].TotalDistance != 12345.6 || page2.Data.Items[0].TotalDuration != 3661 {
+		t.Fatalf("expected updated stats in history, got %+v", page2.Data.Items[0])
+	}
+	if page2.Data.Items[0].LocateAddr != "北京市海淀区颐和园" || page2.Data.Items[0].ActualParticipantCount != 2 {
+		t.Fatalf("expected updated locate_addr and actual_participant_count in history, got %+v", page2.Data.Items[0])
+	}
+	if page2.Data.Items[0].TrackScreenshotURL != "/api/v1/static/screenshots/companion_"+created1.Data.Session.SessionID+".png" {
+		t.Fatalf("expected local screenshot in history, got %q", page2.Data.Items[0].TrackScreenshotURL)
+	}
 	if page2.Data.HasMore || page2.Data.NextCursor != "" {
 		t.Fatalf("expected page2 end, got %+v", page2.Data)
 	}
@@ -865,6 +900,32 @@ func TestCompanionListHistory(t *testing.T) {
 	w = e.perform(http.MethodGet, "/api/v1/companion/session/history?cursor=bad-cursor", nil, authHeader(ownerToken))
 	if w.Result().StatusCode() != http.StatusBadRequest {
 		t.Fatalf("expected invalid cursor status 400, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+}
+
+func TestCompanionUpdateSessionStatsRequiresEndedOwner(t *testing.T) {
+	e := newTestEnv()
+	ensureTestUser(t, e, 1001, "owner")
+	ownerToken := e.generateTestToken(1001)
+
+	w := e.perform(http.MethodPost, "/api/v1/companion/session/create", []byte(`{"title":"待结束"}`), authHeader(ownerToken))
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected create status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+	var created handler.StandardResponse[*service.CompanionSessionState]
+	decodeJSON(t, w.Body.Bytes(), &created)
+
+	body, _ := json.Marshal(map[string]any{"total_distance": 1})
+	w = e.perform(http.MethodPut, "/api/v1/companion/session/"+created.Data.Session.SessionID+"/update", body, authHeader(ownerToken))
+	if w.Result().StatusCode() != http.StatusBadRequest {
+		t.Fatalf("expected active update status 400, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+	var resp struct {
+		Error string `json:"error"`
+	}
+	decodeJSON(t, w.Body.Bytes(), &resp)
+	if resp.Error != "companion session is not ended" {
+		t.Fatalf("unexpected active update error: %q", resp.Error)
 	}
 }
 

@@ -176,6 +176,7 @@ func main() {
 		screenshotCache = nil
 	} else {
 		trackSvc.SetScreenshotCache(screenshotCache)
+		companionSvc.SetScreenshotCache(screenshotCache)
 		log.Printf("screenshot cache enabled: %s", screenshotCacheDir)
 	}
 
