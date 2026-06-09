@@ -237,4 +237,13 @@ type CompanionRepository interface {
 	// - MySQL 实现按 LIMIT 分批删除，避免长事务；
 	// - Mongo 暂未实现，返回 not implemented。
 	DeleteDanmakusBySessionEndedBefore(ctx context.Context, deadline time.Time) (int64, error)
+
+	// InsertEvent inserts one owner-reported companion event and assigns its auto-incremented ID into event.ID.
+	InsertEvent(ctx context.Context, event *models.CompanionEvent) error
+	// FindEventByClientEventID returns the event written with the same owner-side idempotency key.
+	FindEventByClientEventID(ctx context.Context, sessionID, clientEventID string) (*models.CompanionEvent, error)
+	// CountEventsBySessionID returns how many key events have been recorded for the session.
+	CountEventsBySessionID(ctx context.Context, sessionID string) (int64, error)
+	// ListEventsBySessionID lists key events by event_time/id, either ascending or descending.
+	ListEventsBySessionID(ctx context.Context, sessionID string, cursor *models.CompanionEventCursor, limit int, ascending bool) ([]*models.CompanionEvent, error)
 }

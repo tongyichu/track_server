@@ -52,7 +52,7 @@ track_server/
 │   ├── config/             # 环境变量加载；内置省市数据 + 昵称字典 + 同行弹幕敏感词词库
 │   ├── handler/            # Hertz HTTP handler + router.go 路由表（权威）
 │   ├── middleware/         # JWT 鉴权、请求元信息、Token 黑名单
-│   ├── models/             # 领域模型（Track / User / Companion / Achievement / 相关光标/子结构）
+│   ├── models/             # 领域模型（Track / User / Companion / CompanionEvent / Achievement / 相关光标/子结构）
 │   ├── repository/         # 持久化接口 + mysql / mongo / memory 三实现
 │   ├── scheduler/          # 进程内定时任务（基于 robfig/cron/v3，按 SCHEDULER_ENABLED 启停）
 │   └── service/            # 业务编排：登录、轨迹、用户、同行控制面、成就、OSS STS、资源缓存
@@ -74,7 +74,7 @@ track_server/
 | HTTP 路由清单 | `internal/handler/router.go` |
 | 配置项与默认值 | `internal/config/config.go` |
 | Repository 接口契约 | `internal/repository/interfaces.go` |
-| 领域模型 | `internal/models/track.go`、`internal/models/user.go`、`internal/models/achievement.go` |
+| 领域模型 | `internal/models/track.go`、`internal/models/user.go`、`internal/models/companion.go`、`internal/models/achievement.go` |
 | MySQL 表结构 | `mysql.sql` |
 | 接口协议 | `track_api.md`、`login.md`、`track_companion.md`、`track_achievement_client.md`、`track_map.md` |
 | 成就规则方案 | `track_achievement.md` |
@@ -124,6 +124,8 @@ Scheduler(companion_session_autoclose，每 10 分钟)
 
 **同行结束摘要更新**：owner 可在同行结束后调用 `PUT /api/v1/companion/session/:session_id/update` 补写 `locate_addr`、`total_distance`、`total_duration`、`track_screenshot_url`、`actual_participant_count`；该接口只允许 owner 操作 `status=ended` 的 session。`companion/session/history` 与 `companion/session/nearby` 都返回这些字段，其中截图响应应通过截图资源缓存改写为 `/api/v1/static/screenshots/...`。
 
+**同行关键事件时间线**：owner 可通过 `POST /api/v1/companion/session/:session_id/events` 上报成员离开、断线/重连、同行周知、关键点、风险提醒或自定义事件，并通过 `GET /api/v1/companion/session/:session_id/events` 按 `event_time,id` 游标查询。事件持久化在 `companion_events`，`client_event_id` 是同一 session 内的幂等键；单个 `session_id` 最多 100 条事件，达到上限后新事件返回 `companion event limit exceeded`，但重复 `client_event_id` 仍返回已有事件。调整事件类型、字段、上限、幂等或时间校验规则时，同步更新 `track_api.md` 与 `track_companion.md`。
+
 **典型业务调用链**：
 ```
 HTTP Request
@@ -142,7 +144,7 @@ HTTP Request
 - 全量测试：`make test`（等价 `go test ./...`）
 - 新增/修改路由：核对 `internal/handler/router.go` 是否挂载在正确的 `auth` 分组。
 - 新增 Repository 方法：`mysql.go` / `mongo.go` / `memory.go` 三实现必须同步。
-- 改动与协议相关（字段增删、登录流程、错误码、同行控制面、成就系统）：同步更新 `track_api.md`、`login.md`、`track_companion.md` 或 `track_achievement_client.md`。
+- 改动与协议相关（字段增删、登录流程、错误码、同行控制面、同行关键事件、成就系统）：同步更新 `track_api.md`、`login.md`、`track_companion.md` 或 `track_achievement_client.md`。
 - 用户要求提交代码时，commit message 必须使用中文，并尽量详细说明：做了什么、为什么做、影响哪些模块、是否包含数据结构/协议/文档/测试变更。
 
 ---

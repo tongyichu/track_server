@@ -159,6 +159,29 @@ App Server 提供以下职责：
 - 不在控制面阶段存高频历史点流；
 - 后续 EMQX 可通过 rule engine 或内部回调把 MQTT 消息落到该表。
 
+### 5.4 CompanionEvent
+
+owner 上报的同行关键事件时间线，独立于实时 control topic 和弹幕：
+
+- `id`：自增主键，也是接口返回的事件 ID；
+- `session_id`：同行会话 ID；
+- `owner_user_id`：房主用户 ID；
+- `event_type`：事件类型，当前支持 `member_left` / `member_disconnected` / `member_reconnected` / `notice_sent` / `checkpoint_reached` / `risk_reported` / `custom`；
+- `target_user_id`：事件关联成员；无关联成员时为 `0`；
+- `title` / `content`：时间线展示文本；
+- `event_time`：客户端感知的事件发生时间；
+- `client_event_id`：客户端幂等事件 ID，同一 `(session_id, client_event_id)` 只写一次；
+- `metadata_json`：客户端扩展 JSON 对象，服务端仅存储与透传；
+- `created_at`：服务端入库时间。
+
+约束：
+
+- 只有 session owner 可以写入和查询；
+- 单个 `session_id` 最多 100 条事件，达到上限后新 `client_event_id` 写入会被拒绝；
+- 幂等重试优先于数量限制：已存在的 `client_event_id` 会返回原事件；
+- `target_user_id > 0` 时必须属于该 session；
+- `event_time` 不能早于 `started_at - 5min`，不能晚于服务端当前时间 `+1min`；已结束会话还不能晚于 `ended_at + 5min`。
+
 ---
 
 ## 6. 控制面接口设计（当前仓库已实现）
@@ -279,7 +302,22 @@ App Server 提供以下职责：
 - 被踢成员的 `member_status` 变为 `kicked`，`presence_status` 变为 `offline`，并从 snapshot 成员与位置集合中移除；
 - 服务端通过 `companion/{session_id}/control` 广播 `member_kicked` 事件。
 
-### 6.10 同行结束后的个人轨迹上传
+### 6.10 owner 上报 / 查询同行关键事件
+
+- `POST /api/v1/companion/session/:session_id/events`
+- `GET /api/v1/companion/session/:session_id/events`
+
+规则：
+
+- 必须登录；
+- 仅 session owner 可调用；
+- 用于记录成员离开、成员断线/重连、owner 周知、到达关键点、风险提醒、自定义事件等关键时间线；
+- 上报请求必须携带 `event_type` 与 `client_event_id`；
+- `client_event_id` 用于幂等重试，建议客户端使用 UUID；
+- 单个 session 最多 100 条事件，超过后返回 `companion event limit exceeded`；
+- 查询按 `event_time, id` 游标分页，默认 `asc`，也支持 `desc`。
+
+### 6.11 同行结束后的个人轨迹上传
 
 同行结束后，每个成员仍通过普通轨迹接口上传自己的完整轨迹：
 

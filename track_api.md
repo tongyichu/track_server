@@ -35,6 +35,8 @@
 | 22 | [结束同行会话](#22-结束同行会话) | POST | `/companion/session/:session_id/end` | ✅ |
 | 22.1 | [踢出同行成员](#221-踢出同行成员) | POST | `/companion/session/:session_id/members/:user_id/kick` | ✅ |
 | 22.2 | [更新已结束同行摘要](#222-更新已结束同行摘要owner) | PUT | `/companion/session/:session_id/update` | ✅ |
+| 22.3 | [上报同行关键事件](#223-上报同行关键事件owner) | POST | `/companion/session/:session_id/events` | ✅ |
+| 22.4 | [查询同行关键事件时间线](#224-查询同行关键事件时间线owner) | GET | `/companion/session/:session_id/events` | ✅ |
 | 23 | [当前用户参与过的同行记录列表](#23-当前用户参与过的同行记录列表) | GET | `/companion/session/history` | ✅ |
 | 24 | [获取同行 MQTT 凭证](#24-获取同行-mqtt-凭证) | POST | `/companion/session/:session_id/mqtt/credentials` | ✅ |
 | 25 | [EMQX HTTP AuthN 回调](#25-emqx-http-authn-回调) | POST | `/internal/mqtt/auth` | ❌（内部） |
@@ -2264,6 +2266,155 @@ Content-Type: application/json
   - `total_duration must be >= 0`
   - `actual_participant_count must be >= 0`
   - `companion session is not ended`
+- `403 Forbidden`
+  - 当前用户不是 owner
+- `404 Not Found`
+  - session 不存在
+
+---
+
+## 22.3 上报同行关键事件（owner）
+
+owner 记录同行过程中的关键事件，例如成员离开、成员断线、成员重连、同行周知消息、到达关键点、风险提醒或自定义事件。该事件时间线只允许 session owner 写入和查询。
+
+**需要认证**
+
+### 请求
+
+```http
+POST /api/v1/companion/session/:session_id/events
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+```json
+{
+  "event_type": "member_disconnected",
+  "target_user_id": 1002,
+  "title": "成员断线",
+  "content": "Jerry 已超过 30 秒无位置更新",
+  "event_time": "2026-06-09T10:20:30Z",
+  "client_event_id": "ios-uuid-xxx",
+  "metadata": {
+    "last_seen_seconds": 32
+  }
+}
+```
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `event_type` | string | 是 | 事件类型：`member_left` / `member_disconnected` / `member_reconnected` / `notice_sent` / `checkpoint_reached` / `risk_reported` / `custom`。 |
+| `target_user_id` | int64 | 否 | 事件关联成员 user_id；无关联成员传 `0` 或不传。传入大于 0 时，该用户必须属于该 session。 |
+| `title` | string | 否 | 事件标题，最多 64 个字符。 |
+| `content` | string | 否 | 事件内容，最多 500 个字符。 |
+| `event_time` | string(datetime) | 否 | 事件发生时间；不传时服务端取当前时间。不能早于 `started_at - 5min`，不能晚于服务端当前时间 `+1min`；已结束会话还不能晚于 `ended_at + 5min`。 |
+| `client_event_id` | string | 是 | 客户端幂等事件 ID，建议 UUID；同一 session 内重复上报同一个值会返回已有事件，不重复写入。最大 128 字符。 |
+| `metadata` | object | 否 | 客户端扩展 JSON 对象，最大 2048 bytes；服务端仅存储和透传，不解释业务含义。 |
+
+单个 `session_id` 最多写入 100 条关键事件。达到上限后，新 `client_event_id` 会返回 `400 companion event limit exceeded`；重复上报已存在的 `client_event_id` 仍返回已有事件。
+
+### 成功响应
+
+```json
+{
+  "code": 0,
+  "data": {
+    "id": 12345,
+    "session_id": "sess_xxx",
+    "owner_user_id": 1001,
+    "event_type": "member_disconnected",
+    "target_user_id": 1002,
+    "title": "成员断线",
+    "content": "Jerry 已超过 30 秒无位置更新",
+    "event_time": "2026-06-09T10:20:30Z",
+    "client_event_id": "ios-uuid-xxx",
+    "metadata": {
+      "last_seen_seconds": 32
+    },
+    "created_at": "2026-06-09T10:20:31Z"
+  }
+}
+```
+
+### 错误响应
+
+- `400 Bad Request`
+  - `session_id is required`
+  - `client_event_id is required`
+  - `client_event_id is too long`
+  - `invalid event_type`
+  - `title exceeds 64 characters`
+  - `content exceeds 500 characters`
+  - `target_user_id must be >= 0`
+  - `event_time is too early`
+  - `event_time is too late`
+  - `invalid metadata`
+  - `metadata must be an object`
+  - `metadata exceeds 2048 bytes`
+  - `companion event limit exceeded`
+- `403 Forbidden`
+  - 当前用户不是 owner
+- `404 Not Found`
+  - session 不存在或 `target_user_id` 不属于该 session
+
+---
+
+## 22.4 查询同行关键事件时间线（owner）
+
+owner 按时间线查询自己上报过的同行关键事件，支持游标分页。
+
+**需要认证**
+
+### 请求
+
+```http
+GET /api/v1/companion/session/:session_id/events?limit=50&cursor=<cursor>&order=asc
+Authorization: Bearer <token>
+```
+
+### Query 参数
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `limit` | int | 否 | 每页数量，默认 `20`，最大 `50`。 |
+| `cursor` | string | 否 | 分页游标，首次请求不传；后续将上次返回的 `next_cursor` 原样透传。 |
+| `order` | string | 否 | 排序方向：`asc` / `desc`，默认 `asc`。排序键为 `event_time, id`。 |
+
+### 响应
+
+```json
+{
+  "code": 0,
+  "data": {
+    "items": [
+      {
+        "id": 12345,
+        "session_id": "sess_xxx",
+        "owner_user_id": 1001,
+        "event_type": "notice_sent",
+        "target_user_id": 0,
+        "title": "同行周知",
+        "content": "前方补给点休整 10 分钟",
+        "event_time": "2026-06-09T10:30:00Z",
+        "client_event_id": "ios-uuid-yyy",
+        "metadata": {
+          "level": "info"
+        },
+        "created_at": "2026-06-09T10:30:01Z"
+      }
+    ],
+    "next_cursor": "eyJldmVudF90aW1lIjoiMjAyNi0wNi0wOVQxMDozMDowMFoiLCJpZCI6MTIzNDV9",
+    "has_more": true
+  }
+}
+```
+
+### 错误响应
+
+- `400 Bad Request`
+  - `invalid limit`
+  - `invalid cursor`
+  - `invalid order`
 - `403 Forbidden`
   - 当前用户不是 owner
 - `404 Not Found`

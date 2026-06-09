@@ -219,6 +219,56 @@ func (h *CompanionHandler) UpdateSessionStats(ctx context.Context, c *app.Reques
 	c.JSON(http.StatusOK, successResponse(session))
 }
 
+// CreateEvent handles POST /api/v1/companion/session/:session_id/events.
+func (h *CompanionHandler) CreateEvent(ctx context.Context, c *app.RequestContext) {
+	userID, ok := h.authUserID(c)
+	if !ok {
+		return
+	}
+	var req service.CreateCompanionEventInput
+	body := c.Request.Body()
+	if len(bytes.TrimSpace(body)) == 0 {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid payload"})
+		return
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid payload"})
+		return
+	}
+	event, err := h.svc.CreateEvent(ctx, userID, c.Param("session_id"), req)
+	if err != nil {
+		h.writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, successResponse(event))
+}
+
+// ListEvents handles GET /api/v1/companion/session/:session_id/events.
+func (h *CompanionHandler) ListEvents(ctx context.Context, c *app.RequestContext) {
+	userID, ok := h.authUserID(c)
+	if !ok {
+		return
+	}
+	in := service.ListCompanionEventsInput{
+		Cursor: string(c.Query("cursor")),
+		Order:  string(c.Query("order")),
+	}
+	if rawLimit := strings.TrimSpace(string(c.Query("limit"))); rawLimit != "" {
+		limit, err := strconv.Atoi(rawLimit)
+		if err != nil || limit <= 0 {
+			c.JSON(http.StatusBadRequest, utils.H{"error": "invalid limit"})
+			return
+		}
+		in.Limit = limit
+	}
+	page, err := h.svc.ListEvents(ctx, userID, c.Param("session_id"), in)
+	if err != nil {
+		h.writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, successResponse(page))
+}
+
 // KickSessionMember handles POST /api/v1/companion/session/:session_id/members/:user_id/kick.
 func (h *CompanionHandler) KickSessionMember(ctx context.Context, c *app.RequestContext) {
 	userID, ok := h.authUserID(c)

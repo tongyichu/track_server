@@ -3,8 +3,10 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -1167,6 +1169,105 @@ func TestCompanionServiceSetSessionDanmakuEnabledPublishesControlEvent(t *testin
 	}
 	if last.event.Enabled == nil || *last.event.Enabled != true {
 		t.Fatalf("expected enabled=true in re-enable event, got %+v", last.event.Enabled)
+	}
+}
+
+func TestCompanionServiceCreateAndListEvents(t *testing.T) {
+	svc, _, _ := newCompanionServiceForTest(t)
+	ctx := context.Background()
+	created, err := svc.CreateSession(ctx, 1001, CreateCompanionSessionInput{Title: "events"})
+	if err != nil {
+		t.Fatalf("CreateSession returned error: %v", err)
+	}
+	if _, err := svc.JoinSession(ctx, 1002, JoinCompanionSessionInput{JoinToken: created.Join.JoinToken}); err != nil {
+		t.Fatalf("JoinSession returned error: %v", err)
+	}
+
+	eventTime := created.Session.StartedAt.Add(time.Minute)
+	event, err := svc.CreateEvent(ctx, 1001, created.Session.SessionID, CreateCompanionEventInput{
+		EventType:     "member_disconnected",
+		TargetUserID:  1002,
+		Title:         "成员断线",
+		Content:       "guest offline",
+		EventTime:     eventTime,
+		ClientEventID: "evt-1",
+		Metadata:      json.RawMessage(`{"last_seen_seconds":31}`),
+	})
+	if err != nil {
+		t.Fatalf("CreateEvent returned error: %v", err)
+	}
+	if event.ID <= 0 || event.Metadata == nil {
+		t.Fatalf("unexpected event: %+v", event)
+	}
+
+	again, err := svc.CreateEvent(ctx, 1001, created.Session.SessionID, CreateCompanionEventInput{
+		EventType:     "member_disconnected",
+		ClientEventID: "evt-1",
+	})
+	if err != nil {
+		t.Fatalf("CreateEvent idempotent retry returned error: %v", err)
+	}
+	if again.ID != event.ID {
+		t.Fatalf("expected idempotent retry to return event %d, got %d", event.ID, again.ID)
+	}
+
+	page, err := svc.ListEvents(ctx, 1001, created.Session.SessionID, ListCompanionEventsInput{Limit: 1})
+	if err != nil {
+		t.Fatalf("ListEvents returned error: %v", err)
+	}
+	if len(page.Items) != 1 || page.Items[0].ID != event.ID {
+		t.Fatalf("unexpected events page: %+v", page)
+	}
+	if page.Items[0].Metadata == nil {
+		t.Fatalf("expected metadata in event response")
+	}
+}
+
+func TestCompanionServiceCreateEventOwnerOnly(t *testing.T) {
+	svc, _, _ := newCompanionServiceForTest(t)
+	ctx := context.Background()
+	created, err := svc.CreateSession(ctx, 1001, CreateCompanionSessionInput{Title: "events"})
+	if err != nil {
+		t.Fatalf("CreateSession returned error: %v", err)
+	}
+	_, err = svc.CreateEvent(ctx, 1002, created.Session.SessionID, CreateCompanionEventInput{
+		EventType:     "notice_sent",
+		ClientEventID: "evt-forbidden",
+	})
+	if !errors.Is(err, repository.ErrForbidden) {
+		t.Fatalf("expected forbidden, got %v", err)
+	}
+}
+
+func TestCompanionServiceCreateEventLimit(t *testing.T) {
+	svc, _, _ := newCompanionServiceForTest(t)
+	ctx := context.Background()
+	created, err := svc.CreateSession(ctx, 1001, CreateCompanionSessionInput{Title: "events"})
+	if err != nil {
+		t.Fatalf("CreateSession returned error: %v", err)
+	}
+	for i := 0; i < companionEventMaxPerSession; i++ {
+		_, err := svc.CreateEvent(ctx, 1001, created.Session.SessionID, CreateCompanionEventInput{
+			EventType:     "custom",
+			ClientEventID: "evt-limit-" + strconv.Itoa(i),
+		})
+		if err != nil {
+			t.Fatalf("CreateEvent #%d returned error: %v", i, err)
+		}
+	}
+	existing, err := svc.CreateEvent(ctx, 1001, created.Session.SessionID, CreateCompanionEventInput{
+		EventType:     "custom",
+		ClientEventID: "evt-limit-0",
+	})
+	if err != nil || existing == nil {
+		t.Fatalf("expected idempotent retry to succeed after limit, got event=%+v err=%v", existing, err)
+	}
+	_, err = svc.CreateEvent(ctx, 1001, created.Session.SessionID, CreateCompanionEventInput{
+		EventType:     "custom",
+		ClientEventID: "evt-over-limit",
+	})
+	if err == nil || err.Error() != "companion event limit exceeded" {
+		t.Fatalf("expected limit exceeded, got %v", err)
 	}
 }
 

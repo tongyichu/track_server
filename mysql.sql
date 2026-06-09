@@ -211,3 +211,20 @@ CREATE TABLE `companion_danmakus` (
                                      KEY `idx_companion_danmaku_session_time` (`session_id`, `created_at`),
                                      KEY `idx_companion_danmaku_session_user_time` (`session_id`, `user_id`, `created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='同行文字弹幕表';
+
+CREATE TABLE `companion_events` (
+                                    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                                    `session_id` VARCHAR(64) NOT NULL COMMENT '同行会话ID',
+                                    `owner_user_id` BIGINT NOT NULL COMMENT '房主用户ID',
+                                    `event_type` VARCHAR(32) NOT NULL COMMENT '事件类型',
+                                    `target_user_id` BIGINT NOT NULL DEFAULT 0 COMMENT '事件关联成员用户ID；无关联成员为0',
+                                    `title` VARCHAR(64) NOT NULL DEFAULT '' COMMENT '事件标题',
+                                    `content` VARCHAR(500) NOT NULL DEFAULT '' COMMENT '事件内容',
+                                    `event_time` DATETIME(6) NOT NULL COMMENT '事件发生时间',
+                                    `client_event_id` VARCHAR(128) NOT NULL COMMENT '客户端幂等事件ID',
+                                    `metadata_json` TEXT COMMENT '客户端扩展JSON对象',
+                                    `created_at` DATETIME(6) NOT NULL COMMENT '入库时间',
+                                    PRIMARY KEY (`id`),
+                                    UNIQUE KEY `uk_companion_event_client` (`session_id`, `client_event_id`),
+                                    KEY `idx_companion_events_session_time` (`session_id`, `event_time`, `id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='同行关键事件表';

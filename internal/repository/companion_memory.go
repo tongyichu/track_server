@@ -11,13 +11,15 @@ import (
 
 // InMemoryCompanionRepository 是 CompanionRepository 的内存实现。
 type InMemoryCompanionRepository struct {
-	mu               sync.RWMutex
-	sessions         map[string]*models.CompanionSession
-	sessionByToken   map[string]string
-	members          map[string]map[int64]*models.CompanionSessionMember
-	positions        map[string]map[int64]*models.CompanionLivePosition
-	danmakus         []*models.CompanionDanmaku
-	danmakuNextID    int64
+	mu             sync.RWMutex
+	sessions       map[string]*models.CompanionSession
+	sessionByToken map[string]string
+	members        map[string]map[int64]*models.CompanionSessionMember
+	positions      map[string]map[int64]*models.CompanionLivePosition
+	danmakus       []*models.CompanionDanmaku
+	danmakuNextID  int64
+	events         []*models.CompanionEvent
+	eventNextID    int64
 }
 
 // NewInMemoryCompanionRepository creates an in-memory companion repository.
@@ -29,6 +31,8 @@ func NewInMemoryCompanionRepository() *InMemoryCompanionRepository {
 		positions:      make(map[string]map[int64]*models.CompanionLivePosition),
 		danmakus:       make([]*models.CompanionDanmaku, 0),
 		danmakuNextID:  0,
+		events:         make([]*models.CompanionEvent, 0),
+		eventNextID:    0,
 	}
 }
 
@@ -466,4 +470,112 @@ func (r *InMemoryCompanionRepository) DeleteDanmakusBySessionEndedBefore(_ conte
 	}
 	r.danmakus = filtered
 	return affected, nil
+}
+
+func (r *InMemoryCompanionRepository) InsertEvent(_ context.Context, event *models.CompanionEvent) error {
+	if event == nil || event.SessionID == "" || event.OwnerUserID <= 0 || event.ClientEventID == "" {
+		return ErrNotFound
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, item := range r.events {
+		if item != nil && item.SessionID == event.SessionID && item.ClientEventID == event.ClientEventID {
+			return ErrAlreadyExists
+		}
+	}
+	r.eventNextID++
+	clone := cloneCompanionEvent(event)
+	clone.ID = r.eventNextID
+	if clone.CreatedAt.IsZero() {
+		clone.CreatedAt = time.Now()
+	}
+	r.events = append(r.events, clone)
+	event.ID = clone.ID
+	event.CreatedAt = clone.CreatedAt
+	return nil
+}
+
+func (r *InMemoryCompanionRepository) FindEventByClientEventID(_ context.Context, sessionID, clientEventID string) (*models.CompanionEvent, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, item := range r.events {
+		if item != nil && item.SessionID == sessionID && item.ClientEventID == clientEventID {
+			return cloneCompanionEvent(item), nil
+		}
+	}
+	return nil, ErrNotFound
+}
+
+func (r *InMemoryCompanionRepository) CountEventsBySessionID(_ context.Context, sessionID string) (int64, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var count int64
+	for _, item := range r.events {
+		if item != nil && item.SessionID == sessionID {
+			count++
+		}
+	}
+	return count, nil
+}
+
+func (r *InMemoryCompanionRepository) ListEventsBySessionID(_ context.Context, sessionID string, cursor *models.CompanionEventCursor, limit int, ascending bool) ([]*models.CompanionEvent, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	items := make([]*models.CompanionEvent, 0)
+	for _, item := range r.events {
+		if item == nil || item.SessionID != sessionID {
+			continue
+		}
+		if cursor != nil && !cursor.EventTime.IsZero() && cursor.ID > 0 {
+			cmp := compareCompanionEventCursor(item.EventTime, item.ID, cursor.EventTime, cursor.ID)
+			if ascending && cmp <= 0 {
+				continue
+			}
+			if !ascending && cmp >= 0 {
+				continue
+			}
+		}
+		items = append(items, cloneCompanionEvent(item))
+	}
+	sort.SliceStable(items, func(i, j int) bool {
+		cmp := compareCompanionEventCursor(items[i].EventTime, items[i].ID, items[j].EventTime, items[j].ID)
+		if ascending {
+			return cmp < 0
+		}
+		return cmp > 0
+	})
+	if len(items) > limit {
+		items = items[:limit]
+	}
+	return items, nil
+}
+
+func cloneCompanionEvent(event *models.CompanionEvent) *models.CompanionEvent {
+	if event == nil {
+		return nil
+	}
+	clone := *event
+	if event.Metadata != nil {
+		clone.Metadata = append([]byte(nil), event.Metadata...)
+	}
+	return &clone
+}
+
+func compareCompanionEventCursor(aTime time.Time, aID int64, bTime time.Time, bID int64) int {
+	if aTime.Before(bTime) {
+		return -1
+	}
+	if aTime.After(bTime) {
+		return 1
+	}
+	if aID < bID {
+		return -1
+	}
+	if aID > bID {
+		return 1
+	}
+	return 0
 }

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"crypto/hmac"
 	crand "crypto/rand"
@@ -56,6 +57,12 @@ const (
 
 	// 自动收尾：单次扫描 active session 的上限。
 	companionAutoCloseScanLimit = 1000
+
+	// 关键事件：单场同行最多保留 owner 上报的事件数。
+	companionEventMaxPerSession    = 100
+	companionEventMaxTitleRunes    = 64
+	companionEventMaxContentRunes  = 500
+	companionEventMaxMetadataBytes = 2048
 )
 
 type companionAutoCloseRule struct {
@@ -89,6 +96,16 @@ var companionAutoCloseRules = map[string]companionAutoCloseRule{
 		InactiveTimeout: 60 * time.Minute,
 		MaxDuration:     72 * time.Hour,
 	},
+}
+
+var companionEventTypes = map[string]struct{}{
+	"member_left":         {},
+	"member_disconnected": {},
+	"member_reconnected":  {},
+	"notice_sent":         {},
+	"checkpoint_reached":  {},
+	"risk_reported":       {},
+	"custom":              {},
 }
 
 // CompanionService 实现“同行”控制面的业务逻辑。
@@ -251,6 +268,24 @@ type UpdateCompanionSessionStatsInput struct {
 	TotalDuration          *int64   `json:"total_duration"`
 	TrackScreenshotURL     *string  `json:"track_screenshot_url"`
 	ActualParticipantCount *int64   `json:"actual_participant_count"`
+}
+
+// CreateCompanionEventInput describes one owner-reported key event in a companion session.
+type CreateCompanionEventInput struct {
+	EventType     string          `json:"event_type"`
+	TargetUserID  int64           `json:"target_user_id"`
+	Title         string          `json:"title"`
+	Content       string          `json:"content"`
+	EventTime     time.Time       `json:"event_time"`
+	ClientEventID string          `json:"client_event_id"`
+	Metadata      json.RawMessage `json:"metadata"`
+}
+
+// ListCompanionEventsInput describes paging input for owner-visible companion events.
+type ListCompanionEventsInput struct {
+	Cursor string
+	Limit  int
+	Order  string
 }
 
 // CompanionJoinInfo is the owner-only invitation info returned by control plane APIs.
@@ -1441,6 +1476,159 @@ func (s *CompanionService) UpdateSessionStats(ctx context.Context, ownerUserID i
 	return companionSessionForResponse(session), nil
 }
 
+// CreateEvent records one owner-reported key event in a companion session.
+func (s *CompanionService) CreateEvent(ctx context.Context, ownerUserID int64, sessionID string, in CreateCompanionEventInput) (*models.CompanionEvent, error) {
+	if s == nil || s.repo == nil {
+		return nil, errors.New("companion service not configured")
+	}
+	if ownerUserID <= 0 {
+		return nil, invalidArg("user_id is required")
+	}
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return nil, invalidArg("session_id is required")
+	}
+	clientEventID := strings.TrimSpace(in.ClientEventID)
+	if clientEventID == "" {
+		return nil, invalidArg("client_event_id is required")
+	}
+	if len(clientEventID) > 128 {
+		return nil, invalidArg("client_event_id is too long")
+	}
+	session, err := s.repo.FindSessionByID(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	if session.OwnerUserID != ownerUserID {
+		return nil, repository.ErrForbidden
+	}
+	if existing, err := s.repo.FindEventByClientEventID(ctx, sessionID, clientEventID); err == nil {
+		return companionEventForResponse(existing), nil
+	} else if !errors.Is(err, repository.ErrNotFound) {
+		return nil, err
+	}
+	eventType := strings.TrimSpace(in.EventType)
+	if _, ok := companionEventTypes[eventType]; !ok {
+		return nil, invalidArg("invalid event_type")
+	}
+	title := strings.TrimSpace(in.Title)
+	if utf8.RuneCountInString(title) > companionEventMaxTitleRunes {
+		return nil, invalidArg(fmt.Sprintf("title exceeds %d characters", companionEventMaxTitleRunes))
+	}
+	content := strings.TrimSpace(in.Content)
+	if utf8.RuneCountInString(content) > companionEventMaxContentRunes {
+		return nil, invalidArg(fmt.Sprintf("content exceeds %d characters", companionEventMaxContentRunes))
+	}
+	if in.TargetUserID < 0 {
+		return nil, invalidArg("target_user_id must be >= 0")
+	}
+	if in.TargetUserID > 0 {
+		if _, err := s.repo.FindMember(ctx, sessionID, in.TargetUserID); err != nil {
+			return nil, err
+		}
+	}
+	now := time.Now()
+	eventTime := in.EventTime
+	if eventTime.IsZero() {
+		eventTime = now
+	}
+	if eventTime.Before(session.StartedAt.Add(-5 * time.Minute)) {
+		return nil, invalidArg("event_time is too early")
+	}
+	if eventTime.After(now.Add(time.Minute)) {
+		return nil, invalidArg("event_time is too late")
+	}
+	if session.Status == models.CompanionSessionStatusEnded && !session.EndedAt.IsZero() && eventTime.After(session.EndedAt.Add(5*time.Minute)) {
+		return nil, invalidArg("event_time is too late")
+	}
+	metadataJSON, metadata, err := normalizeCompanionEventMetadata(in.Metadata)
+	if err != nil {
+		return nil, err
+	}
+	count, err := s.repo.CountEventsBySessionID(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	if count >= companionEventMaxPerSession {
+		return nil, invalidArg("companion event limit exceeded")
+	}
+	event := &models.CompanionEvent{
+		SessionID:     sessionID,
+		OwnerUserID:   ownerUserID,
+		EventType:     eventType,
+		TargetUserID:  in.TargetUserID,
+		Title:         title,
+		Content:       content,
+		EventTime:     eventTime,
+		ClientEventID: clientEventID,
+		Metadata:      metadata,
+		MetadataJSON:  metadataJSON,
+		CreatedAt:     now,
+	}
+	if err := s.repo.InsertEvent(ctx, event); err != nil {
+		if errors.Is(err, repository.ErrAlreadyExists) {
+			return s.repo.FindEventByClientEventID(ctx, sessionID, clientEventID)
+		}
+		return nil, err
+	}
+	return companionEventForResponse(event), nil
+}
+
+// ListEvents returns owner-visible key events in a companion session.
+func (s *CompanionService) ListEvents(ctx context.Context, ownerUserID int64, sessionID string, in ListCompanionEventsInput) (*models.CompanionEventPage, error) {
+	if s == nil || s.repo == nil {
+		return nil, errors.New("companion service not configured")
+	}
+	if ownerUserID <= 0 {
+		return nil, invalidArg("user_id is required")
+	}
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return nil, invalidArg("session_id is required")
+	}
+	session, err := s.repo.FindSessionByID(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	if session.OwnerUserID != ownerUserID {
+		return nil, repository.ErrForbidden
+	}
+	order := strings.ToLower(strings.TrimSpace(in.Order))
+	if order == "" {
+		order = "asc"
+	}
+	if order != "asc" && order != "desc" {
+		return nil, invalidArg("invalid order")
+	}
+	ascending := order == "asc"
+	limit := normalizeCompanionPageLimit(in.Limit)
+	cursor, err := decodeCompanionEventCursor(in.Cursor)
+	if err != nil {
+		return nil, err
+	}
+	events, err := s.repo.ListEventsBySessionID(ctx, sessionID, cursor, limit+1, ascending)
+	if err != nil {
+		return nil, err
+	}
+	hasMore := len(events) > limit
+	if hasMore {
+		events = events[:limit]
+	}
+	for i := range events {
+		events[i] = companionEventForResponse(events[i])
+	}
+	page := &models.CompanionEventPage{Items: events, HasMore: hasMore}
+	if hasMore && len(events) > 0 {
+		last := events[len(events)-1]
+		nextCursor, err := encodeCompanionEventCursor(last.EventTime, last.ID)
+		if err != nil {
+			return nil, err
+		}
+		page.NextCursor = nextCursor
+	}
+	return page, nil
+}
+
 // AutoCloseInactiveSessions ends active sessions that have no recent member activity
 // or exceed the hard maximum duration for their track type.
 func (s *CompanionService) AutoCloseInactiveSessions(ctx context.Context, now time.Time) (*CompanionAutoCloseResult, error) {
@@ -1851,6 +2039,67 @@ func encodeCompanionSessionListCursor(startedAt time.Time, sessionID string) (st
 		return "", err
 	}
 	return base64.RawURLEncoding.EncodeToString(buf), nil
+}
+
+func decodeCompanionEventCursor(raw string) (*models.CompanionEventCursor, error) {
+	if strings.TrimSpace(raw) == "" {
+		return nil, nil
+	}
+	buf, err := base64.RawURLEncoding.DecodeString(raw)
+	if err != nil {
+		return nil, invalidArg("invalid cursor")
+	}
+	var cursor models.CompanionEventCursor
+	if err := json.Unmarshal(buf, &cursor); err != nil {
+		return nil, invalidArg("invalid cursor")
+	}
+	if cursor.ID <= 0 || cursor.EventTime.IsZero() {
+		return nil, invalidArg("invalid cursor")
+	}
+	return &cursor, nil
+}
+
+func encodeCompanionEventCursor(eventTime time.Time, id int64) (string, error) {
+	buf, err := json.Marshal(models.CompanionEventCursor{EventTime: eventTime, ID: id})
+	if err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(buf), nil
+}
+
+func normalizeCompanionEventMetadata(raw json.RawMessage) (string, json.RawMessage, error) {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 {
+		return "", nil, nil
+	}
+	if len(trimmed) > companionEventMaxMetadataBytes {
+		return "", nil, invalidArg(fmt.Sprintf("metadata exceeds %d bytes", companionEventMaxMetadataBytes))
+	}
+	if !json.Valid(trimmed) {
+		return "", nil, invalidArg("invalid metadata")
+	}
+	if !bytes.Equal(trimmed, []byte("null")) && trimmed[0] != '{' {
+		return "", nil, invalidArg("metadata must be an object")
+	}
+	if bytes.Equal(trimmed, []byte("null")) {
+		return "", nil, nil
+	}
+	clone := append([]byte(nil), trimmed...)
+	return string(clone), clone, nil
+}
+
+func companionEventForResponse(event *models.CompanionEvent) *models.CompanionEvent {
+	if event == nil {
+		return nil
+	}
+	clone := *event
+	if len(clone.Metadata) == 0 && clone.MetadataJSON != "" {
+		clone.Metadata = []byte(clone.MetadataJSON)
+	}
+	if clone.Metadata != nil {
+		clone.Metadata = append([]byte(nil), clone.Metadata...)
+	}
+	return &clone
 }
 
 func parseCompanionMQTTPrincipal(principal string) (*companionMQTTPrincipalClaims, error) {

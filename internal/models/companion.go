@@ -1,6 +1,9 @@
 package models
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 // CompanionSessionStatus 表示一场“同行”会话的状态。
 type CompanionSessionStatus string
@@ -159,6 +162,42 @@ type CompanionDanmaku struct {
 	UserID    int64     `json:"user_id" bson:"user_id"`
 	Content   string    `json:"content" bson:"content"`
 	CreatedAt time.Time `json:"created_at" bson:"created_at"`
+}
+
+// CompanionEvent 表示 owner 上报的一条同行关键事件。
+//
+// 设计说明：
+// - id 由存储层自增分配，作为对外事件 ID；
+// - client_event_id 由客户端生成，用于 owner 重试时幂等；
+// - metadata_json 保存客户端扩展 JSON 对象，服务端不解释其业务含义。
+type CompanionEvent struct {
+	ID            int64           `json:"id" bson:"id"`
+	SessionID     string          `json:"session_id" bson:"session_id"`
+	OwnerUserID   int64           `json:"owner_user_id" bson:"owner_user_id"`
+	EventType     string          `json:"event_type" bson:"event_type"`
+	TargetUserID  int64           `json:"target_user_id" bson:"target_user_id"`
+	Title         string          `json:"title" bson:"title"`
+	Content       string          `json:"content" bson:"content"`
+	EventTime     time.Time       `json:"event_time" bson:"event_time"`
+	ClientEventID string          `json:"client_event_id" bson:"client_event_id"`
+	Metadata      json.RawMessage `json:"metadata,omitempty" bson:"-"`
+	MetadataJSON  string          `json:"-" bson:"metadata_json"`
+	CreatedAt     time.Time       `json:"created_at" bson:"created_at"`
+}
+
+// CompanionEventCursor is the cursor used for paging companion event timeline.
+//
+// Order: event_time asc/desc, id asc/desc.
+type CompanionEventCursor struct {
+	EventTime time.Time `json:"event_time"`
+	ID        int64     `json:"id"`
+}
+
+// CompanionEventPage is the paging response of owner-visible companion events.
+type CompanionEventPage struct {
+	Items      []*CompanionEvent `json:"items"`
+	NextCursor string            `json:"next_cursor,omitempty"`
+	HasMore    bool              `json:"has_more"`
 }
 
 // CompanionSessionListCursor is the cursor used for paging companion history list.

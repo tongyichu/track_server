@@ -6,6 +6,8 @@ import (
 	"errors"
 	"time"
 
+	"github.com/go-sql-driver/mysql"
+
 	"github.com/tongyichu/track_server/internal/models"
 )
 
@@ -57,6 +59,10 @@ func (r *MySQLCompanionRepository) CreateSession(ctx context.Context, session *m
 		session.UpdatedAt,
 	)
 	if err != nil {
+		var mysqlErr *mysql.MySQLError
+		if errors.As(err, &mysqlErr) && mysqlErr.Number == 1062 {
+			return ErrAlreadyExists
+		}
 		return err
 	}
 	return nil
@@ -93,6 +99,10 @@ func (r *MySQLCompanionRepository) UpdateSession(ctx context.Context, session *m
 		session.SessionID,
 	)
 	if err != nil {
+		var mysqlErr *mysql.MySQLError
+		if errors.As(err, &mysqlErr) && mysqlErr.Number == 1062 {
+			return ErrAlreadyExists
+		}
 		return err
 	}
 	rows, _ := res.RowsAffected()
@@ -508,8 +518,104 @@ func (r *MySQLCompanionRepository) DeleteDanmakusBySessionEndedBefore(ctx contex
 	}
 }
 
+func (r *MySQLCompanionRepository) InsertEvent(ctx context.Context, event *models.CompanionEvent) error {
+	if event == nil || event.SessionID == "" || event.OwnerUserID <= 0 || event.ClientEventID == "" {
+		return errors.New("invalid companion event")
+	}
+	if event.CreatedAt.IsZero() {
+		event.CreatedAt = time.Now()
+	}
+	res, err := r.db.ExecContext(ctx,
+		`INSERT INTO companion_events (
+			session_id, owner_user_id, event_type, target_user_id,
+			title, content, event_time, client_event_id, metadata_json, created_at
+		) VALUES (?,?,?,?,?,?,?,?,?,?)`,
+		event.SessionID,
+		event.OwnerUserID,
+		event.EventType,
+		event.TargetUserID,
+		event.Title,
+		event.Content,
+		event.EventTime,
+		event.ClientEventID,
+		event.MetadataJSON,
+		event.CreatedAt,
+	)
+	if err != nil {
+		var mysqlErr *mysql.MySQLError
+		if errors.As(err, &mysqlErr) && mysqlErr.Number == 1062 {
+			return ErrAlreadyExists
+		}
+		return err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return err
+	}
+	event.ID = id
+	return nil
+}
+
+func (r *MySQLCompanionRepository) FindEventByClientEventID(ctx context.Context, sessionID, clientEventID string) (*models.CompanionEvent, error) {
+	row := r.db.QueryRowContext(ctx, companionEventSelectSQL()+` WHERE session_id=? AND client_event_id=?`, sessionID, clientEventID)
+	return scanCompanionEventRow(row)
+}
+
+func (r *MySQLCompanionRepository) CountEventsBySessionID(ctx context.Context, sessionID string) (int64, error) {
+	row := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM companion_events WHERE session_id=?`, sessionID)
+	var count int64
+	if err := row.Scan(&count); err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+func (r *MySQLCompanionRepository) ListEventsBySessionID(ctx context.Context, sessionID string, cursor *models.CompanionEventCursor, limit int, ascending bool) ([]*models.CompanionEvent, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	query := companionEventSelectSQL() + ` WHERE session_id=?`
+	args := []any{sessionID}
+	if cursor != nil && !cursor.EventTime.IsZero() && cursor.ID > 0 {
+		if ascending {
+			query += ` AND (event_time > ? OR (event_time = ? AND id > ?))`
+		} else {
+			query += ` AND (event_time < ? OR (event_time = ? AND id < ?))`
+		}
+		args = append(args, cursor.EventTime, cursor.EventTime, cursor.ID)
+	}
+	if ascending {
+		query += ` ORDER BY event_time ASC, id ASC`
+	} else {
+		query += ` ORDER BY event_time DESC, id DESC`
+	}
+	query += ` LIMIT ?`
+	args = append(args, limit)
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := make([]*models.CompanionEvent, 0, limit)
+	for rows.Next() {
+		item, err := scanCompanionEvent(rows)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 func companionSessionSelectSQL() string {
 	return `SELECT companion_sessions.session_id, companion_sessions.owner_user_id, companion_sessions.status, companion_sessions.visibility, companion_sessions.join_token, companion_sessions.title, companion_sessions.track_type, companion_sessions.locate_addr, companion_sessions.max_members, companion_sessions.danmaku_enabled, companion_sessions.total_distance, companion_sessions.total_duration, companion_sessions.track_screenshot_url, companion_sessions.actual_participant_count, companion_sessions.started_at, companion_sessions.ended_at, companion_sessions.end_reason, companion_sessions.end_source, companion_sessions.end_operator_user_id, companion_sessions.created_at, companion_sessions.updated_at FROM companion_sessions`
+}
+
+func companionEventSelectSQL() string {
+	return `SELECT id, session_id, owner_user_id, event_type, target_user_id, title, content, event_time, client_event_id, COALESCE(metadata_json, ''), created_at FROM companion_events`
 }
 
 type companionSessionRowScanner interface{ Scan(dest ...any) error }
@@ -592,4 +698,28 @@ func scanCompanionPosition(row companionPositionRowScanner) (*models.CompanionLi
 		item.TrackID = trackID.String
 	}
 	return &item, nil
+}
+
+type companionEventRowScanner interface{ Scan(dest ...any) error }
+
+func scanCompanionEvent(row companionEventRowScanner) (*models.CompanionEvent, error) {
+	var item models.CompanionEvent
+	if err := row.Scan(&item.ID, &item.SessionID, &item.OwnerUserID, &item.EventType, &item.TargetUserID, &item.Title, &item.Content, &item.EventTime, &item.ClientEventID, &item.MetadataJSON, &item.CreatedAt); err != nil {
+		return nil, err
+	}
+	if item.MetadataJSON != "" {
+		item.Metadata = []byte(item.MetadataJSON)
+	}
+	return &item, nil
+}
+
+func scanCompanionEventRow(row *sql.Row) (*models.CompanionEvent, error) {
+	item, err := scanCompanionEvent(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return item, nil
 }

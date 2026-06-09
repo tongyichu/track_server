@@ -112,3 +112,19 @@ func (r *MongoCompanionRepository) ListDanmakusBySessionID(context.Context, stri
 func (r *MongoCompanionRepository) DeleteDanmakusBySessionEndedBefore(context.Context, time.Time) (int64, error) {
 	return 0, errors.New("MongoCompanionRepository.DeleteDanmakusBySessionEndedBefore not implemented")
 }
+
+func (r *MongoCompanionRepository) InsertEvent(context.Context, *models.CompanionEvent) error {
+	return errors.New("MongoCompanionRepository.InsertEvent not implemented")
+}
+
+func (r *MongoCompanionRepository) FindEventByClientEventID(context.Context, string, string) (*models.CompanionEvent, error) {
+	return nil, errors.New("MongoCompanionRepository.FindEventByClientEventID not implemented")
+}
+
+func (r *MongoCompanionRepository) CountEventsBySessionID(context.Context, string) (int64, error) {
+	return 0, errors.New("MongoCompanionRepository.CountEventsBySessionID not implemented")
+}
+
+func (r *MongoCompanionRepository) ListEventsBySessionID(context.Context, string, *models.CompanionEventCursor, int, bool) ([]*models.CompanionEvent, error) {
+	return nil, errors.New("MongoCompanionRepository.ListEventsBySessionID not implemented")
+}
