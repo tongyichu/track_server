@@ -69,23 +69,23 @@ var defaultCompanionAutoCloseRule = companionAutoCloseRule{
 }
 
 var companionAutoCloseRules = map[string]companionAutoCloseRule{
-	"跑步": {
+	"running": {
 		InactiveTimeout: 30 * time.Minute,
 		MaxDuration:     8 * time.Hour,
 	},
-	"徒步": {
+	"hiking": {
 		InactiveTimeout: 30 * time.Minute,
 		MaxDuration:     16 * time.Hour,
 	},
-	"爬山": {
+	"climbing": {
 		InactiveTimeout: 45 * time.Minute,
 		MaxDuration:     24 * time.Hour,
 	},
-	"骑行": {
+	"riding": {
 		InactiveTimeout: 30 * time.Minute,
 		MaxDuration:     24 * time.Hour,
 	},
-	"自驾": {
+	"driving": {
 		InactiveTimeout: 60 * time.Minute,
 		MaxDuration:     72 * time.Hour,
 	},
@@ -837,7 +837,7 @@ func (s *CompanionService) CreateSession(ctx context.Context, ownerUserID int64,
 		Visibility:     visibility,
 		JoinToken:      joinToken,
 		Title:          title,
-		TrackType:      strings.TrimSpace(in.TrackType),
+		TrackType:      normalizeTrackTypeCode(in.TrackType),
 		LocateAddr:     strings.TrimSpace(in.LocateAddr),
 		MaxMembers:     maxMembers,
 		DanmakuEnabled: true,
@@ -1449,7 +1449,7 @@ func companionMemberLastActivity(member *models.CompanionSessionMember, position
 }
 
 func companionAutoCloseRuleForTrackType(trackType string) companionAutoCloseRule {
-	if rule, ok := companionAutoCloseRules[strings.TrimSpace(trackType)]; ok {
+	if rule, ok := companionAutoCloseRules[normalizeTrackTypeCode(trackType)]; ok {
 		return rule
 	}
 	return defaultCompanionAutoCloseRule

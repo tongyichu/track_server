@@ -317,7 +317,7 @@ func TestCreateTrack_WithBody(t *testing.T) {
 	if result.Data.SessionID != "sess_create_001" {
 		t.Fatalf("expected session_id sess_create_001, got %q", result.Data.SessionID)
 	}
-	if result.Data.TrackType != "跑步" {
+	if result.Data.TrackType != "running" {
 		t.Fatalf("unexpected track_type: %q", result.Data.TrackType)
 	}
 	if result.Data.CoordinateSystem != "GCJ02" {
@@ -419,6 +419,85 @@ func TestAchievementRewardsAfterCompletedTrack(t *testing.T) {
 	for _, reward := range resp.Data.Rewards {
 		if reward.Type == models.AchievementRewardTypeMilestone {
 			t.Fatalf("expected MVP rewards to exclude milestones, got %+v", reward)
+		}
+	}
+}
+
+func TestAchievementRewardsAfterCompletedTrackWithEnglishType(t *testing.T) {
+	e := newTestEnv()
+	token := e.generateTestToken(1001)
+
+	body := []byte(`{"track_type":"running","distance":6000,"duration":1800,"is_running":false}`)
+	w := e.perform(http.MethodPost, "/api/v1/track/create", body, authHeader(token))
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected create completed track status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+	var createResp handler.StandardResponse[*models.Track]
+	decodeJSON(t, w.Body.Bytes(), &createResp)
+	if createResp.Data == nil {
+		t.Fatalf("expected created track")
+	}
+	if createResp.Data.TrackType != "running" {
+		t.Fatalf("expected normalized track_type running, got %q", createResp.Data.TrackType)
+	}
+
+	rewards, err := e.achievementRepo.ListUserRewards(context.Background(), 1001)
+	if err != nil {
+		t.Fatalf("list achievement rewards failed: %v", err)
+	}
+	earned := map[string]bool{}
+	for _, reward := range rewards {
+		earned[reward.RewardCode] = true
+	}
+	for _, code := range []string{"first_track", "run_5k"} {
+		if !earned[code] {
+			t.Fatalf("expected reward %s to be settled for english track_type", code)
+		}
+	}
+}
+
+func TestAchievementRewardsLazyBackfillHistoricalEnglishType(t *testing.T) {
+	e := newTestEnv()
+	token := e.generateTestToken(1001)
+	ctx := context.Background()
+
+	if err := e.trackRepo.Create(ctx, &models.Track{
+		ID:        "trk-ach-backfill",
+		UserID:    1001,
+		Title:     "历史跑步",
+		TrackType: "running",
+		Distance:  6000,
+		Duration:  1800,
+		StartTime: time.Now().Add(-time.Hour),
+		EndTime:   time.Now(),
+		IsRunning: false,
+		Status:    models.TrackStatusNormal,
+	}); err != nil {
+		t.Fatalf("create historical track failed: %v", err)
+	}
+	before, err := e.achievementRepo.ListUserRewards(ctx, 1001)
+	if err != nil {
+		t.Fatalf("list rewards before backfill failed: %v", err)
+	}
+	if len(before) != 0 {
+		t.Fatalf("expected no rewards before lazy backfill, got %d", len(before))
+	}
+
+	w := e.perform(http.MethodGet, "/api/v1/achievement/rewards", nil, authHeader(token))
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected achievement rewards status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
+	}
+	after, err := e.achievementRepo.ListUserRewards(ctx, 1001)
+	if err != nil {
+		t.Fatalf("list rewards after backfill failed: %v", err)
+	}
+	earned := map[string]bool{}
+	for _, reward := range after {
+		earned[reward.RewardCode] = true
+	}
+	for _, code := range []string{"first_track", "run_5k"} {
+		if !earned[code] {
+			t.Fatalf("expected reward %s after lazy backfill", code)
 		}
 	}
 }
@@ -1170,6 +1249,7 @@ func TestUpdateTrackInfo_Success(t *testing.T) {
 		"session_id":                     "sess_update_001",
 		"city_code":                      "330100",
 		"locate_addr":                    "杭州市西湖区",
+		"track_type":                     "running",
 		"coordinate_system":              "BD09",
 		"distance":                       200.5,
 		"is_running":                     false,
@@ -1202,6 +1282,9 @@ func TestUpdateTrackInfo_Success(t *testing.T) {
 	}
 	if result.Data.SessionID != "sess_update_001" {
 		t.Fatalf("expected session_id sess_update_001, got %q", result.Data.SessionID)
+	}
+	if result.Data.TrackType != "running" {
+		t.Fatalf("expected track_type running, got %q", result.Data.TrackType)
 	}
 	// 只有当字段为空时才允许更新：duration 非空应保持原值。
 	if result.Data.Duration != 10 {

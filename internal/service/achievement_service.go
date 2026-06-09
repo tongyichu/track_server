@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"math"
-	"strings"
 	"time"
 
 	"github.com/tongyichu/track_server/internal/models"
@@ -30,6 +29,9 @@ func (s *AchievementService) Definitions() []models.AchievementDefinition {
 }
 
 func (s *AchievementService) GetSummary(ctx context.Context, userID int64) (*models.AchievementSummary, error) {
+	if err := s.SettleUserCompletedTracks(ctx, userID); err != nil {
+		return nil, err
+	}
 	stats, earned, err := s.buildUserState(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -58,6 +60,9 @@ func (s *AchievementService) GetLevelInfo(ctx context.Context, userID int64) (*m
 }
 
 func (s *AchievementService) ListRewards(ctx context.Context, userID int64) (*models.AchievementRewardList, error) {
+	if err := s.SettleUserCompletedTracks(ctx, userID); err != nil {
+		return nil, err
+	}
 	stats, earned, err := s.buildUserState(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -73,7 +78,26 @@ func (s *AchievementService) SettleTrackCompleted(ctx context.Context, track *mo
 	if s == nil || s.rewards == nil || track == nil || !isQualifiedAchievementTrack(track) {
 		return nil, nil
 	}
-	stats, earned, err := s.buildUserState(ctx, track.UserID)
+	return s.settleUserRewards(ctx, track.UserID, track)
+}
+
+func (s *AchievementService) SettleUserCompletedTracks(ctx context.Context, userID int64) error {
+	if s == nil || s.rewards == nil || s.tracks == nil {
+		return nil
+	}
+	if userID <= 0 {
+		return invalidArg("userID is required")
+	}
+	sourceTrack, err := s.findAnyQualifiedTrack(ctx, userID)
+	if err != nil || sourceTrack == nil {
+		return err
+	}
+	_, err = s.settleUserRewards(ctx, userID, sourceTrack)
+	return err
+}
+
+func (s *AchievementService) settleUserRewards(ctx context.Context, userID int64, sourceTrack *models.Track) ([]*models.AchievementRewardView, error) {
+	stats, earned, err := s.buildUserState(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -87,10 +111,10 @@ func (s *AchievementService) SettleTrackCompleted(ctx context.Context, track *mo
 			continue
 		}
 		reward := &models.UserAchievementReward{
-			UserID:          track.UserID,
+			UserID:          userID,
 			RewardCode:      def.Code,
-			SourceTrackID:   track.ID,
-			SourceSessionID: track.SessionID,
+			SourceTrackID:   sourceTrack.ID,
+			SourceSessionID: sourceTrack.SessionID,
 			EarnedAt:        now,
 		}
 		created, err := s.rewards.UpsertUserReward(ctx, reward)
@@ -103,6 +127,26 @@ func (s *AchievementService) SettleTrackCompleted(ctx context.Context, track *mo
 		}
 	}
 	return newRewards, nil
+}
+
+func (s *AchievementService) findAnyQualifiedTrack(ctx context.Context, userID int64) (*models.Track, error) {
+	var cursor *models.TrackListCursor
+	for {
+		items, err := s.tracks.ListByUserID(ctx, userID, cursor, maxTrackPageSize)
+		if err != nil {
+			return nil, err
+		}
+		for _, track := range items {
+			if isQualifiedAchievementTrack(track) {
+				return track, nil
+			}
+		}
+		if len(items) < maxTrackPageSize {
+			return nil, nil
+		}
+		last := items[len(items)-1]
+		cursor = &models.TrackListCursor{StartTime: last.StartTime, ID: last.ID}
+	}
 }
 
 func (s *AchievementService) buildUserState(ctx context.Context, userID int64) (*models.UserAchievementStats, map[string]*models.UserAchievementReward, error) {
@@ -229,8 +273,8 @@ func isQualifiedAchievementTrack(track *models.Track) bool {
 		return false
 	}
 	trackType := normalizeAchievementTrackType(track.TrackType)
-	minDistance := map[string]float64{"跑步": 500, "徒步": 500, "爬山": 300, "骑行": 1000, "自驾": 3000}
-	minDuration := map[string]uint32{"跑步": 180, "徒步": 300, "爬山": 300, "骑行": 300, "自驾": 300}
+	minDistance := map[string]float64{"running": 500, "hiking": 500, "climbing": 300, "riding": 1000, "driving": 3000}
+	minDuration := map[string]uint32{"running": 180, "hiking": 300, "climbing": 300, "riding": 300, "driving": 300}
 	if minDistance[trackType] == 0 {
 		return false
 	}
@@ -240,8 +284,8 @@ func isQualifiedAchievementTrack(track *models.Track) bool {
 func achievementTrackXP(track *models.Track) int64 {
 	trackType := normalizeAchievementTrackType(track.TrackType)
 	distanceKM := track.Distance / metersPerKM
-	weights := map[string]float64{"跑步": 15, "徒步": 18, "爬山": 12, "骑行": 6, "自驾": 1}
-	caps := map[string]float64{"跑步": 800, "徒步": 900, "爬山": 700, "骑行": 1200, "自驾": 600}
+	weights := map[string]float64{"running": 15, "hiking": 18, "climbing": 12, "riding": 6, "driving": 1}
+	caps := map[string]float64{"running": 800, "hiking": 900, "climbing": 700, "riding": 1200, "driving": 600}
 	distanceXP := distanceKM * weights[trackType]
 	if capValue := caps[trackType]; capValue > 0 && distanceXP > capValue {
 		distanceXP = capValue
@@ -249,11 +293,11 @@ func achievementTrackXP(track *models.Track) int64 {
 	durationXP := math.Min(float64(track.Duration)/600*5, 120)
 	elevationXP := 0.0
 	switch trackType {
-	case "爬山":
+	case "climbing":
 		elevationXP = float64(track.ElevationGain) / 100 * 12
-	case "骑行":
+	case "riding":
 		elevationXP = float64(track.ElevationGain) / 100 * 6
-	case "徒步":
+	case "hiking":
 		elevationXP = float64(track.ElevationGain) / 100 * 3
 	}
 	qualityXP := 0.0
@@ -274,15 +318,7 @@ func achievementTrackXP(track *models.Track) int64 {
 }
 
 func normalizeAchievementTrackType(trackType string) string {
-	t := strings.TrimSpace(trackType)
-	switch t {
-	case "跑步", "徒步", "爬山", "骑行", "自驾":
-		return t
-	case "骑车":
-		return "骑行"
-	default:
-		return t
-	}
+	return normalizeTrackTypeCode(trackType)
 }
 
 func resolveAchievementLevel(xp int64) (models.AchievementLevel, *models.AchievementLevel, float64) {
@@ -317,27 +353,27 @@ func achievementProgress(def models.AchievementDefinition, stats *models.UserAch
 	case "first_companion":
 		return float64(stats.CompanionCount)
 	case "run_5k", "run_10k":
-		return typeMaxDistanceKM(stats, "跑步")
+		return typeMaxDistanceKM(stats, "running")
 	case "hike_3k", "hike_15k":
-		return typeMaxDistanceKM(stats, "徒步")
+		return typeMaxDistanceKM(stats, "hiking")
 	case "climb_100m", "climb_1000m":
-		return float64(stats.TypeStats["爬山"].MaxElevationGain)
+		return float64(stats.TypeStats["climbing"].MaxElevationGain)
 	case "ride_10k", "ride_50k":
-		return typeMaxDistanceKM(stats, "骑行")
+		return typeMaxDistanceKM(stats, "riding")
 	case "drive_30k", "drive_300k":
-		return typeMaxDistanceKM(stats, "自驾")
+		return typeMaxDistanceKM(stats, "driving")
 	}
 	switch def.Category {
 	case "跑步":
-		return typeDistanceKM(stats, "跑步")
+		return typeDistanceKM(stats, "running")
 	case "徒步":
-		return typeDistanceKM(stats, "徒步")
+		return typeDistanceKM(stats, "hiking")
 	case "爬山":
-		return float64(stats.TypeStats["爬山"].ElevationGain)
+		return float64(stats.TypeStats["climbing"].ElevationGain)
 	case "骑行":
-		return typeDistanceKM(stats, "骑行")
+		return typeDistanceKM(stats, "riding")
 	case "自驾":
-		return typeDistanceKM(stats, "自驾")
+		return typeDistanceKM(stats, "driving")
 	}
 	return 0
 }

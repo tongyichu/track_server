@@ -117,7 +117,7 @@ App Server 提供以下职责：
 - `title`
 - `max_members`
 - `started_at`
-- `expires_at`（由 `started_at + track_type 对应最大持续时间` 派生，不入库，用于客户端 session 过期倒计时）
+- `expires_at`（由 `started_at + track_type 对应最大持续时间` 派生，不入库，用于客户端 session 过期倒计时；`track_type` 使用英文 code，如 `hiking` / `running`）
 - `ended_at`
 
 ### 5.2 CompanionSessionMember
@@ -597,14 +597,14 @@ last_activity_at = max(member.last_seen_at, latest_position.recorded_at, member.
 
 内置策略写在代码中，不通过启动参数配置：
 
-| 运动类型 | 无活动阈值 | 最大持续时间 |
-| --- | --- | --- |
-| 跑步 | 30 分钟 | 8 小时 |
-| 徒步 | 30 分钟 | 16 小时 |
-| 爬山 | 45 分钟 | 24 小时 |
-| 骑行 | 30 分钟 | 24 小时 |
-| 自驾 | 60 分钟 | 72 小时 |
-| 未知类型 | 45 分钟 | 24 小时 |
+| 运动类型 code | 展示名 | 全员无活动超时 | 最大持续时长 |
+| --- | --- | --- | --- |
+| `running` | 跑步 | 30 分钟 | 8 小时 |
+| `hiking` | 徒步 | 30 分钟 | 16 小时 |
+| `climbing` | 爬山 | 45 分钟 | 24 小时 |
+| `riding` | 骑行 | 30 分钟 | 24 小时 |
+| `driving` | 自驾 | 60 分钟 | 72 小时 |
+| 未知类型 | - | 45 分钟 | 24 小时 |
 
 控制面返回的 `session.expires_at` 与附近房间列表的 `expires_at` 使用同一套最大持续时间规则计算：
 

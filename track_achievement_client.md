@@ -34,6 +34,7 @@
 | `POST /track/create` 且 `is_running=false` | 创建已完成轨迹后立即结算 |
 | `POST /track/:track_id/upload_cloud` | 进行中轨迹上传云端并标记完成后结算 |
 | `PUT /track/:track_id/update` | 已完成轨迹补充距离、爬升、截图等字段后幂等结算 |
+| `GET /achievement/summary` / `GET /achievement/rewards` | 查询前会幂等补齐历史有效轨迹的奖励记录，兼容早期未结算数据 |
 
 同一用户同一个成就只会发放一次。客户端可以在完成轨迹后重新请求成就摘要或奖励列表，判断是否有新奖励。
 
@@ -53,7 +54,7 @@
 
 1. `is_running=false`。
 2. `status=1`，即正常轨迹。
-3. `track_type` 必须是 `跑步` / `徒步` / `爬山` / `骑行` / `自驾` 之一。
+3. `track_type` 必须使用 `/track/types` 返回的英文 `type`：`hiking` / `running` / `climbing` / `riding` / `driving`；服务端兼容历史中文名输入，但入库和成就计算都会归一为英文 code。
 
 ## 4. 接口一：成就中心摘要
 
@@ -93,7 +94,7 @@ Authorization: Bearer <token>
       "total_elevation_gain": 0,
       "companion_count": 0,
       "type_stats": {
-        "跑步": {
+        "running": {
           "distance": 6000,
           "duration": 1800,
           "elevation_gain": 0,

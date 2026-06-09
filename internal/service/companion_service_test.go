@@ -587,8 +587,8 @@ func TestCompanionServiceListHistory(t *testing.T) {
 			t.Fatalf("expected left participant 1003 excluded from active participants: %+v", page1.Items[0].Participants)
 		}
 	}
-	if page1.Items[0].TrackType != "跑步" {
-		t.Fatalf("expected active track_type=跑步, got %q", page1.Items[0].TrackType)
+	if page1.Items[0].TrackType != "running" {
+		t.Fatalf("expected active track_type=running, got %q", page1.Items[0].TrackType)
 	}
 	if page1.Items[0].DurationSeconds < 0 {
 		t.Fatalf("expected non-negative active duration_seconds, got %d", page1.Items[0].DurationSeconds)
@@ -610,8 +610,8 @@ func TestCompanionServiceListHistory(t *testing.T) {
 	if page2.Items[0].ParticipantCount != 2 || len(page2.Items[0].Participants) != 2 {
 		t.Fatalf("expected ended participant history preserved, got %+v", page2.Items[0])
 	}
-	if page2.Items[0].TrackType != "徒步" {
-		t.Fatalf("expected ended track_type=徒步, got %q", page2.Items[0].TrackType)
+	if page2.Items[0].TrackType != "hiking" {
+		t.Fatalf("expected ended track_type=hiking, got %q", page2.Items[0].TrackType)
 	}
 	if page2.Items[0].LocateAddr != "北京市海淀区颐和园" {
 		t.Fatalf("expected ended locate_addr=北京市海淀区颐和园, got %q", page2.Items[0].LocateAddr)

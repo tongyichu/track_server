@@ -183,7 +183,7 @@ func TestCreateTrack_UsesProvidedFields(t *testing.T) {
 	screenshotURL := "https://example.com/track.png"
 	isRunning := false
 	avgSpeed := 10.4
-	trackType := "跑步"
+	trackType := "running"
 	coordinateSystem := "GCJ02"
 	sessionID := "sess_companion_001"
 

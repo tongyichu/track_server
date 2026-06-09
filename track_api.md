@@ -101,7 +101,7 @@ Token 的获取与说明参考 `login.md`。
 | `session_id` | string | 关联的同行会话 ID；非同行轨迹为空字符串 |
 | `city_code` | string | 城市 Code（用于标识轨迹所属城市；城市/省份映射关系维护在配置文件中） |
 | `locate_addr` | string | 轨迹的具体位置信息 |
-| `track_type` | string | 轨迹类型，例如 `徒步` / `跑步` / `骑车` / `自驾` |
+| `track_type` | string | 轨迹类型 code，例如 `hiking` / `running` / `climbing` / `riding` / `driving` |
 | `coordinate_system` | string | 坐标系，例如 `WGS84` / `GCJ02` / `BD09` |
 | `title` | string | 轨迹标题 |
 | `start_time` | string | 开始时间（RFC3339/ISO8601，服务端序列化时间格式） |
@@ -144,7 +144,7 @@ Authorization: Bearer <token>
   "session_id": "sess_xxx",
   "city_code": "330100",
   "locate_addr": "杭州市西湖区",
-  "track_type": "跑步",
+  "track_type": "running",
   "coordinate_system": "GCJ02",
   "start_time": "2026-04-20T12:00:00Z",
   "end_time": "2026-04-20T12:30:00Z",
@@ -166,7 +166,7 @@ Authorization: Bearer <token>
 | `session_id` | string | 否 | 关联的同行会话 ID；参加同行结束后上传个人轨迹时传同一个 `session_id`，用于把本次同行内多人轨迹串联起来 |
 | `city_code` | string | 否 | 城市 Code（标识轨迹所属城市） |
 | `locate_addr` | string | 否 | 轨迹的具体位置信息，最大长度 `255` 字符 |
-| `track_type` | string | 否 | 轨迹类型，例如 `徒步` / `跑步` / `骑车` / `自驾` |
+| `track_type` | string | 否 | 轨迹类型，使用 `/track/types` 返回的英文 `type`：`hiking` / `running` / `climbing` / `riding` / `driving`；服务端兼容历史中文名输入，但入库会归一为英文 code |
 | `coordinate_system` | string | 否 | 坐标系，例如 `WGS84` / `GCJ02` / `BD09` |
 | `start_time` | string | 否 | 开始时间，RFC3339/ISO8601 格式 |
 | `end_time` | string | 否 | 结束时间，RFC3339/ISO8601 格式，必须 `>= start_time` |
@@ -195,7 +195,7 @@ Authorization: Bearer <token>
     "session_id": "sess_xxx",
     "city_code": "330100",
     "locate_addr": "杭州市西湖区",
-    "track_type": "跑步",
+    "track_type": "running",
     "coordinate_system": "GCJ02",
     "title": "傍晚夜跑",
     "start_time": "2026-04-20T12:00:00Z",
@@ -249,7 +249,7 @@ curl -X POST "http://<host>:<port>/api/v1/track/create" \
     "session_id": "sess_xxx",
     "city_code": "330100",
     "locate_addr": "杭州市西湖区",
-    "track_type": "跑步",
+    "track_type": "running",
     "start_time": "2026-04-20T12:00:00Z",
     "end_time": "2026-04-20T12:30:00Z",
     "distance": 1200.5,
@@ -282,7 +282,7 @@ curl -X POST "http://<host>:<port>/api/v1/track/create" \
 - 返回结果中的 `nickname` / `user_avatar_url` 为轨迹所属用户的昵称/头像 URI。
 - 返回结果中的 `city_code` / `city_name` 为轨迹所属城市 Code 及其对应的城市名称。
 - 返回结果中的 `locate_addr` 为轨迹的具体位置信息。
-- 返回结果中的 `track_type` 为轨迹类型，例如 `徒步` / `跑步` / `骑车` / `自驾`。
+- 返回结果中的 `track_type` 为英文轨迹类型 code，例如 `hiking` / `running` / `climbing` / `riding` / `driving`。
 - 返回结果中的 `start_time` 为运动开始时间。
 - 返回结果中的 `end_time` 为运动结束时间。
 - 返回结果中的 `avg_speed_kmh` 为平均速度（km/h）。
@@ -324,7 +324,7 @@ Authorization: Bearer <token>
         "session_id": "sess_xxx",
         "city_code": "330100",
         "locate_addr": "杭州市西湖区",
-        "track_type": "徒步",
+        "track_type": "hiking",
         "start_time": "2026-04-20T12:00:00Z",
         "end_time": "2026-04-20T12:10:00Z",
         "city_name": "杭州市",
@@ -408,7 +408,7 @@ Authorization: Bearer <token>
     "id": "trk-detail",
     "user_id": 1001,
     "session_id": "sess_xxx",
-    "track_type": "徒步",
+    "track_type": "hiking",
     "coordinate_system": "WGS84",
     "title": "详情轨迹",
     "start_time": "2026-04-20T12:00:00Z",
@@ -614,7 +614,7 @@ Authorization: Bearer <token>
       "total_elevation_gain": 0,
       "companion_count": 0,
       "type_stats": {
-        "跑步": {
+        "running": {
           "distance": 6000,
           "duration": 1800,
           "elevation_gain": 0,
@@ -654,7 +654,7 @@ Authorization: Bearer <token>
 | `stats.next_level` | object/null | 下一等级；满级时为空 |
 | `stats.level_progress` | number | 当前等级到下一等级的进度，范围 `0-1` |
 | `stats.qualified_track_count` | int64 | 参与成就计算的有效轨迹数 |
-| `stats.type_stats` | object | 按运动类型聚合的统计，key 为 `跑步` / `徒步` / `爬山` / `骑行` / `自驾` |
+| `stats.type_stats` | object | 按运动类型聚合的统计，key 为英文运动类型 code：`hiking` / `running` / `climbing` / `riding` / `driving` |
 | `recent_rewards` | array | 最近获得的奖励，最多 10 条 |
 
 ---
@@ -722,6 +722,7 @@ Authorization: Bearer <token>
 - `track/create` 创建已完成轨迹（`is_running=false`）后会触发成就结算。
 - `/track/:track_id/upload_cloud` 将进行中轨迹标记完成后会触发成就结算。
 - `/track/:track_id/update` 更新已完成轨迹的补充字段后会尝试幂等结算。
+- `/achievement/summary` 与 `/achievement/rewards` 会在查询前幂等补齐该用户历史有效轨迹的奖励记录，用于兼容历史轨迹或早期未结算数据。
 - 同一用户同一成就只会发放一次。
 - `404 Not Found`
   - `track_id` 对应轨迹不存在
@@ -806,7 +807,7 @@ curl -X DELETE "http://<host>:<port>/api/v1/track_collect?track_id=trk2" \
 - 返回结果中的 `nickname` / `user_avatar_url` 为轨迹所属用户的昵称/头像 URI。
 - 返回结果中的 `city_code` / `city_name` 为轨迹所属城市 Code 及其对应的城市名称。
 - 返回结果中的 `locate_addr` 为轨迹的具体位置信息。
-- 返回结果中的 `track_type` 为轨迹类型，例如 `徒步` / `跑步` / `骑车` / `自驾`。
+- 返回结果中的 `track_type` 为英文轨迹类型 code，例如 `hiking` / `running` / `climbing` / `riding` / `driving`。
 - 返回结果中的 `start_time` 为运动开始时间。
 - 返回结果中的 `end_time` 为运动结束时间。
 - 返回结果中的 `avg_speed_kmh` 为平均速度（km/h）。
@@ -850,7 +851,7 @@ Authorization: Bearer <token>
         "session_id": "sess_xxx",
         "city_code": "330100",
         "locate_addr": "杭州市西湖区",
-        "track_type": "徒步",
+        "track_type": "hiking",
         "start_time": "2026-04-20T12:00:00Z",
         "end_time": "2026-04-20T12:10:00Z",
         "city_name": "杭州市",
@@ -1040,7 +1041,7 @@ Authorization: Bearer <token>
         "session_id": "sess_xxx",
         "city_code": "330100",
         "locate_addr": "杭州市西湖区",
-        "track_type": "徒步",
+        "track_type": "hiking",
         "start_time": "2026-04-20T12:00:00Z",
         "end_time": "2026-04-20T12:10:00Z",
         "city_name": "杭州市",
@@ -1076,7 +1077,7 @@ Authorization: Bearer <token>
 | `data.items[].session_id` | string | 关联的同行会话 ID；非同行轨迹为空字符串。 |
 | `data.items[].city_code` | string | 城市 Code。 |
 | `data.items[].locate_addr` | string | 轨迹的具体位置信息。 |
-| `data.items[].track_type` | string | 轨迹类型，例如 `徒步` / `跑步` / `骑车` / `自驾`。 |
+| `data.items[].track_type` | string | 英文轨迹类型 code，例如 `hiking` / `running` / `climbing` / `riding` / `driving`。 |
 | `data.items[].start_time` | string | 运动开始时间。 |
 | `data.items[].end_time` | string | 运动结束时间。 |
 | `data.items[].city_name` | string | 城市名称，由 `city_code` 映射得到。 |
@@ -1245,6 +1246,7 @@ Authorization: Bearer <token>
   "session_id": "sess_xxx",
   "city_code": "330100",
   "locate_addr": "杭州市西湖区",
+  "track_type": "running",
   "coordinate_system": "GCJ02",
   "raw_track_url": "https://<bucket>.oss-<region>.aliyuncs.com/prod/track/.../xxx.dat",
   "track_screenshot_url": "https://<bucket>.oss-<region>.aliyuncs.com/prod/track/.../xxx.jpg",
@@ -1261,6 +1263,7 @@ Authorization: Bearer <token>
 | `session_id` | string | 否 | 关联的同行会话 ID，仅当原值为空时才会写入；用于把同一次同行结束后各成员上传的个人轨迹串联起来 |
 | `city_code` | string | 否 | 城市 Code（仅当原值为空时才会写入） |
 | `locate_addr` | string | 否 | 轨迹的具体位置信息，最大长度 `255` 字符（仅当原值为空时才会写入） |
+| `track_type` | string | 否 | 轨迹类型，仅当原值为空时才会写入；使用 `/track/types` 返回的英文 `type`，服务端兼容历史中文名输入但会归一为英文 code |
 | `coordinate_system` | string | 否 | 坐标系，例如 `WGS84` / `GCJ02` / `BD09`（仅当原值为空时才会写入） |
 | `raw_track_url` | string | 否 | 原始轨迹文件 OSS 地址（仅当原值为空时才会写入） |
 | `track_screenshot_url` | string | 否 | 轨迹截图 OSS 地址（仅当原值为空时才会写入） |
@@ -1403,7 +1406,7 @@ Authorization: Bearer <token>
         "user_id": 1001,
         "city_code": "330100",
         "locate_addr": "杭州市西湖区",
-        "track_type": "徒步",
+        "track_type": "hiking",
         "start_time": "2026-04-20T12:00:00Z",
         "end_time": "2026-04-20T13:30:00Z",
         "city_name": "杭州市",
@@ -1663,8 +1666,8 @@ X-Platform: android
 
 ### 说明
 
-- 默认返回：`徒步`、`跑步`、`爬山`、`骑行`、`自驾`。
-- 服务端可通过环境变量 `TRACK_TYPES` 配置运动类型，支持使用英文逗号、分号、中文逗号、顿号或竖线分隔，例如：`TRACK_TYPES=徒步,跑步,爬山,骑行,自驾,滑雪`。
+- 默认返回五个内置运动类型，`type` 分别为 `hiking`、`running`、`climbing`、`riding`、`driving`，`name` 分别为 `徒步`、`跑步`、`爬山`、`骑行`、`自驾`。
+- 服务端可通过环境变量 `TRACK_TYPES` 配置运动类型展示名，支持使用英文逗号、分号、中文逗号、顿号或竖线分隔，例如：`TRACK_TYPES=徒步,跑步,爬山,骑行,自驾,滑雪`。
 - 服务端会自动过滤空项和重复项；若未配置或配置为空，则使用默认列表。
 - 每个运动类型会返回一个图标链接 `icon_url`，图标文件来自服务端静态目录 `/api/v1/static/track_type_icon/`；默认对应关系为：`徒步 -> hiking.svg`、`跑步 -> running.svg`、`爬山 -> climbing.svg`、`骑行 -> riding.svg`、`自驾 -> driving.svg`。
 - 每个运动类型会额外返回：`type`（英文标识）、`theme_color`（主题色）、`icon_anim_url`（Lottie 动画文件链接；当前默认空字符串，后续可通过配置补充）。
@@ -1774,7 +1777,7 @@ Content-Type: application/json
 ```json
 {
   "title": "周末同行",
-  "track_type": "徒步",
+  "track_type": "hiking",
   "locate_addr": "北京市海淀区颐和园",
   "max_members": 8,
   "visibility": "private"
@@ -1784,7 +1787,7 @@ Content-Type: application/json
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | `title` | string | 否 | 会话标题，默认 `与友同行` |
-| `track_type` | string | 否 | 运动类型（徒步 / 跑步 / 爬山 / 骑行 / 自驾 等，与 `track_types` 接口返回的类型一致），默认空字符串 |
+| `track_type` | string | 否 | 运动类型 code（`hiking` / `running` / `climbing` / `riding` / `driving` 等，与 `track_types` 接口返回的 `type` 一致），默认空字符串 |
 | `locate_addr` | string | 否 | 创建会话时的位置信息文本（由客户端逆地理获取），默认空字符串，最大 255 字符 |
 | `max_members` | int | 否 | 最大成员数，默认 `8`，最小 `2`，最大 `32` |
 | `visibility` | string | 否 | 可见性：`private`（默认，私密房间，必须凭 `join_token` 加入） / `public`（公开房间，可凭 `session_id` 加入，且会出现在「附近房间」列表中） |
@@ -1801,7 +1804,7 @@ Content-Type: application/json
       "status": "active",
       "visibility": "private",
       "title": "周末同行",
-      "track_type": "徒步",
+      "track_type": "hiking",
       "locate_addr": "北京市海淀区颐和园",
       "max_members": 8,
       "started_at": "2026-05-23T16:00:00Z",
@@ -2083,7 +2086,7 @@ Authorization: Bearer <token>
       "status": "active",
       "visibility": "private",
       "title": "周末同行",
-      "track_type": "徒步",
+      "track_type": "hiking",
       "locate_addr": "北京市海淀区颐和园",
       "max_members": 8,
       "danmaku_enabled": true,
@@ -2150,7 +2153,7 @@ Authorization: Bearer <token>
       {
         "session_id": "sess_xxx",
         "title": "周末同行",
-        "track_type": "徒步",
+        "track_type": "hiking",
         "locate_addr": "北京市海淀区颐和园",
         "participant_count": 3,
         "started_at": "2026-05-23T16:00:00Z",
@@ -2185,7 +2188,7 @@ Authorization: Bearer <token>
 | `data.items` | `CompanionHistoryItem[]` | 当前页记录列表，按 `started_at DESC, session_id DESC` 排序。 |
 | `data.items[].session_id` | string | 同行会话 ID。 |
 | `data.items[].title` | string | 同行标题。 |
-| `data.items[].track_type` | string | 运动类型（徒步 / 跑步 / 爬山 / 骑行 / 自驾 等），创建会话时传入；若未设置则为空字符串。 |
+| `data.items[].track_type` | string | 运动类型 code（`hiking` / `running` / `climbing` / `riding` / `driving` 等），创建会话时传入；若未设置则为空字符串。 |
 | `data.items[].locate_addr` | string | 创建会话时的位置信息文本（由客户端逆地理获取）；若未设置则为空字符串。 |
 | `data.items[].participant_count` | int64 | 该场同行人数：若 `status=ended`，返回参与过的人数；若 `status=active`，返回当前仍为 `joined` 的人数。 |
 | `data.items[].started_at` | string(datetime) | 同行开始时间。 |
@@ -2601,7 +2604,7 @@ Authorization: Bearer <token>
       {
         "session_id": "sess_xxx",
         "title": "周末同行",
-        "track_type": "徒步",
+        "track_type": "hiking",
         "locate_addr": "北京市海淀区颐和园",
         "join_token": "ab12cd34",
         "max_members": 8,
@@ -2641,7 +2644,7 @@ Authorization: Bearer <token>
 | `data.items` | `CompanionNearbyItem[]` | 命中半径的 active 房间列表，按 `distance_m` 升序。 |
 | `data.items[].session_id` | string | 同行会话 ID。 |
 | `data.items[].title` | string | 同行标题。 |
-| `data.items[].track_type` | string | 运动类型（徒步 / 跑步 / 爬山 / 骑行 / 自驾 等），创建会话时传入；若未设置则为空字符串。 |
+| `data.items[].track_type` | string | 运动类型 code（`hiking` / `running` / `climbing` / `riding` / `driving` 等），创建会话时传入；若未设置则为空字符串。 |
 | `data.items[].locate_addr` | string | 创建会话时的位置文本；若未设置则为空字符串。 |
 | `data.items[].join_token` | string | 加入口令，可用于直接调用 `/companion/session/join`。 |
 | `data.items[].max_members` | int | 房间最大人数。 |
@@ -2679,8 +2682,8 @@ Authorization: Bearer <token>
 
 ### 说明
 
-- 默认返回：`徒步`、`跑步`、`爬山`、`骑行`、`自驾`。
-- 服务端可通过环境变量 `TRACK_TYPES` 配置运动类型，支持使用英文逗号、分号、中文逗号、顿号或竖线分隔，例如：`TRACK_TYPES=徒步,跑步,爬山,骑行,自驾,滑雪`。
+- 默认返回五个内置运动类型，`type` 分别为 `hiking`、`running`、`climbing`、`riding`、`driving`，`name` 分别为 `徒步`、`跑步`、`爬山`、`骑行`、`自驾`。
+- 服务端可通过环境变量 `TRACK_TYPES` 配置运动类型展示名，支持使用英文逗号、分号、中文逗号、顿号或竖线分隔，例如：`TRACK_TYPES=徒步,跑步,爬山,骑行,自驾,滑雪`。
 - 服务端会自动过滤空项和重复项；若未配置或配置为空，则使用默认列表。
 - 每个运动类型会返回一个图标链接 `icon_url`，图标文件来自服务端静态目录 `/api/v1/static/track_type_icon/`；默认对应关系为：`徒步 -> hiking.svg`、`跑步 -> running.svg`、`爬山 -> climbing.svg`、`骑行 -> riding.svg`、`自驾 -> driving.svg`。
 - 每个运动类型会额外返回：`type`（英文标识）、`theme_color`（主题色）、`icon_anim_url`（Lottie 动画文件链接；当前默认空字符串，后续可通过配置补充）。

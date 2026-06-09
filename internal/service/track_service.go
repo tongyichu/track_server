@@ -121,6 +121,10 @@ func (in *CreateTrackInput) normalize() {
 		v := strings.TrimSpace(*in.SessionID)
 		in.SessionID = &v
 	}
+	if in.TrackType != nil {
+		v := normalizeTrackTypeCode(*in.TrackType)
+		in.TrackType = &v
+	}
 }
 
 func (in CreateTrackInput) validate() error {
@@ -159,6 +163,7 @@ type TrackInfoPatch struct {
 	SessionID                 *string  `json:"session_id"`
 	CityCode                  *string  `json:"city_code"`
 	LocateAddr                *string  `json:"locate_addr"`
+	TrackType                 *string  `json:"track_type"`
 	CoordinateSystem          *string  `json:"coordinate_system"`
 	Distance                  *float64 `json:"distance"`
 	Duration                  *uint32  `json:"duration"`
@@ -181,12 +186,17 @@ func (p *TrackInfoPatch) normalize() {
 		v := strings.TrimSpace(*p.SessionID)
 		p.SessionID = &v
 	}
+	if p.TrackType != nil {
+		v := normalizeTrackTypeCode(*p.TrackType)
+		p.TrackType = &v
+	}
 }
 
 func (p TrackInfoPatch) empty() bool {
 	return p.SessionID == nil &&
 		p.CityCode == nil &&
 		p.LocateAddr == nil &&
+		p.TrackType == nil &&
 		p.CoordinateSystem == nil &&
 		p.Distance == nil &&
 		p.Duration == nil &&
@@ -243,6 +253,35 @@ func (s *TrackService) ListTrackTypeOptions() []models.TrackTypeOption {
 	return items
 }
 
+func normalizeTrackTypeCode(trackType string) string {
+	t := strings.TrimSpace(trackType)
+	if t == "" {
+		return ""
+	}
+	switch strings.ToLower(t) {
+	case "running", "run":
+		return "running"
+	case "hiking", "walk", "walking":
+		return "hiking"
+	case "climbing", "mountain", "mountaineering":
+		return "climbing"
+	case "riding", "cycling", "bike", "biking":
+		return "riding"
+	case "driving", "drive":
+		return "driving"
+	}
+	switch t {
+	case "骑车":
+		return "riding"
+	}
+	for _, item := range config.DefaultTrackTypeConfigs {
+		if item.Type == t || item.Name == t {
+			return item.Type
+		}
+	}
+	return t
+}
+
 // ListTrackTypeOptionsWithStats returns configured track types plus current user's month/year stats.
 func (s *TrackService) ListTrackTypeOptionsWithStats(ctx context.Context, userID int64) ([]models.TrackTypeOption, error) {
 	if userID <= 0 {
@@ -255,7 +294,7 @@ func (s *TrackService) ListTrackTypeOptionsWithStats(ctx context.Context, userID
 
 	statsByType := make(map[string]*models.TrackTypeMilestone, len(items))
 	for i := range items {
-		statsByType[items[i].Name] = &items[i].Milestone
+		statsByType[items[i].Type] = &items[i].Milestone
 	}
 
 	now := time.Now()
@@ -272,7 +311,7 @@ func (s *TrackService) ListTrackTypeOptionsWithStats(ctx context.Context, userID
 			break
 		}
 		for _, track := range tracks {
-			milestone := statsByType[track.TrackType]
+			milestone := statsByType[normalizeTrackTypeCode(track.TrackType)]
 			if milestone == nil {
 				continue
 			}
@@ -1170,6 +1209,10 @@ func (s *TrackService) UpdateTrackInfo(ctx context.Context, userID int64, trackI
 	}
 	if patch.LocateAddr != nil && track.LocateAddr == "" {
 		track.LocateAddr = *patch.LocateAddr
+		updated = true
+	}
+	if patch.TrackType != nil && track.TrackType == "" {
+		track.TrackType = *patch.TrackType
 		updated = true
 	}
 	if patch.CoordinateSystem != nil && track.CoordinateSystem == "" {
