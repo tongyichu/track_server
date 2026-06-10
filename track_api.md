@@ -123,6 +123,7 @@ Token 的获取与说明参考 `login.md`。
 | `created_at` | string | 创建时间 |
 | `updated_at` | string | 更新时间 |
 | `deleted_at` | string | 删除时间（软删除；未删除时为空或不返回） |
+| `earned_rewards` | array | 本次轨迹完成即时新获得的成就奖励；仅完成轨迹结算产生新奖励时返回，结构同 `/achievement/rewards` 单条奖励 |
 
 ---
 
@@ -212,10 +213,26 @@ Authorization: Bearer <token>
     "raw_track_url": "/api/v1/static/raw_tracks/No.1713520800123456789.dat",
     "track_screenshot_url": "/api/v1/static/screenshots/No.1713520800123456789.jpg",
     "track_no_map_bg_screenshot_url": "/api/v1/static/screenshots/No.1713520800123456789_no_map_bg.jpg",
-    "is_running": true,
+    "is_running": false,
     "status": 1,
     "created_at": "2026-04-20T12:00:00Z",
-    "updated_at": "2026-04-20T12:00:00Z"
+    "updated_at": "2026-04-20T12:00:00Z",
+    "earned_rewards": [
+      {
+        "code": "first_track",
+        "type": "badge",
+        "category": "新手",
+        "name": "第一条轨迹",
+        "description": "完成首条有效轨迹",
+        "rarity": "common",
+        "icon_url": "",
+        "target_value": 1,
+        "earned": true,
+        "earned_at": "2026-04-20T12:00:00Z",
+        "current_value": 1,
+        "progress": 1
+      }
+    ]
   }
 }
 ```
@@ -230,6 +247,8 @@ Authorization: Bearer <token>
 - 具体消息格式见 `track_companion.md` 的 control topic 说明。
 
 说明：`raw_track_url` / `track_screenshot_url` / `track_no_map_bg_screenshot_url` 在请求时是 OSS 地址，但响应会被服务端替换为可直接从业务服务器下载的本地链接（路径在 `/api/v1/static/...` 下，需要登录态）。
+
+成就奖励：创建已完成轨迹（`is_running=false`）后，服务端会立即幂等结算成就；如果本次结算产生新的奖励，会直接在响应 `data.earned_rewards` 中返回，客户端可用于轨迹完成页即时弹窗。同一用户已获得过的奖励不会重复返回。
 
 约束：同一用户同一时间只能处于一种进行中状态。创建普通进行中轨迹（`is_running=true` 或未传）时，若用户已经加入 active 同行，会返回 `400`；创建已完成轨迹（`is_running=false`）不受该限制，可用于同行结束后上传个人轨迹并携带 `session_id`。
 

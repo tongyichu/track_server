@@ -404,6 +404,22 @@ func TestAchievementRewardsAfterCompletedTrack(t *testing.T) {
 	if w.Result().StatusCode() != http.StatusOK {
 		t.Fatalf("expected create completed track status 200, got %d body=%s", w.Result().StatusCode(), string(w.Body.Bytes()))
 	}
+	var createResp handler.StandardResponse[*models.Track]
+	decodeJSON(t, w.Body.Bytes(), &createResp)
+	if createResp.Data == nil {
+		t.Fatalf("expected created track")
+	}
+	createdEarned := map[string]bool{}
+	for _, reward := range createResp.Data.EarnedRewards {
+		if reward.Earned {
+			createdEarned[reward.Code] = true
+		}
+	}
+	for _, code := range []string{"first_track", "run_5k"} {
+		if !createdEarned[code] {
+			t.Fatalf("expected create response earned_rewards to include %s, got %+v", code, createResp.Data.EarnedRewards)
+		}
+	}
 
 	w = e.perform(http.MethodGet, "/api/v1/achievement/rewards", nil, authHeader(token))
 	if w.Result().StatusCode() != http.StatusOK {
@@ -451,6 +467,9 @@ func TestAchievementRewardsAfterCompletedTrackWithEnglishType(t *testing.T) {
 	}
 	if createResp.Data.TrackType != "running" {
 		t.Fatalf("expected normalized track_type running, got %q", createResp.Data.TrackType)
+	}
+	if len(createResp.Data.EarnedRewards) != 2 {
+		t.Fatalf("expected create response earned_rewards length 2, got %d: %+v", len(createResp.Data.EarnedRewards), createResp.Data.EarnedRewards)
 	}
 
 	rewards, err := e.achievementRepo.ListUserRewards(context.Background(), 1001)

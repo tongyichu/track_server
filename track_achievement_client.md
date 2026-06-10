@@ -190,11 +190,11 @@ Authorization: Bearer <token>
 
 轨迹完成后建议：
 
-1. 调用 `/achievement/summary`。
-2. 对比本地缓存的最近奖励 `code`。
-3. 若出现新的 `recent_rewards[].code`，展示获得勋章弹窗。
+1. 优先读取 `POST /track/create` 响应中的 `data.earned_rewards`。
+2. 若 `earned_rewards` 非空，按数组顺序展示获得勋章弹窗。
+3. 弹窗结束后可刷新 `/achievement/summary` 或 `/achievement/rewards`，同步成就中心整体进度。
 
-服务端 MVP 暂未在 `track/create` 响应里直接返回 `earned_rewards`，客户端通过成就摘要刷新实现。
+说明：`earned_rewards` 只表示本次轨迹完成即时新获得的奖励；同一用户已获得过的奖励不会重复返回。
 
 ### 6.4 等级规则页
 

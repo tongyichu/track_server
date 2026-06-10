@@ -103,7 +103,8 @@ track/create(is_running=false) 或 track upload/update 完成轨迹
   → TrackService 调用 AchievementService.SettleTrackCompleted
   → AchievementService 基于有效轨迹实时聚合 XP / 进度
   → AchievementRepository 幂等写入 user_achievement_rewards
-  → 客户端通过 /achievement/summary 或 /achievement/rewards 拉取展示
+  → track/create 响应通过 data.earned_rewards 返回本次新获得奖励
+  → 客户端可再通过 /achievement/summary 或 /achievement/rewards 拉取全量展示
 ```
 轨迹创建、轨迹补全和同行创建接口以 `/track/types` 返回的英文 `type` 为权威入库值；服务端兼容历史中文名输入，但写入前会归一为英文 code。成就侧按英文 code 计算，并兼容历史中文类型。`/achievement/summary` 与 `/achievement/rewards` 查询前会对该用户历史有效轨迹做幂等奖励补齐，用于兼容早期未结算数据。
 运维可通过 `POST /api/v1/ops/achievement/refresh` 按手机号手动触发单用户成就幂等补齐；该接口不走业务 JWT，使用 `OPS_INTERNAL_TOKEN` 配置值对应的 `X-Internal-Token` 鉴权。

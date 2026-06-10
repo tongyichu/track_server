@@ -26,30 +26,31 @@ type TrackPoint struct {
 // Track aggregates persisted fields of track_records.
 // Points is transient field kept for existing service logic.
 type Track struct {
-	ID                        string       `json:"id" bson:"_id,omitempty"`                                              // ID 是轨迹记录唯一标识，由 generateTrackID 生成。
-	UserID                    int64        `json:"user_id" bson:"user_id"`                                               // UserID 是轨迹所属用户 ID。
-	SessionID                 string       `json:"session_id" bson:"session_id"`                                         // SessionID 是关联的同行会话 ID，可为空。
-	CityCode                  string       `json:"city_code" bson:"city_code"`                                           // CityCode 是轨迹所属的城市 Code（城市/省份映射由配置文件维护）。
-	LocateAddr                string       `json:"locate_addr" bson:"locate_addr"`                                       // LocateAddr 是轨迹的具体位置信息。
-	TrackType                 string       `json:"track_type" bson:"track_type"`                                         // TrackType 是轨迹类型，例如徒步、跑步、骑车、自驾。
-	CoordinateSystem          string       `json:"coordinate_system" bson:"coordinate_system"`                           // CoordinateSystem 是轨迹坐标系，例如 WGS84/GCJ02/BD09。
-	Title                     string       `json:"title" bson:"title"`                                                   // Title 是轨迹名称。
-	StartTime                 time.Time    `json:"start_time" bson:"start_time"`                                         // StartTime 是运动开始时间。
-	EndTime                   time.Time    `json:"end_time" bson:"end_time"`                                             // EndTime 是运动结束时间。
-	Distance                  float64      `json:"distance" bson:"distance"`                                             // Distance 是总距离，单位米。
-	Duration                  uint32       `json:"duration" bson:"duration"`                                             // Duration 是运动耗时，单位秒。
-	CaloriesBurned            float64      `json:"calories_burned" bson:"calories_burned"`                               // CaloriesBurned 是热量消耗，单位千卡。
-	ElevationGain             int          `json:"elevation_gain" bson:"elevation_gain"`                                 // ElevationGain 是累计爬升，单位米。
-	RawTrackURL               string       `json:"raw_track_url" bson:"raw_track_url"`                                   // RawTrackURL 是原始轨迹点文件在对象存储中的地址。
-	TrackScreenshotURL        string       `json:"track_screenshot_url" bson:"track_screenshot_url"`                     // TrackScreenshotURL 是轨迹截图文件在对象存储中的地址。
-	TrackNoMapBgScreenshotURL string       `json:"track_no_map_bg_screenshot_url" bson:"track_no_map_bg_screenshot_url"` // TrackNoMapBgScreenshotURL 是“无地图背景的轨迹路线截图”文件在对象存储中的地址。
-	IsRunning                 bool         `json:"is_running" bson:"is_running"`                                         // IsRunning 表示轨迹是否仍处于进行中。
-	Status                    TrackStatus  `json:"status" bson:"status"`                                                 // Status 是轨迹状态：0-删除，1-正常，2-私密。
-	CreatedAt                 time.Time    `json:"created_at" bson:"created_at"`                                         // CreatedAt 是记录创建时间。
-	UpdatedAt                 time.Time    `json:"updated_at" bson:"updated_at"`                                         // UpdatedAt 是记录更新时间。
-	DeletedAt                 time.Time    `json:"deleted_at,omitempty" bson:"deleted_at"`                               // DeletedAt 是删除时间（软删除）。
-	Points                    []TrackPoint `json:"points,omitempty" bson:"-"`                                            // Points 是内存中的轨迹点集合，不直接持久化到 track_records。
-	AvgSpeedKmh               float64      `json:"avg_speed_kmh,omitempty" bson:"avg_speed_kmh"`                         // AvgSpeedKmh 是平均速度，单位 km/h。
+	ID                        string                   `json:"id" bson:"_id,omitempty"`                                              // ID 是轨迹记录唯一标识，由 generateTrackID 生成。
+	UserID                    int64                    `json:"user_id" bson:"user_id"`                                               // UserID 是轨迹所属用户 ID。
+	SessionID                 string                   `json:"session_id" bson:"session_id"`                                         // SessionID 是关联的同行会话 ID，可为空。
+	CityCode                  string                   `json:"city_code" bson:"city_code"`                                           // CityCode 是轨迹所属的城市 Code（城市/省份映射由配置文件维护）。
+	LocateAddr                string                   `json:"locate_addr" bson:"locate_addr"`                                       // LocateAddr 是轨迹的具体位置信息。
+	TrackType                 string                   `json:"track_type" bson:"track_type"`                                         // TrackType 是轨迹类型，例如徒步、跑步、骑车、自驾。
+	CoordinateSystem          string                   `json:"coordinate_system" bson:"coordinate_system"`                           // CoordinateSystem 是轨迹坐标系，例如 WGS84/GCJ02/BD09。
+	Title                     string                   `json:"title" bson:"title"`                                                   // Title 是轨迹名称。
+	StartTime                 time.Time                `json:"start_time" bson:"start_time"`                                         // StartTime 是运动开始时间。
+	EndTime                   time.Time                `json:"end_time" bson:"end_time"`                                             // EndTime 是运动结束时间。
+	Distance                  float64                  `json:"distance" bson:"distance"`                                             // Distance 是总距离，单位米。
+	Duration                  uint32                   `json:"duration" bson:"duration"`                                             // Duration 是运动耗时，单位秒。
+	CaloriesBurned            float64                  `json:"calories_burned" bson:"calories_burned"`                               // CaloriesBurned 是热量消耗，单位千卡。
+	ElevationGain             int                      `json:"elevation_gain" bson:"elevation_gain"`                                 // ElevationGain 是累计爬升，单位米。
+	RawTrackURL               string                   `json:"raw_track_url" bson:"raw_track_url"`                                   // RawTrackURL 是原始轨迹点文件在对象存储中的地址。
+	TrackScreenshotURL        string                   `json:"track_screenshot_url" bson:"track_screenshot_url"`                     // TrackScreenshotURL 是轨迹截图文件在对象存储中的地址。
+	TrackNoMapBgScreenshotURL string                   `json:"track_no_map_bg_screenshot_url" bson:"track_no_map_bg_screenshot_url"` // TrackNoMapBgScreenshotURL 是“无地图背景的轨迹路线截图”文件在对象存储中的地址。
+	IsRunning                 bool                     `json:"is_running" bson:"is_running"`                                         // IsRunning 表示轨迹是否仍处于进行中。
+	Status                    TrackStatus              `json:"status" bson:"status"`                                                 // Status 是轨迹状态：0-删除，1-正常，2-私密。
+	CreatedAt                 time.Time                `json:"created_at" bson:"created_at"`                                         // CreatedAt 是记录创建时间。
+	UpdatedAt                 time.Time                `json:"updated_at" bson:"updated_at"`                                         // UpdatedAt 是记录更新时间。
+	DeletedAt                 time.Time                `json:"deleted_at,omitempty" bson:"deleted_at"`                               // DeletedAt 是删除时间（软删除）。
+	Points                    []TrackPoint             `json:"points,omitempty" bson:"-"`                                            // Points 是内存中的轨迹点集合，不直接持久化到 track_records。
+	AvgSpeedKmh               float64                  `json:"avg_speed_kmh,omitempty" bson:"avg_speed_kmh"`                         // AvgSpeedKmh 是平均速度，单位 km/h。
+	EarnedRewards             []*AchievementRewardView `json:"earned_rewards,omitempty" bson:"-"`                                    // EarnedRewards 是本次轨迹完成即时获得的成就奖励，不持久化到 track_records。
 }
 
 // TrackSummary 是轨迹列表接口使用的轻量返回模型。

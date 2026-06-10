@@ -518,9 +518,11 @@ func (s *TrackService) CreateTrack(ctx context.Context, userID int64, input Crea
 		track.RawTrackURL = s.rawTrackCache.GuessLocalURL(track.ID, src)
 	}
 	if !track.IsRunning && s.achievements != nil {
-		if _, err := s.achievements.SettleTrackCompleted(ctx, track); err != nil {
+		rewards, err := s.achievements.SettleTrackCompleted(ctx, track)
+		if err != nil {
 			return nil, err
 		}
+		track.EarnedRewards = rewards
 	}
 	return track, nil
 }
@@ -1256,9 +1258,11 @@ func (s *TrackService) UpdateTrackInfo(ctx context.Context, userID int64, trackI
 			return nil, err
 		}
 		if !track.IsRunning && s.achievements != nil {
-			if _, err := s.achievements.SettleTrackCompleted(ctx, track); err != nil {
+			rewards, err := s.achievements.SettleTrackCompleted(ctx, track)
+			if err != nil {
 				return nil, err
 			}
+			track.EarnedRewards = rewards
 		}
 	}
 
