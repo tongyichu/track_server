@@ -60,7 +60,8 @@ track_server/
 ├── Makefile                # run / test / docker-build / compose-up/down
 ├── go.mod / go.sum
 ├── mysql.sql               # MySQL 初始化 SQL（表结构权威之一）
-├── track_api.md            # 业务接口文档（接口契约权威，含同行控制面 API）
+├── track_api.md            # 业务接口文档轻量入口；完整分册见 docs/api/
+├── docs/api/               # 业务接口分册文档：README + route-index + common/models + 各业务模块
 ├── track_map.md            # 首页地图模式与路线发现能力方案（路线组 / 附近与城市地图查询 / 客户端交互草案）
 ├── track_companion.md      # 同行能力技术方案设计（控制面 / MQTT 数据面规划）
 ├── track_achievement.md    # 轨迹成就产品/规则方案（等级、XP、勋章、会员边界）
@@ -76,14 +77,14 @@ track_server/
 | Repository 接口契约 | `internal/repository/interfaces.go` |
 | 领域模型 | `internal/models/track.go`、`internal/models/user.go`、`internal/models/companion.go`、`internal/models/achievement.go` |
 | MySQL 表结构 | `mysql.sql` |
-| 接口协议 | `track_api.md`、`login.md`、`track_companion.md`、`track_achievement_client.md`、`track_map.md` |
+| 接口协议 | `docs/api/`（入口 `track_api.md`，路由索引 `docs/api/route-index.md`）、`login.md`、`track_companion.md`、`track_achievement_client.md`、`track_map.md` |
 | 成就规则方案 | `track_achievement.md` |
 
 ### 稳定默认值
 
 - 默认运动类型由 `internal/config/config.go:DefaultTrackTypeConfigs` 维护，当前 code 为 `hiking`、`running`、`climbing`、`riding`、`driving`，展示名为 `徒步`、`跑步`、`爬山`、`骑行`、`自驾`；`GET /api/v1/track/types`、轨迹入库 `track_type`、运动类型图标元信息和成就系统类型口径应保持一致。
-- 轨迹 `locate_addr` 最大长度为 255 字符，对应 `track_records.locate_addr VARCHAR(255)`；修改该字段长度时同步更新 `mysql.sql`、`internal/repository/mysql.go` 与 `track_api.md`。
-- 轨迹 `source_tag` 是来源/运营标签，对应 `track_records.source_tag VARCHAR(64)`；业务接口只允许空字符串或 `manual_seed`（人工录入冷启动轨迹），更新接口仅在原值为空时补写，普通列表摘要不返回该字段；修改该字段口径时同步更新 `internal/service/track_service.go`、`mysql.sql` 与 `track_api.md`。
+- 轨迹 `locate_addr` 最大长度为 255 字符，对应 `track_records.locate_addr VARCHAR(255)`；修改该字段长度时同步更新 `mysql.sql`、`internal/repository/mysql.go` 与 `docs/api/track.md`。
+- 轨迹 `source_tag` 是来源/运营标签，对应 `track_records.source_tag VARCHAR(64)`；业务接口只允许空字符串或 `manual_seed`（人工录入冷启动轨迹），更新接口仅在原值为空时补写，普通列表摘要不返回该字段；修改该字段口径时同步更新 `internal/service/track_service.go`、`mysql.sql` 与 `docs/api/track.md`。
 
 ### 关键流程
 
@@ -109,7 +110,7 @@ track/create(is_running=false) 或 track upload/update 完成轨迹
 ```
 轨迹创建、轨迹补全和同行创建接口以 `/track/types` 返回的英文 `type` 为权威入库值；服务端兼容历史中文名输入，但写入前会归一为英文 code。成就侧按英文 code 计算，并兼容历史中文类型。`/achievement/summary` 与 `/achievement/rewards` 查询前会对该用户历史有效轨迹做幂等奖励补齐，用于兼容早期未结算数据。
 运维可通过 `POST /api/v1/ops/achievement/refresh` 按手机号手动触发单用户成就幂等补齐；该接口不走业务 JWT，使用 `OPS_INTERNAL_TOKEN` 配置值对应的 `X-Internal-Token` 鉴权。
-成就系统 MVP 只实现成长等级与勋章体系；里程碑体系暂不结算、不下发 `type=milestone` 奖励。调整成就定义时同步更新 `track_achievement.md`、`track_achievement_client.md` 和 `track_api.md`。
+成就系统 MVP 只实现成长等级与勋章体系；里程碑体系暂不结算、不下发 `type=milestone` 奖励。调整成就定义时同步更新 `track_achievement.md`、`track_achievement_client.md` 和 `docs/api/achievement.md`。
 
 **短信登录等级信息**：`POST /api/v1/login/sms` 成功响应会附带 `achievement_level`，由 `LoginHandler` 调用 `AchievementService.GetLevelInfo` 基于当前有效轨迹实时计算；修改登录响应或等级字段时同步更新 `login.md`。
 
@@ -122,11 +123,11 @@ Scheduler(companion_session_autoclose，每 10 分钟)
   → 通过 companion control topic 广播 session_ended
 ```
 同行自动收尾策略写在 `internal/service/companion_service.go` 代码常量中，不通过环境变量或启动参数配置；调整该策略时同步更新 `track_companion.md`。
-同行控制面返回的 `session.expires_at`、附近房间列表的 `expires_at` 均由 `session.started_at + 运动类型最大持续时间` 派生，不落库；调整最大持续时间或返回字段时同步更新 `track_api.md` 与 `track_companion.md`。
+同行控制面返回的 `session.expires_at`、附近房间列表的 `expires_at` 均由 `session.started_at + 运动类型最大持续时间` 派生，不落库；调整最大持续时间或返回字段时同步更新 `docs/api/companion.md` 与 `track_companion.md`。
 
 **同行结束摘要更新**：owner 可在同行结束后调用 `PUT /api/v1/companion/session/:session_id/update` 补写 `locate_addr`、`total_distance`、`total_duration`、`track_screenshot_url`、`actual_participant_count`；该接口只允许 owner 操作 `status=ended` 的 session。`companion/session/history` 与 `companion/session/nearby` 都返回这些字段，其中截图响应应通过截图资源缓存改写为 `/api/v1/static/screenshots/...`。
 
-**同行关键事件时间线**：owner 可通过 `POST /api/v1/companion/session/:session_id/events` 上报成员离开、断线/重连、同行周知、关键点、风险提醒或自定义事件，并通过 `GET /api/v1/companion/session/:session_id/events` 按 `event_time,id` 游标查询。事件持久化在 `companion_events`，`client_event_id` 是同一 session 内的幂等键；单个 `session_id` 最多 100 条事件，达到上限后新事件返回 `companion event limit exceeded`，但重复 `client_event_id` 仍返回已有事件。调整事件类型、字段、上限、幂等或时间校验规则时，同步更新 `track_api.md` 与 `track_companion.md`。
+**同行关键事件时间线**：owner 可通过 `POST /api/v1/companion/session/:session_id/events` 上报成员离开、断线/重连、同行周知、关键点、风险提醒或自定义事件，并通过 `GET /api/v1/companion/session/:session_id/events` 按 `event_time,id` 游标查询。事件持久化在 `companion_events`，`client_event_id` 是同一 session 内的幂等键；单个 `session_id` 最多 100 条事件，达到上限后新事件返回 `companion event limit exceeded`，但重复 `client_event_id` 仍返回已有事件。调整事件类型、字段、上限、幂等或时间校验规则时，同步更新 `docs/api/companion.md` 与 `track_companion.md`。
 
 **典型业务调用链**：
 ```
@@ -139,14 +140,14 @@ HTTP Request
 
 **资源缓存与静态发布包**：客户端经 OSS 直传（头像 / 轨迹截图 / 同行轨迹截图 / 原始轨迹文件），列表/详情/同行历史/附近房间接口返回时由 `AssetCacheService` 按需从 OSS 拉回本地 `<LogDir>/static/<category>/`，对外走 `GET /api/v1/static/<category>/<file>`（需登录）。管理后台上传的 App 发布包直接写入 `<LogDir>/static/release/<platform>/`，对外走公开的 `GET /api/v1/static/release/<platform>/<file>`，供升级下载使用。
 
-**内置 H5 页面**：客户端等级规则页使用公开路由 `GET /api/v1/achievement/level-rules.html`，HTML 文件内置在 `internal/handler/static/achievement_level_rules.html` 并通过 `go:embed` 打包；页面支持 `lang=english` 切英文、`is_dark=true` 切夜间模式。修改等级 XP 规则、等级阈值、语言或主题参数时，同步更新该页面、`track_achievement_client.md` 和 `track_api.md`。
+**内置 H5 页面**：客户端等级规则页使用公开路由 `GET /api/v1/achievement/level-rules.html`，HTML 文件内置在 `internal/handler/static/achievement_level_rules.html` 并通过 `go:embed` 打包；页面支持 `lang=english` 切英文、`is_dark=true` 切夜间模式。修改等级 XP 规则、等级阈值、语言或主题参数时，同步更新该页面、`track_achievement_client.md` 和 `docs/api/achievement.md`。
 
 ### 提交前最小检查
 - 构建可通过：`go build ./...`
 - 全量测试：`make test`（等价 `go test ./...`）
 - 新增/修改路由：核对 `internal/handler/router.go` 是否挂载在正确的 `auth` 分组。
 - 新增 Repository 方法：`mysql.go` / `mongo.go` / `memory.go` 三实现必须同步。
-- 改动与协议相关（字段增删、登录流程、错误码、同行控制面、同行关键事件、成就系统）：同步更新 `track_api.md`、`login.md`、`track_companion.md` 或 `track_achievement_client.md`。
+- 改动与协议相关（字段增删、登录流程、错误码、同行控制面、同行关键事件、成就系统）：同步更新 `docs/api/` 对应分册与 `docs/api/route-index.md`、`login.md`、`track_companion.md` 或 `track_achievement_client.md`。
 - 用户要求提交代码时，commit message 必须使用中文，并尽量详细说明：做了什么、为什么做、影响哪些模块、是否包含数据结构/协议/文档/测试变更。
 
 ---

@@ -1,0 +1,44 @@
+# API 路由索引
+
+> 只用于快速定位接口文档；完整请求/响应以对应分册为准。
+
+| 接口 | 方法 | 路径 | 需要认证 | 文档 |
+| --- | --- | --- | --- | --- |
+| 创建轨迹 | POST | `/track/create` | 是 | [track.md](track.md#1-创建轨迹) |
+| 推荐轨迹列表 | GET | `/track/recommend/list` | 是 | [track.md](track.md#2-推荐轨迹列表) |
+| 轨迹详情 | GET | `/track/:track_id/detail` | 是 | [track.md](track.md#3-轨迹详情) |
+| 获取 OSS STS 临时凭证 | GET | `/oss/sts-token` | 是 | [oss.md](oss.md#4-获取-oss-sts-临时凭证直传上传) |
+| 收藏轨迹 | POST | `/track_collect` | 是 | [collect-navigation.md](collect-navigation.md#5-收藏轨迹) |
+| 取消收藏轨迹 | DELETE | `/track_collect` | 是 | [collect-navigation.md](collect-navigation.md#6-取消收藏轨迹) |
+| 轨迹搜索列表 | GET | `/track/search/list` | 是 | [track.md](track.md#7-轨迹搜索列表) |
+| 导航使用上报 | POST | `/track/:track_id/navigation/report` | 是 | [collect-navigation.md](collect-navigation.md#8-导航使用上报) |
+| 我的轨迹列表 | GET | `/track/my/list` | 是 | [track.md](track.md#9-我的轨迹列表) |
+| 获取用户详情 | GET | `/user/:user_id/detail` | 是 | [user.md](user.md#10-获取用户详情) |
+| 更新轨迹信息 | PUT | `/track/:track_id/update` | 是 | [track.md](track.md#11-更新轨迹信息) |
+| 删除轨迹 | DELETE | `/track/:track_id` | 是 | [track.md](track.md#12-删除轨迹) |
+| 用户已收藏轨迹列表 | GET | `/track/collected/list` | 是 | [collect-navigation.md](collect-navigation.md#13-用户已收藏轨迹列表) |
+| 更新个人信息 | PUT | `/user/profile/update` | 是 | [user.md](user.md#14-更新个人信息) |
+| App 升级检查 | GET | `/upgrade/check` | 否 | [upgrade.md](upgrade.md#15-app-升级检查) |
+| 获取运动类型 | GET | `/track/types` | 是 | [track.md](track.md#16-获取运动类型) |
+| 创建同行会话 | POST | `/companion/session/create` | 是 | [companion.md](companion.md#17-创建同行会话) |
+| 加入同行会话 | POST | `/companion/session/join` | 是 | [companion.md](companion.md#18-加入同行会话) |
+| 预览同行会话 | GET | `/companion/session/preview` | 是 | [companion.md](companion.md#181-预览同行会话) |
+| 获取当前同行会话 | GET | `/companion/session/current` | 是 | [companion.md](companion.md#19-获取当前同行会话) |
+| 获取同行快照 | GET | `/companion/session/:session_id/snapshot` | 是 | [companion.md](companion.md#20-获取同行快照) |
+| 离开同行会话 | POST | `/companion/session/:session_id/leave` | 是 | [companion.md](companion.md#21-离开同行会话) |
+| 结束同行会话 | POST | `/companion/session/:session_id/end` | 是 | [companion.md](companion.md#22-结束同行会话) |
+| 踢出同行成员 | POST | `/companion/session/:session_id/members/:user_id/kick` | 是 | [companion.md](companion.md#221-踢出同行成员) |
+| 更新已结束同行摘要 | PUT | `/companion/session/:session_id/update` | 是 | [companion.md](companion.md#222-更新已结束同行摘要owner) |
+| 上报同行关键事件 | POST | `/companion/session/:session_id/events` | 是 | [companion.md](companion.md#223-上报同行关键事件owner) |
+| 查询同行关键事件时间线 | GET | `/companion/session/:session_id/events` | 是 | [companion.md](companion.md#224-查询同行关键事件时间线owner) |
+| 当前用户参与过的同行记录列表 | GET | `/companion/session/history` | 是 | [companion.md](companion.md#23-当前用户参与过的同行记录列表) |
+| 获取同行 MQTT 凭证 | POST | `/companion/session/:session_id/mqtt/credentials` | 是 | [companion.md](companion.md#24-获取同行-mqtt-凭证) |
+| EMQX HTTP AuthN 回调 | POST | `/internal/mqtt/auth` | 内部 | [companion-internal.md](companion-internal.md#25-emqx-http-authn-回调) |
+| EMQX HTTP AuthZ 回调 | POST | `/internal/mqtt/acl` | 内部 | [companion-internal.md](companion-internal.md#26-emqx-http-authz-回调) |
+| EMQX 数据面写回接口 | POST | `/internal/companion/mqtt/*` | 内部 | [companion-internal.md](companion-internal.md#27-emqx-数据面写回接口) |
+| 同行弹幕开关切换 | POST | `/companion/session/:session_id/danmaku/toggle` | 是 | [companion.md](companion.md#274-弹幕开关切换owner) |
+| 附近 active 同行房间列表 | GET | `/companion/session/nearby` | 是 | [companion.md](companion.md#29-附近-active-同行房间列表) |
+| 成就中心摘要 | GET | `/achievement/summary` | 是 | [achievement.md](achievement.md#30-成就中心摘要) |
+| 成就奖励列表 | GET | `/achievement/rewards` | 是 | [achievement.md](achievement.md#31-成就奖励列表) |
+| 成长等级规则 H5 | GET | `/achievement/level-rules.html` | 否 | [achievement.md](achievement.md#32-成长等级规则-h5) |
+| 运维刷新用户成就 | POST | `/ops/achievement/refresh` | 运维内部 | [achievement.md](achievement.md#33-运维刷新用户成就) |
