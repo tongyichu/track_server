@@ -20,6 +20,7 @@ CREATE TABLE `track_records` (
                                  `city_code` varchar(16) NOT NULL DEFAULT '' COMMENT '城市Code',
                                  `locate_addr` varchar(255) NOT NULL DEFAULT '' COMMENT '轨迹的具体位置信息',
                                 `track_type` varchar(32) NOT NULL DEFAULT '' COMMENT '轨迹类型，如徒步/跑步/骑车/自驾',
+                                `source_tag` varchar(64) NOT NULL DEFAULT '' COMMENT '轨迹来源/运营标签',
                                 `coordinate_system` varchar(32) NOT NULL DEFAULT '' COMMENT '坐标系',
                                  `title` varchar(128) NOT NULL DEFAULT '' COMMENT '轨迹名称',
                                  `start_time` datetime NOT NULL COMMENT '开始时间',
@@ -39,6 +40,7 @@ CREATE TABLE `track_records` (
                                  `deleted_at` datetime DEFAULT NULL COMMENT '删除时间',
                                  PRIMARY KEY (`id`),
                                  KEY `idx_track_session` (`session_id`),
+                                 KEY `idx_track_source_tag` (`source_tag`),
                                  KEY `idx_user_time` (`user_id`,`start_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='轨迹概要信息表';
 

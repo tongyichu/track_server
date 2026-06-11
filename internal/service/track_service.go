@@ -37,9 +37,16 @@ const (
 	defaultTrackPageSize   = 20
 	maxTrackPageSize       = 50
 	maxTrackLocateAddrLen  = 255
+	maxTrackSourceTagLen   = 64
+	trackSourceTagManual   = "manual_seed"
 	trackTypeIconURLPrefix = "/api/v1/static/track_type_icon/"
 	trackTypeAnimURLPrefix = "/api/v1/static/track_type_icon_anim/"
 )
+
+var allowedTrackSourceTags = map[string]struct{}{
+	"":                   {},
+	trackSourceTagManual: {},
+}
 
 type ListRecommendInput struct {
 	Cursor string
@@ -98,6 +105,7 @@ type CreateTrackInput struct {
 	CityCode                  *string    `json:"city_code"`
 	LocateAddr                *string    `json:"locate_addr"`
 	TrackType                 *string    `json:"track_type"`
+	SourceTag                 *string    `json:"source_tag"`
 	CoordinateSystem          *string    `json:"coordinate_system"`
 	StartTime                 *time.Time `json:"start_time"`
 	EndTime                   *time.Time `json:"end_time"`
@@ -125,6 +133,10 @@ func (in *CreateTrackInput) normalize() {
 		v := normalizeTrackTypeCode(*in.TrackType)
 		in.TrackType = &v
 	}
+	if in.SourceTag != nil {
+		v := strings.TrimSpace(*in.SourceTag)
+		in.SourceTag = &v
+	}
 }
 
 func (in CreateTrackInput) validate() error {
@@ -142,6 +154,11 @@ func (in CreateTrackInput) validate() error {
 	if in.LocateAddr != nil && utf8.RuneCountInString(*in.LocateAddr) > maxTrackLocateAddrLen {
 		return invalidArg("locate_addr is too long")
 	}
+	if in.SourceTag != nil {
+		if err := validateTrackSourceTag(*in.SourceTag); err != nil {
+			return err
+		}
+	}
 	if in.ElevationGain != nil && *in.ElevationGain < 0 {
 		return invalidArg("elevation_gain must be >= 0")
 	}
@@ -157,6 +174,16 @@ func (in CreateTrackInput) validate() error {
 	return nil
 }
 
+func validateTrackSourceTag(sourceTag string) error {
+	if utf8.RuneCountInString(sourceTag) > maxTrackSourceTagLen {
+		return invalidArg("source_tag is too long")
+	}
+	if _, ok := allowedTrackSourceTags[sourceTag]; !ok {
+		return invalidArg("invalid source_tag")
+	}
+	return nil
+}
+
 // TrackInfoPatch describes which track summary fields should be updated.
 // Nil means the field is not provided and should remain unchanged.
 type TrackInfoPatch struct {
@@ -164,6 +191,7 @@ type TrackInfoPatch struct {
 	CityCode                  *string  `json:"city_code"`
 	LocateAddr                *string  `json:"locate_addr"`
 	TrackType                 *string  `json:"track_type"`
+	SourceTag                 *string  `json:"source_tag"`
 	CoordinateSystem          *string  `json:"coordinate_system"`
 	Distance                  *float64 `json:"distance"`
 	Duration                  *uint32  `json:"duration"`
@@ -190,6 +218,10 @@ func (p *TrackInfoPatch) normalize() {
 		v := normalizeTrackTypeCode(*p.TrackType)
 		p.TrackType = &v
 	}
+	if p.SourceTag != nil {
+		v := strings.TrimSpace(*p.SourceTag)
+		p.SourceTag = &v
+	}
 }
 
 func (p TrackInfoPatch) empty() bool {
@@ -197,6 +229,7 @@ func (p TrackInfoPatch) empty() bool {
 		p.CityCode == nil &&
 		p.LocateAddr == nil &&
 		p.TrackType == nil &&
+		p.SourceTag == nil &&
 		p.CoordinateSystem == nil &&
 		p.Distance == nil &&
 		p.Duration == nil &&
@@ -462,6 +495,9 @@ func (s *TrackService) CreateTrack(ctx context.Context, userID int64, input Crea
 	}
 	if input.TrackType != nil {
 		track.TrackType = *input.TrackType
+	}
+	if input.SourceTag != nil {
+		track.SourceTag = *input.SourceTag
 	}
 	if input.CoordinateSystem != nil {
 		track.CoordinateSystem = *input.CoordinateSystem
@@ -1173,6 +1209,11 @@ func (s *TrackService) UpdateTrackInfo(ctx context.Context, userID int64, trackI
 	if patch.LocateAddr != nil && utf8.RuneCountInString(*patch.LocateAddr) > maxTrackLocateAddrLen {
 		return nil, invalidArg("locate_addr is too long")
 	}
+	if patch.SourceTag != nil {
+		if err := validateTrackSourceTag(*patch.SourceTag); err != nil {
+			return nil, err
+		}
+	}
 	if patch.ElevationGain != nil && *patch.ElevationGain < 0 {
 		return nil, invalidArg("elevation_gain must be >= 0")
 	}
@@ -1215,6 +1256,10 @@ func (s *TrackService) UpdateTrackInfo(ctx context.Context, userID int64, trackI
 	}
 	if patch.TrackType != nil && track.TrackType == "" {
 		track.TrackType = *patch.TrackType
+		updated = true
+	}
+	if patch.SourceTag != nil && track.SourceTag == "" {
+		track.SourceTag = *patch.SourceTag
 		updated = true
 	}
 	if patch.CoordinateSystem != nil && track.CoordinateSystem == "" {

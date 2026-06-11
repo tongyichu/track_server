@@ -294,6 +294,7 @@ func TestCreateTrack_WithBody(t *testing.T) {
 		"session_id":           "sess_create_001",
 		"city_code":            "330100",
 		"track_type":           "跑步",
+		"source_tag":           " manual_seed ",
 		"coordinate_system":    "GCJ02",
 		"start_time":           "2026-04-20T12:00:00Z",
 		"end_time":             "2026-04-20T12:30:00Z",
@@ -331,6 +332,9 @@ func TestCreateTrack_WithBody(t *testing.T) {
 	}
 	if result.Data.TrackType != "running" {
 		t.Fatalf("unexpected track_type: %q", result.Data.TrackType)
+	}
+	if result.Data.SourceTag != "manual_seed" {
+		t.Fatalf("unexpected source_tag: %q", result.Data.SourceTag)
 	}
 	if result.Data.CoordinateSystem != "GCJ02" {
 		t.Fatalf("unexpected coordinate_system: %q", result.Data.CoordinateSystem)
@@ -613,6 +617,32 @@ func TestCreateTrack_InvalidTimeRange(t *testing.T) {
 	body, _ := json.Marshal(map[string]interface{}{
 		"start_time": "2026-04-20T12:30:00Z",
 		"end_time":   "2026-04-20T12:00:00Z",
+	})
+
+	w := e.perform(http.MethodPost, "/api/v1/track/create", body, authHeader(token), ut.Header{Key: middleware.HeaderUserID, Value: "1001"})
+	if w.Result().StatusCode() != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d", w.Result().StatusCode())
+	}
+}
+
+func TestCreateTrack_SourceTagTooLong(t *testing.T) {
+	e := newTestEnv()
+	token := e.generateTestToken(1001)
+	body, _ := json.Marshal(map[string]interface{}{
+		"source_tag": strings.Repeat("a", 65),
+	})
+
+	w := e.perform(http.MethodPost, "/api/v1/track/create", body, authHeader(token), ut.Header{Key: middleware.HeaderUserID, Value: "1001"})
+	if w.Result().StatusCode() != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d", w.Result().StatusCode())
+	}
+}
+
+func TestCreateTrack_InvalidSourceTag(t *testing.T) {
+	e := newTestEnv()
+	token := e.generateTestToken(1001)
+	body, _ := json.Marshal(map[string]interface{}{
+		"source_tag": "official_seed",
 	})
 
 	w := e.perform(http.MethodPost, "/api/v1/track/create", body, authHeader(token), ut.Header{Key: middleware.HeaderUserID, Value: "1001"})
@@ -1130,7 +1160,7 @@ func TestListMyTracks_OmitsFields(t *testing.T) {
 	startOther := time.Date(2026, 4, 22, 12, 0, 0, 0, time.UTC)
 
 	// seed tracks: 2 for user 1001 (one private), 1 条 raw_track_url 为空，1 for other user; running should be excluded.
-	_ = e.trackRepo.Create(ctx, &models.Track{ID: "my1", UserID: 1001, CityCode: "330100", TrackType: "跑步", Title: "我的1", StartTime: start1, AvgSpeedKmh: 13.2, RawTrackURL: "https://example.com/my1.dat", IsRunning: false, Status: models.TrackStatusNormal})
+	_ = e.trackRepo.Create(ctx, &models.Track{ID: "my1", UserID: 1001, CityCode: "330100", TrackType: "跑步", SourceTag: "manual_seed", Title: "我的1", StartTime: start1, AvgSpeedKmh: 13.2, RawTrackURL: "https://example.com/my1.dat", IsRunning: false, Status: models.TrackStatusNormal})
 	_ = e.trackRepo.Create(ctx, &models.Track{ID: "my2", UserID: 1001, CityCode: "330100", TrackType: "徒步", Title: "我的2", StartTime: start2, AvgSpeedKmh: 5.6, RawTrackURL: "https://example.com/my2.dat", IsRunning: false, Status: models.TrackStatusPrivate})
 	_ = e.trackRepo.Create(ctx, &models.Track{ID: "my-empty-raw", UserID: 1001, Title: "空轨迹文件", StartTime: start2.Add(-time.Hour), IsRunning: false, Status: models.TrackStatusNormal})
 	_ = e.trackRepo.Create(ctx, &models.Track{ID: "other1", UserID: 2002, Title: "别人的", StartTime: startOther, IsRunning: false, Status: models.TrackStatusNormal})
@@ -1155,6 +1185,15 @@ func TestListMyTracks_OmitsFields(t *testing.T) {
 	}
 	if len(result.Data.Items) != 2 {
 		t.Fatalf("expected my list size 2, got %d", len(result.Data.Items))
+	}
+	var raw map[string]interface{}
+	decodeJSON(t, resp.Body(), &raw)
+	data := raw["data"].(map[string]interface{})
+	items := data["items"].([]interface{})
+	for _, item := range items {
+		if _, ok := item.(map[string]interface{})["source_tag"]; ok {
+			t.Fatalf("my track list should not return source_tag")
+		}
 	}
 	if result.Data.HasMore {
 		t.Fatalf("expected has_more=false")
@@ -1355,6 +1394,7 @@ func TestUpdateTrackInfo_Success(t *testing.T) {
 		"city_code":                      "330100",
 		"locate_addr":                    "杭州市西湖区",
 		"track_type":                     "running",
+		"source_tag":                     "manual_seed",
 		"coordinate_system":              "BD09",
 		"distance":                       200.5,
 		"is_running":                     false,
@@ -1391,6 +1431,9 @@ func TestUpdateTrackInfo_Success(t *testing.T) {
 	if result.Data.TrackType != "running" {
 		t.Fatalf("expected track_type running, got %q", result.Data.TrackType)
 	}
+	if result.Data.SourceTag != "manual_seed" {
+		t.Fatalf("expected source_tag manual_seed, got %q", result.Data.SourceTag)
+	}
 	// 只有当字段为空时才允许更新：duration 非空应保持原值。
 	if result.Data.Duration != 10 {
 		t.Fatalf("expected duration 10 (unchanged), got %v", result.Data.Duration)
@@ -1423,6 +1466,38 @@ func TestUpdateTrackInfo_Success(t *testing.T) {
 	}
 	if result.Data.AvgSpeedKmh != 12.3 {
 		t.Fatalf("expected avg_speed_kmh 12.3, got %v", result.Data.AvgSpeedKmh)
+	}
+}
+
+func TestUpdateTrackInfo_SourceTagDoesNotOverwrite(t *testing.T) {
+	e := newTestEnv()
+	ctx := context.Background()
+	token := e.generateTestToken(1001)
+
+	_ = e.trackRepo.Create(ctx, &models.Track{
+		ID:        "trk-source-tag",
+		UserID:    1001,
+		Title:     "轨迹",
+		SourceTag: "legacy_seed",
+		Status:    models.TrackStatusNormal,
+	})
+
+	body, _ := json.Marshal(map[string]interface{}{
+		"source_tag": "manual_seed",
+	})
+
+	w := e.perform(http.MethodPut, "/api/v1/track/trk-source-tag/update", body, authHeader(token))
+	resp := w.Result()
+	if resp.StatusCode() != http.StatusOK {
+		t.Fatalf("expected status 200, got %d, body=%s", resp.StatusCode(), string(resp.Body()))
+	}
+	var result handler.StandardResponse[*models.Track]
+	decodeJSON(t, resp.Body(), &result)
+	if result.Data == nil {
+		t.Fatalf("expected non-nil data")
+	}
+	if result.Data.SourceTag != "legacy_seed" {
+		t.Fatalf("expected source_tag unchanged legacy_seed, got %q", result.Data.SourceTag)
 	}
 }
 
