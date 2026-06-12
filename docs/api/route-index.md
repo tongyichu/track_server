@@ -23,6 +23,7 @@
 | 查询关注状态 | GET | `/user/:user_id/follow/status` | 是 | [user.md](user.md#44-查询关注状态) |
 | 关注列表 | GET | `/user/:user_id/following/list` | 是 | [user.md](user.md#45-关注列表) |
 | 粉丝列表 | GET | `/user/:user_id/follower/list` | 是 | [user.md](user.md#46-粉丝列表) |
+| 批量上报埋点事件 | POST | `/analytics/events` | 否 | [analytics.md](analytics.md#47-批量上报埋点事件) |
 | App 升级检查 | GET | `/upgrade/check` | 否 | [upgrade.md](upgrade.md#15-app-升级检查) |
 | 获取运动类型 | GET | `/track/types` | 是 | [track.md](track.md#16-获取运动类型) |
 | 创建同行会话 | POST | `/companion/session/create` | 是 | [companion.md](companion.md#17-创建同行会话) |

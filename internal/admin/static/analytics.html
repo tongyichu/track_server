@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>埋点同步 - Track</title>
+  <link rel="stylesheet" href="/admin/static/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="title">Track 管理后台</div>
+    <nav class="nav">
+      <a href="/admin/index.html">App 发布</a>
+      <a href="/admin/users.html">用户管理</a>
+      <a href="/admin/tracks.html">轨迹管理</a>
+      <a href="/admin/companions.html">同行管理</a>
+      <a href="/admin/feedbacks.html">意见反馈</a>
+      <a class="active" href="/admin/analytics.html">埋点同步</a>
+    </nav>
+    <div class="spacer"></div>
+    <div class="user">
+      <span id="userName"></span>
+      <button id="logoutBtn">退出</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="panel">
+      <h2>埋点 OSS 同步摘要 <span class="hint" id="totalHint"></span></h2>
+      <div class="row">
+        <label>状态
+          <select id="statusFilter">
+            <option value="">全部</option>
+            <option value="success">success</option>
+            <option value="partial">partial</option>
+            <option value="failed">failed</option>
+          </select>
+        </label>
+        <button id="refreshBtn">刷新</button>
+        <button id="prevBtn" disabled>上一页</button>
+        <button id="nextBtn" disabled>下一页</button>
+        <span class="hint" id="pageHint"></span>
+      </div>
+      <table class="data">
+        <thead>
+          <tr>
+            <th>ID</th><th>状态</th><th>开始时间</th><th>耗时</th>
+            <th>扫描</th><th>上传</th><th>失败</th><th>数据量</th>
+            <th>OSS 前缀</th><th>错误</th><th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="summaryList"></tbody>
+      </table>
+    </section>
+
+    <section class="panel" id="detailPanel">
+      <h2>文件明细</h2>
+      <div id="emptyDetail" class="hint">请选择一条同步摘要</div>
+      <div id="detailContent" class="hidden">
+        <div class="detail-grid">
+          <div><strong>摘要 ID</strong><span id="detailID"></span></div>
+          <div><strong>任务名</strong><span id="detailJob"></span></div>
+          <div><strong>状态</strong><span id="detailStatus"></span></div>
+          <div><strong>时间</strong><span id="detailTime"></span></div>
+        </div>
+        <table class="data">
+          <thead>
+            <tr>
+              <th>状态</th><th>大小</th><th>本地文件</th><th>OSS Key</th><th>错误</th>
+            </tr>
+          </thead>
+          <tbody id="fileList"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="/admin/static/analytics.js"></script>
+</body>
+</html>

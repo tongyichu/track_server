@@ -20,6 +20,7 @@ type Deps struct {
 	CompanionService           *service.CompanionService
 	AchievementService         *service.AchievementService
 	FeedbackService            *service.FeedbackService
+	AnalyticsService           *service.AnalyticsService
 	JWTSecret                  string
 	TokenBlacklist             *middleware.TokenBlacklist
 	CompanionMQTTInternalToken string
@@ -48,6 +49,7 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 	achievementHandler := NewAchievementHandler(deps.AchievementService)
 	opsHandler := NewOpsHandler(deps.UserService, deps.AchievementService, deps.OpsInternalToken)
 	feedbackHandler := NewFeedbackHandler(deps.FeedbackService, deps.OpsInternalToken)
+	analyticsHandler := NewAnalyticsHandler(deps.AnalyticsService)
 
 	api := h.Group("/api/v1")
 
@@ -60,6 +62,7 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 	api.POST("/login/sms", loginHandler.LoginBySMS)
 	api.POST("/login/wechat", loginHandler.LoginByWechat)
 	api.POST("/login/apple", loginHandler.LoginByApple)
+	api.POST("/analytics/events", analyticsHandler.Ingest)
 	api.POST("/internal/mqtt/auth", companionHandler.MQTTAuth)
 	api.POST("/internal/mqtt/acl", companionHandler.MQTTACL)
 	api.POST("/internal/companion/mqtt/location-ingest", companionHandler.IngestMQTTLocation)

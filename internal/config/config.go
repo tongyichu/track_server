@@ -11,6 +11,7 @@ import (
 
 const (
 	DefaultOSSPathPrefix               = "prod/track/"
+	DefaultAnalyticsOSSPrefix          = "analytics/ods/"
 	DefaultOSSBucket                   = "track-resource"
 	DefaultSTSRegion                   = "cn-hangzhou"
 	DefaultSTSDurationSeconds          = 900
@@ -106,6 +107,20 @@ type Config struct {
 	SchedulerEnabled     bool
 	DanmakuCleanupCron   string
 	DanmakuRetentionDays int
+
+	// 客户端埋点采集
+	// - ANALYTICS_ENABLED=false 时关闭 /api/v1/analytics/events；
+	// - ANALYTICS_LOCAL_DIR 为空时使用 <LogDir>/analytics/events；
+	// - ANALYTICS_SYNC_CRON：本地埋点文件同步 OSS 的 cron 表达式（默认每天 03:00）；
+	// - ANALYTICS_OSS_PREFIX：OSS ODS 归档前缀，最终路径会追加 event_date/hour 分区；
+	// - ANALYTICS_MAX_BATCH_SIZE：单次上报事件条数上限（默认 50）；
+	// - ANALYTICS_MAX_BODY_BYTES：单次请求 body 大小上限（默认 256 KiB）。
+	AnalyticsEnabled      bool
+	AnalyticsLocalDir     string
+	AnalyticsSyncCron     string
+	AnalyticsOSSPrefix    string
+	AnalyticsMaxBatchSize int
+	AnalyticsMaxBodyBytes int64
 }
 
 // Load reads configuration from environment variables with sensible defaults.
@@ -187,6 +202,14 @@ func Load() *Config {
 		SchedulerEnabled:     os.Getenv("SCHEDULER_ENABLED") == "true",
 		DanmakuCleanupCron:   getEnv("DANMAKU_CLEANUP_CRON", "0 3 * * *"),
 		DanmakuRetentionDays: int(getEnvInt64("DANMAKU_RETENTION_DAYS", 7)),
+
+		// 客户端埋点采集
+		AnalyticsEnabled:      getEnv("ANALYTICS_ENABLED", "true") != "false",
+		AnalyticsLocalDir:     os.Getenv("ANALYTICS_LOCAL_DIR"),
+		AnalyticsSyncCron:     getEnv("ANALYTICS_SYNC_CRON", "0 3 * * *"),
+		AnalyticsOSSPrefix:    getEnv("ANALYTICS_OSS_PREFIX", DefaultAnalyticsOSSPrefix),
+		AnalyticsMaxBatchSize: int(getEnvInt64("ANALYTICS_MAX_BATCH_SIZE", 50)),
+		AnalyticsMaxBodyBytes: getEnvInt64("ANALYTICS_MAX_BODY_BYTES", 256*1024),
 	}
 
 	// Priority:

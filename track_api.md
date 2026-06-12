@@ -19,6 +19,7 @@
 | 成就接口 | [docs/api/achievement.md](docs/api/achievement.md) |
 | 同行接口 | [docs/api/companion.md](docs/api/companion.md) |
 | 同行内部 MQTT/EMQX 接口 | [docs/api/companion-internal.md](docs/api/companion-internal.md) |
+| 客户端埋点上报接口 | [docs/api/analytics.md](docs/api/analytics.md) |
 | 客户端埋点方案 | [track_analytics.md](track_analytics.md) |
 
 ## 维护规则

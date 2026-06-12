@@ -11,6 +11,7 @@
 - 围绕 `AppRelease` 的发布、列表、删除接口；
 - 上传安装包到服务端本地静态目录的接口；
 - 查看和处理用户意见反馈（含图片预览、状态更新、用户可见反馈意见）。
+- 查看埋点 OSS 同步摘要（任务状态、文件列表、OSS key、字节数、耗时与错误）。
 
 模块对外只暴露 `admin.NewModule(...)` 与 `Module.RegisterRoutes(h)`，不被业务 handler 引用。
 
@@ -45,10 +46,11 @@ internal/admin/
 | --- | --- |
 | 路由清单 | `routes.go` 中 `RegisterRoutes` |
 | 鉴权与 cookie | `auth.go`（`sessionCookieName = "admin_session"`） |
-| 业务依赖注入 | `routes.go` 的 `NewModule(accounts, releaseSvc, stsSvc, staticRoot, ..., feedbackSvc)` |
+| 业务依赖注入 | `routes.go` 的 `NewModule(accounts, releaseSvc, stsSvc, staticRoot, ..., analyticsRepo, userSvc, feedbackSvc)` |
 | 前端入口 | `static/login.html`、`static/index.html` |
 | 安装包上传 | `handlers.go` 中 `UploadPackage`、`static/app.js` 中 `/admin/api/releases/upload-package` |
 | 意见反馈管理 | `handlers.go` 中 `ListFeedbacks` / `GetFeedback` / `UpdateFeedbackStatus` / `GetFeedbackImage`，`static/feedbacks.html`、`static/feedbacks.js` |
+| 埋点同步摘要 | `handlers.go` 中 `ListAnalyticsSyncSummaries`，`static/analytics.html`、`static/analytics.js` |
 
 ## 路由清单（与 `routes.go` 对齐）
 
@@ -70,6 +72,7 @@ internal/admin/
 | GET | `/admin/api/feedbacks/:feedback_id` | 鉴权 | 意见反馈详情 |
 | PUT | `/admin/api/feedbacks/:feedback_id/status` | 鉴权 | 更新反馈处理状态与用户可见 `reply`；`resolved` 时 `reply` 必填 |
 | GET | `/admin/api/feedbacks/:feedback_id/images/:image_id` | 鉴权 | 读取反馈图片 |
+| GET | `/admin/api/analytics/sync-summaries` | 鉴权 | 埋点 OSS 同步摘要列表，支持 `status` / `limit` / `offset` |
 
 ## 关键流程
 
@@ -103,6 +106,14 @@ POST /admin/api/login {username,password}
   → PUT /admin/api/feedbacks/:feedback_id/status {status, reply}
        → FeedbackService.UpdateStatus
        → resolved 状态要求 reply 必填，reply 会展示给提交用户
+```
+
+**查看埋点同步摘要**：
+```
+[admin UI] /admin/analytics.html
+  → GET /admin/api/analytics/sync-summaries?status=&limit=&offset=
+  → AnalyticsRepository.ListSyncSummaries / CountSyncSummaries
+  → 页面展示任务状态、扫描/上传/失败文件数、总字节数、OSS 前缀与 files_json 文件明细
 ```
 
 ## 改动导航

@@ -261,6 +261,25 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 			KEY idx_feedback_user_created (user_id, created_at, feedback_id),
 			KEY idx_feedback_status_created (status, created_at, feedback_id)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户意见反馈表';`,
+		`CREATE TABLE IF NOT EXISTS analytics_sync_summaries (
+			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+			job_name VARCHAR(64) NOT NULL DEFAULT 'analytics_sync' COMMENT '同步任务名',
+			status VARCHAR(16) NOT NULL COMMENT 'success / partial / failed',
+			started_at DATETIME(6) NOT NULL COMMENT '任务开始时间',
+			ended_at DATETIME(6) NOT NULL COMMENT '任务结束时间',
+			duration_ms BIGINT NOT NULL DEFAULT 0 COMMENT '任务耗时毫秒',
+			scanned_files INT NOT NULL DEFAULT 0 COMMENT '扫描到的本地文件数',
+			uploaded_files INT NOT NULL DEFAULT 0 COMMENT '成功上传文件数',
+			failed_files INT NOT NULL DEFAULT 0 COMMENT '失败文件数',
+			total_bytes BIGINT NOT NULL DEFAULT 0 COMMENT '成功上传的数据量字节数',
+			oss_prefix VARCHAR(255) NOT NULL DEFAULT '' COMMENT 'OSS ODS 归档前缀',
+			files_json JSON NULL COMMENT '文件级同步摘要',
+			error_message TEXT NULL COMMENT '任务级错误摘要',
+			created_at DATETIME(6) NOT NULL,
+			PRIMARY KEY (id),
+			KEY idx_analytics_sync_started (started_at),
+			KEY idx_analytics_sync_status_started (status, started_at)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='埋点文件同步摘要表';`,
 	}
 
 	for _, stmt := range stmts {

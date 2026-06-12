@@ -53,10 +53,10 @@ track_server/
 │   ├── config/             # 环境变量加载；内置省市数据 + 昵称字典 + 同行弹幕敏感词词库
 │   ├── handler/            # Hertz HTTP handler + router.go 路由表（权威）
 │   ├── middleware/         # JWT 鉴权、请求元信息、Token 黑名单
-│   ├── models/             # 领域模型（Track / User / UserFollow / Companion / CompanionEvent / Achievement / Feedback / 相关光标/子结构）
+│   ├── models/             # 领域模型（Track / User / UserFollow / Companion / CompanionEvent / Achievement / Feedback / Analytics / 相关光标/子结构）
 │   ├── repository/         # 持久化接口 + mysql / mongo / memory 三实现
 │   ├── scheduler/          # 进程内定时任务（基于 robfig/cron/v3，按 SCHEDULER_ENABLED 启停）
-│   └── service/            # 业务编排：登录、轨迹、用户、同行控制面、成就、OSS STS、资源缓存
+│   └── service/            # 业务编排：登录、轨迹、用户、同行控制面、成就、OSS STS、资源缓存、埋点落盘
 ├── deploy/                 # Dockerfile / docker-compose / nginx / systemd
 ├── Makefile                # run / test / docker-build / compose-up/down
 ├── go.mod / go.sum
@@ -77,10 +77,10 @@ track_server/
 | HTTP 路由清单 | `internal/handler/router.go` |
 | 配置项与默认值 | `internal/config/config.go` |
 | Repository 接口契约 | `internal/repository/interfaces.go` |
-| 领域模型 | `internal/models/track.go`、`internal/models/user.go`、`internal/models/companion.go`、`internal/models/achievement.go`、`internal/models/feedback.go` |
+| 领域模型 | `internal/models/track.go`、`internal/models/user.go`、`internal/models/companion.go`、`internal/models/achievement.go`、`internal/models/feedback.go`、`internal/models/analytics.go` |
 | MySQL 表结构 | `mysql.sql` |
 | 接口协议 | `docs/api/`（入口 `track_api.md`，路由索引 `docs/api/route-index.md`）、`login.md`、`track_companion.md`、`track_achievement_client.md`、`track_map.md` |
-| 客户端埋点方案 | `track_analytics.md` |
+| 客户端埋点方案 | `track_analytics.md`、`docs/api/analytics.md` |
 | 成就规则方案 | `track_achievement.md` |
 
 ### 稳定默认值
@@ -88,6 +88,7 @@ track_server/
 - 默认运动类型由 `internal/config/config.go:DefaultTrackTypeConfigs` 维护，当前 code 为 `hiking`、`running`、`climbing`、`riding`、`driving`，展示名为 `徒步`、`跑步`、`爬山`、`骑行`、`自驾`；`GET /api/v1/track/types`、轨迹入库 `track_type`、运动类型图标元信息和成就系统类型口径应保持一致。
 - 轨迹 `locate_addr` 最大长度为 255 字符，对应 `track_records.locate_addr VARCHAR(255)`；修改该字段长度时同步更新 `mysql.sql`、`internal/repository/mysql.go` 与 `docs/api/track.md`。
 - 轨迹 `source_tag` 是来源/运营标签，对应 `track_records.source_tag VARCHAR(64)`；业务接口只允许空字符串或 `manual_seed`（人工录入冷启动轨迹），更新接口仅在原值为空时补写，普通列表摘要不返回该字段；修改该字段口径时同步更新 `internal/service/track_service.go`、`mysql.sql` 与 `docs/api/track.md`。
+- 埋点采集接口 `POST /api/v1/analytics/events` 默认公开可访问，用于未登录启动/登录页等事件；服务端只做校验、脱敏和本地 JSONL 落盘，不把原始埋点写入业务 MySQL，凌晨同步 OSS 的任务由 `SCHEDULER_ENABLED` 控制。`analytics_sync_summaries` 只记录每次 OSS 同步摘要（文件列表、OSS key、字节数、耗时、错误等），不保存原始事件。调整事件协议、认证策略、本地目录、OSS 前缀、批量上限、同步时间或同步摘要字段时，同步更新 `track_analytics.md`、`docs/api/analytics.md` 与 `mysql.sql`。
 
 ### 关键流程
 
@@ -101,6 +102,20 @@ Load Config → 选择 Repository（Memory/MySQL/Mongo，失败降级为 Memory�
 → （可选）SCHEDULER_ENABLED=true 时启动 Scheduler（注册 danmaku_cleanup、companion_session_autoclose 等任务）
 → h.Spin()
 ```
+
+**埋点采集与同步流程**：
+```
+POST /api/v1/analytics/events（公开接口）
+  → AnalyticsHandler 校验 JSON batch 与 body 大小
+  → AnalyticsService 清理手机号/token/原始经纬度/OSS 签名 URL 等敏感字段
+  → append 到 <LogDir>/analytics/events/<yyyy-MM-dd>/<HH>/events-*.jsonl.writing
+  → 文件按大小或时间轮转为 .jsonl
+  → Scheduler(analytics_sync，默认每天 03:00)
+  → OSSTokenService 使用 STS 临时凭证上传到 OSS: analytics/ods/event_date=.../hour=.../
+  → 上传成功后删除本地 JSONL 文件并尽力清理空目录
+  → AnalyticsRepository 写入 analytics_sync_summaries 同步摘要
+```
+埋点 OSS 同步任务默认 cron 为 `ANALYTICS_SYNC_CRON=0 3 * * *`；`ANALYTICS_ENABLED=false` 会关闭采集接口。缺少 OSS 配置时服务仍可本地落盘，但同步任务会失败重试，避免影响接口写入。同步上传强制使用 `OSS_INTERNAL_ENDPOINT` 内网域名，不允许回退公网 Endpoint。
 
 **成就结算流程**：
 ```
@@ -154,7 +169,7 @@ HTTP Request
 - 全量测试：`make test`（等价 `go test ./...`）
 - 新增/修改路由：核对 `internal/handler/router.go` 是否挂载在正确的 `auth` 分组。
 - 新增 Repository 方法：`mysql.go` / `mongo.go` / `memory.go` 三实现必须同步。
-- 改动与协议相关（字段增删、登录流程、错误码、同行控制面、同行关键事件、成就系统、意见反馈）：同步更新 `docs/api/` 对应分册与 `docs/api/route-index.md`、`login.md`、`track_companion.md` 或 `track_achievement_client.md`。
+- 改动与协议相关（字段增删、登录流程、错误码、同行控制面、同行关键事件、成就系统、意见反馈、埋点采集）：同步更新 `docs/api/` 对应分册与 `docs/api/route-index.md`、`login.md`、`track_companion.md`、`track_achievement_client.md` 或 `track_analytics.md`。
 - 用户要求提交代码时，commit message 必须使用中文，并尽量详细说明：做了什么、为什么做、影响哪些模块、是否包含数据结构/协议/文档/测试变更。
 
 ---

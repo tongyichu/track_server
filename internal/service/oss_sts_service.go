@@ -7,6 +7,7 @@ import (
 	"github.com/tongyichu/track_server/internal/config"
 	"log"
 	"net/url"
+	"path"
 	"strings"
 	"time"
 
@@ -185,6 +186,76 @@ func (s *OSSTokenService) GetReleaseUploadCredential(subDir string) (*OSSTempora
 		Endpoint:        s.ossEndpoint,
 		Dir:             dir,
 	}, nil
+}
+
+// UploadLocalFileToOSS uploads a server-local file to OSS with temporary STS
+// credentials. It is used by background jobs such as analytics ODS sync.
+//
+// The upload path is intentionally forced through OSS_INTERNAL_ENDPOINT. If it
+// is not configured, the upload fails and the local file remains for retry,
+// avoiding accidental public-network traffic fees.
+func (s *OSSTokenService) UploadLocalFileToOSS(objectKey, localPath string) error {
+	if s == nil {
+		return errors.New("oss sts service is nil")
+	}
+	objectKey = strings.TrimLeft(strings.TrimSpace(objectKey), "/")
+	if objectKey == "" {
+		return invalidArg("object_key is required")
+	}
+	if strings.Contains(objectKey, "..") {
+		return invalidArg("object_key must not contain '..'")
+	}
+	dir := path.Dir(objectKey)
+	if dir == "." || dir == "/" {
+		dir = ""
+	}
+	if dir != "" {
+		dir += "/"
+	}
+	policyJSON, err := buildOSSPutObjectPolicy(s.ossBucket, dir)
+	if err != nil {
+		return err
+	}
+	roleSessionName := fmt.Sprintf("%sanalytics-%d", s.roleSessionPrefix, time.Now().Unix())
+	if len(roleSessionName) > 64 {
+		roleSessionName = roleSessionName[:64]
+	}
+	req := sts.CreateAssumeRoleRequest()
+	req.Scheme = "https"
+	req.RoleArn = s.roleARN
+	req.RoleSessionName = roleSessionName
+	req.DurationSeconds = requests.NewInteger(int(s.durationSeconds))
+	req.Policy = policyJSON
+	resp, err := s.stsClient.AssumeRole(req)
+	if err != nil {
+		log.Printf("[OSSUpload] assume_role_error object_key=%s err=%v", objectKey, err)
+		return err
+	}
+	cred := resp.Credentials
+	if cred.AccessKeyId == "" || cred.AccessKeySecret == "" || cred.SecurityToken == "" {
+		return errors.New("sts returned empty credentials")
+	}
+	endpoint := s.ossInternalEndpoint
+	if endpoint == "" {
+		err := errors.New("oss internal endpoint is not configured; please set OSS_INTERNAL_ENDPOINT to the internal endpoint to avoid public traffic fee")
+		log.Printf("[OSSUpload] missing_internal_endpoint bucket=%s object_key=%s local=%s", s.ossBucket, objectKey, localPath)
+		return err
+	}
+	cli, err := ossclient.New(endpoint, cred.AccessKeyId, cred.AccessKeySecret, ossclient.SecurityToken(cred.SecurityToken))
+	if err != nil {
+		log.Printf("[OSSUpload] new_client_error endpoint=%s bucket=%s object_key=%s err=%v", endpoint, s.ossBucket, objectKey, err)
+		return err
+	}
+	bkt, err := cli.Bucket(s.ossBucket)
+	if err != nil {
+		log.Printf("[OSSUpload] bucket_error endpoint=%s bucket=%s object_key=%s err=%v", endpoint, s.ossBucket, objectKey, err)
+		return err
+	}
+	if err := bkt.PutObjectFromFile(objectKey, localPath); err != nil {
+		log.Printf("[OSSUpload] put_object_error endpoint=%s bucket=%s object_key=%s local=%s err=%v", endpoint, s.ossBucket, objectKey, localPath, err)
+		return err
+	}
+	return nil
 }
 
 // GetUploadCredential 为指定 userID 申请一份“仅允许上传到该用户目录”的临时凭证。

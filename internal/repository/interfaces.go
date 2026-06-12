@@ -215,6 +215,13 @@ type FeedbackRepository interface {
 	UpdateStatus(ctx context.Context, feedbackID string, status models.FeedbackStatus, reply string) error
 }
 
+// AnalyticsRepository defines persistence operations for analytics sync audits.
+type AnalyticsRepository interface {
+	CreateSyncSummary(ctx context.Context, summary *models.AnalyticsSyncSummary) error
+	ListSyncSummaries(ctx context.Context, status string, limit, offset int) ([]*models.AnalyticsSyncSummary, error)
+	CountSyncSummaries(ctx context.Context, status string) (int64, error)
+}
+
 // CompanionRepository defines persistence operations for companion session control plane.
 type CompanionRepository interface {
 	CreateSession(ctx context.Context, session *models.CompanionSession) error

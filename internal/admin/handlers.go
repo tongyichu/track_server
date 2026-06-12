@@ -30,6 +30,7 @@ type Handler struct {
 	userSvc       *service.UserService
 	trackRepo     repository.TrackRepository
 	companionRepo repository.CompanionRepository
+	analyticsRepo repository.AnalyticsRepository
 	feedbackSvc   *service.FeedbackService
 	// staticRoot 是服务端本地静态资源根目录（通常为 <LogDir>/static）。
 	// 管理后台上传的安装包会落到 <staticRoot>/release/<platform>/ 下，
@@ -46,6 +47,7 @@ func NewHandler(
 	userRepo repository.UserRepository,
 	trackRepo repository.TrackRepository,
 	companionRepo repository.CompanionRepository,
+	analyticsRepo repository.AnalyticsRepository,
 	userSvc *service.UserService,
 	feedbackSvc *service.FeedbackService,
 ) *Handler {
@@ -58,6 +60,7 @@ func NewHandler(
 		userSvc:       userSvc,
 		trackRepo:     trackRepo,
 		companionRepo: companionRepo,
+		analyticsRepo: analyticsRepo,
 		feedbackSvc:   feedbackSvc,
 	}
 }
@@ -684,6 +687,53 @@ func writeAdminFeedbackError(c *app.RequestContext, err error) {
 	default:
 		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
 	}
+}
+
+// ----- 埋点同步摘要 -----
+
+// ListAnalyticsSyncSummaries 处理 GET /admin/api/analytics/sync-summaries
+//
+// query：
+//   - status: success / partial / failed，可空；
+//   - limit:  每页条数（默认 20，最大 100）；
+//   - offset: 起始偏移量（默认 0）。
+func (h *Handler) ListAnalyticsSyncSummaries(ctx context.Context, c *app.RequestContext) {
+	if h == nil || h.analyticsRepo == nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "analytics repository not configured"})
+		return
+	}
+	limit := parseAdminListLimit(string(c.Query("limit")))
+	offset := parseNonNegativeInt(string(c.Query("offset")))
+	status := strings.TrimSpace(string(c.Query("status")))
+	items, err := h.analyticsRepo.ListSyncSummaries(ctx, status, limit, offset)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	total, err := h.analyticsRepo.CountSyncSummaries(ctx, status)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{
+		"items":       items,
+		"total":       total,
+		"limit":       limit,
+		"offset":      offset,
+		"has_more":    int64(offset+len(items)) < total,
+		"next_offset": offset + len(items),
+	}})
+}
+
+func parseNonNegativeInt(raw string) int {
+	if strings.TrimSpace(raw) == "" {
+		return 0
+	}
+	v, err := strconv.Atoi(raw)
+	if err != nil || v < 0 {
+		return 0
+	}
+	return v
 }
 
 // GetReleaseUploadCredential 处理 GET /admin/api/releases/upload-token

@@ -19,6 +19,7 @@
 | 成就摘要、奖励、等级规则 H5、运维刷新 | [achievement.md](achievement.md) |
 | 同行控制面、会话、成员、事件、附近房间 | [companion.md](companion.md) |
 | EMQX 回调、MQTT 数据面写回等内部接口 | [companion-internal.md](companion-internal.md) |
+| 客户端埋点批量上报 | [analytics.md](analytics.md) |
 | 客户端埋点事件、属性、隐私与验收 | [../../track_analytics.md](../../track_analytics.md) |
 | 按 method/path 查找接口归属 | [route-index.md](route-index.md) |
 

@@ -53,12 +53,14 @@ func main() {
 	var companionRepo repository.CompanionRepository
 	var achievementRepo repository.AchievementRepository
 	var feedbackRepo repository.FeedbackRepository
+	var analyticsRepo repository.AnalyticsRepository
 
 	if cfg.UseInMemory {
 		trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo, companionRepo = repository.NewInMemoryRepositories()
 		followRepo = repository.NewInMemoryFollowRepository()
 		achievementRepo = repository.NewInMemoryAchievementRepository()
 		feedbackRepo = repository.NewInMemoryFeedbackRepository()
+		analyticsRepo = repository.NewInMemoryAnalyticsRepository()
 		log.Println("using in-memory repositories")
 	} else if cfg.UseMySQL {
 		db, err := repository.OpenMySQL(cfg.MySQLDSN)
@@ -68,6 +70,7 @@ func main() {
 			followRepo = repository.NewInMemoryFollowRepository()
 			achievementRepo = repository.NewInMemoryAchievementRepository()
 			feedbackRepo = repository.NewInMemoryFeedbackRepository()
+			analyticsRepo = repository.NewInMemoryAnalyticsRepository()
 		} else if err := db.PingContext(ctx); err != nil {
 			log.Printf("failed to ping mysql, fallback to memory: %v", err)
 			_ = db.Close()
@@ -75,6 +78,7 @@ func main() {
 			followRepo = repository.NewInMemoryFollowRepository()
 			achievementRepo = repository.NewInMemoryAchievementRepository()
 			feedbackRepo = repository.NewInMemoryFeedbackRepository()
+			analyticsRepo = repository.NewInMemoryAnalyticsRepository()
 		} else {
 			tr, ur, cr, lr, nr, ar, cor, err := repository.NewMySQLRepositories(ctx, db)
 			if err != nil {
@@ -84,6 +88,7 @@ func main() {
 				followRepo = repository.NewInMemoryFollowRepository()
 				achievementRepo = repository.NewInMemoryAchievementRepository()
 				feedbackRepo = repository.NewInMemoryFeedbackRepository()
+				analyticsRepo = repository.NewInMemoryAnalyticsRepository()
 			} else {
 				defer func() {
 					_ = db.Close()
@@ -92,6 +97,7 @@ func main() {
 				followRepo = repository.NewMySQLFollowRepository(db)
 				achievementRepo = repository.NewMySQLAchievementRepository(db)
 				feedbackRepo = repository.NewMySQLFeedbackRepository(db)
+				analyticsRepo = repository.NewMySQLAnalyticsRepository(db)
 				log.Println("using mysql repositories")
 			}
 		}
@@ -104,6 +110,7 @@ func main() {
 			followRepo = repository.NewInMemoryFollowRepository()
 			achievementRepo = repository.NewInMemoryAchievementRepository()
 			feedbackRepo = repository.NewInMemoryFeedbackRepository()
+			analyticsRepo = repository.NewInMemoryAnalyticsRepository()
 		} else {
 			db := client.Database(cfg.MongoDBName)
 			trackRepo = repository.NewMongoTrackRepository(db.Collection("tracks"))
@@ -115,6 +122,7 @@ func main() {
 			appReleaseRepo = repository.NewMongoAppReleaseRepository(db.Collection("app_releases"))
 			achievementRepo = repository.NewMongoAchievementRepository(db.Collection("user_achievement_rewards"))
 			feedbackRepo = repository.NewMongoFeedbackRepository(db.Collection("user_feedbacks"))
+			analyticsRepo = repository.NewMongoAnalyticsRepository(db.Collection("analytics_sync_summaries"))
 			companionRepo = repository.NewMongoCompanionRepository(
 				db.Collection("companion_sessions"),
 				db.Collection("companion_session_members"),
@@ -256,6 +264,35 @@ func main() {
 		ossTokenSvc = nil
 	}
 
+	analyticsLocalDir := cfg.AnalyticsLocalDir
+	if analyticsLocalDir == "" {
+		analyticsLocalDir = filepath.Join(cfg.LogDir, "analytics", "events")
+	}
+	var analyticsUploader service.AnalyticsOSSUploader
+	if ossTokenSvc != nil {
+		analyticsUploader = ossTokenSvc
+	}
+	analyticsSvc, err := service.NewAnalyticsService(service.AnalyticsConfig{
+		Enabled:      cfg.AnalyticsEnabled,
+		LocalDir:     analyticsLocalDir,
+		OSSPrefix:    cfg.AnalyticsOSSPrefix,
+		MaxBatchSize: cfg.AnalyticsMaxBatchSize,
+		MaxBodyBytes: cfg.AnalyticsMaxBodyBytes,
+		Uploader:     analyticsUploader,
+		Repository:   analyticsRepo,
+	})
+	if err != nil {
+		log.Printf("analytics service disabled: %v", err)
+		analyticsSvc = nil
+	} else if cfg.AnalyticsEnabled {
+		log.Printf("analytics service enabled: local_dir=%s oss_prefix=%s sync_cron=%s", analyticsLocalDir, cfg.AnalyticsOSSPrefix, cfg.AnalyticsSyncCron)
+		if analyticsUploader == nil {
+			log.Printf("analytics service has no OSS uploader; events will stay on local disk until OSS is configured")
+		}
+	} else {
+		log.Printf("analytics service disabled (ANALYTICS_ENABLED=false)")
+	}
+
 	// 把 OSS 下载能力注入资源缓存服务。OSS 对象带权限控制，无法直接 http.Get，
 	// 因此必须通过 STS 临时凭证 + OSS SDK 的方式下载。
 	if ossTokenSvc != nil {
@@ -310,6 +347,7 @@ func main() {
 		CompanionService:           companionSvc,
 		AchievementService:         achievementSvc,
 		FeedbackService:            feedbackSvc,
+		AnalyticsService:           analyticsSvc,
 		JWTSecret:                  cfg.JWTSecret,
 		TokenBlacklist:             tokenBlacklist,
 		CompanionMQTTInternalToken: cfg.CompanionMQTTInternalToken,
@@ -319,7 +357,7 @@ func main() {
 
 	// 管理后台（独立于业务用户鉴权）。若未配置任何管理员账号，
 	// NewModule 创建出的 auth 为 nil，RegisterRoutes 会直接跳过。
-	adminModule := admin.NewModule(cfg.AdminAccounts, appReleaseSvc, ossTokenSvc, staticRoot, userRepo, trackRepo, companionRepo, userSvc, feedbackSvc)
+	adminModule := admin.NewModule(cfg.AdminAccounts, appReleaseSvc, ossTokenSvc, staticRoot, userRepo, trackRepo, companionRepo, analyticsRepo, userSvc, feedbackSvc)
 	defer adminModule.Close()
 	adminModule.RegisterRoutes(h)
 	if adminModule != nil && adminModule.Auth != nil {
@@ -333,7 +371,11 @@ func main() {
 		sch := scheduler.New()
 		danmakuJob := jobs.NewDanmakuCleanup(companionRepo, cfg.DanmakuRetentionDays, cfg.DanmakuCleanupCron)
 		companionAutoCloseJob := jobs.NewCompanionAutoClose(companionSvc)
-		if err := sch.Register(danmakuJob, companionAutoCloseJob); err != nil {
+		schedulerJobs := []scheduler.Job{danmakuJob, companionAutoCloseJob}
+		if analyticsSvc != nil && cfg.AnalyticsEnabled {
+			schedulerJobs = append(schedulerJobs, jobs.NewAnalyticsSync(analyticsSvc, cfg.AnalyticsSyncCron))
+		}
+		if err := sch.Register(schedulerJobs...); err != nil {
 			log.Printf("scheduler register failed, scheduler disabled: %v", err)
 		} else {
 			sch.Start()
