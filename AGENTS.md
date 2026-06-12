@@ -67,6 +67,7 @@ track_server/
 ├── track_companion.md      # 同行能力技术方案设计（控制面 / MQTT 数据面规划）
 ├── track_achievement.md    # 轨迹成就产品/规则方案（等级、XP、勋章、会员边界）
 ├── track_achievement_client.md # 成就系统客户端对接文档
+├── track_analytics.md      # 客户端埋点方案（事件命名 / 公共属性 / 业务事件 / 隐私验收）
 └── login.md                # 登录流程与协议说明
 ```
 
@@ -79,6 +80,7 @@ track_server/
 | 领域模型 | `internal/models/track.go`、`internal/models/user.go`、`internal/models/companion.go`、`internal/models/achievement.go`、`internal/models/feedback.go` |
 | MySQL 表结构 | `mysql.sql` |
 | 接口协议 | `docs/api/`（入口 `track_api.md`，路由索引 `docs/api/route-index.md`）、`login.md`、`track_companion.md`、`track_achievement_client.md`、`track_map.md` |
+| 客户端埋点方案 | `track_analytics.md` |
 | 成就规则方案 | `track_achievement.md` |
 
 ### 稳定默认值
