@@ -119,13 +119,15 @@
     var fileList = document.getElementById('fileList');
     fileList.innerHTML = '';
     if (!files.length) {
-      fileList.innerHTML = '<tr><td colspan="5" class="hint">无文件明细</td></tr>';
+      fileList.innerHTML = '<tr><td colspan="6" class="hint">无文件明细</td></tr>';
     }
     files.forEach(function (f) {
+      var inputFiles = fmtInputFiles(f);
       var tr = document.createElement('tr');
       tr.innerHTML = '<td>' + statusBadge(f.status) + '</td>' +
         '<td>' + fmtBytes(f.size_bytes) + '</td>' +
-        '<td class="mono clip" title="' + esc(f.local_path || '') + '">' + esc(f.local_path || '') + '</td>' +
+        '<td>' + esc(inputFileCount(f)) + '</td>' +
+        '<td class="mono clip" title="' + esc(inputFiles) + '">' + esc(inputFiles || f.local_path || '') + '</td>' +
         '<td class="mono clip" title="' + esc(f.oss_key || '') + '">' + esc(f.oss_key || '') + '</td>' +
         '<td class="clip" title="' + esc(f.error || '') + '">' + esc(f.error || '') + '</td>';
       fileList.appendChild(tr);
@@ -154,6 +156,17 @@
     if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
     if (n < 1024 * 1024 * 1024) return (n / 1024 / 1024).toFixed(2) + ' MB';
     return (n / 1024 / 1024 / 1024).toFixed(2) + ' GB';
+  }
+  function inputFileCount(f) {
+    if (f && f.input_file_count) return f.input_file_count;
+    if (f && Array.isArray(f.input_files)) return f.input_files.length;
+    return f && f.local_path ? 1 : 0;
+  }
+  function fmtInputFiles(f) {
+    if (f && Array.isArray(f.input_files) && f.input_files.length) {
+      return f.input_files.join('\n');
+    }
+    return '';
   }
   function esc(s) {
     return String(s == null ? '' : s)

@@ -26,9 +26,11 @@ type AnalyticsSyncSummary struct {
 }
 
 type AnalyticsSyncFileSummary struct {
-	LocalPath string `json:"local_path"`
-	OSSKey    string `json:"oss_key,omitempty"`
-	SizeBytes int64  `json:"size_bytes"`
-	Status    string `json:"status"`
-	Error     string `json:"error,omitempty"`
+	LocalPath      string   `json:"local_path"`
+	OSSKey         string   `json:"oss_key,omitempty"`
+	SizeBytes      int64    `json:"size_bytes"`
+	Status         string   `json:"status"`
+	InputFileCount int      `json:"input_file_count,omitempty"`
+	InputFiles     []string `json:"input_files,omitempty"`
+	Error          string   `json:"error,omitempty"`
 }

@@ -265,12 +265,13 @@ App SDK 本地队列
 - 本地目录：`<LogDir>/analytics/events/`，按日期和小时分区，例如 `2026-06-12/15/events-000001.jsonl`。
 - 文件格式：JSON Lines，一行一条事件；每行包含公共属性、业务属性、`server_time`、`schema_version`。
 - 写入策略：接口完成校验和脱敏后 append 到当前活跃文件；写入成功即可向客户端返回成功。
-- 文件轮转：按大小或时间轮转，建议单文件 64 MB 到 128 MB，或每 5 分钟轮转一次。
+- 文件轮转：按大小或时间轮转，当前服务端本地活跃文件按 64 MB 或 5 分钟轮转。
 - 完成标记：活跃文件使用 `.writing` 后缀，轮转完成后 rename 为 `.jsonl`，只同步已关闭文件。
-- 上传路径：`analytics/ods/event_date=yyyy-mm-dd/hour=HH/events-<instance_id>-<seq>.jsonl`。
+- 上传合并：同步任务先按 `event_date/hour` 时间分区合并小 JSONL 文件，单个 OSS part 目标上限为 128 MB，减少 OSS 小文件数量。
+- 上传路径：`analytics/ods/event_date=yyyy-mm-dd/hour=HH/part-<instance_id>-yyyy-mm-dd-HH-*.jsonl`。
 - 上传 Endpoint：服务端强制使用 `OSS_INTERNAL_ENDPOINT` 内网域名，未配置时同步任务失败并保留本地文件等待重试，不回退公网 Endpoint。
-- 上传成功后：服务端删除对应本地 JSONL 文件，并尽力清理空的小时/日期目录；同步审计信息以 `analytics_sync_summaries` 为准。
-- 同步摘要：每次 `analytics_sync` 执行都会写入 `analytics_sync_summaries`，记录同步了哪些本地文件、对应 OSS key、成功上传字节数、任务耗时和错误摘要；摘要写入失败只记录日志，不阻断文件上传结果。
+- 上传成功后：服务端删除参与该 part 合并的本地 JSONL 文件和临时 part，并尽力清理空的小时/日期目录；同步审计信息以 `analytics_sync_summaries` 为准。
+- 同步摘要：每次 `analytics_sync` 执行都会写入 `analytics_sync_summaries`，记录扫描了哪些本地源文件、合并上传到哪个 OSS part、成功上传字节数、任务耗时和错误摘要；摘要写入失败只记录日志，不阻断文件上传结果。
 - 上传失败后：保留原文件，定时任务按退避策略重试；连续失败时记录日志并触发告警。
 
 服务端本地落盘必须满足以下约束：

@@ -88,7 +88,7 @@ track_server/
 - 默认运动类型由 `internal/config/config.go:DefaultTrackTypeConfigs` 维护，当前 code 为 `hiking`、`running`、`climbing`、`riding`、`driving`，展示名为 `徒步`、`跑步`、`爬山`、`骑行`、`自驾`；`GET /api/v1/track/types`、轨迹入库 `track_type`、运动类型图标元信息和成就系统类型口径应保持一致。
 - 轨迹 `locate_addr` 最大长度为 255 字符，对应 `track_records.locate_addr VARCHAR(255)`；修改该字段长度时同步更新 `mysql.sql`、`internal/repository/mysql.go` 与 `docs/api/track.md`。
 - 轨迹 `source_tag` 是来源/运营标签，对应 `track_records.source_tag VARCHAR(64)`；业务接口只允许空字符串或 `manual_seed`（人工录入冷启动轨迹），更新接口仅在原值为空时补写，普通列表摘要不返回该字段；修改该字段口径时同步更新 `internal/service/track_service.go`、`mysql.sql` 与 `docs/api/track.md`。
-- 埋点采集接口 `POST /api/v1/analytics/events` 默认公开可访问，用于未登录启动/登录页等事件；服务端只做校验、脱敏和本地 JSONL 落盘，不把原始埋点写入业务 MySQL，凌晨同步 OSS 的任务由 `SCHEDULER_ENABLED` 控制。`analytics_sync_summaries` 只记录每次 OSS 同步摘要（文件列表、OSS key、字节数、耗时、错误等），不保存原始事件。调整事件协议、认证策略、本地目录、OSS 前缀、批量上限、同步时间或同步摘要字段时，同步更新 `track_analytics.md`、`docs/api/analytics.md` 与 `mysql.sql`。
+- 埋点采集接口 `POST /api/v1/analytics/events` 默认公开可访问，用于未登录启动/登录页等事件；服务端只做校验、脱敏和本地 JSONL 落盘，不把原始埋点写入业务 MySQL，凌晨同步 OSS 的任务由 `SCHEDULER_ENABLED` 控制。同步时按 `event_date/hour` 合并小 JSONL，单个 OSS part 目标上限 128 MB。`analytics_sync_summaries` 只记录每次 OSS 同步摘要（源文件列表、OSS part key、字节数、耗时、错误等），不保存原始事件。调整事件协议、认证策略、本地目录、OSS 前缀、批量上限、同步时间或同步摘要字段时，同步更新 `track_analytics.md`、`docs/api/analytics.md` 与 `mysql.sql`。
 
 ### 关键流程
 
@@ -111,8 +111,9 @@ POST /api/v1/analytics/events（公开接口）
   → append 到 <LogDir>/analytics/events/<yyyy-MM-dd>/<HH>/events-*.jsonl.writing
   → 文件按大小或时间轮转为 .jsonl
   → Scheduler(analytics_sync，默认每天 03:00)
-  → OSSTokenService 使用 STS 临时凭证上传到 OSS: analytics/ods/event_date=.../hour=.../
-  → 上传成功后删除本地 JSONL 文件并尽力清理空目录
+  → 按 event_date/hour 合并小 JSONL 为 128 MB 内的 part-*.jsonl
+  → OSSTokenService 使用 STS 临时凭证上传到 OSS: analytics/ods/event_date=.../hour=.../part-*.jsonl
+  → 上传成功后删除本地源 JSONL 和临时 part，并尽力清理空目录
   → AnalyticsRepository 写入 analytics_sync_summaries 同步摘要
 ```
 埋点 OSS 同步任务默认 cron 为 `ANALYTICS_SYNC_CRON=0 3 * * *`；`ANALYTICS_ENABLED=false` 会关闭采集接口。缺少 OSS 配置时服务仍可本地落盘，但同步任务会失败重试，避免影响接口写入。同步上传强制使用 `OSS_INTERNAL_ENDPOINT` 内网域名，不允许回退公网 Endpoint。

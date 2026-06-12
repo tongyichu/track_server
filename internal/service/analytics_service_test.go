@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,8 +15,9 @@ import (
 )
 
 type fakeAnalyticsUploader struct {
-	uploads map[string]string
-	err     error
+	uploads  map[string]string
+	contents map[string][]byte
+	err      error
 }
 
 func (f *fakeAnalyticsUploader) UploadLocalFileToOSS(objectKey, localPath string) error {
@@ -25,7 +27,15 @@ func (f *fakeAnalyticsUploader) UploadLocalFileToOSS(objectKey, localPath string
 	if f.uploads == nil {
 		f.uploads = make(map[string]string)
 	}
+	if f.contents == nil {
+		f.contents = make(map[string][]byte)
+	}
+	b, err := os.ReadFile(localPath)
+	if err != nil {
+		return err
+	}
 	f.uploads[objectKey] = localPath
+	f.contents[objectKey] = b
 	return nil
 }
 
@@ -123,12 +133,15 @@ func TestAnalyticsServiceSyncClosedFilesUploadsAndRemovesLocalFile(t *testing.T)
 	if result.Summary == nil || result.Summary.ID == 0 {
 		t.Fatalf("result summary missing: %#v", result.Summary)
 	}
-	key := "analytics/ods/event_date=2026-06-12/hour=15/events-inst-1-000001.jsonl"
-	if uploader.uploads[key] == "" {
-		t.Fatalf("missing upload for key %s; uploads=%#v", key, uploader.uploads)
+	var key string
+	for k := range uploader.uploads {
+		key = k
+	}
+	if !strings.HasPrefix(key, "analytics/ods/event_date=2026-06-12/hour=15/part-inst-1-2026-06-12-15-") {
+		t.Fatalf("unexpected upload key %q; uploads=%#v", key, uploader.uploads)
 	}
 	if _, err := os.Stat(uploader.uploads[key]); !os.IsNotExist(err) {
-		t.Fatalf("uploaded source should have been removed, stat err=%v", err)
+		t.Fatalf("uploaded part should have been removed, stat err=%v", err)
 	}
 	summaries := repo.Summaries()
 	if len(summaries) != 1 {
@@ -140,6 +153,72 @@ func TestAnalyticsServiceSyncClosedFilesUploadsAndRemovesLocalFile(t *testing.T)
 	}
 	if summary.OSSPrefix != "analytics/ods" || summary.FilesJSON == "" || summary.FilesJSON == "[]" {
 		t.Fatalf("summary missing oss/files detail: %#v", summary)
+	}
+	var files []models.AnalyticsSyncFileSummary
+	if err := json.Unmarshal([]byte(summary.FilesJSON), &files); err != nil {
+		t.Fatalf("decode files_json failed: %v", err)
+	}
+	if len(files) != 1 || files[0].InputFileCount != 1 || len(files[0].InputFiles) != 1 {
+		t.Fatalf("unexpected file summary: %#v", files)
+	}
+	if _, err := os.Stat(files[0].InputFiles[0]); !os.IsNotExist(err) {
+		t.Fatalf("input source should have been removed, stat err=%v", err)
+	}
+}
+
+func TestAnalyticsServiceSyncClosedFilesMergesSmallFilesByHour(t *testing.T) {
+	currentNow := time.Date(2026, 6, 12, 15, 0, 0, 0, time.UTC)
+	dir := t.TempDir()
+	uploader := &fakeAnalyticsUploader{}
+	repo := repository.NewInMemoryAnalyticsRepository()
+	svc, err := NewAnalyticsService(AnalyticsConfig{
+		Enabled:    true,
+		LocalDir:   dir,
+		OSSPrefix:  "analytics/ods",
+		InstanceID: "inst-merge",
+		Now:        func() time.Time { return currentNow },
+		Uploader:   uploader,
+		Repository: repo,
+	})
+	if err != nil {
+		t.Fatalf("NewAnalyticsService failed: %v", err)
+	}
+	for _, id := range []string{"evt-1", "evt-2", "evt-3"} {
+		if _, err := svc.Ingest(context.Background(), AnalyticsEventBatch{Events: []map[string]any{{"event_id": id, "event_name": "app_launch"}}}, AnalyticsIngestMeta{}); err != nil {
+			t.Fatalf("Ingest %s failed: %v", id, err)
+		}
+		currentNow = currentNow.Add(6 * time.Minute)
+	}
+	result, err := svc.SyncClosedFiles(context.Background())
+	if err != nil {
+		t.Fatalf("SyncClosedFiles failed: %v", err)
+	}
+	if result.Scanned != 3 || result.Uploaded != 1 || result.Failed != 0 {
+		t.Fatalf("unexpected sync result: %#v", result)
+	}
+	if len(uploader.uploads) != 1 {
+		t.Fatalf("uploads=%d, want 1: %#v", len(uploader.uploads), uploader.uploads)
+	}
+	var key string
+	for k := range uploader.uploads {
+		key = k
+	}
+	if !strings.HasPrefix(key, "analytics/ods/event_date=2026-06-12/hour=15/part-inst-merge-2026-06-12-15-") {
+		t.Fatalf("unexpected upload key %q", key)
+	}
+	body := string(uploader.contents[key])
+	for _, id := range []string{"evt-1", "evt-2", "evt-3"} {
+		if !strings.Contains(body, id) {
+			t.Fatalf("merged part missing %s: %s", id, body)
+		}
+	}
+	if len(result.Files) != 1 || result.Files[0].InputFileCount != 3 || len(result.Files[0].InputFiles) != 3 {
+		t.Fatalf("unexpected result files: %#v", result.Files)
+	}
+	for _, path := range result.Files[0].InputFiles {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("input source should have been removed path=%s stat err=%v", path, err)
+		}
 	}
 }
 

@@ -93,7 +93,8 @@
 - 定时任务 `analytics_sync` 默认每天 03:00 执行，由 `ANALYTICS_SYNC_CRON` 覆盖。
 - OSS 归档前缀默认 `analytics/ods/`，可通过 `ANALYTICS_OSS_PREFIX` 覆盖。
 - OSS 同步强制使用 `OSS_INTERNAL_ENDPOINT` 内网域名；未配置时同步失败并保留本地文件等待重试，不会回退公网 Endpoint。
-- 上传后的 OSS key 形如 `analytics/ods/event_date=2026-06-12/hour=15/<instance>-000001.jsonl`。
-- 上传成功后，服务端会删除对应本地 JSONL 文件，并尽力清理空的小时/日期目录。
-- 每次同步任务都会向 `analytics_sync_summaries` 写入一条摘要，记录开始/结束时间、耗时、扫描/上传/失败文件数、成功上传字节数、OSS 前缀、文件明细 JSON 和错误摘要。
+- 同步时按 `event_date/hour` 时间分区合并小 JSONL 文件，单个 OSS part 目标上限为 128 MB。
+- 上传后的 OSS key 形如 `analytics/ods/event_date=2026-06-12/hour=15/part-<instance>-2026-06-12-15-*.jsonl`。
+- 上传成功后，服务端会删除参与该 part 合并的本地 JSONL 文件和临时 part，并尽力清理空的小时/日期目录。
+- 每次同步任务都会向 `analytics_sync_summaries` 写入一条摘要，记录开始/结束时间、耗时、扫描源文件数、上传 part 数、失败 part 数、成功上传字节数、OSS 前缀、文件明细 JSON 和错误摘要；文件明细中包含每个 part 对应的源文件列表。
 - 摘要写入失败不会影响本地文件上传结果；服务端只记录日志，避免摘要表故障阻断埋点归档。

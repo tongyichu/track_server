@@ -7,10 +7,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -24,6 +26,7 @@ const (
 	defaultAnalyticsMaxBatchSize = 50
 	defaultAnalyticsMaxBodyBytes = int64(256 * 1024)
 	defaultAnalyticsMaxFileBytes = int64(64 * 1024 * 1024)
+	defaultAnalyticsPartMaxBytes = int64(128 * 1024 * 1024)
 	defaultAnalyticsRotateAfter  = 5 * time.Minute
 	defaultAnalyticsSchema       = "1"
 )
@@ -85,6 +88,18 @@ type AnalyticsSyncResult struct {
 	TotalBytes int64                             `json:"total_bytes"`
 	Files      []models.AnalyticsSyncFileSummary `json:"files,omitempty"`
 	Summary    *models.AnalyticsSyncSummary      `json:"summary,omitempty"`
+}
+
+type analyticsLocalFile struct {
+	Path      string
+	Date      string
+	Hour      string
+	SizeBytes int64
+}
+
+type analyticsPartition struct {
+	Date string
+	Hour string
 }
 
 // AnalyticsService receives client analytics events, writes local JSONL files,
@@ -340,59 +355,66 @@ func (s *AnalyticsService) SyncClosedFiles(ctx context.Context) (result Analytic
 		return result, syncErr
 	}
 
-	walkErr := filepath.WalkDir(s.localDir, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			return nil
-		}
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return ctxErr
-		}
-		if !strings.HasSuffix(d.Name(), ".jsonl") {
-			return nil
-		}
-		fileSummary := models.AnalyticsSyncFileSummary{
-			LocalPath: path,
-			Status:    models.AnalyticsSyncStatusFailed,
-		}
-		if info, err := d.Info(); err == nil {
-			fileSummary.SizeBytes = info.Size()
-		}
-		result.Scanned++
-		objectKey, err := s.objectKeyForLocalFile(path)
-		if err != nil {
-			result.Failed++
-			fileSummary.Error = err.Error()
-			result.Files = append(result.Files, fileSummary)
-			log.Printf("[Analytics] object_key_error path=%s err=%v", path, err)
-			return nil
-		}
-		fileSummary.OSSKey = objectKey
-		if err := s.uploader.UploadLocalFileToOSS(objectKey, path); err != nil {
-			result.Failed++
-			fileSummary.Error = err.Error()
-			result.Files = append(result.Files, fileSummary)
-			log.Printf("[Analytics] upload_failed path=%s object_key=%s err=%v", path, objectKey, err)
-			return nil
-		}
-		if err := s.removeUploadedLocalFile(path); err != nil {
-			result.Failed++
-			fileSummary.Error = err.Error()
-			result.Files = append(result.Files, fileSummary)
-			log.Printf("[Analytics] cleanup_uploaded_failed path=%s err=%v", path, err)
-			return nil
-		}
-		result.Uploaded++
-		result.TotalBytes += fileSummary.SizeBytes
-		fileSummary.Status = models.AnalyticsSyncStatusSuccess
-		result.Files = append(result.Files, fileSummary)
-		return nil
-	})
-	if walkErr != nil {
-		syncErr = walkErr
+	files, err := s.listClosedFiles(ctx)
+	if err != nil {
+		syncErr = err
 		return result, syncErr
+	}
+	result.Scanned = len(files)
+	partitions := groupAnalyticsFilesByPartition(files)
+	for _, partition := range sortedAnalyticsPartitions(partitions) {
+		if err := ctx.Err(); err != nil {
+			syncErr = err
+			return result, syncErr
+		}
+		parts := splitAnalyticsFilesIntoParts(partitions[partition], defaultAnalyticsPartMaxBytes)
+		for i, partFiles := range parts {
+			fileSummary := models.AnalyticsSyncFileSummary{
+				Status:         models.AnalyticsSyncStatusFailed,
+				InputFileCount: len(partFiles),
+				InputFiles:     analyticsFilePaths(partFiles),
+			}
+			partPath, err := s.createAnalyticsPartFile(partition, i+1, partFiles)
+			if err != nil {
+				result.Failed++
+				fileSummary.Error = err.Error()
+				result.Files = append(result.Files, fileSummary)
+				log.Printf("[Analytics] merge_part_failed partition=%s/%s err=%v", partition.Date, partition.Hour, err)
+				continue
+			}
+			fileSummary.LocalPath = partPath
+			partInfo, err := os.Stat(partPath)
+			if err != nil {
+				result.Failed++
+				fileSummary.Error = err.Error()
+				result.Files = append(result.Files, fileSummary)
+				log.Printf("[Analytics] stat_part_failed path=%s err=%v", partPath, err)
+				_ = os.Remove(partPath)
+				continue
+			}
+			fileSummary.SizeBytes = partInfo.Size()
+			objectKey := s.objectKeyForPart(partition, filepath.Base(partPath))
+			fileSummary.OSSKey = objectKey
+			if err := s.uploader.UploadLocalFileToOSS(objectKey, partPath); err != nil {
+				result.Failed++
+				fileSummary.Error = err.Error()
+				result.Files = append(result.Files, fileSummary)
+				log.Printf("[Analytics] upload_failed path=%s object_key=%s err=%v", partPath, objectKey, err)
+				_ = os.Remove(partPath)
+				continue
+			}
+			if err := s.removeUploadedAnalyticsPart(partPath, partFiles); err != nil {
+				result.Failed++
+				fileSummary.Error = err.Error()
+				result.Files = append(result.Files, fileSummary)
+				log.Printf("[Analytics] cleanup_uploaded_failed path=%s err=%v", partPath, err)
+				continue
+			}
+			result.Uploaded++
+			result.TotalBytes += fileSummary.SizeBytes
+			fileSummary.Status = models.AnalyticsSyncStatusSuccess
+			result.Files = append(result.Files, fileSummary)
+		}
 	}
 	if result.Failed > 0 {
 		syncErr = fmt.Errorf("analytics sync failed: uploaded=%d failed=%d", result.Uploaded, result.Failed)
@@ -444,22 +466,175 @@ func (s *AnalyticsService) recordSyncSummary(startedAt, endedAt time.Time, durat
 	return summary
 }
 
-func (s *AnalyticsService) objectKeyForLocalFile(path string) (string, error) {
-	rel, err := filepath.Rel(s.localDir, path)
+func (s *AnalyticsService) listClosedFiles(ctx context.Context) ([]analyticsLocalFile, error) {
+	files := make([]analyticsLocalFile, 0)
+	err := filepath.WalkDir(s.localDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return ctxErr
+		}
+		if d.IsDir() {
+			name := d.Name()
+			if name == ".parts" || strings.HasPrefix(name, ".") && path != s.localDir {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(d.Name(), ".jsonl") {
+			return nil
+		}
+		rel, err := filepath.Rel(s.localDir, path)
+		if err != nil {
+			return err
+		}
+		parts := strings.Split(filepath.ToSlash(rel), "/")
+		if len(parts) != 3 {
+			log.Printf("[Analytics] skip_unexpected_local_file path=%s", path)
+			return nil
+		}
+		date := sanitizeAnalyticsPathPart(parts[0])
+		hour := sanitizeAnalyticsPathPart(parts[1])
+		name := sanitizeAnalyticsPathPart(parts[2])
+		if date == "" || hour == "" || name == "" {
+			log.Printf("[Analytics] skip_invalid_local_file path=%s", path)
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		files = append(files, analyticsLocalFile{
+			Path:      path,
+			Date:      date,
+			Hour:      hour,
+			SizeBytes: info.Size(),
+		})
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	sort.Slice(files, func(i, j int) bool {
+		return files[i].Path < files[j].Path
+	})
+	return files, nil
+}
+
+func groupAnalyticsFilesByPartition(files []analyticsLocalFile) map[analyticsPartition][]analyticsLocalFile {
+	out := make(map[analyticsPartition][]analyticsLocalFile)
+	for _, file := range files {
+		partition := analyticsPartition{Date: file.Date, Hour: file.Hour}
+		out[partition] = append(out[partition], file)
+	}
+	return out
+}
+
+func sortedAnalyticsPartitions(partitions map[analyticsPartition][]analyticsLocalFile) []analyticsPartition {
+	out := make([]analyticsPartition, 0, len(partitions))
+	for partition := range partitions {
+		out = append(out, partition)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Date == out[j].Date {
+			return out[i].Hour < out[j].Hour
+		}
+		return out[i].Date < out[j].Date
+	})
+	return out
+}
+
+func splitAnalyticsFilesIntoParts(files []analyticsLocalFile, maxPartBytes int64) [][]analyticsLocalFile {
+	if maxPartBytes <= 0 {
+		maxPartBytes = defaultAnalyticsPartMaxBytes
+	}
+	parts := make([][]analyticsLocalFile, 0)
+	current := make([]analyticsLocalFile, 0)
+	var currentSize int64
+	for _, file := range files {
+		if len(current) > 0 && currentSize+file.SizeBytes > maxPartBytes {
+			parts = append(parts, current)
+			current = make([]analyticsLocalFile, 0)
+			currentSize = 0
+		}
+		current = append(current, file)
+		currentSize += file.SizeBytes
+	}
+	if len(current) > 0 {
+		parts = append(parts, current)
+	}
+	return parts
+}
+
+func (s *AnalyticsService) createAnalyticsPartFile(partition analyticsPartition, seq int, files []analyticsLocalFile) (string, error) {
+	partDir := filepath.Join(s.localDir, ".parts", partition.Date, partition.Hour)
+	if err := os.MkdirAll(partDir, 0o755); err != nil {
+		return "", err
+	}
+	partName := fmt.Sprintf("part-%s-%s-%s-%d-%03d.jsonl",
+		s.instanceID,
+		partition.Date,
+		partition.Hour,
+		s.now().UTC().UnixNano(),
+		seq,
+	)
+	partPath := filepath.Join(partDir, partName)
+	out, err := os.OpenFile(partPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
 	if err != nil {
 		return "", err
 	}
-	parts := strings.Split(filepath.ToSlash(rel), "/")
-	if len(parts) < 3 {
-		return "", fmt.Errorf("unexpected analytics path %q", rel)
+	success := false
+	defer func() {
+		if !success {
+			_ = os.Remove(partPath)
+		}
+	}()
+	defer out.Close()
+	for _, file := range files {
+		in, err := os.Open(file.Path)
+		if err != nil {
+			return "", err
+		}
+		if _, err := io.Copy(out, in); err != nil {
+			_ = in.Close()
+			return "", err
+		}
+		if err := in.Close(); err != nil {
+			return "", err
+		}
 	}
-	date := sanitizeAnalyticsPathPart(parts[0])
-	hour := sanitizeAnalyticsPathPart(parts[1])
-	file := sanitizeAnalyticsPathPart(parts[len(parts)-1])
-	if date == "" || hour == "" || file == "" {
-		return "", fmt.Errorf("invalid analytics path %q", rel)
+	if err := out.Sync(); err != nil {
+		return "", err
 	}
-	return fmt.Sprintf("%s/event_date=%s/hour=%s/%s", s.ossPrefix, date, hour, file), nil
+	success = true
+	return partPath, nil
+}
+
+func (s *AnalyticsService) objectKeyForPart(partition analyticsPartition, partName string) string {
+	file := sanitizeAnalyticsPathPart(partName)
+	return fmt.Sprintf("%s/event_date=%s/hour=%s/%s", s.ossPrefix, partition.Date, partition.Hour, file)
+}
+
+func (s *AnalyticsService) removeUploadedAnalyticsPart(partPath string, files []analyticsLocalFile) error {
+	for _, file := range files {
+		if err := s.removeUploadedLocalFile(file.Path); err != nil {
+			return err
+		}
+	}
+	if err := os.Remove(partPath); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	s.removeEmptyAnalyticsDirs(filepath.Dir(partPath))
+	return nil
+}
+
+func analyticsFilePaths(files []analyticsLocalFile) []string {
+	out := make([]string, 0, len(files))
+	for _, file := range files {
+		out = append(out, file.Path)
+	}
+	return out
 }
 
 func (s *AnalyticsService) removeUploadedLocalFile(path string) error {
@@ -470,14 +645,17 @@ func (s *AnalyticsService) removeUploadedLocalFile(path string) error {
 	if err := os.Remove(path); err != nil {
 		return err
 	}
-	dir := filepath.Join(s.localDir, filepath.Dir(rel))
+	s.removeEmptyAnalyticsDirs(filepath.Join(s.localDir, filepath.Dir(rel)))
+	return nil
+}
+
+func (s *AnalyticsService) removeEmptyAnalyticsDirs(dir string) {
 	for dir != s.localDir && strings.HasPrefix(dir, s.localDir) {
 		if err := os.Remove(dir); err != nil {
 			break
 		}
 		dir = filepath.Dir(dir)
 	}
-	return nil
 }
 
 func sanitizeAnalyticsValue(v any) any {
