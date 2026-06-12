@@ -34,6 +34,7 @@ type testEnv struct {
 	loginLogRepo       repository.LoginLogRepository
 	navigationRepo     repository.NavigationRepository
 	companionRepo      repository.CompanionRepository
+	feedbackRepo       repository.FeedbackRepository
 	achievementRepo    repository.AchievementRepository
 	loginSvc           *service.LoginService
 	tokenBlacklist     *middleware.TokenBlacklist
@@ -47,6 +48,7 @@ type testEnv struct {
 func newTestEnv() *testEnv {
 	trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, _, companionRepo := repository.NewInMemoryRepositories()
 	achievementRepo := repository.NewInMemoryAchievementRepository()
+	feedbackRepo := repository.NewInMemoryFeedbackRepository()
 	trackSvc := service.NewTrackService(trackRepo, collectRepo)
 	trackSvc.SetUserRepository(userRepo)
 	trackSvc.SetNavigationRepository(navigationRepo)
@@ -68,6 +70,7 @@ func newTestEnv() *testEnv {
 	})
 	tokenBlacklist := middleware.NewTokenBlacklist()
 	staticRoot, _ := os.MkdirTemp("", "track_server_test_static_")
+	feedbackSvc := service.NewFeedbackService(feedbackRepo, filepath.Join(staticRoot, "private_feedback", "images"))
 	avatarCacheDir := filepath.Join(staticRoot, "avatars")
 	avatarCache, err := service.NewAssetCacheService(
 		avatarCacheDir,
@@ -98,6 +101,7 @@ func newTestEnv() *testEnv {
 		LoginService:               loginSvc,
 		CompanionService:           companionSvc,
 		AchievementService:         achievementSvc,
+		FeedbackService:            feedbackSvc,
 		JWTSecret:                  testJWTSecret,
 		TokenBlacklist:             tokenBlacklist,
 		CompanionMQTTInternalToken: testInternalToken,
@@ -105,7 +109,19 @@ func newTestEnv() *testEnv {
 		StaticRoot:                 staticRoot,
 	})
 
-	return &testEnv{h: h, trackRepo: trackRepo, userRepo: userRepo, collectRepo: collectRepo, loginLogRepo: loginLogRepo, navigationRepo: navigationRepo, companionRepo: companionRepo, achievementRepo: achievementRepo, loginSvc: loginSvc, tokenBlacklist: tokenBlacklist, internalToken: testInternalToken, staticRoot: staticRoot, avatarCacheDir: avatarCacheDir, screenshotCacheDir: screenshotCacheDir}
+	return &testEnv{h: h, trackRepo: trackRepo, userRepo: userRepo, collectRepo: collectRepo, loginLogRepo: loginLogRepo, navigationRepo: navigationRepo, companionRepo: companionRepo, feedbackRepo: feedbackRepo, achievementRepo: achievementRepo, loginSvc: loginSvc, tokenBlacklist: tokenBlacklist, internalToken: testInternalToken, staticRoot: staticRoot, avatarCacheDir: avatarCacheDir, screenshotCacheDir: screenshotCacheDir}
+}
+
+func (e *testEnv) close() {
+	if e == nil {
+		return
+	}
+	if e.tokenBlacklist != nil {
+		e.tokenBlacklist.Close()
+	}
+	if e.staticRoot != "" {
+		_ = os.RemoveAll(e.staticRoot)
+	}
 }
 
 func (e *testEnv) generateTestToken(userID int64) string {

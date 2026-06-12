@@ -187,6 +187,15 @@ type AppReleaseRepository interface {
 	Delete(ctx context.Context, id int64) error
 }
 
+// FeedbackRepository defines persistence operations for user feedback records.
+type FeedbackRepository interface {
+	Create(ctx context.Context, feedback *models.Feedback) error
+	FindByFeedbackID(ctx context.Context, feedbackID string) (*models.Feedback, error)
+	List(ctx context.Context, filter models.FeedbackListFilter) ([]*models.Feedback, error)
+	CountByUserAndStatuses(ctx context.Context, userID int64, statuses []models.FeedbackStatus) (int64, error)
+	UpdateStatus(ctx context.Context, feedbackID string, status models.FeedbackStatus, reply string) error
+}
+
 // CompanionRepository defines persistence operations for companion session control plane.
 type CompanionRepository interface {
 	CreateSession(ctx context.Context, session *models.CompanionSession) error

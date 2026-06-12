@@ -500,9 +500,17 @@ type MongoAppReleaseRepository struct {
 	collection *mongo.Collection
 }
 
+type MongoFeedbackRepository struct {
+	collection *mongo.Collection
+}
+
 // NewMongoAppReleaseRepository constructs a Mongo-backed AppReleaseRepository.
 func NewMongoAppReleaseRepository(collection *mongo.Collection) *MongoAppReleaseRepository {
 	return &MongoAppReleaseRepository{collection: collection}
+}
+
+func NewMongoFeedbackRepository(collection *mongo.Collection) *MongoFeedbackRepository {
+	return &MongoFeedbackRepository{collection: collection}
 }
 
 func (r *MongoAppReleaseRepository) Upsert(context.Context, *models.AppRelease) error {
@@ -527,4 +535,108 @@ func (r *MongoAppReleaseRepository) GetLatestPublished(context.Context, models.A
 
 func (r *MongoAppReleaseRepository) Delete(context.Context, int64) error {
 	return errors.New("MongoAppReleaseRepository.Delete not implemented")
+}
+
+func (r *MongoFeedbackRepository) Create(ctx context.Context, feedback *models.Feedback) error {
+	if feedback == nil || feedback.FeedbackID == "" {
+		return errors.New("feedback id is required")
+	}
+	now := time.Now()
+	if feedback.CreatedAt.IsZero() {
+		feedback.CreatedAt = now
+	}
+	if feedback.UpdatedAt.IsZero() {
+		feedback.UpdatedAt = feedback.CreatedAt
+	}
+	if feedback.Status == "" {
+		feedback.Status = models.FeedbackStatusPending
+	}
+	_, err := r.collection.InsertOne(ctx, feedback)
+	if mongo.IsDuplicateKeyError(err) {
+		return ErrAlreadyExists
+	}
+	return err
+}
+
+func (r *MongoFeedbackRepository) FindByFeedbackID(ctx context.Context, feedbackID string) (*models.Feedback, error) {
+	var feedback models.Feedback
+	err := r.collection.FindOne(ctx, bson.M{"feedback_id": feedbackID}).Decode(&feedback)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return &feedback, nil
+}
+
+func (r *MongoFeedbackRepository) List(ctx context.Context, filter models.FeedbackListFilter) ([]*models.Feedback, error) {
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	query := bson.M{}
+	if filter.UserID > 0 {
+		query["user_id"] = filter.UserID
+	}
+	if filter.Status != "" {
+		query["status"] = filter.Status
+	}
+	if filter.Cursor != nil && !filter.Cursor.CreatedAt.IsZero() && filter.Cursor.FeedbackID != "" {
+		query["$or"] = bson.A{
+			bson.M{"created_at": bson.M{"$lt": filter.Cursor.CreatedAt}},
+			bson.M{"created_at": filter.Cursor.CreatedAt, "feedback_id": bson.M{"$lt": filter.Cursor.FeedbackID}},
+		}
+	}
+	cur, err := r.collection.Find(ctx, query, options.Find().
+		SetSort(bson.D{{Key: "created_at", Value: -1}, {Key: "feedback_id", Value: -1}}).
+		SetLimit(int64(limit)),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+	res := make([]*models.Feedback, 0, limit)
+	for cur.Next(ctx) {
+		var item models.Feedback
+		if err := cur.Decode(&item); err != nil {
+			return nil, err
+		}
+		res = append(res, &item)
+	}
+	if err := cur.Err(); err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
+func (r *MongoFeedbackRepository) CountByUserAndStatuses(ctx context.Context, userID int64, statuses []models.FeedbackStatus) (int64, error) {
+	if userID <= 0 || len(statuses) == 0 {
+		return 0, nil
+	}
+	count, err := r.collection.CountDocuments(ctx, bson.M{
+		"user_id": userID,
+		"status":  bson.M{"$in": statuses},
+	})
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+func (r *MongoFeedbackRepository) UpdateStatus(ctx context.Context, feedbackID string, status models.FeedbackStatus, reply string) error {
+	res, err := r.collection.UpdateOne(ctx,
+		bson.M{"feedback_id": feedbackID},
+		bson.M{"$set": bson.M{"status": status, "reply": reply, "updated_at": time.Now()}},
+	)
+	if err != nil {
+		return err
+	}
+	if res.MatchedCount == 0 {
+		return ErrNotFound
+	}
+	return nil
 }

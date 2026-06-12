@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>意见反馈 - Track</title>
+  <link rel="stylesheet" href="/admin/static/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="title">Track 管理后台</div>
+    <nav class="nav">
+      <a href="/admin/index.html">App 发布</a>
+      <a href="/admin/users.html">用户管理</a>
+      <a href="/admin/tracks.html">轨迹管理</a>
+      <a href="/admin/companions.html">同行管理</a>
+      <a class="active" href="/admin/feedbacks.html">意见反馈</a>
+    </nav>
+    <div class="spacer"></div>
+    <div class="user">
+      <span id="userName"></span>
+      <button id="logoutBtn">退出</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="panel">
+      <h2>意见反馈列表</h2>
+      <div class="row">
+        <label>状态
+          <select id="statusFilter">
+            <option value="">全部</option>
+            <option value="pending">pending</option>
+            <option value="processing">processing</option>
+            <option value="resolved">resolved</option>
+            <option value="ignored">ignored</option>
+          </select>
+        </label>
+        <button id="refreshBtn">刷新</button>
+        <button id="prevBtn" disabled>上一页</button>
+        <button id="nextBtn" disabled>下一页</button>
+        <span class="hint" id="pageHint"></span>
+      </div>
+      <table class="data">
+        <thead>
+          <tr>
+            <th>反馈ID</th><th>用户ID</th><th>状态</th><th>内容</th>
+            <th>图片</th><th>平台</th><th>版本</th><th>时间</th><th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="feedbackList"></tbody>
+      </table>
+    </section>
+
+    <section class="panel" id="detailPanel">
+      <h2>反馈详情</h2>
+      <div id="emptyDetail" class="hint">请选择一条反馈</div>
+      <div id="detailContent" class="hidden">
+        <div class="detail-grid">
+          <div><strong>反馈ID</strong><span id="detailID"></span></div>
+          <div><strong>用户ID</strong><span id="detailUserID"></span></div>
+          <div><strong>状态</strong><span id="detailStatus"></span></div>
+          <div><strong>客户端</strong><span id="detailClient"></span></div>
+          <div><strong>设备</strong><span id="detailDevice"></span></div>
+          <div><strong>联系方式</strong><span id="detailContact"></span></div>
+          <div><strong>创建时间</strong><span id="detailCreated"></span></div>
+          <div><strong>更新时间</strong><span id="detailUpdated"></span></div>
+        </div>
+        <div class="detail-block">
+          <strong>反馈内容</strong>
+          <p id="detailText"></p>
+        </div>
+        <div class="detail-block">
+          <strong>图片</strong>
+          <div id="detailImages" class="thumbs"></div>
+        </div>
+        <form id="statusForm" class="grid compact-grid">
+          <label>处理状态
+            <select name="status" id="statusSelect">
+              <option value="pending">pending</option>
+              <option value="processing">processing</option>
+              <option value="resolved">resolved</option>
+              <option value="ignored">ignored</option>
+            </select>
+          </label>
+          <label class="full">反馈意见
+            <textarea name="reply" id="replyInput" rows="4" placeholder="resolved 状态必填，用户可见"></textarea>
+          </label>
+          <div class="full actions">
+            <button type="submit">保存处理结果</button>
+            <span class="error" id="saveErr"></span>
+            <span class="ok" id="saveOk"></span>
+          </div>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <script src="/admin/static/feedbacks.js"></script>
+</body>
+</html>

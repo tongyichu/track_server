@@ -39,10 +39,10 @@ type Module struct {
 // 管理后台上传的安装包会落盘到 <staticRoot>/release/<platform>/，
 // 并通过 /api/v1/static/release/<platform>/<file> 对外下发。
 // 留空表示禁用本地上传接口（接口会返回 500）。
-func NewModule(accounts map[string]string, releaseSvc *service.AppReleaseService, stsSvc *service.OSSTokenService, staticRoot string, userRepo repository.UserRepository, trackRepo repository.TrackRepository, companionRepo repository.CompanionRepository, userSvc *service.UserService) *Module {
+func NewModule(accounts map[string]string, releaseSvc *service.AppReleaseService, stsSvc *service.OSSTokenService, staticRoot string, userRepo repository.UserRepository, trackRepo repository.TrackRepository, companionRepo repository.CompanionRepository, userSvc *service.UserService, feedbackSvc *service.FeedbackService) *Module {
 	store := NewSessionStore(12 * time.Hour)
 	auth := NewAuthenticator(accounts, store)
-	handler := NewHandler(releaseSvc, stsSvc, auth, staticRoot, userRepo, trackRepo, companionRepo, userSvc)
+	handler := NewHandler(releaseSvc, stsSvc, auth, staticRoot, userRepo, trackRepo, companionRepo, userSvc, feedbackSvc)
 	return &Module{
 		Auth:    auth,
 		Handler: handler,
@@ -76,6 +76,10 @@ func (m *Module) Close() {
 // - GET  /admin/api/tracks                 轨迹列表（鉴权，cursor 翻页）
 // - GET  /admin/api/companions             同行会话列表（鉴权，cursor 翻页）
 // - GET  /admin/api/companions/:session_id  同行会话详情：会话/成员/位置/弹幕（鉴权）
+// - GET  /admin/api/feedbacks              意见反馈列表（鉴权，cursor 翻页）
+// - GET  /admin/api/feedbacks/:feedback_id 意见反馈详情（鉴权）
+// - PUT  /admin/api/feedbacks/:feedback_id/status 处理意见反馈（鉴权）
+// - GET  /admin/api/feedbacks/:feedback_id/images/:image_id 读取反馈图片（鉴权）
 //
 // 当 m == nil 或 m.Auth == nil 时，整个 /admin 不会被挂载。
 func (m *Module) RegisterRoutes(h *server.Hertz) {
@@ -96,6 +100,7 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	g.GET("/tracks.html", serveEmbedded("static/tracks.html", "text/html; charset=utf-8"))
 	g.GET("/companions.html", serveEmbedded("static/companions.html", "text/html; charset=utf-8"))
 	g.GET("/companion_detail.html", serveEmbedded("static/companion_detail.html", "text/html; charset=utf-8"))
+	g.GET("/feedbacks.html", serveEmbedded("static/feedbacks.html", "text/html; charset=utf-8"))
 	g.GET("/static/*filepath", serveEmbeddedDir())
 
 	// 公开 API
@@ -116,6 +121,10 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	api.GET("/tracks", m.Handler.ListTracks)
 	api.GET("/companions", m.Handler.ListCompanions)
 	api.GET("/companions/:session_id", m.Handler.GetCompanionDetail)
+	api.GET("/feedbacks", m.Handler.ListFeedbacks)
+	api.GET("/feedbacks/:feedback_id", m.Handler.GetFeedback)
+	api.PUT("/feedbacks/:feedback_id/status", m.Handler.UpdateFeedbackStatus)
+	api.GET("/feedbacks/:feedback_id/images/:image_id", m.Handler.GetFeedbackImage)
 }
 
 func redirectToLogin(_ context.Context, c *app.RequestContext) {

@@ -19,6 +19,7 @@ type Deps struct {
 	AppReleaseService          *service.AppReleaseService
 	CompanionService           *service.CompanionService
 	AchievementService         *service.AchievementService
+	FeedbackService            *service.FeedbackService
 	JWTSecret                  string
 	TokenBlacklist             *middleware.TokenBlacklist
 	CompanionMQTTInternalToken string
@@ -46,6 +47,7 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 	companionHandler := NewCompanionHandler(deps.CompanionService, deps.CompanionMQTTInternalToken)
 	achievementHandler := NewAchievementHandler(deps.AchievementService)
 	opsHandler := NewOpsHandler(deps.UserService, deps.AchievementService, deps.OpsInternalToken)
+	feedbackHandler := NewFeedbackHandler(deps.FeedbackService, deps.OpsInternalToken)
 
 	api := h.Group("/api/v1")
 
@@ -66,6 +68,10 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 
 	ops := api.Group("/ops")
 	ops.POST("/achievement/refresh", opsHandler.RefreshAchievementByPhone)
+	ops.GET("/feedback/list", feedbackHandler.ListOps)
+	ops.GET("/feedback/:feedback_id", feedbackHandler.GetOps)
+	ops.PUT("/feedback/:feedback_id/status", feedbackHandler.UpdateOpsStatus)
+	ops.GET("/feedback/:feedback_id/images/:image_id", feedbackHandler.GetOpsImage)
 
 	// public: upgrade check (客户端启动/切前台时调用，无需登录)
 	api.GET("/upgrade/check", appReleaseHandler.CheckUpgrade)
@@ -132,6 +138,10 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 
 	auth.POST("/logout", loginHandler.Logout)
 	auth.GET("/login/log", loginHandler.GetLoginLog)
+	auth.POST("/feedback", feedbackHandler.Submit)
+	auth.GET("/feedback/list", feedbackHandler.ListMine)
+	auth.GET("/feedback/:feedback_id", feedbackHandler.GetMine)
+	auth.GET("/feedback/:feedback_id/images/:image_id", feedbackHandler.GetMineImage)
 	auth.POST("/companion/session/create", companionHandler.CreateSession)
 	auth.POST("/companion/session/join", companionHandler.JoinSession)
 	auth.GET("/companion/session/preview", companionHandler.PreviewSession)

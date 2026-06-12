@@ -233,6 +233,26 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 			UNIQUE KEY uk_platform_version_code (platform, version_code),
 			KEY idx_platform_status_code (platform, status, version_code)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='App 发布信息表';`,
+		`CREATE TABLE IF NOT EXISTS user_feedbacks (
+			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+			feedback_id VARCHAR(32) NOT NULL,
+			user_id BIGINT NOT NULL,
+			content TEXT NOT NULL,
+			images_json JSON NULL,
+			contact VARCHAR(128) NOT NULL DEFAULT '',
+			app_version VARCHAR(32) NOT NULL DEFAULT '',
+			platform VARCHAR(32) NOT NULL DEFAULT '',
+			device_model VARCHAR(128) NOT NULL DEFAULT '',
+			system_version VARCHAR(64) NOT NULL DEFAULT '',
+			status VARCHAR(32) NOT NULL DEFAULT 'pending',
+			reply TEXT NULL,
+			created_at DATETIME(6) NOT NULL,
+			updated_at DATETIME(6) NOT NULL,
+			PRIMARY KEY (id),
+			UNIQUE KEY uk_feedback_id (feedback_id),
+			KEY idx_feedback_user_created (user_id, created_at, feedback_id),
+			KEY idx_feedback_status_created (status, created_at, feedback_id)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户意见反馈表';`,
 	}
 
 	for _, stmt := range stmts {
@@ -2206,11 +2226,181 @@ func (r *MySQLAppReleaseRepository) Delete(ctx context.Context, id int64) error 
 	return nil
 }
 
+// MySQLFeedbackRepository implements FeedbackRepository on top of MySQL.
+type MySQLFeedbackRepository struct{ db *sql.DB }
+
+func NewMySQLFeedbackRepository(db *sql.DB) *MySQLFeedbackRepository {
+	return &MySQLFeedbackRepository{db: db}
+}
+
+func (r *MySQLFeedbackRepository) Create(ctx context.Context, feedback *models.Feedback) error {
+	if feedback == nil {
+		return errors.New("feedback is nil")
+	}
+	imagesJSON, err := json.Marshal(feedback.Images)
+	if err != nil {
+		return err
+	}
+	now := time.Now()
+	if feedback.CreatedAt.IsZero() {
+		feedback.CreatedAt = now
+	}
+	feedback.UpdatedAt = feedback.CreatedAt
+	if feedback.Status == "" {
+		feedback.Status = models.FeedbackStatusPending
+	}
+	res, err := r.db.ExecContext(ctx, `INSERT INTO user_feedbacks (
+		feedback_id, user_id, content, images_json, contact, app_version, platform,
+		device_model, system_version, status, reply, created_at, updated_at
+	) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		feedback.FeedbackID, feedback.UserID, feedback.Content, string(imagesJSON), feedback.Contact,
+		feedback.AppVersion, feedback.Platform, feedback.DeviceModel, feedback.SystemVersion,
+		feedback.Status, nullableStringValue(feedback.Reply), feedback.CreatedAt, feedback.UpdatedAt,
+	)
+	if err != nil {
+		var mysqlErr *mysql.MySQLError
+		if errors.As(err, &mysqlErr) && mysqlErr.Number == 1062 {
+			return ErrAlreadyExists
+		}
+		return err
+	}
+	id, _ := res.LastInsertId()
+	feedback.ID = id
+	return nil
+}
+
+func (r *MySQLFeedbackRepository) FindByFeedbackID(ctx context.Context, feedbackID string) (*models.Feedback, error) {
+	row := r.db.QueryRowContext(ctx, feedbackSelectSQL()+` WHERE feedback_id=?`, feedbackID)
+	return scanFeedbackRow(row)
+}
+
+func (r *MySQLFeedbackRepository) List(ctx context.Context, filter models.FeedbackListFilter) ([]*models.Feedback, error) {
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	query := feedbackSelectSQL() + ` WHERE 1=1`
+	args := make([]any, 0, 5)
+	if filter.UserID > 0 {
+		query += ` AND user_id=?`
+		args = append(args, filter.UserID)
+	}
+	if filter.Status != "" {
+		query += ` AND status=?`
+		args = append(args, filter.Status)
+	}
+	if filter.Cursor != nil && !filter.Cursor.CreatedAt.IsZero() && filter.Cursor.FeedbackID != "" {
+		query += ` AND (created_at < ? OR (created_at = ? AND feedback_id < ?))`
+		args = append(args, filter.Cursor.CreatedAt, filter.Cursor.CreatedAt, filter.Cursor.FeedbackID)
+	}
+	query += ` ORDER BY created_at DESC, feedback_id DESC LIMIT ?`
+	args = append(args, limit)
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	res := make([]*models.Feedback, 0, limit)
+	for rows.Next() {
+		item, err := scanFeedback(rows)
+		if err != nil {
+			return nil, err
+		}
+		res = append(res, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
+func (r *MySQLFeedbackRepository) CountByUserAndStatuses(ctx context.Context, userID int64, statuses []models.FeedbackStatus) (int64, error) {
+	if userID <= 0 || len(statuses) == 0 {
+		return 0, nil
+	}
+	placeholders := make([]string, 0, len(statuses))
+	args := make([]any, 0, len(statuses)+1)
+	args = append(args, userID)
+	for _, status := range statuses {
+		placeholders = append(placeholders, "?")
+		args = append(args, status)
+	}
+	query := fmt.Sprintf(`SELECT COUNT(*) FROM user_feedbacks WHERE user_id=? AND status IN (%s)`, strings.Join(placeholders, ","))
+	var count int64
+	if err := r.db.QueryRowContext(ctx, query, args...).Scan(&count); err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+func (r *MySQLFeedbackRepository) UpdateStatus(ctx context.Context, feedbackID string, status models.FeedbackStatus, reply string) error {
+	res, err := r.db.ExecContext(ctx, `UPDATE user_feedbacks SET status=?, reply=?, updated_at=? WHERE feedback_id=?`,
+		status, nullableStringValue(reply), time.Now(), feedbackID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, _ := res.RowsAffected()
+	if rows == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func appReleaseSelectSQL() string {
 	return `SELECT id, platform, version_name, version_code, min_supported_version_code,
 		package_url, package_size, package_md5, release_notes, force_update,
 		status, operator_user_id, operator_name, created_at, updated_at
 	FROM app_releases`
+}
+
+func feedbackSelectSQL() string {
+	return `SELECT id, feedback_id, user_id, content, images_json, contact, app_version, platform,
+		device_model, system_version, status, reply, created_at, updated_at
+	FROM user_feedbacks`
+}
+
+type feedbackRowScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanFeedback(row feedbackRowScanner) (*models.Feedback, error) {
+	var (
+		item       models.Feedback
+		imagesJSON sql.NullString
+		reply      sql.NullString
+	)
+	if err := row.Scan(
+		&item.ID, &item.FeedbackID, &item.UserID, &item.Content, &imagesJSON, &item.Contact,
+		&item.AppVersion, &item.Platform, &item.DeviceModel, &item.SystemVersion,
+		&item.Status, &reply, &item.CreatedAt, &item.UpdatedAt,
+	); err != nil {
+		return nil, err
+	}
+	if imagesJSON.Valid && imagesJSON.String != "" {
+		if err := json.Unmarshal([]byte(imagesJSON.String), &item.Images); err != nil {
+			return nil, err
+		}
+	}
+	if reply.Valid {
+		item.Reply = reply.String
+	}
+	return &item, nil
+}
+
+func scanFeedbackRow(row *sql.Row) (*models.Feedback, error) {
+	item, err := scanFeedback(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return item, nil
 }
 
 // appReleaseRowScanner 抽象 sql.Row 与 sql.Rows 的 Scan 方法，便于统一扫描逻辑。

@@ -45,6 +45,7 @@ body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Ro
 .error { color: #d93026; font-size: 13px; }
 .ok { color: #1aa453; font-size: 13px; }
 .hint { color: #86909c; font-size: 12px; }
+.hidden { display: none !important; }
 
 button { font: inherit; }
 
@@ -53,4 +54,28 @@ table.data { width: 100%; border-collapse: collapse; margin-top: 12px; font-size
 table.data th, table.data td { padding: 8px 10px; border-bottom: 1px solid #e5e6eb; text-align: left; vertical-align: top; }
 table.data th { background: #f7f8fa; font-weight: 600; }
 table.data td.url { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+table.data td.clip { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+table.data td.mono, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+table.data tr.selected { background: #eef6ff; }
 table.data .danger { color: #d93026; background: #fff; border: 1px solid #d93026; padding: 3px 8px; border-radius: 4px; cursor: pointer; }
+
+.badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; border: 1px solid #d9dde5; background: #f7f8fa; color: #4a4f55; }
+.badge-pending { border-color: #f0c36d; background: #fff7e6; color: #ad6800; }
+.badge-processing { border-color: #91caff; background: #e6f4ff; color: #0958d9; }
+.badge-resolved { border-color: #95de64; background: #f6ffed; color: #237804; }
+.badge-ignored { border-color: #d9d9d9; background: #fafafa; color: #595959; }
+
+.detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 18px; margin-bottom: 14px; }
+.detail-grid div { min-width: 0; }
+.detail-grid strong, .detail-block strong { display: block; color: #4a4f55; font-size: 12px; margin-bottom: 4px; }
+.detail-grid span { font-size: 13px; word-break: break-all; }
+.detail-block { margin: 12px 0; }
+.detail-block p { margin: 4px 0 0; white-space: pre-wrap; line-height: 1.6; }
+.thumbs { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+.thumbs a { display: block; width: 148px; height: 112px; border: 1px solid #e5e6eb; border-radius: 6px; overflow: hidden; background: #f7f8fa; }
+.thumbs img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.compact-grid { grid-template-columns: 220px 1fr; margin-top: 12px; }
+
+@media (max-width: 720px) {
+  .detail-grid, .compact-grid { grid-template-columns: 1fr; }
+}

@@ -230,3 +230,24 @@ CREATE TABLE `companion_events` (
                                     UNIQUE KEY `uk_companion_event_client` (`session_id`, `client_event_id`),
                                     KEY `idx_companion_events_session_time` (`session_id`, `event_time`, `id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='同行关键事件表';
+
+CREATE TABLE `user_feedbacks` (
+                                  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                                  `feedback_id` VARCHAR(32) NOT NULL COMMENT '反馈业务ID',
+                                  `user_id` BIGINT NOT NULL COMMENT '提交用户ID',
+                                  `content` TEXT NOT NULL COMMENT '反馈文字内容',
+                                  `images_json` JSON DEFAULT NULL COMMENT '反馈图片元信息，最多3张',
+                                  `contact` VARCHAR(128) NOT NULL DEFAULT '' COMMENT '用户补充联系方式',
+                                  `app_version` VARCHAR(32) NOT NULL DEFAULT '' COMMENT '客户端版本',
+                                  `platform` VARCHAR(32) NOT NULL DEFAULT '' COMMENT '客户端平台',
+                                  `device_model` VARCHAR(128) NOT NULL DEFAULT '' COMMENT '设备型号',
+                                  `system_version` VARCHAR(64) NOT NULL DEFAULT '' COMMENT '系统版本',
+                                  `status` VARCHAR(32) NOT NULL DEFAULT 'pending' COMMENT 'pending / processing / resolved / ignored',
+                                  `reply` TEXT COMMENT '运营处理备注',
+                                  `created_at` DATETIME(6) NOT NULL,
+                                  `updated_at` DATETIME(6) NOT NULL,
+                                  PRIMARY KEY (`id`),
+                                  UNIQUE KEY `uk_feedback_id` (`feedback_id`),
+                                  KEY `idx_feedback_user_created` (`user_id`, `created_at`, `feedback_id`),
+                                  KEY `idx_feedback_status_created` (`status`, `created_at`, `feedback_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户意见反馈表';

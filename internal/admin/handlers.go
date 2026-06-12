@@ -30,6 +30,7 @@ type Handler struct {
 	userSvc       *service.UserService
 	trackRepo     repository.TrackRepository
 	companionRepo repository.CompanionRepository
+	feedbackSvc   *service.FeedbackService
 	// staticRoot 是服务端本地静态资源根目录（通常为 <LogDir>/static）。
 	// 管理后台上传的安装包会落到 <staticRoot>/release/<platform>/ 下，
 	// 并通过 /api/v1/static/release/<platform>/<file> 对外下发。
@@ -46,6 +47,7 @@ func NewHandler(
 	trackRepo repository.TrackRepository,
 	companionRepo repository.CompanionRepository,
 	userSvc *service.UserService,
+	feedbackSvc *service.FeedbackService,
 ) *Handler {
 	return &Handler{
 		releaseSvc:    releaseSvc,
@@ -56,6 +58,7 @@ func NewHandler(
 		userSvc:       userSvc,
 		trackRepo:     trackRepo,
 		companionRepo: companionRepo,
+		feedbackSvc:   feedbackSvc,
 	}
 }
 
@@ -560,6 +563,127 @@ func (h *Handler) GetCompanionDetail(ctx context.Context, c *app.RequestContext)
 		"live_positions": positions,
 		"danmakus":       danmakus,
 	}})
+}
+
+// ----- 意见反馈管理 -----
+
+// ListFeedbacks 处理 GET /admin/api/feedbacks
+//
+// query：
+//   - status: pending / processing / resolved / ignored，可空；
+//   - cursor: 上一页返回的 next_cursor；
+//   - limit:  每页条数（默认 20，最大 100）。
+func (h *Handler) ListFeedbacks(ctx context.Context, c *app.RequestContext) {
+	if h == nil || h.feedbackSvc == nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "feedback service not configured"})
+		return
+	}
+	cursor, err := service.ParseFeedbackCursor(string(c.Query("cursor")))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": err.Error()})
+		return
+	}
+	page, err := h.feedbackSvc.ListOps(ctx, models.FeedbackStatus(strings.TrimSpace(string(c.Query("status")))), cursor, parseAdminListLimit(string(c.Query("limit"))))
+	if err != nil {
+		writeAdminFeedbackError(c, err)
+		return
+	}
+	h.rewriteFeedbackImageURLs(page.Items)
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": page})
+}
+
+// GetFeedback 处理 GET /admin/api/feedbacks/:feedback_id
+func (h *Handler) GetFeedback(ctx context.Context, c *app.RequestContext) {
+	if h == nil || h.feedbackSvc == nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "feedback service not configured"})
+		return
+	}
+	item, err := h.feedbackSvc.GetOps(ctx, c.Param("feedback_id"))
+	if err != nil {
+		writeAdminFeedbackError(c, err)
+		return
+	}
+	h.rewriteFeedbackImageURLs([]*models.Feedback{item})
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": item})
+}
+
+type updateFeedbackStatusBody struct {
+	Status models.FeedbackStatus `json:"status"`
+	Reply  string                `json:"reply"`
+}
+
+// UpdateFeedbackStatus 处理 PUT /admin/api/feedbacks/:feedback_id/status
+func (h *Handler) UpdateFeedbackStatus(ctx context.Context, c *app.RequestContext) {
+	if h == nil || h.feedbackSvc == nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "feedback service not configured"})
+		return
+	}
+	var body updateFeedbackStatusBody
+	data, err := c.Body()
+	if err != nil || json.Unmarshal(data, &body) != nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid payload"})
+		return
+	}
+	if err := h.feedbackSvc.UpdateStatus(ctx, service.UpdateFeedbackStatusInput{
+		FeedbackID: c.Param("feedback_id"),
+		Status:     body.Status,
+		Reply:      body.Reply,
+	}); err != nil {
+		writeAdminFeedbackError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"status": "ok"}})
+}
+
+// GetFeedbackImage 处理 GET /admin/api/feedbacks/:feedback_id/images/:image_id
+func (h *Handler) GetFeedbackImage(ctx context.Context, c *app.RequestContext) {
+	if h == nil || h.feedbackSvc == nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "feedback service not configured"})
+		return
+	}
+	file, err := h.feedbackSvc.GetImageFile(ctx, 0, c.Param("feedback_id"), c.Param("image_id"), true)
+	if err != nil {
+		writeAdminFeedbackError(c, err)
+		return
+	}
+	data, err := os.ReadFile(file.Path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			c.JSON(http.StatusNotFound, utils.H{"error": "not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	c.Response.SetStatusCode(http.StatusOK)
+	c.Response.Header.SetContentType(file.MimeType)
+	c.Response.SetBody(data)
+}
+
+func (h *Handler) rewriteFeedbackImageURLs(items []*models.Feedback) {
+	for _, item := range items {
+		if item == nil {
+			continue
+		}
+		for i := range item.Images {
+			item.Images[i].URL = "/admin/api/feedbacks/" + item.FeedbackID + "/images/" + item.Images[i].ImageID
+		}
+	}
+}
+
+func writeAdminFeedbackError(c *app.RequestContext, err error) {
+	var iae *service.InvalidArgumentError
+	switch {
+	case errors.As(err, &iae),
+		errors.Is(err, service.ErrFeedbackReplyRequired):
+		c.JSON(http.StatusBadRequest, utils.H{"error": err.Error()})
+	case errors.Is(err, repository.ErrNotFound):
+		c.JSON(http.StatusNotFound, utils.H{"error": "not found"})
+	case errors.Is(err, repository.ErrForbidden):
+		c.JSON(http.StatusForbidden, utils.H{"error": "forbidden"})
+	default:
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+	}
 }
 
 // GetReleaseUploadCredential 处理 GET /admin/api/releases/upload-token

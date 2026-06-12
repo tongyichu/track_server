@@ -42,3 +42,11 @@
 | 成就奖励列表 | GET | `/achievement/rewards` | 是 | [achievement.md](achievement.md#31-成就奖励列表) |
 | 成长等级规则 H5 | GET | `/achievement/level-rules.html` | 否 | [achievement.md](achievement.md#32-成长等级规则-h5) |
 | 运维刷新用户成就 | POST | `/ops/achievement/refresh` | 运维内部 | [achievement.md](achievement.md#33-运维刷新用户成就) |
+| 提交意见反馈 | POST | `/feedback` | 是 | [feedback.md](feedback.md#34-提交意见反馈) |
+| 我的反馈列表 | GET | `/feedback/list` | 是 | [feedback.md](feedback.md#35-我的反馈列表) |
+| 我的反馈详情 | GET | `/feedback/:feedback_id` | 是 | [feedback.md](feedback.md#36-我的反馈详情) |
+| 读取我的反馈图片 | GET | `/feedback/:feedback_id/images/:image_id` | 是 | [feedback.md](feedback.md#37-读取我的反馈图片) |
+| 运维反馈列表 | GET | `/ops/feedback/list` | 运维内部 | [feedback.md](feedback.md#38-运维反馈列表) |
+| 运维反馈详情 | GET | `/ops/feedback/:feedback_id` | 运维内部 | [feedback.md](feedback.md#39-运维反馈详情) |
+| 运维更新反馈状态 | PUT | `/ops/feedback/:feedback_id/status` | 运维内部 | [feedback.md](feedback.md#40-运维更新反馈状态) |
+| 运维读取反馈图片 | GET | `/ops/feedback/:feedback_id/images/:image_id` | 运维内部 | [feedback.md](feedback.md#41-运维读取反馈图片) |

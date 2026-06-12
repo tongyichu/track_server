@@ -51,10 +51,12 @@ func main() {
 	var appReleaseRepo repository.AppReleaseRepository
 	var companionRepo repository.CompanionRepository
 	var achievementRepo repository.AchievementRepository
+	var feedbackRepo repository.FeedbackRepository
 
 	if cfg.UseInMemory {
 		trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo, companionRepo = repository.NewInMemoryRepositories()
 		achievementRepo = repository.NewInMemoryAchievementRepository()
+		feedbackRepo = repository.NewInMemoryFeedbackRepository()
 		log.Println("using in-memory repositories")
 	} else if cfg.UseMySQL {
 		db, err := repository.OpenMySQL(cfg.MySQLDSN)
@@ -62,11 +64,13 @@ func main() {
 			log.Printf("failed to open mysql, fallback to memory: %v", err)
 			trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo, companionRepo = repository.NewInMemoryRepositories()
 			achievementRepo = repository.NewInMemoryAchievementRepository()
+			feedbackRepo = repository.NewInMemoryFeedbackRepository()
 		} else if err := db.PingContext(ctx); err != nil {
 			log.Printf("failed to ping mysql, fallback to memory: %v", err)
 			_ = db.Close()
 			trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo, companionRepo = repository.NewInMemoryRepositories()
 			achievementRepo = repository.NewInMemoryAchievementRepository()
+			feedbackRepo = repository.NewInMemoryFeedbackRepository()
 		} else {
 			tr, ur, cr, lr, nr, ar, cor, err := repository.NewMySQLRepositories(ctx, db)
 			if err != nil {
@@ -74,12 +78,14 @@ func main() {
 				_ = db.Close()
 				trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo, companionRepo = repository.NewInMemoryRepositories()
 				achievementRepo = repository.NewInMemoryAchievementRepository()
+				feedbackRepo = repository.NewInMemoryFeedbackRepository()
 			} else {
 				defer func() {
 					_ = db.Close()
 				}()
 				trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo, companionRepo = tr, ur, cr, lr, nr, ar, cor
 				achievementRepo = repository.NewMySQLAchievementRepository(db)
+				feedbackRepo = repository.NewMySQLFeedbackRepository(db)
 				log.Println("using mysql repositories")
 			}
 		}
@@ -90,6 +96,7 @@ func main() {
 			log.Printf("failed to connect mongo, fallback to memory: %v", err)
 			trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo, companionRepo = repository.NewInMemoryRepositories()
 			achievementRepo = repository.NewInMemoryAchievementRepository()
+			feedbackRepo = repository.NewInMemoryFeedbackRepository()
 		} else {
 			db := client.Database(cfg.MongoDBName)
 			trackRepo = repository.NewMongoTrackRepository(db.Collection("tracks"))
@@ -99,6 +106,7 @@ func main() {
 			navigationRepo = repository.NewMongoNavigationRepository(db.Collection("track_navigations"))
 			appReleaseRepo = repository.NewMongoAppReleaseRepository(db.Collection("app_releases"))
 			achievementRepo = repository.NewMongoAchievementRepository(db.Collection("user_achievement_rewards"))
+			feedbackRepo = repository.NewMongoFeedbackRepository(db.Collection("user_feedbacks"))
 			companionRepo = repository.NewMongoCompanionRepository(
 				db.Collection("companion_sessions"),
 				db.Collection("companion_session_members"),
@@ -120,6 +128,7 @@ func main() {
 	userSvc.SetNavigationRepository(navigationRepo)
 	loginSvc := service.NewLoginService(userRepo, loginLogRepo, cfg.WechatAppID, cfg.WechatAppSecret, cfg.JWTSecret)
 	appReleaseSvc := service.NewAppReleaseService(appReleaseRepo)
+	feedbackSvc := service.NewFeedbackService(feedbackRepo, filepath.Join(cfg.LogDir, "feedback", "images"))
 	companionSvc := service.NewCompanionService(companionRepo, userRepo)
 	companionSvc.SetTrackRepository(trackRepo)
 	clientBrokerURL := cfg.EMQXClientBrokerURL
@@ -291,6 +300,7 @@ func main() {
 		AppReleaseService:          appReleaseSvc,
 		CompanionService:           companionSvc,
 		AchievementService:         achievementSvc,
+		FeedbackService:            feedbackSvc,
 		JWTSecret:                  cfg.JWTSecret,
 		TokenBlacklist:             tokenBlacklist,
 		CompanionMQTTInternalToken: cfg.CompanionMQTTInternalToken,
@@ -300,7 +310,7 @@ func main() {
 
 	// 管理后台（独立于业务用户鉴权）。若未配置任何管理员账号，
 	// NewModule 创建出的 auth 为 nil，RegisterRoutes 会直接跳过。
-	adminModule := admin.NewModule(cfg.AdminAccounts, appReleaseSvc, ossTokenSvc, staticRoot, userRepo, trackRepo, companionRepo, userSvc)
+	adminModule := admin.NewModule(cfg.AdminAccounts, appReleaseSvc, ossTokenSvc, staticRoot, userRepo, trackRepo, companionRepo, userSvc, feedbackSvc)
 	defer adminModule.Close()
 	adminModule.RegisterRoutes(h)
 	if adminModule != nil && adminModule.Auth != nil {

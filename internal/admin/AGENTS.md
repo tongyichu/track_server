@@ -9,7 +9,8 @@
 
 - 一个独立登录的 Web 控制台（HTML/CSS/JS 经 `go:embed` 内置）；
 - 围绕 `AppRelease` 的发布、列表、删除接口；
-- 上传安装包到服务端本地静态目录的接口。
+- 上传安装包到服务端本地静态目录的接口；
+- 查看和处理用户意见反馈（含图片预览、状态更新、用户可见反馈意见）。
 
 模块对外只暴露 `admin.NewModule(...)` 与 `Module.RegisterRoutes(h)`，不被业务 handler 引用。
 
@@ -32,7 +33,7 @@
 internal/admin/
 ├── auth.go         # Authenticator + bcrypt 校验 + cookie + AuthMiddleware
 ├── session.go      # SessionStore (内存 + GC 协程，TTL 默认 12h)
-├── handlers.go     # /admin/api/releases* + /admin/api/releases/upload-package
+├── handlers.go     # /admin/api/releases*、/admin/api/feedbacks*、安装包上传、列表查询
 ├── routes.go       # NewModule / RegisterRoutes / go:embed static
 └── static/
     ├── login.html  ├── login.js
@@ -44,9 +45,10 @@ internal/admin/
 | --- | --- |
 | 路由清单 | `routes.go` 中 `RegisterRoutes` |
 | 鉴权与 cookie | `auth.go`（`sessionCookieName = "admin_session"`） |
-| 业务依赖注入 | `routes.go` 的 `NewModule(accounts, releaseSvc, stsSvc, staticRoot)` |
+| 业务依赖注入 | `routes.go` 的 `NewModule(accounts, releaseSvc, stsSvc, staticRoot, ..., feedbackSvc)` |
 | 前端入口 | `static/login.html`、`static/index.html` |
 | 安装包上传 | `handlers.go` 中 `UploadPackage`、`static/app.js` 中 `/admin/api/releases/upload-package` |
+| 意见反馈管理 | `handlers.go` 中 `ListFeedbacks` / `GetFeedback` / `UpdateFeedbackStatus` / `GetFeedbackImage`，`static/feedbacks.html`、`static/feedbacks.js` |
 
 ## 路由清单（与 `routes.go` 对齐）
 
@@ -64,6 +66,10 @@ internal/admin/
 | DELETE | `/admin/api/releases/:id` | 鉴权 | 删除一条发布记录 |
 | POST | `/admin/api/releases/upload-package` | 鉴权 | multipart 上传安装包到 `<LogDir>/static/release/<platform>/` |
 | GET | `/admin/api/releases/upload-token` | 鉴权 | 旧 OSS 直传 STS 凭证接口，前端不再使用 |
+| GET | `/admin/api/feedbacks` | 鉴权 | 意见反馈列表，支持 `status` / `cursor` / `limit` |
+| GET | `/admin/api/feedbacks/:feedback_id` | 鉴权 | 意见反馈详情 |
+| PUT | `/admin/api/feedbacks/:feedback_id/status` | 鉴权 | 更新反馈处理状态与用户可见 `reply`；`resolved` 时 `reply` 必填 |
+| GET | `/admin/api/feedbacks/:feedback_id/images/:image_id` | 鉴权 | 读取反馈图片 |
 
 ## 关键流程
 
@@ -89,10 +95,21 @@ POST /admin/api/login {username,password}
 请求 → Authenticator.AuthMiddleware → SessionFromRequest(cookie) → 否则 401
 ```
 
+**处理意见反馈**：
+```
+[admin UI] /admin/feedbacks.html
+  → GET /admin/api/feedbacks?status=&cursor=  拉取反馈列表
+  → GET /admin/api/feedbacks/:feedback_id     查看详情与图片
+  → PUT /admin/api/feedbacks/:feedback_id/status {status, reply}
+       → FeedbackService.UpdateStatus
+       → resolved 状态要求 reply 必填，reply 会展示给提交用户
+```
+
 ## 改动导航
 
 - **加一个管理后台 API**：在 `handlers.go` 写 handler → `routes.go` 的 `api := g.Group("/api", m.Auth.AuthMiddleware())` 下挂载。需要操作者信息时用 `h.auth.SessionFromRequest(c)`。
 - **加一个公开页面/资源**：把文件放进 `static/`，在 `routes.go` 用 `serveEmbedded(...)` 或走 `/admin/static/*filepath`。**不要新增第二个 `go:embed`**。
+- **加一个侧边/顶部入口**：同步更新所有后台页面的 `<nav>`，避免新增页面成为孤岛。
 - **改 cookie 策略**：只在 `auth.go` 改；保持 `HttpOnly=true`，跨站调用前提下才考虑 `SameSite=None + Secure`。
 - **调整 session TTL**：改 `routes.go` 中 `NewSessionStore(12 * time.Hour)`，不要在 cookie 与 store 两边写不一致的过期时间。
 

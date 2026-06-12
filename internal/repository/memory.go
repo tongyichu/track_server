@@ -39,6 +39,12 @@ type InMemoryAchievementRepository struct {
 	rewards map[int64]map[string]*models.UserAchievementReward
 }
 
+type InMemoryFeedbackRepository struct {
+	mu        sync.RWMutex
+	nextID    int64
+	feedbacks map[string]*models.Feedback
+}
+
 func NewInMemoryNavigationRepository() *InMemoryNavigationRepository {
 	return &InMemoryNavigationRepository{byTrack: make(map[string][]int64)}
 }
@@ -48,6 +54,10 @@ func NewInMemoryAchievementRepository() *InMemoryAchievementRepository {
 		nextID:  1,
 		rewards: make(map[int64]map[string]*models.UserAchievementReward),
 	}
+}
+
+func NewInMemoryFeedbackRepository() *InMemoryFeedbackRepository {
+	return &InMemoryFeedbackRepository{nextID: 1, feedbacks: make(map[string]*models.Feedback)}
 }
 
 // NewInMemoryTrackRepository creates a new in-memory track repository.
@@ -742,6 +752,133 @@ func (r *InMemoryLoginLogRepository) ListByUserID(_ context.Context, userID int6
 // NewInMemoryRepositories is a helper to create a full set of in-memory repositories.
 func NewInMemoryRepositories() (TrackRepository, UserRepository, CollectRepository, LoginLogRepository, NavigationRepository, AppReleaseRepository, CompanionRepository) {
 	return NewInMemoryTrackRepository(), NewInMemoryUserRepository(), NewInMemoryCollectRepository(), NewInMemoryLoginLogRepository(), NewInMemoryNavigationRepository(), NewInMemoryAppReleaseRepository(), NewInMemoryCompanionRepository()
+}
+
+func (r *InMemoryFeedbackRepository) Create(_ context.Context, feedback *models.Feedback) error {
+	if feedback == nil || feedback.FeedbackID == "" {
+		return errors.New("feedback id is required")
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, exists := r.feedbacks[feedback.FeedbackID]; exists {
+		return ErrAlreadyExists
+	}
+	now := time.Now()
+	clone := cloneFeedback(feedback)
+	if clone.ID == 0 {
+		clone.ID = r.nextID
+		r.nextID++
+	}
+	if clone.CreatedAt.IsZero() {
+		clone.CreatedAt = now
+	}
+	if clone.UpdatedAt.IsZero() {
+		clone.UpdatedAt = clone.CreatedAt
+	}
+	r.feedbacks[clone.FeedbackID] = clone
+	feedback.ID = clone.ID
+	feedback.CreatedAt = clone.CreatedAt
+	feedback.UpdatedAt = clone.UpdatedAt
+	return nil
+}
+
+func (r *InMemoryFeedbackRepository) FindByFeedbackID(_ context.Context, feedbackID string) (*models.Feedback, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	item, ok := r.feedbacks[feedbackID]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	return cloneFeedback(item), nil
+}
+
+func (r *InMemoryFeedbackRepository) List(_ context.Context, filter models.FeedbackListFilter) ([]*models.Feedback, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	res := make([]*models.Feedback, 0, limit)
+	for _, item := range r.feedbacks {
+		if item == nil {
+			continue
+		}
+		if filter.UserID > 0 && item.UserID != filter.UserID {
+			continue
+		}
+		if filter.Status != "" && item.Status != filter.Status {
+			continue
+		}
+		if filter.Cursor != nil {
+			if item.CreatedAt.After(filter.Cursor.CreatedAt) {
+				continue
+			}
+			if item.CreatedAt.Equal(filter.Cursor.CreatedAt) && item.FeedbackID >= filter.Cursor.FeedbackID {
+				continue
+			}
+		}
+		res = append(res, cloneFeedback(item))
+	}
+	sort.SliceStable(res, func(i, j int) bool {
+		if res[i].CreatedAt.Equal(res[j].CreatedAt) {
+			return res[i].FeedbackID > res[j].FeedbackID
+		}
+		return res[i].CreatedAt.After(res[j].CreatedAt)
+	})
+	if len(res) > limit {
+		res = res[:limit]
+	}
+	return res, nil
+}
+
+func (r *InMemoryFeedbackRepository) CountByUserAndStatuses(_ context.Context, userID int64, statuses []models.FeedbackStatus) (int64, error) {
+	if userID <= 0 || len(statuses) == 0 {
+		return 0, nil
+	}
+	allowed := make(map[models.FeedbackStatus]struct{}, len(statuses))
+	for _, status := range statuses {
+		allowed[status] = struct{}{}
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var count int64
+	for _, item := range r.feedbacks {
+		if item == nil || item.UserID != userID {
+			continue
+		}
+		if _, ok := allowed[item.Status]; ok {
+			count++
+		}
+	}
+	return count, nil
+}
+
+func (r *InMemoryFeedbackRepository) UpdateStatus(_ context.Context, feedbackID string, status models.FeedbackStatus, reply string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	item, ok := r.feedbacks[feedbackID]
+	if !ok {
+		return ErrNotFound
+	}
+	item.Status = status
+	item.Reply = reply
+	item.UpdatedAt = time.Now()
+	return nil
+}
+
+func cloneFeedback(in *models.Feedback) *models.Feedback {
+	if in == nil {
+		return nil
+	}
+	clone := *in
+	if len(in.Images) > 0 {
+		clone.Images = append([]models.FeedbackImage(nil), in.Images...)
+	}
+	return &clone
 }
 
 func (r *InMemoryNavigationRepository) AddNavigation(_ context.Context, navigatorUserID int64, trackID string) error {
