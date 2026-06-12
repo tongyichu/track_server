@@ -53,7 +53,7 @@ track_server/
 │   ├── config/             # 环境变量加载；内置省市数据 + 昵称字典 + 同行弹幕敏感词词库
 │   ├── handler/            # Hertz HTTP handler + router.go 路由表（权威）
 │   ├── middleware/         # JWT 鉴权、请求元信息、Token 黑名单
-│   ├── models/             # 领域模型（Track / User / Companion / CompanionEvent / Achievement / Feedback / 相关光标/子结构）
+│   ├── models/             # 领域模型（Track / User / UserFollow / Companion / CompanionEvent / Achievement / Feedback / 相关光标/子结构）
 │   ├── repository/         # 持久化接口 + mysql / mongo / memory 三实现
 │   ├── scheduler/          # 进程内定时任务（基于 robfig/cron/v3，按 SCHEDULER_ENABLED 启停）
 │   └── service/            # 业务编排：登录、轨迹、用户、同行控制面、成就、OSS STS、资源缓存
@@ -114,6 +114,8 @@ track/create(is_running=false) 或 track upload/update 完成轨迹
 成就系统 MVP 只实现成长等级与勋章体系；里程碑体系暂不结算、不下发 `type=milestone` 奖励。调整成就定义时同步更新 `track_achievement.md`、`track_achievement_client.md` 和 `docs/api/achievement.md`。
 
 **短信登录等级信息**：`POST /api/v1/login/sms` 成功响应会附带 `achievement_level`，由 `LoginHandler` 调用 `AchievementService.GetLevelInfo` 基于当前有效轨迹实时计算；修改登录响应或等级字段时同步更新 `login.md`。
+
+**关注/粉丝关系流程**：`POST /api/v1/user/:user_id/follow` 与 `DELETE /api/v1/user/:user_id/follow` 使用当前 JWT 用户作为关注者，写入或删除 `user_follows(follower_user_id, followee_user_id)` 单向关系；禁止关注自己，重复关注/取消关注按幂等成功处理。`GET /api/v1/user/:user_id/detail` 可查看任意用户公开主页，只有查看自己时返回手机号和客户端语言；详情、关注列表、粉丝列表会返回 `following_count`、`follower_count` 与当前登录用户视角的 `is_following`。调整关注关系字段、计数口径、主页隐私字段或分页游标时，同步更新 `docs/api/user.md` 与 `docs/api/route-index.md`。
 
 **同行自动收尾流程**：
 ```
@@ -186,6 +188,7 @@ HTTP Request
 | Track | 一条用户轨迹记录，外部 ID 形如 `NO.00000001` |
 | Waypoint | 轨迹上的多媒体打点 |
 | Collect | 用户对他人轨迹的收藏 |
+| Follow | 用户对另一个用户的单向关注关系，存储在 `user_follows` |
 | Navigation | "使用他人轨迹导航"的使用次数统计（与 Collect 独立） |
 | AssetCache | 把 OSS 私有对象按需缓存到服务器本地并通过 `/api/v1/static/*` 下发的服务 |
 | STS | 阿里云临时凭证，用于客户端直传 OSS |

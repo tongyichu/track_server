@@ -46,6 +46,7 @@ func main() {
 	var trackRepo repository.TrackRepository
 	var userRepo repository.UserRepository
 	var collectRepo repository.CollectRepository
+	var followRepo repository.FollowRepository
 	var loginLogRepo repository.LoginLogRepository
 	var navigationRepo repository.NavigationRepository
 	var appReleaseRepo repository.AppReleaseRepository
@@ -55,6 +56,7 @@ func main() {
 
 	if cfg.UseInMemory {
 		trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo, companionRepo = repository.NewInMemoryRepositories()
+		followRepo = repository.NewInMemoryFollowRepository()
 		achievementRepo = repository.NewInMemoryAchievementRepository()
 		feedbackRepo = repository.NewInMemoryFeedbackRepository()
 		log.Println("using in-memory repositories")
@@ -63,12 +65,14 @@ func main() {
 		if err != nil {
 			log.Printf("failed to open mysql, fallback to memory: %v", err)
 			trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo, companionRepo = repository.NewInMemoryRepositories()
+			followRepo = repository.NewInMemoryFollowRepository()
 			achievementRepo = repository.NewInMemoryAchievementRepository()
 			feedbackRepo = repository.NewInMemoryFeedbackRepository()
 		} else if err := db.PingContext(ctx); err != nil {
 			log.Printf("failed to ping mysql, fallback to memory: %v", err)
 			_ = db.Close()
 			trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo, companionRepo = repository.NewInMemoryRepositories()
+			followRepo = repository.NewInMemoryFollowRepository()
 			achievementRepo = repository.NewInMemoryAchievementRepository()
 			feedbackRepo = repository.NewInMemoryFeedbackRepository()
 		} else {
@@ -77,6 +81,7 @@ func main() {
 				log.Printf("failed to init mysql schema, fallback to memory: %v", err)
 				_ = db.Close()
 				trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo, companionRepo = repository.NewInMemoryRepositories()
+				followRepo = repository.NewInMemoryFollowRepository()
 				achievementRepo = repository.NewInMemoryAchievementRepository()
 				feedbackRepo = repository.NewInMemoryFeedbackRepository()
 			} else {
@@ -84,6 +89,7 @@ func main() {
 					_ = db.Close()
 				}()
 				trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo, companionRepo = tr, ur, cr, lr, nr, ar, cor
+				followRepo = repository.NewMySQLFollowRepository(db)
 				achievementRepo = repository.NewMySQLAchievementRepository(db)
 				feedbackRepo = repository.NewMySQLFeedbackRepository(db)
 				log.Println("using mysql repositories")
@@ -95,6 +101,7 @@ func main() {
 		if err != nil {
 			log.Printf("failed to connect mongo, fallback to memory: %v", err)
 			trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo, companionRepo = repository.NewInMemoryRepositories()
+			followRepo = repository.NewInMemoryFollowRepository()
 			achievementRepo = repository.NewInMemoryAchievementRepository()
 			feedbackRepo = repository.NewInMemoryFeedbackRepository()
 		} else {
@@ -102,6 +109,7 @@ func main() {
 			trackRepo = repository.NewMongoTrackRepository(db.Collection("tracks"))
 			userRepo = repository.NewMongoUserRepository(db.Collection("users"))
 			collectRepo = repository.NewMongoCollectRepository(db.Collection("track_collects"))
+			followRepo = repository.NewMongoFollowRepository(db.Collection("user_follows"))
 			loginLogRepo = repository.NewMongoLoginLogRepository(db.Collection("login_log"))
 			navigationRepo = repository.NewMongoNavigationRepository(db.Collection("track_navigations"))
 			appReleaseRepo = repository.NewMongoAppReleaseRepository(db.Collection("app_releases"))
@@ -126,6 +134,7 @@ func main() {
 	userSvc := service.NewUserService(userRepo)
 	userSvc.SetTrackRepository(trackRepo)
 	userSvc.SetNavigationRepository(navigationRepo)
+	userSvc.SetFollowRepository(followRepo)
 	loginSvc := service.NewLoginService(userRepo, loginLogRepo, cfg.WechatAppID, cfg.WechatAppSecret, cfg.JWTSecret)
 	appReleaseSvc := service.NewAppReleaseService(appReleaseRepo)
 	feedbackSvc := service.NewFeedbackService(feedbackRepo, filepath.Join(cfg.LogDir, "feedback", "images"))

@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"strconv"
 	"time"
@@ -18,6 +20,7 @@ var (
 	ErrNoFieldsToUpdate  = errors.New("no fields to update")
 	ErrAvatarURLRequired = errors.New("avatar_url is required")
 	ErrNameRequired      = errors.New("name is required")
+	ErrCannotFollowSelf  = errors.New("cannot follow yourself")
 )
 
 // UserService provides business logic related to user profile and settings.
@@ -25,6 +28,7 @@ type UserService struct {
 	users       repository.UserRepository
 	tracks      repository.TrackRepository
 	navigations repository.NavigationRepository
+	follows     repository.FollowRepository
 	avatarCache *AssetCacheService
 }
 
@@ -64,6 +68,11 @@ func (s *UserService) SetNavigationRepository(repo repository.NavigationReposito
 	s.navigations = repo
 }
 
+// SetFollowRepository 设置用户关注关系仓储。
+func (s *UserService) SetFollowRepository(repo repository.FollowRepository) {
+	s.follows = repo
+}
+
 type userTrackStatsProvider interface {
 	StatsByUserID(ctx context.Context, userID int64) (trackCount int64, totalDistance float64, err error)
 }
@@ -77,6 +86,49 @@ type UserStats struct {
 	TotalDistance  float64 `json:"total_distance"`
 	TrackCount     int64   `json:"track_count"`
 	TrackUsedCount int64   `json:"track_used_count"`
+}
+
+// UserProfileDetail is the safe profile payload returned by user detail APIs.
+type UserProfileDetail struct {
+	ID             int64     `json:"id"`
+	Nickname       string    `json:"nickname"`
+	AvatarURL      string    `json:"avatar_url"`
+	Signature      string    `json:"signature"`
+	Phone          string    `json:"phone,omitempty"`
+	ClientLanguage string    `json:"client_language,omitempty"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+
+	TotalDistance  float64 `json:"total_distance"`
+	TrackCount     int64   `json:"track_count"`
+	TrackUsedCount int64   `json:"track_used_count"`
+	FollowingCount int64   `json:"following_count"`
+	FollowerCount  int64   `json:"follower_count"`
+	IsFollowing    bool    `json:"is_following"`
+	IsSelf         bool    `json:"is_self"`
+}
+
+type UserFollowListInput struct {
+	Cursor string
+	Limit  int
+}
+
+type UserFollowListItem struct {
+	ID             int64     `json:"id"`
+	Nickname       string    `json:"nickname"`
+	AvatarURL      string    `json:"avatar_url"`
+	Signature      string    `json:"signature"`
+	FollowingCount int64     `json:"following_count"`
+	FollowerCount  int64     `json:"follower_count"`
+	IsFollowing    bool      `json:"is_following"`
+	CreatedAt      time.Time `json:"created_at"`
+}
+
+type UserFollowListPage struct {
+	Items      []*UserFollowListItem `json:"items"`
+	NextCursor string                `json:"next_cursor,omitempty"`
+	HasMore    bool                  `json:"has_more"`
+	TotalCount int64                 `json:"total_count"`
 }
 
 // GetUserStats 返回用户维度的统计信息。
@@ -203,6 +255,237 @@ func (s *UserService) GetUserProfile(ctx context.Context, userID int64) (*models
 	}
 	s.decorateUserAvatar(ctx, user)
 	return user, nil
+}
+
+func (s *UserService) GetUserProfileDetail(ctx context.Context, viewerUserID int64, targetUserID int64) (*UserProfileDetail, error) {
+	if viewerUserID <= 0 || targetUserID <= 0 {
+		return nil, errors.New("userID is required")
+	}
+	user, err := s.GetUserProfile(ctx, targetUserID)
+	if err != nil {
+		return nil, err
+	}
+	stats, err := s.GetUserStats(ctx, targetUserID)
+	if err != nil {
+		return nil, err
+	}
+	isSelf := viewerUserID == targetUserID
+	detail := &UserProfileDetail{
+		ID:             user.ID,
+		Nickname:       user.Nickname,
+		AvatarURL:      user.AvatarURL,
+		Signature:      user.Signature,
+		CreatedAt:      user.CreatedAt,
+		UpdatedAt:      user.UpdatedAt,
+		TotalDistance:  stats.TotalDistance,
+		TrackCount:     stats.TrackCount,
+		TrackUsedCount: stats.TrackUsedCount,
+		IsSelf:         isSelf,
+	}
+	if isSelf {
+		detail.Phone = user.Phone
+		detail.ClientLanguage = user.ClientLanguage
+	}
+	if s.follows != nil {
+		following, err := s.follows.CountFollowing(ctx, targetUserID)
+		if err != nil {
+			return nil, err
+		}
+		followers, err := s.follows.CountFollowers(ctx, targetUserID)
+		if err != nil {
+			return nil, err
+		}
+		detail.FollowingCount = following
+		detail.FollowerCount = followers
+		if !isSelf {
+			detail.IsFollowing, err = s.follows.IsFollowing(ctx, viewerUserID, targetUserID)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	return detail, nil
+}
+
+func (s *UserService) FollowUser(ctx context.Context, followerUserID int64, followeeUserID int64) error {
+	if followerUserID <= 0 || followeeUserID <= 0 {
+		return errors.New("userID is required")
+	}
+	if followerUserID == followeeUserID {
+		return ErrCannotFollowSelf
+	}
+	if s.follows == nil {
+		return errors.New("follow repository not configured")
+	}
+	if _, err := s.users.FindByID(ctx, followeeUserID); err != nil {
+		return err
+	}
+	return s.follows.AddFollow(ctx, followerUserID, followeeUserID)
+}
+
+func (s *UserService) UnfollowUser(ctx context.Context, followerUserID int64, followeeUserID int64) error {
+	if followerUserID <= 0 || followeeUserID <= 0 {
+		return errors.New("userID is required")
+	}
+	if s.follows == nil {
+		return errors.New("follow repository not configured")
+	}
+	return s.follows.RemoveFollow(ctx, followerUserID, followeeUserID)
+}
+
+func (s *UserService) IsFollowing(ctx context.Context, followerUserID int64, followeeUserID int64) (bool, error) {
+	if followerUserID <= 0 || followeeUserID <= 0 {
+		return false, errors.New("userID is required")
+	}
+	if followerUserID == followeeUserID {
+		return false, nil
+	}
+	if s.follows == nil {
+		return false, errors.New("follow repository not configured")
+	}
+	return s.follows.IsFollowing(ctx, followerUserID, followeeUserID)
+}
+
+func (s *UserService) ListFollowing(ctx context.Context, viewerUserID int64, targetUserID int64, input UserFollowListInput) (*UserFollowListPage, error) {
+	if s.follows == nil {
+		return nil, errors.New("follow repository not configured")
+	}
+	cur, err := decodeUserFollowCursor(input.Cursor)
+	if err != nil {
+		return nil, err
+	}
+	limit := normalizeUserFollowLimit(input.Limit)
+	total, err := s.follows.CountFollowing(ctx, targetUserID)
+	if err != nil {
+		return nil, err
+	}
+	recs, err := s.follows.ListFollowing(ctx, targetUserID, cur, limit+1)
+	if err != nil {
+		return nil, err
+	}
+	hasMore := len(recs) > limit
+	if hasMore {
+		recs = recs[:limit]
+	}
+	page, err := s.buildUserFollowListPage(ctx, viewerUserID, recs, total, hasMore, func(f *models.UserFollow) int64 {
+		return f.FolloweeUserID
+	})
+	if err != nil {
+		return nil, err
+	}
+	return page, nil
+}
+
+func (s *UserService) ListFollowers(ctx context.Context, viewerUserID int64, targetUserID int64, input UserFollowListInput) (*UserFollowListPage, error) {
+	if s.follows == nil {
+		return nil, errors.New("follow repository not configured")
+	}
+	cur, err := decodeUserFollowCursor(input.Cursor)
+	if err != nil {
+		return nil, err
+	}
+	limit := normalizeUserFollowLimit(input.Limit)
+	total, err := s.follows.CountFollowers(ctx, targetUserID)
+	if err != nil {
+		return nil, err
+	}
+	recs, err := s.follows.ListFollowers(ctx, targetUserID, cur, limit+1)
+	if err != nil {
+		return nil, err
+	}
+	hasMore := len(recs) > limit
+	if hasMore {
+		recs = recs[:limit]
+	}
+	return s.buildUserFollowListPage(ctx, viewerUserID, recs, total, hasMore, func(f *models.UserFollow) int64 {
+		return f.FollowerUserID
+	})
+}
+
+func (s *UserService) buildUserFollowListPage(ctx context.Context, viewerUserID int64, recs []*models.UserFollow, total int64, hasMore bool, userIDOf func(*models.UserFollow) int64) (*UserFollowListPage, error) {
+	page := &UserFollowListPage{Items: make([]*UserFollowListItem, 0, len(recs)), TotalCount: total, HasMore: hasMore}
+	for _, rec := range recs {
+		userID := userIDOf(rec)
+		user, err := s.users.FindByID(ctx, userID)
+		if err != nil {
+			if errors.Is(err, repository.ErrNotFound) {
+				continue
+			}
+			return nil, err
+		}
+		s.decorateUserAvatar(ctx, user)
+		item := &UserFollowListItem{
+			ID:        user.ID,
+			Nickname:  user.Nickname,
+			AvatarURL: user.AvatarURL,
+			Signature: user.Signature,
+			CreatedAt: rec.CreatedAt,
+		}
+		if s.follows != nil {
+			followingCount, err := s.follows.CountFollowing(ctx, user.ID)
+			if err != nil {
+				return nil, err
+			}
+			followerCount, err := s.follows.CountFollowers(ctx, user.ID)
+			if err != nil {
+				return nil, err
+			}
+			item.FollowingCount = followingCount
+			item.FollowerCount = followerCount
+			if viewerUserID > 0 && viewerUserID != user.ID {
+				item.IsFollowing, err = s.follows.IsFollowing(ctx, viewerUserID, user.ID)
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
+		page.Items = append(page.Items, item)
+	}
+	if hasMore && len(recs) > 0 {
+		last := recs[len(recs)-1]
+		nextCursor, err := encodeUserFollowCursor(last.CreatedAt, userIDOf(last))
+		if err != nil {
+			return nil, err
+		}
+		page.NextCursor = nextCursor
+	}
+	return page, nil
+}
+
+func normalizeUserFollowLimit(limit int) int {
+	if limit <= 0 {
+		return 20
+	}
+	if limit > 100 {
+		return 100
+	}
+	return limit
+}
+
+func decodeUserFollowCursor(raw string) (*models.UserFollowCursor, error) {
+	if raw == "" {
+		return nil, nil
+	}
+	data, err := base64.RawURLEncoding.DecodeString(raw)
+	if err != nil {
+		return nil, errors.New("invalid cursor")
+	}
+	var cursor models.UserFollowCursor
+	if err := json.Unmarshal(data, &cursor); err != nil {
+		return nil, errors.New("invalid cursor")
+	}
+	if cursor.CreatedAt.IsZero() || cursor.UserID <= 0 {
+		return nil, errors.New("invalid cursor")
+	}
+	return &cursor, nil
+}
+
+func encodeUserFollowCursor(createdAt time.Time, userID int64) (string, error) {
+	buf, err := json.Marshal(models.UserFollowCursor{CreatedAt: createdAt, UserID: userID})
+	if err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(buf), nil
 }
 
 // UpdateAvatar updates user's avatar URL.

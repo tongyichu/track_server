@@ -698,6 +698,142 @@ func (r *InMemoryCollectRepository) RemoveCollect(_ context.Context, userID int6
 	return nil
 }
 
+// InMemoryFollowRepository is an in-memory implementation of FollowRepository.
+type InMemoryFollowRepository struct {
+	mu      sync.RWMutex
+	follows map[int64]map[int64]*models.UserFollow // followerUserID -> followeeUserID -> follow
+}
+
+func NewInMemoryFollowRepository() *InMemoryFollowRepository {
+	return &InMemoryFollowRepository{follows: make(map[int64]map[int64]*models.UserFollow)}
+}
+
+func (r *InMemoryFollowRepository) IsFollowing(_ context.Context, followerUserID int64, followeeUserID int64) (bool, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	following, ok := r.follows[followerUserID]
+	if !ok {
+		return false, nil
+	}
+	_, ok = following[followeeUserID]
+	return ok, nil
+}
+
+func (r *InMemoryFollowRepository) AddFollow(_ context.Context, followerUserID int64, followeeUserID int64) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, ok := r.follows[followerUserID]; !ok {
+		r.follows[followerUserID] = make(map[int64]*models.UserFollow)
+	}
+	if _, exists := r.follows[followerUserID][followeeUserID]; exists {
+		return nil
+	}
+	r.follows[followerUserID][followeeUserID] = &models.UserFollow{
+		FollowerUserID: followerUserID,
+		FolloweeUserID: followeeUserID,
+		CreatedAt:      time.Now(),
+	}
+	return nil
+}
+
+func (r *InMemoryFollowRepository) RemoveFollow(_ context.Context, followerUserID int64, followeeUserID int64) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	following, ok := r.follows[followerUserID]
+	if !ok {
+		return nil
+	}
+	delete(following, followeeUserID)
+	if len(following) == 0 {
+		delete(r.follows, followerUserID)
+	}
+	return nil
+}
+
+func (r *InMemoryFollowRepository) ListFollowing(_ context.Context, userID int64, cursor *models.UserFollowCursor, limit int) ([]*models.UserFollow, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if userID <= 0 || limit <= 0 {
+		return []*models.UserFollow{}, nil
+	}
+	following, ok := r.follows[userID]
+	if !ok || len(following) == 0 {
+		return []*models.UserFollow{}, nil
+	}
+	items := make([]*models.UserFollow, 0, len(following))
+	for _, f := range following {
+		clone := *f
+		items = append(items, &clone)
+	}
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].CreatedAt.Equal(items[j].CreatedAt) {
+			return items[i].FolloweeUserID > items[j].FolloweeUserID
+		}
+		return items[i].CreatedAt.After(items[j].CreatedAt)
+	})
+	return pageUserFollows(items, cursor, limit, func(f *models.UserFollow) int64 { return f.FolloweeUserID }), nil
+}
+
+func (r *InMemoryFollowRepository) ListFollowers(_ context.Context, userID int64, cursor *models.UserFollowCursor, limit int) ([]*models.UserFollow, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if userID <= 0 || limit <= 0 {
+		return []*models.UserFollow{}, nil
+	}
+	items := make([]*models.UserFollow, 0)
+	for _, following := range r.follows {
+		if f, ok := following[userID]; ok {
+			clone := *f
+			items = append(items, &clone)
+		}
+	}
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].CreatedAt.Equal(items[j].CreatedAt) {
+			return items[i].FollowerUserID > items[j].FollowerUserID
+		}
+		return items[i].CreatedAt.After(items[j].CreatedAt)
+	})
+	return pageUserFollows(items, cursor, limit, func(f *models.UserFollow) int64 { return f.FollowerUserID }), nil
+}
+
+func pageUserFollows(items []*models.UserFollow, cursor *models.UserFollowCursor, limit int, cursorUserID func(*models.UserFollow) int64) []*models.UserFollow {
+	res := make([]*models.UserFollow, 0, limit)
+	for _, f := range items {
+		if cursor != nil && !cursor.CreatedAt.IsZero() && cursor.UserID > 0 {
+			id := cursorUserID(f)
+			if f.CreatedAt.After(cursor.CreatedAt) {
+				continue
+			}
+			if f.CreatedAt.Equal(cursor.CreatedAt) && id >= cursor.UserID {
+				continue
+			}
+		}
+		res = append(res, f)
+		if len(res) >= limit {
+			break
+		}
+	}
+	return res
+}
+
+func (r *InMemoryFollowRepository) CountFollowing(_ context.Context, userID int64) (int64, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return int64(len(r.follows[userID])), nil
+}
+
+func (r *InMemoryFollowRepository) CountFollowers(_ context.Context, userID int64) (int64, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var cnt int64
+	for _, following := range r.follows {
+		if _, ok := following[userID]; ok {
+			cnt++
+		}
+	}
+	return cnt, nil
+}
+
 // InMemoryLoginLogRepository is an in-memory implementation of LoginLogRepository.
 type InMemoryLoginLogRepository struct {
 	mu      sync.RWMutex

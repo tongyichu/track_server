@@ -141,6 +141,25 @@ type CollectRepository interface {
 	RemoveCollect(ctx context.Context, userID int64, trackID string) error
 }
 
+// FollowRepository defines persistence operations for one-way user follow relationships.
+type FollowRepository interface {
+	IsFollowing(ctx context.Context, followerUserID int64, followeeUserID int64) (bool, error)
+	AddFollow(ctx context.Context, followerUserID int64, followeeUserID int64) error
+	RemoveFollow(ctx context.Context, followerUserID int64, followeeUserID int64) error
+	// ListFollowing lists users followed by userID in reverse chronological order.
+	//
+	// Order: created_at desc, followee_user_id desc.
+	// Cursor condition: (created_at, followee_user_id) strictly less than cursor.
+	ListFollowing(ctx context.Context, userID int64, cursor *models.UserFollowCursor, limit int) ([]*models.UserFollow, error)
+	// ListFollowers lists users following userID in reverse chronological order.
+	//
+	// Order: created_at desc, follower_user_id desc.
+	// Cursor condition: (created_at, follower_user_id) strictly less than cursor.
+	ListFollowers(ctx context.Context, userID int64, cursor *models.UserFollowCursor, limit int) ([]*models.UserFollow, error)
+	CountFollowing(ctx context.Context, userID int64) (int64, error)
+	CountFollowers(ctx context.Context, userID int64) (int64, error)
+}
+
 // NavigationRepository defines persistence operations for track navigation usage records.
 //
 // 设计说明：

@@ -11,7 +11,7 @@ import (
 	"github.com/cloudwego/hertz/pkg/common/utils"
 
 	"github.com/tongyichu/track_server/internal/middleware"
-	"github.com/tongyichu/track_server/internal/models"
+	"github.com/tongyichu/track_server/internal/repository"
 	"github.com/tongyichu/track_server/internal/service"
 )
 
@@ -39,32 +39,123 @@ func (h *UserHandler) GetUserDetail(ctx context.Context, c *app.RequestContext) 
 		c.JSON(http.StatusBadRequest, utils.H{"error": err.Error()})
 		return
 	}
-	if userID != authUserID {
-		c.JSON(http.StatusForbidden, utils.H{"error": "forbidden"})
-		return
-	}
-	user, err := h.userSvc.GetUserProfile(ctx, userID)
+	detail, err := h.userSvc.GetUserProfileDetail(ctx, authUserID, userID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, utils.H{"error": err.Error()})
+		if errors.Is(err, repository.ErrNotFound) {
+			c.JSON(http.StatusNotFound, utils.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
 		return
 	}
-	stats, err := h.userSvc.GetUserStats(ctx, userID)
+	c.JSON(http.StatusOK, successResponse(detail))
+}
+
+func (h *UserHandler) FollowUser(ctx context.Context, c *app.RequestContext) {
+	authUserID, ok := h.authUserID(c)
+	if !ok {
+		return
+	}
+	targetUserID, err := parseRequiredUserID(c.Param("user_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": err.Error()})
+		return
+	}
+	if err := h.userSvc.FollowUser(ctx, authUserID, targetUserID); err != nil {
+		switch {
+		case errors.Is(err, service.ErrCannotFollowSelf):
+			c.JSON(http.StatusBadRequest, utils.H{"error": err.Error()})
+		case errors.Is(err, repository.ErrNotFound):
+			c.JSON(http.StatusNotFound, utils.H{"error": err.Error()})
+		default:
+			c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		}
+		return
+	}
+	c.JSON(http.StatusOK, successResponse(StatusResult{Status: "ok"}))
+}
+
+func (h *UserHandler) UnfollowUser(ctx context.Context, c *app.RequestContext) {
+	authUserID, ok := h.authUserID(c)
+	if !ok {
+		return
+	}
+	targetUserID, err := parseRequiredUserID(c.Param("user_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": err.Error()})
+		return
+	}
+	if err := h.userSvc.UnfollowUser(ctx, authUserID, targetUserID); err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, successResponse(StatusResult{Status: "ok"}))
+}
+
+func (h *UserHandler) GetFollowStatus(ctx context.Context, c *app.RequestContext) {
+	authUserID, ok := h.authUserID(c)
+	if !ok {
+		return
+	}
+	targetUserID, err := parseRequiredUserID(c.Param("user_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": err.Error()})
+		return
+	}
+	following, err := h.userSvc.IsFollowing(ctx, authUserID, targetUserID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
 		return
 	}
-	data := struct {
-		*models.User
-		TotalDistance  float64 `json:"total_distance"`
-		TrackCount     int64   `json:"track_count"`
-		TrackUsedCount int64   `json:"track_used_count"`
-	}{
-		User:           user,
-		TotalDistance:  stats.TotalDistance,
-		TrackCount:     stats.TrackCount,
-		TrackUsedCount: stats.TrackUsedCount,
+	c.JSON(http.StatusOK, successResponse(struct {
+		IsFollowing bool `json:"is_following"`
+	}{IsFollowing: following}))
+}
+
+func (h *UserHandler) ListFollowing(ctx context.Context, c *app.RequestContext) {
+	h.listUserFollows(ctx, c, true)
+}
+
+func (h *UserHandler) ListFollowers(ctx context.Context, c *app.RequestContext) {
+	h.listUserFollows(ctx, c, false)
+}
+
+func (h *UserHandler) listUserFollows(ctx context.Context, c *app.RequestContext, following bool) {
+	authUserID, ok := h.authUserID(c)
+	if !ok {
+		return
 	}
-	c.JSON(http.StatusOK, successResponse(data))
+	targetUserID, err := parseRequiredUserID(c.Param("user_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": err.Error()})
+		return
+	}
+	limit, err := parseOptionalLimit(c.Query("limit"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": err.Error()})
+		return
+	}
+	input := service.UserFollowListInput{Cursor: string(c.Query("cursor")), Limit: limit}
+	var page *service.UserFollowListPage
+	if following {
+		page, err = h.userSvc.ListFollowing(ctx, authUserID, targetUserID, input)
+	} else {
+		page, err = h.userSvc.ListFollowers(ctx, authUserID, targetUserID, input)
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, successResponse(page))
+}
+
+func (h *UserHandler) authUserID(c *app.RequestContext) (int64, bool) {
+	meta := middleware.GetRequestMeta(c)
+	if meta == nil || meta.AuthUserID <= 0 {
+		c.JSON(http.StatusUnauthorized, utils.H{"error": "unauthorized"})
+		return 0, false
+	}
+	return meta.AuthUserID, true
 }
 
 // UpdateProfile handles PUT /api/v1/user/profile/update
@@ -78,9 +169,9 @@ func (h *UserHandler) UpdateProfile(ctx context.Context, c *app.RequestContext) 
 	authUserID := meta.AuthUserID
 
 	var body struct {
-		AvatarURL  *string `json:"avatar_url"`
-		Name       *string `json:"name"`
-		Signature  *string `json:"signature"`
+		AvatarURL *string `json:"avatar_url"`
+		Name      *string `json:"name"`
+		Signature *string `json:"signature"`
 	}
 	data, err := c.Body()
 	if err != nil || json.Unmarshal(data, &body) != nil {
@@ -161,4 +252,15 @@ func parseRequiredUserID(raw string) (int64, error) {
 		return 0, errors.New("user_id must be int64")
 	}
 	return userID, nil
+}
+
+func parseOptionalLimit(raw string) (int, error) {
+	if raw == "" {
+		return 0, nil
+	}
+	limit, err := strconv.Atoi(raw)
+	if err != nil || limit < 0 {
+		return 0, errors.New("limit must be non-negative int")
+	}
+	return limit, nil
 }

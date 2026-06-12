@@ -18,6 +18,11 @@
 | 删除轨迹 | DELETE | `/track/:track_id` | 是 | [track.md](track.md#12-删除轨迹) |
 | 用户已收藏轨迹列表 | GET | `/track/collected/list` | 是 | [collect-navigation.md](collect-navigation.md#13-用户已收藏轨迹列表) |
 | 更新个人信息 | PUT | `/user/profile/update` | 是 | [user.md](user.md#14-更新个人信息) |
+| 关注用户 | POST | `/user/:user_id/follow` | 是 | [user.md](user.md#42-关注用户) |
+| 取消关注用户 | DELETE | `/user/:user_id/follow` | 是 | [user.md](user.md#43-取消关注用户) |
+| 查询关注状态 | GET | `/user/:user_id/follow/status` | 是 | [user.md](user.md#44-查询关注状态) |
+| 关注列表 | GET | `/user/:user_id/following/list` | 是 | [user.md](user.md#45-关注列表) |
+| 粉丝列表 | GET | `/user/:user_id/follower/list` | 是 | [user.md](user.md#46-粉丝列表) |
 | App 升级检查 | GET | `/upgrade/check` | 否 | [upgrade.md](upgrade.md#15-app-升级检查) |
 | 获取运动类型 | GET | `/track/types` | 是 | [track.md](track.md#16-获取运动类型) |
 | 创建同行会话 | POST | `/companion/session/create` | 是 | [companion.md](companion.md#17-创建同行会话) |

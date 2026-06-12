@@ -24,16 +24,27 @@ func TestGetUserDetail_NotFound(t *testing.T) {
 	}
 }
 
-func TestGetUserDetail_ForbiddenWhenUserIDMismatch(t *testing.T) {
+func TestGetUserDetail_PublicProfileWhenUserIDMismatch(t *testing.T) {
 	e := newTestEnv()
 	ctx := context.Background()
 	token := e.generateTestToken(1001)
-	_, _ = e.userRepo.CreateIfNotExists(ctx, &models.User{ID: 1002, Nickname: "Bob"})
+	_, _ = e.userRepo.CreateIfNotExists(ctx, &models.User{ID: 1002, Nickname: "Bob", Phone: "13900000000"})
 
 	w := e.perform(http.MethodGet, "/api/v1/user/1002/detail", nil, authHeader(token))
 	resp := w.Result()
-	if resp.StatusCode() != http.StatusForbidden {
-		t.Fatalf("expected status 403, got %d", resp.StatusCode())
+	if resp.StatusCode() != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", resp.StatusCode())
+	}
+	var out handler.StandardResponse[map[string]any]
+	decodeJSON(t, resp.Body(), &out)
+	if out.Data["nickname"] != "Bob" {
+		t.Fatalf("expected nickname Bob, got %v", out.Data["nickname"])
+	}
+	if out.Data["is_self"] != false {
+		t.Fatalf("expected is_self=false, got %v", out.Data["is_self"])
+	}
+	if _, ok := out.Data["phone"]; ok {
+		t.Fatalf("expected other user's phone omitted")
 	}
 }
 

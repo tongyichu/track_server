@@ -31,6 +31,7 @@ type testEnv struct {
 	trackRepo          repository.TrackRepository
 	userRepo           repository.UserRepository
 	collectRepo        repository.CollectRepository
+	followRepo         repository.FollowRepository
 	loginLogRepo       repository.LoginLogRepository
 	navigationRepo     repository.NavigationRepository
 	companionRepo      repository.CompanionRepository
@@ -47,6 +48,7 @@ type testEnv struct {
 // newTestEnv creates a fresh Hertz server wired with in-memory repositories.
 func newTestEnv() *testEnv {
 	trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, _, companionRepo := repository.NewInMemoryRepositories()
+	followRepo := repository.NewInMemoryFollowRepository()
 	achievementRepo := repository.NewInMemoryAchievementRepository()
 	feedbackRepo := repository.NewInMemoryFeedbackRepository()
 	trackSvc := service.NewTrackService(trackRepo, collectRepo)
@@ -58,6 +60,7 @@ func newTestEnv() *testEnv {
 	userSvc := service.NewUserService(userRepo)
 	userSvc.SetTrackRepository(trackRepo)
 	userSvc.SetNavigationRepository(navigationRepo)
+	userSvc.SetFollowRepository(followRepo)
 	loginSvc := service.NewLoginService(userRepo, loginLogRepo, "", "", testJWTSecret)
 	companionSvc := service.NewCompanionService(companionRepo, userRepo)
 	companionSvc.SetTrackRepository(trackRepo)
@@ -109,7 +112,7 @@ func newTestEnv() *testEnv {
 		StaticRoot:                 staticRoot,
 	})
 
-	return &testEnv{h: h, trackRepo: trackRepo, userRepo: userRepo, collectRepo: collectRepo, loginLogRepo: loginLogRepo, navigationRepo: navigationRepo, companionRepo: companionRepo, feedbackRepo: feedbackRepo, achievementRepo: achievementRepo, loginSvc: loginSvc, tokenBlacklist: tokenBlacklist, internalToken: testInternalToken, staticRoot: staticRoot, avatarCacheDir: avatarCacheDir, screenshotCacheDir: screenshotCacheDir}
+	return &testEnv{h: h, trackRepo: trackRepo, userRepo: userRepo, collectRepo: collectRepo, followRepo: followRepo, loginLogRepo: loginLogRepo, navigationRepo: navigationRepo, companionRepo: companionRepo, feedbackRepo: feedbackRepo, achievementRepo: achievementRepo, loginSvc: loginSvc, tokenBlacklist: tokenBlacklist, internalToken: testInternalToken, staticRoot: staticRoot, avatarCacheDir: avatarCacheDir, screenshotCacheDir: screenshotCacheDir}
 }
 
 func (e *testEnv) close() {
@@ -1703,5 +1706,92 @@ func TestCollectTrack_UsesJWTUserID(t *testing.T) {
 	}
 	if !collected {
 		t.Fatalf("expected track to be collected by JWT user")
+	}
+}
+
+func TestUserFollowFlow(t *testing.T) {
+	e := newTestEnv()
+	ctx := context.Background()
+	token := e.generateTestToken(1001)
+	_, _ = e.userRepo.CreateIfNotExists(ctx, &models.User{ID: 1001, Nickname: "Alice"})
+	_, _ = e.userRepo.CreateIfNotExists(ctx, &models.User{ID: 1002, Nickname: "Bob"})
+
+	w := e.perform(http.MethodPost, "/api/v1/user/1002/follow", nil, authHeader(token))
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected follow status 200, got %d", w.Result().StatusCode())
+	}
+	following, err := e.followRepo.IsFollowing(ctx, 1001, 1002)
+	if err != nil {
+		t.Fatalf("check follow failed: %v", err)
+	}
+	if !following {
+		t.Fatalf("expected 1001 follows 1002")
+	}
+
+	w = e.perform(http.MethodGet, "/api/v1/user/1002/follow/status", nil, authHeader(token))
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected status query 200, got %d", w.Result().StatusCode())
+	}
+	var statusResp handler.StandardResponse[struct {
+		IsFollowing bool `json:"is_following"`
+	}]
+	decodeJSON(t, w.Result().Body(), &statusResp)
+	if !statusResp.Data.IsFollowing {
+		t.Fatalf("expected is_following=true")
+	}
+
+	w = e.perform(http.MethodGet, "/api/v1/user/1002/detail", nil, authHeader(token))
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected detail status 200, got %d", w.Result().StatusCode())
+	}
+	var detailResp handler.StandardResponse[map[string]any]
+	decodeJSON(t, w.Result().Body(), &detailResp)
+	if detailResp.Data["is_self"] != false {
+		t.Fatalf("expected is_self=false, got %v", detailResp.Data["is_self"])
+	}
+	if detailResp.Data["is_following"] != true {
+		t.Fatalf("expected detail is_following=true, got %v", detailResp.Data["is_following"])
+	}
+	if detailResp.Data["follower_count"].(float64) != 1 {
+		t.Fatalf("expected follower_count=1, got %v", detailResp.Data["follower_count"])
+	}
+	if _, ok := detailResp.Data["phone"]; ok {
+		t.Fatalf("expected other user's phone omitted")
+	}
+
+	w = e.perform(http.MethodGet, "/api/v1/user/1001/following/list", nil, authHeader(token))
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected following list 200, got %d", w.Result().StatusCode())
+	}
+	var listResp handler.StandardResponse[struct {
+		Items []*service.UserFollowListItem `json:"items"`
+	}]
+	decodeJSON(t, w.Result().Body(), &listResp)
+	if len(listResp.Data.Items) != 1 || listResp.Data.Items[0].ID != 1002 {
+		t.Fatalf("expected following list contains 1002, got %+v", listResp.Data.Items)
+	}
+
+	w = e.perform(http.MethodDelete, "/api/v1/user/1002/follow", nil, authHeader(token))
+	if w.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected unfollow status 200, got %d", w.Result().StatusCode())
+	}
+	following, err = e.followRepo.IsFollowing(ctx, 1001, 1002)
+	if err != nil {
+		t.Fatalf("check follow after unfollow failed: %v", err)
+	}
+	if following {
+		t.Fatalf("expected follow relation removed")
+	}
+}
+
+func TestUserFollowSelfRejected(t *testing.T) {
+	e := newTestEnv()
+	ctx := context.Background()
+	token := e.generateTestToken(1001)
+	_, _ = e.userRepo.CreateIfNotExists(ctx, &models.User{ID: 1001, Nickname: "Alice"})
+
+	w := e.perform(http.MethodPost, "/api/v1/user/1001/follow", nil, authHeader(token))
+	if w.Result().StatusCode() != http.StatusBadRequest {
+		t.Fatalf("expected follow self status 400, got %d", w.Result().StatusCode())
 	}
 }

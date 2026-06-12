@@ -96,6 +96,14 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 			PRIMARY KEY (user_id, track_id),
 			INDEX idx_collects_track (track_id)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
+		`CREATE TABLE IF NOT EXISTS user_follows (
+			follower_user_id BIGINT NOT NULL COMMENT '关注者用户ID',
+			followee_user_id BIGINT NOT NULL COMMENT '被关注者用户ID',
+			created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT '关注时间',
+			PRIMARY KEY (follower_user_id, followee_user_id),
+			KEY idx_user_follows_followee (followee_user_id, created_at, follower_user_id),
+			KEY idx_user_follows_follower (follower_user_id, created_at, followee_user_id)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户关注关系表';`,
 		`CREATE TABLE IF NOT EXISTS track_navigations (
 			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
 			track_id VARCHAR(64) NOT NULL COMMENT '轨迹ID',
@@ -1900,6 +1908,113 @@ func (r *MySQLCollectRepository) RemoveCollect(ctx context.Context, userID int64
 		return err
 	}
 	return nil
+}
+
+// MySQLFollowRepository implements FollowRepository on top of MySQL.
+type MySQLFollowRepository struct{ db *sql.DB }
+
+func NewMySQLFollowRepository(db *sql.DB) *MySQLFollowRepository {
+	return &MySQLFollowRepository{db: db}
+}
+
+func (r *MySQLFollowRepository) IsFollowing(ctx context.Context, followerUserID int64, followeeUserID int64) (bool, error) {
+	row := r.db.QueryRowContext(ctx,
+		`SELECT 1 FROM user_follows WHERE follower_user_id=? AND followee_user_id=? LIMIT 1`,
+		followerUserID, followeeUserID,
+	)
+	var one int
+	if err := row.Scan(&one); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
+func (r *MySQLFollowRepository) AddFollow(ctx context.Context, followerUserID int64, followeeUserID int64) error {
+	_, err := r.db.ExecContext(ctx,
+		`INSERT INTO user_follows (follower_user_id, followee_user_id, created_at)
+		 VALUES (?,?,?)
+		 ON DUPLICATE KEY UPDATE created_at=created_at`,
+		followerUserID, followeeUserID, time.Now(),
+	)
+	return err
+}
+
+func (r *MySQLFollowRepository) RemoveFollow(ctx context.Context, followerUserID int64, followeeUserID int64) error {
+	_, err := r.db.ExecContext(ctx, `DELETE FROM user_follows WHERE follower_user_id=? AND followee_user_id=?`, followerUserID, followeeUserID)
+	return err
+}
+
+func (r *MySQLFollowRepository) ListFollowing(ctx context.Context, userID int64, cursor *models.UserFollowCursor, limit int) ([]*models.UserFollow, error) {
+	if userID <= 0 || limit <= 0 {
+		return []*models.UserFollow{}, nil
+	}
+	query := `SELECT follower_user_id, followee_user_id, created_at FROM user_follows WHERE follower_user_id=?`
+	args := []any{userID}
+	if cursor != nil && !cursor.CreatedAt.IsZero() && cursor.UserID > 0 {
+		query += ` AND (created_at < ? OR (created_at = ? AND followee_user_id < ?))`
+		args = append(args, cursor.CreatedAt, cursor.CreatedAt, cursor.UserID)
+	}
+	query += ` ORDER BY created_at DESC, followee_user_id DESC LIMIT ?`
+	args = append(args, limit)
+	return r.listFollows(ctx, query, args, limit)
+}
+
+func (r *MySQLFollowRepository) ListFollowers(ctx context.Context, userID int64, cursor *models.UserFollowCursor, limit int) ([]*models.UserFollow, error) {
+	if userID <= 0 || limit <= 0 {
+		return []*models.UserFollow{}, nil
+	}
+	query := `SELECT follower_user_id, followee_user_id, created_at FROM user_follows WHERE followee_user_id=?`
+	args := []any{userID}
+	if cursor != nil && !cursor.CreatedAt.IsZero() && cursor.UserID > 0 {
+		query += ` AND (created_at < ? OR (created_at = ? AND follower_user_id < ?))`
+		args = append(args, cursor.CreatedAt, cursor.CreatedAt, cursor.UserID)
+	}
+	query += ` ORDER BY created_at DESC, follower_user_id DESC LIMIT ?`
+	args = append(args, limit)
+	return r.listFollows(ctx, query, args, limit)
+}
+
+func (r *MySQLFollowRepository) listFollows(ctx context.Context, query string, args []any, limit int) ([]*models.UserFollow, error) {
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	res := make([]*models.UserFollow, 0, limit)
+	for rows.Next() {
+		var f models.UserFollow
+		if err := rows.Scan(&f.FollowerUserID, &f.FolloweeUserID, &f.CreatedAt); err != nil {
+			return nil, err
+		}
+		res = append(res, &f)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
+func (r *MySQLFollowRepository) CountFollowing(ctx context.Context, userID int64) (int64, error) {
+	return r.countFollows(ctx, `SELECT COUNT(*) FROM user_follows WHERE follower_user_id=?`, userID)
+}
+
+func (r *MySQLFollowRepository) CountFollowers(ctx context.Context, userID int64) (int64, error) {
+	return r.countFollows(ctx, `SELECT COUNT(*) FROM user_follows WHERE followee_user_id=?`, userID)
+}
+
+func (r *MySQLFollowRepository) countFollows(ctx context.Context, query string, userID int64) (int64, error) {
+	if userID <= 0 {
+		return 0, nil
+	}
+	row := r.db.QueryRowContext(ctx, query, userID)
+	var cnt int64
+	if err := row.Scan(&cnt); err != nil {
+		return 0, err
+	}
+	return cnt, nil
 }
 
 // MySQLNavigationRepository implements NavigationRepository on top of MySQL.

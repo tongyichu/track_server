@@ -42,6 +42,22 @@ type TrackCollectCursor struct {
 	TrackID   string    `json:"track_id"`
 }
 
+// UserFollow represents a one-way follow relationship between two users.
+type UserFollow struct {
+	FollowerUserID int64     `json:"follower_user_id" bson:"follower_user_id"`
+	FolloweeUserID int64     `json:"followee_user_id" bson:"followee_user_id"`
+	CreatedAt      time.Time `json:"created_at" bson:"created_at"`
+}
+
+// UserFollowCursor is the cursor used for paging follow/follower lists.
+//
+// Order: created_at desc, user_id desc.
+// Next page condition: (created_at, user_id) strictly less than cursor.
+type UserFollowCursor struct {
+	CreatedAt time.Time `json:"created_at"`
+	UserID    int64     `json:"user_id"`
+}
+
 // LoginLog records a user's login event for audit and statistics.
 type LoginLog struct {
 	ID        int64     `json:"id" bson:"_id,omitempty"`

@@ -77,6 +77,16 @@ CREATE TABLE `track_collects` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户收藏轨迹关系表';
 
 
+CREATE TABLE `user_follows` (
+                                `follower_user_id` BIGINT NOT NULL COMMENT '关注者用户ID',
+                                `followee_user_id` BIGINT NOT NULL COMMENT '被关注者用户ID',
+                                `created_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT '关注时间',
+                                PRIMARY KEY (`follower_user_id`, `followee_user_id`),
+                                KEY `idx_user_follows_followee` (`followee_user_id`, `created_at`, `follower_user_id`),
+                                KEY `idx_user_follows_follower` (`follower_user_id`, `created_at`, `followee_user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户关注关系表';
+
+
 CREATE TABLE `track_navigations` (
                                      `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
                                      `track_id` VARCHAR(64) NOT NULL COMMENT '轨迹ID',

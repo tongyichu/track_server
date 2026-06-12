@@ -457,6 +457,44 @@ func (r *MongoCollectRepository) RemoveCollect(context.Context, int64, string) e
 	return errors.New("MongoCollectRepository.RemoveCollect not implemented")
 }
 
+// MongoFollowRepository is a stub of FollowRepository backed by MongoDB.
+type MongoFollowRepository struct {
+	collection *mongo.Collection
+}
+
+// NewMongoFollowRepository constructs a Mongo-backed FollowRepository.
+func NewMongoFollowRepository(collection *mongo.Collection) *MongoFollowRepository {
+	return &MongoFollowRepository{collection: collection}
+}
+
+func (r *MongoFollowRepository) IsFollowing(context.Context, int64, int64) (bool, error) {
+	return false, errors.New("MongoFollowRepository.IsFollowing not implemented")
+}
+
+func (r *MongoFollowRepository) AddFollow(context.Context, int64, int64) error {
+	return errors.New("MongoFollowRepository.AddFollow not implemented")
+}
+
+func (r *MongoFollowRepository) RemoveFollow(context.Context, int64, int64) error {
+	return errors.New("MongoFollowRepository.RemoveFollow not implemented")
+}
+
+func (r *MongoFollowRepository) ListFollowing(context.Context, int64, *models.UserFollowCursor, int) ([]*models.UserFollow, error) {
+	return nil, errors.New("MongoFollowRepository.ListFollowing not implemented")
+}
+
+func (r *MongoFollowRepository) ListFollowers(context.Context, int64, *models.UserFollowCursor, int) ([]*models.UserFollow, error) {
+	return nil, errors.New("MongoFollowRepository.ListFollowers not implemented")
+}
+
+func (r *MongoFollowRepository) CountFollowing(context.Context, int64) (int64, error) {
+	return 0, errors.New("MongoFollowRepository.CountFollowing not implemented")
+}
+
+func (r *MongoFollowRepository) CountFollowers(context.Context, int64) (int64, error) {
+	return 0, errors.New("MongoFollowRepository.CountFollowers not implemented")
+}
+
 // MongoNavigationRepository is a stub of NavigationRepository backed by MongoDB.
 type MongoNavigationRepository struct {
 	collection *mongo.Collection
