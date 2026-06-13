@@ -949,6 +949,9 @@ func (r *InMemoryFeedbackRepository) List(_ context.Context, filter models.Feedb
 		if filter.Status != "" && item.Status != filter.Status {
 			continue
 		}
+		if filter.AppVersion != "" && item.AppVersion != filter.AppVersion {
+			continue
+		}
 		if filter.Cursor != nil {
 			if item.CreatedAt.After(filter.Cursor.CreatedAt) {
 				continue

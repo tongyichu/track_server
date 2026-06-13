@@ -395,9 +395,16 @@ func (r *MongoUserRepository) FindByID(context.Context, int64) (*models.User, er
 	return nil, errors.New("MongoUserRepository.FindByID not implemented")
 }
 
-// FindByPhone is not implemented in this demo and returns an error.
-func (r *MongoUserRepository) FindByPhone(context.Context, string) (*models.User, error) {
-	return nil, errors.New("MongoUserRepository.FindByPhone not implemented")
+func (r *MongoUserRepository) FindByPhone(ctx context.Context, phone string) (*models.User, error) {
+	var user models.User
+	err := r.collection.FindOne(ctx, bson.M{"phone": phone}).Decode(&user)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
 }
 
 // FindByNickname is not implemented in this demo and returns an error.
@@ -622,6 +629,9 @@ func (r *MongoFeedbackRepository) List(ctx context.Context, filter models.Feedba
 	}
 	if filter.Status != "" {
 		query["status"] = filter.Status
+	}
+	if filter.AppVersion != "" {
+		query["app_version"] = filter.AppVersion
 	}
 	if filter.Cursor != nil && !filter.Cursor.CreatedAt.IsZero() && filter.Cursor.FeedbackID != "" {
 		query["$or"] = bson.A{

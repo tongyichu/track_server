@@ -674,6 +674,8 @@ func defaultAdminAvatarSVG(name string) string {
 //
 // query：
 //   - status: pending / processing / resolved / ignored，可空；
+//   - app_version/version: 客户端版本，可空，精确匹配；
+//   - phone: 用户手机号，可空，精确匹配；
 //   - cursor: 上一页返回的 next_cursor；
 //   - limit:  每页条数（默认 20，最大 100）。
 func (h *Handler) ListFeedbacks(ctx context.Context, c *app.RequestContext) {
@@ -686,7 +688,32 @@ func (h *Handler) ListFeedbacks(ctx context.Context, c *app.RequestContext) {
 		c.JSON(http.StatusBadRequest, utils.H{"error": err.Error()})
 		return
 	}
-	page, err := h.feedbackSvc.ListOps(ctx, models.FeedbackStatus(strings.TrimSpace(string(c.Query("status")))), cursor, parseAdminListLimit(string(c.Query("limit"))))
+	filter := models.FeedbackListFilter{
+		Status:     models.FeedbackStatus(strings.TrimSpace(string(c.Query("status")))),
+		AppVersion: strings.TrimSpace(string(c.Query("app_version"))),
+		Cursor:     cursor,
+	}
+	if filter.AppVersion == "" {
+		filter.AppVersion = strings.TrimSpace(string(c.Query("version")))
+	}
+	phone := strings.TrimSpace(string(c.Query("phone")))
+	if phone != "" {
+		if h.userRepo == nil {
+			c.JSON(http.StatusInternalServerError, utils.H{"error": "user repository not configured"})
+			return
+		}
+		user, err := h.userRepo.FindByPhone(ctx, phone)
+		if err != nil {
+			if errors.Is(err, repository.ErrNotFound) {
+				c.JSON(http.StatusOK, utils.H{"code": 0, "data": &models.FeedbackPage{Items: []*models.Feedback{}}})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+			return
+		}
+		filter.UserID = user.ID
+	}
+	page, err := h.feedbackSvc.ListOpsFiltered(ctx, filter, parseAdminListLimit(string(c.Query("limit"))))
 	if err != nil {
 		writeAdminFeedbackError(c, err)
 		return

@@ -145,10 +145,16 @@ func (s *FeedbackService) ListMine(ctx context.Context, userID int64, cursor *mo
 }
 
 func (s *FeedbackService) ListOps(ctx context.Context, status models.FeedbackStatus, cursor *models.FeedbackListCursor, limit int) (*models.FeedbackPage, error) {
-	if status != "" && !isValidFeedbackStatus(status) {
+	return s.ListOpsFiltered(ctx, models.FeedbackListFilter{Status: status, Cursor: cursor}, limit)
+}
+
+func (s *FeedbackService) ListOpsFiltered(ctx context.Context, filter models.FeedbackListFilter, limit int) (*models.FeedbackPage, error) {
+	filter.AppVersion = strings.TrimSpace(filter.AppVersion)
+	if filter.Status != "" && !isValidFeedbackStatus(filter.Status) {
 		return nil, invalidArg("invalid status")
 	}
-	return s.list(ctx, models.FeedbackListFilter{Status: status, Cursor: cursor, Limit: normalizeFeedbackLimit(limit) + 1}, normalizeFeedbackLimit(limit))
+	filter.Limit = normalizeFeedbackLimit(limit) + 1
+	return s.list(ctx, filter, normalizeFeedbackLimit(limit))
 }
 
 func (s *FeedbackService) list(ctx context.Context, filter models.FeedbackListFilter, limit int) (*models.FeedbackPage, error) {
@@ -234,7 +240,7 @@ func (s *FeedbackService) GetImageFile(ctx context.Context, userID int64, feedba
 		if img.ImageID != imageID {
 			continue
 		}
-		path, err := s.resolveImagePath(img.StoragePath)
+		path, err := s.resolveFeedbackImagePath(item, img)
 		if err != nil {
 			return nil, err
 		}
@@ -320,6 +326,60 @@ func (s *FeedbackService) resolveImagePath(storagePath string) (string, error) {
 		return "", repository.ErrNotFound
 	}
 	return abs, nil
+}
+
+func (s *FeedbackService) resolveFeedbackImagePath(item *models.Feedback, img models.FeedbackImage) (string, error) {
+	storagePath := strings.TrimSpace(img.StoragePath)
+	if storagePath == "" {
+		storagePath = legacyFeedbackImageStoragePath(item, img)
+	}
+	return s.resolveImagePath(storagePath)
+}
+
+func legacyFeedbackImageStoragePath(item *models.Feedback, img models.FeedbackImage) string {
+	if item == nil || item.UserID <= 0 || item.FeedbackID == "" || item.CreatedAt.IsZero() {
+		return ""
+	}
+	if !isSafeFeedbackPathPart(item.FeedbackID) || !isSafeFeedbackPathPart(img.ImageID) {
+		return ""
+	}
+	ext := feedbackImageExt(img.MimeType)
+	if ext == "" {
+		return ""
+	}
+	day := item.CreatedAt.Format("20060102")
+	fileName := fmt.Sprintf("%s_%s%s", item.FeedbackID, img.ImageID, ext)
+	return filepath.ToSlash(filepath.Join(fmt.Sprintf("%d", item.UserID), day, fileName))
+}
+
+func feedbackImageExt(mimeType string) string {
+	switch strings.ToLower(strings.TrimSpace(mimeType)) {
+	case "image/jpeg", "image/jpg":
+		return ".jpg"
+	case "image/png":
+		return ".png"
+	case "image/webp":
+		return ".webp"
+	default:
+		return ""
+	}
+}
+
+func isSafeFeedbackPathPart(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, r := range value {
+		switch {
+		case r >= 'a' && r <= 'z',
+			r >= 'A' && r <= 'Z',
+			r >= '0' && r <= '9':
+			continue
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 func (s *FeedbackService) fillImageURLs(item *models.Feedback) {

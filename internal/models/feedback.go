@@ -42,10 +42,11 @@ type FeedbackListCursor struct {
 }
 
 type FeedbackListFilter struct {
-	UserID int64
-	Status FeedbackStatus
-	Cursor *FeedbackListCursor
-	Limit  int
+	UserID     int64
+	Status     FeedbackStatus
+	AppVersion string
+	Cursor     *FeedbackListCursor
+	Limit      int
 }
 
 type FeedbackPage struct {

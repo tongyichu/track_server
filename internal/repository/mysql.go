@@ -2371,7 +2371,7 @@ func (r *MySQLFeedbackRepository) Create(ctx context.Context, feedback *models.F
 	if feedback == nil {
 		return errors.New("feedback is nil")
 	}
-	imagesJSON, err := json.Marshal(feedback.Images)
+	imagesJSON, err := marshalFeedbackImagesJSON(feedback.Images)
 	if err != nil {
 		return err
 	}
@@ -2425,6 +2425,10 @@ func (r *MySQLFeedbackRepository) List(ctx context.Context, filter models.Feedba
 	if filter.Status != "" {
 		query += ` AND status=?`
 		args = append(args, filter.Status)
+	}
+	if filter.AppVersion != "" {
+		query += ` AND app_version=?`
+		args = append(args, filter.AppVersion)
 	}
 	if filter.Cursor != nil && !filter.Cursor.CreatedAt.IsZero() && filter.Cursor.FeedbackID != "" {
 		query += ` AND (created_at < ? OR (created_at = ? AND feedback_id < ?))`
@@ -2516,14 +2520,53 @@ func scanFeedback(row feedbackRowScanner) (*models.Feedback, error) {
 		return nil, err
 	}
 	if imagesJSON.Valid && imagesJSON.String != "" {
-		if err := json.Unmarshal([]byte(imagesJSON.String), &item.Images); err != nil {
+		images, err := unmarshalFeedbackImagesJSON(imagesJSON.String)
+		if err != nil {
 			return nil, err
 		}
+		item.Images = images
 	}
 	if reply.Valid {
 		item.Reply = reply.String
 	}
 	return &item, nil
+}
+
+type feedbackImageJSON struct {
+	ImageID     string `json:"image_id"`
+	StoragePath string `json:"storage_path,omitempty"`
+	MimeType    string `json:"mime_type"`
+	Size        int64  `json:"size"`
+}
+
+func marshalFeedbackImagesJSON(images []models.FeedbackImage) ([]byte, error) {
+	rows := make([]feedbackImageJSON, 0, len(images))
+	for _, img := range images {
+		rows = append(rows, feedbackImageJSON{
+			ImageID:     img.ImageID,
+			StoragePath: img.StoragePath,
+			MimeType:    img.MimeType,
+			Size:        img.Size,
+		})
+	}
+	return json.Marshal(rows)
+}
+
+func unmarshalFeedbackImagesJSON(raw string) ([]models.FeedbackImage, error) {
+	var rows []feedbackImageJSON
+	if err := json.Unmarshal([]byte(raw), &rows); err != nil {
+		return nil, err
+	}
+	images := make([]models.FeedbackImage, 0, len(rows))
+	for _, row := range rows {
+		images = append(images, models.FeedbackImage{
+			ImageID:     row.ImageID,
+			StoragePath: row.StoragePath,
+			MimeType:    row.MimeType,
+			Size:        row.Size,
+		})
+	}
+	return images, nil
 }
 
 func scanFeedbackRow(row *sql.Row) (*models.Feedback, error) {

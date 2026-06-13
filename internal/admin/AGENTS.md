@@ -70,7 +70,7 @@ internal/admin/
 | POST | `/admin/api/releases/upload-package` | 鉴权 | multipart 上传安装包到 `<LogDir>/static/release/<platform>/` |
 | GET | `/admin/api/releases/upload-token` | 鉴权 | 旧 OSS 直传 STS 凭证接口，前端不再使用 |
 | GET | `/admin/api/static/*filepath` | 鉴权 | 后台静态资源代理，从 `<LogDir>/static/` 读取头像等资源；后台页面不要直接访问需业务 JWT 的 `/api/v1/static/*` |
-| GET | `/admin/api/feedbacks` | 鉴权 | 意见反馈列表，支持 `status` / `cursor` / `limit` |
+| GET | `/admin/api/feedbacks` | 鉴权 | 意见反馈列表，支持 `status` / `app_version` / `phone` / `cursor` / `limit` |
 | GET | `/admin/api/feedbacks/:feedback_id` | 鉴权 | 意见反馈详情 |
 | PUT | `/admin/api/feedbacks/:feedback_id/status` | 鉴权 | 更新反馈处理状态与用户可见 `reply`；`resolved` 时 `reply` 必填 |
 | GET | `/admin/api/feedbacks/:feedback_id/images/:image_id` | 鉴权 | 读取反馈图片 |
@@ -113,7 +113,7 @@ GET /admin/api/users
 **处理意见反馈**：
 ```
 [admin UI] /admin/feedbacks.html
-  → GET /admin/api/feedbacks?status=&cursor=  拉取反馈列表
+  → GET /admin/api/feedbacks?status=&app_version=&phone=&cursor=  拉取反馈列表
   → GET /admin/api/feedbacks/:feedback_id     查看详情与图片
   → PUT /admin/api/feedbacks/:feedback_id/status {status, reply}
        → FeedbackService.UpdateStatus

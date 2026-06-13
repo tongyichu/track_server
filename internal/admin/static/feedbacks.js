@@ -22,6 +22,8 @@
 
   var tbody = document.getElementById('feedbackList');
   var statusFilter = document.getElementById('statusFilter');
+  var versionFilter = document.getElementById('versionFilter');
+  var phoneFilter = document.getElementById('phoneFilter');
   var refreshBtn = document.getElementById('refreshBtn');
   var prevBtn = document.getElementById('prevBtn');
   var nextBtn = document.getElementById('nextBtn');
@@ -36,6 +38,11 @@
 
   statusFilter.addEventListener('change', resetAndLoad);
   refreshBtn.addEventListener('click', resetAndLoad);
+  [versionFilter, phoneFilter].forEach(function (input) {
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') resetAndLoad();
+    });
+  });
   prevBtn.addEventListener('click', function () {
     if (pageIndex <= 0) return;
     pageIndex -= 1;
@@ -88,6 +95,8 @@
     var params = new URLSearchParams();
     params.set('limit', String(pageSize));
     if (statusFilter.value) params.set('status', statusFilter.value);
+    if (versionFilter.value.trim()) params.set('app_version', versionFilter.value.trim());
+    if (phoneFilter.value.trim()) params.set('phone', phoneFilter.value.trim());
     if (cursorStack[pageIndex]) params.set('cursor', cursorStack[pageIndex]);
 
     var resp = await fetch('/admin/api/feedbacks?' + params.toString());
