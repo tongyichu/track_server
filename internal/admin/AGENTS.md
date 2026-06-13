@@ -10,6 +10,7 @@
 - 一个独立登录的 Web 控制台（HTML/CSS/JS 经 `go:embed` 内置）；
 - 围绕 `AppRelease` 的发布、列表、删除接口；
 - 上传安装包到服务端本地静态目录的接口；
+- 通过后台会话代理读取服务端静态资源（如用户头像），避免复用业务 JWT；
 - 查看和处理用户意见反馈（含图片预览、状态更新、用户可见反馈意见）。
 - 查看埋点 OSS 同步摘要（任务状态、文件列表、OSS key、字节数、耗时与错误）。
 
@@ -68,6 +69,7 @@ internal/admin/
 | DELETE | `/admin/api/releases/:id` | 鉴权 | 删除一条发布记录 |
 | POST | `/admin/api/releases/upload-package` | 鉴权 | multipart 上传安装包到 `<LogDir>/static/release/<platform>/` |
 | GET | `/admin/api/releases/upload-token` | 鉴权 | 旧 OSS 直传 STS 凭证接口，前端不再使用 |
+| GET | `/admin/api/static/*filepath` | 鉴权 | 后台静态资源代理，从 `<LogDir>/static/` 读取头像等资源；后台页面不要直接访问需业务 JWT 的 `/api/v1/static/*` |
 | GET | `/admin/api/feedbacks` | 鉴权 | 意见反馈列表，支持 `status` / `cursor` / `limit` |
 | GET | `/admin/api/feedbacks/:feedback_id` | 鉴权 | 意见反馈详情 |
 | PUT | `/admin/api/feedbacks/:feedback_id/status` | 鉴权 | 更新反馈处理状态与用户可见 `reply`；`resolved` 时 `reply` 必填 |
@@ -98,6 +100,16 @@ POST /admin/api/login {username,password}
 请求 → Authenticator.AuthMiddleware → SessionFromRequest(cookie) → 否则 401
 ```
 
+**后台头像读取**：
+```
+GET /admin/api/users
+  → UserService.DecorateAvatar 把头像改写为 /api/v1/static/...
+  → admin handler 再改写为 /admin/api/static/...
+  → 浏览器 <img> 请求携带 admin_session
+  → GET /admin/api/static/*filepath 经 AuthMiddleware 后从 <LogDir>/static/ 读取
+```
+未落盘的内置默认头像（`default_avatars/girl_01.png` 等）由后台静态代理返回简单 SVG 兜底；正式视觉素材仍应放入 `<LogDir>/static/default_avatars/`。
+
 **处理意见反馈**：
 ```
 [admin UI] /admin/feedbacks.html
@@ -119,6 +131,7 @@ POST /admin/api/login {username,password}
 ## 改动导航
 
 - **加一个管理后台 API**：在 `handlers.go` 写 handler → `routes.go` 的 `api := g.Group("/api", m.Auth.AuthMiddleware())` 下挂载。需要操作者信息时用 `h.auth.SessionFromRequest(c)`。
+- **展示业务静态资源**：后台页面不要直接使用 `/api/v1/static/*`，应由 handler 改写为 `/admin/api/static/*`，通过 admin session 鉴权后读取 `staticRoot`。
 - **加一个公开页面/资源**：把文件放进 `static/`，在 `routes.go` 用 `serveEmbedded(...)` 或走 `/admin/static/*filepath`。**不要新增第二个 `go:embed`**。
 - **加一个侧边/顶部入口**：同步更新所有后台页面的 `<nav>`，避免新增页面成为孤岛。
 - **改 cookie 策略**：只在 `auth.go` 改；保持 `HttpOnly=true`，跨站调用前提下才考虑 `SameSite=None + Secure`。

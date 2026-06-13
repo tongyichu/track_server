@@ -81,6 +81,7 @@ func (m *Module) Close() {
 // - PUT  /admin/api/feedbacks/:feedback_id/status 处理意见反馈（鉴权）
 // - GET  /admin/api/feedbacks/:feedback_id/images/:image_id 读取反馈图片（鉴权）
 // - GET  /admin/api/analytics/sync-summaries       埋点 OSS 同步摘要列表（鉴权）
+// - GET  /admin/api/static/*filepath               后台静态资源代理（鉴权）
 //
 // 当 m == nil 或 m.Auth == nil 时，整个 /admin 不会被挂载。
 func (m *Module) RegisterRoutes(h *server.Hertz) {
@@ -119,6 +120,7 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	api.POST("/releases/upload-package", m.Handler.UploadPackage)
 
 	// 用户 / 轨迹 / 同行 列表（仅查询，提供基础翻页）
+	api.GET("/static/*filepath", m.Handler.GetStaticAsset)
 	api.GET("/users", m.Handler.ListUsers)
 	api.GET("/tracks", m.Handler.ListTracks)
 	api.GET("/companions", m.Handler.ListCompanions)

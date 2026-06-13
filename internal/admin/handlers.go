@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -350,6 +351,7 @@ func (h *Handler) ListUsers(ctx context.Context, c *app.RequestContext) {
 	if h.userSvc != nil {
 		for _, u := range items {
 			h.userSvc.DecorateAvatar(ctx, u)
+			u.AvatarURL = rewriteAdminStaticURL(u.AvatarURL)
 		}
 	}
 	total, err := h.userRepo.CountAll(ctx)
@@ -545,7 +547,7 @@ func (h *Handler) GetCompanionDetail(ctx context.Context, c *app.RequestContext)
 					h.userSvc.DecorateAvatar(ctx, u)
 				}
 				detail.Nickname = u.Nickname
-				detail.AvatarURL = u.AvatarURL
+				detail.AvatarURL = rewriteAdminStaticURL(u.AvatarURL)
 			}
 		}
 		members = append(members, detail)
@@ -566,6 +568,104 @@ func (h *Handler) GetCompanionDetail(ctx context.Context, c *app.RequestContext)
 		"live_positions": positions,
 		"danmakus":       danmakus,
 	}})
+}
+
+// GetStaticAsset 处理 GET /admin/api/static/*filepath
+//
+// 业务静态资源 /api/v1/static/* 需要业务 JWT；管理后台只持有 admin_session，
+// 因此后台页面通过这个已鉴权代理读取同一个 staticRoot 下的头像等资源。
+func (h *Handler) GetStaticAsset(ctx context.Context, c *app.RequestContext) {
+	if h == nil || strings.TrimSpace(h.staticRoot) == "" {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "static root not configured"})
+		return
+	}
+	rel, ok := cleanAdminStaticPath(c.Param("filepath"))
+	if !ok {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid path"})
+		return
+	}
+	fullPath := filepath.Join(h.staticRoot, filepath.FromSlash(rel))
+	root, err := filepath.Abs(h.staticRoot)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	absPath, err := filepath.Abs(fullPath)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	if r, err := filepath.Rel(root, absPath); err != nil || r == "." || strings.HasPrefix(r, ".."+string(filepath.Separator)) || r == ".." {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid path"})
+		return
+	}
+	data, err := os.ReadFile(absPath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) && isAdminDefaultAvatarPath(rel) {
+			c.Data(http.StatusOK, "image/svg+xml", []byte(defaultAdminAvatarSVG(path.Base(rel))))
+			return
+		}
+		if errors.Is(err, os.ErrNotExist) {
+			c.JSON(http.StatusNotFound, utils.H{"error": "not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	c.Data(http.StatusOK, contentTypeFor(rel), data)
+}
+
+func rewriteAdminStaticURL(raw string) string {
+	const apiStaticPrefix = "/api/v1/static/"
+	if strings.HasPrefix(raw, apiStaticPrefix) {
+		return "/admin/api/static/" + strings.TrimPrefix(raw, apiStaticPrefix)
+	}
+	return raw
+}
+
+func cleanAdminStaticPath(raw string) (string, bool) {
+	raw = strings.TrimSpace(strings.ReplaceAll(raw, "\\", "/"))
+	raw = strings.TrimPrefix(raw, "/")
+	if raw == "" {
+		return "", false
+	}
+	for _, part := range strings.Split(raw, "/") {
+		if part == ".." {
+			return "", false
+		}
+	}
+	cleaned := strings.TrimPrefix(path.Clean("/"+raw), "/")
+	if cleaned == "." || cleaned == "" || strings.HasPrefix(cleaned, "../") || strings.Contains(cleaned, "/../") {
+		return "", false
+	}
+	return cleaned, true
+}
+
+func isAdminDefaultAvatarPath(rel string) bool {
+	switch rel {
+	case "default_avatars/girl_01.png",
+		"default_avatars/girl_2.png",
+		"default_avatars/boy_01.png",
+		"default_avatars/boy_02.png":
+		return true
+	default:
+		return false
+	}
+}
+
+func defaultAdminAvatarSVG(name string) string {
+	fill := "#64748b"
+	switch name {
+	case "girl_01.png":
+		fill = "#db2777"
+	case "girl_2.png":
+		fill = "#7c3aed"
+	case "boy_01.png":
+		fill = "#2563eb"
+	case "boy_02.png":
+		fill = "#059669"
+	}
+	return fmt.Sprintf(`<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96"><rect width="96" height="96" rx="48" fill="%s"/><circle cx="48" cy="36" r="18" fill="#fff" fill-opacity=".9"/><path d="M19 84c5-18 16-28 29-28s24 10 29 28" fill="#fff" fill-opacity=".9"/></svg>`, fill)
 }
 
 // ----- 意见反馈管理 -----
