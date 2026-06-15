@@ -58,6 +58,13 @@ type AchievementLevelInfo struct {
 	LevelProgress float64           `json:"level_progress"`
 }
 
+// UserProfileAchievement is the public achievement summary shown on user profile pages.
+type UserProfileAchievement struct {
+	Level            AchievementLevel         `json:"level"`
+	EarnedBadgeCount int64                    `json:"earned_badge_count"`
+	RecentBadges     []*AchievementRewardView `json:"recent_badges"`
+}
+
 // UserAchievementStats is the aggregated achievement stats of a user.
 type UserAchievementStats struct {
 	TotalXP             int64                                `json:"total_xp"`

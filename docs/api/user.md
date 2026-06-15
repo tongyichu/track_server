@@ -4,7 +4,7 @@
 
 ## 10. 获取用户详情
 
-获取指定用户的公开主页信息，并返回用户轨迹、关注/粉丝相关统计。当前登录用户查看自己时会额外返回手机号和客户端语言；查看他人时不返回这些私有字段。
+获取指定用户的公开主页信息，并返回用户轨迹、关注/粉丝和成就相关统计。当前登录用户查看自己时会额外返回手机号和客户端语言；查看他人时不返回这些私有字段。成就信息为公开主页信息，查看自己和查看他人都会返回。
 
 **需要认证**
 
@@ -50,7 +50,31 @@ Authorization: Bearer <token>
     "following_count": 8,
     "follower_count": 12,
     "is_following": false,
-    "is_self": true
+    "is_self": true,
+    "achievement": {
+      "level": {
+        "level": 1,
+        "name": "初上路",
+        "xp": 0
+      },
+      "earned_badge_count": 3,
+      "recent_badges": [
+        {
+          "code": "run_10k",
+          "type": "badge",
+          "category": "跑步",
+          "name": "10K 完成",
+          "description": "单次跑步距离达到 10km",
+          "rarity": "rare",
+          "icon_url": "",
+          "target_value": 10,
+          "earned": true,
+          "earned_at": "2026-04-20T12:00:00Z",
+          "current_value": 10,
+          "progress": 1
+        }
+      ]
+    }
   }
 }
 ```
@@ -74,6 +98,9 @@ Authorization: Bearer <token>
 | `data.follower_count` | int64 | 该用户的粉丝数。 |
 | `data.is_following` | bool | 当前登录用户是否关注该用户；查看自己时固定为 `false`。 |
 | `data.is_self` | bool | 当前登录用户是否正在查看自己的主页。 |
+| `data.achievement.level` | object | 用户当前等级，结构同 `AchievementLevel`：`level`、`name`、`xp`。 |
+| `data.achievement.earned_badge_count` | int64 | 用户已获得的勋章总数，仅统计 `type=badge` 的成就奖励。 |
+| `data.achievement.recent_badges` | array | 用户最近获得的 3 个勋章，按获得时间倒序；单条结构同 [achievement.md](achievement.md#31-成就奖励列表) 中 `rewards[]`。 |
 
 ### 错误响应
 
@@ -84,7 +111,7 @@ Authorization: Bearer <token>
 - `404 Not Found`
   - 用户不存在
 - `500 Internal Server Error`
-  - 服务端统计计算失败
+  - 服务端统计或成就摘要计算失败
 
 错误响应格式示例：
 

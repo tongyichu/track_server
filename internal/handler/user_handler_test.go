@@ -143,6 +143,58 @@ func TestGetUserDetail_Stats(t *testing.T) {
 	}
 }
 
+func TestGetUserDetail_AchievementPublicForOtherUser(t *testing.T) {
+	e := newTestEnv()
+	ctx := context.Background()
+	token := e.generateTestToken(1001)
+	_, _ = e.userRepo.CreateIfNotExists(ctx, &models.User{ID: 1002, Nickname: "Bob", Phone: "13900000000"})
+	start := time.Date(2026, 4, 24, 8, 0, 0, 0, time.UTC)
+	_ = e.trackRepo.Create(ctx, &models.Track{
+		ID:          "trk-achievement",
+		UserID:      1002,
+		Title:       "10K",
+		StartTime:   start,
+		TrackType:   "running",
+		Distance:    10000,
+		Duration:    3600,
+		RawTrackURL: "https://example.com/trk-achievement.dat",
+		IsRunning:   false,
+		Status:      models.TrackStatusNormal,
+	})
+
+	w := e.perform(http.MethodGet, "/api/v1/user/1002/detail", nil, authHeader(token))
+	resp := w.Result()
+	if resp.StatusCode() != http.StatusOK {
+		t.Fatalf("expected status 200, got %d body=%s", resp.StatusCode(), w.Body.String())
+	}
+	var out handler.StandardResponse[struct {
+		ID          int64                          `json:"id"`
+		Phone       string                         `json:"phone"`
+		Achievement *models.UserProfileAchievement `json:"achievement"`
+	}]
+	decodeJSON(t, resp.Body(), &out)
+	if out.Data.Phone != "" {
+		t.Fatalf("expected other user's phone omitted, got %q", out.Data.Phone)
+	}
+	if out.Data.Achievement == nil {
+		t.Fatalf("expected achievement summary")
+	}
+	if out.Data.Achievement.Level.Level != 1 {
+		t.Fatalf("expected level 1, got %+v", out.Data.Achievement.Level)
+	}
+	if out.Data.Achievement.EarnedBadgeCount != 3 {
+		t.Fatalf("expected earned_badge_count 3, got %d", out.Data.Achievement.EarnedBadgeCount)
+	}
+	if len(out.Data.Achievement.RecentBadges) != 3 {
+		t.Fatalf("expected 3 recent badges, got %d", len(out.Data.Achievement.RecentBadges))
+	}
+	for _, badge := range out.Data.Achievement.RecentBadges {
+		if badge == nil || badge.Type != models.AchievementRewardTypeBadge || !badge.Earned {
+			t.Fatalf("expected earned badge in recent_badges, got %+v", badge)
+		}
+	}
+}
+
 // TestGetUserDetail_AvatarURLUsesStaticAsset verifies avatar_url is rewritten to local static URL.
 func TestGetUserDetail_AvatarURLUsesStaticAsset(t *testing.T) {
 	e := newTestEnv()

@@ -11,6 +11,7 @@ import (
 
 const (
 	achievementRecentLimit = 10
+	userProfileBadgeLimit  = 3
 	metersPerKM            = 1000
 )
 
@@ -56,6 +57,41 @@ func (s *AchievementService) GetLevelInfo(ctx context.Context, userID int64) (*m
 		CurrentLevel:  stats.CurrentLevel,
 		NextLevel:     stats.NextLevel,
 		LevelProgress: stats.LevelProgress,
+	}, nil
+}
+
+func (s *AchievementService) GetUserProfileAchievement(ctx context.Context, userID int64) (*models.UserProfileAchievement, error) {
+	if err := s.SettleUserCompletedTracks(ctx, userID); err != nil {
+		return nil, err
+	}
+	stats, earned, err := s.buildUserState(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	var earnedBadgeCount int64
+	for _, def := range achievementDefinitions {
+		if def.Type == models.AchievementRewardTypeBadge && earned[def.Code] != nil {
+			earnedBadgeCount++
+		}
+	}
+	recent, err := s.recentRewardViews(ctx, userID, earned, stats, len(achievementDefinitions))
+	if err != nil {
+		return nil, err
+	}
+	recentBadges := make([]*models.AchievementRewardView, 0, userProfileBadgeLimit)
+	for _, reward := range recent {
+		if reward == nil || reward.Type != models.AchievementRewardTypeBadge {
+			continue
+		}
+		recentBadges = append(recentBadges, reward)
+		if len(recentBadges) >= userProfileBadgeLimit {
+			break
+		}
+	}
+	return &models.UserProfileAchievement{
+		Level:            stats.CurrentLevel,
+		EarnedBadgeCount: earnedBadgeCount,
+		RecentBadges:     recentBadges,
 	}, nil
 }
 

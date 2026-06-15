@@ -25,11 +25,12 @@ var (
 
 // UserService provides business logic related to user profile and settings.
 type UserService struct {
-	users       repository.UserRepository
-	tracks      repository.TrackRepository
-	navigations repository.NavigationRepository
-	follows     repository.FollowRepository
-	avatarCache *AssetCacheService
+	users        repository.UserRepository
+	tracks       repository.TrackRepository
+	navigations  repository.NavigationRepository
+	follows      repository.FollowRepository
+	achievements *AchievementService
+	avatarCache  *AssetCacheService
 }
 
 // UserProfilePatch describes optional user profile fields that can be updated.
@@ -106,6 +107,8 @@ type UserProfileDetail struct {
 	FollowerCount  int64   `json:"follower_count"`
 	IsFollowing    bool    `json:"is_following"`
 	IsSelf         bool    `json:"is_self"`
+
+	Achievement *models.UserProfileAchievement `json:"achievement,omitempty"`
 }
 
 type UserFollowListInput struct {
@@ -235,6 +238,10 @@ func (s *UserService) SetAvatarCache(cache *AssetCacheService) {
 	s.avatarCache = cache
 }
 
+func (s *UserService) SetAchievementService(achievementSvc *AchievementService) {
+	s.achievements = achievementSvc
+}
+
 // EnsureUser makes sure the user exists in persistence layer.
 func (s *UserService) EnsureUser(ctx context.Context, userID int64, language string) (*models.User, error) {
 	if userID <= 0 {
@@ -303,6 +310,13 @@ func (s *UserService) GetUserProfileDetail(ctx context.Context, viewerUserID int
 				return nil, err
 			}
 		}
+	}
+	if s.achievements != nil {
+		achievement, err := s.achievements.GetUserProfileAchievement(ctx, targetUserID)
+		if err != nil {
+			return nil, err
+		}
+		detail.Achievement = achievement
 	}
 	return detail, nil
 }
