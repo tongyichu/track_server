@@ -88,7 +88,7 @@ track_server/
 - 默认运动类型由 `internal/config/config.go:DefaultTrackTypeConfigs` 维护，当前 code 为 `hiking`、`running`、`climbing`、`riding`、`driving`，展示名为 `徒步`、`跑步`、`爬山`、`骑行`、`自驾`；`GET /api/v1/track/types`、轨迹入库 `track_type`、运动类型图标元信息和成就系统类型口径应保持一致。
 - 轨迹 `locate_addr` 最大长度为 255 字符，对应 `track_records.locate_addr VARCHAR(255)`；修改该字段长度时同步更新 `mysql.sql`、`internal/repository/mysql.go` 与 `docs/api/track.md`。
 - 轨迹 `source_tag` 是来源/运营标签，对应 `track_records.source_tag VARCHAR(64)`；业务接口只允许空字符串或 `manual_seed`（人工录入冷启动轨迹），更新接口仅在原值为空时补写，普通列表摘要不返回该字段；修改该字段口径时同步更新 `internal/service/track_service.go`、`mysql.sql` 与 `docs/api/track.md`。
-- 首页地图模式的轨迹空间索引由 `track_map_index` 后台任务异步构建：轨迹完成接口只写入 `track_map_index_jobs`，不得在请求主链路同步下载 OSS raw track 或解析轨迹点；后台下载 raw track 必须通过 `OSS_INTERNAL_ENDPOINT` 内网域名，未配置时失败重试且不回退公网。路线组由 `track_route_group` 离线任务基于 `track_geo_indexes` 聚合生成，默认每天 04:00 执行。
+- 首页地图模式的轨迹空间索引由 `track_map_index` 后台任务异步构建：轨迹完成接口只写入 `track_map_index_jobs`，不得在请求主链路同步下载 OSS raw track 或解析轨迹点；后台下载 raw track 必须通过 `OSS_INTERNAL_ENDPOINT` 内网域名，未配置时失败重试且不回退公网；raw track 解析支持 JSON / GeoJSON / KML / KMZ。路线组由 `track_route_group` 离线任务基于 `track_geo_indexes` 聚合生成，默认每天 04:00 执行。
 - `track_map_index_jobs` 补偿入队必须保持幂等：对已有 `pending` job 只能保留或提前 `next_run_at`，不能刷新到更晚时间，否则补偿扫描会反复推迟任务导致 `claimed=0`。
 - 埋点采集接口 `POST /api/v1/analytics/events` 默认公开可访问，用于未登录启动/登录页等事件；服务端只做校验、脱敏和本地 JSONL 落盘，不把原始埋点写入业务 MySQL，凌晨同步 OSS 的任务由 `SCHEDULER_ENABLED` 控制。同步时按 `event_date/hour` 合并小 JSONL，单个 OSS part 目标上限 128 MB。`analytics_sync_summaries` 只记录每次 OSS 同步摘要（源文件列表、OSS part key、字节数、耗时、错误等），不保存原始事件。调整事件协议、认证策略、本地目录、OSS 前缀、批量上限、同步时间或同步摘要字段时，同步更新 `track_analytics.md`、`docs/api/analytics.md` 与 `mysql.sql`。
 

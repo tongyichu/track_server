@@ -1,7 +1,11 @@
 package service
 
 import (
+	"archive/zip"
+	"bytes"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/tongyichu/track_server/internal/models"
@@ -47,6 +51,72 @@ func TestParseTrackPointsJSONSupportsGeoJSONLineString(t *testing.T) {
 	}
 	if points[0].Longitude != 114.1 || points[0].Latitude != 22.3 {
 		t.Fatalf("unexpected first point: %+v", points[0])
+	}
+}
+
+func TestParseRawTrackPointsSupportsKMLLineString(t *testing.T) {
+	raw := []byte(`<?xml version="1.0" encoding="UTF-8"?>
+		<kml xmlns="http://www.opengis.net/kml/2.2">
+			<Document>
+				<Placemark>
+					<LineString>
+						<coordinates>
+							114.1,22.3,8 114.2,22.4,9
+						</coordinates>
+					</LineString>
+				</Placemark>
+			</Document>
+		</kml>`)
+
+	points, err := parseRawTrackPoints(raw, "track.kml")
+	if err != nil {
+		t.Fatalf("parse kml failed: %v", err)
+	}
+	if len(points) != 2 {
+		t.Fatalf("expected 2 points, got %d", len(points))
+	}
+	if points[0].Longitude != 114.1 || points[0].Latitude != 22.3 || points[0].Elevation != 8 {
+		t.Fatalf("unexpected first point: %+v", points[0])
+	}
+}
+
+func TestParseTrackPointsFileSupportsKMZ(t *testing.T) {
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	w, err := zw.Create("doc.kml")
+	if err != nil {
+		t.Fatalf("create kml entry: %v", err)
+	}
+	_, err = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
+		<kml xmlns="http://www.opengis.net/kml/2.2">
+			<Document>
+				<Placemark>
+					<LineString>
+						<coordinates>120.1,30.1 120.2,30.2</coordinates>
+					</LineString>
+				</Placemark>
+			</Document>
+		</kml>`))
+	if err != nil {
+		t.Fatalf("write kml entry: %v", err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatalf("close kmz: %v", err)
+	}
+
+	path := filepath.Join(t.TempDir(), "track.kmz")
+	if err := os.WriteFile(path, buf.Bytes(), 0o644); err != nil {
+		t.Fatalf("write kmz file: %v", err)
+	}
+	points, err := parseTrackPointsFile(path)
+	if err != nil {
+		t.Fatalf("parse kmz failed: %v", err)
+	}
+	if len(points) != 2 {
+		t.Fatalf("expected 2 points, got %d", len(points))
+	}
+	if points[1].Longitude != 120.2 || points[1].Latitude != 30.2 {
+		t.Fatalf("unexpected second point: %+v", points[1])
 	}
 }
 

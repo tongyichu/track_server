@@ -56,7 +56,7 @@ Authorization: Bearer <token>
 | `duration` | int | 否 | 时长（秒），必须 `>= 0` |
 | `calories_burned` | number | 否 | 热量消耗（千卡），必须 `>= 0` |
 | `elevation_gain` | int | 否 | 累计爬升（米），必须 `>= 0` |
-| `raw_track_url` | string | 否 | 原始轨迹文件 OSS 地址（建议传 OSS HTTP URL，可带签名参数） |
+| `raw_track_url` | string | 否 | 原始轨迹文件 OSS 地址（建议传 OSS HTTP URL，可带签名参数；轨迹地图索引支持 JSON/GeoJSON/KML/KMZ） |
 | `track_screenshot_url` | string | 否 | 轨迹截图 OSS 地址（建议传 OSS HTTP URL，可带签名参数） |
 | `track_no_map_bg_screenshot_url` | string | 否 | 无地图背景的轨迹路线截图 OSS 地址（建议传 OSS HTTP URL，可带签名参数） |
 | `is_running` | bool | 否 | 是否进行中，默认 `true`；当为 `true` 或未传时，当前用户不能已处于 active 同行中 |
@@ -852,4 +852,3 @@ Authorization: Bearer <token>
 - `401 Unauthorized`
   - 缺少/无效/过期的 Token
 ---
-

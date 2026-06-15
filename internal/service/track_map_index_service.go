@@ -1,13 +1,18 @@
 package service
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
 	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
 	"math"
 	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -172,7 +177,24 @@ func parseTrackPointsFile(path string) ([]models.TrackPoint, error) {
 	if len(data) > maxRawTrackIndexFileBytes {
 		return nil, fmt.Errorf("raw track file exceeds %d bytes", maxRawTrackIndexFileBytes)
 	}
-	return parseTrackPointsJSON(data)
+	return parseRawTrackPoints(data, path)
+}
+
+func parseRawTrackPoints(data []byte, path string) ([]models.TrackPoint, error) {
+	ext := strings.ToLower(filepath.Ext(path))
+	if ext == ".kmz" || isZipData(data) {
+		return parseKMZPoints(data)
+	}
+	if ext == ".kml" {
+		return parseKMLPoints(data)
+	}
+	if points, err := parseTrackPointsJSON(data); err == nil {
+		return points, nil
+	}
+	if points, err := parseKMLPoints(data); err == nil {
+		return points, nil
+	}
+	return nil, errors.New("unsupported raw track format for map index")
 }
 
 func parseTrackPointsJSON(data []byte) ([]models.TrackPoint, error) {
@@ -198,7 +220,139 @@ func parseTrackPointsJSON(data []byte) ([]models.TrackPoint, error) {
 	if err == nil && len(points) > 0 {
 		return normalizeTrackPoints(points), nil
 	}
-	return nil, errors.New("unsupported raw track format for map index")
+	return nil, errors.New("unsupported json raw track format for map index")
+}
+
+func isZipData(data []byte) bool {
+	return len(data) >= 4 && data[0] == 'P' && data[1] == 'K' && data[2] == 0x03 && data[3] == 0x04
+}
+
+func parseKMZPoints(data []byte) ([]models.TrackPoint, error) {
+	reader, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		return nil, err
+	}
+	var lastErr error
+	for _, file := range reader.File {
+		if file == nil || file.FileInfo().IsDir() || !strings.EqualFold(filepath.Ext(file.Name), ".kml") {
+			continue
+		}
+		rc, err := file.Open()
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		kmlData, readErr := io.ReadAll(io.LimitReader(rc, maxRawTrackIndexFileBytes+1))
+		closeErr := rc.Close()
+		if readErr != nil {
+			lastErr = readErr
+			continue
+		}
+		if closeErr != nil {
+			lastErr = closeErr
+			continue
+		}
+		if len(kmlData) > maxRawTrackIndexFileBytes {
+			return nil, fmt.Errorf("kml file in kmz exceeds %d bytes", maxRawTrackIndexFileBytes)
+		}
+		points, err := parseKMLPoints(kmlData)
+		if err == nil && len(points) > 0 {
+			return points, nil
+		}
+		lastErr = err
+	}
+	if lastErr != nil {
+		return nil, lastErr
+	}
+	return nil, errors.New("kmz contains no parseable kml track")
+}
+
+func parseKMLPoints(data []byte) ([]models.TrackPoint, error) {
+	decoder := xml.NewDecoder(bytes.NewReader(data))
+	stack := make([]string, 0, 16)
+	var points []models.TrackPoint
+
+	for {
+		token, err := decoder.Token()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		switch t := token.(type) {
+		case xml.StartElement:
+			stack = append(stack, t.Name.Local)
+		case xml.EndElement:
+			if len(stack) > 0 {
+				stack = stack[:len(stack)-1]
+			}
+		case xml.CharData:
+			if len(stack) == 0 {
+				continue
+			}
+			current := stack[len(stack)-1]
+			text := strings.TrimSpace(string(t))
+			if text == "" {
+				continue
+			}
+			switch {
+			case current == "coordinates" && hasXMLAncestor(stack, "LineString"):
+				points = append(points, parseKMLCoordinates(text, len(points))...)
+			case current == "coord" && hasXMLAncestor(stack, "Track"):
+				if p, ok := parseKMLCoord(text, len(points)); ok {
+					points = append(points, p)
+				}
+			}
+		}
+	}
+	points = normalizeTrackPoints(points)
+	if len(points) == 0 {
+		return nil, errors.New("kml contains no valid track points")
+	}
+	return points, nil
+}
+
+func hasXMLAncestor(stack []string, name string) bool {
+	for i := len(stack) - 2; i >= 0; i-- {
+		if stack[i] == name {
+			return true
+		}
+	}
+	return false
+}
+
+func parseKMLCoordinates(text string, startIndex int) []models.TrackPoint {
+	fields := strings.Fields(text)
+	points := make([]models.TrackPoint, 0, len(fields))
+	for _, field := range fields {
+		if p, ok := parseKMLCoord(strings.ReplaceAll(field, ",", " "), startIndex+len(points)); ok {
+			points = append(points, p)
+		}
+	}
+	return points
+}
+
+func parseKMLCoord(text string, index int) (models.TrackPoint, bool) {
+	parts := strings.Fields(text)
+	if len(parts) < 2 {
+		return models.TrackPoint{}, false
+	}
+	lng, err := strconv.ParseFloat(parts[0], 64)
+	if err != nil {
+		return models.TrackPoint{}, false
+	}
+	lat, err := strconv.ParseFloat(parts[1], 64)
+	if err != nil {
+		return models.TrackPoint{}, false
+	}
+	point := models.TrackPoint{Index: index, Latitude: lat, Longitude: lng}
+	if len(parts) >= 3 {
+		if elevation, err := strconv.ParseFloat(parts[2], 64); err == nil {
+			point.Elevation = elevation
+		}
+	}
+	return point, true
 }
 
 func parseGeoJSONPoints(data []byte) ([]models.TrackPoint, error) {

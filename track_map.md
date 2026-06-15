@@ -711,7 +711,7 @@ Scheduler(track_map_index，默认每 1 分钟)
   → 补偿扫描：查找已完成但缺少 track_geo_indexes 的轨迹，并补写 pending job
   → Claim pending jobs（小批量，默认 10 条；processing 超过 30 分钟可被重新抢占）
   → 读取 raw_track_url 对应原始轨迹点
-  → 解析轨迹点
+  → 解析轨迹点（支持 JSON/GeoJSON/KML/KMZ）
   → 坐标统一到服务端内部坐标系
   → 计算起点、终点、中心点、bbox、简化折线
   → 写入 track_geo_indexes
