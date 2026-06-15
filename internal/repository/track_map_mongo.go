@@ -39,6 +39,20 @@ func (r *MongoTrackMapRepository) EnqueueIndexJob(ctx context.Context, trackID s
 	if err == nil && (existing.Status == models.TrackMapIndexJobSucceeded || existing.Status == models.TrackMapIndexJobProcessing) {
 		return nil
 	}
+	if err == nil && existing.Status == models.TrackMapIndexJobPending {
+		set := bson.M{
+			"status":     models.TrackMapIndexJobPending,
+			"updated_at": now,
+		}
+		if existing.NextRunAt.IsZero() || runAt.Before(existing.NextRunAt) {
+			set["next_run_at"] = runAt
+		}
+		_, err = r.jobs.UpdateOne(ctx,
+			bson.M{"track_id": trackID},
+			bson.M{"$set": set},
+		)
+		return err
+	}
 	update := bson.M{
 		"$setOnInsert": bson.M{
 			"track_id":   trackID,

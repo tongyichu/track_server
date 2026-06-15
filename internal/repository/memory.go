@@ -1315,7 +1315,9 @@ func (r *InMemoryTrackMapRepository) EnqueueIndexJob(_ context.Context, trackID 
 			return nil
 		}
 		existing.Status = models.TrackMapIndexJobPending
-		existing.NextRunAt = runAt
+		if existing.NextRunAt.IsZero() || runAt.Before(existing.NextRunAt) {
+			existing.NextRunAt = runAt
+		}
 		existing.UpdatedAt = now
 		return nil
 	}

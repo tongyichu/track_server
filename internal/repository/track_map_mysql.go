@@ -37,6 +37,7 @@ func (r *MySQLTrackMapRepository) EnqueueIndexJob(ctx context.Context, trackID s
 			END,
 			next_run_at = CASE
 				WHEN status IN ('succeeded', 'processing') THEN next_run_at
+				WHEN status = 'pending' THEN LEAST(next_run_at, VALUES(next_run_at))
 				ELSE VALUES(next_run_at)
 			END,
 			updated_at = VALUES(updated_at)
