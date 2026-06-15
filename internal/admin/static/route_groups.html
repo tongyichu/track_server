@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>聚合路线 - Track</title>
+  <link rel="stylesheet" href="/admin/static/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="title">Track 管理后台</div>
+    <nav class="nav">
+      <a href="/admin/index.html">App 发布</a>
+      <a href="/admin/users.html">用户管理</a>
+      <a href="/admin/tracks.html">轨迹管理</a>
+      <a class="active" href="/admin/route_groups.html">聚合路线</a>
+      <a href="/admin/companions.html">同行管理</a>
+      <a href="/admin/feedbacks.html">意见反馈</a>
+      <a href="/admin/analytics.html">埋点同步</a>
+    </nav>
+    <div class="spacer"></div>
+    <div class="user">
+      <span id="userName"></span>
+      <button id="logoutBtn">退出</button>
+    </div>
+  </header>
+
+  <main class="container wide">
+    <section class="panel">
+      <h2>聚合路线列表 <span class="hint" id="totalHint"></span></h2>
+      <div class="row">
+        <label>运动类型 <input id="trackTypeInput" type="text" value="hiking" placeholder="hiking" /></label>
+        <label>城市 Code <input id="cityCodeInput" type="text" placeholder="810000" /></label>
+        <button id="refreshBtn">查询</button>
+        <span class="hint" id="statusHint"></span>
+      </div>
+      <table class="data">
+        <thead>
+          <tr>
+            <th>路线组ID</th><th>名称</th><th>类型</th><th>城市</th>
+            <th>成员数</th><th>来源</th><th>代表轨迹</th><th>更新时间</th><th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="groupList"></tbody>
+      </table>
+    </section>
+
+    <section class="panel" id="detailPanel">
+      <h2>路线组详情 <span class="hint" id="detailHint"></span></h2>
+      <div class="detail-grid">
+        <div><strong>路线组ID</strong><span id="detailGroupID" class="mono"></span></div>
+        <div><strong>名称</strong><span id="detailName"></span></div>
+        <div><strong>运动类型</strong><span id="detailTrackType"></span></div>
+        <div><strong>城市</strong><span id="detailCities"></span></div>
+        <div><strong>成员数</strong><span id="detailMemberCount"></span></div>
+        <div><strong>代表轨迹</strong><span id="detailRepresentative" class="mono"></span></div>
+      </div>
+
+      <div class="grid compact-grid">
+        <label>新名称
+          <input id="renameInput" type="text" placeholder="例如：麦理浩径徒步路线" />
+        </label>
+        <div class="actions">
+          <button id="renameBtn">改名</button>
+          <span class="hint">不会向客户端暴露成员数</span>
+        </div>
+        <label>源路线组ID
+          <input id="mergeInput" type="text" placeholder="把这个路线组合并到当前路线组" />
+        </label>
+        <div class="actions">
+          <button id="mergeBtn">合并</button>
+          <span class="hint">源路线组合并后会归档</span>
+        </div>
+      </div>
+
+      <h2 class="subhead">成员轨迹</h2>
+      <table class="data">
+        <thead>
+          <tr>
+            <th>轨迹ID</th><th>角色</th><th>方向</th><th>相似度</th>
+            <th>城市</th><th>距离(m)</th><th>点数</th><th>来源</th><th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="memberList"></tbody>
+      </table>
+    </section>
+  </main>
+
+  <script src="/admin/static/route_groups.js"></script>
+</body>
+</html>

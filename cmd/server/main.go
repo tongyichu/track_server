@@ -144,6 +144,8 @@ func main() {
 				db.Collection("track_map_index_jobs"),
 				db.Collection("track_geo_indexes"),
 				db.Collection("tracks"),
+				db.Collection("track_route_groups"),
+				db.Collection("track_route_group_members"),
 			)
 			companionRepo = repository.NewMongoCompanionRepository(
 				db.Collection("companion_sessions"),
@@ -335,8 +337,10 @@ func main() {
 
 	var trackMapIndexSvc *service.TrackMapIndexService
 	var trackMapSvc *service.TrackMapService
+	var trackRouteGroupSvc *service.TrackRouteGroupService
 	if trackMapRepo != nil && rawTrackCache != nil {
 		trackMapIndexSvc = service.NewTrackMapIndexService(trackMapRepo, trackRepo, rawTrackCache)
+		trackRouteGroupSvc = service.NewTrackRouteGroupService(trackMapRepo)
 		trackMapSvc = service.NewTrackMapService(trackMapRepo, trackRepo, trackSvc)
 		trackSvc.SetTrackMapIndexService(trackMapIndexSvc)
 		log.Printf("track map services enabled")
@@ -391,7 +395,7 @@ func main() {
 
 	// 管理后台（独立于业务用户鉴权）。若未配置任何管理员账号，
 	// NewModule 创建出的 auth 为 nil，RegisterRoutes 会直接跳过。
-	adminModule := admin.NewModule(cfg.AdminAccounts, appReleaseSvc, ossTokenSvc, staticRoot, userRepo, trackRepo, companionRepo, analyticsRepo, userSvc, feedbackSvc)
+	adminModule := admin.NewModule(cfg.AdminAccounts, appReleaseSvc, ossTokenSvc, staticRoot, userRepo, trackRepo, companionRepo, analyticsRepo, userSvc, feedbackSvc, trackRouteGroupSvc)
 	defer adminModule.Close()
 	adminModule.RegisterRoutes(h)
 	if adminModule != nil && adminModule.Auth != nil {
@@ -408,6 +412,9 @@ func main() {
 		schedulerJobs := []scheduler.Job{danmakuJob, companionAutoCloseJob}
 		if trackMapIndexSvc != nil {
 			schedulerJobs = append(schedulerJobs, jobs.NewTrackMapIndex(trackMapIndexSvc, cfg.TrackMapIndexCron))
+		}
+		if trackRouteGroupSvc != nil {
+			schedulerJobs = append(schedulerJobs, jobs.NewTrackRouteGroup(trackRouteGroupSvc, cfg.TrackRouteGroupCron))
 		}
 		if analyticsSvc != nil && cfg.AnalyticsEnabled {
 			schedulerJobs = append(schedulerJobs, jobs.NewAnalyticsSync(analyticsSvc, cfg.AnalyticsSyncCron))

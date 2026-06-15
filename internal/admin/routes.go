@@ -39,10 +39,10 @@ type Module struct {
 // 管理后台上传的安装包会落盘到 <staticRoot>/release/<platform>/，
 // 并通过 /api/v1/static/release/<platform>/<file> 对外下发。
 // 留空表示禁用本地上传接口（接口会返回 500）。
-func NewModule(accounts map[string]string, releaseSvc *service.AppReleaseService, stsSvc *service.OSSTokenService, staticRoot string, userRepo repository.UserRepository, trackRepo repository.TrackRepository, companionRepo repository.CompanionRepository, analyticsRepo repository.AnalyticsRepository, userSvc *service.UserService, feedbackSvc *service.FeedbackService) *Module {
+func NewModule(accounts map[string]string, releaseSvc *service.AppReleaseService, stsSvc *service.OSSTokenService, staticRoot string, userRepo repository.UserRepository, trackRepo repository.TrackRepository, companionRepo repository.CompanionRepository, analyticsRepo repository.AnalyticsRepository, userSvc *service.UserService, feedbackSvc *service.FeedbackService, routeGroupSvc *service.TrackRouteGroupService) *Module {
 	store := NewSessionStore(12 * time.Hour)
 	auth := NewAuthenticator(accounts, store)
-	handler := NewHandler(releaseSvc, stsSvc, auth, staticRoot, userRepo, trackRepo, companionRepo, analyticsRepo, userSvc, feedbackSvc)
+	handler := NewHandler(releaseSvc, stsSvc, auth, staticRoot, userRepo, trackRepo, companionRepo, analyticsRepo, userSvc, feedbackSvc, routeGroupSvc)
 	return &Module{
 		Auth:    auth,
 		Handler: handler,
@@ -100,6 +100,7 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	g.GET("/index.html", serveEmbedded("static/index.html", "text/html; charset=utf-8"))
 	g.GET("/users.html", serveEmbedded("static/users.html", "text/html; charset=utf-8"))
 	g.GET("/tracks.html", serveEmbedded("static/tracks.html", "text/html; charset=utf-8"))
+	g.GET("/route_groups.html", serveEmbedded("static/route_groups.html", "text/html; charset=utf-8"))
 	g.GET("/companions.html", serveEmbedded("static/companions.html", "text/html; charset=utf-8"))
 	g.GET("/companion_detail.html", serveEmbedded("static/companion_detail.html", "text/html; charset=utf-8"))
 	g.GET("/feedbacks.html", serveEmbedded("static/feedbacks.html", "text/html; charset=utf-8"))
@@ -123,6 +124,12 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	api.GET("/static/*filepath", m.Handler.GetStaticAsset)
 	api.GET("/users", m.Handler.ListUsers)
 	api.GET("/tracks", m.Handler.ListTracks)
+	api.GET("/route-groups", m.Handler.ListRouteGroups)
+	api.GET("/route-groups/:group_id", m.Handler.GetRouteGroup)
+	api.PUT("/route-groups/:group_id/name", m.Handler.RenameRouteGroup)
+	api.POST("/route-groups/:group_id/merge", m.Handler.MergeRouteGroup)
+	api.DELETE("/route-groups/:group_id/members/:track_id", m.Handler.RemoveRouteGroupMember)
+	api.PUT("/route-groups/:group_id/representative", m.Handler.SetRouteGroupRepresentative)
 	api.GET("/companions", m.Handler.ListCompanions)
 	api.GET("/companions/:session_id", m.Handler.GetCompanionDetail)
 	api.GET("/feedbacks", m.Handler.ListFeedbacks)

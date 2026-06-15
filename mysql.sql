@@ -141,6 +141,46 @@ CREATE TABLE `track_geo_indexes` (
                                      KEY `idx_track_geo_center` (`center_lat`, `center_lng`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='轨迹地图空间索引表';
 
+CREATE TABLE `track_route_groups` (
+                                      `group_id` VARCHAR(64) NOT NULL COMMENT '路线组ID',
+                                      `name` VARCHAR(128) NOT NULL DEFAULT '' COMMENT '路线组展示名',
+                                      `track_type` VARCHAR(32) NOT NULL DEFAULT '' COMMENT '运动类型',
+                                      `status` VARCHAR(16) NOT NULL DEFAULT 'active' COMMENT 'active/archived',
+                                      `city_codes_json` TEXT COMMENT '路线覆盖城市 code JSON 数组',
+                                      `coordinate_system` VARCHAR(32) NOT NULL DEFAULT '' COMMENT '坐标系',
+                                      `center_lat` DOUBLE NOT NULL,
+                                      `center_lng` DOUBLE NOT NULL,
+                                      `min_lat` DOUBLE NOT NULL,
+                                      `min_lng` DOUBLE NOT NULL,
+                                      `max_lat` DOUBLE NOT NULL,
+                                      `max_lng` DOUBLE NOT NULL,
+                                      `distance` DOUBLE NOT NULL DEFAULT 0,
+                                      `representative_track_id` VARCHAR(64) NOT NULL DEFAULT '' COMMENT '代表轨迹ID',
+                                      `representative_polyline_json` MEDIUMTEXT,
+                                      `member_count` BIGINT NOT NULL DEFAULT 0 COMMENT '内部成员轨迹数，不直接下发冷启动人气',
+                                      `source` VARCHAR(16) NOT NULL DEFAULT 'auto' COMMENT 'auto/manual/mixed',
+                                      `created_at` DATETIME(6) NOT NULL,
+                                      `updated_at` DATETIME(6) NOT NULL,
+                                      PRIMARY KEY (`group_id`),
+                                      KEY `idx_track_route_group_type_status` (`track_type`, `status`),
+                                      KEY `idx_track_route_group_center` (`center_lat`, `center_lng`),
+                                      KEY `idx_track_route_group_rep` (`representative_track_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='路线发现路线组表';
+
+CREATE TABLE `track_route_group_members` (
+                                             `group_id` VARCHAR(64) NOT NULL COMMENT '路线组ID',
+                                             `track_id` VARCHAR(64) NOT NULL COMMENT '轨迹ID',
+                                             `similarity_score` DOUBLE NOT NULL DEFAULT 0 COMMENT '自动聚合相似度',
+                                             `match_direction` VARCHAR(16) NOT NULL DEFAULT 'forward' COMMENT 'forward/reverse',
+                                             `role` VARCHAR(16) NOT NULL DEFAULT 'member' COMMENT 'representative/member',
+                                             `source` VARCHAR(16) NOT NULL DEFAULT 'auto' COMMENT 'auto/manual',
+                                             `created_at` DATETIME(6) NOT NULL,
+                                             `updated_at` DATETIME(6) NOT NULL,
+                                             PRIMARY KEY (`group_id`, `track_id`),
+                                             UNIQUE KEY `uk_track_route_member_track` (`track_id`),
+                                             KEY `idx_track_route_member_group` (`group_id`, `role`, `created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='路线组成员轨迹表';
+
 
 CREATE TABLE `user_achievement_rewards` (
                                             `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,

@@ -56,14 +56,14 @@ func (s *TrackMapService) View(ctx context.Context, input TrackMapViewInput) (*m
 	}
 	switch viewLevel {
 	case trackMapViewCity:
-		items, err := s.maps.CountTrackGeoIndexesByCity(ctx, filter)
+		items, err := s.maps.CountRouteGroupsByCity(ctx, filter)
 		if err != nil {
 			return nil, err
 		}
 		s.decorateClusters(items)
 		return &models.TrackMapViewResponse{ViewLevel: trackMapViewCity, CoordinateSystem: "GCJ02", Items: items}, nil
 	case trackMapViewArea:
-		items, err := s.maps.CountTrackGeoIndexesByArea(ctx, filter)
+		items, err := s.maps.CountRouteGroupsByArea(ctx, filter)
 		if err != nil {
 			return nil, err
 		}
@@ -82,13 +82,13 @@ func (s *TrackMapService) ListGroups(ctx context.Context, input TrackMapViewInpu
 	if err != nil {
 		return nil, err
 	}
-	indexes, err := s.maps.ListTrackGeoIndexes(ctx, filter)
+	groups, err := s.maps.ListRouteGroups(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
-	items := make([]*models.TrackMapRouteGroupItem, 0, len(indexes))
-	for _, index := range indexes {
-		item, err := s.routeGroupItem(ctx, index)
+	items := make([]*models.TrackMapRouteGroupItem, 0, len(groups))
+	for _, group := range groups {
+		item, err := s.routeGroupItem(ctx, group)
 		if err != nil {
 			if errors.Is(err, repository.ErrNotFound) {
 				continue
@@ -105,11 +105,11 @@ func (s *TrackMapService) GetGroupDetail(ctx context.Context, groupID string) (*
 	if groupID == "" {
 		return nil, invalidArg("group_id is required")
 	}
-	index, err := s.maps.FindTrackGeoIndex(ctx, groupID)
+	group, err := s.maps.FindRouteGroup(ctx, groupID)
 	if err != nil {
 		return nil, err
 	}
-	return s.routeGroupItem(ctx, index)
+	return s.routeGroupItem(ctx, group)
 }
 
 func (s *TrackMapService) ListGroupTracks(ctx context.Context, userID int64, groupID string, input TrackMapGroupTracksInput) (*models.TrackSummaryPage, error) {
@@ -117,34 +117,155 @@ func (s *TrackMapService) ListGroupTracks(ctx context.Context, userID int64, gro
 	if groupID == "" {
 		return nil, invalidArg("group_id is required")
 	}
-	if _, err := s.maps.FindTrackGeoIndex(ctx, groupID); err != nil {
+	if _, err := s.maps.FindRouteGroup(ctx, groupID); err != nil {
 		return nil, err
 	}
-	track, err := s.tracks.FindByID(ctx, groupID)
+	limit := input.Limit
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > maxTrackMapLimit {
+		limit = maxTrackMapLimit
+	}
+	members, err := s.maps.ListRouteGroupMembers(ctx, groupID, limit)
 	if err != nil {
 		return nil, err
 	}
-	if track.Status != models.TrackStatusNormal || track.IsRunning {
-		return &models.TrackSummaryPage{Items: []*models.TrackSummary{}, HasMore: false}, nil
+	tracks := make([]*models.Track, 0, len(members))
+	for _, member := range members {
+		if member == nil || member.TrackID == "" {
+			continue
+		}
+		track, err := s.tracks.FindByID(ctx, member.TrackID)
+		if err != nil {
+			if errors.Is(err, repository.ErrNotFound) {
+				continue
+			}
+			return nil, err
+		}
+		if track.Status != models.TrackStatusNormal || track.IsRunning {
+			continue
+		}
+		tracks = append(tracks, track)
 	}
-	summaries := toSummaries([]*models.Track{track})
+	summaries := toSummaries(tracks)
 	if s.trackSvc != nil {
 		cacheCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		if s.trackSvc.screenshotCache != nil {
-			summaries[0].TrackScreenshotURL = s.trackSvc.screenshotCache.EnsureCached(cacheCtx, track.UserID, track.ID, track.TrackScreenshotURL)
-			if track.TrackNoMapBgScreenshotURL != "" {
-				summaries[0].TrackNoMapBgScreenshotURL = s.trackSvc.screenshotCache.EnsureCached(cacheCtx, track.UserID, track.ID+"_no_map_bg", track.TrackNoMapBgScreenshotURL)
+			for i, track := range tracks {
+				summaries[i].TrackScreenshotURL = s.trackSvc.screenshotCache.EnsureCached(cacheCtx, track.UserID, track.ID, track.TrackScreenshotURL)
+				if track.TrackNoMapBgScreenshotURL != "" {
+					summaries[i].TrackNoMapBgScreenshotURL = s.trackSvc.screenshotCache.EnsureCached(cacheCtx, track.UserID, track.ID+"_no_map_bg", track.TrackNoMapBgScreenshotURL)
+				}
 			}
 		}
 		if s.trackSvc.rawTrackCache != nil {
-			summaries[0].RawTrackURL = s.trackSvc.rawTrackCache.EnsureCached(cacheCtx, track.UserID, track.ID, track.RawTrackURL)
+			for i, track := range tracks {
+				summaries[i].RawTrackURL = s.trackSvc.rawTrackCache.EnsureCached(cacheCtx, track.UserID, track.ID, track.RawTrackURL)
+			}
 		}
 		cancel()
-		if err := s.trackSvc.fillTrackSummaryExtras(ctx, userID, summaries); err != nil {
-			return nil, err
+		if len(summaries) > 0 {
+			if err := s.trackSvc.fillTrackSummaryExtras(ctx, userID, summaries); err != nil {
+				return nil, err
+			}
 		}
 	}
 	return &models.TrackSummaryPage{Items: summaries, HasMore: false}, nil
+}
+
+func (s *TrackMapService) routeGroupItem(ctx context.Context, group *models.TrackRouteGroup) (*models.TrackMapRouteGroupItem, error) {
+	if group == nil {
+		return nil, repository.ErrNotFound
+	}
+	track, err := s.tracks.FindByID(ctx, group.RepresentativeTrackID)
+	if err != nil {
+		return nil, err
+	}
+	cityCode := ""
+	if len(group.CityCodes) > 0 {
+		cityCode = group.CityCodes[0]
+	}
+	item := &models.TrackMapRouteGroupItem{
+		Type:             "route_group",
+		GroupID:          group.GroupID,
+		Name:             routeGroupDisplayName(group),
+		CityCode:         cityCode,
+		CityName:         config.CityNameByCode(cityCode),
+		TrackType:        group.TrackType,
+		CoordinateSystem: mapCoordinateSystem(group.CoordinateSystem),
+		Center:           models.TrackMapPoint{Latitude: group.CenterLat, Longitude: group.CenterLng},
+		BBox: models.TrackMapBBox{
+			MinLatitude:  group.MinLat,
+			MinLongitude: group.MinLng,
+			MaxLatitude:  group.MaxLat,
+			MaxLongitude: group.MaxLng,
+		},
+		RepresentativePolyline: trackMapPolyline(group.RepresentativePolyline),
+		CoverTrack:             &models.TrackMapCoverTrack{TrackID: track.ID},
+		RawTrackID:             track.ID,
+		Track:                  track,
+	}
+	if s.trackSvc != nil && s.trackSvc.screenshotCache != nil && track.TrackScreenshotURL != "" {
+		cacheCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+		item.CoverTrack.TrackScreenshotURL = s.trackSvc.screenshotCache.EnsureCached(cacheCtx, track.UserID, track.ID, track.TrackScreenshotURL)
+		cancel()
+	}
+	return item, nil
+}
+
+func routeGroupDisplayName(group *models.TrackRouteGroup) string {
+	name := strings.TrimSpace(group.Name)
+	if name != "" {
+		return name
+	}
+	cityCode := ""
+	if len(group.CityCodes) > 0 {
+		cityCode = group.CityCodes[0]
+	}
+	cityName := config.CityNameByCode(cityCode)
+	trackTypeName := trackTypeDisplayName(group.TrackType)
+	if cityName == "" {
+		return trackTypeName + "路线"
+	}
+	return cityName + trackTypeName + "路线"
+}
+
+func (s *TrackMapService) legacyRouteGroupItem(ctx context.Context, index *models.TrackGeoIndex) (*models.TrackMapRouteGroupItem, error) {
+	if index == nil {
+		return nil, repository.ErrNotFound
+	}
+	track, err := s.tracks.FindByID(ctx, index.TrackID)
+	if err != nil {
+		return nil, err
+	}
+	item := &models.TrackMapRouteGroupItem{
+		Type:             "route_group",
+		GroupID:          index.TrackID,
+		Name:             trackMapRouteName(track, index),
+		CityCode:         index.CityCode,
+		CityName:         config.CityNameByCode(index.CityCode),
+		TrackType:        index.TrackType,
+		CoordinateSystem: mapCoordinateSystem(index.CoordinateSystem),
+		Center:           models.TrackMapPoint{Latitude: index.CenterLat, Longitude: index.CenterLng},
+		BBox: models.TrackMapBBox{
+			MinLatitude:  index.MinLat,
+			MinLongitude: index.MinLng,
+			MaxLatitude:  index.MaxLat,
+			MaxLongitude: index.MaxLng,
+		},
+		RepresentativePolyline: trackMapPolyline(index.SimplifiedPolyline),
+		CoverTrack:             &models.TrackMapCoverTrack{TrackID: track.ID},
+		RawTrackID:             track.ID,
+		SourceGeoIndex:         index,
+		Track:                  track,
+	}
+	if s.trackSvc != nil && s.trackSvc.screenshotCache != nil && track.TrackScreenshotURL != "" {
+		cacheCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+		item.CoverTrack.TrackScreenshotURL = s.trackSvc.screenshotCache.EnsureCached(cacheCtx, track.UserID, track.ID, track.TrackScreenshotURL)
+		cancel()
+	}
+	return item, nil
 }
 
 func (s *TrackMapService) buildFilter(input TrackMapViewInput) (models.TrackMapQueryFilter, string, error) {
@@ -250,43 +371,6 @@ func parseTrackMapBBox(raw string) (*models.TrackMapBBox, error) {
 
 func validMapLatLng(lat, lng float64) bool {
 	return lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180
-}
-
-func (s *TrackMapService) routeGroupItem(ctx context.Context, index *models.TrackGeoIndex) (*models.TrackMapRouteGroupItem, error) {
-	if index == nil {
-		return nil, repository.ErrNotFound
-	}
-	track, err := s.tracks.FindByID(ctx, index.TrackID)
-	if err != nil {
-		return nil, err
-	}
-	item := &models.TrackMapRouteGroupItem{
-		Type:             "route_group",
-		GroupID:          index.TrackID,
-		Name:             trackMapRouteName(track, index),
-		CityCode:         index.CityCode,
-		CityName:         config.CityNameByCode(index.CityCode),
-		TrackType:        index.TrackType,
-		CoordinateSystem: mapCoordinateSystem(index.CoordinateSystem),
-		Center:           models.TrackMapPoint{Latitude: index.CenterLat, Longitude: index.CenterLng},
-		BBox: models.TrackMapBBox{
-			MinLatitude:  index.MinLat,
-			MinLongitude: index.MinLng,
-			MaxLatitude:  index.MaxLat,
-			MaxLongitude: index.MaxLng,
-		},
-		RepresentativePolyline: trackMapPolyline(index.SimplifiedPolyline),
-		CoverTrack:             &models.TrackMapCoverTrack{TrackID: track.ID},
-		RawTrackID:             track.ID,
-		SourceGeoIndex:         index,
-		Track:                  track,
-	}
-	if s.trackSvc != nil && s.trackSvc.screenshotCache != nil && track.TrackScreenshotURL != "" {
-		cacheCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
-		item.CoverTrack.TrackScreenshotURL = s.trackSvc.screenshotCache.EnsureCached(cacheCtx, track.UserID, track.ID, track.TrackScreenshotURL)
-		cancel()
-	}
-	return item, nil
 }
 
 func trackMapRouteName(track *models.Track, index *models.TrackGeoIndex) string {

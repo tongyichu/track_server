@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -90,7 +91,7 @@ func TestAdminFeedbackDetailRewritesImageURLAndServesImage(t *testing.T) {
 	}
 
 	h := server.Default()
-	module := NewModule(map[string]string{"admin": string(placeholderPasswordHash)}, nil, nil, staticRoot, nil, nil, nil, nil, nil, feedbackSvc)
+	module := NewModule(map[string]string{"admin": string(placeholderPasswordHash)}, nil, nil, staticRoot, nil, nil, nil, nil, nil, feedbackSvc, nil)
 	module.RegisterRoutes(h)
 	defer module.Close()
 
@@ -148,7 +149,7 @@ func TestAdminListFeedbacksFiltersByVersionAndPhone(t *testing.T) {
 	}
 
 	h := server.Default()
-	module := NewModule(map[string]string{"admin": string(placeholderPasswordHash)}, nil, nil, t.TempDir(), userRepo, nil, nil, nil, nil, feedbackSvc)
+	module := NewModule(map[string]string{"admin": string(placeholderPasswordHash)}, nil, nil, t.TempDir(), userRepo, nil, nil, nil, nil, feedbackSvc, nil)
 	module.RegisterRoutes(h)
 	defer module.Close()
 	session, err := module.Auth.store.Create("admin")
@@ -178,6 +179,89 @@ func TestAdminListFeedbacksFiltersByVersionAndPhone(t *testing.T) {
 	}
 }
 
+func TestAdminRouteGroupOperations(t *testing.T) {
+	ctx := context.Background()
+	trackRepo := repository.NewInMemoryTrackRepository()
+	mapRepo := repository.NewInMemoryTrackMapRepository(trackRepo)
+	now := time.Now()
+	index1 := adminTestGeoIndex("NO.00001001", now)
+	index2 := adminTestGeoIndex("NO.00001002", now)
+	index2.StartLat += 0.001
+	index2.EndLat += 0.001
+	if err := mapRepo.UpsertTrackGeoIndex(ctx, index1); err != nil {
+		t.Fatal(err)
+	}
+	if err := mapRepo.UpsertTrackGeoIndex(ctx, index2); err != nil {
+		t.Fatal(err)
+	}
+	group := &models.TrackRouteGroup{
+		GroupID:                "RG.00001001",
+		Name:                   "旧名称",
+		TrackType:              "hiking",
+		Status:                 models.TrackRouteGroupStatusActive,
+		CityCodes:              []string{"810000"},
+		CoordinateSystem:       "GCJ02",
+		CenterLat:              index1.CenterLat,
+		CenterLng:              index1.CenterLng,
+		MinLat:                 index1.MinLat,
+		MinLng:                 index1.MinLng,
+		MaxLat:                 index1.MaxLat,
+		MaxLng:                 index1.MaxLng,
+		Distance:               index1.Distance,
+		RepresentativeTrackID:  index1.TrackID,
+		RepresentativePolyline: index1.SimplifiedPolyline,
+		MemberCount:            2,
+		Source:                 models.TrackRouteGroupSourceAuto,
+		CreatedAt:              now,
+		UpdatedAt:              now,
+	}
+	if err := mapRepo.UpsertRouteGroup(ctx, group); err != nil {
+		t.Fatal(err)
+	}
+	for _, member := range []*models.TrackRouteGroupMember{
+		{GroupID: group.GroupID, TrackID: index1.TrackID, SimilarityScore: 1, MatchDirection: models.TrackRouteGroupMemberDirectionForward, Role: models.TrackRouteGroupMemberRoleRepresentative, Source: models.TrackRouteGroupSourceAuto, CreatedAt: now, UpdatedAt: now},
+		{GroupID: group.GroupID, TrackID: index2.TrackID, SimilarityScore: 0.9, MatchDirection: models.TrackRouteGroupMemberDirectionForward, Role: models.TrackRouteGroupMemberRoleMember, Source: models.TrackRouteGroupSourceAuto, CreatedAt: now, UpdatedAt: now},
+	} {
+		if err := mapRepo.UpsertRouteGroupMember(ctx, member); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	h := server.Default()
+	routeGroupSvc := service.NewTrackRouteGroupService(mapRepo)
+	module := NewModule(map[string]string{"admin": string(placeholderPasswordHash)}, nil, nil, t.TempDir(), nil, trackRepo, nil, nil, nil, nil, routeGroupSvc)
+	module.RegisterRoutes(h)
+	defer module.Close()
+	session, err := module.Auth.store.Create("admin")
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	cookie := ut.Header{Key: "Cookie", Value: sessionCookieName + "=" + session.Token}
+	jsonHeader := ut.Header{Key: "Content-Type", Value: "application/json"}
+
+	renameBody := []byte(`{"name":"麦理浩径徒步路线"}`)
+	resp := ut.PerformRequest(h.Engine, http.MethodPut, "/admin/api/route-groups/RG.00001001/name", &ut.Body{Body: bytes.NewBuffer(renameBody), Len: len(renameBody)}, cookie, jsonHeader)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("rename status=%d body=%s", resp.Code, resp.Body.String())
+	}
+	representativeBody := []byte(`{"track_id":"NO.00001002"}`)
+	resp = ut.PerformRequest(h.Engine, http.MethodPut, "/admin/api/route-groups/RG.00001001/representative", &ut.Body{Body: bytes.NewBuffer(representativeBody), Len: len(representativeBody)}, cookie, jsonHeader)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("set representative status=%d body=%s", resp.Code, resp.Body.String())
+	}
+	resp = ut.PerformRequest(h.Engine, http.MethodDelete, "/admin/api/route-groups/RG.00001001/members/NO.00001001", nil, cookie)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("remove member status=%d body=%s", resp.Code, resp.Body.String())
+	}
+	got, err := mapRepo.FindRouteGroup(ctx, group.GroupID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Name != "麦理浩径徒步路线" || got.RepresentativeTrackID != "NO.00001002" || got.MemberCount != 1 {
+		t.Fatalf("unexpected route group after ops: %+v", got)
+	}
+}
+
 func performAdminFeedbackList(t *testing.T, h *server.Hertz, target string, headers ...ut.Header) struct {
 	Code int                 `json:"code"`
 	Data models.FeedbackPage `json:"data"`
@@ -195,6 +279,36 @@ func performAdminFeedbackList(t *testing.T, h *server.Hertz, target string, head
 		t.Fatalf("decode %s: %v", target, err)
 	}
 	return out
+}
+
+func adminTestGeoIndex(trackID string, now time.Time) *models.TrackGeoIndex {
+	points := []models.TrackPoint{
+		{Index: 0, Latitude: 22.3, Longitude: 114.1},
+		{Index: 1, Latitude: 22.31, Longitude: 114.11},
+		{Index: 2, Latitude: 22.32, Longitude: 114.12},
+	}
+	return &models.TrackGeoIndex{
+		TrackID:            trackID,
+		UserID:             1001,
+		CityCode:           "810000",
+		TrackType:          "hiking",
+		CoordinateSystem:   "GCJ02",
+		StartLat:           points[0].Latitude,
+		StartLng:           points[0].Longitude,
+		EndLat:             points[2].Latitude,
+		EndLng:             points[2].Longitude,
+		CenterLat:          22.31,
+		CenterLng:          114.11,
+		MinLat:             22.3,
+		MinLng:             114.1,
+		MaxLat:             22.32,
+		MaxLng:             114.12,
+		Distance:           3000,
+		PointCount:         len(points),
+		SimplifiedPolyline: points,
+		CreatedAt:          now,
+		UpdatedAt:          now,
+	}
 }
 
 func testPNGBytes() []byte {

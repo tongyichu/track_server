@@ -10,7 +10,7 @@
 - `area`：区域聚合气泡。
 - `city`：城市聚合气泡。
 
-当前 MVP 中，`group_id` 等于已索引轨迹的 `track_id`；客户端仍按 RouteGroup 处理。后续服务端切换到真正路线聚合表时，接口形状保持不变。
+服务端已使用 `track_route_groups` 聚合表作为数据源，`group_id` 是路线组 ID，不等同于单条轨迹 ID。路线组由后台离线任务基于 `track_geo_indexes` 聚合生成。
 
 **需要认证**
 
@@ -49,7 +49,7 @@ GET /api/v1/track-map/view?latitude=22.3000&longitude=114.1700&radius_m=10000&tr
     "items": [
       {
         "type": "route_group",
-        "group_id": "NO.00000001",
+        "group_id": "RG.00000001",
         "name": "麦理浩径徒步路线",
         "city_code": "810000",
         "city_name": "香港",
@@ -192,7 +192,7 @@ GET /api/v1/track-map/groups/:group_id/detail
 Authorization: Bearer <token>
 ```
 
-当前 MVP 中，`:group_id` 传 `NO.00000001` 这类轨迹 ID。
+`:group_id` 传路线组 ID，例如 `RG.00000001`。
 
 响应 `data` 为单个 `route_group` 对象，字段同 [查询地图路线组列表](#49-查询地图路线组列表)。
 
@@ -205,7 +205,7 @@ GET /api/v1/track-map/groups/:group_id/tracks?limit=20
 Authorization: Bearer <token>
 ```
 
-当前 MVP 中，一个路线组下返回一条代表轨迹；后续服务端启用真正路线聚合后，会返回同一路线组下的多条用户轨迹，响应结构不变。
+返回同一路线组下的具体用户轨迹列表。第一版不额外返回路线组人数或轨迹总数，避免冷启动阶段暴露人气不足。
 
 响应：
 
@@ -240,4 +240,3 @@ Authorization: Bearer <token>
   }
 }
 ```
-

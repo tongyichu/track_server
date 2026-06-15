@@ -114,6 +114,18 @@ type TrackMapRepository interface {
 	ListTrackGeoIndexes(ctx context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackGeoIndex, error)
 	CountTrackGeoIndexesByCity(ctx context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackMapClusterItem, error)
 	CountTrackGeoIndexesByArea(ctx context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackMapClusterItem, error)
+	FindRouteGroup(ctx context.Context, groupID string) (*models.TrackRouteGroup, error)
+	ListRouteGroups(ctx context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackRouteGroup, error)
+	ListRouteGroupCandidates(ctx context.Context, index *models.TrackGeoIndex, limit int) ([]*models.TrackRouteGroupCandidate, error)
+	ListGeoIndexesWithoutRouteGroup(ctx context.Context, limit int) ([]*models.TrackGeoIndex, error)
+	UpsertRouteGroup(ctx context.Context, group *models.TrackRouteGroup) error
+	UpsertRouteGroupMember(ctx context.Context, member *models.TrackRouteGroupMember) error
+	DeleteRouteGroupMember(ctx context.Context, groupID, trackID string) error
+	ArchiveRouteGroup(ctx context.Context, groupID string, now time.Time) error
+	ListRouteGroupMembers(ctx context.Context, groupID string, limit int) ([]*models.TrackRouteGroupMember, error)
+	FindRouteGroupByTrackID(ctx context.Context, trackID string) (*models.TrackRouteGroup, error)
+	CountRouteGroupsByCity(ctx context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackMapClusterItem, error)
+	CountRouteGroupsByArea(ctx context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackMapClusterItem, error)
 }
 
 // UserRepository defines persistence operations for User entities.

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"strconv"
 	"strings"
 	"time"
 
@@ -440,6 +441,405 @@ func scanTrackGeoIndex(row trackGeoIndexScanner) (*models.TrackGeoIndex, error) 
 		_ = json.Unmarshal([]byte(polylineJSON.String), &index.SimplifiedPolyline)
 	}
 	return &index, nil
+}
+
+func (r *MySQLTrackMapRepository) FindRouteGroup(ctx context.Context, groupID string) (*models.TrackRouteGroup, error) {
+	row := r.db.QueryRowContext(ctx, trackRouteGroupSelectSQL()+` WHERE group_id = ? AND status = ?`, groupID, models.TrackRouteGroupStatusActive)
+	group, err := scanTrackRouteGroup(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return group, nil
+}
+
+func (r *MySQLTrackMapRepository) ListRouteGroups(ctx context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackRouteGroup, error) {
+	limit := normalizeTrackMapQueryLimit(filter.Limit)
+	where, args := buildTrackRouteGroupWhere(filter)
+	args = append(args, limit)
+	rows, err := r.db.QueryContext(ctx, trackRouteGroupSelectSQL()+where+` ORDER BY member_count DESC, updated_at DESC LIMIT ?`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := make([]*models.TrackRouteGroup, 0, limit)
+	for rows.Next() {
+		group, err := scanTrackRouteGroup(rows)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, group)
+	}
+	return items, rows.Err()
+}
+
+func (r *MySQLTrackMapRepository) ListRouteGroupCandidates(ctx context.Context, index *models.TrackGeoIndex, limit int) ([]*models.TrackRouteGroupCandidate, error) {
+	if index == nil {
+		return nil, nil
+	}
+	if limit <= 0 {
+		limit = 20
+	}
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT `+trackRouteGroupColumns("rg")+`, `+trackGeoIndexColumns("gi")+`
+		FROM track_route_groups rg
+		JOIN track_geo_indexes gi ON gi.track_id = rg.representative_track_id
+		WHERE rg.status = ?
+		  AND rg.track_type = ?
+		  AND rg.max_lat >= ? AND rg.min_lat <= ? AND rg.max_lng >= ? AND rg.min_lng <= ?
+		ORDER BY rg.member_count DESC, rg.updated_at DESC
+		LIMIT ?
+	`, models.TrackRouteGroupStatusActive, index.TrackType, index.MinLat-0.02, index.MaxLat+0.02, index.MinLng-0.02, index.MaxLng+0.02, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := make([]*models.TrackRouteGroupCandidate, 0, limit)
+	for rows.Next() {
+		group, geoIndex, err := scanTrackRouteGroupCandidate(rows)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, &models.TrackRouteGroupCandidate{Group: group, Index: geoIndex})
+	}
+	return items, rows.Err()
+}
+
+func (r *MySQLTrackMapRepository) ListGeoIndexesWithoutRouteGroup(ctx context.Context, limit int) ([]*models.TrackGeoIndex, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	rows, err := r.db.QueryContext(ctx, trackGeoIndexSelectSQL()+`
+		WHERE NOT EXISTS (
+			SELECT 1 FROM track_route_group_members m WHERE m.track_id = track_geo_indexes.track_id
+		)
+		ORDER BY created_at ASC
+		LIMIT ?
+	`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := make([]*models.TrackGeoIndex, 0, limit)
+	for rows.Next() {
+		index, err := scanTrackGeoIndex(rows)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, index)
+	}
+	return items, rows.Err()
+}
+
+func (r *MySQLTrackMapRepository) UpsertRouteGroup(ctx context.Context, group *models.TrackRouteGroup) error {
+	if group == nil || group.GroupID == "" {
+		return errors.New("route group is required")
+	}
+	cityCodesJSON, err := json.Marshal(group.CityCodes)
+	if err != nil {
+		return err
+	}
+	polylineJSON, err := json.Marshal(group.RepresentativePolyline)
+	if err != nil {
+		return err
+	}
+	now := time.Now()
+	if group.CreatedAt.IsZero() {
+		group.CreatedAt = now
+	}
+	group.UpdatedAt = now
+	_, err = r.db.ExecContext(ctx, `
+		INSERT INTO track_route_groups
+			(group_id, name, track_type, status, city_codes_json, coordinate_system,
+			 center_lat, center_lng, min_lat, min_lng, max_lat, max_lng, distance,
+			 representative_track_id, representative_polyline_json, member_count, source, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON DUPLICATE KEY UPDATE
+			name = VALUES(name),
+			track_type = VALUES(track_type),
+			status = VALUES(status),
+			city_codes_json = VALUES(city_codes_json),
+			coordinate_system = VALUES(coordinate_system),
+			center_lat = VALUES(center_lat),
+			center_lng = VALUES(center_lng),
+			min_lat = VALUES(min_lat),
+			min_lng = VALUES(min_lng),
+			max_lat = VALUES(max_lat),
+			max_lng = VALUES(max_lng),
+			distance = VALUES(distance),
+			representative_track_id = VALUES(representative_track_id),
+			representative_polyline_json = VALUES(representative_polyline_json),
+			member_count = VALUES(member_count),
+			source = VALUES(source),
+			updated_at = VALUES(updated_at)
+	`, group.GroupID, group.Name, group.TrackType, group.Status, string(cityCodesJSON), group.CoordinateSystem,
+		group.CenterLat, group.CenterLng, group.MinLat, group.MinLng, group.MaxLat, group.MaxLng, group.Distance,
+		group.RepresentativeTrackID, string(polylineJSON), group.MemberCount, group.Source, group.CreatedAt, group.UpdatedAt)
+	return err
+}
+
+func (r *MySQLTrackMapRepository) UpsertRouteGroupMember(ctx context.Context, member *models.TrackRouteGroupMember) error {
+	if member == nil || member.GroupID == "" || member.TrackID == "" {
+		return errors.New("route group member is required")
+	}
+	now := time.Now()
+	if member.CreatedAt.IsZero() {
+		member.CreatedAt = now
+	}
+	member.UpdatedAt = now
+	_, err := r.db.ExecContext(ctx, `
+		INSERT INTO track_route_group_members
+			(group_id, track_id, similarity_score, match_direction, role, source, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		ON DUPLICATE KEY UPDATE
+			similarity_score = VALUES(similarity_score),
+			match_direction = VALUES(match_direction),
+			role = VALUES(role),
+			source = VALUES(source),
+			updated_at = VALUES(updated_at)
+	`, member.GroupID, member.TrackID, member.SimilarityScore, member.MatchDirection, member.Role, member.Source, member.CreatedAt, member.UpdatedAt)
+	if err != nil {
+		return err
+	}
+	_, err = r.db.ExecContext(ctx, `
+		UPDATE track_route_groups
+		SET member_count = (SELECT COUNT(*) FROM track_route_group_members WHERE group_id = ?), updated_at = ?
+		WHERE group_id = ?
+	`, member.GroupID, now, member.GroupID)
+	return err
+}
+
+func (r *MySQLTrackMapRepository) DeleteRouteGroupMember(ctx context.Context, groupID, trackID string) error {
+	res, err := r.db.ExecContext(ctx, `DELETE FROM track_route_group_members WHERE group_id = ? AND track_id = ?`, groupID, trackID)
+	if err != nil {
+		return err
+	}
+	affected, err := res.RowsAffected()
+	if err == nil && affected == 0 {
+		return ErrNotFound
+	}
+	now := time.Now()
+	_, err = r.db.ExecContext(ctx, `
+		UPDATE track_route_groups
+		SET member_count = (SELECT COUNT(*) FROM track_route_group_members WHERE group_id = ?), updated_at = ?
+		WHERE group_id = ?
+	`, groupID, now, groupID)
+	return err
+}
+
+func (r *MySQLTrackMapRepository) ArchiveRouteGroup(ctx context.Context, groupID string, now time.Time) error {
+	res, err := r.db.ExecContext(ctx, `UPDATE track_route_groups SET status = ?, updated_at = ? WHERE group_id = ?`, models.TrackRouteGroupStatusArchived, now, groupID)
+	if err != nil {
+		return err
+	}
+	affected, err := res.RowsAffected()
+	if err == nil && affected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (r *MySQLTrackMapRepository) ListRouteGroupMembers(ctx context.Context, groupID string, limit int) ([]*models.TrackRouteGroupMember, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT group_id, track_id, similarity_score, match_direction, role, source, created_at, updated_at
+		FROM track_route_group_members
+		WHERE group_id = ?
+		ORDER BY role = 'representative' DESC, created_at DESC
+		LIMIT ?
+	`, groupID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := make([]*models.TrackRouteGroupMember, 0, limit)
+	for rows.Next() {
+		member, err := scanTrackRouteGroupMember(rows)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, member)
+	}
+	return items, rows.Err()
+}
+
+func (r *MySQLTrackMapRepository) FindRouteGroupByTrackID(ctx context.Context, trackID string) (*models.TrackRouteGroup, error) {
+	row := r.db.QueryRowContext(ctx, trackRouteGroupSelectSQL()+`
+		JOIN track_route_group_members m ON m.group_id = track_route_groups.group_id
+		WHERE m.track_id = ? AND track_route_groups.status = ?
+		LIMIT 1
+	`, trackID, models.TrackRouteGroupStatusActive)
+	group, err := scanTrackRouteGroup(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return group, nil
+}
+
+func (r *MySQLTrackMapRepository) CountRouteGroupsByCity(ctx context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackMapClusterItem, error) {
+	groups, err := r.ListRouteGroups(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	accs := make(map[string]*trackMapClusterAcc)
+	for _, group := range groups {
+		codes := group.CityCodes
+		if len(codes) == 0 {
+			codes = []string{""}
+		}
+		for _, code := range codes {
+			key := code
+			if key == "" {
+				key = "unknown"
+			}
+			a := accs[key]
+			if a == nil {
+				a = &trackMapClusterAcc{}
+				accs[key] = a
+			}
+			a.addRouteGroup(group)
+		}
+	}
+	return sortedClusterItems(accs, "city_cluster", filter.TrackType, filter.Limit), nil
+}
+
+func (r *MySQLTrackMapRepository) CountRouteGroupsByArea(ctx context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackMapClusterItem, error) {
+	limit := normalizeTrackMapQueryLimit(filter.Limit)
+	where, args := buildTrackRouteGroupWhere(filter)
+	args = append(args, limit)
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT FLOOR(center_lat * 10) / 10 AS lat_cell, FLOOR(center_lng * 10) / 10 AS lng_cell, track_type, COUNT(*) AS route_count,
+		       AVG(center_lat), AVG(center_lng), MIN(min_lat), MIN(min_lng), MAX(max_lat), MAX(max_lng)
+		FROM track_route_groups`+where+`
+		GROUP BY lat_cell, lng_cell, track_type
+		ORDER BY route_count DESC
+		LIMIT ?`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := make([]*models.TrackMapClusterItem, 0, limit)
+	for rows.Next() {
+		var latCell, lngCell float64
+		item := &models.TrackMapClusterItem{Type: "area_cluster"}
+		if err := rows.Scan(&latCell, &lngCell, &item.TrackType, &item.RouteCount, &item.Center.Latitude, &item.Center.Longitude, &item.BBox.MinLatitude, &item.BBox.MinLongitude, &item.BBox.MaxLatitude, &item.BBox.MaxLongitude); err != nil {
+			return nil, err
+		}
+		item.ClusterID = "cell_" + strings.TrimRight(strings.TrimRight(strconvFormatFloat(latCell), "0"), ".") + "_" + strings.TrimRight(strings.TrimRight(strconvFormatFloat(lngCell), "0"), ".")
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+func trackRouteGroupSelectSQL() string {
+	return `SELECT ` + trackRouteGroupColumns("track_route_groups") + ` FROM track_route_groups`
+}
+
+func trackRouteGroupColumns(alias string) string {
+	p := alias + "."
+	return p + `group_id, ` + p + `name, ` + p + `track_type, ` + p + `status, ` + p + `city_codes_json, ` + p + `coordinate_system,
+		` + p + `center_lat, ` + p + `center_lng, ` + p + `min_lat, ` + p + `min_lng, ` + p + `max_lat, ` + p + `max_lng,
+		` + p + `distance, ` + p + `representative_track_id, ` + p + `representative_polyline_json, ` + p + `member_count,
+		` + p + `source, ` + p + `created_at, ` + p + `updated_at`
+}
+
+func trackGeoIndexColumns(alias string) string {
+	p := alias + "."
+	return p + `track_id, ` + p + `user_id, ` + p + `city_code, ` + p + `track_type, ` + p + `coordinate_system,
+		` + p + `start_lat, ` + p + `start_lng, ` + p + `end_lat, ` + p + `end_lng, ` + p + `center_lat, ` + p + `center_lng,
+		` + p + `min_lat, ` + p + `min_lng, ` + p + `max_lat, ` + p + `max_lng, ` + p + `distance, ` + p + `point_count,
+		` + p + `simplified_polyline_json, ` + p + `created_at, ` + p + `updated_at`
+}
+
+func buildTrackRouteGroupWhere(filter models.TrackMapQueryFilter) (string, []interface{}) {
+	conds := []string{"status = ?"}
+	args := []interface{}{models.TrackRouteGroupStatusActive}
+	if filter.TrackType != "" {
+		conds = append(conds, "track_type = ?")
+		args = append(args, filter.TrackType)
+	}
+	if filter.CityCode != "" {
+		conds = append(conds, "city_codes_json LIKE ?")
+		args = append(args, "%\""+filter.CityCode+"\"%")
+	}
+	if filter.BBox != nil {
+		conds = append(conds, "max_lat >= ? AND min_lat <= ? AND max_lng >= ? AND min_lng <= ?")
+		args = append(args, filter.BBox.MinLatitude, filter.BBox.MaxLatitude, filter.BBox.MinLongitude, filter.BBox.MaxLongitude)
+	}
+	if filter.Center != nil && filter.RadiusM > 0 {
+		deg := float64(filter.RadiusM) / 111000.0
+		conds = append(conds, "center_lat BETWEEN ? AND ? AND center_lng BETWEEN ? AND ?")
+		args = append(args, filter.Center.Latitude-deg, filter.Center.Latitude+deg, filter.Center.Longitude-deg, filter.Center.Longitude+deg)
+	}
+	return " WHERE " + strings.Join(conds, " AND "), args
+}
+
+func scanTrackRouteGroup(row trackGeoIndexScanner) (*models.TrackRouteGroup, error) {
+	var group models.TrackRouteGroup
+	var cityCodesJSON, polylineJSON sql.NullString
+	if err := row.Scan(&group.GroupID, &group.Name, &group.TrackType, &group.Status, &cityCodesJSON, &group.CoordinateSystem,
+		&group.CenterLat, &group.CenterLng, &group.MinLat, &group.MinLng, &group.MaxLat, &group.MaxLng,
+		&group.Distance, &group.RepresentativeTrackID, &polylineJSON, &group.MemberCount,
+		&group.Source, &group.CreatedAt, &group.UpdatedAt); err != nil {
+		return nil, err
+	}
+	if cityCodesJSON.Valid {
+		group.CityCodesJSON = cityCodesJSON.String
+		_ = json.Unmarshal([]byte(cityCodesJSON.String), &group.CityCodes)
+	}
+	if polylineJSON.Valid {
+		group.RepresentativePolylineJSON = polylineJSON.String
+		_ = json.Unmarshal([]byte(polylineJSON.String), &group.RepresentativePolyline)
+	}
+	return &group, nil
+}
+
+func scanTrackRouteGroupCandidate(row trackGeoIndexScanner) (*models.TrackRouteGroup, *models.TrackGeoIndex, error) {
+	var group models.TrackRouteGroup
+	var cityCodesJSON, groupPolylineJSON, indexPolylineJSON sql.NullString
+	var index models.TrackGeoIndex
+	if err := row.Scan(&group.GroupID, &group.Name, &group.TrackType, &group.Status, &cityCodesJSON, &group.CoordinateSystem,
+		&group.CenterLat, &group.CenterLng, &group.MinLat, &group.MinLng, &group.MaxLat, &group.MaxLng,
+		&group.Distance, &group.RepresentativeTrackID, &groupPolylineJSON, &group.MemberCount,
+		&group.Source, &group.CreatedAt, &group.UpdatedAt,
+		&index.TrackID, &index.UserID, &index.CityCode, &index.TrackType, &index.CoordinateSystem,
+		&index.StartLat, &index.StartLng, &index.EndLat, &index.EndLng, &index.CenterLat, &index.CenterLng,
+		&index.MinLat, &index.MinLng, &index.MaxLat, &index.MaxLng, &index.Distance, &index.PointCount,
+		&indexPolylineJSON, &index.CreatedAt, &index.UpdatedAt); err != nil {
+		return nil, nil, err
+	}
+	if cityCodesJSON.Valid {
+		group.CityCodesJSON = cityCodesJSON.String
+		_ = json.Unmarshal([]byte(cityCodesJSON.String), &group.CityCodes)
+	}
+	if groupPolylineJSON.Valid {
+		group.RepresentativePolylineJSON = groupPolylineJSON.String
+		_ = json.Unmarshal([]byte(groupPolylineJSON.String), &group.RepresentativePolyline)
+	}
+	if indexPolylineJSON.Valid {
+		index.SimplifiedPolylineJSON = indexPolylineJSON.String
+		_ = json.Unmarshal([]byte(indexPolylineJSON.String), &index.SimplifiedPolyline)
+	}
+	return &group, &index, nil
+}
+
+func scanTrackRouteGroupMember(row trackGeoIndexScanner) (*models.TrackRouteGroupMember, error) {
+	var member models.TrackRouteGroupMember
+	if err := row.Scan(&member.GroupID, &member.TrackID, &member.SimilarityScore, &member.MatchDirection, &member.Role, &member.Source, &member.CreatedAt, &member.UpdatedAt); err != nil {
+		return nil, err
+	}
+	return &member, nil
+}
+
+func strconvFormatFloat(v float64) string {
+	return strings.TrimRight(strings.TrimRight(strconv.FormatFloat(v, 'f', 1, 64), "0"), ".")
 }
 
 func normalizeTrackMapQueryLimit(limit int) int {

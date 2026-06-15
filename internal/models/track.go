@@ -233,6 +233,82 @@ type TrackGeoIndex struct {
 	UpdatedAt              time.Time    `json:"updated_at" bson:"updated_at"`
 }
 
+// TrackRouteGroupSource marks how a route group or membership was produced.
+type TrackRouteGroupSource string
+
+const (
+	TrackRouteGroupSourceAuto   TrackRouteGroupSource = "auto"
+	TrackRouteGroupSourceManual TrackRouteGroupSource = "manual"
+	TrackRouteGroupSourceMixed  TrackRouteGroupSource = "mixed"
+)
+
+// TrackRouteGroupStatus marks whether a route group is visible to clients.
+type TrackRouteGroupStatus string
+
+const (
+	TrackRouteGroupStatusActive   TrackRouteGroupStatus = "active"
+	TrackRouteGroupStatusArchived TrackRouteGroupStatus = "archived"
+)
+
+// TrackRouteGroupMemberRole identifies the representative member of a group.
+type TrackRouteGroupMemberRole string
+
+const (
+	TrackRouteGroupMemberRoleRepresentative TrackRouteGroupMemberRole = "representative"
+	TrackRouteGroupMemberRoleMember         TrackRouteGroupMemberRole = "member"
+)
+
+// TrackRouteGroupMemberDirection records whether a track matches the group forward or reversed.
+type TrackRouteGroupMemberDirection string
+
+const (
+	TrackRouteGroupMemberDirectionForward TrackRouteGroupMemberDirection = "forward"
+	TrackRouteGroupMemberDirectionReverse TrackRouteGroupMemberDirection = "reverse"
+)
+
+// TrackRouteGroup is the persistent aggregation of similar public completed tracks.
+type TrackRouteGroup struct {
+	GroupID                    string                `json:"group_id" bson:"_id,omitempty"`
+	Name                       string                `json:"name" bson:"name"`
+	TrackType                  string                `json:"track_type" bson:"track_type"`
+	Status                     TrackRouteGroupStatus `json:"status" bson:"status"`
+	CityCodes                  []string              `json:"city_codes" bson:"city_codes"`
+	CityCodesJSON              string                `json:"-" bson:"city_codes_json"`
+	CoordinateSystem           string                `json:"coordinate_system" bson:"coordinate_system"`
+	CenterLat                  float64               `json:"center_lat" bson:"center_lat"`
+	CenterLng                  float64               `json:"center_lng" bson:"center_lng"`
+	MinLat                     float64               `json:"min_lat" bson:"min_lat"`
+	MinLng                     float64               `json:"min_lng" bson:"min_lng"`
+	MaxLat                     float64               `json:"max_lat" bson:"max_lat"`
+	MaxLng                     float64               `json:"max_lng" bson:"max_lng"`
+	Distance                   float64               `json:"distance" bson:"distance"`
+	RepresentativeTrackID      string                `json:"representative_track_id" bson:"representative_track_id"`
+	RepresentativePolyline     []TrackPoint          `json:"representative_polyline,omitempty" bson:"representative_polyline"`
+	RepresentativePolylineJSON string                `json:"-" bson:"representative_polyline_json"`
+	MemberCount                int64                 `json:"member_count" bson:"member_count"`
+	Source                     TrackRouteGroupSource `json:"source" bson:"source"`
+	CreatedAt                  time.Time             `json:"created_at" bson:"created_at"`
+	UpdatedAt                  time.Time             `json:"updated_at" bson:"updated_at"`
+}
+
+// TrackRouteGroupMember stores the many-to-many membership between groups and tracks.
+type TrackRouteGroupMember struct {
+	GroupID         string                         `json:"group_id" bson:"group_id"`
+	TrackID         string                         `json:"track_id" bson:"track_id"`
+	SimilarityScore float64                        `json:"similarity_score" bson:"similarity_score"`
+	MatchDirection  TrackRouteGroupMemberDirection `json:"match_direction" bson:"match_direction"`
+	Role            TrackRouteGroupMemberRole      `json:"role" bson:"role"`
+	Source          TrackRouteGroupSource          `json:"source" bson:"source"`
+	CreatedAt       time.Time                      `json:"created_at" bson:"created_at"`
+	UpdatedAt       time.Time                      `json:"updated_at" bson:"updated_at"`
+}
+
+// TrackRouteGroupCandidate is used by offline aggregation candidate recall.
+type TrackRouteGroupCandidate struct {
+	Group *TrackRouteGroup
+	Index *TrackGeoIndex
+}
+
 // TrackMapBBox represents a map bounding box.
 type TrackMapBBox struct {
 	MinLatitude  float64 `json:"min_latitude" bson:"min_latitude"`

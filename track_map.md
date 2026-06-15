@@ -87,7 +87,7 @@
 
 RouteGroup 必须归属于明确的运动类型。同一地理路线在不同运动类型下应拆成不同 RouteGroup，例如“西湖环线徒步路线”和“西湖环线骑行路线”不能合并。
 
-当前 MVP 已实现客户端 HTTP 接口，但还没有正式落地 `track_route_groups` 聚合表；服务端先把每条已构建 `track_geo_indexes` 的公开完成轨迹作为一个路线组入口，`group_id` 等于 `track_id`。后续切换到真正 RouteGroup 聚合时，客户端接口形状保持不变。
+当前实现已落地 `track_route_groups` / `track_route_group_members` 聚合表。客户端始终按 RouteGroup 处理，`group_id` 为路线组 ID，不再等同于单条轨迹 ID。
 
 ## 3. 运动类型分类约束
 
@@ -627,42 +627,43 @@ CREATE TABLE track_geo_indexes (
 
 #### track_route_groups
 
-用于存储路线组。
+用于存储路线组。自动聚合只处理公开、已完成、正常状态轨迹对应的 `track_geo_indexes`，并严格按 `track_type` 分组。
 
-建议字段：
+当前实现字段：
 
 ```sql
 CREATE TABLE track_route_groups (
-  id VARCHAR(64) NOT NULL,
-  city_code VARCHAR(16) NOT NULL DEFAULT '',
-  track_type VARCHAR(32) NOT NULL DEFAULT '',
+  group_id VARCHAR(64) NOT NULL,
   name VARCHAR(128) NOT NULL DEFAULT '',
-  coordinate_system VARCHAR(32) NOT NULL DEFAULT 'WGS84',
+  track_type VARCHAR(32) NOT NULL DEFAULT '',
+  status VARCHAR(16) NOT NULL DEFAULT 'active',
+  city_codes_json TEXT,
+  coordinate_system VARCHAR(32) NOT NULL DEFAULT '',
   center_lat DOUBLE NOT NULL,
   center_lng DOUBLE NOT NULL,
   min_lat DOUBLE NOT NULL,
   min_lng DOUBLE NOT NULL,
   max_lat DOUBLE NOT NULL,
   max_lng DOUBLE NOT NULL,
+  distance DOUBLE NOT NULL DEFAULT 0,
   representative_track_id VARCHAR(64) NOT NULL DEFAULT '',
   representative_polyline_json MEDIUMTEXT,
-  track_count BIGINT NOT NULL DEFAULT 0,
-  user_count BIGINT NOT NULL DEFAULT 0,
-  hot_score DOUBLE NOT NULL DEFAULT 0,
+  member_count BIGINT NOT NULL DEFAULT 0,
   source VARCHAR(16) NOT NULL DEFAULT 'auto',
-  status TINYINT NOT NULL DEFAULT 1,
   created_at DATETIME(6) NOT NULL,
   updated_at DATETIME(6) NOT NULL,
-  PRIMARY KEY (id),
-  KEY idx_route_group_city_type (city_code, track_type),
-  KEY idx_route_group_center (center_lat, center_lng)
+  PRIMARY KEY (group_id),
+  KEY idx_track_route_group_type_status (track_type, status),
+  KEY idx_track_route_group_center (center_lat, center_lng),
+  KEY idx_track_route_group_rep (representative_track_id)
 );
 ```
 
 说明：
 
-- `track_count` / `user_count` / `hot_score` 只作为服务端内部排序和后续运营能力使用。
-- 第一版接口不返回这些字段。
+- `member_count` 是服务端内部字段，用于排序和运营观察；第一版接口不返回该字段。
+- `city_codes_json` 支持跨城市路线归属于多个城市。当前自动聚合先继承轨迹 `city_code`，后续可通过轨迹点反查城市后扩展为多城市。
+- `source=auto/manual/mixed` 预留人工运营能力。自动任务不会覆盖人工改名后的展示诉求，后续 ops 接口可基于该字段做合并、拆分、改名和指定代表轨迹。
 
 #### track_route_group_members
 
@@ -673,9 +674,14 @@ CREATE TABLE track_route_group_members (
   group_id VARCHAR(64) NOT NULL,
   track_id VARCHAR(64) NOT NULL,
   similarity_score DOUBLE NOT NULL DEFAULT 0,
+  match_direction VARCHAR(16) NOT NULL DEFAULT 'forward',
+  role VARCHAR(16) NOT NULL DEFAULT 'member',
+  source VARCHAR(16) NOT NULL DEFAULT 'auto',
   created_at DATETIME(6) NOT NULL,
+  updated_at DATETIME(6) NOT NULL,
   PRIMARY KEY (group_id, track_id),
-  KEY idx_route_group_member_track (track_id)
+  UNIQUE KEY uk_track_route_member_track (track_id),
+  KEY idx_track_route_member_group (group_id, role, created_at)
 );
 ```
 
@@ -709,10 +715,15 @@ Scheduler(track_map_index，默认每 1 分钟)
   → 坐标统一到服务端内部坐标系
   → 计算起点、终点、中心点、bbox、简化折线
   → 写入 track_geo_indexes
-  → 查找候选 RouteGroup
-  → 判断是否可归入已有 RouteGroup
-  → 写入 track_route_group_members
-  → 更新 track_route_groups 的代表折线与内部统计
+  → 标记索引任务 succeeded
+
+Scheduler(track_route_group，默认每天 04:00)
+  → 扫描尚未归入 RouteGroup 的 track_geo_indexes
+  → 排除过短、点数过少或缺少运动类型的轨迹
+  → 召回同运动类型、bbox 相近的候选 RouteGroup
+  → 同时计算正向和反向相似度
+  → 达到阈值则写入 track_route_group_members
+  → 未达到阈值则创建新的 track_route_groups
 ```
 
 如果索引构建失败：
@@ -730,23 +741,29 @@ OSS 下载要求：
 
 ### 6.3 路线聚合规则
 
-第一版建议使用简单、可解释的规则。
+当前实现使用简单、可解释、偏保守的规则。
 
 候选范围：
 
-- 同城市。
+- 不强制同城市；跨城市路线可以合并，RouteGroup 会记录多个 `city_code`，城市聚合时每个城市都计数。
 - 同运动类型。运动类型是硬性分组条件，不能跨类型聚合。
 - bbox 有交集或中心点距离在一定范围内。
 
 相似判断：
 
-- 起点距离小于 500 米。
-- 终点距离小于 500 米。
-- 或允许反向路线：A 起点接近 B 终点，A 终点接近 B 起点。
-- 总距离差小于 20%。
-- 简化折线采样点平均距离小于 100-200 米。
+- 正向和反向都参与计算，反向路线允许合并。
+- 总距离差异不超过约 35%。
+- 起终点平均距离不能超过约 1200 米。
+- 简化折线采样后计算平均距离，综合得到相似度分。
+- 相似度分达到阈值才合并；低置信度宁可新建 RouteGroup。
 
 满足阈值则归入已有 RouteGroup，否则创建新的 RouteGroup。
+
+不合并的情况：
+
+- 不同运动类型。
+- 只走完整路线一小段的轨迹。
+- 距离太短、点数太少、GPS 数据质量明显不足的轨迹。
 
 后续可升级为：
 
@@ -814,7 +831,7 @@ RouteGroup 是路线聚合入口，不展示用户实时位置。
 
 - 新增首页地图模式所需的数据模型。
 - 完成 `TrackGeoIndex` 构建。
-- 完成自动 RouteGroup 聚合。
+- 已完成自动 RouteGroup 聚合。
 - 提供地图视野查询接口，支持具体 RouteGroup、区域聚合、城市聚合三种返回粒度。
 - 提供附近/城市 RouteGroup 查询接口。
 - 提供 RouteGroup 下具体轨迹列表接口。
@@ -822,7 +839,7 @@ RouteGroup 是路线聚合入口，不展示用户实时位置。
 
 ### 第二阶段
 
-- 支持路线人工命名和人工合并。
+- 支持路线人工命名和人工合并的服务端数据结构，后续补 ops 接口或管理后台。
 - 支持更好的路线相似算法。
 - 支持路线详情页展示难度、爬升、距离区间、推荐季节等。
 - 支持路线搜索。
@@ -840,9 +857,12 @@ RouteGroup 是路线聚合入口，不展示用户实时位置。
 
 - 新增 HTTP 路由：`/track-map/view`、`/track-map/groups`、`/track-map/groups/:group_id/detail`、`/track-map/groups/:group_id/tracks`。
 - 新增模型：TrackGeoIndex、TrackMapIndexJob、地图视野响应模型。
+- 新增模型：TrackRouteGroup、TrackRouteGroupMember。
 - 新增 repository interface 与 MySQL / Mongo / memory 三套实现。
 - 新增数据库表结构。
 - 新增轨迹完成后的索引构建流程。
+- 新增路线组离线聚合任务 `track_route_group`，默认每天 04:00。
+- 新增管理中心聚合路线运营页，支持查看 RouteGroup、改名、合并、移除成员、指定代表轨迹。
 - 更新 `track_api.md` 与 `docs/api/track-map.md`。
 - 更新 `AGENTS.md`。
 

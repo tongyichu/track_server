@@ -105,10 +105,12 @@ type Config struct {
 	// - DANMAKU_CLEANUP_CRON：弹幕清理任务的 cron 表达式（5 段，默认每天 03:00）；
 	// - DANMAKU_RETENTION_DAYS：会话结束后弹幕保留天数（默认 7 天）；
 	// - TRACK_MAP_INDEX_CRON：轨迹地图索引任务的 cron 表达式（默认每 1 分钟）。
+	// - TRACK_ROUTE_GROUP_CRON：路线组离线聚合任务的 cron 表达式（默认每天 04:00）。
 	SchedulerEnabled     bool
 	DanmakuCleanupCron   string
 	DanmakuRetentionDays int
 	TrackMapIndexCron    string
+	TrackRouteGroupCron  string
 
 	// 客户端埋点采集
 	// - ANALYTICS_ENABLED=false 时关闭 /api/v1/analytics/events；
@@ -205,6 +207,7 @@ func Load() *Config {
 		DanmakuCleanupCron:   getEnv("DANMAKU_CLEANUP_CRON", "0 3 * * *"),
 		DanmakuRetentionDays: int(getEnvInt64("DANMAKU_RETENTION_DAYS", 7)),
 		TrackMapIndexCron:    getEnv("TRACK_MAP_INDEX_CRON", "@every 1m"),
+		TrackRouteGroupCron:  getEnv("TRACK_ROUTE_GROUP_CRON", "0 4 * * *"),
 
 		// 客户端埋点采集
 		AnalyticsEnabled:      getEnv("ANALYTICS_ENABLED", "true") != "false",

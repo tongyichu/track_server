@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -43,10 +44,12 @@ type InMemoryAchievementRepository struct {
 
 // InMemoryTrackMapRepository stores async map index jobs and geo indexes in memory.
 type InMemoryTrackMapRepository struct {
-	mu      sync.RWMutex
-	tracks  *InMemoryTrackRepository
-	jobs    map[string]*models.TrackMapIndexJob
-	indexes map[string]*models.TrackGeoIndex
+	mu           sync.RWMutex
+	tracks       *InMemoryTrackRepository
+	jobs         map[string]*models.TrackMapIndexJob
+	indexes      map[string]*models.TrackGeoIndex
+	routeGroups  map[string]*models.TrackRouteGroup
+	routeMembers map[string]map[string]*models.TrackRouteGroupMember
 }
 
 type InMemoryFeedbackRepository struct {
@@ -68,9 +71,11 @@ func NewInMemoryAchievementRepository() *InMemoryAchievementRepository {
 
 func NewInMemoryTrackMapRepository(tracks *InMemoryTrackRepository) *InMemoryTrackMapRepository {
 	return &InMemoryTrackMapRepository{
-		tracks:  tracks,
-		jobs:    make(map[string]*models.TrackMapIndexJob),
-		indexes: make(map[string]*models.TrackGeoIndex),
+		tracks:       tracks,
+		jobs:         make(map[string]*models.TrackMapIndexJob),
+		indexes:      make(map[string]*models.TrackGeoIndex),
+		routeGroups:  make(map[string]*models.TrackRouteGroup),
+		routeMembers: make(map[string]map[string]*models.TrackRouteGroupMember),
 	}
 }
 
@@ -1546,6 +1551,309 @@ func cloneTrackGeoIndex(index *models.TrackGeoIndex) *models.TrackGeoIndex {
 	return &clone
 }
 
+func (r *InMemoryTrackMapRepository) FindRouteGroup(_ context.Context, groupID string) (*models.TrackRouteGroup, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	group := r.routeGroups[groupID]
+	if group == nil || group.Status == models.TrackRouteGroupStatusArchived {
+		return nil, ErrNotFound
+	}
+	return cloneTrackRouteGroup(group), nil
+}
+
+func (r *InMemoryTrackMapRepository) ListRouteGroups(_ context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackRouteGroup, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	limit := normalizeTrackMapQueryLimit(filter.Limit)
+	items := make([]*models.TrackRouteGroup, 0, limit)
+	for _, group := range r.routeGroups {
+		if !routeGroupMatchesFilter(group, filter) {
+			continue
+		}
+		items = append(items, cloneTrackRouteGroup(group))
+	}
+	sort.SliceStable(items, func(i, j int) bool {
+		if items[i].MemberCount == items[j].MemberCount {
+			return items[i].UpdatedAt.After(items[j].UpdatedAt)
+		}
+		return items[i].MemberCount > items[j].MemberCount
+	})
+	if len(items) > limit {
+		items = items[:limit]
+	}
+	return items, nil
+}
+
+func (r *InMemoryTrackMapRepository) ListRouteGroupCandidates(_ context.Context, index *models.TrackGeoIndex, limit int) ([]*models.TrackRouteGroupCandidate, error) {
+	if index == nil {
+		return nil, nil
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if limit <= 0 {
+		limit = 20
+	}
+	items := make([]*models.TrackRouteGroupCandidate, 0, limit)
+	filter := models.TrackMapQueryFilter{
+		TrackType: index.TrackType,
+		BBox: &models.TrackMapBBox{
+			MinLatitude:  index.MinLat - 0.02,
+			MinLongitude: index.MinLng - 0.02,
+			MaxLatitude:  index.MaxLat + 0.02,
+			MaxLongitude: index.MaxLng + 0.02,
+		},
+	}
+	for _, group := range r.routeGroups {
+		if !routeGroupMatchesFilter(group, filter) {
+			continue
+		}
+		rep := r.indexes[group.RepresentativeTrackID]
+		if rep == nil {
+			continue
+		}
+		items = append(items, &models.TrackRouteGroupCandidate{Group: cloneTrackRouteGroup(group), Index: cloneTrackGeoIndex(rep)})
+		if len(items) >= limit {
+			break
+		}
+	}
+	return items, nil
+}
+
+func (r *InMemoryTrackMapRepository) ListGeoIndexesWithoutRouteGroup(_ context.Context, limit int) ([]*models.TrackGeoIndex, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if limit <= 0 {
+		limit = 100
+	}
+	items := make([]*models.TrackGeoIndex, 0, limit)
+	for _, index := range r.indexes {
+		if index == nil {
+			continue
+		}
+		found := false
+		for _, members := range r.routeMembers {
+			if members[index.TrackID] != nil {
+				found = true
+				break
+			}
+		}
+		if found {
+			continue
+		}
+		items = append(items, cloneTrackGeoIndex(index))
+	}
+	sort.SliceStable(items, func(i, j int) bool {
+		return items[i].CreatedAt.Before(items[j].CreatedAt)
+	})
+	if len(items) > limit {
+		items = items[:limit]
+	}
+	return items, nil
+}
+
+func (r *InMemoryTrackMapRepository) UpsertRouteGroup(_ context.Context, group *models.TrackRouteGroup) error {
+	if group == nil || group.GroupID == "" {
+		return errors.New("route group is required")
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	now := time.Now()
+	clone := cloneTrackRouteGroup(group)
+	if clone.CreatedAt.IsZero() {
+		clone.CreatedAt = now
+	}
+	clone.UpdatedAt = now
+	r.routeGroups[clone.GroupID] = clone
+	return nil
+}
+
+func (r *InMemoryTrackMapRepository) UpsertRouteGroupMember(_ context.Context, member *models.TrackRouteGroupMember) error {
+	if member == nil || member.GroupID == "" || member.TrackID == "" {
+		return errors.New("route group member is required")
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	now := time.Now()
+	clone := *member
+	if clone.CreatedAt.IsZero() {
+		clone.CreatedAt = now
+	}
+	clone.UpdatedAt = now
+	if r.routeMembers[clone.GroupID] == nil {
+		r.routeMembers[clone.GroupID] = make(map[string]*models.TrackRouteGroupMember)
+	}
+	r.routeMembers[clone.GroupID][clone.TrackID] = &clone
+	if group := r.routeGroups[clone.GroupID]; group != nil {
+		group.MemberCount = int64(len(r.routeMembers[clone.GroupID]))
+		group.UpdatedAt = now
+	}
+	return nil
+}
+
+func (r *InMemoryTrackMapRepository) DeleteRouteGroupMember(_ context.Context, groupID, trackID string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	members := r.routeMembers[groupID]
+	if members == nil || members[trackID] == nil {
+		return ErrNotFound
+	}
+	delete(members, trackID)
+	if group := r.routeGroups[groupID]; group != nil {
+		group.MemberCount = int64(len(members))
+		group.UpdatedAt = time.Now()
+	}
+	return nil
+}
+
+func (r *InMemoryTrackMapRepository) ArchiveRouteGroup(_ context.Context, groupID string, now time.Time) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	group := r.routeGroups[groupID]
+	if group == nil {
+		return ErrNotFound
+	}
+	group.Status = models.TrackRouteGroupStatusArchived
+	group.UpdatedAt = now
+	return nil
+}
+
+func (r *InMemoryTrackMapRepository) ListRouteGroupMembers(_ context.Context, groupID string, limit int) ([]*models.TrackRouteGroupMember, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if limit <= 0 {
+		limit = 20
+	}
+	members := r.routeMembers[groupID]
+	items := make([]*models.TrackRouteGroupMember, 0, len(members))
+	for _, member := range members {
+		if member == nil {
+			continue
+		}
+		clone := *member
+		items = append(items, &clone)
+	}
+	sort.SliceStable(items, func(i, j int) bool {
+		if items[i].Role == items[j].Role {
+			return items[i].CreatedAt.After(items[j].CreatedAt)
+		}
+		return items[i].Role == models.TrackRouteGroupMemberRoleRepresentative
+	})
+	if len(items) > limit {
+		items = items[:limit]
+	}
+	return items, nil
+}
+
+func (r *InMemoryTrackMapRepository) FindRouteGroupByTrackID(_ context.Context, trackID string) (*models.TrackRouteGroup, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for groupID, members := range r.routeMembers {
+		if members[trackID] == nil {
+			continue
+		}
+		group := r.routeGroups[groupID]
+		if group == nil || group.Status == models.TrackRouteGroupStatusArchived {
+			return nil, ErrNotFound
+		}
+		return cloneTrackRouteGroup(group), nil
+	}
+	return nil, ErrNotFound
+}
+
+func (r *InMemoryTrackMapRepository) CountRouteGroupsByCity(_ context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackMapClusterItem, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	groups := make(map[string]*trackMapClusterAcc)
+	for _, group := range r.routeGroups {
+		if !routeGroupMatchesFilter(group, filter) {
+			continue
+		}
+		codes := group.CityCodes
+		if len(codes) == 0 {
+			codes = []string{""}
+		}
+		for _, cityCode := range codes {
+			key := cityCode
+			if key == "" {
+				key = "unknown"
+			}
+			a := groups[key]
+			if a == nil {
+				a = &trackMapClusterAcc{}
+				groups[key] = a
+			}
+			a.addRouteGroup(group)
+		}
+	}
+	return sortedClusterItems(groups, "city_cluster", filter.TrackType, filter.Limit), nil
+}
+
+func (r *InMemoryTrackMapRepository) CountRouteGroupsByArea(_ context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackMapClusterItem, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	groups := make(map[string]*trackMapClusterAcc)
+	for _, group := range r.routeGroups {
+		if !routeGroupMatchesFilter(group, filter) {
+			continue
+		}
+		key := trackMapAreaClusterKey(group.CenterLat, group.CenterLng)
+		a := groups[key]
+		if a == nil {
+			a = &trackMapClusterAcc{}
+			groups[key] = a
+		}
+		a.addRouteGroup(group)
+	}
+	return sortedClusterItems(groups, "area_cluster", filter.TrackType, filter.Limit), nil
+}
+
+func cloneTrackRouteGroup(group *models.TrackRouteGroup) *models.TrackRouteGroup {
+	if group == nil {
+		return nil
+	}
+	clone := *group
+	clone.CityCodes = append([]string(nil), group.CityCodes...)
+	clone.RepresentativePolyline = append([]models.TrackPoint(nil), group.RepresentativePolyline...)
+	return &clone
+}
+
+func routeGroupMatchesFilter(group *models.TrackRouteGroup, filter models.TrackMapQueryFilter) bool {
+	if group == nil || group.Status == models.TrackRouteGroupStatusArchived {
+		return false
+	}
+	if filter.TrackType != "" && group.TrackType != filter.TrackType {
+		return false
+	}
+	if filter.CityCode != "" && !routeGroupHasCity(group, filter.CityCode) {
+		return false
+	}
+	if filter.BBox != nil && !routeGroupIntersectsBBox(group, *filter.BBox) {
+		return false
+	}
+	if filter.Center != nil && filter.RadiusM > 0 {
+		if haversineMeters(filter.Center.Latitude, filter.Center.Longitude, group.CenterLat, group.CenterLng) > float64(filter.RadiusM) {
+			return false
+		}
+	}
+	return true
+}
+
+func routeGroupHasCity(group *models.TrackRouteGroup, cityCode string) bool {
+	for _, code := range group.CityCodes {
+		if strings.TrimSpace(code) == cityCode {
+			return true
+		}
+	}
+	return false
+}
+
+func routeGroupIntersectsBBox(group *models.TrackRouteGroup, bbox models.TrackMapBBox) bool {
+	return group.MaxLat >= bbox.MinLatitude &&
+		group.MinLat <= bbox.MaxLatitude &&
+		group.MaxLng >= bbox.MinLongitude &&
+		group.MinLng <= bbox.MaxLongitude
+}
+
 func trackGeoIndexMatchesFilter(index *models.TrackGeoIndex, filter models.TrackMapQueryFilter) bool {
 	if index == nil {
 		return false
@@ -1615,6 +1923,32 @@ func (a *trackMapClusterAcc) add(index *models.TrackGeoIndex) {
 	}
 }
 
+func (a *trackMapClusterAcc) addRouteGroup(group *models.TrackRouteGroup) {
+	if group == nil {
+		return
+	}
+	a.count++
+	a.sumLat += group.CenterLat
+	a.sumLng += group.CenterLng
+	if !a.initialized {
+		a.minLat, a.minLng, a.maxLat, a.maxLng = group.MinLat, group.MinLng, group.MaxLat, group.MaxLng
+		a.initialized = true
+		return
+	}
+	if group.MinLat < a.minLat {
+		a.minLat = group.MinLat
+	}
+	if group.MinLng < a.minLng {
+		a.minLng = group.MinLng
+	}
+	if group.MaxLat > a.maxLat {
+		a.maxLat = group.MaxLat
+	}
+	if group.MaxLng > a.maxLng {
+		a.maxLng = group.MaxLng
+	}
+}
+
 func (a *trackMapClusterAcc) item(kind, clusterID, cityCode, trackType string) *models.TrackMapClusterItem {
 	item := &models.TrackMapClusterItem{
 		Type:       kind,
@@ -1633,6 +1967,30 @@ func (a *trackMapClusterAcc) item(kind, clusterID, cityCode, trackType string) *
 		item.Center = models.TrackMapPoint{Latitude: a.sumLat / float64(a.count), Longitude: a.sumLng / float64(a.count)}
 	}
 	return item
+}
+
+func sortedClusterItems(groups map[string]*trackMapClusterAcc, kind, trackType string, limit int) []*models.TrackMapClusterItem {
+	items := make([]*models.TrackMapClusterItem, 0, len(groups))
+	for key, a := range groups {
+		cityCode := ""
+		clusterID := key
+		if kind == "city_cluster" {
+			cityCode = key
+			if cityCode == "unknown" {
+				cityCode = ""
+			}
+			clusterID = ""
+		}
+		items = append(items, a.item(kind, clusterID, cityCode, trackType))
+	}
+	sort.SliceStable(items, func(i, j int) bool {
+		return items[i].RouteCount > items[j].RouteCount
+	})
+	max := normalizeTrackMapQueryLimit(limit)
+	if len(items) > max {
+		items = items[:max]
+	}
+	return items
 }
 
 func haversineMeters(lat1, lng1, lat2, lng2 float64) float64 {

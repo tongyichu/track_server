@@ -13,6 +13,7 @@
 - 通过后台会话代理读取服务端静态资源（如用户头像），避免复用业务 JWT；
 - 查看和处理用户意见反馈（含图片预览、状态更新、用户可见反馈意见）。
 - 查看埋点 OSS 同步摘要（任务状态、文件列表、OSS key、字节数、耗时与错误）。
+- 查看和人工运营路线发现 RouteGroup（改名、合并、移除成员、指定代表轨迹）。
 
 模块对外只暴露 `admin.NewModule(...)` 与 `Module.RegisterRoutes(h)`，不被业务 handler 引用。
 
@@ -35,7 +36,7 @@
 internal/admin/
 ├── auth.go         # Authenticator + bcrypt 校验 + cookie + AuthMiddleware
 ├── session.go      # SessionStore (内存 + GC 协程，TTL 默认 12h)
-├── handlers.go     # /admin/api/releases*、/admin/api/feedbacks*、安装包上传、列表查询
+├── handlers.go     # /admin/api/releases*、/admin/api/feedbacks*、/admin/api/route-groups*、安装包上传、列表查询
 ├── routes.go       # NewModule / RegisterRoutes / go:embed static
 └── static/
     ├── login.html  ├── login.js
@@ -47,11 +48,12 @@ internal/admin/
 | --- | --- |
 | 路由清单 | `routes.go` 中 `RegisterRoutes` |
 | 鉴权与 cookie | `auth.go`（`sessionCookieName = "admin_session"`） |
-| 业务依赖注入 | `routes.go` 的 `NewModule(accounts, releaseSvc, stsSvc, staticRoot, ..., analyticsRepo, userSvc, feedbackSvc)` |
+| 业务依赖注入 | `routes.go` 的 `NewModule(accounts, releaseSvc, stsSvc, staticRoot, ..., analyticsRepo, userSvc, feedbackSvc, routeGroupSvc)` |
 | 前端入口 | `static/login.html`、`static/index.html` |
 | 安装包上传 | `handlers.go` 中 `UploadPackage`、`static/app.js` 中 `/admin/api/releases/upload-package` |
 | 意见反馈管理 | `handlers.go` 中 `ListFeedbacks` / `GetFeedback` / `UpdateFeedbackStatus` / `GetFeedbackImage`，`static/feedbacks.html`、`static/feedbacks.js` |
 | 埋点同步摘要 | `handlers.go` 中 `ListAnalyticsSyncSummaries`，`static/analytics.html`、`static/analytics.js` |
+| 聚合路线运营 | `handlers.go` 中 `ListRouteGroups` / `GetRouteGroup` / `RenameRouteGroup` / `MergeRouteGroup` / `RemoveRouteGroupMember` / `SetRouteGroupRepresentative`，`static/route_groups.html`、`static/route_groups.js` |
 
 ## 路由清单（与 `routes.go` 对齐）
 
@@ -60,6 +62,7 @@ internal/admin/
 | GET | `/admin/`、`/admin` | 公开 | 302 跳转 `/admin/login.html` |
 | GET | `/admin/login.html` | 公开 | 登录页 |
 | GET | `/admin/index.html` | 公开 | 管理首页（页面内会拉 `/admin/api/me` 校验） |
+| GET | `/admin/route_groups.html` | 公开 | 聚合路线运营页（页面内会拉 `/admin/api/me` 校验） |
 | GET | `/admin/static/*filepath` | 公开 | 内置静态资源 |
 | POST | `/admin/api/login` | 公开 | bcrypt 校验，成功后下发 `admin_session` cookie |
 | POST | `/admin/api/logout` | 公开 | 删除 session + 清 cookie |
@@ -75,6 +78,12 @@ internal/admin/
 | PUT | `/admin/api/feedbacks/:feedback_id/status` | 鉴权 | 更新反馈处理状态与用户可见 `reply`；`resolved` 时 `reply` 必填 |
 | GET | `/admin/api/feedbacks/:feedback_id/images/:image_id` | 鉴权 | 读取反馈图片 |
 | GET | `/admin/api/analytics/sync-summaries` | 鉴权 | 埋点 OSS 同步摘要列表，支持 `status` / `limit` / `offset` |
+| GET | `/admin/api/route-groups` | 鉴权 | 路线组列表，支持 `track_type` / `city_code` / `limit` |
+| GET | `/admin/api/route-groups/:group_id` | 鉴权 | 路线组详情与成员轨迹 |
+| PUT | `/admin/api/route-groups/:group_id/name` | 鉴权 | 人工改名 |
+| POST | `/admin/api/route-groups/:group_id/merge` | 鉴权 | 将 `source_group_id` 合并到当前路线组，并归档源路线组 |
+| DELETE | `/admin/api/route-groups/:group_id/members/:track_id` | 鉴权 | 从路线组移除成员轨迹 |
+| PUT | `/admin/api/route-groups/:group_id/representative` | 鉴权 | 指定代表轨迹 |
 
 ## 关键流程
 
@@ -121,6 +130,19 @@ GET /admin/api/users
 ```
 
 **查看埋点同步摘要**：
+```
+
+**运营聚合路线**：
+```
+[admin UI] /admin/route_groups.html
+  → GET /admin/api/route-groups?track_type=&city_code=
+  → GET /admin/api/route-groups/:group_id 查看成员轨迹与 geo index
+  → PUT /admin/api/route-groups/:group_id/name {name}
+  → POST /admin/api/route-groups/:group_id/merge {source_group_id}
+  → DELETE /admin/api/route-groups/:group_id/members/:track_id
+  → PUT /admin/api/route-groups/:group_id/representative {track_id}
+       → TrackRouteGroupService 校验运动类型、成员关系与代表轨迹
+       → TrackMapRepository 更新 track_route_groups / track_route_group_members
 ```
 [admin UI] /admin/analytics.html
   → GET /admin/api/analytics/sync-summaries?status=&limit=&offset=

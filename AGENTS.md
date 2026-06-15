@@ -88,7 +88,7 @@ track_server/
 - 默认运动类型由 `internal/config/config.go:DefaultTrackTypeConfigs` 维护，当前 code 为 `hiking`、`running`、`climbing`、`riding`、`driving`，展示名为 `徒步`、`跑步`、`爬山`、`骑行`、`自驾`；`GET /api/v1/track/types`、轨迹入库 `track_type`、运动类型图标元信息和成就系统类型口径应保持一致。
 - 轨迹 `locate_addr` 最大长度为 255 字符，对应 `track_records.locate_addr VARCHAR(255)`；修改该字段长度时同步更新 `mysql.sql`、`internal/repository/mysql.go` 与 `docs/api/track.md`。
 - 轨迹 `source_tag` 是来源/运营标签，对应 `track_records.source_tag VARCHAR(64)`；业务接口只允许空字符串或 `manual_seed`（人工录入冷启动轨迹），更新接口仅在原值为空时补写，普通列表摘要不返回该字段；修改该字段口径时同步更新 `internal/service/track_service.go`、`mysql.sql` 与 `docs/api/track.md`。
-- 首页地图模式的轨迹空间索引由 `track_map_index` 后台任务异步构建：轨迹完成接口只写入 `track_map_index_jobs`，不得在请求主链路同步下载 OSS raw track 或解析轨迹点；后台下载 raw track 必须通过 `OSS_INTERNAL_ENDPOINT` 内网域名，未配置时失败重试且不回退公网。
+- 首页地图模式的轨迹空间索引由 `track_map_index` 后台任务异步构建：轨迹完成接口只写入 `track_map_index_jobs`，不得在请求主链路同步下载 OSS raw track 或解析轨迹点；后台下载 raw track 必须通过 `OSS_INTERNAL_ENDPOINT` 内网域名，未配置时失败重试且不回退公网。路线组由 `track_route_group` 离线任务基于 `track_geo_indexes` 聚合生成，默认每天 04:00 执行。
 - 埋点采集接口 `POST /api/v1/analytics/events` 默认公开可访问，用于未登录启动/登录页等事件；服务端只做校验、脱敏和本地 JSONL 落盘，不把原始埋点写入业务 MySQL，凌晨同步 OSS 的任务由 `SCHEDULER_ENABLED` 控制。同步时按 `event_date/hour` 合并小 JSONL，单个 OSS part 目标上限 128 MB。`analytics_sync_summaries` 只记录每次 OSS 同步摘要（源文件列表、OSS part key、字节数、耗时、错误等），不保存原始事件。调整事件协议、认证策略、本地目录、OSS 前缀、批量上限、同步时间或同步摘要字段时，同步更新 `track_analytics.md`、`docs/api/analytics.md` 与 `mysql.sql`。
 
 ### 关键流程
@@ -100,7 +100,7 @@ Load Config → 选择 Repository（Memory/MySQL/Mongo，失败降级为 Memory�
 → 将 OSSTokenService 作为 downloader 注入 AssetCache
 → （可选）加载 TLS 证书
 → RegisterRoutes(Hertz, Deps)
-→ （可选）SCHEDULER_ENABLED=true 时启动 Scheduler（注册 danmaku_cleanup、companion_session_autoclose、track_map_index 等任务）
+→ （可选）SCHEDULER_ENABLED=true 时启动 Scheduler（注册 danmaku_cleanup、companion_session_autoclose、track_map_index、track_route_group 等任务）
 → h.Spin()
 ```
 
@@ -143,8 +143,11 @@ track/create(is_running=false) 或 track upload/update 完成轨迹
   → 通过 rawTrackCache + OSS_INTERNAL_ENDPOINT 下载/复用 raw track 本地缓存
   → 解析 JSON/GeoJSON 轨迹点，计算 bbox/中心点/起终点/简化折线
   → Upsert track_geo_indexes，任务标记 succeeded；失败则延迟重试
+  → Scheduler(track_route_group，默认 TRACK_ROUTE_GROUP_CRON=0 4 * * *)
+  → 扫描尚未归组的 track_geo_indexes，按 track_type 严格分组，正反向相似路线可合并
+  → Upsert track_route_groups / track_route_group_members
 ```
-首页地图模式客户端接口挂在 auth 组：`GET /api/v1/track-map/view`、`GET /api/v1/track-map/groups`、`GET /api/v1/track-map/groups/:group_id/detail`、`GET /api/v1/track-map/groups/:group_id/tracks`。当前 MVP 中 `group_id` 等于已索引轨迹的 `track_id`，后续切到真正 RouteGroup 聚合表时保持接口形状不变。调整字段、缩放分层、聚合数量口径或 group_id 语义时，同步更新 `docs/api/track-map.md`、`docs/api/route-index.md` 与 `track_map.md`。
+首页地图模式客户端接口挂在 auth 组：`GET /api/v1/track-map/view`、`GET /api/v1/track-map/groups`、`GET /api/v1/track-map/groups/:group_id/detail`、`GET /api/v1/track-map/groups/:group_id/tracks`。`group_id` 来自 `track_route_groups.group_id`，不等同于单条 `track_id`；列表和地图聚合使用 RouteGroup 数量口径，不返回 `user_count` / `track_count`。调整字段、缩放分层、聚合数量口径或 group_id 语义时，同步更新 `docs/api/track-map.md`、`docs/api/route-index.md` 与 `track_map.md`。
 
 **短信登录等级信息**：`POST /api/v1/login/sms` 成功响应会附带 `achievement_level`，由 `LoginHandler` 调用 `AchievementService.GetLevelInfo` 基于当前有效轨迹实时计算；修改登录响应或等级字段时同步更新 `login.md`。
 

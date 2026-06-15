@@ -33,6 +33,7 @@ type Handler struct {
 	companionRepo repository.CompanionRepository
 	analyticsRepo repository.AnalyticsRepository
 	feedbackSvc   *service.FeedbackService
+	routeGroupSvc *service.TrackRouteGroupService
 	// staticRoot 是服务端本地静态资源根目录（通常为 <LogDir>/static）。
 	// 管理后台上传的安装包会落到 <staticRoot>/release/<platform>/ 下，
 	// 并通过 /api/v1/static/release/<platform>/<file> 对外下发。
@@ -51,6 +52,7 @@ func NewHandler(
 	analyticsRepo repository.AnalyticsRepository,
 	userSvc *service.UserService,
 	feedbackSvc *service.FeedbackService,
+	routeGroupSvc *service.TrackRouteGroupService,
 ) *Handler {
 	return &Handler{
 		releaseSvc:    releaseSvc,
@@ -63,6 +65,7 @@ func NewHandler(
 		companionRepo: companionRepo,
 		analyticsRepo: analyticsRepo,
 		feedbackSvc:   feedbackSvc,
+		routeGroupSvc: routeGroupSvc,
 	}
 }
 
@@ -806,6 +809,148 @@ func writeAdminFeedbackError(c *app.RequestContext, err error) {
 	switch {
 	case errors.As(err, &iae),
 		errors.Is(err, service.ErrFeedbackReplyRequired):
+		c.JSON(http.StatusBadRequest, utils.H{"error": err.Error()})
+	case errors.Is(err, repository.ErrNotFound):
+		c.JSON(http.StatusNotFound, utils.H{"error": "not found"})
+	case errors.Is(err, repository.ErrForbidden):
+		c.JSON(http.StatusForbidden, utils.H{"error": "forbidden"})
+	default:
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+	}
+}
+
+// ----- 路线组运营 -----
+
+// ListRouteGroups 处理 GET /admin/api/route-groups
+func (h *Handler) ListRouteGroups(ctx context.Context, c *app.RequestContext) {
+	if h == nil || h.routeGroupSvc == nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "route group service not configured"})
+		return
+	}
+	filter := models.TrackMapQueryFilter{
+		TrackType: strings.TrimSpace(string(c.Query("track_type"))),
+		CityCode:  strings.TrimSpace(string(c.Query("city_code"))),
+		Limit:     parseAdminListLimit(string(c.Query("limit"))),
+	}
+	items, err := h.routeGroupSvc.ListRouteGroups(ctx, filter)
+	if err != nil {
+		writeAdminRouteGroupError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"items": items, "total": len(items)}})
+}
+
+// GetRouteGroup 处理 GET /admin/api/route-groups/:group_id
+func (h *Handler) GetRouteGroup(ctx context.Context, c *app.RequestContext) {
+	if h == nil || h.routeGroupSvc == nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "route group service not configured"})
+		return
+	}
+	detail, err := h.routeGroupSvc.GetRouteGroupDetail(ctx, c.Param("group_id"), parseAdminListLimit(string(c.Query("limit"))))
+	if err != nil {
+		writeAdminRouteGroupError(c, err)
+		return
+	}
+	if h.trackRepo != nil {
+		for _, member := range detail.Members {
+			if member == nil || member.Member == nil {
+				continue
+			}
+			track, err := h.trackRepo.FindByID(ctx, member.Member.TrackID)
+			if err == nil {
+				member.Track = track
+			}
+		}
+	}
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": detail})
+}
+
+type renameRouteGroupBody struct {
+	Name string `json:"name"`
+}
+
+func (h *Handler) RenameRouteGroup(ctx context.Context, c *app.RequestContext) {
+	if h == nil || h.routeGroupSvc == nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "route group service not configured"})
+		return
+	}
+	var body renameRouteGroupBody
+	data, err := c.Body()
+	if err != nil || json.Unmarshal(data, &body) != nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid payload"})
+		return
+	}
+	group, err := h.routeGroupSvc.RenameRouteGroup(ctx, c.Param("group_id"), body.Name)
+	if err != nil {
+		writeAdminRouteGroupError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": group})
+}
+
+type mergeRouteGroupBody struct {
+	SourceGroupID string `json:"source_group_id"`
+}
+
+func (h *Handler) MergeRouteGroup(ctx context.Context, c *app.RequestContext) {
+	if h == nil || h.routeGroupSvc == nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "route group service not configured"})
+		return
+	}
+	var body mergeRouteGroupBody
+	data, err := c.Body()
+	if err != nil || json.Unmarshal(data, &body) != nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid payload"})
+		return
+	}
+	group, err := h.routeGroupSvc.MergeRouteGroups(ctx, c.Param("group_id"), body.SourceGroupID)
+	if err != nil {
+		writeAdminRouteGroupError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": group})
+}
+
+func (h *Handler) RemoveRouteGroupMember(ctx context.Context, c *app.RequestContext) {
+	if h == nil || h.routeGroupSvc == nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "route group service not configured"})
+		return
+	}
+	group, err := h.routeGroupSvc.RemoveRouteGroupMember(ctx, c.Param("group_id"), c.Param("track_id"))
+	if err != nil {
+		writeAdminRouteGroupError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": group})
+}
+
+type setRepresentativeBody struct {
+	TrackID string `json:"track_id"`
+}
+
+func (h *Handler) SetRouteGroupRepresentative(ctx context.Context, c *app.RequestContext) {
+	if h == nil || h.routeGroupSvc == nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "route group service not configured"})
+		return
+	}
+	var body setRepresentativeBody
+	data, err := c.Body()
+	if err != nil || json.Unmarshal(data, &body) != nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid payload"})
+		return
+	}
+	group, err := h.routeGroupSvc.SetRepresentativeTrack(ctx, c.Param("group_id"), body.TrackID)
+	if err != nil {
+		writeAdminRouteGroupError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": group})
+}
+
+func writeAdminRouteGroupError(c *app.RequestContext, err error) {
+	var iae *service.InvalidArgumentError
+	switch {
+	case errors.As(err, &iae):
 		c.JSON(http.StatusBadRequest, utils.H{"error": err.Error()})
 	case errors.Is(err, repository.ErrNotFound):
 		c.JSON(http.StatusNotFound, utils.H{"error": "not found"})
