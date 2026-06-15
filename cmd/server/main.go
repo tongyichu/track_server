@@ -54,9 +54,13 @@ func main() {
 	var achievementRepo repository.AchievementRepository
 	var feedbackRepo repository.FeedbackRepository
 	var analyticsRepo repository.AnalyticsRepository
+	var trackMapRepo repository.TrackMapRepository
 
 	if cfg.UseInMemory {
 		trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo, companionRepo = repository.NewInMemoryRepositories()
+		if memTrackRepo, ok := trackRepo.(*repository.InMemoryTrackRepository); ok {
+			trackMapRepo = repository.NewInMemoryTrackMapRepository(memTrackRepo)
+		}
 		followRepo = repository.NewInMemoryFollowRepository()
 		achievementRepo = repository.NewInMemoryAchievementRepository()
 		feedbackRepo = repository.NewInMemoryFeedbackRepository()
@@ -67,6 +71,9 @@ func main() {
 		if err != nil {
 			log.Printf("failed to open mysql, fallback to memory: %v", err)
 			trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo, companionRepo = repository.NewInMemoryRepositories()
+			if memTrackRepo, ok := trackRepo.(*repository.InMemoryTrackRepository); ok {
+				trackMapRepo = repository.NewInMemoryTrackMapRepository(memTrackRepo)
+			}
 			followRepo = repository.NewInMemoryFollowRepository()
 			achievementRepo = repository.NewInMemoryAchievementRepository()
 			feedbackRepo = repository.NewInMemoryFeedbackRepository()
@@ -75,6 +82,9 @@ func main() {
 			log.Printf("failed to ping mysql, fallback to memory: %v", err)
 			_ = db.Close()
 			trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo, companionRepo = repository.NewInMemoryRepositories()
+			if memTrackRepo, ok := trackRepo.(*repository.InMemoryTrackRepository); ok {
+				trackMapRepo = repository.NewInMemoryTrackMapRepository(memTrackRepo)
+			}
 			followRepo = repository.NewInMemoryFollowRepository()
 			achievementRepo = repository.NewInMemoryAchievementRepository()
 			feedbackRepo = repository.NewInMemoryFeedbackRepository()
@@ -85,6 +95,9 @@ func main() {
 				log.Printf("failed to init mysql schema, fallback to memory: %v", err)
 				_ = db.Close()
 				trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo, companionRepo = repository.NewInMemoryRepositories()
+				if memTrackRepo, ok := trackRepo.(*repository.InMemoryTrackRepository); ok {
+					trackMapRepo = repository.NewInMemoryTrackMapRepository(memTrackRepo)
+				}
 				followRepo = repository.NewInMemoryFollowRepository()
 				achievementRepo = repository.NewInMemoryAchievementRepository()
 				feedbackRepo = repository.NewInMemoryFeedbackRepository()
@@ -94,6 +107,7 @@ func main() {
 					_ = db.Close()
 				}()
 				trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo, companionRepo = tr, ur, cr, lr, nr, ar, cor
+				trackMapRepo = repository.NewMySQLTrackMapRepository(db)
 				followRepo = repository.NewMySQLFollowRepository(db)
 				achievementRepo = repository.NewMySQLAchievementRepository(db)
 				feedbackRepo = repository.NewMySQLFeedbackRepository(db)
@@ -107,6 +121,9 @@ func main() {
 		if err != nil {
 			log.Printf("failed to connect mongo, fallback to memory: %v", err)
 			trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo, companionRepo = repository.NewInMemoryRepositories()
+			if memTrackRepo, ok := trackRepo.(*repository.InMemoryTrackRepository); ok {
+				trackMapRepo = repository.NewInMemoryTrackMapRepository(memTrackRepo)
+			}
 			followRepo = repository.NewInMemoryFollowRepository()
 			achievementRepo = repository.NewInMemoryAchievementRepository()
 			feedbackRepo = repository.NewInMemoryFeedbackRepository()
@@ -123,6 +140,11 @@ func main() {
 			achievementRepo = repository.NewMongoAchievementRepository(db.Collection("user_achievement_rewards"))
 			feedbackRepo = repository.NewMongoFeedbackRepository(db.Collection("user_feedbacks"))
 			analyticsRepo = repository.NewMongoAnalyticsRepository(db.Collection("analytics_sync_summaries"))
+			trackMapRepo = repository.NewMongoTrackMapRepository(
+				db.Collection("track_map_index_jobs"),
+				db.Collection("track_geo_indexes"),
+				db.Collection("tracks"),
+			)
 			companionRepo = repository.NewMongoCompanionRepository(
 				db.Collection("companion_sessions"),
 				db.Collection("companion_session_members"),
@@ -311,6 +333,17 @@ func main() {
 		}
 	}
 
+	var trackMapIndexSvc *service.TrackMapIndexService
+	var trackMapSvc *service.TrackMapService
+	if trackMapRepo != nil && rawTrackCache != nil {
+		trackMapIndexSvc = service.NewTrackMapIndexService(trackMapRepo, trackRepo, rawTrackCache)
+		trackMapSvc = service.NewTrackMapService(trackMapRepo, trackRepo, trackSvc)
+		trackSvc.SetTrackMapIndexService(trackMapIndexSvc)
+		log.Printf("track map services enabled")
+	} else {
+		log.Printf("track map services disabled: repo_configured=%t raw_track_cache_configured=%t", trackMapRepo != nil, rawTrackCache != nil)
+	}
+
 	var h *server.Hertz
 	if cfg.EnableTLS {
 		cert, err := tls.LoadX509KeyPair(cfg.TLSCertFile, cfg.TLSKeyFile)
@@ -340,6 +373,7 @@ func main() {
 
 	handler.RegisterRoutes(h, handler.Deps{
 		TrackService:               trackSvc,
+		TrackMapService:            trackMapSvc,
 		UserService:                userSvc,
 		LoginService:               loginSvc,
 		OSSTokenService:            ossTokenSvc,
@@ -372,6 +406,9 @@ func main() {
 		danmakuJob := jobs.NewDanmakuCleanup(companionRepo, cfg.DanmakuRetentionDays, cfg.DanmakuCleanupCron)
 		companionAutoCloseJob := jobs.NewCompanionAutoClose(companionSvc)
 		schedulerJobs := []scheduler.Job{danmakuJob, companionAutoCloseJob}
+		if trackMapIndexSvc != nil {
+			schedulerJobs = append(schedulerJobs, jobs.NewTrackMapIndex(trackMapIndexSvc, cfg.TrackMapIndexCron))
+		}
 		if analyticsSvc != nil && cfg.AnalyticsEnabled {
 			schedulerJobs = append(schedulerJobs, jobs.NewAnalyticsSync(analyticsSvc, cfg.AnalyticsSyncCron))
 		}

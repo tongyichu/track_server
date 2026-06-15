@@ -154,6 +154,33 @@ func (s *AssetCacheService) EnsureCached(ctx context.Context, userID int64, key,
 	return s.LocalURL(key, ext)
 }
 
+// EnsureCachedFile ensures key is cached locally and returns its absolute file path.
+// It is intended for server-side background jobs that need to read the downloaded
+// object, such as track map index building. Downloads still go through the
+// injected OSSObjectDownloader, which for OSS must use the internal endpoint.
+func (s *AssetCacheService) EnsureCachedFile(ctx context.Context, userID int64, key, sourceURL string) (string, error) {
+	if s == nil {
+		return "", errors.New("asset cache is nil")
+	}
+	if key == "" {
+		return "", errors.New("key is required")
+	}
+	if ext, ok := s.Exists(key); ok {
+		return s.localPath(key, ext), nil
+	}
+	if sourceURL == "" {
+		return "", errors.New("sourceURL is empty")
+	}
+	if s.downloader == nil {
+		return "", errors.New("asset cache downloader is not configured")
+	}
+	ext := pickExt(sourceURL, s.allowedExts, s.defaultExt)
+	if err := s.downloadOnce(ctx, userID, key, ext, sourceURL); err != nil {
+		return "", err
+	}
+	return s.localPath(key, ext), nil
+}
+
 // PrefetchAsync 在后台预热资源，失败静默。
 func (s *AssetCacheService) PrefetchAsync(userID int64, key, sourceURL string) {
 	if key == "" || sourceURL == "" || s.downloader == nil {

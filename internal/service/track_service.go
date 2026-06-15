@@ -31,6 +31,7 @@ type TrackService struct {
 	avatarCache     *AssetCacheService
 	rawTrackCache   *AssetCacheService
 	trackTypes      []string
+	trackMapIndex   *TrackMapIndexService
 }
 
 const (
@@ -438,6 +439,11 @@ func (s *TrackService) SetRawTrackCache(cache *AssetCacheService) {
 	s.rawTrackCache = cache
 }
 
+// SetTrackMapIndexService injects the async track map index service.
+func (s *TrackService) SetTrackMapIndexService(indexSvc *TrackMapIndexService) {
+	s.trackMapIndex = indexSvc
+}
+
 // CreateTrack creates a new track for a user.
 func (s *TrackService) CreateTrack(ctx context.Context, userID int64, input CreateTrackInput) (*models.Track, error) {
 	if userID <= 0 {
@@ -534,6 +540,7 @@ func (s *TrackService) CreateTrack(ctx context.Context, userID int64, input Crea
 	if err := s.tracks.Create(ctx, track); err != nil {
 		return nil, err
 	}
+	s.enqueueTrackMapIndex(ctx, track)
 	// 异步预热截图到服务端本地缓存目录，供 ListRecommend 等接口后续直接下发本地 URL。
 	// 失败不影响主流程，且仅在配置了缓存服务时触发。
 	if s.screenshotCache != nil && track.TrackScreenshotURL != "" {
@@ -561,6 +568,15 @@ func (s *TrackService) CreateTrack(ctx context.Context, userID int64, input Crea
 		track.EarnedRewards = rewards
 	}
 	return track, nil
+}
+
+func (s *TrackService) enqueueTrackMapIndex(ctx context.Context, track *models.Track) {
+	if s == nil || s.trackMapIndex == nil || track == nil {
+		return
+	}
+	if err := s.trackMapIndex.EnqueueTrackIndexIfEligible(ctx, track); err != nil {
+		log.Printf("[TrackMapIndex] enqueue_failed track_id=%s user_id=%d err=%v", track.ID, track.UserID, err)
+	}
 }
 
 func (s *TrackService) ensureNoActiveCompanionSession(ctx context.Context, userID int64) error {
@@ -1185,9 +1201,11 @@ func (s *TrackService) MarkUploadedToCloud(ctx context.Context, trackID string) 
 		return err
 	}
 	if s.achievements != nil {
-		_, err := s.achievements.SettleTrackCompleted(ctx, track)
-		return err
+		if _, err := s.achievements.SettleTrackCompleted(ctx, track); err != nil {
+			return err
+		}
 	}
+	s.enqueueTrackMapIndex(ctx, track)
 	return nil
 }
 
@@ -1308,6 +1326,9 @@ func (s *TrackService) UpdateTrackInfo(ctx context.Context, userID int64, trackI
 				return nil, err
 			}
 			track.EarnedRewards = rewards
+		}
+		if !track.IsRunning && (updatedRaw || patch.CityCode != nil || patch.TrackType != nil || patch.CoordinateSystem != nil) {
+			s.enqueueTrackMapIndex(ctx, track)
 		}
 	}
 

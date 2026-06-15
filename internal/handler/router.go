@@ -13,6 +13,7 @@ import (
 // Deps groups all handler dependencies.
 type Deps struct {
 	TrackService               *service.TrackService
+	TrackMapService            *service.TrackMapService
 	UserService                *service.UserService
 	LoginService               *service.LoginService
 	OSSTokenService            *service.OSSTokenService
@@ -41,6 +42,7 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 	// 注意：静态资源下载必须走 auth group，保证鉴权逻辑与其他接口一致。
 
 	trackHandler := NewTrackHandler(deps.TrackService)
+	trackMapHandler := NewTrackMapHandler(deps.TrackMapService)
 	userHandler := NewUserHandler(deps.UserService)
 	loginHandler := NewLoginHandler(deps.LoginService, deps.TokenBlacklist, deps.AchievementService)
 	ossHandler := NewOSSHandler(deps.OSSTokenService)
@@ -180,6 +182,12 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 	auth.POST("/track/:track_id/navigation/report", trackHandler.ReportTrackNavigation)
 	auth.GET("/track/:track_id/detail", trackHandler.GetTrackDetail)
 	auth.GET("/track/:track_id/summary", trackHandler.GetTrackDetail)
+	if deps.TrackMapService != nil {
+		auth.GET("/track-map/view", trackMapHandler.View)
+		auth.GET("/track-map/groups", trackMapHandler.ListGroups)
+		auth.GET("/track-map/groups/:group_id/detail", trackMapHandler.GetGroupDetail)
+		auth.GET("/track-map/groups/:group_id/tracks", trackMapHandler.ListGroupTracks)
+	}
 
 	// achievement center
 	auth.GET("/achievement/summary", achievementHandler.Summary)

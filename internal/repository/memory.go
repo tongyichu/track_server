@@ -3,6 +3,8 @@ package repository
 import (
 	"context"
 	"errors"
+	"fmt"
+	"math"
 	"sort"
 	"sync"
 	"time"
@@ -39,6 +41,14 @@ type InMemoryAchievementRepository struct {
 	rewards map[int64]map[string]*models.UserAchievementReward
 }
 
+// InMemoryTrackMapRepository stores async map index jobs and geo indexes in memory.
+type InMemoryTrackMapRepository struct {
+	mu      sync.RWMutex
+	tracks  *InMemoryTrackRepository
+	jobs    map[string]*models.TrackMapIndexJob
+	indexes map[string]*models.TrackGeoIndex
+}
+
 type InMemoryFeedbackRepository struct {
 	mu        sync.RWMutex
 	nextID    int64
@@ -53,6 +63,14 @@ func NewInMemoryAchievementRepository() *InMemoryAchievementRepository {
 	return &InMemoryAchievementRepository{
 		nextID:  1,
 		rewards: make(map[int64]map[string]*models.UserAchievementReward),
+	}
+}
+
+func NewInMemoryTrackMapRepository(tracks *InMemoryTrackRepository) *InMemoryTrackMapRepository {
+	return &InMemoryTrackMapRepository{
+		tracks:  tracks,
+		jobs:    make(map[string]*models.TrackMapIndexJob),
+		indexes: make(map[string]*models.TrackGeoIndex),
 	}
 }
 
@@ -107,7 +125,8 @@ func (r *InMemoryTrackRepository) Create(_ context.Context, t *models.Track) err
 		t.EndTime = t.StartTime
 	}
 	t.UpdatedAt = t.CreatedAt
-	r.tracks[t.ID] = t
+	clone := *t
+	r.tracks[t.ID] = &clone
 	return nil
 }
 
@@ -119,7 +138,8 @@ func (r *InMemoryTrackRepository) Update(_ context.Context, t *models.Track) err
 		return ErrNotFound
 	}
 	t.UpdatedAt = time.Now()
-	r.tracks[t.ID] = t
+	clone := *t
+	r.tracks[t.ID] = &clone
 	return nil
 }
 
@@ -131,7 +151,8 @@ func (r *InMemoryTrackRepository) FindByID(_ context.Context, id string) (*model
 	if !ok {
 		return nil, ErrNotFound
 	}
-	return t, nil
+	clone := *t
+	return &clone, nil
 }
 
 // FindRunningByUserID finds the running track of a user.
@@ -1276,3 +1297,350 @@ func (r *InMemoryAppReleaseRepository) Delete(_ context.Context, id int64) error
 }
 
 func duplicateContainsIgnoreCaseShim() {}
+
+func (r *InMemoryTrackMapRepository) EnqueueIndexJob(_ context.Context, trackID string, runAt time.Time) error {
+	if trackID == "" {
+		return errors.New("track id is required")
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	now := time.Now()
+	if existing := r.jobs[trackID]; existing != nil {
+		if existing.Status == models.TrackMapIndexJobSucceeded || existing.Status == models.TrackMapIndexJobProcessing {
+			return nil
+		}
+		existing.Status = models.TrackMapIndexJobPending
+		existing.NextRunAt = runAt
+		existing.UpdatedAt = now
+		return nil
+	}
+	r.jobs[trackID] = &models.TrackMapIndexJob{
+		TrackID:   trackID,
+		Status:    models.TrackMapIndexJobPending,
+		NextRunAt: runAt,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	return nil
+}
+
+func (r *InMemoryTrackMapRepository) ClaimPendingIndexJobs(_ context.Context, workerID string, now time.Time, limit int) ([]*models.TrackMapIndexJob, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	jobs := make([]*models.TrackMapIndexJob, 0, limit)
+	for _, job := range r.jobs {
+		if len(jobs) >= limit {
+			break
+		}
+		staleProcessing := job != nil &&
+			job.Status == models.TrackMapIndexJobProcessing &&
+			!job.LockedAt.IsZero() &&
+			job.LockedAt.Add(30*time.Minute).Before(now)
+		if job == nil || (job.Status != models.TrackMapIndexJobPending && !staleProcessing) {
+			continue
+		}
+		if job.Status == models.TrackMapIndexJobPending && !job.NextRunAt.IsZero() && job.NextRunAt.After(now) {
+			continue
+		}
+		job.Status = models.TrackMapIndexJobProcessing
+		job.LockedAt = now
+		job.LockedBy = workerID
+		job.UpdatedAt = now
+		clone := *job
+		jobs = append(jobs, &clone)
+	}
+	sort.SliceStable(jobs, func(i, j int) bool {
+		return jobs[i].CreatedAt.Before(jobs[j].CreatedAt)
+	})
+	return jobs, nil
+}
+
+func (r *InMemoryTrackMapRepository) MarkIndexJobSucceeded(_ context.Context, trackID string, now time.Time) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	job := r.jobs[trackID]
+	if job == nil {
+		return ErrNotFound
+	}
+	job.Status = models.TrackMapIndexJobSucceeded
+	job.LastError = ""
+	job.SucceededAt = now
+	job.UpdatedAt = now
+	return nil
+}
+
+func (r *InMemoryTrackMapRepository) MarkIndexJobFailed(_ context.Context, trackID, errMsg string, nextRunAt time.Time, now time.Time) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	job := r.jobs[trackID]
+	if job == nil {
+		return ErrNotFound
+	}
+	job.Status = models.TrackMapIndexJobPending
+	job.Attempts++
+	job.LastError = errMsg
+	job.LastFailedAt = now
+	job.NextRunAt = nextRunAt
+	job.UpdatedAt = now
+	return nil
+}
+
+func (r *InMemoryTrackMapRepository) UpsertTrackGeoIndex(_ context.Context, index *models.TrackGeoIndex) error {
+	if index == nil || index.TrackID == "" {
+		return errors.New("track geo index is required")
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	now := time.Now()
+	clone := *index
+	if clone.CreatedAt.IsZero() {
+		clone.CreatedAt = now
+	}
+	clone.UpdatedAt = now
+	r.indexes[index.TrackID] = &clone
+	return nil
+}
+
+func (r *InMemoryTrackMapRepository) HasTrackGeoIndex(_ context.Context, trackID string) (bool, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	_, ok := r.indexes[trackID]
+	return ok, nil
+}
+
+func (r *InMemoryTrackMapRepository) ListCompletedTracksMissingGeoIndex(_ context.Context, limit int) ([]*models.Track, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	if r.tracks == nil {
+		return nil, nil
+	}
+	r.tracks.mu.RLock()
+	defer r.tracks.mu.RUnlock()
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	items := make([]*models.Track, 0, limit)
+	for _, track := range r.tracks.tracks {
+		if len(items) >= limit {
+			break
+		}
+		if track == nil || track.IsRunning || track.Status != models.TrackStatusNormal || track.RawTrackURL == "" {
+			continue
+		}
+		if _, ok := r.indexes[track.ID]; ok {
+			continue
+		}
+		clone := *track
+		items = append(items, &clone)
+	}
+	sort.SliceStable(items, func(i, j int) bool {
+		return items[i].CreatedAt.Before(items[j].CreatedAt)
+	})
+	return items, nil
+}
+
+func (r *InMemoryTrackMapRepository) FindTrackGeoIndex(_ context.Context, trackID string) (*models.TrackGeoIndex, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	item := r.indexes[trackID]
+	if item == nil {
+		return nil, ErrNotFound
+	}
+	clone := cloneTrackGeoIndex(item)
+	return clone, nil
+}
+
+func (r *InMemoryTrackMapRepository) ListTrackGeoIndexes(_ context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackGeoIndex, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	limit := normalizeTrackMapQueryLimit(filter.Limit)
+	items := make([]*models.TrackGeoIndex, 0, limit)
+	for _, index := range r.indexes {
+		if !trackGeoIndexMatchesFilter(index, filter) {
+			continue
+		}
+		items = append(items, cloneTrackGeoIndex(index))
+		if len(items) >= limit {
+			break
+		}
+	}
+	sort.SliceStable(items, func(i, j int) bool {
+		return items[i].CreatedAt.After(items[j].CreatedAt)
+	})
+	return items, nil
+}
+
+func (r *InMemoryTrackMapRepository) CountTrackGeoIndexesByCity(_ context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackMapClusterItem, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	groups := make(map[string]*trackMapClusterAcc)
+	for _, index := range r.indexes {
+		if !trackGeoIndexMatchesFilter(index, filter) {
+			continue
+		}
+		key := index.CityCode
+		if key == "" {
+			key = "unknown"
+		}
+		a := groups[key]
+		if a == nil {
+			a = &trackMapClusterAcc{}
+			groups[key] = a
+		}
+		a.add(index)
+	}
+	items := make([]*models.TrackMapClusterItem, 0, len(groups))
+	for cityCode, a := range groups {
+		items = append(items, a.item("city_cluster", "", cityCode, filter.TrackType))
+	}
+	sort.SliceStable(items, func(i, j int) bool {
+		return items[i].RouteCount > items[j].RouteCount
+	})
+	limit := normalizeTrackMapQueryLimit(filter.Limit)
+	if len(items) > limit {
+		items = items[:limit]
+	}
+	return items, nil
+}
+
+func (r *InMemoryTrackMapRepository) CountTrackGeoIndexesByArea(_ context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackMapClusterItem, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	groups := make(map[string]*trackMapClusterAcc)
+	for _, index := range r.indexes {
+		if !trackGeoIndexMatchesFilter(index, filter) {
+			continue
+		}
+		key := trackMapAreaClusterKey(index.CenterLat, index.CenterLng)
+		a := groups[key]
+		if a == nil {
+			a = &trackMapClusterAcc{}
+			groups[key] = a
+		}
+		a.add(index)
+	}
+	items := make([]*models.TrackMapClusterItem, 0, len(groups))
+	for key, a := range groups {
+		items = append(items, a.item("area_cluster", key, "", filter.TrackType))
+	}
+	sort.SliceStable(items, func(i, j int) bool {
+		return items[i].RouteCount > items[j].RouteCount
+	})
+	limit := normalizeTrackMapQueryLimit(filter.Limit)
+	if len(items) > limit {
+		items = items[:limit]
+	}
+	return items, nil
+}
+
+func cloneTrackGeoIndex(index *models.TrackGeoIndex) *models.TrackGeoIndex {
+	if index == nil {
+		return nil
+	}
+	clone := *index
+	clone.SimplifiedPolyline = append([]models.TrackPoint(nil), index.SimplifiedPolyline...)
+	return &clone
+}
+
+func trackGeoIndexMatchesFilter(index *models.TrackGeoIndex, filter models.TrackMapQueryFilter) bool {
+	if index == nil {
+		return false
+	}
+	if filter.TrackType != "" && index.TrackType != filter.TrackType {
+		return false
+	}
+	if filter.CityCode != "" && index.CityCode != filter.CityCode {
+		return false
+	}
+	if filter.BBox != nil && !geoIndexIntersectsBBox(index, *filter.BBox) {
+		return false
+	}
+	if filter.Center != nil && filter.RadiusM > 0 {
+		if haversineMeters(filter.Center.Latitude, filter.Center.Longitude, index.CenterLat, index.CenterLng) > float64(filter.RadiusM) {
+			return false
+		}
+	}
+	return true
+}
+
+func geoIndexIntersectsBBox(index *models.TrackGeoIndex, bbox models.TrackMapBBox) bool {
+	return index.MaxLat >= bbox.MinLatitude &&
+		index.MinLat <= bbox.MaxLatitude &&
+		index.MaxLng >= bbox.MinLongitude &&
+		index.MinLng <= bbox.MaxLongitude
+}
+
+func trackMapAreaClusterKey(lat, lng float64) string {
+	return fmt.Sprintf("cell_%.1f_%.1f", lat, lng)
+}
+
+type trackMapClusterAcc struct {
+	count       int64
+	sumLat      float64
+	sumLng      float64
+	minLat      float64
+	minLng      float64
+	maxLat      float64
+	maxLng      float64
+	initialized bool
+}
+
+func (a *trackMapClusterAcc) add(index *models.TrackGeoIndex) {
+	if index == nil {
+		return
+	}
+	a.count++
+	a.sumLat += index.CenterLat
+	a.sumLng += index.CenterLng
+	if !a.initialized {
+		a.minLat, a.minLng, a.maxLat, a.maxLng = index.MinLat, index.MinLng, index.MaxLat, index.MaxLng
+		a.initialized = true
+		return
+	}
+	if index.MinLat < a.minLat {
+		a.minLat = index.MinLat
+	}
+	if index.MinLng < a.minLng {
+		a.minLng = index.MinLng
+	}
+	if index.MaxLat > a.maxLat {
+		a.maxLat = index.MaxLat
+	}
+	if index.MaxLng > a.maxLng {
+		a.maxLng = index.MaxLng
+	}
+}
+
+func (a *trackMapClusterAcc) item(kind, clusterID, cityCode, trackType string) *models.TrackMapClusterItem {
+	item := &models.TrackMapClusterItem{
+		Type:       kind,
+		ClusterID:  clusterID,
+		CityCode:   cityCode,
+		TrackType:  trackType,
+		RouteCount: a.count,
+		BBox: models.TrackMapBBox{
+			MinLatitude:  a.minLat,
+			MinLongitude: a.minLng,
+			MaxLatitude:  a.maxLat,
+			MaxLongitude: a.maxLng,
+		},
+	}
+	if a.count > 0 {
+		item.Center = models.TrackMapPoint{Latitude: a.sumLat / float64(a.count), Longitude: a.sumLng / float64(a.count)}
+	}
+	return item
+}
+
+func haversineMeters(lat1, lng1, lat2, lng2 float64) float64 {
+	const earthRadiusM = 6371000
+	toRad := func(v float64) float64 { return v * math.Pi / 180 }
+	dLat := toRad(lat2 - lat1)
+	dLng := toRad(lng2 - lng1)
+	a := math.Sin(dLat/2)*math.Sin(dLat/2) +
+		math.Cos(toRad(lat1))*math.Cos(toRad(lat2))*math.Sin(dLng/2)*math.Sin(dLng/2)
+	return 2 * earthRadiusM * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
+}

@@ -183,6 +183,128 @@ type TrackMap struct {
 	Points  []TrackPoint `json:"points"`   // Points 是用于地图绘制的轨迹点集合。
 }
 
+// TrackMapIndexJobStatus represents the lifecycle of an async map index job.
+type TrackMapIndexJobStatus string
+
+const (
+	TrackMapIndexJobPending    TrackMapIndexJobStatus = "pending"
+	TrackMapIndexJobProcessing TrackMapIndexJobStatus = "processing"
+	TrackMapIndexJobSucceeded  TrackMapIndexJobStatus = "succeeded"
+	TrackMapIndexJobFailed     TrackMapIndexJobStatus = "failed"
+)
+
+// TrackMapIndexJob records async work needed to build map indexes for a track.
+type TrackMapIndexJob struct {
+	TrackID      string                 `json:"track_id" bson:"track_id"`
+	Status       TrackMapIndexJobStatus `json:"status" bson:"status"`
+	Attempts     int                    `json:"attempts" bson:"attempts"`
+	LastError    string                 `json:"last_error,omitempty" bson:"last_error"`
+	NextRunAt    time.Time              `json:"next_run_at" bson:"next_run_at"`
+	LockedAt     time.Time              `json:"locked_at,omitempty" bson:"locked_at"`
+	LockedBy     string                 `json:"locked_by,omitempty" bson:"locked_by"`
+	CreatedAt    time.Time              `json:"created_at" bson:"created_at"`
+	UpdatedAt    time.Time              `json:"updated_at" bson:"updated_at"`
+	SucceededAt  time.Time              `json:"succeeded_at,omitempty" bson:"succeeded_at"`
+	LastFailedAt time.Time              `json:"last_failed_at,omitempty" bson:"last_failed_at"`
+}
+
+// TrackGeoIndex stores the server-side spatial index derived from raw track points.
+type TrackGeoIndex struct {
+	TrackID                string       `json:"track_id" bson:"track_id"`
+	UserID                 int64        `json:"user_id" bson:"user_id"`
+	CityCode               string       `json:"city_code" bson:"city_code"`
+	TrackType              string       `json:"track_type" bson:"track_type"`
+	CoordinateSystem       string       `json:"coordinate_system" bson:"coordinate_system"`
+	StartLat               float64      `json:"start_lat" bson:"start_lat"`
+	StartLng               float64      `json:"start_lng" bson:"start_lng"`
+	EndLat                 float64      `json:"end_lat" bson:"end_lat"`
+	EndLng                 float64      `json:"end_lng" bson:"end_lng"`
+	CenterLat              float64      `json:"center_lat" bson:"center_lat"`
+	CenterLng              float64      `json:"center_lng" bson:"center_lng"`
+	MinLat                 float64      `json:"min_lat" bson:"min_lat"`
+	MinLng                 float64      `json:"min_lng" bson:"min_lng"`
+	MaxLat                 float64      `json:"max_lat" bson:"max_lat"`
+	MaxLng                 float64      `json:"max_lng" bson:"max_lng"`
+	Distance               float64      `json:"distance" bson:"distance"`
+	PointCount             int          `json:"point_count" bson:"point_count"`
+	SimplifiedPolyline     []TrackPoint `json:"simplified_polyline,omitempty" bson:"simplified_polyline"`
+	SimplifiedPolylineJSON string       `json:"-" bson:"simplified_polyline_json"`
+	CreatedAt              time.Time    `json:"created_at" bson:"created_at"`
+	UpdatedAt              time.Time    `json:"updated_at" bson:"updated_at"`
+}
+
+// TrackMapBBox represents a map bounding box.
+type TrackMapBBox struct {
+	MinLatitude  float64 `json:"min_latitude" bson:"min_latitude"`
+	MinLongitude float64 `json:"min_longitude" bson:"min_longitude"`
+	MaxLatitude  float64 `json:"max_latitude" bson:"max_latitude"`
+	MaxLongitude float64 `json:"max_longitude" bson:"max_longitude"`
+}
+
+// TrackMapPoint represents a map point.
+type TrackMapPoint struct {
+	Latitude  float64 `json:"latitude" bson:"latitude"`
+	Longitude float64 `json:"longitude" bson:"longitude"`
+}
+
+// TrackMapQueryFilter is used by repository map queries.
+type TrackMapQueryFilter struct {
+	TrackType string
+	CityCode  string
+	BBox      *TrackMapBBox
+	Center    *TrackMapPoint
+	RadiusM   int
+	Limit     int
+}
+
+// TrackMapCoverTrack is a lightweight representative track payload.
+type TrackMapCoverTrack struct {
+	TrackID            string `json:"track_id"`
+	TrackScreenshotURL string `json:"track_screenshot_url"`
+}
+
+// TrackMapRouteGroupItem is the route-level item returned to map clients.
+type TrackMapRouteGroupItem struct {
+	Type                   string              `json:"type"`
+	GroupID                string              `json:"group_id"`
+	Name                   string              `json:"name"`
+	CityCode               string              `json:"city_code"`
+	CityName               string              `json:"city_name"`
+	TrackType              string              `json:"track_type"`
+	CoordinateSystem       string              `json:"coordinate_system"`
+	Center                 TrackMapPoint       `json:"center"`
+	BBox                   TrackMapBBox        `json:"bbox"`
+	RepresentativePolyline []TrackMapPoint     `json:"representative_polyline"`
+	CoverTrack             *TrackMapCoverTrack `json:"cover_track,omitempty"`
+	RawTrackID             string              `json:"-"`
+	SourceGeoIndex         *TrackGeoIndex      `json:"-"`
+	Track                  *Track              `json:"-"`
+}
+
+// TrackMapClusterItem is the area/city aggregate item returned to map clients.
+type TrackMapClusterItem struct {
+	Type       string        `json:"type"`
+	ClusterID  string        `json:"cluster_id,omitempty"`
+	CityCode   string        `json:"city_code,omitempty"`
+	CityName   string        `json:"city_name,omitempty"`
+	TrackType  string        `json:"track_type"`
+	Center     TrackMapPoint `json:"center"`
+	BBox       TrackMapBBox  `json:"bbox"`
+	RouteCount int64         `json:"route_count"`
+}
+
+// TrackMapViewResponse is the main map viewport response.
+type TrackMapViewResponse struct {
+	ViewLevel        string      `json:"view_level"`
+	CoordinateSystem string      `json:"coordinate_system"`
+	Items            interface{} `json:"items"`
+}
+
+// TrackMapRouteGroupList is the response for direct route group listing.
+type TrackMapRouteGroupList struct {
+	Items []*TrackMapRouteGroupItem `json:"items"`
+}
+
 // TrackUserStats 是用户维度的轨迹统计数据。
 type TrackUserStats struct {
 	TotalDistance float64 `json:"total_distance" bson:"total_distance"` // TotalDistance 是总里程，单位米。

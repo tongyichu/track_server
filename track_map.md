@@ -1,7 +1,7 @@
 # 首页地图模式与路线发现能力方案
 
 > 面向客户端、服务端和产品协作使用。
-> 本文是功能设计与接口草案，具体字段以最终落地后的 `track_api.md` 和代码实现为准。
+> 本文是功能设计与实现说明；客户端 HTTP 接口以 `docs/api/track-map.md` 和代码实现为准。
 
 ## 1. 背景与目标
 
@@ -87,6 +87,8 @@
 
 RouteGroup 必须归属于明确的运动类型。同一地理路线在不同运动类型下应拆成不同 RouteGroup，例如“西湖环线徒步路线”和“西湖环线骑行路线”不能合并。
 
+当前 MVP 已实现客户端 HTTP 接口，但还没有正式落地 `track_route_groups` 聚合表；服务端先把每条已构建 `track_geo_indexes` 的公开完成轨迹作为一个路线组入口，`group_id` 等于 `track_id`。后续切换到真正 RouteGroup 聚合时，客户端接口形状保持不变。
+
 ## 3. 运动类型分类约束
 
 首页地图模式的一级过滤维度是运动类型。
@@ -160,11 +162,22 @@ RouteGroup 必须归属于明确的运动类型。同一地理路线在不同运
 
 地图上展示的是路线入口，不是单个用户轨迹。
 
-建议展示形式：
+地图展示应随缩放级别变化：
 
-- 低缩放级别：展示带运动类型的路线 marker，例如“麦理浩径徒步”。
-- 中高缩放级别：展示代表路线折线 + 名称 marker。
-- 点击 marker 或折线：打开路线详情半屏卡片。
+- 默认进入 / 高缩放级别：展示具体 RouteGroup，例如“麦理浩径徒步路线”。
+- 中等缩放级别：展示区域聚合气泡，例如“18 条路线”。
+- 低缩放级别：展示城市聚合气泡，例如“香港 42 条路线”。
+- 点击城市气泡：地图放大到该城市。
+- 点击区域气泡：地图放大到该区域。
+- 点击 RouteGroup marker 或折线：打开路线详情半屏卡片。
+
+这里的“路线数量”指 RouteGroup 数量，不是用户数，也不是用户上传的 Track 数量。该口径表达的是“这个区域有多少条可发现路线”，不会暴露冷启动阶段具体有几个人走过。
+
+具体 RouteGroup 展示建议：
+
+- marker / 路线卡片需要体现运动类型，例如“麦理浩径徒步”。
+- 地图放大后展示代表路线折线 + 名称 marker。
+- 路线折线和 marker 可按运动类型使用不同图标或颜色。
 
 RouteGroup 列表不展示人数与轨迹数量，文案使用路线视角：
 
@@ -178,7 +191,29 @@ RouteGroup 列表不展示人数与轨迹数量，文案使用路线视角：
 - “2 条轨迹”
 - “热度 3”
 
-### 4.3 城市模式
+### 4.3 缩放分层策略
+
+客户端每次地图拖动或缩放后，建议以当前地图视野查询数据，而不是只按固定 10 公里半径查询。
+
+推荐交互：
+
+1. 首次进入地图模式：用用户当前位置查询附近 10 公里，展示具体 RouteGroup。
+2. 用户拖动地图：传当前 `bbox + zoom + track_type` 给服务端。
+3. 用户缩小地图：服务端根据 zoom 返回区域聚合或城市聚合。
+4. 用户放大地图：服务端返回更具体的 RouteGroup。
+5. 客户端对拖动/缩放请求做 300-500ms debounce，避免频繁请求。
+
+推荐分层：
+
+| 地图状态 | 服务端返回 | 客户端展示 |
+| --- | --- | --- |
+| 默认进入 / 放大 | 附近 10km 或当前 bbox 内的 RouteGroup | 具体路线 marker / 折线 |
+| 缩小到区域级 | 网格或区域聚合数据 | 聚合气泡，例如“18 条路线” |
+| 继续缩小到城市级 | 城市路线数量 | 城市气泡，例如“香港 42 条路线” |
+
+具体 zoom 阈值由客户端地图 SDK 和产品体验调试决定。服务端也可以根据 `bbox` 尺寸兜底判断返回粒度，避免不同平台 zoom 语义不一致。
+
+### 4.4 城市模式
 
 用户可以切换城市。
 
@@ -192,7 +227,7 @@ RouteGroup 列表不展示人数与轨迹数量，文案使用路线视角：
 这里还没有可展示的路线
 ```
 
-### 4.4 路线详情与具体轨迹列表
+### 4.5 路线详情与具体轨迹列表
 
 用户点击 RouteGroup 后：
 
@@ -203,15 +238,163 @@ RouteGroup 列表不展示人数与轨迹数量，文案使用路线视角：
 
 第一版详情也可以不展示轨迹数量，只展示“相关轨迹”。
 
-## 5. 接口草案
+## 5. 客户端接口
 
-所有接口建议放在 `/api/v1` 的 auth 分组下，需要 JWT。
+所有接口放在 `/api/v1` 的 auth 分组下，需要 JWT；完整协议见 `docs/api/track-map.md`。
 
-### 5.1 查询地图路线组
+### 5.1 查询地图视野数据
+
+```http
+GET /api/v1/track-map/view
+```
+
+用于地图模式的主查询接口。客户端传当前地图视野和缩放级别，服务端根据视野大小返回不同粒度的数据。
+
+首次进入时，客户端可以传用户当前位置：
+
+```text
+latitude=22.3000
+longitude=114.1700
+radius_m=10000
+track_type=徒步
+```
+
+地图拖动或缩放后，客户端传当前视野：
+
+```text
+bbox=114.1000,22.2500,114.3500,22.4500
+zoom=12
+track_type=徒步
+```
+
+参数：
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `bbox` | string | 地图视野模式必填 | 当前地图视野，格式 `minLng,minLat,maxLng,maxLat` |
+| `zoom` | number | 否 | 地图缩放级别，用于判断返回粒度 |
+| `latitude` | number | 首次附近模式必填 | 用户当前位置纬度 |
+| `longitude` | number | 首次附近模式必填 | 用户当前位置经度 |
+| `radius_m` | int | 否 | 半径，默认 10000 |
+| `city_code` | string | 否 | 城市 Code，可用于城市筛选或兜底 |
+| `track_type` | string | 否 | 运动类型，不传时默认 `徒步` |
+| `limit` | int | 否 | 默认 100 |
+
+服务端返回的 `view_level` 决定客户端展示方式：
+
+| `view_level` | 含义 | 客户端展示 |
+| --- | --- | --- |
+| `route` | 具体路线组 | RouteGroup marker / 折线 |
+| `area` | 区域聚合 | 区域聚合气泡 |
+| `city` | 城市聚合 | 城市聚合气泡 |
+
+具体路线组响应示例：
+
+```json
+{
+  "view_level": "route",
+  "coordinate_system": "GCJ02",
+  "items": [
+    {
+      "type": "route_group",
+      "group_id": "rg_810000_hiking_000001",
+      "name": "麦理浩径徒步路线",
+      "city_code": "810000",
+      "city_name": "香港",
+      "track_type": "徒步",
+      "center": {
+        "latitude": 22.3942,
+        "longitude": 114.2781
+      },
+      "bbox": {
+        "min_latitude": 22.3541,
+        "min_longitude": 114.2098,
+        "max_latitude": 22.4320,
+        "max_longitude": 114.3652
+      },
+      "representative_polyline": [
+        { "latitude": 22.3541, "longitude": 114.2098 },
+        { "latitude": 22.3712, "longitude": 114.2481 },
+        { "latitude": 22.3942, "longitude": 114.2781 }
+      ],
+      "cover_track": {
+        "track_id": "NO.00000001",
+        "track_screenshot_url": "/api/v1/static/screenshots/NO.00000001.jpg"
+      }
+    }
+  ]
+}
+```
+
+区域聚合响应示例：
+
+```json
+{
+  "view_level": "area",
+  "coordinate_system": "GCJ02",
+  "items": [
+    {
+      "type": "area_cluster",
+      "cluster_id": "cell_810000_11420_2235",
+      "track_type": "徒步",
+      "center": {
+        "latitude": 22.3500,
+        "longitude": 114.2000
+      },
+      "bbox": {
+        "min_latitude": 22.3000,
+        "min_longitude": 114.1500,
+        "max_latitude": 22.4000,
+        "max_longitude": 114.2500
+      },
+      "route_count": 18
+    }
+  ]
+}
+```
+
+城市聚合响应示例：
+
+```json
+{
+  "view_level": "city",
+  "coordinate_system": "GCJ02",
+  "items": [
+    {
+      "type": "city_cluster",
+      "city_code": "810000",
+      "city_name": "香港",
+      "track_type": "徒步",
+      "center": {
+        "latitude": 22.3193,
+        "longitude": 114.1694
+      },
+      "bbox": {
+        "min_latitude": 22.1435,
+        "min_longitude": 113.8257,
+        "max_latitude": 22.5619,
+        "max_longitude": 114.4295
+      },
+      "route_count": 42
+    }
+  ]
+}
+```
+
+说明：
+
+- `route_count` 表示符合当前 `track_type` 的 RouteGroup 数量。
+- `route_count` 不表示用户数，也不表示具体 Track 数量。
+- 客户端点击 `city_cluster` 或 `area_cluster` 后，只需要放大地图并重新请求 `/track-map/view`。
+- 客户端点击 `route_group` 后，请求路线组详情或具体轨迹列表。
+
+### 5.2 查询地图路线组
 
 ```http
 GET /api/v1/track-map/groups
 ```
+
+该接口可作为高缩放级别下直接查询 RouteGroup 的接口，也可作为 `/track-map/view` 返回 `view_level=route` 时的兼容拆分接口。若实现了 `/track-map/view`，客户端地图主流程优先使用 `/track-map/view`。
 
 支持两种查询模式。
 
@@ -297,7 +480,7 @@ city_code=810000
 
 注意：第一版列表不返回 `user_count`、`track_count`、`hot_score`。
 
-### 5.2 查询路线组详情
+### 5.3 查询路线组详情
 
 ```http
 GET /api/v1/track-map/groups/:group_id/detail
@@ -337,7 +520,7 @@ GET /api/v1/track-map/groups/:group_id/detail
 
 详情第一版同样不展示人数和轨迹数量。如果客户端需要列表入口，直接展示“相关轨迹”。
 
-### 5.3 查询路线组下的具体轨迹列表
+### 5.4 查询路线组下的具体轨迹列表
 
 ```http
 GET /api/v1/track-map/groups/:group_id/tracks?limit=20&cursor=
@@ -378,6 +561,37 @@ GET /api/v1/track-map/groups/:group_id/tracks?limit=20&cursor=
 
 ### 6.1 数据表建议
 
+#### track_map_index_jobs
+
+用于记录轨迹地图索引异步任务。轨迹完成接口只负责写入 pending job，不在请求主链路里下载 OSS 文件、解析轨迹点或聚合 RouteGroup。
+
+```sql
+CREATE TABLE track_map_index_jobs (
+  track_id VARCHAR(64) NOT NULL,
+  status VARCHAR(16) NOT NULL DEFAULT 'pending',
+  attempts INT NOT NULL DEFAULT 0,
+  last_error VARCHAR(512) NOT NULL DEFAULT '',
+  next_run_at DATETIME(6) NOT NULL,
+  locked_at DATETIME(6) NULL,
+  locked_by VARCHAR(64) NOT NULL DEFAULT '',
+  created_at DATETIME(6) NOT NULL,
+  updated_at DATETIME(6) NOT NULL,
+  succeeded_at DATETIME(6) NULL,
+  last_failed_at DATETIME(6) NULL,
+  PRIMARY KEY (track_id),
+  KEY idx_track_map_index_pending (status, next_run_at, created_at)
+);
+```
+
+任务状态：
+
+| 状态 | 说明 |
+| --- | --- |
+| `pending` | 等待后台 worker 处理 |
+| `processing` | 已被某个 worker 抢占处理 |
+| `succeeded` | 索引构建成功 |
+| `failed` | 保留枚举；当前实现失败后会回到 `pending` 并设置 `next_run_at` 延迟重试 |
+
 #### track_geo_indexes
 
 用于存储单条轨迹的地图索引。
@@ -403,7 +617,6 @@ CREATE TABLE track_geo_indexes (
   distance DOUBLE NOT NULL DEFAULT 0,
   point_count INT NOT NULL DEFAULT 0,
   simplified_polyline_json MEDIUMTEXT,
-  spatial_tokens JSON,
   created_at DATETIME(6) NOT NULL,
   updated_at DATETIME(6) NOT NULL,
   PRIMARY KEY (track_id),
@@ -468,12 +681,29 @@ CREATE TABLE track_route_group_members (
 
 ### 6.2 索引构建流程
 
-当轨迹完成或补齐原始轨迹文件后，服务端异步或同步触发索引构建。
+当轨迹完成或补齐原始轨迹文件后，服务端只触发索引任务入队。索引构建由后台 scheduler 异步执行；定时任务同时负责漏建补偿和失败重试。
+
+主链路禁止同步依赖以下重操作：
+
+- 下载 OSS raw track 文件。
+- 解析大量轨迹点。
+- 坐标转换。
+- 计算 bbox / 中心点 / 起终点 / 简化折线。
+- 查找候选 RouteGroup 和路线相似度计算。
+
+这样可以保证 `track/create`、`/track/:track_id/upload_cloud`、`/track/:track_id/update` 的响应速度主要受轨迹记录写入影响，不受 OSS 下载和轨迹点解析影响。
 
 ```text
 track/create(is_running=false)
 或 /track/:track_id/upload_cloud
 或 /track/:track_id/update 补齐 raw_track_url
+  → 校验轨迹已完成、公开、raw_track_url 非空
+  → 写入 track_map_index_jobs(status=pending)
+  → 主接口立即返回
+
+Scheduler(track_map_index，默认每 1 分钟)
+  → 补偿扫描：查找已完成但缺少 track_geo_indexes 的轨迹，并补写 pending job
+  → Claim pending jobs（小批量，默认 10 条；processing 超过 30 分钟可被重新抢占）
   → 读取 raw_track_url 对应原始轨迹点
   → 解析轨迹点
   → 坐标统一到服务端内部坐标系
@@ -488,8 +718,15 @@ track/create(is_running=false)
 如果索引构建失败：
 
 - 不影响轨迹创建/更新主流程。
-- 记录日志。
-- 后续可通过后台任务补偿重建。
+- 记录到 `track_map_index_jobs.last_error`。
+- 按 `next_run_at` 延迟重试，避免失败任务高频重刷。
+- worker 中途退出导致的 `processing` 僵尸任务，超过 30 分钟后可被后续 worker 重新抢占。
+- 定时补偿任务会持续发现漏建索引的历史轨迹。
+
+OSS 下载要求：
+
+- 后台索引 worker 复用服务端 raw track 本地缓存能力。
+- 下载必须通过 `OSS_INTERNAL_ENDPOINT` 内网域名；未配置内网 endpoint 时下载失败并重试，不回退公网 endpoint。
 
 ### 6.3 路线聚合规则
 
@@ -578,6 +815,7 @@ RouteGroup 是路线聚合入口，不展示用户实时位置。
 - 新增首页地图模式所需的数据模型。
 - 完成 `TrackGeoIndex` 构建。
 - 完成自动 RouteGroup 聚合。
+- 提供地图视野查询接口，支持具体 RouteGroup、区域聚合、城市聚合三种返回粒度。
 - 提供附近/城市 RouteGroup 查询接口。
 - 提供 RouteGroup 下具体轨迹列表接口。
 - 客户端完成地图页、城市切换、路线详情、相关轨迹列表。
@@ -598,14 +836,14 @@ RouteGroup 是路线聚合入口，不展示用户实时位置。
 
 ## 11. 对现有工程的影响
 
-真正落地实现时会涉及：
+当前落地实现已涉及：
 
-- 新增 HTTP 路由：`/track-map/groups`、`/track-map/groups/:group_id/detail`、`/track-map/groups/:group_id/tracks`。
-- 新增模型：RouteGroup、TrackGeoIndex、RouteGroupMember。
+- 新增 HTTP 路由：`/track-map/view`、`/track-map/groups`、`/track-map/groups/:group_id/detail`、`/track-map/groups/:group_id/tracks`。
+- 新增模型：TrackGeoIndex、TrackMapIndexJob、地图视野响应模型。
 - 新增 repository interface 与 MySQL / Mongo / memory 三套实现。
 - 新增数据库表结构。
 - 新增轨迹完成后的索引构建流程。
-- 更新 `track_api.md`。
+- 更新 `track_api.md` 与 `docs/api/track-map.md`。
 - 更新 `AGENTS.md`。
 
 由于现有工程支持 MySQL / Mongo / in-memory 降级，新增 repository 方法时必须三套实现同步补齐。

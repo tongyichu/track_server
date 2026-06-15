@@ -98,6 +98,50 @@ CREATE TABLE `track_navigations` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='轨迹导航使用记录表';
 
 
+CREATE TABLE `track_map_index_jobs` (
+                                        `track_id` VARCHAR(64) NOT NULL COMMENT '轨迹ID',
+                                        `status` VARCHAR(16) NOT NULL DEFAULT 'pending' COMMENT 'pending/processing/succeeded/failed',
+                                        `attempts` INT NOT NULL DEFAULT 0 COMMENT '失败重试次数',
+                                        `last_error` VARCHAR(512) NOT NULL DEFAULT '' COMMENT '最近一次失败原因',
+                                        `next_run_at` DATETIME(6) NOT NULL COMMENT '下次可执行时间',
+                                        `locked_at` DATETIME(6) DEFAULT NULL COMMENT 'worker 抢占时间',
+                                        `locked_by` VARCHAR(64) NOT NULL DEFAULT '' COMMENT 'worker 标识',
+                                        `created_at` DATETIME(6) NOT NULL,
+                                        `updated_at` DATETIME(6) NOT NULL,
+                                        `succeeded_at` DATETIME(6) DEFAULT NULL COMMENT '成功时间',
+                                        `last_failed_at` DATETIME(6) DEFAULT NULL COMMENT '最近失败时间',
+                                        PRIMARY KEY (`track_id`),
+                                        KEY `idx_track_map_index_pending` (`status`, `next_run_at`, `created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='轨迹地图索引异步任务表';
+
+
+CREATE TABLE `track_geo_indexes` (
+                                     `track_id` VARCHAR(64) NOT NULL COMMENT '轨迹ID',
+                                     `user_id` BIGINT NOT NULL COMMENT '轨迹所属用户ID',
+                                     `city_code` VARCHAR(16) NOT NULL DEFAULT '' COMMENT '城市Code',
+                                     `track_type` VARCHAR(32) NOT NULL DEFAULT '' COMMENT '运动类型',
+                                     `coordinate_system` VARCHAR(32) NOT NULL DEFAULT '' COMMENT '坐标系',
+                                     `start_lat` DOUBLE NOT NULL,
+                                     `start_lng` DOUBLE NOT NULL,
+                                     `end_lat` DOUBLE NOT NULL,
+                                     `end_lng` DOUBLE NOT NULL,
+                                     `center_lat` DOUBLE NOT NULL,
+                                     `center_lng` DOUBLE NOT NULL,
+                                     `min_lat` DOUBLE NOT NULL,
+                                     `min_lng` DOUBLE NOT NULL,
+                                     `max_lat` DOUBLE NOT NULL,
+                                     `max_lng` DOUBLE NOT NULL,
+                                     `distance` DOUBLE NOT NULL DEFAULT 0,
+                                     `point_count` INT NOT NULL DEFAULT 0,
+                                     `simplified_polyline_json` MEDIUMTEXT,
+                                     `created_at` DATETIME(6) NOT NULL,
+                                     `updated_at` DATETIME(6) NOT NULL,
+                                     PRIMARY KEY (`track_id`),
+                                     KEY `idx_track_geo_city_type` (`city_code`, `track_type`),
+                                     KEY `idx_track_geo_center` (`center_lat`, `center_lng`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='轨迹地图空间索引表';
+
+
 CREATE TABLE `user_achievement_rewards` (
                                             `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
                                             `user_id` BIGINT NOT NULL COMMENT '用户ID',

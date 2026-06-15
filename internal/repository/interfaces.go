@@ -101,6 +101,21 @@ type TrackWaypointRepository interface {
 	ListByTrackID(ctx context.Context, trackID string) ([]*models.TrackWaypoint, error)
 }
 
+// TrackMapRepository defines persistence operations for async map index building.
+type TrackMapRepository interface {
+	EnqueueIndexJob(ctx context.Context, trackID string, runAt time.Time) error
+	ClaimPendingIndexJobs(ctx context.Context, workerID string, now time.Time, limit int) ([]*models.TrackMapIndexJob, error)
+	MarkIndexJobSucceeded(ctx context.Context, trackID string, now time.Time) error
+	MarkIndexJobFailed(ctx context.Context, trackID, errMsg string, nextRunAt time.Time, now time.Time) error
+	UpsertTrackGeoIndex(ctx context.Context, index *models.TrackGeoIndex) error
+	HasTrackGeoIndex(ctx context.Context, trackID string) (bool, error)
+	ListCompletedTracksMissingGeoIndex(ctx context.Context, limit int) ([]*models.Track, error)
+	FindTrackGeoIndex(ctx context.Context, trackID string) (*models.TrackGeoIndex, error)
+	ListTrackGeoIndexes(ctx context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackGeoIndex, error)
+	CountTrackGeoIndexesByCity(ctx context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackMapClusterItem, error)
+	CountTrackGeoIndexesByArea(ctx context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackMapClusterItem, error)
+}
+
 // UserRepository defines persistence operations for User entities.
 type UserRepository interface {
 	CreateIfNotExists(ctx context.Context, u *models.User) (*models.User, error)
