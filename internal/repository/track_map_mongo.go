@@ -384,6 +384,28 @@ func (r *MongoTrackMapRepository) ListRouteGroups(ctx context.Context, filter mo
 	return items, cur.Err()
 }
 
+func (r *MongoTrackMapRepository) ListRouteGroupSummaries(ctx context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackRouteGroup, error) {
+	limit := normalizeTrackMapQueryLimit(filter.Limit)
+	opts := options.Find().
+		SetSort(bson.D{{Key: "member_count", Value: -1}, {Key: "updated_at", Value: -1}}).
+		SetLimit(int64(limit)).
+		SetProjection(bson.M{"representative_polyline": 0, "representative_polyline_json": 0})
+	cur, err := r.groups.Find(ctx, mongoTrackRouteGroupFilter(filter), opts)
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+	items := make([]*models.TrackRouteGroup, 0, limit)
+	for cur.Next(ctx) {
+		var group models.TrackRouteGroup
+		if err := cur.Decode(&group); err != nil {
+			return nil, err
+		}
+		items = append(items, &group)
+	}
+	return items, cur.Err()
+}
+
 func (r *MongoTrackMapRepository) ListRouteGroupCandidates(ctx context.Context, index *models.TrackGeoIndex, limit int) ([]*models.TrackRouteGroupCandidate, error) {
 	if index == nil {
 		return nil, nil

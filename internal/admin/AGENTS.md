@@ -144,6 +144,7 @@ GET /admin/api/users
        → TrackRouteGroupService 校验运动类型、成员关系与代表轨迹
        → TrackMapRepository 更新 track_route_groups / track_route_group_members
 ```
+路线组列表页只展示摘要信息，后端必须走轻量查询，不读取 `track_route_groups.representative_polyline_json`；需要路线折线时进入详情或使用客户端地图接口。
 [admin UI] /admin/analytics.html
   → GET /admin/api/analytics/sync-summaries?status=&limit=&offset=
   → AnalyticsRepository.ListSyncSummaries / CountSyncSummaries

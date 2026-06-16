@@ -476,6 +476,26 @@ func (r *MySQLTrackMapRepository) ListRouteGroups(ctx context.Context, filter mo
 	return items, rows.Err()
 }
 
+func (r *MySQLTrackMapRepository) ListRouteGroupSummaries(ctx context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackRouteGroup, error) {
+	limit := normalizeTrackMapQueryLimit(filter.Limit)
+	where, args := buildTrackRouteGroupWhere(filter)
+	args = append(args, limit)
+	rows, err := r.db.QueryContext(ctx, `SELECT `+trackRouteGroupSummaryColumns("track_route_groups")+` FROM track_route_groups`+where+` ORDER BY member_count DESC, updated_at DESC LIMIT ?`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := make([]*models.TrackRouteGroup, 0, limit)
+	for rows.Next() {
+		group, err := scanTrackRouteGroupSummary(rows)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, group)
+	}
+	return items, rows.Err()
+}
+
 func (r *MySQLTrackMapRepository) ListRouteGroupCandidates(ctx context.Context, index *models.TrackGeoIndex, limit int) ([]*models.TrackRouteGroupCandidate, error) {
 	if index == nil {
 		return nil, nil
@@ -751,6 +771,14 @@ func trackRouteGroupColumns(alias string) string {
 		` + p + `source, ` + p + `created_at, ` + p + `updated_at`
 }
 
+func trackRouteGroupSummaryColumns(alias string) string {
+	p := alias + "."
+	return p + `group_id, ` + p + `name, ` + p + `track_type, ` + p + `status, ` + p + `city_codes_json, ` + p + `coordinate_system,
+		` + p + `center_lat, ` + p + `center_lng, ` + p + `min_lat, ` + p + `min_lng, ` + p + `max_lat, ` + p + `max_lng,
+		` + p + `distance, ` + p + `representative_track_id, ` + p + `member_count,
+		` + p + `source, ` + p + `created_at, ` + p + `updated_at`
+}
+
 func trackGeoIndexColumns(alias string) string {
 	p := alias + "."
 	return p + `track_id, ` + p + `user_id, ` + p + `city_code, ` + p + `track_type, ` + p + `coordinate_system,
@@ -798,6 +826,22 @@ func scanTrackRouteGroup(row trackGeoIndexScanner) (*models.TrackRouteGroup, err
 	if polylineJSON.Valid {
 		group.RepresentativePolylineJSON = polylineJSON.String
 		_ = json.Unmarshal([]byte(polylineJSON.String), &group.RepresentativePolyline)
+	}
+	return &group, nil
+}
+
+func scanTrackRouteGroupSummary(row trackGeoIndexScanner) (*models.TrackRouteGroup, error) {
+	var group models.TrackRouteGroup
+	var cityCodesJSON sql.NullString
+	if err := row.Scan(&group.GroupID, &group.Name, &group.TrackType, &group.Status, &cityCodesJSON, &group.CoordinateSystem,
+		&group.CenterLat, &group.CenterLng, &group.MinLat, &group.MinLng, &group.MaxLat, &group.MaxLng,
+		&group.Distance, &group.RepresentativeTrackID, &group.MemberCount,
+		&group.Source, &group.CreatedAt, &group.UpdatedAt); err != nil {
+		return nil, err
+	}
+	if cityCodesJSON.Valid {
+		group.CityCodesJSON = cityCodesJSON.String
+		_ = json.Unmarshal([]byte(cityCodesJSON.String), &group.CityCodes)
 	}
 	return &group, nil
 }

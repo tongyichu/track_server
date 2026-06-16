@@ -1586,6 +1586,18 @@ func (r *InMemoryTrackMapRepository) ListRouteGroups(_ context.Context, filter m
 	return items, nil
 }
 
+func (r *InMemoryTrackMapRepository) ListRouteGroupSummaries(ctx context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackRouteGroup, error) {
+	items, err := r.ListRouteGroups(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	for _, item := range items {
+		item.RepresentativePolyline = nil
+		item.RepresentativePolylineJSON = ""
+	}
+	return items, nil
+}
+
 func (r *InMemoryTrackMapRepository) ListRouteGroupCandidates(_ context.Context, index *models.TrackGeoIndex, limit int) ([]*models.TrackRouteGroupCandidate, error) {
 	if index == nil {
 		return nil, nil

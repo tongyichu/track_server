@@ -239,8 +239,27 @@ func TestAdminRouteGroupOperations(t *testing.T) {
 	cookie := ut.Header{Key: "Cookie", Value: sessionCookieName + "=" + session.Token}
 	jsonHeader := ut.Header{Key: "Content-Type", Value: "application/json"}
 
+	resp := ut.PerformRequest(h.Engine, http.MethodGet, "/admin/api/route-groups?limit=10", nil, cookie)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("list route groups status=%d body=%s", resp.Code, resp.Body.String())
+	}
+	var listOut struct {
+		Data struct {
+			Items []models.TrackRouteGroup `json:"items"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(resp.Body.Bytes(), &listOut); err != nil {
+		t.Fatalf("decode route group list: %v", err)
+	}
+	if len(listOut.Data.Items) != 1 {
+		t.Fatalf("expected 1 route group, got %d", len(listOut.Data.Items))
+	}
+	if len(listOut.Data.Items[0].RepresentativePolyline) != 0 || listOut.Data.Items[0].RepresentativePolylineJSON != "" {
+		t.Fatalf("route group list should not include representative polyline: %+v", listOut.Data.Items[0])
+	}
+
 	renameBody := []byte(`{"name":"麦理浩径徒步路线"}`)
-	resp := ut.PerformRequest(h.Engine, http.MethodPut, "/admin/api/route-groups/RG.00001001/name", &ut.Body{Body: bytes.NewBuffer(renameBody), Len: len(renameBody)}, cookie, jsonHeader)
+	resp = ut.PerformRequest(h.Engine, http.MethodPut, "/admin/api/route-groups/RG.00001001/name", &ut.Body{Body: bytes.NewBuffer(renameBody), Len: len(renameBody)}, cookie, jsonHeader)
 	if resp.Code != http.StatusOK {
 		t.Fatalf("rename status=%d body=%s", resp.Code, resp.Body.String())
 	}

@@ -59,6 +59,13 @@ func (s *TrackRouteGroupService) ListRouteGroups(ctx context.Context, filter mod
 	return s.repo.ListRouteGroups(ctx, filter)
 }
 
+func (s *TrackRouteGroupService) ListRouteGroupSummaries(ctx context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackRouteGroup, error) {
+	if s == nil || s.repo == nil {
+		return nil, fmt.Errorf("track route group service is not configured")
+	}
+	return s.repo.ListRouteGroupSummaries(ctx, filter)
+}
+
 func (s *TrackRouteGroupService) GetRouteGroupDetail(ctx context.Context, groupID string, limit int) (*AdminRouteGroupDetail, error) {
 	if s == nil || s.repo == nil {
 		return nil, fmt.Errorf("track route group service is not configured")

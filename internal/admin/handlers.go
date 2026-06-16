@@ -832,7 +832,7 @@ func (h *Handler) ListRouteGroups(ctx context.Context, c *app.RequestContext) {
 		CityCode:  strings.TrimSpace(string(c.Query("city_code"))),
 		Limit:     parseAdminListLimit(string(c.Query("limit"))),
 	}
-	items, err := h.routeGroupSvc.ListRouteGroups(ctx, filter)
+	items, err := h.routeGroupSvc.ListRouteGroupSummaries(ctx, filter)
 	if err != nil {
 		writeAdminRouteGroupError(c, err)
 		return
