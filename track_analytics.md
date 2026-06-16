@@ -56,20 +56,20 @@
 
 ## 4. 业务公共属性
 
-| 字段 | 类型 | 示例 | 说明 |
-| --- | --- | --- | --- |
+| 字段 | 类型 | 示例            | 说明 |
+| --- | --- |---------------| --- |
 | `track_id` | string | `NO.00000001` | 轨迹外部 ID；仅在轨迹已创建后上报 |
-| `track_type` | string | `hiking` | 使用 `/track/types` 返回的英文 code |
-| `is_running` | bool | `false` | 轨迹是否仍在进行中 |
-| `distance_m` | number | `5230` | 距离，单位米，可按区间脱敏后上报 |
-| `duration_s` | number | `3600` | 时长，单位秒 |
-| `city_code` | string | `110100` | 城市编码；避免上报精确经纬度 |
-| `locate_status` | string | `authorized` | `authorized` / `denied` / `restricted` / `unknown` |
-| `gps_quality` | string | `good` | `good` / `weak` / `lost` / `unknown` |
-| `companion_session_id` | string | - | 同行会话 ID |
-| `achievement_reward_id` | string | - | 成就奖励 ID |
-| `error_code` | string | - | 业务或 SDK 错误码 |
-| `error_message` | string | - | 错误摘要，不带手机号、token、URL 签名等敏感信息 |
+| `track_type` | string | `hiking`      | 使用 `/track/types` 返回的英文 code |
+| `is_running` | bool | `false`       | 轨迹是否仍在进行中 |
+| `distance_m` | number | `5230`        | 距离，单位米，可按区间脱敏后上报 |
+| `duration_s` | number | `3600`        | 时长，单位秒 |
+| `city_code` | string | `110000`      | 城市编码；避免上报精确经纬度 |
+| `locate_status` | string | `authorized`  | `authorized` / `denied` / `restricted` / `unknown` |
+| `gps_quality` | string | `good`        | `good` / `weak` / `lost` / `unknown` |
+| `companion_session_id` | string | -             | 同行会话 ID |
+| `achievement_reward_id` | string | -             | 成就奖励 ID |
+| `error_code` | string | -             | 业务或 SDK 错误码 |
+| `error_message` | string | -             | 错误摘要，不带手机号、token、URL 签名等敏感信息 |
 
 ## 5. 页面曝光事件
 
