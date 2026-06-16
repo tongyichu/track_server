@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -91,7 +92,7 @@ func TestAdminFeedbackDetailRewritesImageURLAndServesImage(t *testing.T) {
 	}
 
 	h := server.Default()
-	module := NewModule(map[string]string{"admin": string(placeholderPasswordHash)}, nil, nil, staticRoot, nil, nil, nil, nil, nil, feedbackSvc, nil)
+	module := NewModule(map[string]string{"admin": string(placeholderPasswordHash)}, nil, nil, staticRoot, nil, nil, nil, nil, nil, nil, nil, feedbackSvc, nil)
 	module.RegisterRoutes(h)
 	defer module.Close()
 
@@ -149,7 +150,7 @@ func TestAdminListFeedbacksFiltersByVersionAndPhone(t *testing.T) {
 	}
 
 	h := server.Default()
-	module := NewModule(map[string]string{"admin": string(placeholderPasswordHash)}, nil, nil, t.TempDir(), userRepo, nil, nil, nil, nil, feedbackSvc, nil)
+	module := NewModule(map[string]string{"admin": string(placeholderPasswordHash)}, nil, nil, t.TempDir(), userRepo, nil, nil, nil, nil, nil, nil, feedbackSvc, nil)
 	module.RegisterRoutes(h)
 	defer module.Close()
 	session, err := module.Auth.store.Create("admin")
@@ -229,7 +230,7 @@ func TestAdminRouteGroupOperations(t *testing.T) {
 
 	h := server.Default()
 	routeGroupSvc := service.NewTrackRouteGroupService(mapRepo)
-	module := NewModule(map[string]string{"admin": string(placeholderPasswordHash)}, nil, nil, t.TempDir(), nil, trackRepo, nil, nil, nil, nil, routeGroupSvc)
+	module := NewModule(map[string]string{"admin": string(placeholderPasswordHash)}, nil, nil, t.TempDir(), nil, trackRepo, nil, mapRepo, nil, nil, nil, nil, routeGroupSvc)
 	module.RegisterRoutes(h)
 	defer module.Close()
 	session, err := module.Auth.store.Create("admin")
@@ -278,6 +279,99 @@ func TestAdminRouteGroupOperations(t *testing.T) {
 	}
 	if got.Name != "麦理浩径徒步路线" || got.RepresentativeTrackID != "NO.00001002" || got.MemberCount != 1 {
 		t.Fatalf("unexpected route group after ops: %+v", got)
+	}
+}
+
+func TestAdminDeleteTrackCleansRelatedData(t *testing.T) {
+	ctx := context.Background()
+	trackRepo := repository.NewInMemoryTrackRepository()
+	collectRepo := repository.NewInMemoryCollectRepository()
+	mapRepo := repository.NewInMemoryTrackMapRepository(trackRepo)
+	now := time.Now()
+	trackID := "NO.00002001"
+	if err := trackRepo.Create(ctx, &models.Track{
+		ID:        trackID,
+		UserID:    1001,
+		Title:     "待删除轨迹",
+		TrackType: "hiking",
+		StartTime: now,
+		EndTime:   now.Add(time.Hour),
+		Status:    models.TrackStatusNormal,
+		IsRunning: false,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := collectRepo.AddCollect(ctx, 2002, trackID); err != nil {
+		t.Fatal(err)
+	}
+	index := adminTestGeoIndex(trackID, now)
+	if err := mapRepo.UpsertTrackGeoIndex(ctx, index); err != nil {
+		t.Fatal(err)
+	}
+	group := &models.TrackRouteGroup{
+		GroupID:                "RG.00002001",
+		TrackType:              "hiking",
+		Status:                 models.TrackRouteGroupStatusActive,
+		CityCodes:              []string{"810000"},
+		CoordinateSystem:       "GCJ02",
+		CenterLat:              index.CenterLat,
+		CenterLng:              index.CenterLng,
+		MinLat:                 index.MinLat,
+		MinLng:                 index.MinLng,
+		MaxLat:                 index.MaxLat,
+		MaxLng:                 index.MaxLng,
+		Distance:               index.Distance,
+		RepresentativeTrackID:  trackID,
+		RepresentativePolyline: index.SimplifiedPolyline,
+		MemberCount:            1,
+		Source:                 models.TrackRouteGroupSourceAuto,
+		CreatedAt:              now,
+		UpdatedAt:              now,
+	}
+	if err := mapRepo.UpsertRouteGroup(ctx, group); err != nil {
+		t.Fatal(err)
+	}
+	if err := mapRepo.UpsertRouteGroupMember(ctx, &models.TrackRouteGroupMember{
+		GroupID: group.GroupID, TrackID: trackID, SimilarityScore: 1,
+		MatchDirection: models.TrackRouteGroupMemberDirectionForward,
+		Role:           models.TrackRouteGroupMemberRoleRepresentative,
+		Source:         models.TrackRouteGroupSourceAuto,
+		CreatedAt:      now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	h := server.Default()
+	module := NewModule(map[string]string{"admin": string(placeholderPasswordHash)}, nil, nil, t.TempDir(), nil, trackRepo, collectRepo, mapRepo, nil, nil, nil, nil, nil)
+	module.RegisterRoutes(h)
+	defer module.Close()
+	session, err := module.Auth.store.Create("admin")
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	cookie := ut.Header{Key: "Cookie", Value: sessionCookieName + "=" + session.Token}
+
+	resp := ut.PerformRequest(h.Engine, http.MethodDelete, "/admin/api/tracks/"+trackID, nil, cookie)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("delete track status=%d body=%s", resp.Code, resp.Body.String())
+	}
+	got, err := trackRepo.FindByID(ctx, trackID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != models.TrackStatusDeleted || got.IsRunning || got.DeletedAt.IsZero() {
+		t.Fatalf("track was not soft deleted correctly: %+v", got)
+	}
+	if collected, err := collectRepo.IsCollected(ctx, 2002, trackID); err != nil || collected {
+		t.Fatalf("collect cleanup collected=%v err=%v", collected, err)
+	}
+	if _, err := mapRepo.FindTrackGeoIndex(ctx, trackID); !errors.Is(err, repository.ErrNotFound) {
+		t.Fatalf("geo index cleanup err=%v", err)
+	}
+	if _, err := mapRepo.FindRouteGroup(ctx, group.GroupID); !errors.Is(err, repository.ErrNotFound) {
+		t.Fatalf("representative route group should be archived, err=%v", err)
 	}
 }
 

@@ -1418,6 +1418,43 @@ func (r *InMemoryTrackMapRepository) HasTrackGeoIndex(_ context.Context, trackID
 	return ok, nil
 }
 
+// CleanupDeletedTrack removes map-index side records for a deleted track.
+func (r *InMemoryTrackMapRepository) CleanupDeletedTrack(_ context.Context, trackID string) error {
+	if trackID == "" {
+		return nil
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.jobs, trackID)
+	delete(r.indexes, trackID)
+	now := time.Now()
+	for groupID, members := range r.routeMembers {
+		if members == nil || members[trackID] == nil {
+			continue
+		}
+		group := r.routeGroups[groupID]
+		deletingRepresentative := group != nil && group.RepresentativeTrackID == trackID
+		delete(members, trackID)
+		if deletingRepresentative {
+			delete(r.routeMembers, groupID)
+			if group != nil {
+				group.Status = models.TrackRouteGroupStatusArchived
+				group.MemberCount = 0
+				group.UpdatedAt = now
+			}
+			continue
+		}
+		if len(members) == 0 {
+			delete(r.routeMembers, groupID)
+		}
+		if group != nil {
+			group.MemberCount = int64(len(members))
+			group.UpdatedAt = now
+		}
+	}
+	return nil
+}
+
 func (r *InMemoryTrackMapRepository) ListCompletedTracksMissingGeoIndex(_ context.Context, limit int) ([]*models.Track, error) {
 	if limit <= 0 {
 		limit = 100

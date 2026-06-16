@@ -39,10 +39,10 @@ type Module struct {
 // 管理后台上传的安装包会落盘到 <staticRoot>/release/<platform>/，
 // 并通过 /api/v1/static/release/<platform>/<file> 对外下发。
 // 留空表示禁用本地上传接口（接口会返回 500）。
-func NewModule(accounts map[string]string, releaseSvc *service.AppReleaseService, stsSvc *service.OSSTokenService, staticRoot string, userRepo repository.UserRepository, trackRepo repository.TrackRepository, companionRepo repository.CompanionRepository, analyticsRepo repository.AnalyticsRepository, userSvc *service.UserService, feedbackSvc *service.FeedbackService, routeGroupSvc *service.TrackRouteGroupService) *Module {
+func NewModule(accounts map[string]string, releaseSvc *service.AppReleaseService, stsSvc *service.OSSTokenService, staticRoot string, userRepo repository.UserRepository, trackRepo repository.TrackRepository, collectRepo repository.CollectRepository, trackMapRepo repository.TrackMapRepository, companionRepo repository.CompanionRepository, analyticsRepo repository.AnalyticsRepository, userSvc *service.UserService, feedbackSvc *service.FeedbackService, routeGroupSvc *service.TrackRouteGroupService) *Module {
 	store := NewSessionStore(12 * time.Hour)
 	auth := NewAuthenticator(accounts, store)
-	handler := NewHandler(releaseSvc, stsSvc, auth, staticRoot, userRepo, trackRepo, companionRepo, analyticsRepo, userSvc, feedbackSvc, routeGroupSvc)
+	handler := NewHandler(releaseSvc, stsSvc, auth, staticRoot, userRepo, trackRepo, collectRepo, trackMapRepo, companionRepo, analyticsRepo, userSvc, feedbackSvc, routeGroupSvc)
 	return &Module{
 		Auth:    auth,
 		Handler: handler,
@@ -74,6 +74,7 @@ func (m *Module) Close() {
 // - GET  /admin/api/releases/upload-token  旧 OSS 直传凭证接口（鉴权，前端不再使用）
 // - GET  /admin/api/users                  用户列表（鉴权，cursor 翻页）
 // - GET  /admin/api/tracks                 轨迹列表（鉴权，cursor 翻页）
+// - DELETE /admin/api/tracks/:track_id     删除轨迹（鉴权，软删除并清理关联索引/收藏）
 // - GET  /admin/api/companions             同行会话列表（鉴权，cursor 翻页）
 // - GET  /admin/api/companions/:session_id  同行会话详情：会话/成员/位置/弹幕（鉴权）
 // - GET  /admin/api/feedbacks              意见反馈列表（鉴权，cursor 翻页）
@@ -124,6 +125,7 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	api.GET("/static/*filepath", m.Handler.GetStaticAsset)
 	api.GET("/users", m.Handler.ListUsers)
 	api.GET("/tracks", m.Handler.ListTracks)
+	api.DELETE("/tracks/:track_id", m.Handler.DeleteTrack)
 	api.GET("/route-groups", m.Handler.ListRouteGroups)
 	api.GET("/route-groups/:group_id", m.Handler.GetRouteGroup)
 	api.PUT("/route-groups/:group_id/name", m.Handler.RenameRouteGroup)

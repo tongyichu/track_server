@@ -198,6 +198,68 @@ func (r *MongoTrackMapRepository) HasTrackGeoIndex(ctx context.Context, trackID 
 	return true, nil
 }
 
+// CleanupDeletedTrack removes map-index side records for a deleted track.
+func (r *MongoTrackMapRepository) CleanupDeletedTrack(ctx context.Context, trackID string) error {
+	trackID = strings.TrimSpace(trackID)
+	if trackID == "" {
+		return nil
+	}
+	cur, err := r.members.Find(ctx, bson.M{"track_id": trackID})
+	if err != nil {
+		return err
+	}
+	defer cur.Close(ctx)
+	var members []models.TrackRouteGroupMember
+	if err := cur.All(ctx, &members); err != nil {
+		return err
+	}
+	if _, err := r.jobs.DeleteOne(ctx, bson.M{"track_id": trackID}); err != nil {
+		return err
+	}
+	if _, err := r.members.DeleteMany(ctx, bson.M{"track_id": trackID}); err != nil {
+		return err
+	}
+	if _, err := r.index.DeleteOne(ctx, bson.M{"track_id": trackID}); err != nil {
+		return err
+	}
+	now := time.Now()
+	for _, member := range members {
+		if member.GroupID == "" {
+			continue
+		}
+		var group models.TrackRouteGroup
+		err := r.groups.FindOne(ctx, bson.M{"group_id": member.GroupID}).Decode(&group)
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		if group.RepresentativeTrackID == trackID {
+			if _, err := r.members.DeleteMany(ctx, bson.M{"group_id": member.GroupID}); err != nil {
+				return err
+			}
+			_, err = r.groups.UpdateOne(ctx, bson.M{"group_id": member.GroupID}, bson.M{"$set": bson.M{
+				"status":       models.TrackRouteGroupStatusArchived,
+				"member_count": 0,
+				"updated_at":   now,
+			}})
+			if err != nil {
+				return err
+			}
+			continue
+		}
+		count, err := r.members.CountDocuments(ctx, bson.M{"group_id": member.GroupID})
+		if err != nil {
+			return err
+		}
+		if _, err := r.groups.UpdateOne(ctx, bson.M{"group_id": member.GroupID}, bson.M{"$set": bson.M{"member_count": count, "updated_at": now}}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (r *MongoTrackMapRepository) ListCompletedTracksMissingGeoIndex(ctx context.Context, limit int) ([]*models.Track, error) {
 	if limit <= 0 {
 		limit = 100

@@ -183,6 +183,37 @@ func (r *MySQLTrackMapRepository) HasTrackGeoIndex(ctx context.Context, trackID 
 	return true, nil
 }
 
+// CleanupDeletedTrack removes map-index side records for a deleted track.
+func (r *MySQLTrackMapRepository) CleanupDeletedTrack(ctx context.Context, trackID string) error {
+	trackID = strings.TrimSpace(trackID)
+	if trackID == "" {
+		return nil
+	}
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	groups, err := mysqlRouteGroupsForTrackTx(ctx, tx, trackID)
+	if err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM track_map_index_jobs WHERE track_id=?`, trackID); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM track_route_group_members WHERE track_id=?`, trackID); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM track_geo_indexes WHERE track_id=?`, trackID); err != nil {
+		return err
+	}
+	if err := mysqlCleanupRouteGroupsAfterTrackDeleteTx(ctx, tx, groups, time.Now()); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 func (r *MySQLTrackMapRepository) ListCompletedTracksMissingGeoIndex(ctx context.Context, limit int) ([]*models.Track, error) {
 	if limit <= 0 {
 		limit = 100

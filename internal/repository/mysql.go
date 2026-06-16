@@ -1236,6 +1236,126 @@ func (r *MySQLTrackRepository) SoftDeleteAndCleanupCollectsTx(ctx context.Contex
 	return tx.Commit()
 }
 
+// AdminSoftDeleteAndCleanupTx 在一个 MySQL 事务中完成管理后台轨迹删除。
+//
+// 管理后台删除不校验轨迹归属；除软删除 track_records 外，还会清理：
+// - track_collects：避免已删除轨迹继续出现在收藏关系中；
+// - track_map_index_jobs：避免异步索引任务继续处理已删除轨迹；
+// - track_geo_indexes：避免首页地图继续聚合该轨迹；
+// - track_route_group_members：避免路线组成员指向已删除轨迹。
+//
+// 如果被删除轨迹是某个路线组的代表轨迹，会归档该路线组并移除其全部成员，
+// 让剩余轨迹在下一次 track_route_group 任务中重新聚合。
+func (r *MySQLTrackRepository) AdminSoftDeleteAndCleanupTx(ctx context.Context, trackID string) error {
+	trackID = strings.TrimSpace(trackID)
+	if trackID == "" {
+		return ErrNotFound
+	}
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var deletedAt sql.NullTime
+	if err := tx.QueryRowContext(ctx, `SELECT deleted_at FROM track_records WHERE id=? LIMIT 1`, trackID).Scan(&deletedAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		}
+		return err
+	}
+	now := time.Now()
+	da := now
+	if deletedAt.Valid {
+		da = deletedAt.Time
+	}
+
+	groups, err := mysqlRouteGroupsForTrackTx(ctx, tx, trackID)
+	if err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx,
+		`UPDATE track_records SET status=?, is_running=0, deleted_at=?, updated_at=? WHERE id=?`,
+		models.TrackStatusDeleted, da, now, trackID,
+	); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM track_collects WHERE track_id=?`, trackID); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM track_map_index_jobs WHERE track_id=?`, trackID); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM track_route_group_members WHERE track_id=?`, trackID); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM track_geo_indexes WHERE track_id=?`, trackID); err != nil {
+		return err
+	}
+	if err := mysqlCleanupRouteGroupsAfterTrackDeleteTx(ctx, tx, groups, now); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+type mysqlTrackRouteGroupRef struct {
+	GroupID           string
+	RepresentativeID  string
+	DeletedTrackIsRep bool
+}
+
+func mysqlRouteGroupsForTrackTx(ctx context.Context, tx *sql.Tx, trackID string) ([]mysqlTrackRouteGroupRef, error) {
+	rows, err := tx.QueryContext(ctx, `
+		SELECT rg.group_id, rg.representative_track_id
+		FROM track_route_group_members m
+		JOIN track_route_groups rg ON rg.group_id = m.group_id
+		WHERE m.track_id = ?
+	`, trackID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	groups := make([]mysqlTrackRouteGroupRef, 0, 1)
+	for rows.Next() {
+		var ref mysqlTrackRouteGroupRef
+		if err := rows.Scan(&ref.GroupID, &ref.RepresentativeID); err != nil {
+			return nil, err
+		}
+		ref.DeletedTrackIsRep = ref.RepresentativeID == trackID
+		groups = append(groups, ref)
+	}
+	return groups, rows.Err()
+}
+
+func mysqlCleanupRouteGroupsAfterTrackDeleteTx(ctx context.Context, tx *sql.Tx, groups []mysqlTrackRouteGroupRef, now time.Time) error {
+	for _, ref := range groups {
+		if ref.GroupID == "" {
+			continue
+		}
+		if ref.DeletedTrackIsRep {
+			if _, err := tx.ExecContext(ctx, `DELETE FROM track_route_group_members WHERE group_id=?`, ref.GroupID); err != nil {
+				return err
+			}
+			if _, err := tx.ExecContext(ctx, `
+				UPDATE track_route_groups
+				SET status=?, member_count=0, updated_at=?
+				WHERE group_id=?
+			`, models.TrackRouteGroupStatusArchived, now, ref.GroupID); err != nil {
+				return err
+			}
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, `
+			UPDATE track_route_groups
+			SET member_count = (SELECT COUNT(*) FROM track_route_group_members WHERE group_id = ?), updated_at = ?
+			WHERE group_id = ?
+		`, ref.GroupID, now, ref.GroupID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (r *MySQLTrackRepository) FindByID(ctx context.Context, id string) (*models.Track, error) {
 	row := r.db.QueryRowContext(ctx,
 		`SELECT id, user_id, session_id, city_code, locate_addr, track_type, source_tag, coordinate_system, title, start_time, end_time,

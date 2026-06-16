@@ -69,7 +69,7 @@
     }
     var resp = await fetch('/admin/api/tracks?' + params.toString());
     if (!resp.ok) {
-      tbody.innerHTML = '<tr><td colspan="10">加载失败: ' + resp.status + '</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="11">加载失败: ' + resp.status + '</td></tr>';
       return;
     }
     var data = ((await resp.json()).data) || {};
@@ -89,7 +89,8 @@
         '<td>' + (it.duration || 0) + '</td>' +
         '<td>' + esc(statusText(it.status)) + '</td>' +
         '<td>' + fmtTime(it.start_time) + '</td>' +
-        '<td>' + fmtTime(it.end_time) + '</td>';
+        '<td>' + fmtTime(it.end_time) + '</td>' +
+        '<td><button class="danger js-delete-track" data-track-id="' + esc(it.id) + '">删除</button></td>';
       tbody.appendChild(tr);
     });
 
@@ -98,6 +99,37 @@
     pageHint.textContent = '第 ' + (pageIndex + 1) + ' 页（' + items.length + ' 条）';
     totalHint.textContent = '共 ' + totalCount + ' 条轨迹（不含已删除）';
   }
+
+  tbody.addEventListener('click', async function (ev) {
+    var btn = ev.target && ev.target.closest ? ev.target.closest('.js-delete-track') : null;
+    if (!btn) return;
+    var trackID = btn.getAttribute('data-track-id') || '';
+    if (!trackID) return;
+    if (!window.confirm('确认删除轨迹 ' + trackID + '？删除后会标记为已删除，并清理收藏和地图索引。')) {
+      return;
+    }
+    btn.disabled = true;
+    btn.textContent = '删除中';
+    try {
+      var resp = await fetch('/admin/api/tracks/' + encodeURIComponent(trackID), { method: 'DELETE' });
+      if (!resp.ok) {
+        var msg = '删除失败: ' + resp.status;
+        try {
+          var body = await resp.json();
+          if (body && body.error) msg += ' ' + body.error;
+        } catch (_) {}
+        window.alert(msg);
+        btn.disabled = false;
+        btn.textContent = '删除';
+        return;
+      }
+      await loadPage();
+    } catch (err) {
+      window.alert('删除失败: ' + (err && err.message ? err.message : err));
+      btn.disabled = false;
+      btn.textContent = '删除';
+    }
+  });
 
   loadPage();
 })();

@@ -14,6 +14,7 @@
 - 查看和处理用户意见反馈（含图片预览、状态更新、用户可见反馈意见）。
 - 查看埋点 OSS 同步摘要（任务状态、文件列表、OSS key、字节数、耗时与错误）。
 - 查看和人工运营路线发现 RouteGroup（改名、合并、移除成员、指定代表轨迹）。
+- 查看和删除用户轨迹；删除为软删除，并同步清理收藏关系与首页地图索引/路线组成员。
 
 模块对外只暴露 `admin.NewModule(...)` 与 `Module.RegisterRoutes(h)`，不被业务 handler 引用。
 
@@ -48,7 +49,7 @@ internal/admin/
 | --- | --- |
 | 路由清单 | `routes.go` 中 `RegisterRoutes` |
 | 鉴权与 cookie | `auth.go`（`sessionCookieName = "admin_session"`） |
-| 业务依赖注入 | `routes.go` 的 `NewModule(accounts, releaseSvc, stsSvc, staticRoot, ..., analyticsRepo, userSvc, feedbackSvc, routeGroupSvc)` |
+| 业务依赖注入 | `routes.go` 的 `NewModule(accounts, releaseSvc, stsSvc, staticRoot, userRepo, trackRepo, collectRepo, trackMapRepo, ..., routeGroupSvc)` |
 | 前端入口 | `static/login.html`、`static/index.html` |
 | 安装包上传 | `handlers.go` 中 `UploadPackage`、`static/app.js` 中 `/admin/api/releases/upload-package` |
 | 意见反馈管理 | `handlers.go` 中 `ListFeedbacks` / `GetFeedback` / `UpdateFeedbackStatus` / `GetFeedbackImage`，`static/feedbacks.html`、`static/feedbacks.js` |
@@ -73,6 +74,9 @@ internal/admin/
 | POST | `/admin/api/releases/upload-package` | 鉴权 | multipart 上传安装包到 `<LogDir>/static/release/<platform>/` |
 | GET | `/admin/api/releases/upload-token` | 鉴权 | 旧 OSS 直传 STS 凭证接口，前端不再使用 |
 | GET | `/admin/api/static/*filepath` | 鉴权 | 后台静态资源代理，从 `<LogDir>/static/` 读取头像等资源；后台页面不要直接访问需业务 JWT 的 `/api/v1/static/*` |
+| GET | `/admin/api/users` | 鉴权 | 用户列表，支持 cursor 翻页 |
+| GET | `/admin/api/tracks` | 鉴权 | 轨迹列表，支持 cursor 翻页 |
+| DELETE | `/admin/api/tracks/:track_id` | 鉴权 | 删除轨迹：标记 `status=0`，并清理收藏、地图索引任务、geo index、路线组成员 |
 | GET | `/admin/api/feedbacks` | 鉴权 | 意见反馈列表，支持 `status` / `app_version` / `phone` / `cursor` / `limit` |
 | GET | `/admin/api/feedbacks/:feedback_id` | 鉴权 | 意见反馈详情 |
 | PUT | `/admin/api/feedbacks/:feedback_id/status` | 鉴权 | 更新反馈处理状态与用户可见 `reply`；`resolved` 时 `reply` 必填 |
@@ -145,6 +149,17 @@ GET /admin/api/users
        → TrackMapRepository 更新 track_route_groups / track_route_group_members
 ```
 路线组列表页只展示摘要信息，后端必须走轻量查询，不读取 `track_route_groups.representative_polyline_json`；需要路线折线时进入详情或使用客户端地图接口。
+
+**管理删除轨迹**：
+```
+[admin UI] /admin/tracks.html
+  → 管理员点击删除并在浏览器确认弹窗二次确认
+  → DELETE /admin/api/tracks/:track_id
+       → track_records.status=0，is_running=0，记录/保留 deleted_at
+       → 清理 track_collects
+       → 清理 track_map_index_jobs / track_geo_indexes / track_route_group_members
+       → 若删除的是路线组代表轨迹，归档该路线组并移除其全部成员，后续由 track_route_group 任务重新聚合剩余轨迹
+```
 [admin UI] /admin/analytics.html
   → GET /admin/api/analytics/sync-summaries?status=&limit=&offset=
   → AnalyticsRepository.ListSyncSummaries / CountSyncSummaries

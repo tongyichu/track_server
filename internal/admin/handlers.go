@@ -30,6 +30,8 @@ type Handler struct {
 	userRepo      repository.UserRepository
 	userSvc       *service.UserService
 	trackRepo     repository.TrackRepository
+	collectRepo   repository.CollectRepository
+	trackMapRepo  repository.TrackMapRepository
 	companionRepo repository.CompanionRepository
 	analyticsRepo repository.AnalyticsRepository
 	feedbackSvc   *service.FeedbackService
@@ -40,6 +42,14 @@ type Handler struct {
 	staticRoot string
 }
 
+type adminTrackDeleter interface {
+	AdminSoftDeleteAndCleanupTx(ctx context.Context, trackID string) error
+}
+
+type trackMapCleanupRepository interface {
+	CleanupDeletedTrack(ctx context.Context, trackID string) error
+}
+
 // NewHandler 构造管理后台 Handler。
 func NewHandler(
 	releaseSvc *service.AppReleaseService,
@@ -48,6 +58,8 @@ func NewHandler(
 	staticRoot string,
 	userRepo repository.UserRepository,
 	trackRepo repository.TrackRepository,
+	collectRepo repository.CollectRepository,
+	trackMapRepo repository.TrackMapRepository,
 	companionRepo repository.CompanionRepository,
 	analyticsRepo repository.AnalyticsRepository,
 	userSvc *service.UserService,
@@ -62,6 +74,8 @@ func NewHandler(
 		userRepo:      userRepo,
 		userSvc:       userSvc,
 		trackRepo:     trackRepo,
+		collectRepo:   collectRepo,
+		trackMapRepo:  trackMapRepo,
 		companionRepo: companionRepo,
 		analyticsRepo: analyticsRepo,
 		feedbackSvc:   feedbackSvc,
@@ -428,6 +442,71 @@ func (h *Handler) ListTracks(ctx context.Context, c *app.RequestContext) {
 		}
 	}
 	c.JSON(http.StatusOK, utils.H{"code": 0, "data": resp})
+}
+
+// DeleteTrack 处理 DELETE /admin/api/tracks/:track_id
+func (h *Handler) DeleteTrack(ctx context.Context, c *app.RequestContext) {
+	if h == nil || h.trackRepo == nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "track repository not configured"})
+		return
+	}
+	trackID := strings.TrimSpace(c.Param("track_id"))
+	if trackID == "" {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "track_id is required"})
+		return
+	}
+	if deleter, ok := h.trackRepo.(adminTrackDeleter); ok {
+		if err := deleter.AdminSoftDeleteAndCleanupTx(ctx, trackID); err != nil {
+			handleAdminRepoError(c, err)
+			return
+		}
+		c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"status": "ok"}})
+		return
+	}
+
+	track, err := h.trackRepo.FindByID(ctx, trackID)
+	if err != nil {
+		handleAdminRepoError(c, err)
+		return
+	}
+	now := time.Now()
+	if track.DeletedAt.IsZero() {
+		track.DeletedAt = now
+	}
+	track.Status = models.TrackStatusDeleted
+	track.IsRunning = false
+	track.UpdatedAt = now
+	if err := h.trackRepo.Update(ctx, track); err != nil {
+		handleAdminRepoError(c, err)
+		return
+	}
+	if h.collectRepo != nil {
+		if err := h.collectRepo.RemoveByTrackID(ctx, trackID); err != nil {
+			c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+			return
+		}
+	}
+	if cleaner, ok := h.trackMapRepo.(trackMapCleanupRepository); ok {
+		if err := cleaner.CleanupDeletedTrack(ctx, trackID); err != nil {
+			c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+			return
+		}
+	}
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"status": "ok"}})
+}
+
+func handleAdminRepoError(c *app.RequestContext, err error) {
+	var iae *service.InvalidArgumentError
+	switch {
+	case errors.As(err, &iae):
+		c.JSON(http.StatusBadRequest, utils.H{"error": err.Error()})
+	case errors.Is(err, repository.ErrNotFound):
+		c.JSON(http.StatusNotFound, utils.H{"error": "not found"})
+	case errors.Is(err, repository.ErrForbidden), errors.Is(err, service.ErrForbidden):
+		c.JSON(http.StatusForbidden, utils.H{"error": "forbidden"})
+	default:
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+	}
 }
 
 // ----- 同行管理 -----
