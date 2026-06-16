@@ -14,7 +14,7 @@
 - 查看和处理用户意见反馈（含图片预览、状态更新、用户可见反馈意见）。
 - 查看埋点 OSS 同步摘要（任务状态、文件列表、OSS key、字节数、耗时与错误）。
 - 查看和人工运营路线发现 RouteGroup（改名、合并、移除成员、指定代表轨迹）。
-- 查看和删除用户轨迹；删除为软删除，并同步清理收藏关系与首页地图索引/路线组成员。
+- 查看、修正和删除用户轨迹；修正仅允许改 `title` / `city_code`，删除为软删除，并同步清理收藏关系与首页地图索引/路线组成员。
 
 模块对外只暴露 `admin.NewModule(...)` 与 `Module.RegisterRoutes(h)`，不被业务 handler 引用。
 
@@ -76,6 +76,7 @@ internal/admin/
 | GET | `/admin/api/static/*filepath` | 鉴权 | 后台静态资源代理，从 `<LogDir>/static/` 读取头像等资源；后台页面不要直接访问需业务 JWT 的 `/api/v1/static/*` |
 | GET | `/admin/api/users` | 鉴权 | 用户列表，支持 cursor 翻页 |
 | GET | `/admin/api/tracks` | 鉴权 | 轨迹列表，支持 cursor 翻页 |
+| PUT | `/admin/api/tracks/:track_id` | 鉴权 | 更新轨迹 `title` / `city_code`；若已有地图索引，同步修正 `track_geo_indexes.city_code` |
 | DELETE | `/admin/api/tracks/:track_id` | 鉴权 | 删除轨迹：标记 `status=0`，并清理收藏、地图索引任务、geo index、路线组成员 |
 | GET | `/admin/api/feedbacks` | 鉴权 | 意见反馈列表，支持 `status` / `app_version` / `phone` / `cursor` / `limit` |
 | GET | `/admin/api/feedbacks/:feedback_id` | 鉴权 | 意见反馈详情 |
@@ -150,9 +151,13 @@ GET /admin/api/users
 ```
 路线组列表页只展示摘要信息，后端必须走轻量查询，不读取 `track_route_groups.representative_polyline_json`；需要路线折线时进入详情或使用客户端地图接口。
 
-**管理删除轨迹**：
+**管理轨迹**：
 ```
 [admin UI] /admin/tracks.html
+  → 管理员点击编辑
+  → PUT /admin/api/tracks/:track_id {title, city_code}
+       → 只更新 track_records.title / city_code
+       → 若 city_code 变化且已有 track_geo_indexes，同步更新 track_geo_indexes.city_code
   → 管理员点击删除并在浏览器确认弹窗二次确认
   → DELETE /admin/api/tracks/:track_id
        → track_records.status=0，is_running=0，记录/保留 deleted_at

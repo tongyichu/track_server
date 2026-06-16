@@ -74,6 +74,7 @@ func (m *Module) Close() {
 // - GET  /admin/api/releases/upload-token  旧 OSS 直传凭证接口（鉴权，前端不再使用）
 // - GET  /admin/api/users                  用户列表（鉴权，cursor 翻页）
 // - GET  /admin/api/tracks                 轨迹列表（鉴权，cursor 翻页）
+// - PUT  /admin/api/tracks/:track_id       更新轨迹标题与城市 Code（鉴权）
 // - DELETE /admin/api/tracks/:track_id     删除轨迹（鉴权，软删除并清理关联索引/收藏）
 // - GET  /admin/api/companions             同行会话列表（鉴权，cursor 翻页）
 // - GET  /admin/api/companions/:session_id  同行会话详情：会话/成员/位置/弹幕（鉴权）
@@ -125,6 +126,7 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	api.GET("/static/*filepath", m.Handler.GetStaticAsset)
 	api.GET("/users", m.Handler.ListUsers)
 	api.GET("/tracks", m.Handler.ListTracks)
+	api.PUT("/tracks/:track_id", m.Handler.UpdateTrack)
 	api.DELETE("/tracks/:track_id", m.Handler.DeleteTrack)
 	api.GET("/route-groups", m.Handler.ListRouteGroups)
 	api.GET("/route-groups/:group_id", m.Handler.GetRouteGroup)

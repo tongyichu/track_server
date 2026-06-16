@@ -90,7 +90,8 @@
         '<td>' + esc(statusText(it.status)) + '</td>' +
         '<td>' + fmtTime(it.start_time) + '</td>' +
         '<td>' + fmtTime(it.end_time) + '</td>' +
-        '<td><button class="danger js-delete-track" data-track-id="' + esc(it.id) + '">删除</button></td>';
+        '<td><button class="js-edit-track" data-track-id="' + esc(it.id) + '" data-title="' + esc(it.title || '') + '" data-city-code="' + esc(it.city_code || '') + '">编辑</button> ' +
+        '<button class="danger js-delete-track" data-track-id="' + esc(it.id) + '">删除</button></td>';
       tbody.appendChild(tr);
     });
 
@@ -101,6 +102,11 @@
   }
 
   tbody.addEventListener('click', async function (ev) {
+    var editBtn = ev.target && ev.target.closest ? ev.target.closest('.js-edit-track') : null;
+    if (editBtn) {
+      await editTrack(editBtn);
+      return;
+    }
     var btn = ev.target && ev.target.closest ? ev.target.closest('.js-delete-track') : null;
     if (!btn) return;
     var trackID = btn.getAttribute('data-track-id') || '';
@@ -130,6 +136,52 @@
       btn.textContent = '删除';
     }
   });
+
+  async function editTrack(btn) {
+    var trackID = btn.getAttribute('data-track-id') || '';
+    if (!trackID) return;
+    var oldTitle = btn.getAttribute('data-title') || '';
+    var oldCityCode = btn.getAttribute('data-city-code') || '';
+    var title = window.prompt('轨迹标题', oldTitle);
+    if (title == null) return;
+    var cityCode = window.prompt('城市 Code', oldCityCode);
+    if (cityCode == null) return;
+    title = title.trim();
+    cityCode = cityCode.trim();
+    if (title.length > 128) {
+      window.alert('标题不能超过 128 个字符');
+      return;
+    }
+    if (cityCode.length > 16) {
+      window.alert('城市 Code 不能超过 16 个字符');
+      return;
+    }
+    btn.disabled = true;
+    btn.textContent = '保存中';
+    try {
+      var resp = await fetch('/admin/api/tracks/' + encodeURIComponent(trackID), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: title, city_code: cityCode })
+      });
+      if (!resp.ok) {
+        var msg = '保存失败: ' + resp.status;
+        try {
+          var body = await resp.json();
+          if (body && body.error) msg += ' ' + body.error;
+        } catch (_) {}
+        window.alert(msg);
+        btn.disabled = false;
+        btn.textContent = '编辑';
+        return;
+      }
+      await loadPage();
+    } catch (err) {
+      window.alert('保存失败: ' + (err && err.message ? err.message : err));
+      btn.disabled = false;
+      btn.textContent = '编辑';
+    }
+  }
 
   loadPage();
 })();

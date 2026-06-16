@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/common/utils"
@@ -48,6 +49,11 @@ type adminTrackDeleter interface {
 
 type trackMapCleanupRepository interface {
 	CleanupDeletedTrack(ctx context.Context, trackID string) error
+}
+
+type updateTrackBody struct {
+	Title    *string `json:"title"`
+	CityCode *string `json:"city_code"`
 }
 
 // NewHandler 构造管理后台 Handler。
@@ -442,6 +448,70 @@ func (h *Handler) ListTracks(ctx context.Context, c *app.RequestContext) {
 		}
 	}
 	c.JSON(http.StatusOK, utils.H{"code": 0, "data": resp})
+}
+
+// UpdateTrack 处理 PUT /admin/api/tracks/:track_id
+//
+// 管理后台只允许修正运营展示字段：title 与 city_code。
+func (h *Handler) UpdateTrack(ctx context.Context, c *app.RequestContext) {
+	if h == nil || h.trackRepo == nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "track repository not configured"})
+		return
+	}
+	trackID := strings.TrimSpace(c.Param("track_id"))
+	if trackID == "" {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "track_id is required"})
+		return
+	}
+	var body updateTrackBody
+	data, err := c.Body()
+	if err != nil || json.Unmarshal(data, &body) != nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid payload"})
+		return
+	}
+	if body.Title == nil && body.CityCode == nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "title or city_code is required"})
+		return
+	}
+	track, err := h.trackRepo.FindByID(ctx, trackID)
+	if err != nil {
+		handleAdminRepoError(c, err)
+		return
+	}
+	oldCityCode := track.CityCode
+	if body.Title != nil {
+		title := strings.TrimSpace(*body.Title)
+		if utf8.RuneCountInString(title) > 128 {
+			c.JSON(http.StatusBadRequest, utils.H{"error": "title exceeds 128 characters"})
+			return
+		}
+		track.Title = title
+	}
+	if body.CityCode != nil {
+		cityCode := strings.TrimSpace(*body.CityCode)
+		if utf8.RuneCountInString(cityCode) > 16 {
+			c.JSON(http.StatusBadRequest, utils.H{"error": "city_code exceeds 16 characters"})
+			return
+		}
+		track.CityCode = cityCode
+	}
+	if err := h.trackRepo.Update(ctx, track); err != nil {
+		handleAdminRepoError(c, err)
+		return
+	}
+	if h.trackMapRepo != nil && body.CityCode != nil && oldCityCode != track.CityCode {
+		if index, err := h.trackMapRepo.FindTrackGeoIndex(ctx, track.ID); err == nil && index != nil {
+			index.CityCode = track.CityCode
+			if err := h.trackMapRepo.UpsertTrackGeoIndex(ctx, index); err != nil {
+				c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+				return
+			}
+		} else if err != nil && !errors.Is(err, repository.ErrNotFound) {
+			c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+			return
+		}
+	}
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": track})
 }
 
 // DeleteTrack 处理 DELETE /admin/api/tracks/:track_id
