@@ -458,11 +458,13 @@ func buildTrackGeoIndex(track *models.Track, points []models.TrackPoint) (*model
 }
 
 func defaultTrackMapType(trackType string) string {
-	trackType = strings.TrimSpace(trackType)
-	if trackType == "" {
-		return "徒步"
+	code := normalizeTrackTypeCode(trackType)
+	switch code {
+	case "hiking", "running", "climbing", "riding", "driving":
+		return code
+	default:
+		return "hiking"
 	}
-	return trackType
 }
 
 func simplifyTrackPoints(points []models.TrackPoint, maxPoints int) []models.TrackPoint {

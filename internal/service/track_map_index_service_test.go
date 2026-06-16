@@ -135,8 +135,8 @@ func TestBuildTrackGeoIndexDefaultsTrackTypeAndSimplifies(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build index failed: %v", err)
 	}
-	if index.TrackType != "徒步" {
-		t.Fatalf("expected default track type 徒步, got %q", index.TrackType)
+	if index.TrackType != "hiking" {
+		t.Fatalf("expected default track type hiking, got %q", index.TrackType)
 	}
 	if index.PointCount != 600 {
 		t.Fatalf("expected point count 600, got %d", index.PointCount)
@@ -149,5 +149,35 @@ func TestBuildTrackGeoIndexDefaultsTrackTypeAndSimplifies(t *testing.T) {
 	}
 	if index.SimplifiedPolylineJSON == "" {
 		t.Fatalf("expected simplified polyline json")
+	}
+}
+
+func TestBuildTrackGeoIndexNormalizesTrackTypeToCode(t *testing.T) {
+	points := []models.TrackPoint{
+		{Latitude: 30.1, Longitude: 120.1},
+		{Latitude: 30.2, Longitude: 120.2},
+	}
+	cases := []struct {
+		name      string
+		trackType string
+		want      string
+	}{
+		{name: "chinese hiking", trackType: "徒步", want: "hiking"},
+		{name: "upper hike", trackType: "HIKE", want: "hiking"},
+		{name: "walking alias", trackType: "散步", want: "hiking"},
+		{name: "running", trackType: "跑步", want: "running"},
+		{name: "unknown fallback", trackType: "滑雪", want: "hiking"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			track := &models.Track{ID: "NO.00000001", UserID: 1001, TrackType: tc.trackType, Distance: 1200}
+			index, err := buildTrackGeoIndex(track, points)
+			if err != nil {
+				t.Fatalf("build index failed: %v", err)
+			}
+			if index.TrackType != tc.want {
+				t.Fatalf("track type=%q, want %q", index.TrackType, tc.want)
+			}
+		})
 	}
 }

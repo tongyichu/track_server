@@ -30,7 +30,7 @@
 - 客户端只需要在首页提供列表/地图模式切换，不需要新增一个可见的“路线发现”按钮。
 - 支持当前位置附近 10 公里查询。
 - 支持指定城市查询。
-- 首页地图模式必须按运动类型分类，默认分类为 `徒步`。
+- 首页地图模式必须按运动类型分类，默认分类 code 为 `hiking`（展示名 `徒步`）。
 - 点击路线组后展示相关轨迹列表。
 - RouteGroup 列表先不展示 `user_count` 和 `track_count`，避免冷启动阶段暴露人气不足。
 
@@ -96,10 +96,10 @@ RouteGroup 必须归属于明确的运动类型。同一地理路线在不同运
 默认运动类型：
 
 ```text
-徒步
+hiking
 ```
 
-客户端进入首页地图模式时，如果用户没有主动选择运动类型，应默认请求 `track_type=徒步`。服务端在客户端未传 `track_type` 时也应按 `徒步` 处理，避免一次返回多种运动类型导致地图语义混乱。
+客户端进入首页地图模式时，如果用户没有主动选择运动类型，应默认请求 `track_type=hiking`。服务端在客户端未传 `track_type` 时也应按 `hiking` 处理，避免一次返回多种运动类型导致地图语义混乱。
 
 客户端展示要求：
 
@@ -136,7 +136,7 @@ RouteGroup 必须归属于明确的运动类型。同一地理路线在不同运
 
 1. 用户在首页点击地图模式切换按钮。
 2. 客户端请求定位权限。
-3. 如果拿到定位，默认以 `徒步` 分类查询当前位置附近 10 公里路线。
+3. 如果拿到定位，默认以 `hiking` 分类查询当前位置附近 10 公里路线。
 4. 如果没有定位权限，默认进入城市选择或使用上次城市。
 5. 地图展示当前运动类型下的路线组 marker / 折线。
 6. 底部半屏列表展示当前视野内路线。
@@ -256,7 +256,7 @@ GET /api/v1/track-map/view
 latitude=22.3000
 longitude=114.1700
 radius_m=10000
-track_type=徒步
+track_type=hiking
 ```
 
 地图拖动或缩放后，客户端传当前视野：
@@ -264,7 +264,7 @@ track_type=徒步
 ```text
 bbox=114.1000,22.2500,114.3500,22.4500
 zoom=12
-track_type=徒步
+track_type=hiking
 ```
 
 参数：
@@ -277,7 +277,7 @@ track_type=徒步
 | `longitude` | number | 首次附近模式必填 | 用户当前位置经度 |
 | `radius_m` | int | 否 | 半径，默认 10000 |
 | `city_code` | string | 否 | 城市 Code，可用于城市筛选或兜底 |
-| `track_type` | string | 否 | 运动类型，不传时默认 `徒步` |
+| `track_type` | string | 否 | 运动类型 code，不传时默认 `hiking`；地图索引与路线组只保存 `hiking` / `running` / `climbing` / `riding` / `driving`，兼容中文名如 `徒步` |
 | `limit` | int | 否 | 默认 100 |
 
 服务端返回的 `view_level` 决定客户端展示方式：
@@ -301,7 +301,7 @@ track_type=徒步
       "name": "麦理浩径徒步路线",
       "city_code": "810000",
       "city_name": "香港",
-      "track_type": "徒步",
+      "track_type": "hiking",
       "center": {
         "latitude": 22.3942,
         "longitude": 114.2781
@@ -336,7 +336,7 @@ track_type=徒步
     {
       "type": "area_cluster",
       "cluster_id": "cell_810000_11420_2235",
-      "track_type": "徒步",
+      "track_type": "hiking",
       "center": {
         "latitude": 22.3500,
         "longitude": 114.2000
@@ -364,7 +364,7 @@ track_type=徒步
       "type": "city_cluster",
       "city_code": "810000",
       "city_name": "香港",
-      "track_type": "徒步",
+      "track_type": "hiking",
       "center": {
         "latitude": 22.3193,
         "longitude": 114.1694
@@ -420,7 +420,7 @@ city_code=810000
 | `longitude` | number | 附近模式必填 | 用户当前位置经度 |
 | `radius_m` | int | 否 | 半径，默认 10000，建议最大 50000 |
 | `city_code` | string | 城市模式必填 | 城市 Code |
-| `track_type` | string | 否 | 运动类型，例如 `徒步` / `跑步`；不传时默认 `徒步` |
+| `track_type` | string | 否 | 运动类型 code，例如 `hiking` / `running`；不传时默认 `hiking`，兼容中文名 |
 | `bbox` | string | 否 | 当前地图视野，格式 `minLng,minLat,maxLng,maxLat` |
 | `zoom` | number | 否 | 地图缩放级别 |
 | `limit` | int | 否 | 默认 50，最大 100 |
@@ -437,7 +437,7 @@ city_code=810000
       "name": "麦理浩径徒步路线",
       "city_code": "810000",
       "city_name": "香港",
-      "track_type": "徒步",
+      "track_type": "hiking",
       "coordinate_system": "GCJ02",
       "center": {
         "latitude": 22.3942,
@@ -494,7 +494,7 @@ GET /api/v1/track-map/groups/:group_id/detail
   "name": "麦理浩径徒步路线",
   "city_code": "810000",
   "city_name": "香港",
-  "track_type": "徒步",
+  "track_type": "hiking",
   "coordinate_system": "GCJ02",
   "center": {
     "latitude": 22.3942,
@@ -536,7 +536,7 @@ GET /api/v1/track-map/groups/:group_id/tracks?limit=20&cursor=
       "user_id": 1001,
       "city_code": "810000",
       "city_name": "香港",
-      "track_type": "徒步",
+      "track_type": "hiking",
       "nickname": "山野用户",
       "user_avatar_url": "/api/v1/static/avatar/1001.jpg",
       "title": "麦理浩径一段",

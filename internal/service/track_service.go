@@ -295,7 +295,7 @@ func normalizeTrackTypeCode(trackType string) string {
 	switch strings.ToLower(t) {
 	case "running", "run":
 		return "running"
-	case "hiking", "walk", "walking":
+	case "hiking", "hike", "walk", "walking":
 		return "hiking"
 	case "climbing", "mountain", "mountaineering":
 		return "climbing"
@@ -307,6 +307,8 @@ func normalizeTrackTypeCode(trackType string) string {
 	switch t {
 	case "骑车":
 		return "riding"
+	case "散步":
+		return "hiking"
 	}
 	for _, item := range config.DefaultTrackTypeConfigs {
 		if item.Type == t || item.Name == t {
