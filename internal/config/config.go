@@ -381,7 +381,7 @@ func splitByAny(s, seps string) []string {
 // - 通过 sync.Once 在进程内完成一次性解析，后续查询为 map O(1)。
 //
 // 注意：
-// - 当前仅使用 city_code -> city_name 映射；province 的映射文件也一并内置，便于后续扩展（例如返回省份名称）。
+// - city_code 优先使用城市映射；直辖市、港澳台等省级 code 使用省份映射兜底。
 
 //go:embed china_city_raw.json
 var chinaCityRaw []byte
@@ -396,6 +396,12 @@ type rawCity struct {
 	City     string `json:"city"`
 }
 
+type rawProvince struct {
+	Code     string `json:"code"`
+	Name     string `json:"name"`
+	Province string `json:"province"`
+}
+
 var (
 	cityNameOnce sync.Once
 	cityNameMap  map[string]string
@@ -403,7 +409,8 @@ var (
 
 // CityNameByCode 根据城市 Code 返回城市名称。
 //
-// - 数据来源：internal/config/china_city_raw.json（编译期内置），由业务侧维护映射关系；
+// - 数据来源：internal/config/china_city_raw.json 与 china_province_raw.json（编译期内置），由业务侧维护映射关系；
+// - 城市表优先，省份表只用于 110000/310000/810000 等省级或直辖市 code 兜底；
 // - 若 code 为空或未找到映射，返回空字符串；
 // - 该函数不会抛错，避免影响推荐/搜索列表主流程（拿不到 city_name 时仍返回 city_code 以及其他字段）。
 //
@@ -419,15 +426,26 @@ func CityNameByCode(code string) string {
 		cityNameMap = make(map[string]string, 2500)
 		var cities []rawCity
 		if err := json.Unmarshal(chinaCityRaw, &cities); err != nil {
-			// 配置解析失败时兜底为空 map；调用方拿不到 city_name 但不影响其他字段。
-			cityNameMap = map[string]string{}
-			return
+			cities = nil
 		}
 		for _, c := range cities {
 			if c.Code == "" {
 				continue
 			}
 			cityNameMap[c.Code] = c.Name
+		}
+		var provinces []rawProvince
+		if err := json.Unmarshal(chinaProvinceRaw, &provinces); err != nil {
+			return
+		}
+		for _, p := range provinces {
+			if p.Code == "" {
+				continue
+			}
+			if _, exists := cityNameMap[p.Code]; exists {
+				continue
+			}
+			cityNameMap[p.Code] = p.Name
 		}
 	})
 	return cityNameMap[code]
