@@ -18,6 +18,8 @@ const (
 	maxTrackMapRadiusM     = 50000
 	defaultTrackMapLimit   = 100
 	maxTrackMapLimit       = 200
+	trackMapCityMaxZoom    = 9
+	trackMapAreaMaxZoom    = 11
 	trackMapViewRoute      = "route"
 	trackMapViewArea       = "area"
 	trackMapViewCity       = "city"
@@ -320,10 +322,10 @@ func (s *TrackMapService) buildFilter(input TrackMapViewInput) (models.TrackMapQ
 
 func chooseTrackMapViewLevel(zoom float64, filter models.TrackMapQueryFilter) string {
 	if zoom > 0 {
-		if zoom <= 7 {
+		if zoom <= trackMapCityMaxZoom {
 			return trackMapViewCity
 		}
-		if zoom <= 11 {
+		if zoom <= trackMapAreaMaxZoom {
 			return trackMapViewArea
 		}
 		return trackMapViewRoute

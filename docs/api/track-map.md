@@ -30,7 +30,7 @@ GET /api/v1/track-map/view?latitude=22.3000&longitude=114.1700&radius_m=10000&tr
 | 参数 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
 | `bbox` | string | 地图视野模式必填 | `minLng,minLat,maxLng,maxLat` |
-| `zoom` | number | 否 | 地图缩放级别；`<=7` 返回城市聚合，`<=11` 返回区域聚合，更大返回路线组 |
+| `zoom` | number | 否 | 地图缩放级别；`<=9` 返回城市聚合，`<=11` 返回区域聚合，更大返回路线组 |
 | `latitude` | number | 附近模式必填 | 用户当前位置纬度 |
 | `longitude` | number | 附近模式必填 | 用户当前位置经度 |
 | `radius_m` | int | 否 | 附近半径，默认 `10000`，最大 `50000` |
