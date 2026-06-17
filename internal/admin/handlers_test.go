@@ -294,17 +294,29 @@ func TestAdminListTracksRewritesScreenshotURL(t *testing.T) {
 		StartTime:                 now,
 		EndTime:                   now.Add(time.Hour),
 		Status:                    models.TrackStatusNormal,
-		TrackScreenshotURL:        "/api/v1/static/screenshots/NO.00003001.png",
-		TrackNoMapBgScreenshotURL: "/api/v1/static/screenshots/NO.00003001_no_map_bg.png",
+		TrackScreenshotURL:        "https://bucket.oss-cn-beijing.aliyuncs.com/screenshots/NO.00003001.png?signature=abc",
+		TrackNoMapBgScreenshotURL: "https://bucket.oss-cn-beijing.aliyuncs.com/screenshots/NO.00003001_no_map_bg.png?signature=abc",
 		RawTrackURL:               "/api/v1/static/raw_tracks/NO.00003001.json",
 		CreatedAt:                 now,
 		UpdatedAt:                 now,
 	}); err != nil {
 		t.Fatal(err)
 	}
+	staticRoot := t.TempDir()
+	screenshotCache, err := service.NewAssetCacheService(
+		filepath.Join(staticRoot, "screenshots"),
+		"/api/v1/static/screenshots",
+		[]string{".png", ".jpg", ".jpeg", ".webp", ".svg"},
+		".png",
+	)
+	if err != nil {
+		t.Fatalf("create screenshot cache: %v", err)
+	}
+	screenshotCache.SetDownloader(adminFakeDownloader{})
 
 	h := server.Default()
-	module := NewModule(map[string]string{"admin": string(placeholderPasswordHash)}, nil, nil, t.TempDir(), nil, trackRepo, nil, nil, nil, nil, nil, nil, nil)
+	module := NewModule(map[string]string{"admin": string(placeholderPasswordHash)}, nil, nil, staticRoot, nil, trackRepo, nil, nil, nil, nil, nil, nil, nil)
+	module.Handler.SetScreenshotCache(screenshotCache)
 	module.RegisterRoutes(h)
 	defer module.Close()
 	session, err := module.Auth.store.Create("admin")
@@ -338,6 +350,15 @@ func TestAdminListTracksRewritesScreenshotURL(t *testing.T) {
 	if got.RawTrackURL != "/admin/api/static/raw_tracks/NO.00003001.json" {
 		t.Fatalf("unexpected raw track url: %q", got.RawTrackURL)
 	}
+	if _, err := os.Stat(filepath.Join(staticRoot, "screenshots", "NO.00003001.png")); err != nil {
+		t.Fatalf("expected cached screenshot: %v", err)
+	}
+}
+
+type adminFakeDownloader struct{}
+
+func (adminFakeDownloader) DownloadObject(_ int64, _ string, localPath string) error {
+	return os.WriteFile(localPath, testPNGBytes(), 0o644)
 }
 
 func TestAdminDeleteTrackCleansRelatedData(t *testing.T) {

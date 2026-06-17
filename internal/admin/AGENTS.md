@@ -14,7 +14,7 @@
 - 查看和处理用户意见反馈（含图片预览、状态更新、用户可见反馈意见）。
 - 查看埋点 OSS 同步摘要（任务状态、文件列表、OSS key、字节数、耗时与错误）。
 - 查看和人工运营路线发现 RouteGroup（改名、合并、移除成员、指定代表轨迹）。
-- 查看、修正和删除用户轨迹；列表展示 `track_screenshot_url` 缩略图，修正仅允许改 `title` / `city_code`，删除为软删除，并同步清理收藏关系与首页地图索引/路线组成员。
+- 查看、修正和删除用户轨迹；列表展示 `track_screenshot_url` 缩略图，OSS 截图需先经共享截图缓存落盘再通过后台静态代理访问；修正仅允许改 `title` / `city_code`，删除为软删除，并同步清理收藏关系与首页地图索引/路线组成员。
 
 模块对外只暴露 `admin.NewModule(...)` 与 `Module.RegisterRoutes(h)`，不被业务 handler 引用。
 
@@ -49,7 +49,7 @@ internal/admin/
 | --- | --- |
 | 路由清单 | `routes.go` 中 `RegisterRoutes` |
 | 鉴权与 cookie | `auth.go`（`sessionCookieName = "admin_session"`） |
-| 业务依赖注入 | `routes.go` 的 `NewModule(accounts, releaseSvc, stsSvc, staticRoot, userRepo, trackRepo, collectRepo, trackMapRepo, ..., routeGroupSvc)` |
+| 业务依赖注入 | `routes.go` 的 `NewModule(accounts, releaseSvc, stsSvc, staticRoot, userRepo, trackRepo, collectRepo, trackMapRepo, ..., routeGroupSvc)`；`cmd/server/main.go` 创建后通过 `Handler.SetScreenshotCache(screenshotCache)` 注入截图缓存 |
 | 前端入口 | `static/login.html`、`static/index.html` |
 | 安装包上传 | `handlers.go` 中 `UploadPackage`、`static/app.js` 中 `/admin/api/releases/upload-package` |
 | 意见反馈管理 | `handlers.go` 中 `ListFeedbacks` / `GetFeedback` / `UpdateFeedbackStatus` / `GetFeedbackImage`，`static/feedbacks.html`、`static/feedbacks.js` |
@@ -154,7 +154,9 @@ GET /admin/api/users
 **管理轨迹**：
 ```
 [admin UI] /admin/tracks.html
-  → GET /admin/api/tracks 拉取轨迹列表，track_screenshot_url 等 /api/v1/static/* 资源会改写为 /admin/api/static/*
+  → GET /admin/api/tracks 拉取轨迹列表
+       → handler 使用 screenshotCache.EnsureCached 把 OSS track_screenshot_url 落到 <LogDir>/static/screenshots/
+       → /api/v1/static/screenshots/... 改写为 /admin/api/static/screenshots/...
   → 管理员点击编辑
   → PUT /admin/api/tracks/:track_id {title, city_code}
        → 只更新 track_records.title / city_code

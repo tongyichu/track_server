@@ -25,18 +25,19 @@ import (
 
 // Handler 聚合管理后台需要的业务依赖。
 type Handler struct {
-	releaseSvc    *service.AppReleaseService
-	stsSvc        *service.OSSTokenService
-	auth          *Authenticator
-	userRepo      repository.UserRepository
-	userSvc       *service.UserService
-	trackRepo     repository.TrackRepository
-	collectRepo   repository.CollectRepository
-	trackMapRepo  repository.TrackMapRepository
-	companionRepo repository.CompanionRepository
-	analyticsRepo repository.AnalyticsRepository
-	feedbackSvc   *service.FeedbackService
-	routeGroupSvc *service.TrackRouteGroupService
+	releaseSvc      *service.AppReleaseService
+	stsSvc          *service.OSSTokenService
+	auth            *Authenticator
+	userRepo        repository.UserRepository
+	userSvc         *service.UserService
+	trackRepo       repository.TrackRepository
+	collectRepo     repository.CollectRepository
+	trackMapRepo    repository.TrackMapRepository
+	companionRepo   repository.CompanionRepository
+	analyticsRepo   repository.AnalyticsRepository
+	feedbackSvc     *service.FeedbackService
+	routeGroupSvc   *service.TrackRouteGroupService
+	screenshotCache *service.AssetCacheService
 	// staticRoot 是服务端本地静态资源根目录（通常为 <LogDir>/static）。
 	// 管理后台上传的安装包会落到 <staticRoot>/release/<platform>/ 下，
 	// 并通过 /api/v1/static/release/<platform>/<file> 对外下发。
@@ -87,6 +88,15 @@ func NewHandler(
 		feedbackSvc:   feedbackSvc,
 		routeGroupSvc: routeGroupSvc,
 	}
+}
+
+// SetScreenshotCache injects the shared screenshot cache used to serve track
+// screenshots through the admin static proxy.
+func (h *Handler) SetScreenshotCache(cache *service.AssetCacheService) {
+	if h == nil {
+		return
+	}
+	h.screenshotCache = cache
 }
 
 // ----- 发布列表 -----
@@ -430,7 +440,7 @@ func (h *Handler) ListTracks(ctx context.Context, c *app.RequestContext) {
 		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
 		return
 	}
-	rewriteAdminTrackAssetURLs(items)
+	h.decorateAdminTrackAssetURLs(ctx, items)
 	total, err := h.trackRepo.CountAll(ctx)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
@@ -776,15 +786,32 @@ func rewriteAdminStaticURL(raw string) string {
 	return raw
 }
 
-func rewriteAdminTrackAssetURLs(items []*models.Track) {
+func (h *Handler) decorateAdminTrackAssetURLs(ctx context.Context, items []*models.Track) {
 	for _, item := range items {
 		if item == nil {
 			continue
+		}
+		if h != nil && h.screenshotCache != nil {
+			item.TrackScreenshotURL = h.ensureAdminScreenshotCached(ctx, item.UserID, item.ID, item.TrackScreenshotURL)
+			item.TrackNoMapBgScreenshotURL = h.ensureAdminScreenshotCached(ctx, item.UserID, item.ID+"_no_map_bg", item.TrackNoMapBgScreenshotURL)
 		}
 		item.TrackScreenshotURL = rewriteAdminStaticURL(item.TrackScreenshotURL)
 		item.TrackNoMapBgScreenshotURL = rewriteAdminStaticURL(item.TrackNoMapBgScreenshotURL)
 		item.RawTrackURL = rewriteAdminStaticURL(item.RawTrackURL)
 	}
+}
+
+func (h *Handler) ensureAdminScreenshotCached(ctx context.Context, userID int64, key, src string) string {
+	src = strings.TrimSpace(src)
+	if src == "" || h == nil || h.screenshotCache == nil || strings.HasPrefix(src, "/api/v1/static/") || strings.HasPrefix(src, "/admin/api/static/") {
+		return src
+	}
+	cacheCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if local := h.screenshotCache.EnsureCached(cacheCtx, userID, key, src); local != "" {
+		return local
+	}
+	return src
 }
 
 func cleanAdminStaticPath(raw string) (string, bool) {
