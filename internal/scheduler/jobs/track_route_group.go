@@ -27,6 +27,7 @@ func (j *TrackRouteGroup) Name() string { return "track_route_group" }
 func (j *TrackRouteGroup) Spec() string { return j.spec }
 
 func (j *TrackRouteGroup) Run(ctx context.Context) error {
+	log.Printf("[TrackRouteGroup] start run ...")
 	result, err := j.groupSvc.RunOnce(ctx)
 	if err != nil {
 		return err
