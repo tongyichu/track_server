@@ -313,6 +313,23 @@ func (r *MongoTrackMapRepository) FindTrackGeoIndex(ctx context.Context, trackID
 	return &index, nil
 }
 
+func (r *MongoTrackMapRepository) ListAllTrackGeoIndexes(ctx context.Context) ([]*models.TrackGeoIndex, error) {
+	cur, err := r.index.Find(ctx, bson.M{}, options.Find().SetSort(bson.D{{Key: "track_type", Value: 1}, {Key: "center_lat", Value: 1}, {Key: "center_lng", Value: 1}, {Key: "track_id", Value: 1}}))
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+	items := make([]*models.TrackGeoIndex, 0)
+	for cur.Next(ctx) {
+		var index models.TrackGeoIndex
+		if err := cur.Decode(&index); err != nil {
+			return nil, err
+		}
+		items = append(items, &index)
+	}
+	return items, cur.Err()
+}
+
 func (r *MongoTrackMapRepository) ListTrackGeoIndexes(ctx context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackGeoIndex, error) {
 	limit := normalizeTrackMapQueryLimit(filter.Limit)
 	cur, err := r.index.Find(ctx, mongoTrackGeoIndexFilter(filter), options.Find().SetSort(bson.D{{Key: "created_at", Value: -1}}).SetLimit(int64(limit)))
@@ -450,8 +467,7 @@ func (r *MongoTrackMapRepository) ListRouteGroupSummaries(ctx context.Context, f
 	limit := normalizeTrackMapQueryLimit(filter.Limit)
 	opts := options.Find().
 		SetSort(bson.D{{Key: "member_count", Value: -1}, {Key: "updated_at", Value: -1}}).
-		SetLimit(int64(limit)).
-		SetProjection(bson.M{"representative_polyline": 0, "representative_polyline_json": 0})
+		SetLimit(int64(limit))
 	cur, err := r.groups.Find(ctx, mongoTrackRouteGroupFilter(filter), opts)
 	if err != nil {
 		return nil, err
@@ -577,6 +593,58 @@ func (r *MongoTrackMapRepository) UpsertRouteGroupMember(ctx context.Context, me
 	}
 	_, err = r.groups.UpdateOne(ctx, bson.M{"_id": member.GroupID}, bson.M{"$set": bson.M{"member_count": count, "updated_at": now}})
 	return err
+}
+
+func (r *MongoTrackMapRepository) ReplaceRouteGroups(ctx context.Context, groups []*models.TrackRouteGroup, members []*models.TrackRouteGroupMember) error {
+	if _, err := r.members.DeleteMany(ctx, bson.M{}); err != nil {
+		return err
+	}
+	if _, err := r.groups.DeleteMany(ctx, bson.M{}); err != nil {
+		return err
+	}
+	if len(groups) > 0 {
+		docs := make([]interface{}, 0, len(groups))
+		now := time.Now()
+		for _, group := range groups {
+			if group == nil || group.GroupID == "" {
+				continue
+			}
+			if group.CreatedAt.IsZero() {
+				group.CreatedAt = now
+			}
+			if group.UpdatedAt.IsZero() {
+				group.UpdatedAt = now
+			}
+			docs = append(docs, group)
+		}
+		if len(docs) > 0 {
+			if _, err := r.groups.InsertMany(ctx, docs); err != nil {
+				return err
+			}
+		}
+	}
+	if len(members) > 0 {
+		docs := make([]interface{}, 0, len(members))
+		now := time.Now()
+		for _, member := range members {
+			if member == nil || member.GroupID == "" || member.TrackID == "" {
+				continue
+			}
+			if member.CreatedAt.IsZero() {
+				member.CreatedAt = now
+			}
+			if member.UpdatedAt.IsZero() {
+				member.UpdatedAt = now
+			}
+			docs = append(docs, member)
+		}
+		if len(docs) > 0 {
+			if _, err := r.members.InsertMany(ctx, docs); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func (r *MongoTrackMapRepository) DeleteRouteGroupMember(ctx context.Context, groupID, trackID string) error {

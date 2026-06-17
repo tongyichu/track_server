@@ -9,7 +9,7 @@ import (
 	"github.com/tongyichu/track_server/internal/repository"
 )
 
-func TestTrackRouteGroupService_MergesReverseRoute(t *testing.T) {
+func TestTrackRouteGroupService_MergesNearbyRouteCenters(t *testing.T) {
 	trackRepo := repository.NewInMemoryTrackRepository()
 	mapRepo := repository.NewInMemoryTrackMapRepository(trackRepo)
 	now := time.Now()
@@ -44,18 +44,21 @@ func TestTrackRouteGroupService_MergesReverseRoute(t *testing.T) {
 	if group.MemberCount != 2 {
 		t.Fatalf("expected member_count=2, got %d", group.MemberCount)
 	}
+	if group.RadiusM <= 0 {
+		t.Fatalf("expected positive radius_m, got %f", group.RadiusM)
+	}
 	members, err := mapRepo.ListRouteGroupMembers(context.Background(), group.GroupID, 10)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var reverseFound bool
+	var mergedFound bool
 	for _, member := range members {
-		if member.TrackID == b.TrackID && member.MatchDirection == models.TrackRouteGroupMemberDirectionReverse {
-			reverseFound = true
+		if member.TrackID == b.TrackID && member.MatchDirection == models.TrackRouteGroupMemberDirectionForward {
+			mergedFound = true
 		}
 	}
-	if !reverseFound {
-		t.Fatalf("expected reverse member for %s", b.TrackID)
+	if !mergedFound {
+		t.Fatalf("expected merged member for %s", b.TrackID)
 	}
 }
 

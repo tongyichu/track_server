@@ -10,7 +10,7 @@
 - `area`：区域聚合气泡。
 - `city`：城市聚合气泡。
 
-服务端已使用 `track_route_groups` 聚合表作为数据源，`group_id` 是路线组 ID，不等同于单条轨迹 ID。路线组由后台离线任务基于 `track_geo_indexes` 聚合生成。
+服务端已使用 `track_route_groups` 聚合表作为数据源，`group_id` 是路线组 ID，不等同于单条轨迹 ID。路线组由后台离线任务基于 `track_geo_indexes` 的轨迹中心点聚类生成；`route_group` 返回 `center` 与 `radius_m`，客户端可直接绘制聚合区域，不再依赖代表路线折线。
 
 **需要认证**
 
@@ -56,16 +56,13 @@ GET /api/v1/track-map/view?latitude=22.3000&longitude=114.1700&radius_m=10000&tr
         "track_type": "hiking",
         "coordinate_system": "GCJ02",
         "center": { "latitude": 22.3942, "longitude": 114.2781 },
+        "radius_m": 6200,
         "bbox": {
           "min_latitude": 22.3541,
           "min_longitude": 114.2098,
           "max_latitude": 22.432,
           "max_longitude": 114.3652
         },
-        "representative_polyline": [
-          { "latitude": 22.3541, "longitude": 114.2098 },
-          { "latitude": 22.3942, "longitude": 114.2781 }
-        ],
         "cover_track": {
           "track_id": "NO.00000001",
           "track_screenshot_url": "/api/v1/static/screenshots/NO.00000001.jpg"
@@ -166,13 +163,13 @@ Authorization: Bearer <token>
         "track_type": "hiking",
         "coordinate_system": "GCJ02",
         "center": { "latitude": 22.3942, "longitude": 114.2781 },
+        "radius_m": 6200,
         "bbox": {
           "min_latitude": 22.3541,
           "min_longitude": 114.2098,
           "max_latitude": 22.432,
           "max_longitude": 114.3652
         },
-        "representative_polyline": [],
         "cover_track": {
           "track_id": "NO.00000001",
           "track_screenshot_url": "/api/v1/static/screenshots/NO.00000001.jpg"

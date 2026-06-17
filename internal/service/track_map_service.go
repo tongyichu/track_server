@@ -197,16 +197,16 @@ func (s *TrackMapService) routeGroupItem(ctx context.Context, group *models.Trac
 		TrackType:        group.TrackType,
 		CoordinateSystem: mapCoordinateSystem(group.CoordinateSystem),
 		Center:           models.TrackMapPoint{Latitude: group.CenterLat, Longitude: group.CenterLng},
+		RadiusM:          group.RadiusM,
 		BBox: models.TrackMapBBox{
 			MinLatitude:  group.MinLat,
 			MinLongitude: group.MinLng,
 			MaxLatitude:  group.MaxLat,
 			MaxLongitude: group.MaxLng,
 		},
-		RepresentativePolyline: trackMapPolyline(group.RepresentativePolyline),
-		CoverTrack:             &models.TrackMapCoverTrack{TrackID: track.ID},
-		RawTrackID:             track.ID,
-		Track:                  track,
+		CoverTrack: &models.TrackMapCoverTrack{TrackID: track.ID},
+		RawTrackID: track.ID,
+		Track:      track,
 	}
 	if s.trackSvc != nil && s.trackSvc.screenshotCache != nil && track.TrackScreenshotURL != "" {
 		cacheCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
@@ -250,17 +250,17 @@ func (s *TrackMapService) legacyRouteGroupItem(ctx context.Context, index *model
 		TrackType:        index.TrackType,
 		CoordinateSystem: mapCoordinateSystem(index.CoordinateSystem),
 		Center:           models.TrackMapPoint{Latitude: index.CenterLat, Longitude: index.CenterLng},
+		RadiusM:          routeGroupCoverageRadiusM(index.CenterLat, index.CenterLng, index),
 		BBox: models.TrackMapBBox{
 			MinLatitude:  index.MinLat,
 			MinLongitude: index.MinLng,
 			MaxLatitude:  index.MaxLat,
 			MaxLongitude: index.MaxLng,
 		},
-		RepresentativePolyline: trackMapPolyline(index.SimplifiedPolyline),
-		CoverTrack:             &models.TrackMapCoverTrack{TrackID: track.ID},
-		RawTrackID:             track.ID,
-		SourceGeoIndex:         index,
-		Track:                  track,
+		CoverTrack:     &models.TrackMapCoverTrack{TrackID: track.ID},
+		RawTrackID:     track.ID,
+		SourceGeoIndex: index,
+		Track:          track,
 	}
 	if s.trackSvc != nil && s.trackSvc.screenshotCache != nil && track.TrackScreenshotURL != "" {
 		cacheCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
@@ -392,14 +392,6 @@ func trackMapRouteName(track *models.Track, index *models.TrackGeoIndex) string 
 		return fmt.Sprintf("%s%s路线", cityName, trackType)
 	}
 	return fmt.Sprintf("%s路线", trackType)
-}
-
-func trackMapPolyline(points []models.TrackPoint) []models.TrackMapPoint {
-	out := make([]models.TrackMapPoint, 0, len(points))
-	for _, p := range points {
-		out = append(out, models.TrackMapPoint{Latitude: p.Latitude, Longitude: p.Longitude})
-	}
-	return out
 }
 
 func mapCoordinateSystem(raw string) string {

@@ -196,25 +196,25 @@ func TestAdminRouteGroupOperations(t *testing.T) {
 		t.Fatal(err)
 	}
 	group := &models.TrackRouteGroup{
-		GroupID:                "RG.00001001",
-		Name:                   "旧名称",
-		TrackType:              "hiking",
-		Status:                 models.TrackRouteGroupStatusActive,
-		CityCodes:              []string{"810000"},
-		CoordinateSystem:       "GCJ02",
-		CenterLat:              index1.CenterLat,
-		CenterLng:              index1.CenterLng,
-		MinLat:                 index1.MinLat,
-		MinLng:                 index1.MinLng,
-		MaxLat:                 index1.MaxLat,
-		MaxLng:                 index1.MaxLng,
-		Distance:               index1.Distance,
-		RepresentativeTrackID:  index1.TrackID,
-		RepresentativePolyline: index1.SimplifiedPolyline,
-		MemberCount:            2,
-		Source:                 models.TrackRouteGroupSourceAuto,
-		CreatedAt:              now,
-		UpdatedAt:              now,
+		GroupID:               "RG.00001001",
+		Name:                  "旧名称",
+		TrackType:             "hiking",
+		Status:                models.TrackRouteGroupStatusActive,
+		CityCodes:             []string{"810000"},
+		CoordinateSystem:      "GCJ02",
+		CenterLat:             index1.CenterLat,
+		CenterLng:             index1.CenterLng,
+		RadiusM:               1000,
+		MinLat:                index1.MinLat,
+		MinLng:                index1.MinLng,
+		MaxLat:                index1.MaxLat,
+		MaxLng:                index1.MaxLng,
+		Distance:              index1.Distance,
+		RepresentativeTrackID: index1.TrackID,
+		MemberCount:           2,
+		Source:                models.TrackRouteGroupSourceAuto,
+		CreatedAt:             now,
+		UpdatedAt:             now,
 	}
 	if err := mapRepo.UpsertRouteGroup(ctx, group); err != nil {
 		t.Fatal(err)
@@ -255,8 +255,8 @@ func TestAdminRouteGroupOperations(t *testing.T) {
 	if len(listOut.Data.Items) != 1 {
 		t.Fatalf("expected 1 route group, got %d", len(listOut.Data.Items))
 	}
-	if len(listOut.Data.Items[0].RepresentativePolyline) != 0 || listOut.Data.Items[0].RepresentativePolylineJSON != "" {
-		t.Fatalf("route group list should not include representative polyline: %+v", listOut.Data.Items[0])
+	if listOut.Data.Items[0].RadiusM <= 0 {
+		t.Fatalf("route group list should include radius_m: %+v", listOut.Data.Items[0])
 	}
 
 	renameBody := []byte(`{"name":"麦理浩径徒步路线"}`)
@@ -279,6 +279,64 @@ func TestAdminRouteGroupOperations(t *testing.T) {
 	}
 	if got.Name != "麦理浩径徒步路线" || got.RepresentativeTrackID != "NO.00001002" || got.MemberCount != 1 {
 		t.Fatalf("unexpected route group after ops: %+v", got)
+	}
+}
+
+func TestAdminListTracksRewritesScreenshotURL(t *testing.T) {
+	ctx := context.Background()
+	trackRepo := repository.NewInMemoryTrackRepository()
+	now := time.Now()
+	if err := trackRepo.Create(ctx, &models.Track{
+		ID:                        "NO.00003001",
+		UserID:                    1001,
+		Title:                     "带截图轨迹",
+		TrackType:                 "hiking",
+		StartTime:                 now,
+		EndTime:                   now.Add(time.Hour),
+		Status:                    models.TrackStatusNormal,
+		TrackScreenshotURL:        "/api/v1/static/screenshots/NO.00003001.png",
+		TrackNoMapBgScreenshotURL: "/api/v1/static/screenshots/NO.00003001_no_map_bg.png",
+		RawTrackURL:               "/api/v1/static/raw_tracks/NO.00003001.json",
+		CreatedAt:                 now,
+		UpdatedAt:                 now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	h := server.Default()
+	module := NewModule(map[string]string{"admin": string(placeholderPasswordHash)}, nil, nil, t.TempDir(), nil, trackRepo, nil, nil, nil, nil, nil, nil, nil)
+	module.RegisterRoutes(h)
+	defer module.Close()
+	session, err := module.Auth.store.Create("admin")
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	cookie := ut.Header{Key: "Cookie", Value: sessionCookieName + "=" + session.Token}
+
+	resp := ut.PerformRequest(h.Engine, http.MethodGet, "/admin/api/tracks?limit=20", nil, cookie)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("list tracks status=%d body=%s", resp.Code, resp.Body.String())
+	}
+	var out struct {
+		Data struct {
+			Items []models.Track `json:"items"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(resp.Body.Bytes(), &out); err != nil {
+		t.Fatalf("decode tracks: %v", err)
+	}
+	if len(out.Data.Items) != 1 {
+		t.Fatalf("expected 1 track, got %d", len(out.Data.Items))
+	}
+	got := out.Data.Items[0]
+	if got.TrackScreenshotURL != "/admin/api/static/screenshots/NO.00003001.png" {
+		t.Fatalf("unexpected screenshot url: %q", got.TrackScreenshotURL)
+	}
+	if got.TrackNoMapBgScreenshotURL != "/admin/api/static/screenshots/NO.00003001_no_map_bg.png" {
+		t.Fatalf("unexpected no-map screenshot url: %q", got.TrackNoMapBgScreenshotURL)
+	}
+	if got.RawTrackURL != "/admin/api/static/raw_tracks/NO.00003001.json" {
+		t.Fatalf("unexpected raw track url: %q", got.RawTrackURL)
 	}
 }
 
@@ -311,24 +369,24 @@ func TestAdminDeleteTrackCleansRelatedData(t *testing.T) {
 		t.Fatal(err)
 	}
 	group := &models.TrackRouteGroup{
-		GroupID:                "RG.00002001",
-		TrackType:              "hiking",
-		Status:                 models.TrackRouteGroupStatusActive,
-		CityCodes:              []string{"810000"},
-		CoordinateSystem:       "GCJ02",
-		CenterLat:              index.CenterLat,
-		CenterLng:              index.CenterLng,
-		MinLat:                 index.MinLat,
-		MinLng:                 index.MinLng,
-		MaxLat:                 index.MaxLat,
-		MaxLng:                 index.MaxLng,
-		Distance:               index.Distance,
-		RepresentativeTrackID:  trackID,
-		RepresentativePolyline: index.SimplifiedPolyline,
-		MemberCount:            1,
-		Source:                 models.TrackRouteGroupSourceAuto,
-		CreatedAt:              now,
-		UpdatedAt:              now,
+		GroupID:               "RG.00002001",
+		TrackType:             "hiking",
+		Status:                models.TrackRouteGroupStatusActive,
+		CityCodes:             []string{"810000"},
+		CoordinateSystem:      "GCJ02",
+		CenterLat:             index.CenterLat,
+		CenterLng:             index.CenterLng,
+		RadiusM:               1000,
+		MinLat:                index.MinLat,
+		MinLng:                index.MinLng,
+		MaxLat:                index.MaxLat,
+		MaxLng:                index.MaxLng,
+		Distance:              index.Distance,
+		RepresentativeTrackID: trackID,
+		MemberCount:           1,
+		Source:                models.TrackRouteGroupSourceAuto,
+		CreatedAt:             now,
+		UpdatedAt:             now,
 	}
 	if err := mapRepo.UpsertRouteGroup(ctx, group); err != nil {
 		t.Fatal(err)

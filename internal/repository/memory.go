@@ -1498,6 +1498,31 @@ func (r *InMemoryTrackMapRepository) FindTrackGeoIndex(_ context.Context, trackI
 	return clone, nil
 }
 
+func (r *InMemoryTrackMapRepository) ListAllTrackGeoIndexes(_ context.Context) ([]*models.TrackGeoIndex, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	items := make([]*models.TrackGeoIndex, 0, len(r.indexes))
+	for _, index := range r.indexes {
+		if index == nil {
+			continue
+		}
+		items = append(items, cloneTrackGeoIndex(index))
+	}
+	sort.SliceStable(items, func(i, j int) bool {
+		if items[i].TrackType == items[j].TrackType {
+			if items[i].CenterLat == items[j].CenterLat {
+				if items[i].CenterLng == items[j].CenterLng {
+					return items[i].TrackID < items[j].TrackID
+				}
+				return items[i].CenterLng < items[j].CenterLng
+			}
+			return items[i].CenterLat < items[j].CenterLat
+		}
+		return items[i].TrackType < items[j].TrackType
+	})
+	return items, nil
+}
+
 func (r *InMemoryTrackMapRepository) ListTrackGeoIndexes(_ context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackGeoIndex, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -1624,15 +1649,7 @@ func (r *InMemoryTrackMapRepository) ListRouteGroups(_ context.Context, filter m
 }
 
 func (r *InMemoryTrackMapRepository) ListRouteGroupSummaries(ctx context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackRouteGroup, error) {
-	items, err := r.ListRouteGroups(ctx, filter)
-	if err != nil {
-		return nil, err
-	}
-	for _, item := range items {
-		item.RepresentativePolyline = nil
-		item.RepresentativePolylineJSON = ""
-	}
-	return items, nil
+	return r.ListRouteGroups(ctx, filter)
 }
 
 func (r *InMemoryTrackMapRepository) ListRouteGroupCandidates(_ context.Context, index *models.TrackGeoIndex, limit int) ([]*models.TrackRouteGroupCandidate, error) {
@@ -1737,6 +1754,31 @@ func (r *InMemoryTrackMapRepository) UpsertRouteGroupMember(_ context.Context, m
 	if group := r.routeGroups[clone.GroupID]; group != nil {
 		group.MemberCount = int64(len(r.routeMembers[clone.GroupID]))
 		group.UpdatedAt = now
+	}
+	return nil
+}
+
+func (r *InMemoryTrackMapRepository) ReplaceRouteGroups(_ context.Context, groups []*models.TrackRouteGroup, members []*models.TrackRouteGroupMember) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.routeGroups = make(map[string]*models.TrackRouteGroup, len(groups))
+	r.routeMembers = make(map[string]map[string]*models.TrackRouteGroupMember)
+	for _, group := range groups {
+		if group == nil || group.GroupID == "" {
+			continue
+		}
+		clone := cloneTrackRouteGroup(group)
+		r.routeGroups[clone.GroupID] = clone
+	}
+	for _, member := range members {
+		if member == nil || member.GroupID == "" || member.TrackID == "" {
+			continue
+		}
+		clone := *member
+		if r.routeMembers[clone.GroupID] == nil {
+			r.routeMembers[clone.GroupID] = make(map[string]*models.TrackRouteGroupMember)
+		}
+		r.routeMembers[clone.GroupID][clone.TrackID] = &clone
 	}
 	return nil
 }
@@ -1864,7 +1906,6 @@ func cloneTrackRouteGroup(group *models.TrackRouteGroup) *models.TrackRouteGroup
 	}
 	clone := *group
 	clone.CityCodes = append([]string(nil), group.CityCodes...)
-	clone.RepresentativePolyline = append([]models.TrackPoint(nil), group.RepresentativePolyline...)
 	return &clone
 }
 

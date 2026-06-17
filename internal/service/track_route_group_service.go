@@ -2,10 +2,10 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
+	"sort"
 	"strings"
 	"time"
 
@@ -15,14 +15,11 @@ import (
 )
 
 const (
-	defaultRouteGroupBatchSize      = 200
-	defaultRouteGroupCandidateLimit = 30
-	minRouteGroupPointCount         = 20
-	minRouteGroupDistanceMeters     = 300
-	maxRouteGroupDistanceRatio      = 0.35
-	maxRouteGroupEndpointDistanceM  = 1200
-	minRouteGroupSimilarityScore    = 0.72
-	routeGroupPolylineSampleSize    = 64
+	minRouteGroupPointCount        = 20
+	minRouteGroupDistanceMeters    = 300
+	defaultRouteGroupCenterRadiusM = 3000.0
+	ridingRouteGroupCenterRadiusM  = 8000.0
+	drivingRouteGroupCenterRadiusM = 15000.0
 )
 
 // TrackRouteGroupService builds persistent route groups from track_geo_indexes.
@@ -46,6 +43,12 @@ type AdminRouteGroupMemberView struct {
 type AdminRouteGroupDetail struct {
 	Group   *models.TrackRouteGroup      `json:"group"`
 	Members []*AdminRouteGroupMemberView `json:"members"`
+}
+
+type routeGroupCluster struct {
+	group   *models.TrackRouteGroup
+	members []*models.TrackRouteGroupMember
+	indexes []*models.TrackGeoIndex
 }
 
 func NewTrackRouteGroupService(repo repository.TrackMapRepository) *TrackRouteGroupService {
@@ -173,9 +176,6 @@ func (s *TrackRouteGroupService) SetRepresentativeTrack(ctx context.Context, gro
 		}
 	}
 	group.RepresentativeTrackID = trackID
-	group.RepresentativePolyline = append([]models.TrackPoint(nil), index.SimplifiedPolyline...)
-	polylineJSON, _ := json.Marshal(group.RepresentativePolyline)
-	group.RepresentativePolylineJSON = string(polylineJSON)
 	group.CoordinateSystem = mapCoordinateSystem(index.CoordinateSystem)
 	group.Source = routeGroupSourceAfterManual(group.Source)
 	group.UpdatedAt = now
@@ -294,7 +294,9 @@ func (s *TrackRouteGroupService) rebuildRouteGroupBounds(ctx context.Context, gr
 		minLat, minLng float64
 		maxLat, maxLng float64
 		maxDistance    float64
+		radiusM        float64
 		cityCodes      []string
+		indexes        []*models.TrackGeoIndex
 		validCount     int64
 		initialized    bool
 	)
@@ -310,6 +312,7 @@ func (s *TrackRouteGroupService) rebuildRouteGroupBounds(ctx context.Context, gr
 			return nil, err
 		}
 		validCount++
+		indexes = append(indexes, index)
 		cityCodes = append(cityCodes, index.CityCode)
 		sumLat += index.CenterLat
 		sumLng += index.CenterLng
@@ -332,6 +335,10 @@ func (s *TrackRouteGroupService) rebuildRouteGroupBounds(ctx context.Context, gr
 	group.CityCodes = compactCityCodes(cityCodes)
 	group.CenterLat = sumLat / float64(validCount)
 	group.CenterLng = sumLng / float64(validCount)
+	for _, index := range indexes {
+		radiusM = math.Max(radiusM, routeGroupCoverageRadiusM(group.CenterLat, group.CenterLng, index))
+	}
+	group.RadiusM = radiusM
 	group.MinLat = minLat
 	group.MinLng = minLng
 	group.MaxLat = maxLat
@@ -351,84 +358,61 @@ func (s *TrackRouteGroupService) RunOnce(ctx context.Context) (*TrackRouteGroupR
 	if s == nil || s.repo == nil {
 		return result, fmt.Errorf("track route group service is not configured")
 	}
-	indexes, err := s.repo.ListGeoIndexesWithoutRouteGroup(ctx, defaultRouteGroupBatchSize)
+	indexes, err := s.repo.ListAllTrackGeoIndexes(ctx)
 	if err != nil {
 		return result, err
 	}
+	sort.SliceStable(indexes, func(i, j int) bool {
+		if indexes[i].TrackType == indexes[j].TrackType {
+			if indexes[i].CenterLat == indexes[j].CenterLat {
+				if indexes[i].CenterLng == indexes[j].CenterLng {
+					return indexes[i].TrackID < indexes[j].TrackID
+				}
+				return indexes[i].CenterLng < indexes[j].CenterLng
+			}
+			return indexes[i].CenterLat < indexes[j].CenterLat
+		}
+		return indexes[i].TrackType < indexes[j].TrackType
+	})
+	clusters := make([]*routeGroupCluster, 0)
 	for _, index := range indexes {
 		result.Scanned++
 		if !isRouteGroupIndexEligible(index) {
 			result.Skipped++
 			continue
 		}
-		group, score, direction, err := s.bestGroupCandidate(ctx, index)
-		if err != nil {
-			return result, err
-		}
-		if group == nil {
-			newGroup, err := buildRouteGroupFromIndex(index)
-			if err != nil {
-				result.Skipped++
-				continue
-			}
-			if err := s.repo.UpsertRouteGroup(ctx, newGroup); err != nil {
-				return result, err
-			}
-			if err := s.repo.UpsertRouteGroupMember(ctx, &models.TrackRouteGroupMember{
-				GroupID:         newGroup.GroupID,
-				TrackID:         index.TrackID,
-				SimilarityScore: 1,
-				MatchDirection:  models.TrackRouteGroupMemberDirectionForward,
-				Role:            models.TrackRouteGroupMemberRoleRepresentative,
-				Source:          models.TrackRouteGroupSourceAuto,
-			}); err != nil {
-				return result, err
-			}
+		cluster := bestSpatialCluster(clusters, index)
+		if cluster == nil {
+			cluster = newRouteGroupCluster(index)
+			clusters = append(clusters, cluster)
 			result.Created++
 			continue
 		}
-		updated := mergeIndexIntoRouteGroup(group, index)
-		if err := s.repo.UpsertRouteGroup(ctx, updated); err != nil {
-			return result, err
-		}
-		if err := s.repo.UpsertRouteGroupMember(ctx, &models.TrackRouteGroupMember{
-			GroupID:         updated.GroupID,
-			TrackID:         index.TrackID,
-			SimilarityScore: score,
-			MatchDirection:  direction,
-			Role:            models.TrackRouteGroupMemberRoleMember,
-			Source:          models.TrackRouteGroupSourceAuto,
-		}); err != nil {
-			return result, err
-		}
+		addIndexToRouteGroupCluster(cluster, index)
 		result.Merged++
+	}
+	groups, members := flattenRouteGroupClusters(clusters)
+	if err := s.repo.ReplaceRouteGroups(ctx, groups, members); err != nil {
+		return result, err
 	}
 	return result, nil
 }
 
-func (s *TrackRouteGroupService) bestGroupCandidate(ctx context.Context, index *models.TrackGeoIndex) (*models.TrackRouteGroup, float64, models.TrackRouteGroupMemberDirection, error) {
-	candidates, err := s.repo.ListRouteGroupCandidates(ctx, index, defaultRouteGroupCandidateLimit)
-	if err != nil {
-		return nil, 0, "", err
-	}
-	var best *models.TrackRouteGroup
-	bestScore := 0.0
-	bestDirection := models.TrackRouteGroupMemberDirectionForward
-	for _, candidate := range candidates {
-		if candidate == nil || candidate.Group == nil || candidate.Index == nil {
+func bestSpatialCluster(clusters []*routeGroupCluster, index *models.TrackGeoIndex) *routeGroupCluster {
+	var best *routeGroupCluster
+	bestDistance := math.MaxFloat64
+	threshold := routeGroupCenterThresholdM(index.TrackType)
+	for _, cluster := range clusters {
+		if cluster == nil || cluster.group == nil || cluster.group.TrackType != index.TrackType {
 			continue
 		}
-		score, direction := routeGroupSimilarity(index, candidate.Index)
-		if score > bestScore {
-			best = candidate.Group
-			bestScore = score
-			bestDirection = direction
+		distance := haversineMeters(cluster.group.CenterLat, cluster.group.CenterLng, index.CenterLat, index.CenterLng)
+		if distance <= threshold && distance < bestDistance {
+			best = cluster
+			bestDistance = distance
 		}
 	}
-	if best == nil || bestScore < minRouteGroupSimilarityScore {
-		return nil, 0, "", nil
-	}
-	return best, bestScore, bestDirection, nil
+	return best
 }
 
 func isRouteGroupIndexEligible(index *models.TrackGeoIndex) bool {
@@ -436,125 +420,162 @@ func isRouteGroupIndexEligible(index *models.TrackGeoIndex) bool {
 		index.TrackID != "" &&
 		index.TrackType != "" &&
 		index.PointCount >= minRouteGroupPointCount &&
-		index.Distance >= minRouteGroupDistanceMeters &&
-		len(index.SimplifiedPolyline) >= 2
+		index.Distance >= minRouteGroupDistanceMeters
 }
 
-func buildRouteGroupFromIndex(index *models.TrackGeoIndex) (*models.TrackRouteGroup, error) {
-	if index == nil {
-		return nil, repository.ErrNotFound
-	}
-	polylineJSON, _ := json.Marshal(index.SimplifiedPolyline)
+func newRouteGroupCluster(index *models.TrackGeoIndex) *routeGroupCluster {
 	now := time.Now()
-	return &models.TrackRouteGroup{
-		GroupID:                    routeGroupIDFromTrackID(index.TrackID),
-		Name:                       defaultRouteGroupName(index),
-		TrackType:                  index.TrackType,
-		Status:                     models.TrackRouteGroupStatusActive,
-		CityCodes:                  compactCityCodes([]string{index.CityCode}),
-		CoordinateSystem:           mapCoordinateSystem(index.CoordinateSystem),
-		CenterLat:                  index.CenterLat,
-		CenterLng:                  index.CenterLng,
-		MinLat:                     index.MinLat,
-		MinLng:                     index.MinLng,
-		MaxLat:                     index.MaxLat,
-		MaxLng:                     index.MaxLng,
-		Distance:                   index.Distance,
-		RepresentativeTrackID:      index.TrackID,
-		RepresentativePolyline:     append([]models.TrackPoint(nil), index.SimplifiedPolyline...),
-		RepresentativePolylineJSON: string(polylineJSON),
-		MemberCount:                1,
-		Source:                     models.TrackRouteGroupSourceAuto,
-		CreatedAt:                  now,
-		UpdatedAt:                  now,
-	}, nil
+	group := &models.TrackRouteGroup{
+		GroupID:               routeGroupIDFromTrackID(index.TrackID),
+		Name:                  defaultRouteGroupName(index),
+		TrackType:             index.TrackType,
+		Status:                models.TrackRouteGroupStatusActive,
+		CityCodes:             compactCityCodes([]string{index.CityCode}),
+		CoordinateSystem:      mapCoordinateSystem(index.CoordinateSystem),
+		CenterLat:             index.CenterLat,
+		CenterLng:             index.CenterLng,
+		RadiusM:               routeGroupCoverageRadiusM(index.CenterLat, index.CenterLng, index),
+		MinLat:                index.MinLat,
+		MinLng:                index.MinLng,
+		MaxLat:                index.MaxLat,
+		MaxLng:                index.MaxLng,
+		Distance:              index.Distance,
+		RepresentativeTrackID: index.TrackID,
+		MemberCount:           1,
+		Source:                models.TrackRouteGroupSourceAuto,
+		CreatedAt:             now,
+		UpdatedAt:             now,
+	}
+	member := &models.TrackRouteGroupMember{
+		GroupID:         group.GroupID,
+		TrackID:         index.TrackID,
+		SimilarityScore: 1,
+		MatchDirection:  models.TrackRouteGroupMemberDirectionForward,
+		Role:            models.TrackRouteGroupMemberRoleRepresentative,
+		Source:          models.TrackRouteGroupSourceAuto,
+		CreatedAt:       now,
+		UpdatedAt:       now,
+	}
+	return &routeGroupCluster{group: group, members: []*models.TrackRouteGroupMember{member}, indexes: []*models.TrackGeoIndex{index}}
 }
 
-func mergeIndexIntoRouteGroup(group *models.TrackRouteGroup, index *models.TrackGeoIndex) *models.TrackRouteGroup {
-	updated := *group
-	updated.CityCodes = compactCityCodes(append(updated.CityCodes, index.CityCode))
-	updated.MinLat = math.Min(updated.MinLat, index.MinLat)
-	updated.MinLng = math.Min(updated.MinLng, index.MinLng)
-	updated.MaxLat = math.Max(updated.MaxLat, index.MaxLat)
-	updated.MaxLng = math.Max(updated.MaxLng, index.MaxLng)
-	updated.CenterLat = (updated.CenterLat*float64(maxInt64(updated.MemberCount, 1)) + index.CenterLat) / float64(maxInt64(updated.MemberCount, 1)+1)
-	updated.CenterLng = (updated.CenterLng*float64(maxInt64(updated.MemberCount, 1)) + index.CenterLng) / float64(maxInt64(updated.MemberCount, 1)+1)
-	if index.Distance > updated.Distance {
-		updated.Distance = index.Distance
+func addIndexToRouteGroupCluster(cluster *routeGroupCluster, index *models.TrackGeoIndex) {
+	if cluster == nil || cluster.group == nil || index == nil {
+		return
 	}
-	updated.MemberCount++
-	if updated.Source == models.TrackRouteGroupSourceManual {
-		updated.Source = models.TrackRouteGroupSourceMixed
-	}
-	updated.UpdatedAt = time.Now()
-	return &updated
+	group := cluster.group
+	now := time.Now()
+	score := routeGroupCenterSimilarity(group, index)
+	cluster.members = append(cluster.members, &models.TrackRouteGroupMember{
+		GroupID:         group.GroupID,
+		TrackID:         index.TrackID,
+		SimilarityScore: score,
+		MatchDirection:  models.TrackRouteGroupMemberDirectionForward,
+		Role:            models.TrackRouteGroupMemberRoleMember,
+		Source:          models.TrackRouteGroupSourceAuto,
+		CreatedAt:       now,
+		UpdatedAt:       now,
+	})
+	cluster.indexes = append(cluster.indexes, index)
+	rebuildRouteGroupFromIndexes(group, cluster.indexes)
 }
 
-func routeGroupSimilarity(a, b *models.TrackGeoIndex) (float64, models.TrackRouteGroupMemberDirection) {
-	if a == nil || b == nil || a.TrackType != b.TrackType {
-		return 0, models.TrackRouteGroupMemberDirectionForward
-	}
-	if a.Distance <= 0 || b.Distance <= 0 {
-		return 0, models.TrackRouteGroupMemberDirectionForward
-	}
-	ratio := math.Abs(a.Distance-b.Distance) / math.Max(a.Distance, b.Distance)
-	if ratio > maxRouteGroupDistanceRatio {
-		return 0, models.TrackRouteGroupMemberDirectionForward
-	}
-	forwardEndpoint := (haversineMeters(a.StartLat, a.StartLng, b.StartLat, b.StartLng) + haversineMeters(a.EndLat, a.EndLng, b.EndLat, b.EndLng)) / 2
-	reverseEndpoint := (haversineMeters(a.StartLat, a.StartLng, b.EndLat, b.EndLng) + haversineMeters(a.EndLat, a.EndLng, b.StartLat, b.StartLng)) / 2
-	direction := models.TrackRouteGroupMemberDirectionForward
-	endpointDistance := forwardEndpoint
-	if reverseEndpoint < forwardEndpoint {
-		endpointDistance = reverseEndpoint
-		direction = models.TrackRouteGroupMemberDirectionReverse
-	}
-	if endpointDistance > maxRouteGroupEndpointDistanceM {
-		return 0, direction
-	}
-	shapeDistance := averagePolylineDistance(a.SimplifiedPolyline, b.SimplifiedPolyline, direction == models.TrackRouteGroupMemberDirectionReverse)
-	shapeScore := 1 - math.Min(shapeDistance/1500, 1)
-	endpointScore := 1 - math.Min(endpointDistance/maxRouteGroupEndpointDistanceM, 1)
-	distanceScore := 1 - ratio
-	return 0.55*shapeScore + 0.30*endpointScore + 0.15*distanceScore, direction
-}
-
-func averagePolylineDistance(a, b []models.TrackPoint, reverseB bool) float64 {
-	if len(a) == 0 || len(b) == 0 {
-		return math.MaxFloat64
-	}
-	sa := sampleTrackPoints(a, routeGroupPolylineSampleSize)
-	sb := sampleTrackPoints(b, routeGroupPolylineSampleSize)
-	if reverseB {
-		for i, j := 0, len(sb)-1; i < j; i, j = i+1, j-1 {
-			sb[i], sb[j] = sb[j], sb[i]
+func flattenRouteGroupClusters(clusters []*routeGroupCluster) ([]*models.TrackRouteGroup, []*models.TrackRouteGroupMember) {
+	groups := make([]*models.TrackRouteGroup, 0, len(clusters))
+	members := make([]*models.TrackRouteGroupMember, 0)
+	for _, cluster := range clusters {
+		if cluster == nil || cluster.group == nil {
+			continue
 		}
+		groups = append(groups, cluster.group)
+		members = append(members, cluster.members...)
 	}
-	n := len(sa)
-	if len(sb) < n {
-		n = len(sb)
-	}
-	var total float64
-	for i := 0; i < n; i++ {
-		total += haversineMeters(sa[i].Latitude, sa[i].Longitude, sb[i].Latitude, sb[i].Longitude)
-	}
-	return total / float64(n)
+	return groups, members
 }
 
-func sampleTrackPoints(points []models.TrackPoint, size int) []models.TrackPoint {
-	if size <= 0 || len(points) <= size {
-		return append([]models.TrackPoint(nil), points...)
+func rebuildRouteGroupFromIndexes(group *models.TrackRouteGroup, indexes []*models.TrackGeoIndex) {
+	if group == nil || len(indexes) == 0 {
+		return
 	}
-	out := make([]models.TrackPoint, 0, size)
-	step := float64(len(points)-1) / float64(size-1)
-	for i := 0; i < size; i++ {
-		idx := int(math.Round(float64(i) * step))
-		if idx >= len(points) {
-			idx = len(points) - 1
+	var sumLat, sumLng, maxDistance float64
+	var cityCodes []string
+	minLat, minLng := indexes[0].MinLat, indexes[0].MinLng
+	maxLat, maxLng := indexes[0].MaxLat, indexes[0].MaxLng
+	for _, index := range indexes {
+		if index == nil {
+			continue
 		}
-		out = append(out, points[idx])
+		sumLat += index.CenterLat
+		sumLng += index.CenterLng
+		cityCodes = append(cityCodes, index.CityCode)
+		minLat = math.Min(minLat, index.MinLat)
+		minLng = math.Min(minLng, index.MinLng)
+		maxLat = math.Max(maxLat, index.MaxLat)
+		maxLng = math.Max(maxLng, index.MaxLng)
+		maxDistance = math.Max(maxDistance, index.Distance)
 	}
-	return out
+	group.CityCodes = compactCityCodes(cityCodes)
+	group.CenterLat = sumLat / float64(len(indexes))
+	group.CenterLng = sumLng / float64(len(indexes))
+	group.MinLat = minLat
+	group.MinLng = minLng
+	group.MaxLat = maxLat
+	group.MaxLng = maxLng
+	group.Distance = maxDistance
+	group.MemberCount = int64(len(indexes))
+	group.RadiusM = 0
+	for _, index := range indexes {
+		group.RadiusM = math.Max(group.RadiusM, routeGroupCoverageRadiusM(group.CenterLat, group.CenterLng, index))
+	}
+	group.UpdatedAt = time.Now()
+}
+
+func routeGroupCenterSimilarity(group *models.TrackRouteGroup, index *models.TrackGeoIndex) float64 {
+	if group == nil || index == nil {
+		return 0
+	}
+	threshold := routeGroupCenterThresholdM(index.TrackType)
+	if threshold <= 0 {
+		return 0
+	}
+	distance := haversineMeters(group.CenterLat, group.CenterLng, index.CenterLat, index.CenterLng)
+	return 1 - math.Min(distance/threshold, 1)
+}
+
+func routeGroupCenterThresholdM(trackType string) float64 {
+	switch strings.TrimSpace(trackType) {
+	case "riding":
+		return ridingRouteGroupCenterRadiusM
+	case "driving":
+		return drivingRouteGroupCenterRadiusM
+	default:
+		return defaultRouteGroupCenterRadiusM
+	}
+}
+
+func routeGroupCoverageRadiusM(centerLat, centerLng float64, index *models.TrackGeoIndex) float64 {
+	if index == nil {
+		return 0
+	}
+	centerDistance := haversineMeters(centerLat, centerLng, index.CenterLat, index.CenterLng)
+	return centerDistance + trackGeoIndexExtentRadiusM(index)
+}
+
+func trackGeoIndexExtentRadiusM(index *models.TrackGeoIndex) float64 {
+	if index == nil {
+		return 0
+	}
+	corners := [][2]float64{
+		{index.MinLat, index.MinLng},
+		{index.MinLat, index.MaxLng},
+		{index.MaxLat, index.MinLng},
+		{index.MaxLat, index.MaxLng},
+	}
+	var radius float64
+	for _, corner := range corners {
+		radius = math.Max(radius, haversineMeters(index.CenterLat, index.CenterLng, corner[0], corner[1]))
+	}
+	return radius
 }
 
 func routeGroupIDFromTrackID(trackID string) string {
@@ -609,11 +630,4 @@ func routeGroupSourceAfterManual(source models.TrackRouteGroupSource) models.Tra
 		return models.TrackRouteGroupSourceMixed
 	}
 	return source
-}
-
-func maxInt64(a, b int64) int64 {
-	if a > b {
-		return a
-	}
-	return b
 }

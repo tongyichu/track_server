@@ -111,6 +111,7 @@ type TrackMapRepository interface {
 	HasTrackGeoIndex(ctx context.Context, trackID string) (bool, error)
 	ListCompletedTracksMissingGeoIndex(ctx context.Context, limit int) ([]*models.Track, error)
 	FindTrackGeoIndex(ctx context.Context, trackID string) (*models.TrackGeoIndex, error)
+	ListAllTrackGeoIndexes(ctx context.Context) ([]*models.TrackGeoIndex, error)
 	ListTrackGeoIndexes(ctx context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackGeoIndex, error)
 	CountTrackGeoIndexesByCity(ctx context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackMapClusterItem, error)
 	CountTrackGeoIndexesByArea(ctx context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackMapClusterItem, error)
@@ -121,6 +122,7 @@ type TrackMapRepository interface {
 	ListGeoIndexesWithoutRouteGroup(ctx context.Context, limit int) ([]*models.TrackGeoIndex, error)
 	UpsertRouteGroup(ctx context.Context, group *models.TrackRouteGroup) error
 	UpsertRouteGroupMember(ctx context.Context, member *models.TrackRouteGroupMember) error
+	ReplaceRouteGroups(ctx context.Context, groups []*models.TrackRouteGroup, members []*models.TrackRouteGroupMember) error
 	DeleteRouteGroupMember(ctx context.Context, groupID, trackID string) error
 	ArchiveRouteGroup(ctx context.Context, groupID string, now time.Time) error
 	ListRouteGroupMembers(ctx context.Context, groupID string, limit int) ([]*models.TrackRouteGroupMember, error)

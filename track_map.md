@@ -39,7 +39,7 @@
 - 不做复杂社交热度外显。
 - 不做实时轨迹展示。
 - 不做路线人工运营后台。
-- 不强依赖高精度地图匹配算法，先用可解释、可迭代的路线相似规则。
+- 不强依赖高精度地图匹配算法，先用可解释、可迭代的中心点空间聚类规则。
 
 ## 2. 核心概念
 
@@ -68,7 +68,7 @@
 
 - 起点、终点、中心点。
 - 轨迹 bbox。
-- 简化后的路线折线。
+- 简化后的路线折线（仅用于轨迹索引和后续分析，不作为 RouteGroup 客户端展示字段）。
 - 轨迹点数量、距离、城市、运动类型。
 - 空间索引字段，例如 geohash / S2 cell / H3 cell。
 
@@ -111,7 +111,7 @@ hiking
 服务端聚合要求：
 
 - RouteGroup 聚合必须以 `track_type` 作为强约束。
-- 查询候选 RouteGroup 时必须限定同一 `track_type`。
+- 聚类时必须限定同一 `track_type`。
 - RouteGroup 列表返回的每一项必须包含 `track_type`。
 
 ## 4. 客户端体验
@@ -138,7 +138,7 @@ hiking
 2. 客户端请求定位权限。
 3. 如果拿到定位，默认以 `hiking` 分类查询当前位置附近 10 公里路线。
 4. 如果没有定位权限，默认进入城市选择或使用上次城市。
-5. 地图展示当前运动类型下的路线组 marker / 折线。
+5. 地图展示当前运动类型下的路线组 marker / 聚合区域。
 6. 底部半屏列表展示当前视野内路线。
 
 示意：
@@ -154,7 +154,7 @@ hiking
 地图模式：
 [徒步 v] [附近 10km v]                         [列表图标]
 ---------------------------------------------------------
-地图 + 路线组 marker / 折线
+地图 + 路线组 marker / 聚合区域
 底部路线卡片
 ```
 
@@ -169,15 +169,15 @@ hiking
 - 低缩放级别：展示城市聚合气泡，例如“香港 42 条路线”。
 - 点击城市气泡：地图放大到该城市。
 - 点击区域气泡：地图放大到该区域。
-- 点击 RouteGroup marker 或折线：打开路线详情半屏卡片。
+- 点击 RouteGroup marker 或聚合区域：打开路线详情半屏卡片。
 
 这里的“路线数量”指 RouteGroup 数量，不是用户数，也不是用户上传的 Track 数量。该口径表达的是“这个区域有多少条可发现路线”，不会暴露冷启动阶段具体有几个人走过。
 
 具体 RouteGroup 展示建议：
 
 - marker / 路线卡片需要体现运动类型，例如“麦理浩径徒步”。
-- 地图放大后展示代表路线折线 + 名称 marker。
-- 路线折线和 marker 可按运动类型使用不同图标或颜色。
+- 地图放大后展示聚合区域 + 名称 marker。
+- 聚合区域和 marker 可按运动类型使用不同图标或颜色。
 
 RouteGroup 列表不展示人数与轨迹数量，文案使用路线视角：
 
@@ -207,7 +207,7 @@ RouteGroup 列表不展示人数与轨迹数量，文案使用路线视角：
 
 | 地图状态 | 服务端返回 | 客户端展示 |
 | --- | --- | --- |
-| 默认进入 / 放大 | 附近 10km 或当前 bbox 内的 RouteGroup | 具体路线 marker / 折线 |
+| 默认进入 / 放大 | 附近 10km 或当前 bbox 内的 RouteGroup | 具体路线 marker / 聚合区域 |
 | 缩小到区域级 | 网格或区域聚合数据 | 聚合气泡，例如“18 条路线” |
 | 继续缩小到城市级 | 城市路线数量 | 城市气泡，例如“香港 42 条路线” |
 
@@ -284,7 +284,7 @@ track_type=hiking
 
 | `view_level` | 含义 | 客户端展示 |
 | --- | --- | --- |
-| `route` | 具体路线组 | RouteGroup marker / 折线 |
+| `route` | 具体路线组 | RouteGroup marker / 聚合区域 |
 | `area` | 区域聚合 | 区域聚合气泡 |
 | `city` | 城市聚合 | 城市聚合气泡 |
 
@@ -306,17 +306,13 @@ track_type=hiking
         "latitude": 22.3942,
         "longitude": 114.2781
       },
+      "radius_m": 6200,
       "bbox": {
         "min_latitude": 22.3541,
         "min_longitude": 114.2098,
         "max_latitude": 22.4320,
         "max_longitude": 114.3652
       },
-      "representative_polyline": [
-        { "latitude": 22.3541, "longitude": 114.2098 },
-        { "latitude": 22.3712, "longitude": 114.2481 },
-        { "latitude": 22.3942, "longitude": 114.2781 }
-      ],
       "cover_track": {
         "track_id": "NO.00000001",
         "track_screenshot_url": "/api/v1/static/screenshots/NO.00000001.jpg"
@@ -443,17 +439,13 @@ city_code=810000
         "latitude": 22.3942,
         "longitude": 114.2781
       },
+      "radius_m": 6200,
       "bbox": {
         "min_latitude": 22.3541,
         "min_longitude": 114.2098,
         "max_latitude": 22.4320,
         "max_longitude": 114.3652
       },
-      "representative_polyline": [
-        { "latitude": 22.3541, "longitude": 114.2098 },
-        { "latitude": 22.3712, "longitude": 114.2481 },
-        { "latitude": 22.3942, "longitude": 114.2781 }
-      ],
       "cover_track": {
         "track_id": "NO.00000001",
         "track_screenshot_url": "/api/v1/static/screenshots/NO.00000001.jpg"
@@ -473,9 +465,9 @@ city_code=810000
 | `city_name` | string | 城市名称 |
 | `track_type` | string | 运动类型 |
 | `coordinate_system` | string | 返回坐标系，客户端按地图 SDK 使用 |
-| `center` | object | 路线中心点，用于 marker |
-| `bbox` | object | 路线范围，用于地图缩放 |
-| `representative_polyline` | array | 代表路线折线，已简化 |
+| `center` | object | 聚合中心点，用于 marker |
+| `radius_m` | number | 聚合区域覆盖半径，单位米，客户端可按中心点直接画区域 |
+| `bbox` | object | 聚合区域范围，用于地图缩放 |
 | `cover_track` | object | 代表轨迹，用于封面图或兜底跳转 |
 
 注意：第一版列表不返回 `user_count`、`track_count`、`hot_score`。
@@ -506,11 +498,7 @@ GET /api/v1/track-map/groups/:group_id/detail
     "max_latitude": 22.4320,
     "max_longitude": 114.3652
   },
-  "representative_polyline": [
-    { "latitude": 22.3541, "longitude": 114.2098 },
-    { "latitude": 22.3712, "longitude": 114.2481 },
-    { "latitude": 22.3942, "longitude": 114.2781 }
-  ],
+  "radius_m": 6200,
   "cover_track": {
     "track_id": "NO.00000001",
     "track_screenshot_url": "/api/v1/static/screenshots/NO.00000001.jpg"
@@ -641,13 +629,13 @@ CREATE TABLE track_route_groups (
   coordinate_system VARCHAR(32) NOT NULL DEFAULT '',
   center_lat DOUBLE NOT NULL,
   center_lng DOUBLE NOT NULL,
+  radius_m DOUBLE NOT NULL DEFAULT 0,
   min_lat DOUBLE NOT NULL,
   min_lng DOUBLE NOT NULL,
   max_lat DOUBLE NOT NULL,
   max_lng DOUBLE NOT NULL,
   distance DOUBLE NOT NULL DEFAULT 0,
   representative_track_id VARCHAR(64) NOT NULL DEFAULT '',
-  representative_polyline_json MEDIUMTEXT,
   member_count BIGINT NOT NULL DEFAULT 0,
   source VARCHAR(16) NOT NULL DEFAULT 'auto',
   created_at DATETIME(6) NOT NULL,
@@ -695,7 +683,7 @@ CREATE TABLE track_route_group_members (
 - 解析大量轨迹点。
 - 坐标转换。
 - 计算 bbox / 中心点 / 起终点 / 简化折线。
-- 查找候选 RouteGroup 和路线相似度计算。
+- RouteGroup 中心点空间聚类。
 
 这样可以保证 `track/create`、`/track/:track_id/upload_cloud`、`/track/:track_id/update` 的响应速度主要受轨迹记录写入影响，不受 OSS 下载和轨迹点解析影响。
 
@@ -718,12 +706,11 @@ Scheduler(track_map_index，默认每 1 分钟)
   → 标记索引任务 succeeded
 
 Scheduler(track_route_group，默认每天 04:00)
-  → 扫描尚未归入 RouteGroup 的 track_geo_indexes
+  → 全量读取 track_geo_indexes
   → 排除过短、点数过少或缺少运动类型的轨迹
-  → 召回同运动类型、bbox 相近的候选 RouteGroup
-  → 同时计算正向和反向相似度
-  → 达到阈值则写入 track_route_group_members
-  → 未达到阈值则创建新的 track_route_groups
+  → 按 track_type 严格隔离，基于轨迹中心点做空间聚类
+  → 计算每个 RouteGroup 的 center_lat/center_lng、radius_m、bbox、member_count
+  → 重建替换 track_route_groups / track_route_group_members（MySQL 实现使用事务）
 ```
 
 如果索引构建失败：
@@ -741,37 +728,35 @@ OSS 下载要求：
 
 ### 6.3 路线聚合规则
 
-当前实现使用简单、可解释、偏保守的规则。
+当前实现使用简单、可解释、偏保守的中心点空间聚类规则。
 
-候选范围：
+聚类范围：
 
 - 不强制同城市；跨城市路线可以合并，RouteGroup 会记录多个 `city_code`，城市聚合时每个城市都计数。
 - 同运动类型。运动类型是硬性分组条件，不能跨类型聚合。
-- bbox 有交集或中心点距离在一定范围内。
+- 中心点距离在运动类型对应阈值内：徒步/跑步/爬山默认 3km，骑行 8km，自驾 15km。
 
-相似判断：
+聚合区域计算：
 
-- 正向和反向都参与计算，反向路线允许合并。
-- 总距离差异不超过约 35%。
-- 起终点平均距离不能超过约 1200 米。
-- 简化折线采样后计算平均距离，综合得到相似度分。
-- 相似度分达到阈值才合并；低置信度宁可新建 RouteGroup。
+- `center_lat` / `center_lng` 使用成员轨迹中心点均值。
+- `radius_m` 取 “成员中心点到 group 中心距离 + 成员 bbox 半径” 的最大值，避免长轨迹覆盖区域被低估。
+- `bbox` 使用所有成员轨迹 bbox 的并集。
+- 聚合任务会重建替换 `track_route_groups` / `track_route_group_members`，存量结果可清空重算；MySQL 实现使用事务。
 
-满足阈值则归入已有 RouteGroup，否则创建新的 RouteGroup。
+中心点距离满足运动类型阈值则归入已有 RouteGroup，否则创建新的 RouteGroup。
 
 不合并的情况：
 
 - 不同运动类型。
-- 只走完整路线一小段的轨迹。
+- 中心点距离超过当前运动类型阈值。
 - 距离太短、点数太少、GPS 数据质量明显不足的轨迹。
 
 后续可升级为：
 
-- Fréchet distance。
-- Dynamic Time Warping。
-- S2/H3 网格重合率。
-- 地图匹配后的道路级相似度。
-- 人工合并/拆分路线。
+- DBSCAN / HDBSCAN 等密度聚类。
+- S2/H3 网格聚合。
+- 基于城市、行政区或业务热区的动态阈值。
+- 人工合并/拆分聚合区域。
 
 ## 7. 排序策略
 
@@ -840,7 +825,7 @@ RouteGroup 是路线聚合入口，不展示用户实时位置。
 ### 第二阶段
 
 - 支持路线人工命名和人工合并的服务端数据结构，后续补 ops 接口或管理后台。
-- 支持更好的路线相似算法。
+- 支持更好的空间聚类算法。
 - 支持路线详情页展示难度、爬升、距离区间、推荐季节等。
 - 支持路线搜索。
 

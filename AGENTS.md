@@ -145,11 +145,12 @@ track/create(is_running=false) 或 track upload/update 完成轨迹
   → 解析 JSON/GeoJSON 轨迹点，计算 bbox/中心点/起终点/简化折线
   → Upsert track_geo_indexes，任务标记 succeeded；失败则延迟重试
   → Scheduler(track_route_group，默认 TRACK_ROUTE_GROUP_CRON=0 4 * * *)
-  → 扫描尚未归组的 track_geo_indexes，按 track_type 严格分组，正反向相似路线可合并
-  → Upsert track_route_groups / track_route_group_members
+  → 全量读取 eligible track_geo_indexes，按 track_type 严格隔离并基于轨迹中心点做空间聚类
+  → 计算每个 track_route_groups 的 center_lat/center_lng、radius_m、bbox、member_count
+  → 重建替换 track_route_groups / track_route_group_members（存量聚合结果可清空重算；MySQL 实现使用事务）
 ```
 首页地图模式客户端接口挂在 auth 组：`GET /api/v1/track-map/view`、`GET /api/v1/track-map/groups`、`GET /api/v1/track-map/groups/:group_id/detail`、`GET /api/v1/track-map/groups/:group_id/tracks`。`group_id` 来自 `track_route_groups.group_id`，不等同于单条 `track_id`；列表和地图聚合使用 RouteGroup 数量口径，不返回 `user_count` / `track_count`。调整字段、缩放分层、聚合数量口径或 group_id 语义时，同步更新 `docs/api/track-map.md`、`docs/api/route-index.md` 与 `track_map.md`。
-管理中心聚合路线列表只展示路线组摘要，必须通过轻量查询避免读取 `track_route_groups.representative_polyline_json`；需要折线时使用详情或客户端地图接口的完整 RouteGroup 查询。
+管理中心聚合路线列表只展示路线组摘要；RouteGroup 对客户端表示聚合区域，使用 `center` + `radius_m` 绘制，不再下发代表路线折线。
 
 **短信登录等级信息**：`POST /api/v1/login/sms` 成功响应会附带 `achievement_level`，由 `LoginHandler` 调用 `AchievementService.GetLevelInfo` 基于当前有效轨迹实时计算；修改登录响应或等级字段时同步更新 `login.md`。
 

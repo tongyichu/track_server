@@ -266,29 +266,28 @@ const (
 	TrackRouteGroupMemberDirectionReverse TrackRouteGroupMemberDirection = "reverse"
 )
 
-// TrackRouteGroup is the persistent aggregation of similar public completed tracks.
+// TrackRouteGroup is the persistent spatial aggregation of public completed tracks.
 type TrackRouteGroup struct {
-	GroupID                    string                `json:"group_id" bson:"_id,omitempty"`
-	Name                       string                `json:"name" bson:"name"`
-	TrackType                  string                `json:"track_type" bson:"track_type"`
-	Status                     TrackRouteGroupStatus `json:"status" bson:"status"`
-	CityCodes                  []string              `json:"city_codes" bson:"city_codes"`
-	CityCodesJSON              string                `json:"-" bson:"city_codes_json"`
-	CoordinateSystem           string                `json:"coordinate_system" bson:"coordinate_system"`
-	CenterLat                  float64               `json:"center_lat" bson:"center_lat"`
-	CenterLng                  float64               `json:"center_lng" bson:"center_lng"`
-	MinLat                     float64               `json:"min_lat" bson:"min_lat"`
-	MinLng                     float64               `json:"min_lng" bson:"min_lng"`
-	MaxLat                     float64               `json:"max_lat" bson:"max_lat"`
-	MaxLng                     float64               `json:"max_lng" bson:"max_lng"`
-	Distance                   float64               `json:"distance" bson:"distance"`
-	RepresentativeTrackID      string                `json:"representative_track_id" bson:"representative_track_id"`
-	RepresentativePolyline     []TrackPoint          `json:"representative_polyline,omitempty" bson:"representative_polyline"`
-	RepresentativePolylineJSON string                `json:"-" bson:"representative_polyline_json"`
-	MemberCount                int64                 `json:"member_count" bson:"member_count"`
-	Source                     TrackRouteGroupSource `json:"source" bson:"source"`
-	CreatedAt                  time.Time             `json:"created_at" bson:"created_at"`
-	UpdatedAt                  time.Time             `json:"updated_at" bson:"updated_at"`
+	GroupID               string                `json:"group_id" bson:"_id,omitempty"`
+	Name                  string                `json:"name" bson:"name"`
+	TrackType             string                `json:"track_type" bson:"track_type"`
+	Status                TrackRouteGroupStatus `json:"status" bson:"status"`
+	CityCodes             []string              `json:"city_codes" bson:"city_codes"`
+	CityCodesJSON         string                `json:"-" bson:"city_codes_json"`
+	CoordinateSystem      string                `json:"coordinate_system" bson:"coordinate_system"`
+	CenterLat             float64               `json:"center_lat" bson:"center_lat"`
+	CenterLng             float64               `json:"center_lng" bson:"center_lng"`
+	RadiusM               float64               `json:"radius_m" bson:"radius_m"`
+	MinLat                float64               `json:"min_lat" bson:"min_lat"`
+	MinLng                float64               `json:"min_lng" bson:"min_lng"`
+	MaxLat                float64               `json:"max_lat" bson:"max_lat"`
+	MaxLng                float64               `json:"max_lng" bson:"max_lng"`
+	Distance              float64               `json:"distance" bson:"distance"`
+	RepresentativeTrackID string                `json:"representative_track_id" bson:"representative_track_id"`
+	MemberCount           int64                 `json:"member_count" bson:"member_count"`
+	Source                TrackRouteGroupSource `json:"source" bson:"source"`
+	CreatedAt             time.Time             `json:"created_at" bson:"created_at"`
+	UpdatedAt             time.Time             `json:"updated_at" bson:"updated_at"`
 }
 
 // TrackRouteGroupMember stores the many-to-many membership between groups and tracks.
@@ -341,20 +340,20 @@ type TrackMapCoverTrack struct {
 
 // TrackMapRouteGroupItem is the route-level item returned to map clients.
 type TrackMapRouteGroupItem struct {
-	Type                   string              `json:"type"`
-	GroupID                string              `json:"group_id"`
-	Name                   string              `json:"name"`
-	CityCode               string              `json:"city_code"`
-	CityName               string              `json:"city_name"`
-	TrackType              string              `json:"track_type"`
-	CoordinateSystem       string              `json:"coordinate_system"`
-	Center                 TrackMapPoint       `json:"center"`
-	BBox                   TrackMapBBox        `json:"bbox"`
-	RepresentativePolyline []TrackMapPoint     `json:"representative_polyline"`
-	CoverTrack             *TrackMapCoverTrack `json:"cover_track,omitempty"`
-	RawTrackID             string              `json:"-"`
-	SourceGeoIndex         *TrackGeoIndex      `json:"-"`
-	Track                  *Track              `json:"-"`
+	Type             string              `json:"type"`
+	GroupID          string              `json:"group_id"`
+	Name             string              `json:"name"`
+	CityCode         string              `json:"city_code"`
+	CityName         string              `json:"city_name"`
+	TrackType        string              `json:"track_type"`
+	CoordinateSystem string              `json:"coordinate_system"`
+	Center           TrackMapPoint       `json:"center"`
+	RadiusM          float64             `json:"radius_m"`
+	BBox             TrackMapBBox        `json:"bbox"`
+	CoverTrack       *TrackMapCoverTrack `json:"cover_track,omitempty"`
+	RawTrackID       string              `json:"-"`
+	SourceGeoIndex   *TrackGeoIndex      `json:"-"`
+	Track            *Track              `json:"-"`
 }
 
 // TrackMapClusterItem is the area/city aggregate item returned to map clients.
