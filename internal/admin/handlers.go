@@ -430,6 +430,7 @@ func (h *Handler) ListTracks(ctx context.Context, c *app.RequestContext) {
 		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
 		return
 	}
+	rewriteAdminTrackAssetURLs(items)
 	total, err := h.trackRepo.CountAll(ctx)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
@@ -773,6 +774,17 @@ func rewriteAdminStaticURL(raw string) string {
 		return "/admin/api/static/" + strings.TrimPrefix(raw, apiStaticPrefix)
 	}
 	return raw
+}
+
+func rewriteAdminTrackAssetURLs(items []*models.Track) {
+	for _, item := range items {
+		if item == nil {
+			continue
+		}
+		item.TrackScreenshotURL = rewriteAdminStaticURL(item.TrackScreenshotURL)
+		item.TrackNoMapBgScreenshotURL = rewriteAdminStaticURL(item.TrackNoMapBgScreenshotURL)
+		item.RawTrackURL = rewriteAdminStaticURL(item.RawTrackURL)
+	}
 }
 
 func cleanAdminStaticPath(raw string) (string, bool) {

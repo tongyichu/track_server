@@ -27,6 +27,13 @@
     if (s === 2) return '私密';
     return String(s);
   }
+  function safeImageURL(s) {
+    s = String(s || '').trim();
+    if (s.indexOf('/admin/api/static/') === 0 || s.indexOf('https://') === 0 || s.indexOf('http://') === 0) {
+      return s;
+    }
+    return '';
+  }
 
   var pageSize = 20;
   var cursorStack = [null];
@@ -69,7 +76,7 @@
     }
     var resp = await fetch('/admin/api/tracks?' + params.toString());
     if (!resp.ok) {
-      tbody.innerHTML = '<tr><td colspan="11">加载失败: ' + resp.status + '</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="12">加载失败: ' + resp.status + '</td></tr>';
       return;
     }
     var data = ((await resp.json()).data) || {};
@@ -80,7 +87,12 @@
     tbody.innerHTML = '';
     items.forEach(function (it) {
       var tr = document.createElement('tr');
-      tr.innerHTML = '<td>' + esc(it.id) + '</td>' +
+      var screenshotURL = safeImageURL(it.track_screenshot_url);
+      var screenshotCell = screenshotURL
+        ? '<a class="track-shot" href="' + esc(screenshotURL) + '" target="_blank" rel="noopener"><img src="' + esc(screenshotURL) + '" alt="轨迹截图" loading="lazy"></a>'
+        : '<span class="hint">无</span>';
+      tr.innerHTML = '<td>' + screenshotCell + '</td>' +
+        '<td>' + esc(it.id) + '</td>' +
         '<td>' + it.user_id + '</td>' +
         '<td>' + esc(it.title || '') + '</td>' +
         '<td>' + esc(it.track_type || '') + '</td>' +
