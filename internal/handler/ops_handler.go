@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/common/utils"
@@ -17,6 +19,7 @@ import (
 type OpsHandler struct {
 	userSvc        *service.UserService
 	achievementSvc *service.AchievementService
+	restrictionSvc *service.AccountRestrictionService
 	internalToken  string
 }
 
@@ -32,10 +35,11 @@ type OpsAchievementRefreshResult struct {
 	NewRewards          []*models.AchievementRewardView `json:"new_rewards"`
 }
 
-func NewOpsHandler(userSvc *service.UserService, achievementSvc *service.AchievementService, internalToken string) *OpsHandler {
+func NewOpsHandler(userSvc *service.UserService, achievementSvc *service.AchievementService, restrictionSvc *service.AccountRestrictionService, internalToken string) *OpsHandler {
 	return &OpsHandler{
 		userSvc:        userSvc,
 		achievementSvc: achievementSvc,
+		restrictionSvc: restrictionSvc,
 		internalToken:  strings.TrimSpace(internalToken),
 	}
 }
@@ -106,6 +110,124 @@ func (h *OpsHandler) RefreshAchievementByPhone(ctx context.Context, c *app.Reque
 		result.NextLevel = rewardList.Stats.NextLevel
 	}
 	c.JSON(http.StatusOK, successResponse(result))
+}
+
+func (h *OpsHandler) CreateAccountRestriction(ctx context.Context, c *app.RequestContext) {
+	if !h.checkInternalToken(c) {
+		return
+	}
+	if h == nil || h.restrictionSvc == nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "account restriction service not configured"})
+		return
+	}
+	userID, err := strconv.ParseInt(strings.TrimSpace(c.Param("user_id")), 10, 64)
+	if err != nil || userID <= 0 {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid user_id"})
+		return
+	}
+	var body struct {
+		Reason    string `json:"reason"`
+		Operator  string `json:"operator"`
+		ExpiresAt string `json:"expires_at"`
+	}
+	if err := json.Unmarshal(c.Request.Body(), &body); err != nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid payload"})
+		return
+	}
+	var expiresAt *time.Time
+	if strings.TrimSpace(body.ExpiresAt) != "" {
+		parsed, err := time.Parse(time.RFC3339, strings.TrimSpace(body.ExpiresAt))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, utils.H{"error": "expires_at must be RFC3339"})
+			return
+		}
+		expiresAt = &parsed
+	}
+	item, err := h.restrictionSvc.Create(ctx, service.CreateAccountRestrictionInput{
+		UserID:    userID,
+		Reason:    body.Reason,
+		Operator:  body.Operator,
+		ExpiresAt: expiresAt,
+	})
+	if err != nil {
+		var iae *service.InvalidArgumentError
+		if errors.As(err, &iae) {
+			c.JSON(http.StatusBadRequest, utils.H{"error": iae.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, successResponse(item))
+}
+
+func (h *OpsHandler) GetCurrentAccountRestriction(ctx context.Context, c *app.RequestContext) {
+	if !h.checkInternalToken(c) {
+		return
+	}
+	if h == nil || h.restrictionSvc == nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "account restriction service not configured"})
+		return
+	}
+	userID, err := strconv.ParseInt(strings.TrimSpace(c.Param("user_id")), 10, 64)
+	if err != nil || userID <= 0 {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid user_id"})
+		return
+	}
+	item, err := h.restrictionSvc.FindActive(ctx, userID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			c.JSON(http.StatusNotFound, utils.H{"error": "account restriction not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, successResponse(item))
+}
+
+func (h *OpsHandler) ListAccountRestrictions(ctx context.Context, c *app.RequestContext) {
+	if !h.checkInternalToken(c) {
+		return
+	}
+	if h == nil || h.restrictionSvc == nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "account restriction service not configured"})
+		return
+	}
+	userID, err := strconv.ParseInt(strings.TrimSpace(c.Param("user_id")), 10, 64)
+	if err != nil || userID <= 0 {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid user_id"})
+		return
+	}
+	limit, _ := strconv.Atoi(strings.TrimSpace(string(c.Query("limit"))))
+	items, err := h.restrictionSvc.ListByUserID(ctx, userID, limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, successResponse(utils.H{"items": items}))
+}
+
+func (h *OpsHandler) RevokeCurrentAccountRestriction(ctx context.Context, c *app.RequestContext) {
+	if !h.checkInternalToken(c) {
+		return
+	}
+	if h == nil || h.restrictionSvc == nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "account restriction service not configured"})
+		return
+	}
+	userID, err := strconv.ParseInt(strings.TrimSpace(c.Param("user_id")), 10, 64)
+	if err != nil || userID <= 0 {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid user_id"})
+		return
+	}
+	operator := strings.TrimSpace(string(c.Query("operator")))
+	count, err := h.restrictionSvc.RevokeActive(ctx, userID, operator)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, successResponse(utils.H{"revoked_count": count}))
 }
 
 func (h *OpsHandler) checkInternalToken(c *app.RequestContext) bool {

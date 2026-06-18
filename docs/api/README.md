@@ -15,6 +15,7 @@
 | 收藏、取消收藏、收藏列表、导航上报 | [collect-navigation.md](collect-navigation.md) |
 | OSS 直传临时凭证 | [oss.md](oss.md) |
 | 用户详情、个人信息更新、关注/粉丝关系 | [user.md](user.md) |
+| 账号限制拦截与运维管理 | [account-restriction.md](account-restriction.md) |
 | App 升级检查 | [upgrade.md](upgrade.md) |
 | 意见反馈提交、历史列表、图片读取、运维处理 | [feedback.md](feedback.md) |
 | 成就摘要、奖励、等级规则 H5、运维刷新 | [achievement.md](achievement.md) |

@@ -58,6 +58,12 @@ type InMemoryFeedbackRepository struct {
 	feedbacks map[string]*models.Feedback
 }
 
+type InMemoryAccountRestrictionRepository struct {
+	mu           sync.RWMutex
+	nextID       int64
+	restrictions map[int64][]*models.AccountRestriction
+}
+
 func NewInMemoryNavigationRepository() *InMemoryNavigationRepository {
 	return &InMemoryNavigationRepository{byTrack: make(map[string][]int64)}
 }
@@ -81,6 +87,10 @@ func NewInMemoryTrackMapRepository(tracks *InMemoryTrackRepository) *InMemoryTra
 
 func NewInMemoryFeedbackRepository() *InMemoryFeedbackRepository {
 	return &InMemoryFeedbackRepository{nextID: 1, feedbacks: make(map[string]*models.Feedback)}
+}
+
+func NewInMemoryAccountRestrictionRepository() *InMemoryAccountRestrictionRepository {
+	return &InMemoryAccountRestrictionRepository{nextID: 1, restrictions: make(map[int64][]*models.AccountRestriction)}
 }
 
 // NewInMemoryTrackRepository creates a new in-memory track repository.
@@ -578,6 +588,97 @@ func (r *InMemoryUserRepository) CountAll(_ context.Context) (int64, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return int64(len(r.users)), nil
+}
+
+func (r *InMemoryAccountRestrictionRepository) CreateAccountRestriction(_ context.Context, restriction *models.AccountRestriction) error {
+	if restriction == nil || restriction.UserID <= 0 {
+		return errors.New("account restriction user_id is required")
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	clone := *restriction
+	if clone.ID <= 0 {
+		clone.ID = r.nextID
+		r.nextID++
+	}
+	if clone.CreatedAt.IsZero() {
+		clone.CreatedAt = time.Now()
+	}
+	if clone.UpdatedAt.IsZero() {
+		clone.UpdatedAt = clone.CreatedAt
+	}
+	if clone.Status == "" {
+		clone.Status = models.AccountRestrictionStatusActive
+	}
+	r.restrictions[clone.UserID] = append(r.restrictions[clone.UserID], &clone)
+	restriction.ID = clone.ID
+	restriction.CreatedAt = clone.CreatedAt
+	restriction.UpdatedAt = clone.UpdatedAt
+	return nil
+}
+
+func (r *InMemoryAccountRestrictionRepository) FindActiveAccountRestriction(_ context.Context, userID int64, now time.Time) (*models.AccountRestriction, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	items := r.restrictions[userID]
+	for i := len(items) - 1; i >= 0; i-- {
+		item := items[i]
+		if item == nil || item.Status != models.AccountRestrictionStatusActive {
+			continue
+		}
+		if item.ExpiresAt != nil && !item.ExpiresAt.After(now) {
+			continue
+		}
+		clone := *item
+		return &clone, nil
+	}
+	return nil, ErrNotFound
+}
+
+func (r *InMemoryAccountRestrictionRepository) ListAccountRestrictionsByUserID(_ context.Context, userID int64, limit int) ([]*models.AccountRestriction, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	items := r.restrictions[userID]
+	res := make([]*models.AccountRestriction, 0, len(items))
+	for _, item := range items {
+		if item == nil {
+			continue
+		}
+		clone := *item
+		res = append(res, &clone)
+	}
+	sort.SliceStable(res, func(i, j int) bool {
+		if res[i].CreatedAt.Equal(res[j].CreatedAt) {
+			return res[i].ID > res[j].ID
+		}
+		return res[i].CreatedAt.After(res[j].CreatedAt)
+	})
+	if len(res) > limit {
+		res = res[:limit]
+	}
+	return res, nil
+}
+
+func (r *InMemoryAccountRestrictionRepository) RevokeActiveAccountRestrictions(_ context.Context, userID int64, operator string, now time.Time) (int64, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var count int64
+	for _, item := range r.restrictions[userID] {
+		if item == nil || item.Status != models.AccountRestrictionStatusActive {
+			continue
+		}
+		if item.ExpiresAt != nil && !item.ExpiresAt.After(now) {
+			continue
+		}
+		item.Status = models.AccountRestrictionStatusRevoked
+		item.UpdatedAt = now
+		item.RevokedAt = &now
+		count++
+	}
+	return count, nil
 }
 
 // InMemoryCollectRepository is an in-memory implementation of CollectRepository.

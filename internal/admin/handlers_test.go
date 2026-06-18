@@ -92,7 +92,7 @@ func TestAdminFeedbackDetailRewritesImageURLAndServesImage(t *testing.T) {
 	}
 
 	h := server.Default()
-	module := NewModule(map[string]string{"admin": string(placeholderPasswordHash)}, nil, nil, staticRoot, nil, nil, nil, nil, nil, nil, nil, feedbackSvc, nil)
+	module := NewModule(map[string]string{"admin": string(placeholderPasswordHash)}, nil, nil, staticRoot, nil, nil, nil, nil, nil, nil, nil, feedbackSvc, nil, nil)
 	module.RegisterRoutes(h)
 	defer module.Close()
 
@@ -150,7 +150,7 @@ func TestAdminListFeedbacksFiltersByVersionAndPhone(t *testing.T) {
 	}
 
 	h := server.Default()
-	module := NewModule(map[string]string{"admin": string(placeholderPasswordHash)}, nil, nil, t.TempDir(), userRepo, nil, nil, nil, nil, nil, nil, feedbackSvc, nil)
+	module := NewModule(map[string]string{"admin": string(placeholderPasswordHash)}, nil, nil, t.TempDir(), userRepo, nil, nil, nil, nil, nil, nil, feedbackSvc, nil, nil)
 	module.RegisterRoutes(h)
 	defer module.Close()
 	session, err := module.Auth.store.Create("admin")
@@ -230,7 +230,7 @@ func TestAdminRouteGroupOperations(t *testing.T) {
 
 	h := server.Default()
 	routeGroupSvc := service.NewTrackRouteGroupService(mapRepo)
-	module := NewModule(map[string]string{"admin": string(placeholderPasswordHash)}, nil, nil, t.TempDir(), nil, trackRepo, nil, mapRepo, nil, nil, nil, nil, routeGroupSvc)
+	module := NewModule(map[string]string{"admin": string(placeholderPasswordHash)}, nil, nil, t.TempDir(), nil, trackRepo, nil, mapRepo, nil, nil, nil, nil, nil, routeGroupSvc)
 	module.RegisterRoutes(h)
 	defer module.Close()
 	session, err := module.Auth.store.Create("admin")
@@ -315,7 +315,7 @@ func TestAdminListTracksRewritesScreenshotURL(t *testing.T) {
 	screenshotCache.SetDownloader(adminFakeDownloader{})
 
 	h := server.Default()
-	module := NewModule(map[string]string{"admin": string(placeholderPasswordHash)}, nil, nil, staticRoot, nil, trackRepo, nil, nil, nil, nil, nil, nil, nil)
+	module := NewModule(map[string]string{"admin": string(placeholderPasswordHash)}, nil, nil, staticRoot, nil, trackRepo, nil, nil, nil, nil, nil, nil, nil, nil)
 	module.Handler.SetScreenshotCache(screenshotCache)
 	module.RegisterRoutes(h)
 	defer module.Close()
@@ -423,7 +423,7 @@ func TestAdminDeleteTrackCleansRelatedData(t *testing.T) {
 	}
 
 	h := server.Default()
-	module := NewModule(map[string]string{"admin": string(placeholderPasswordHash)}, nil, nil, t.TempDir(), nil, trackRepo, collectRepo, mapRepo, nil, nil, nil, nil, nil)
+	module := NewModule(map[string]string{"admin": string(placeholderPasswordHash)}, nil, nil, t.TempDir(), nil, trackRepo, collectRepo, mapRepo, nil, nil, nil, nil, nil, nil)
 	module.RegisterRoutes(h)
 	defer module.Close()
 	session, err := module.Auth.store.Create("admin")

@@ -36,6 +36,7 @@ type Handler struct {
 	companionRepo   repository.CompanionRepository
 	analyticsRepo   repository.AnalyticsRepository
 	feedbackSvc     *service.FeedbackService
+	restrictionSvc  *service.AccountRestrictionService
 	routeGroupSvc   *service.TrackRouteGroupService
 	screenshotCache *service.AssetCacheService
 	// staticRoot 是服务端本地静态资源根目录（通常为 <LogDir>/static）。
@@ -71,22 +72,24 @@ func NewHandler(
 	analyticsRepo repository.AnalyticsRepository,
 	userSvc *service.UserService,
 	feedbackSvc *service.FeedbackService,
+	restrictionSvc *service.AccountRestrictionService,
 	routeGroupSvc *service.TrackRouteGroupService,
 ) *Handler {
 	return &Handler{
-		releaseSvc:    releaseSvc,
-		stsSvc:        stsSvc,
-		auth:          auth,
-		staticRoot:    staticRoot,
-		userRepo:      userRepo,
-		userSvc:       userSvc,
-		trackRepo:     trackRepo,
-		collectRepo:   collectRepo,
-		trackMapRepo:  trackMapRepo,
-		companionRepo: companionRepo,
-		analyticsRepo: analyticsRepo,
-		feedbackSvc:   feedbackSvc,
-		routeGroupSvc: routeGroupSvc,
+		releaseSvc:     releaseSvc,
+		stsSvc:         stsSvc,
+		auth:           auth,
+		staticRoot:     staticRoot,
+		userRepo:       userRepo,
+		userSvc:        userSvc,
+		trackRepo:      trackRepo,
+		collectRepo:    collectRepo,
+		trackMapRepo:   trackMapRepo,
+		companionRepo:  companionRepo,
+		analyticsRepo:  analyticsRepo,
+		feedbackSvc:    feedbackSvc,
+		restrictionSvc: restrictionSvc,
+		routeGroupSvc:  routeGroupSvc,
 	}
 }
 
@@ -387,13 +390,37 @@ func (h *Handler) ListUsers(ctx context.Context, c *app.RequestContext) {
 			u.AvatarURL = rewriteAdminStaticURL(u.AvatarURL)
 		}
 	}
+	rows := make([]utils.H, 0, len(items))
+	for _, u := range items {
+		row := utils.H{
+			"id":                  u.ID,
+			"nickname":            u.Nickname,
+			"avatar_url":          u.AvatarURL,
+			"signature":           u.Signature,
+			"phone":               u.Phone,
+			"client_language":     u.ClientLanguage,
+			"created_at":          u.CreatedAt,
+			"updated_at":          u.UpdatedAt,
+			"account_restriction": nil,
+		}
+		if h.restrictionSvc != nil {
+			restriction, err := h.restrictionSvc.FindActive(ctx, u.ID)
+			if err == nil {
+				row["account_restriction"] = restriction
+			} else if !errors.Is(err, repository.ErrNotFound) {
+				c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+				return
+			}
+		}
+		rows = append(rows, row)
+	}
 	total, err := h.userRepo.CountAll(ctx)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
 		return
 	}
 	resp := utils.H{
-		"items":    items,
+		"items":    rows,
 		"total":    total,
 		"has_more": len(items) == limit,
 	}
@@ -405,6 +432,109 @@ func (h *Handler) ListUsers(ctx context.Context, c *app.RequestContext) {
 		}
 	}
 	c.JSON(http.StatusOK, utils.H{"code": 0, "data": resp})
+}
+
+type adminAccountRestrictionBody struct {
+	Reason    string `json:"reason"`
+	ExpiresAt string `json:"expires_at"`
+}
+
+func (h *Handler) CreateAccountRestriction(ctx context.Context, c *app.RequestContext) {
+	if h == nil || h.restrictionSvc == nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "account restriction service not configured"})
+		return
+	}
+	userID, ok := parseAdminUserID(c)
+	if !ok {
+		return
+	}
+	var body adminAccountRestrictionBody
+	data, err := c.Body()
+	if err != nil || json.Unmarshal(data, &body) != nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid payload"})
+		return
+	}
+	var expiresAt *time.Time
+	if strings.TrimSpace(body.ExpiresAt) != "" {
+		parsed, err := time.Parse(time.RFC3339, strings.TrimSpace(body.ExpiresAt))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, utils.H{"error": "expires_at must be RFC3339"})
+			return
+		}
+		expiresAt = &parsed
+	}
+	item, err := h.restrictionSvc.Create(ctx, service.CreateAccountRestrictionInput{
+		UserID:    userID,
+		Reason:    body.Reason,
+		Operator:  h.adminOperator(c),
+		ExpiresAt: expiresAt,
+	})
+	if err != nil {
+		var iae *service.InvalidArgumentError
+		if errors.As(err, &iae) {
+			c.JSON(http.StatusBadRequest, utils.H{"error": iae.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": item})
+}
+
+func (h *Handler) GetCurrentAccountRestriction(ctx context.Context, c *app.RequestContext) {
+	if h == nil || h.restrictionSvc == nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "account restriction service not configured"})
+		return
+	}
+	userID, ok := parseAdminUserID(c)
+	if !ok {
+		return
+	}
+	item, err := h.restrictionSvc.FindActive(ctx, userID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			c.JSON(http.StatusNotFound, utils.H{"error": "account restriction not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": item})
+}
+
+func (h *Handler) RevokeCurrentAccountRestriction(ctx context.Context, c *app.RequestContext) {
+	if h == nil || h.restrictionSvc == nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "account restriction service not configured"})
+		return
+	}
+	userID, ok := parseAdminUserID(c)
+	if !ok {
+		return
+	}
+	count, err := h.restrictionSvc.RevokeActive(ctx, userID, h.adminOperator(c))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"revoked_count": count}})
+}
+
+func parseAdminUserID(c *app.RequestContext) (int64, bool) {
+	userID, err := strconv.ParseInt(strings.TrimSpace(c.Param("user_id")), 10, 64)
+	if err != nil || userID <= 0 {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid user_id"})
+		return 0, false
+	}
+	return userID, true
+}
+
+func (h *Handler) adminOperator(c *app.RequestContext) string {
+	if h != nil && h.auth != nil {
+		if sess := h.auth.SessionFromRequest(c); sess != nil && strings.TrimSpace(sess.Username) != "" {
+			return sess.Username
+		}
+	}
+	return "admin"
 }
 
 // ----- 轨迹管理 -----

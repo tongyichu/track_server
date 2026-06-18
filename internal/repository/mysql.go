@@ -36,6 +36,20 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 			updated_at DATETIME(6) NOT NULL,
 			INDEX idx_users_updated_at (updated_at)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
+		`CREATE TABLE IF NOT EXISTS user_account_restrictions (
+			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+			user_id BIGINT NOT NULL COMMENT '被限制用户ID',
+			status VARCHAR(32) NOT NULL DEFAULT 'active' COMMENT 'active/revoked',
+			reason VARCHAR(255) NOT NULL DEFAULT '' COMMENT '限制原因',
+			operator VARCHAR(64) NOT NULL DEFAULT '' COMMENT '操作人',
+			expires_at DATETIME(6) NULL COMMENT '过期时间，NULL 表示永久',
+			created_at DATETIME(6) NOT NULL,
+			updated_at DATETIME(6) NOT NULL,
+			revoked_at DATETIME(6) NULL COMMENT '解除时间',
+			PRIMARY KEY (id),
+			KEY idx_user_account_restrictions_active (user_id, status, expires_at),
+			KEY idx_user_account_restrictions_user_time (user_id, created_at, id)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户账号限制记录表';`,
 		`CREATE TABLE IF NOT EXISTS track_records (
 			id VARCHAR(64) NOT NULL,
 			user_id BIGINT UNSIGNED NOT NULL,
@@ -1952,6 +1966,134 @@ func (r *MySQLUserRepository) CountAll(ctx context.Context) (int64, error) {
 		return 0, err
 	}
 	return count, nil
+}
+
+type MySQLAccountRestrictionRepository struct{ db *sql.DB }
+
+func NewMySQLAccountRestrictionRepository(db *sql.DB) *MySQLAccountRestrictionRepository {
+	return &MySQLAccountRestrictionRepository{db: db}
+}
+
+func (r *MySQLAccountRestrictionRepository) CreateAccountRestriction(ctx context.Context, restriction *models.AccountRestriction) error {
+	if restriction == nil {
+		return errors.New("account restriction is nil")
+	}
+	if restriction.CreatedAt.IsZero() {
+		restriction.CreatedAt = time.Now()
+	}
+	if restriction.UpdatedAt.IsZero() {
+		restriction.UpdatedAt = restriction.CreatedAt
+	}
+	if restriction.Status == "" {
+		restriction.Status = models.AccountRestrictionStatusActive
+	}
+	res, err := r.db.ExecContext(ctx,
+		`INSERT INTO user_account_restrictions
+			(user_id, status, reason, operator, expires_at, created_at, updated_at, revoked_at)
+		 VALUES (?,?,?,?,?,?,?,?)`,
+		restriction.UserID,
+		restriction.Status,
+		restriction.Reason,
+		restriction.Operator,
+		restriction.ExpiresAt,
+		restriction.CreatedAt,
+		restriction.UpdatedAt,
+		restriction.RevokedAt,
+	)
+	if err != nil {
+		return err
+	}
+	id, err := res.LastInsertId()
+	if err == nil {
+		restriction.ID = id
+	}
+	return nil
+}
+
+func (r *MySQLAccountRestrictionRepository) FindActiveAccountRestriction(ctx context.Context, userID int64, now time.Time) (*models.AccountRestriction, error) {
+	row := r.db.QueryRowContext(ctx,
+		`SELECT id, user_id, status, reason, operator, expires_at, created_at, updated_at, revoked_at
+		   FROM user_account_restrictions
+		  WHERE user_id=? AND status=? AND (expires_at IS NULL OR expires_at > ?)
+		  ORDER BY created_at DESC, id DESC
+		  LIMIT 1`,
+		userID, models.AccountRestrictionStatusActive, now,
+	)
+	return scanAccountRestriction(row)
+}
+
+func (r *MySQLAccountRestrictionRepository) ListAccountRestrictionsByUserID(ctx context.Context, userID int64, limit int) ([]*models.AccountRestriction, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT id, user_id, status, reason, operator, expires_at, created_at, updated_at, revoked_at
+		   FROM user_account_restrictions
+		  WHERE user_id=?
+		  ORDER BY created_at DESC, id DESC
+		  LIMIT ?`,
+		userID, limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := make([]*models.AccountRestriction, 0, limit)
+	for rows.Next() {
+		item, err := scanAccountRestriction(rows)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+func (r *MySQLAccountRestrictionRepository) RevokeActiveAccountRestrictions(ctx context.Context, userID int64, operator string, now time.Time) (int64, error) {
+	res, err := r.db.ExecContext(ctx,
+		`UPDATE user_account_restrictions
+		    SET status=?, updated_at=?, revoked_at=?
+		  WHERE user_id=? AND status=? AND (expires_at IS NULL OR expires_at > ?)`,
+		models.AccountRestrictionStatusRevoked,
+		now,
+		now,
+		userID,
+		models.AccountRestrictionStatusActive,
+		now,
+	)
+	if err != nil {
+		return 0, err
+	}
+	rows, _ := res.RowsAffected()
+	return rows, nil
+}
+
+type accountRestrictionScanner interface {
+	Scan(dest ...interface{}) error
+}
+
+func scanAccountRestriction(scanner accountRestrictionScanner) (*models.AccountRestriction, error) {
+	var (
+		item      models.AccountRestriction
+		expiresAt sql.NullTime
+		revokedAt sql.NullTime
+	)
+	if err := scanner.Scan(&item.ID, &item.UserID, &item.Status, &item.Reason, &item.Operator, &expiresAt, &item.CreatedAt, &item.UpdatedAt, &revokedAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	if expiresAt.Valid {
+		item.ExpiresAt = &expiresAt.Time
+	}
+	if revokedAt.Valid {
+		item.RevokedAt = &revokedAt.Time
+	}
+	return &item, nil
 }
 
 // MySQLCollectRepository implements CollectRepository on top of MySQL.

@@ -53,7 +53,7 @@ track_server/
 │   ├── config/             # 环境变量加载；内置省市数据 + 昵称字典 + 同行弹幕敏感词词库
 │   ├── handler/            # Hertz HTTP handler + router.go 路由表（权威）
 │   ├── middleware/         # JWT 鉴权、请求元信息、Token 黑名单
-│   ├── models/             # 领域模型（Track / User / UserFollow / Companion / CompanionEvent / Achievement / Feedback / Analytics / 相关光标/子结构）
+│   ├── models/             # 领域模型（Track / User / UserFollow / AccountRestriction / Companion / CompanionEvent / Achievement / Feedback / Analytics / 相关光标/子结构）
 │   ├── repository/         # 持久化接口 + mysql / mongo / memory 三实现
 │   ├── scheduler/          # 进程内定时任务（基于 robfig/cron/v3，按 SCHEDULER_ENABLED 启停）
 │   └── service/            # 业务编排：登录、轨迹、用户、同行控制面、成就、OSS STS、资源缓存、埋点落盘
@@ -77,9 +77,9 @@ track_server/
 | HTTP 路由清单 | `internal/handler/router.go` |
 | 配置项与默认值 | `internal/config/config.go` |
 | Repository 接口契约 | `internal/repository/interfaces.go` |
-| 领域模型 | `internal/models/track.go`、`internal/models/user.go`、`internal/models/companion.go`、`internal/models/achievement.go`、`internal/models/feedback.go`、`internal/models/analytics.go` |
+| 领域模型 | `internal/models/track.go`、`internal/models/user.go`（含 AccountRestriction）、`internal/models/companion.go`、`internal/models/achievement.go`、`internal/models/feedback.go`、`internal/models/analytics.go` |
 | MySQL 表结构 | `mysql.sql` |
-| 接口协议 | `docs/api/`（入口 `track_api.md`，路由索引 `docs/api/route-index.md`，首页地图接口 `docs/api/track-map.md`）、`login.md`、`track_companion.md`、`track_achievement_client.md`、`track_map.md` |
+| 接口协议 | `docs/api/`（入口 `track_api.md`，路由索引 `docs/api/route-index.md`，账号限制接口 `docs/api/account-restriction.md`，首页地图接口 `docs/api/track-map.md`）、`login.md`、`track_companion.md`、`track_achievement_client.md`、`track_map.md` |
 | 客户端埋点方案 | `track_analytics.md`、`docs/api/analytics.md` |
 | 成就规则方案 | `track_achievement.md` |
 
@@ -176,10 +176,13 @@ Scheduler(companion_session_autoclose，每 10 分钟)
 ```
 HTTP Request
   → middleware.RequestMeta → middleware.JWTAuth（auth 组）
+  → middleware.AccountRestriction（仅拦截上传/发起同行/关注/收藏/修改资料等受限动作）
   → handler.<Xxx>Handler（参数校验 + 响应封装）
   → service.<Xxx>Service（业务编排 + 资源缓存下发）
   → repository.<Xxx>Repository（数据持久化）
 ```
+
+**账号限制流程**：管理中心/运维通过 `/api/v1/ops/users/:user_id/restrictions*` 写入或解除 `user_account_restrictions`；当前生效条件为 `status=active AND (expires_at IS NULL OR expires_at > now)`。业务 JWT 通过后，`AccountRestrictionMiddleware` 只拦截上传内容（含上传用 OSS STS、轨迹创建/上传/更新）、发起同行、关注、收藏、修改个人信息；取消收藏、取消关注、退出登录和查询类接口放行。限制错误返回 `403`，`message` 使用“账号已被限制，禁止...”动作文案。新增会产生内容、关系或用户资料变更的业务接口时，需要评估是否加入 `internal/middleware/account_restriction.go` 的受限路由表，并同步更新 `docs/api/account-restriction.md` 与 `docs/api/route-index.md`。
 
 **意见反馈流程**：`POST /api/v1/feedback` 使用 `multipart/form-data` 提交文字与最多 3 张图片；`FeedbackService` 会先检查同一用户未处理反馈数量，`pending` + `processing` 最多 5 条，超限返回 429 且不会写入图片。通过校验后再检查图片真实类型和大小，并私有落盘到 `<LogDir>/feedback/images/<user_id>/<yyyyMMdd>/`，数据库 `user_feedbacks.images_json` 只保存相对路径和元信息。用户历史列表/详情只返回本人的反馈，图片读取必须经业务 JWT 校验归属；`/ops/feedback/*` 使用 `X-Internal-Token` 供运营查看和更新状态，更新为 `resolved` 时 `reply` 必填且会下发给提交用户。调整反馈字段、图片限制、状态枚举、未处理上限、运营回复规则或访问路径时，同步更新 `docs/api/feedback.md` 与 `docs/api/route-index.md`。
 

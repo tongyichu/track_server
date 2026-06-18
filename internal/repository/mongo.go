@@ -427,6 +427,30 @@ func (r *MongoUserRepository) CountAll(context.Context) (int64, error) {
 	return 0, errors.New("MongoUserRepository.CountAll not implemented")
 }
 
+type MongoAccountRestrictionRepository struct {
+	collection *mongo.Collection
+}
+
+func NewMongoAccountRestrictionRepository(collection *mongo.Collection) *MongoAccountRestrictionRepository {
+	return &MongoAccountRestrictionRepository{collection: collection}
+}
+
+func (r *MongoAccountRestrictionRepository) CreateAccountRestriction(context.Context, *models.AccountRestriction) error {
+	return errors.New("MongoAccountRestrictionRepository.CreateAccountRestriction not implemented")
+}
+
+func (r *MongoAccountRestrictionRepository) FindActiveAccountRestriction(context.Context, int64, time.Time) (*models.AccountRestriction, error) {
+	return nil, errors.New("MongoAccountRestrictionRepository.FindActiveAccountRestriction not implemented")
+}
+
+func (r *MongoAccountRestrictionRepository) ListAccountRestrictionsByUserID(context.Context, int64, int) ([]*models.AccountRestriction, error) {
+	return nil, errors.New("MongoAccountRestrictionRepository.ListAccountRestrictionsByUserID not implemented")
+}
+
+func (r *MongoAccountRestrictionRepository) RevokeActiveAccountRestrictions(context.Context, int64, string, time.Time) (int64, error) {
+	return 0, errors.New("MongoAccountRestrictionRepository.RevokeActiveAccountRestrictions not implemented")
+}
+
 // MongoCollectRepository is a stub of CollectRepository backed by MongoDB.
 type MongoCollectRepository struct {
 	collection *mongo.Collection

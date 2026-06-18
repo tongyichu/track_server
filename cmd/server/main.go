@@ -52,6 +52,7 @@ func main() {
 	var appReleaseRepo repository.AppReleaseRepository
 	var companionRepo repository.CompanionRepository
 	var achievementRepo repository.AchievementRepository
+	var accountRestrictionRepo repository.AccountRestrictionRepository
 	var feedbackRepo repository.FeedbackRepository
 	var analyticsRepo repository.AnalyticsRepository
 	var trackMapRepo repository.TrackMapRepository
@@ -63,6 +64,7 @@ func main() {
 		}
 		followRepo = repository.NewInMemoryFollowRepository()
 		achievementRepo = repository.NewInMemoryAchievementRepository()
+		accountRestrictionRepo = repository.NewInMemoryAccountRestrictionRepository()
 		feedbackRepo = repository.NewInMemoryFeedbackRepository()
 		analyticsRepo = repository.NewInMemoryAnalyticsRepository()
 		log.Println("using in-memory repositories")
@@ -76,6 +78,7 @@ func main() {
 			}
 			followRepo = repository.NewInMemoryFollowRepository()
 			achievementRepo = repository.NewInMemoryAchievementRepository()
+			accountRestrictionRepo = repository.NewInMemoryAccountRestrictionRepository()
 			feedbackRepo = repository.NewInMemoryFeedbackRepository()
 			analyticsRepo = repository.NewInMemoryAnalyticsRepository()
 		} else if err := db.PingContext(ctx); err != nil {
@@ -87,6 +90,7 @@ func main() {
 			}
 			followRepo = repository.NewInMemoryFollowRepository()
 			achievementRepo = repository.NewInMemoryAchievementRepository()
+			accountRestrictionRepo = repository.NewInMemoryAccountRestrictionRepository()
 			feedbackRepo = repository.NewInMemoryFeedbackRepository()
 			analyticsRepo = repository.NewInMemoryAnalyticsRepository()
 		} else {
@@ -100,6 +104,7 @@ func main() {
 				}
 				followRepo = repository.NewInMemoryFollowRepository()
 				achievementRepo = repository.NewInMemoryAchievementRepository()
+				accountRestrictionRepo = repository.NewInMemoryAccountRestrictionRepository()
 				feedbackRepo = repository.NewInMemoryFeedbackRepository()
 				analyticsRepo = repository.NewInMemoryAnalyticsRepository()
 			} else {
@@ -110,6 +115,7 @@ func main() {
 				trackMapRepo = repository.NewMySQLTrackMapRepository(db)
 				followRepo = repository.NewMySQLFollowRepository(db)
 				achievementRepo = repository.NewMySQLAchievementRepository(db)
+				accountRestrictionRepo = repository.NewMySQLAccountRestrictionRepository(db)
 				feedbackRepo = repository.NewMySQLFeedbackRepository(db)
 				analyticsRepo = repository.NewMySQLAnalyticsRepository(db)
 				log.Println("using mysql repositories")
@@ -126,6 +132,7 @@ func main() {
 			}
 			followRepo = repository.NewInMemoryFollowRepository()
 			achievementRepo = repository.NewInMemoryAchievementRepository()
+			accountRestrictionRepo = repository.NewInMemoryAccountRestrictionRepository()
 			feedbackRepo = repository.NewInMemoryFeedbackRepository()
 			analyticsRepo = repository.NewInMemoryAnalyticsRepository()
 		} else {
@@ -138,6 +145,7 @@ func main() {
 			navigationRepo = repository.NewMongoNavigationRepository(db.Collection("track_navigations"))
 			appReleaseRepo = repository.NewMongoAppReleaseRepository(db.Collection("app_releases"))
 			achievementRepo = repository.NewMongoAchievementRepository(db.Collection("user_achievement_rewards"))
+			accountRestrictionRepo = repository.NewMongoAccountRestrictionRepository(db.Collection("user_account_restrictions"))
 			feedbackRepo = repository.NewMongoFeedbackRepository(db.Collection("user_feedbacks"))
 			analyticsRepo = repository.NewMongoAnalyticsRepository(db.Collection("analytics_sync_summaries"))
 			trackMapRepo = repository.NewMongoTrackMapRepository(
@@ -162,6 +170,7 @@ func main() {
 	trackSvc.SetNavigationRepository(navigationRepo)
 	trackSvc.SetCompanionRepository(companionRepo)
 	achievementSvc := service.NewAchievementService(achievementRepo, trackRepo)
+	accountRestrictionSvc := service.NewAccountRestrictionService(accountRestrictionRepo)
 	trackSvc.SetAchievementService(achievementSvc)
 	userSvc := service.NewUserService(userRepo)
 	userSvc.SetTrackRepository(trackRepo)
@@ -385,6 +394,7 @@ func main() {
 		AppReleaseService:          appReleaseSvc,
 		CompanionService:           companionSvc,
 		AchievementService:         achievementSvc,
+		AccountRestrictionService:  accountRestrictionSvc,
 		FeedbackService:            feedbackSvc,
 		AnalyticsService:           analyticsSvc,
 		JWTSecret:                  cfg.JWTSecret,
@@ -396,7 +406,7 @@ func main() {
 
 	// 管理后台（独立于业务用户鉴权）。若未配置任何管理员账号，
 	// NewModule 创建出的 auth 为 nil，RegisterRoutes 会直接跳过。
-	adminModule := admin.NewModule(cfg.AdminAccounts, appReleaseSvc, ossTokenSvc, staticRoot, userRepo, trackRepo, collectRepo, trackMapRepo, companionRepo, analyticsRepo, userSvc, feedbackSvc, trackRouteGroupSvc)
+	adminModule := admin.NewModule(cfg.AdminAccounts, appReleaseSvc, ossTokenSvc, staticRoot, userRepo, trackRepo, collectRepo, trackMapRepo, companionRepo, analyticsRepo, userSvc, feedbackSvc, accountRestrictionSvc, trackRouteGroupSvc)
 	if adminModule != nil && adminModule.Handler != nil {
 		adminModule.Handler.SetScreenshotCache(screenshotCache)
 	}

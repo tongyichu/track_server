@@ -39,10 +39,10 @@ type Module struct {
 // 管理后台上传的安装包会落盘到 <staticRoot>/release/<platform>/，
 // 并通过 /api/v1/static/release/<platform>/<file> 对外下发。
 // 留空表示禁用本地上传接口（接口会返回 500）。
-func NewModule(accounts map[string]string, releaseSvc *service.AppReleaseService, stsSvc *service.OSSTokenService, staticRoot string, userRepo repository.UserRepository, trackRepo repository.TrackRepository, collectRepo repository.CollectRepository, trackMapRepo repository.TrackMapRepository, companionRepo repository.CompanionRepository, analyticsRepo repository.AnalyticsRepository, userSvc *service.UserService, feedbackSvc *service.FeedbackService, routeGroupSvc *service.TrackRouteGroupService) *Module {
+func NewModule(accounts map[string]string, releaseSvc *service.AppReleaseService, stsSvc *service.OSSTokenService, staticRoot string, userRepo repository.UserRepository, trackRepo repository.TrackRepository, collectRepo repository.CollectRepository, trackMapRepo repository.TrackMapRepository, companionRepo repository.CompanionRepository, analyticsRepo repository.AnalyticsRepository, userSvc *service.UserService, feedbackSvc *service.FeedbackService, restrictionSvc *service.AccountRestrictionService, routeGroupSvc *service.TrackRouteGroupService) *Module {
 	store := NewSessionStore(12 * time.Hour)
 	auth := NewAuthenticator(accounts, store)
-	handler := NewHandler(releaseSvc, stsSvc, auth, staticRoot, userRepo, trackRepo, collectRepo, trackMapRepo, companionRepo, analyticsRepo, userSvc, feedbackSvc, routeGroupSvc)
+	handler := NewHandler(releaseSvc, stsSvc, auth, staticRoot, userRepo, trackRepo, collectRepo, trackMapRepo, companionRepo, analyticsRepo, userSvc, feedbackSvc, restrictionSvc, routeGroupSvc)
 	return &Module{
 		Auth:    auth,
 		Handler: handler,
@@ -73,6 +73,8 @@ func (m *Module) Close() {
 // - POST /admin/api/releases/upload-package 上传安装包到本机静态目录（鉴权）
 // - GET  /admin/api/releases/upload-token  旧 OSS 直传凭证接口（鉴权，前端不再使用）
 // - GET  /admin/api/users                  用户列表（鉴权，cursor 翻页）
+// - POST /admin/api/users/:user_id/restrictions 创建账号限制（鉴权）
+// - DELETE /admin/api/users/:user_id/restrictions/current 解除当前账号限制（鉴权）
 // - GET  /admin/api/tracks                 轨迹列表（鉴权，cursor 翻页）
 // - PUT  /admin/api/tracks/:track_id       更新轨迹标题与城市 Code（鉴权）
 // - DELETE /admin/api/tracks/:track_id     删除轨迹（鉴权，软删除并清理关联索引/收藏）
@@ -125,6 +127,9 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	// 用户 / 轨迹 / 同行 列表（仅查询，提供基础翻页）
 	api.GET("/static/*filepath", m.Handler.GetStaticAsset)
 	api.GET("/users", m.Handler.ListUsers)
+	api.GET("/users/:user_id/restrictions/current", m.Handler.GetCurrentAccountRestriction)
+	api.POST("/users/:user_id/restrictions", m.Handler.CreateAccountRestriction)
+	api.DELETE("/users/:user_id/restrictions/current", m.Handler.RevokeCurrentAccountRestriction)
 	api.GET("/tracks", m.Handler.ListTracks)
 	api.PUT("/tracks/:track_id", m.Handler.UpdateTrack)
 	api.DELETE("/tracks/:track_id", m.Handler.DeleteTrack)

@@ -22,6 +22,11 @@
   function fmtTime(s) {
     return esc((s || '').replace('T', ' ').slice(0, 19));
   }
+  function restrictionText(r) {
+    if (!r) return '<span class="hint">未限制</span>';
+    var until = r.expires_at ? ('至 ' + fmtTime(r.expires_at)) : '永久';
+    return '<strong>已限制</strong><br><span class="hint">' + esc(until) + '</span><br><span class="hint">' + esc(r.reason || '') + '</span>';
+  }
 
   // 翻页：采用 cursor 栈记录每一页的入口 cursor。
   // cursorStack[i] = 第 i 页（从 0 开始）的入口 cursor；首页入口 cursor 为 null。
@@ -37,6 +42,54 @@
   var refreshBtn = document.getElementById('refreshBtn');
   var pageHint = document.getElementById('pageHint');
   var totalHint = document.getElementById('totalHint');
+
+  tbody.addEventListener('click', async function (ev) {
+    var btn = ev.target;
+    if (!btn || !btn.dataset || !btn.dataset.action) return;
+    var userID = btn.dataset.userId;
+    if (!userID) return;
+    if (btn.dataset.action === 'restrict') {
+      var reason = window.prompt('请输入账号限制原因', '违规上传内容');
+      if (reason == null) return;
+      reason = reason.trim();
+      if (!reason) {
+        window.alert('原因不能为空');
+        return;
+      }
+      var daysRaw = window.prompt('限制天数，留空表示永久', '7');
+      if (daysRaw == null) return;
+      var payload = { reason: reason };
+      daysRaw = daysRaw.trim();
+      if (daysRaw) {
+        var days = Number(daysRaw);
+        if (!isFinite(days) || days <= 0) {
+          window.alert('限制天数必须大于 0');
+          return;
+        }
+        payload.expires_at = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+      }
+      var resp = await fetch('/admin/api/users/' + encodeURIComponent(userID) + '/restrictions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!resp.ok) {
+        window.alert('限制失败: ' + await resp.text());
+        return;
+      }
+      loadPage();
+      return;
+    }
+    if (btn.dataset.action === 'revoke') {
+      if (!window.confirm('确定解除该用户当前账号限制？')) return;
+      var revokeResp = await fetch('/admin/api/users/' + encodeURIComponent(userID) + '/restrictions/current', { method: 'DELETE' });
+      if (!revokeResp.ok) {
+        window.alert('解除失败: ' + await revokeResp.text());
+        return;
+      }
+      loadPage();
+    }
+  });
 
   refreshBtn.addEventListener('click', function () {
     cursorStack = [null];
@@ -66,7 +119,7 @@
     }
     var resp = await fetch('/admin/api/users?' + params.toString());
     if (!resp.ok) {
-      tbody.innerHTML = '<tr><td colspan="8">加载失败: ' + resp.status + '</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="10">加载失败: ' + resp.status + '</td></tr>';
       return;
     }
     var data = ((await resp.json()).data) || {};
@@ -86,8 +139,11 @@
         '<td>' + esc(it.phone || '') + '</td>' +
         '<td>' + esc(it.client_language || '') + '</td>' +
         '<td>' + esc(it.signature || '') + '</td>' +
+        '<td>' + restrictionText(it.account_restriction) + '</td>' +
         '<td>' + fmtTime(it.created_at) + '</td>' +
-        '<td>' + fmtTime(it.updated_at) + '</td>';
+        '<td>' + fmtTime(it.updated_at) + '</td>' +
+        '<td><button data-action="restrict" data-user-id="' + esc(it.id) + '">限制</button> ' +
+        '<button data-action="revoke" data-user-id="' + esc(it.id) + '"' + (it.account_restriction ? '' : ' disabled') + '>解除</button></td>';
       tbody.appendChild(tr);
     });
 

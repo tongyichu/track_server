@@ -13,6 +13,22 @@ CREATE TABLE `users` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户基础资料表';
 
 
+CREATE TABLE `user_account_restrictions` (
+                                             `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                                             `user_id` BIGINT NOT NULL COMMENT '被限制用户ID',
+                                             `status` VARCHAR(32) NOT NULL DEFAULT 'active' COMMENT 'active/revoked',
+                                             `reason` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '限制原因',
+                                             `operator` VARCHAR(64) NOT NULL DEFAULT '' COMMENT '操作人',
+                                             `expires_at` DATETIME(6) DEFAULT NULL COMMENT '过期时间，NULL 表示永久',
+                                             `created_at` DATETIME(6) NOT NULL,
+                                             `updated_at` DATETIME(6) NOT NULL,
+                                             `revoked_at` DATETIME(6) DEFAULT NULL COMMENT '解除时间',
+                                             PRIMARY KEY (`id`),
+                                             KEY `idx_user_account_restrictions_active` (`user_id`, `status`, `expires_at`),
+                                             KEY `idx_user_account_restrictions_user_time` (`user_id`, `created_at`, `id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户账号限制记录表';
+
+
 CREATE TABLE `track_records` (
                                  `id` VARCHAR(64) NOT NULL,
                                  `user_id` bigint unsigned NOT NULL COMMENT '用户ID',

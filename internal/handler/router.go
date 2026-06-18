@@ -20,6 +20,7 @@ type Deps struct {
 	AppReleaseService          *service.AppReleaseService
 	CompanionService           *service.CompanionService
 	AchievementService         *service.AchievementService
+	AccountRestrictionService  *service.AccountRestrictionService
 	FeedbackService            *service.FeedbackService
 	AnalyticsService           *service.AnalyticsService
 	JWTSecret                  string
@@ -49,7 +50,7 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 	appReleaseHandler := NewAppReleaseHandler(deps.AppReleaseService)
 	companionHandler := NewCompanionHandler(deps.CompanionService, deps.CompanionMQTTInternalToken)
 	achievementHandler := NewAchievementHandler(deps.AchievementService)
-	opsHandler := NewOpsHandler(deps.UserService, deps.AchievementService, deps.OpsInternalToken)
+	opsHandler := NewOpsHandler(deps.UserService, deps.AchievementService, deps.AccountRestrictionService, deps.OpsInternalToken)
 	feedbackHandler := NewFeedbackHandler(deps.FeedbackService, deps.OpsInternalToken)
 	analyticsHandler := NewAnalyticsHandler(deps.AnalyticsService)
 
@@ -73,6 +74,10 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 
 	ops := api.Group("/ops")
 	ops.POST("/achievement/refresh", opsHandler.RefreshAchievementByPhone)
+	ops.POST("/users/:user_id/restrictions", opsHandler.CreateAccountRestriction)
+	ops.GET("/users/:user_id/restrictions/current", opsHandler.GetCurrentAccountRestriction)
+	ops.GET("/users/:user_id/restrictions/history", opsHandler.ListAccountRestrictions)
+	ops.DELETE("/users/:user_id/restrictions/current", opsHandler.RevokeCurrentAccountRestriction)
 	ops.GET("/feedback/list", feedbackHandler.ListOps)
 	ops.GET("/feedback/:feedback_id", feedbackHandler.GetOps)
 	ops.PUT("/feedback/:feedback_id/status", feedbackHandler.UpdateOpsStatus)
@@ -101,7 +106,7 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 	}
 
 	// authenticated routes
-	auth := api.Group("", middleware.JWTAuthMiddleware(deps.LoginService, deps.TokenBlacklist))
+	auth := api.Group("", middleware.JWTAuthMiddleware(deps.LoginService, deps.TokenBlacklist), middleware.AccountRestrictionMiddleware(deps.AccountRestrictionService))
 
 	// 静态资源下载（需要登录）
 	if deps.StaticRoot != "" {

@@ -52,6 +52,10 @@
 | 成就奖励列表 | GET | `/achievement/rewards` | 是 | [achievement.md](achievement.md#31-成就奖励列表) |
 | 成长等级规则 H5 | GET | `/achievement/level-rules.html` | 否 | [achievement.md](achievement.md#32-成长等级规则-h5) |
 | 运维刷新用户成就 | POST | `/ops/achievement/refresh` | 运维内部 | [achievement.md](achievement.md#33-运维刷新用户成就) |
+| 创建账号限制 | POST | `/ops/users/:user_id/restrictions` | 运维内部 | [account-restriction.md](account-restriction.md#52-创建账号限制) |
+| 查询当前账号限制 | GET | `/ops/users/:user_id/restrictions/current` | 运维内部 | [account-restriction.md](account-restriction.md#53-查询当前账号限制) |
+| 查询账号限制历史 | GET | `/ops/users/:user_id/restrictions/history` | 运维内部 | [account-restriction.md](account-restriction.md#54-查询账号限制历史) |
+| 解除当前账号限制 | DELETE | `/ops/users/:user_id/restrictions/current` | 运维内部 | [account-restriction.md](account-restriction.md#55-解除当前账号限制) |
 | 提交意见反馈 | POST | `/feedback` | 是 | [feedback.md](feedback.md#34-提交意见反馈) |
 | 我的反馈列表 | GET | `/feedback/list` | 是 | [feedback.md](feedback.md#35-我的反馈列表) |
 | 我的反馈详情 | GET | `/feedback/:feedback_id` | 是 | [feedback.md](feedback.md#36-我的反馈详情) |

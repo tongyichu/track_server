@@ -37,6 +37,7 @@ type testEnv struct {
 	companionRepo      repository.CompanionRepository
 	feedbackRepo       repository.FeedbackRepository
 	achievementRepo    repository.AchievementRepository
+	restrictionRepo    repository.AccountRestrictionRepository
 	loginSvc           *service.LoginService
 	tokenBlacklist     *middleware.TokenBlacklist
 	internalToken      string
@@ -50,12 +51,14 @@ func newTestEnv() *testEnv {
 	trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, _, companionRepo := repository.NewInMemoryRepositories()
 	followRepo := repository.NewInMemoryFollowRepository()
 	achievementRepo := repository.NewInMemoryAchievementRepository()
+	restrictionRepo := repository.NewInMemoryAccountRestrictionRepository()
 	feedbackRepo := repository.NewInMemoryFeedbackRepository()
 	trackSvc := service.NewTrackService(trackRepo, collectRepo)
 	trackSvc.SetUserRepository(userRepo)
 	trackSvc.SetNavigationRepository(navigationRepo)
 	trackSvc.SetCompanionRepository(companionRepo)
 	achievementSvc := service.NewAchievementService(achievementRepo, trackRepo)
+	restrictionSvc := service.NewAccountRestrictionService(restrictionRepo)
 	trackSvc.SetAchievementService(achievementSvc)
 	userSvc := service.NewUserService(userRepo)
 	userSvc.SetTrackRepository(trackRepo)
@@ -105,6 +108,7 @@ func newTestEnv() *testEnv {
 		LoginService:               loginSvc,
 		CompanionService:           companionSvc,
 		AchievementService:         achievementSvc,
+		AccountRestrictionService:  restrictionSvc,
 		FeedbackService:            feedbackSvc,
 		JWTSecret:                  testJWTSecret,
 		TokenBlacklist:             tokenBlacklist,
@@ -113,7 +117,7 @@ func newTestEnv() *testEnv {
 		StaticRoot:                 staticRoot,
 	})
 
-	return &testEnv{h: h, trackRepo: trackRepo, userRepo: userRepo, collectRepo: collectRepo, followRepo: followRepo, loginLogRepo: loginLogRepo, navigationRepo: navigationRepo, companionRepo: companionRepo, feedbackRepo: feedbackRepo, achievementRepo: achievementRepo, loginSvc: loginSvc, tokenBlacklist: tokenBlacklist, internalToken: testInternalToken, staticRoot: staticRoot, avatarCacheDir: avatarCacheDir, screenshotCacheDir: screenshotCacheDir}
+	return &testEnv{h: h, trackRepo: trackRepo, userRepo: userRepo, collectRepo: collectRepo, followRepo: followRepo, loginLogRepo: loginLogRepo, navigationRepo: navigationRepo, companionRepo: companionRepo, feedbackRepo: feedbackRepo, achievementRepo: achievementRepo, restrictionRepo: restrictionRepo, loginSvc: loginSvc, tokenBlacklist: tokenBlacklist, internalToken: testInternalToken, staticRoot: staticRoot, avatarCacheDir: avatarCacheDir, screenshotCacheDir: screenshotCacheDir}
 }
 
 func (e *testEnv) close() {

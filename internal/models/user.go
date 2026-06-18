@@ -26,6 +26,25 @@ type User struct {
 	UpdatedAt      time.Time `json:"updated_at" bson:"updated_at"`
 }
 
+const (
+	AccountRestrictionStatusActive  = "active"
+	AccountRestrictionStatusRevoked = "revoked"
+)
+
+// AccountRestriction records a management-center account restriction.
+// ExpiresAt == nil means the restriction is permanent.
+type AccountRestriction struct {
+	ID        int64      `json:"id" bson:"_id,omitempty"`
+	UserID    int64      `json:"user_id" bson:"user_id"`
+	Status    string     `json:"status" bson:"status"`
+	Reason    string     `json:"reason" bson:"reason"`
+	Operator  string     `json:"operator" bson:"operator"`
+	ExpiresAt *time.Time `json:"expires_at,omitempty" bson:"expires_at,omitempty"`
+	CreatedAt time.Time  `json:"created_at" bson:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at" bson:"updated_at"`
+	RevokedAt *time.Time `json:"revoked_at,omitempty" bson:"revoked_at,omitempty"`
+}
+
 // TrackCollect represents a user-track collection relationship.
 type TrackCollect struct {
 	UserID    int64     `json:"user_id" bson:"user_id"`

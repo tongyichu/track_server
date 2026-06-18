@@ -13,6 +13,7 @@
 - 通过后台会话代理读取服务端静态资源（如用户头像），避免复用业务 JWT；
 - 查看和处理用户意见反馈（含图片预览、状态更新、用户可见反馈意见）。
 - 查看埋点 OSS 同步摘要（任务状态、文件列表、OSS key、字节数、耗时与错误）。
+- 在用户管理页查看、创建和解除账号限制；账号限制会由业务侧中间件拦截上传、发起同行、关注、收藏、修改资料等动作。
 - 查看和人工运营路线发现 RouteGroup（改名、合并、移除成员、指定代表轨迹）。
 - 查看、修正和删除用户轨迹；列表展示 `track_screenshot_url` 缩略图，OSS 截图需先经共享截图缓存落盘再通过后台静态代理访问；修正仅允许改 `title` / `city_code`，删除为软删除，并同步清理收藏关系与首页地图索引/路线组成员。
 
@@ -49,9 +50,10 @@ internal/admin/
 | --- | --- |
 | 路由清单 | `routes.go` 中 `RegisterRoutes` |
 | 鉴权与 cookie | `auth.go`（`sessionCookieName = "admin_session"`） |
-| 业务依赖注入 | `routes.go` 的 `NewModule(accounts, releaseSvc, stsSvc, staticRoot, userRepo, trackRepo, collectRepo, trackMapRepo, ..., routeGroupSvc)`；`cmd/server/main.go` 创建后通过 `Handler.SetScreenshotCache(screenshotCache)` 注入截图缓存 |
+| 业务依赖注入 | `routes.go` 的 `NewModule(accounts, releaseSvc, stsSvc, staticRoot, userRepo, trackRepo, collectRepo, trackMapRepo, ..., restrictionSvc, routeGroupSvc)`；`cmd/server/main.go` 创建后通过 `Handler.SetScreenshotCache(screenshotCache)` 注入截图缓存 |
 | 前端入口 | `static/login.html`、`static/index.html` |
 | 安装包上传 | `handlers.go` 中 `UploadPackage`、`static/app.js` 中 `/admin/api/releases/upload-package` |
+| 用户与账号限制 | `handlers.go` 中 `ListUsers` / `CreateAccountRestriction` / `GetCurrentAccountRestriction` / `RevokeCurrentAccountRestriction`，`static/users.html`、`static/users.js` |
 | 意见反馈管理 | `handlers.go` 中 `ListFeedbacks` / `GetFeedback` / `UpdateFeedbackStatus` / `GetFeedbackImage`，`static/feedbacks.html`、`static/feedbacks.js` |
 | 埋点同步摘要 | `handlers.go` 中 `ListAnalyticsSyncSummaries`，`static/analytics.html`、`static/analytics.js` |
 | 聚合路线运营 | `handlers.go` 中 `ListRouteGroups` / `GetRouteGroup` / `RenameRouteGroup` / `MergeRouteGroup` / `RemoveRouteGroupMember` / `SetRouteGroupRepresentative`，`static/route_groups.html`、`static/route_groups.js` |
@@ -75,6 +77,9 @@ internal/admin/
 | GET | `/admin/api/releases/upload-token` | 鉴权 | 旧 OSS 直传 STS 凭证接口，前端不再使用 |
 | GET | `/admin/api/static/*filepath` | 鉴权 | 后台静态资源代理，从 `<LogDir>/static/` 读取头像等资源；后台页面不要直接访问需业务 JWT 的 `/api/v1/static/*` |
 | GET | `/admin/api/users` | 鉴权 | 用户列表，支持 cursor 翻页 |
+| GET | `/admin/api/users/:user_id/restrictions/current` | 鉴权 | 查询当前账号限制；无生效限制返回 404 |
+| POST | `/admin/api/users/:user_id/restrictions` | 鉴权 | 创建账号限制；`expires_at` 为空表示永久，操作人取 admin session 用户名 |
+| DELETE | `/admin/api/users/:user_id/restrictions/current` | 鉴权 | 解除当前账号限制 |
 | GET | `/admin/api/tracks` | 鉴权 | 轨迹列表，支持 cursor 翻页 |
 | PUT | `/admin/api/tracks/:track_id` | 鉴权 | 更新轨迹 `title` / `city_code`；若已有地图索引，同步修正 `track_geo_indexes.city_code` |
 | DELETE | `/admin/api/tracks/:track_id` | 鉴权 | 删除轨迹：标记 `status=0`，并清理收藏、地图索引任务、geo index、路线组成员 |
@@ -118,11 +123,24 @@ POST /admin/api/login {username,password}
 ```
 GET /admin/api/users
   → UserService.DecorateAvatar 把头像改写为 /api/v1/static/...
+  → AccountRestrictionService.FindActive 为每个用户补当前账号限制状态
   → admin handler 再改写为 /admin/api/static/...
   → 浏览器 <img> 请求携带 admin_session
   → GET /admin/api/static/*filepath 经 AuthMiddleware 后从 <LogDir>/static/ 读取
 ```
 未落盘的内置默认头像（`default_avatars/girl_01.png` 等）由后台静态代理返回简单 SVG 兜底；正式视觉素材仍应放入 `<LogDir>/static/default_avatars/`。
+
+**账号限制运营**：
+```
+[admin UI] /admin/users.html
+  → GET /admin/api/users 拉取用户列表与当前 account_restriction
+  → POST /admin/api/users/:user_id/restrictions {reason, expires_at?}
+       → AccountRestrictionService.Create
+       → 先撤销该用户现有未过期 active 限制，再写入 user_account_restrictions
+  → DELETE /admin/api/users/:user_id/restrictions/current
+       → AccountRestrictionService.RevokeActive
+```
+限制生效后由业务 `/api/v1` 侧 `AccountRestrictionMiddleware` 拦截；admin 页面只负责运营写入和解除。
 
 **处理意见反馈**：
 ```

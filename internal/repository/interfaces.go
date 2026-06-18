@@ -149,6 +149,14 @@ type UserRepository interface {
 	CountAll(ctx context.Context) (int64, error)
 }
 
+// AccountRestrictionRepository defines persistence operations for management-center account restrictions.
+type AccountRestrictionRepository interface {
+	CreateAccountRestriction(ctx context.Context, restriction *models.AccountRestriction) error
+	FindActiveAccountRestriction(ctx context.Context, userID int64, now time.Time) (*models.AccountRestriction, error)
+	ListAccountRestrictionsByUserID(ctx context.Context, userID int64, limit int) ([]*models.AccountRestriction, error)
+	RevokeActiveAccountRestrictions(ctx context.Context, userID int64, operator string, now time.Time) (int64, error)
+}
+
 // CollectRepository defines persistence operations for track collections.
 type CollectRepository interface {
 	IsCollected(ctx context.Context, userID int64, trackID string) (bool, error)
