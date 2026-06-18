@@ -206,7 +206,7 @@ func Load() *Config {
 		SchedulerEnabled:     os.Getenv("SCHEDULER_ENABLED") == "true",
 		DanmakuCleanupCron:   getEnv("DANMAKU_CLEANUP_CRON", "0 3 * * *"),
 		DanmakuRetentionDays: int(getEnvInt64("DANMAKU_RETENTION_DAYS", 7)),
-		TrackMapIndexCron:    getEnv("TRACK_MAP_INDEX_CRON", "@every 1m"),
+		TrackMapIndexCron:    getEnv("TRACK_MAP_INDEX_CRON", "@every 10m"),
 		TrackRouteGroupCron:  getEnv("TRACK_ROUTE_GROUP_CRON", "0 4 * * *"),
 
 		// 客户端埋点采集
