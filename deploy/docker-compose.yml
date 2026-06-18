@@ -8,6 +8,7 @@ services:
       - MYSQL_DSN=root:track_server_6509HbK@tcp(172.18.0.1:3306)/track_db?charset=utf8mb4&parseTime=True
       # Backward compatible with older env files that used BIND_ADDR
       - SERVER_ADDR=${SERVER_ADDR:-${BIND_ADDR:-:8080}}
+      - TZ=${TZ:-Asia/Shanghai}
       - LOG_DIR=${LOG_DIR:-/var/log/track_server}
       - JWT_SECRET=${JWT_SECRET:-track_server_default_jwt_secret}
       - TLS_CERT_FILE=${TLS_CERT_FILE:-}

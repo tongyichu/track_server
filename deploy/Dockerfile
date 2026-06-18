@@ -23,9 +23,13 @@ FROM debian:12-slim
 
 WORKDIR /app
 
+ENV TZ=Asia/Shanghai
+
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl procps \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends curl procps tzdata \
     && apt-get install -y --no-install-recommends ca-certificates \
+    && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime \
+    && echo $TZ > /etc/timezone \
     && mkdir -p /var/log/track_server \
     && rm -rf /var/lib/apt/lists/*
 
