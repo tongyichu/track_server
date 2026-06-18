@@ -30,6 +30,7 @@ type UserService struct {
 	navigations  repository.NavigationRepository
 	follows      repository.FollowRepository
 	achievements *AchievementService
+	restrictions *AccountRestrictionService
 	avatarCache  *AssetCacheService
 }
 
@@ -109,6 +110,8 @@ type UserProfileDetail struct {
 	IsSelf         bool    `json:"is_self"`
 
 	Achievement *models.UserProfileAchievement `json:"achievement,omitempty"`
+
+	AccountRestriction *models.AccountRestriction `json:"account_restriction,omitempty"`
 }
 
 type UserFollowListInput struct {
@@ -242,6 +245,10 @@ func (s *UserService) SetAchievementService(achievementSvc *AchievementService) 
 	s.achievements = achievementSvc
 }
 
+func (s *UserService) SetAccountRestrictionService(restrictionSvc *AccountRestrictionService) {
+	s.restrictions = restrictionSvc
+}
+
 // EnsureUser makes sure the user exists in persistence layer.
 func (s *UserService) EnsureUser(ctx context.Context, userID int64, language string) (*models.User, error) {
 	if userID <= 0 {
@@ -292,6 +299,16 @@ func (s *UserService) GetUserProfileDetail(ctx context.Context, viewerUserID int
 	if isSelf {
 		detail.Phone = user.Phone
 		detail.ClientLanguage = user.ClientLanguage
+		if s.restrictions != nil {
+			restriction, err := s.restrictions.FindActive(ctx, targetUserID)
+			if err != nil {
+				if !errors.Is(err, repository.ErrNotFound) {
+					return nil, err
+				}
+			} else {
+				detail.AccountRestriction = restriction
+			}
+		}
 	}
 	if s.follows != nil {
 		following, err := s.follows.CountFollowing(ctx, targetUserID)

@@ -155,7 +155,7 @@ track/create(is_running=false) 或 track upload/update 完成轨迹
 
 **短信登录等级信息**：`POST /api/v1/login/sms` 成功响应会附带 `achievement_level`，由 `LoginHandler` 调用 `AchievementService.GetLevelInfo` 基于当前有效轨迹实时计算；修改登录响应或等级字段时同步更新 `login.md`。
 
-**关注/粉丝关系流程**：`POST /api/v1/user/:user_id/follow` 与 `DELETE /api/v1/user/:user_id/follow` 使用当前 JWT 用户作为关注者，写入或删除 `user_follows(follower_user_id, followee_user_id)` 单向关系；禁止关注自己，重复关注/取消关注按幂等成功处理。`GET /api/v1/user/:user_id/detail` 可查看任意用户公开主页，只有查看自己时返回手机号和客户端语言；详情、关注列表、粉丝列表会返回 `following_count`、`follower_count` 与当前登录用户视角的 `is_following`。用户详情还会返回公开成就摘要 `achievement`，包含当前等级、已获得勋章总数和最近 3 个勋章，查看自己和查看他人都返回。调整关注关系字段、计数口径、主页隐私字段、用户详情成就字段或分页游标时，同步更新 `docs/api/user.md` 与 `docs/api/route-index.md`。
+**关注/粉丝关系流程**：`POST /api/v1/user/:user_id/follow` 与 `DELETE /api/v1/user/:user_id/follow` 使用当前 JWT 用户作为关注者，写入或删除 `user_follows(follower_user_id, followee_user_id)` 单向关系；禁止关注自己，重复关注/取消关注按幂等成功处理。`GET /api/v1/user/:user_id/detail` 可查看任意用户公开主页，只有查看自己时返回手机号、客户端语言和当前生效的账号限制 `account_restriction`；详情、关注列表、粉丝列表会返回 `following_count`、`follower_count` 与当前登录用户视角的 `is_following`。用户详情还会返回公开成就摘要 `achievement`，包含当前等级、已获得勋章总数和最近 3 个勋章，查看自己和查看他人都返回。调整关注关系字段、计数口径、主页隐私字段、用户详情账号限制/成就字段或分页游标时，同步更新 `docs/api/user.md` 与 `docs/api/route-index.md`。
 
 **同行自动收尾流程**：
 ```

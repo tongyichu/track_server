@@ -29,6 +29,14 @@ func TestGetUserDetail_PublicProfileWhenUserIDMismatch(t *testing.T) {
 	ctx := context.Background()
 	token := e.generateTestToken(1001)
 	_, _ = e.userRepo.CreateIfNotExists(ctx, &models.User{ID: 1002, Nickname: "Bob", Phone: "13900000000"})
+	_ = e.restrictionRepo.CreateAccountRestriction(ctx, &models.AccountRestriction{
+		UserID:    1002,
+		Status:    models.AccountRestrictionStatusActive,
+		Reason:    "违规上传内容",
+		Operator:  "ops",
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	})
 
 	w := e.perform(http.MethodGet, "/api/v1/user/1002/detail", nil, authHeader(token))
 	resp := w.Result()
@@ -45,6 +53,9 @@ func TestGetUserDetail_PublicProfileWhenUserIDMismatch(t *testing.T) {
 	}
 	if _, ok := out.Data["phone"]; ok {
 		t.Fatalf("expected other user's phone omitted")
+	}
+	if _, ok := out.Data["account_restriction"]; ok {
+		t.Fatalf("expected other user's account_restriction omitted")
 	}
 }
 
@@ -91,6 +102,45 @@ func TestGetUserDetail_Success(t *testing.T) {
 	}
 	if data.TrackUsedCount != 0 {
 		t.Fatalf("expected track_used_count 0, got %d", data.TrackUsedCount)
+	}
+}
+
+func TestGetUserDetail_SelfIncludesAccountRestriction(t *testing.T) {
+	e := newTestEnv()
+	ctx := context.Background()
+	token := e.generateTestToken(1001)
+	_, _ = e.userRepo.CreateIfNotExists(ctx, &models.User{ID: 1001, Nickname: "Alice", Phone: "13800000000"})
+	expiresAt := time.Now().Add(7 * 24 * time.Hour).UTC().Truncate(time.Second)
+	if err := e.restrictionRepo.CreateAccountRestriction(ctx, &models.AccountRestriction{
+		UserID:    1001,
+		Status:    models.AccountRestrictionStatusActive,
+		Reason:    "违规上传内容",
+		Operator:  "ops",
+		ExpiresAt: &expiresAt,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}); err != nil {
+		t.Fatalf("create account restriction: %v", err)
+	}
+
+	w := e.perform(http.MethodGet, "/api/v1/user/1001/detail", nil, authHeader(token))
+	resp := w.Result()
+	if resp.StatusCode() != http.StatusOK {
+		t.Fatalf("expected status 200, got %d body=%s", resp.StatusCode(), w.Body.String())
+	}
+	var out handler.StandardResponse[struct {
+		ID                 int64                      `json:"id"`
+		AccountRestriction *models.AccountRestriction `json:"account_restriction"`
+	}]
+	decodeJSON(t, resp.Body(), &out)
+	if out.Data.AccountRestriction == nil {
+		t.Fatalf("expected account_restriction")
+	}
+	if out.Data.AccountRestriction.Reason != "违规上传内容" {
+		t.Fatalf("unexpected restriction reason: %+v", out.Data.AccountRestriction)
+	}
+	if out.Data.AccountRestriction.ExpiresAt == nil {
+		t.Fatalf("expected expires_at")
 	}
 }
 

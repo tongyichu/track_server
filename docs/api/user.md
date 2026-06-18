@@ -51,6 +51,16 @@ Authorization: Bearer <token>
     "follower_count": 12,
     "is_following": false,
     "is_self": true,
+    "account_restriction": {
+      "id": 12,
+      "user_id": 1001,
+      "status": "active",
+      "reason": "违规上传内容",
+      "operator": "ops",
+      "expires_at": "2026-06-25T10:00:00+08:00",
+      "created_at": "2026-06-18T10:00:00+08:00",
+      "updated_at": "2026-06-18T10:00:00+08:00"
+    },
     "achievement": {
       "level": {
         "level": 1,
@@ -98,6 +108,7 @@ Authorization: Bearer <token>
 | `data.follower_count` | int64 | 该用户的粉丝数。 |
 | `data.is_following` | bool | 当前登录用户是否关注该用户；查看自己时固定为 `false`。 |
 | `data.is_self` | bool | 当前登录用户是否正在查看自己的主页。 |
+| `data.account_restriction` | object | 当前登录用户查看自己且账号存在生效限制时返回；查看他人或未被限制时不返回。结构同 [account-restriction.md](account-restriction.md#账号限制错误) 中的限制记录。 |
 | `data.achievement.level` | object | 用户当前等级，结构同 `AchievementLevel`：`level`、`name`、`xp`。 |
 | `data.achievement.earned_badge_count` | int64 | 用户已获得的勋章总数，仅统计 `type=badge` 的成就奖励。 |
 | `data.achievement.recent_badges` | array | 用户最近获得的 3 个勋章，按获得时间倒序；单条结构同 [achievement.md](achievement.md#31-成就奖励列表) 中 `rewards[]`。 |

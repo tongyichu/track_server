@@ -65,6 +65,7 @@ func newTestEnv() *testEnv {
 	userSvc.SetNavigationRepository(navigationRepo)
 	userSvc.SetFollowRepository(followRepo)
 	userSvc.SetAchievementService(achievementSvc)
+	userSvc.SetAccountRestrictionService(restrictionSvc)
 	loginSvc := service.NewLoginService(userRepo, loginLogRepo, "", "", testJWTSecret)
 	companionSvc := service.NewCompanionService(companionRepo, userRepo)
 	companionSvc.SetTrackRepository(trackRepo)

@@ -177,6 +177,7 @@ func main() {
 	userSvc.SetNavigationRepository(navigationRepo)
 	userSvc.SetFollowRepository(followRepo)
 	userSvc.SetAchievementService(achievementSvc)
+	userSvc.SetAccountRestrictionService(accountRestrictionSvc)
 	loginSvc := service.NewLoginService(userRepo, loginLogRepo, cfg.WechatAppID, cfg.WechatAppSecret, cfg.JWTSecret)
 	appReleaseSvc := service.NewAppReleaseService(appReleaseRepo)
 	feedbackSvc := service.NewFeedbackService(feedbackRepo, filepath.Join(cfg.LogDir, "feedback", "images"))
