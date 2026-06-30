@@ -326,6 +326,50 @@ func TestCreateTrack_CleansTempAssetCacheOnly(t *testing.T) {
 	}
 }
 
+func TestListMyTracksReturnsNoMapBackgroundScreenshotURL(t *testing.T) {
+	trackRepo, _, collectRepo, _, _, _, _ := repository.NewInMemoryRepositories()
+	svc := NewTrackService(trackRepo, collectRepo)
+
+	staticRoot := t.TempDir()
+	screenshotCache, err := NewAssetCacheService(
+		filepath.Join(staticRoot, "screenshots"),
+		"/api/v1/static/screenshots",
+		[]string{".png", ".jpg", ".jpeg", ".webp"},
+		".png",
+	)
+	if err != nil {
+		t.Fatalf("create screenshot cache failed: %v", err)
+	}
+	svc.SetScreenshotCache(screenshotCache)
+
+	const trackID = "NO.00000001"
+	noMapCachePath := filepath.Join(staticRoot, "screenshots", trackID+"_no_map_bg.jpg")
+	if err := os.WriteFile(noMapCachePath, []byte("no-map-background-screenshot"), 0o644); err != nil {
+		t.Fatalf("seed no-map-background screenshot cache failed: %v", err)
+	}
+	if err := trackRepo.Create(context.Background(), &models.Track{
+		ID:                        trackID,
+		UserID:                    1001,
+		StartTime:                 time.Date(2026, 6, 30, 12, 0, 0, 0, time.UTC),
+		RawTrackURL:               "https://example.com/raw/track.json",
+		TrackNoMapBgScreenshotURL: "https://example.com/screenshots/track_no_map_bg.jpg",
+		Status:                    models.TrackStatusNormal,
+	}); err != nil {
+		t.Fatalf("create track failed: %v", err)
+	}
+
+	page, err := svc.ListMyTracks(context.Background(), 1001, ListMyTracksInput{})
+	if err != nil {
+		t.Fatalf("ListMyTracks returned error: %v", err)
+	}
+	if len(page.Items) != 1 {
+		t.Fatalf("expected one track, got %d", len(page.Items))
+	}
+	if got, want := page.Items[0].TrackNoMapBgScreenshotURL, "/api/v1/static/screenshots/NO.00000001_no_map_bg.jpg"; got != want {
+		t.Fatalf("expected track_no_map_bg_screenshot_url %q, got %q", want, got)
+	}
+}
+
 func TestCreateTrack_InvalidTimeRange(t *testing.T) {
 	trackRepo, _, collectRepo, _, _, _, _ := repository.NewInMemoryRepositories()
 	svc := NewTrackService(trackRepo, collectRepo)

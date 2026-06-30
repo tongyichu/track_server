@@ -830,12 +830,15 @@ func (s *TrackService) ListMyTracks(ctx context.Context, userID int64, input Lis
 		return nil, err
 	}
 	summaries := toMySummaries(tracks)
-	// 与推荐/搜索列表保持一致：填充资源本地 URL（截图/原始轨迹）。
+	// 与推荐/搜索列表保持一致：填充资源本地 URL（截图/无地图背景截图/原始轨迹）。
 	if s.screenshotCache != nil || s.rawTrackCache != nil {
 		for i, t := range tracks {
 			cacheCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			if s.screenshotCache != nil {
 				summaries[i].TrackScreenshotURL = s.screenshotCache.EnsureCached(cacheCtx, userID, t.ID, t.TrackScreenshotURL)
+				if t.TrackNoMapBgScreenshotURL != "" {
+					summaries[i].TrackNoMapBgScreenshotURL = s.screenshotCache.EnsureCached(cacheCtx, userID, t.ID+"_no_map_bg", t.TrackNoMapBgScreenshotURL)
+				}
 			}
 			if s.rawTrackCache != nil {
 				summaries[i].RawTrackURL = s.rawTrackCache.EnsureCached(cacheCtx, userID, t.ID, t.RawTrackURL)

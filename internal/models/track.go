@@ -148,25 +148,26 @@ type CollectedTrackSummaryPage struct {
 // - 不返回 nickname/user_avatar_url/collected（这些字段对“我的轨迹”列表不需要）。
 // - 仍保留 collect_count/navigate_count 等统计字段，便于客户端展示。
 type MyTrackSummary struct {
-	ID                 string    `json:"id"`                   // ID 是轨迹记录唯一标识。
-	UserID             int64     `json:"user_id"`              // UserID 是轨迹所属用户 ID。
-	SessionID          string    `json:"session_id"`           // SessionID 是关联的同行会话 ID，可为空。
-	CityCode           string    `json:"city_code"`            // CityCode 是轨迹所属的城市 Code。
-	LocateAddr         string    `json:"locate_addr"`          // LocateAddr 是轨迹的具体位置信息。
-	TrackType          string    `json:"track_type"`           // TrackType 是轨迹类型，例如徒步、跑步、骑车、自驾。
-	StartTime          time.Time `json:"start_time"`           // StartTime 是运动开始时间。
-	EndTime            time.Time `json:"end_time"`             // EndTime 是运动结束时间。
-	CityName           string    `json:"city_name"`            // CityName 是城市名称（由 city_code 映射得到）。
-	Title              string    `json:"title"`                // Title 是轨迹名称。
-	Distance           float64   `json:"distance"`             // Distance 是总距离，单位米。
-	Duration           uint32    `json:"duration"`             // Duration 是运动耗时，单位秒。
-	AvgSpeedKmh        float64   `json:"avg_speed_kmh"`        // AvgSpeedKmh 是平均速度，单位 km/h。
-	CaloriesBurned     float64   `json:"calories_burned"`      // CaloriesBurned 是热量消耗，单位千卡。
-	ElevationGain      int       `json:"elevation_gain"`       // ElevationGain 是累计爬升，单位米。
-	CollectCount       int64     `json:"collect_count"`        // CollectCount 是轨迹被收藏的总数。
-	NavigateCount      int64     `json:"navigate_count"`       // NavigateCount 是该轨迹被其他用户用于导航的次数。
-	TrackScreenshotURL string    `json:"track_screenshot_url"` // TrackScreenshotURL 是服务器本地缓存的轨迹截图可下载 URL。
-	RawTrackURL        string    `json:"raw_track_url"`        // RawTrackURL 是服务器本地缓存的原始轨迹文件可下载 URL。
+	ID                        string    `json:"id"`                             // ID 是轨迹记录唯一标识。
+	UserID                    int64     `json:"user_id"`                        // UserID 是轨迹所属用户 ID。
+	SessionID                 string    `json:"session_id"`                     // SessionID 是关联的同行会话 ID，可为空。
+	CityCode                  string    `json:"city_code"`                      // CityCode 是轨迹所属的城市 Code。
+	LocateAddr                string    `json:"locate_addr"`                    // LocateAddr 是轨迹的具体位置信息。
+	TrackType                 string    `json:"track_type"`                     // TrackType 是轨迹类型，例如徒步、跑步、骑车、自驾。
+	StartTime                 time.Time `json:"start_time"`                     // StartTime 是运动开始时间。
+	EndTime                   time.Time `json:"end_time"`                       // EndTime 是运动结束时间。
+	CityName                  string    `json:"city_name"`                      // CityName 是城市名称（由 city_code 映射得到）。
+	Title                     string    `json:"title"`                          // Title 是轨迹名称。
+	Distance                  float64   `json:"distance"`                       // Distance 是总距离，单位米。
+	Duration                  uint32    `json:"duration"`                       // Duration 是运动耗时，单位秒。
+	AvgSpeedKmh               float64   `json:"avg_speed_kmh"`                  // AvgSpeedKmh 是平均速度，单位 km/h。
+	CaloriesBurned            float64   `json:"calories_burned"`                // CaloriesBurned 是热量消耗，单位千卡。
+	ElevationGain             int       `json:"elevation_gain"`                 // ElevationGain 是累计爬升，单位米。
+	CollectCount              int64     `json:"collect_count"`                  // CollectCount 是轨迹被收藏的总数。
+	NavigateCount             int64     `json:"navigate_count"`                 // NavigateCount 是该轨迹被其他用户用于导航的次数。
+	TrackScreenshotURL        string    `json:"track_screenshot_url"`           // TrackScreenshotURL 是服务器本地缓存的轨迹截图可下载 URL。
+	TrackNoMapBgScreenshotURL string    `json:"track_no_map_bg_screenshot_url"` // TrackNoMapBgScreenshotURL 是服务器本地缓存的“无地图背景轨迹截图”可下载 URL。
+	RawTrackURL               string    `json:"raw_track_url"`                  // RawTrackURL 是服务器本地缓存的原始轨迹文件可下载 URL。
 }
 
 // MyTrackSummaryPage 是“我的轨迹”列表的分页返回模型。

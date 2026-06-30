@@ -1216,8 +1216,12 @@ func TestListMyTracks_OmitsFields(t *testing.T) {
 	data := raw["data"].(map[string]interface{})
 	items := data["items"].([]interface{})
 	for _, item := range items {
-		if _, ok := item.(map[string]interface{})["source_tag"]; ok {
+		itemFields := item.(map[string]interface{})
+		if _, ok := itemFields["source_tag"]; ok {
 			t.Fatalf("my track list should not return source_tag")
+		}
+		if _, ok := itemFields["track_no_map_bg_screenshot_url"]; !ok {
+			t.Fatalf("my track list should return track_no_map_bg_screenshot_url")
 		}
 	}
 	if result.Data.HasMore {

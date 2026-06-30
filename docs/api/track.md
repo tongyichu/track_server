@@ -466,7 +466,7 @@ curl -X GET "http://<host>:<port>/api/v1/track/search/list?keyword=西湖&limit=
 - 返回结果**包含** `collect_count`、`navigate_count` 统计字段，便于客户端直接展示。
 - 返回结果中的 `locate_addr` 为轨迹的具体位置信息。
 - 返回结果中的 `avg_speed_kmh` 为平均速度（km/h）。
-- `raw_track_url` / `track_screenshot_url` 为服务端本地可下载链接（不是 OSS 地址）。
+- `raw_track_url` / `track_screenshot_url` / `track_no_map_bg_screenshot_url` 为服务端本地可下载链接（不是 OSS 地址）。
 - 若轨迹记录的 `raw_track_url` 为空，则该轨迹不会出现在本接口返回结果中。
 - `limit` 为可选参数，默认 `20`，最大 `50`；超出最大值时服务端会自动截断到 `50`。
 - 响应中的 `has_more` 表示是否还有下一页；仅当 `has_more=true` 时才会返回 `next_cursor`。
@@ -526,6 +526,7 @@ Authorization: Bearer <token>
         "collect_count": 12,
         "navigate_count": 3,
         "track_screenshot_url": "/api/v1/static/screenshots/trk1.jpg",
+        "track_no_map_bg_screenshot_url": "/api/v1/static/screenshots/trk1_no_map_bg.jpg",
         "raw_track_url": "/api/v1/static/raw_tracks/trk1.dat"
       }
     ],
@@ -562,6 +563,7 @@ Authorization: Bearer <token>
 | `data.items[].collect_count` | int64 | 该轨迹被收藏的总数。 |
 | `data.items[].navigate_count` | int64 | 该轨迹被其他用户用于导航的次数。 |
 | `data.items[].track_screenshot_url` | string | 服务端本地缓存的轨迹截图可下载 URL。 |
+| `data.items[].track_no_map_bg_screenshot_url` | string | 服务端本地缓存的无地图背景轨迹截图可下载 URL。 |
 | `data.items[].raw_track_url` | string | 服务端本地缓存的原始轨迹文件可下载 URL。 |
 
 ### 错误响应
