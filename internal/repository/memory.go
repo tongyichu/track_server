@@ -1990,12 +1990,13 @@ func (r *InMemoryTrackMapRepository) CountRouteGroupsByArea(_ context.Context, f
 		if !routeGroupMatchesFilter(group, filter) {
 			continue
 		}
-		key := trackMapAreaClusterKey(group.CenterLat, group.CenterLng)
+		key, areaID := trackMapRouteGroupAreaClusterKey(group)
 		a := groups[key]
 		if a == nil {
 			a = &trackMapClusterAcc{}
 			groups[key] = a
 		}
+		a.areaID = areaID
 		a.addRouteGroup(group)
 	}
 	return sortedClusterItems(groups, "area_cluster", filter.TrackType, filter.Limit), nil
@@ -2079,7 +2080,19 @@ func trackMapAreaClusterKey(lat, lng float64) string {
 	return fmt.Sprintf("cell_%.1f_%.1f", lat, lng)
 }
 
+func trackMapRouteGroupAreaClusterKey(group *models.TrackRouteGroup) (key, areaID string) {
+	if group == nil {
+		return "", ""
+	}
+	areaID = strings.TrimSpace(group.AreaID)
+	if areaID != "" {
+		return areaID, areaID
+	}
+	return trackMapAreaClusterKey(group.CenterLat, group.CenterLng), ""
+}
+
 type trackMapClusterAcc struct {
+	areaID      string
 	count       int64
 	sumLat      float64
 	sumLng      float64
@@ -2146,6 +2159,7 @@ func (a *trackMapClusterAcc) item(kind, clusterID, cityCode, trackType string) *
 	item := &models.TrackMapClusterItem{
 		Type:       kind,
 		ClusterID:  clusterID,
+		AreaID:     a.areaID,
 		CityCode:   cityCode,
 		TrackType:  trackType,
 		RouteCount: a.count,
@@ -2167,6 +2181,9 @@ func sortedClusterItems(groups map[string]*trackMapClusterAcc, kind, trackType s
 	for key, a := range groups {
 		cityCode := ""
 		clusterID := key
+		if kind == "area_cluster" && a.areaID != "" {
+			clusterID = "area_" + a.areaID
+		}
 		if kind == "city_cluster" {
 			cityCode = key
 			if cityCode == "unknown" {

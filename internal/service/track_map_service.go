@@ -420,10 +420,10 @@ func (s *TrackMapService) decorateAreaClusters(items []*models.TrackMapClusterIt
 		return
 	}
 	for _, item := range items {
-		if item == nil {
+		if item == nil || strings.TrimSpace(item.AreaID) == "" {
 			continue
 		}
-		area := s.areas.Resolve(item.Center.Latitude, item.Center.Longitude)
+		area := s.areas.Find(item.AreaID)
 		if area == nil {
 			continue
 		}

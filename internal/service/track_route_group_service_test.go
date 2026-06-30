@@ -47,6 +47,9 @@ func TestTrackRouteGroupService_MergesNearbyRouteCenters(t *testing.T) {
 	if group.RadiusM <= 0 {
 		t.Fatalf("expected positive radius_m, got %f", group.RadiusM)
 	}
+	if group.AreaID != "" {
+		t.Fatalf("unexpected area_id outside built-in catalog: %s", group.AreaID)
+	}
 	members, err := mapRepo.ListRouteGroupMembers(context.Background(), group.GroupID, 10)
 	if err != nil {
 		t.Fatal(err)
@@ -59,6 +62,28 @@ func TestTrackRouteGroupService_MergesNearbyRouteCenters(t *testing.T) {
 	}
 	if !mergedFound {
 		t.Fatalf("expected merged member for %s", b.TrackID)
+	}
+}
+
+func TestTrackRouteGroupService_AssignsAreaIDOffline(t *testing.T) {
+	mapRepo := repository.NewInMemoryTrackMapRepository(nil)
+	index := testRouteGroupIndex("NO.00000006", "hiking", []models.TrackPoint{
+		{Latitude: 30.24, Longitude: 120.13},
+		{Latitude: 30.25, Longitude: 120.14},
+		{Latitude: 30.26, Longitude: 120.15},
+	}, time.Now())
+	if err := mapRepo.UpsertTrackGeoIndex(context.Background(), index); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NewTrackRouteGroupService(mapRepo).RunOnce(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	group, err := mapRepo.FindRouteGroupByTrackID(context.Background(), index.TrackID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if group.AreaID != "scenic-west-lake" {
+		t.Fatalf("area_id=%q, want scenic-west-lake", group.AreaID)
 	}
 }
 

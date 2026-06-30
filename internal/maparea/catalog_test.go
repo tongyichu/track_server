@@ -20,7 +20,7 @@ func TestDefaultCatalogResolvePrefersScenicSpot(t *testing.T) {
 
 func TestDefaultCatalogResolveDistrict(t *testing.T) {
 	catalog := DefaultCatalog()
-	area := catalog.Resolve(30.30, 120.05)
+	area := catalog.Resolve(30.200766, 120.08362)
 	if area == nil {
 		t.Fatal("expected an area")
 	}
@@ -73,6 +73,7 @@ func TestEmbeddedDistrictCatalogMetadata(t *testing.T) {
 	}
 	cities := make(map[string]struct{})
 	ids := make(map[string]struct{}, len(file.Districts))
+	geometryTypes := make(map[string]int)
 	for _, district := range file.Districts {
 		if _, exists := ids[district.ID]; exists {
 			t.Fatalf("duplicate district id %s", district.ID)
@@ -88,9 +89,28 @@ func TestEmbeddedDistrictCatalogMetadata(t *testing.T) {
 		if district.Bounds.size() <= 0 {
 			t.Fatalf("invalid bounds for %s: %+v", district.ID, district.Bounds)
 		}
+		if district.Geometry == nil {
+			t.Fatalf("missing geometry for %s", district.ID)
+		}
+		if err := district.Geometry.prepare(); err != nil {
+			t.Fatalf("invalid geometry for %s: %v", district.ID, err)
+		}
+		for _, polygon := range district.Geometry.polygons {
+			for _, ring := range polygon {
+				for _, point := range ring {
+					if !district.Bounds.contains(point.latitude, point.longitude) {
+						t.Fatalf("geometry point %+v is outside bounds for %s", point, district.ID)
+					}
+				}
+			}
+		}
+		geometryTypes[district.Geometry.Type]++
 	}
 	if len(cities) != 36 {
 		t.Fatalf("city count=%d, want 36", len(cities))
+	}
+	if geometryTypes["Polygon"]+geometryTypes["MultiPolygon"] != len(file.Districts) {
+		t.Fatalf("unexpected geometry types: %+v", geometryTypes)
 	}
 }
 
@@ -115,5 +135,8 @@ func TestManualAreaOverridesGeneratedDistrict(t *testing.T) {
 	area := catalog.Find("district-110101")
 	if area == nil || area.Name() != "人工东城区" || area.ContentVersion != "2" {
 		t.Fatalf("manual override not applied: %+v", area)
+	}
+	if area.Geometry == nil {
+		t.Fatal("manual district override did not inherit generated geometry")
 	}
 }

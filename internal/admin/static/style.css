@@ -67,6 +67,8 @@ table.data tr.selected { background: #eef6ff; }
 table.data .danger { color: #d93026; background: #fff; border: 1px solid #d93026; padding: 3px 8px; border-radius: 4px; cursor: pointer; }
 .row-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .row-actions button { padding: 3px 8px; border: 1px solid #ccd0d6; background: #fff; border-radius: 4px; cursor: pointer; }
+.admin-link { color: #0070f3; text-decoration: none; font-size: 12px; }
+.admin-link:hover { text-decoration: underline; }
 
 .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; border: 1px solid #d9dde5; background: #f7f8fa; color: #4a4f55; }
 .badge-pending { border-color: #f0c36d; background: #fff7e6; color: #ad6800; }

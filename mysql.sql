@@ -163,6 +163,7 @@ CREATE TABLE `track_route_groups` (
                                       `track_type` VARCHAR(32) NOT NULL DEFAULT '' COMMENT '运动类型',
                                       `status` VARCHAR(16) NOT NULL DEFAULT 'active' COMMENT 'active/archived',
                                       `city_codes_json` TEXT COMMENT '路线覆盖城市 code JSON 数组',
+                                      `area_id` VARCHAR(64) NOT NULL DEFAULT '' COMMENT '离线匹配的稳定地图区域ID',
                                       `coordinate_system` VARCHAR(32) NOT NULL DEFAULT '' COMMENT '坐标系',
                                       `center_lat` DOUBLE NOT NULL,
                                       `center_lng` DOUBLE NOT NULL,
@@ -179,6 +180,7 @@ CREATE TABLE `track_route_groups` (
                                       `updated_at` DATETIME(6) NOT NULL,
                                       PRIMARY KEY (`group_id`),
                                       KEY `idx_track_route_group_type_status` (`track_type`, `status`),
+                                      KEY `idx_track_route_group_area` (`area_id`),
                                       KEY `idx_track_route_group_center` (`center_lat`, `center_lng`),
                                       KEY `idx_track_route_group_rep` (`representative_track_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='路线发现路线组表';

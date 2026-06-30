@@ -275,6 +275,7 @@ type TrackRouteGroup struct {
 	Status                TrackRouteGroupStatus `json:"status" bson:"status"`
 	CityCodes             []string              `json:"city_codes" bson:"city_codes"`
 	CityCodesJSON         string                `json:"-" bson:"city_codes_json"`
+	AreaID                string                `json:"area_id,omitempty" bson:"area_id,omitempty"`
 	CoordinateSystem      string                `json:"coordinate_system" bson:"coordinate_system"`
 	CenterLat             float64               `json:"center_lat" bson:"center_lat"`
 	CenterLng             float64               `json:"center_lng" bson:"center_lng"`
@@ -367,6 +368,7 @@ type TrackMapAreaReference struct {
 type TrackMapClusterItem struct {
 	Type       string                 `json:"type"`
 	ClusterID  string                 `json:"cluster_id,omitempty"`
+	AreaID     string                 `json:"-"`
 	Name       string                 `json:"name,omitempty"`
 	AreaType   string                 `json:"area_type,omitempty"`
 	Area       *TrackMapAreaReference `json:"area,omitempty"`

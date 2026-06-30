@@ -10,7 +10,7 @@
 - `area`：区域聚合气泡。
 - `city`：城市聚合气泡。
 
-服务端已使用 `track_route_groups` 聚合表作为数据源，`group_id` 是路线组 ID，不等同于单条轨迹 ID。路线组由后台离线任务基于 `track_geo_indexes` 的轨迹中心点聚类生成；`route_group` 返回 `center` 与 `radius_m`，客户端可直接绘制聚合区域，不再依赖代表路线折线。
+服务端已使用 `track_route_groups` 聚合表作为数据源，`group_id` 是路线组 ID，不等同于单条轨迹 ID。路线组由后台离线任务基于 `track_geo_indexes` 的轨迹中心点聚类生成，并离线写入 `area_id`；`route_group` 返回 `center` 与 `radius_m`，客户端可直接绘制聚合区域，不再依赖代表路线折线。
 
 **需要认证**
 
@@ -141,7 +141,8 @@ GET /api/v1/track-map/view?latitude=22.3000&longitude=114.1700&radius_m=10000&tr
 - `route_count` 是 RouteGroup 数量，不是用户数，也不是具体轨迹数。
 - `area_cluster` 命中内置区域目录时会额外返回 `name`、`area_type`、`area`、`city_code`、`city_name`；`area_type` 当前为 `scenic_spot`（景区）或 `district`（区县）。
 - `area.id` 是稳定区域 ID，不等同于随网格变化的 `cluster_id`；存在介绍内容时 `area.introduction_url` 指向公开 H5 页面。
-- 区域目录使用 GCJ-02 边界框，并按“景区优先于区县、同优先级选择更小区域”的规则匹配聚合中心。当前区县基线覆盖 36 个重点城市的 194 个核心区县，完整清单见 `internal/maparea/README.md`；未命中时省略上述可选字段，客户端继续只展示路线数量。
+- `area_id` 由 `track_route_group` 离线任务计算并写入 RouteGroup：使用 GCJ-02 `bounds` 预筛、Polygon/MultiPolygon 点包含最终判断，未提供 geometry 的人工区域按 `bounds` 兜底。接口不会实时执行空间匹配，只根据已存 `area_id` 查询名称和介绍信息；相同 `area_id` 的 RouteGroup 聚合成一个区域气泡，空 `area_id` 继续按原网格聚合。
+- 匹配顺序遵循“景区优先于区县、同优先级选择更小区域”。当前区县基线覆盖 36 个重点城市的 194 个核心区县，完整清单见 `internal/maparea/README.md`；未命中时省略上述可选字段，客户端继续只展示路线数量。
 - 点击 `city_cluster` / `area_cluster` 后，客户端放大地图并重新请求本接口。
 - 点击 `route_group` 后，请求路线组详情或路线组轨迹列表。
 

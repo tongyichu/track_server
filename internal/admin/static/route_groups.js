@@ -24,6 +24,22 @@
   function groupCities(g) {
     return (g.city_codes || []).join(', ');
   }
+  function areaTypeName(type) {
+    if (type === 'scenic_spot') return '景区';
+    if (type === 'district') return '区县';
+    return type || '';
+  }
+  function areaInfoHTML(area) {
+    if (!area || !area.name) return '<span class="hint">未命中目录</span>';
+    var html = '<span>' + esc(area.name) + '</span>';
+    var typeName = areaTypeName(area.type);
+    if (typeName) html += ' <span class="badge">' + esc(typeName) + '</span>';
+    if (area.city_name) html += '<div class="hint">' + esc(area.city_name) + '</div>';
+    if (area.introduction_url && area.introduction_url.indexOf('/api/v1/track-map/areas/') === 0) {
+      html += '<div><a class="admin-link" href="' + esc(area.introduction_url) + '" target="_blank" rel="noopener">查看介绍页</a></div>';
+    }
+    return html;
+  }
   function apiJSON(url, options) {
     options = options || {};
     options.headers = Object.assign({ 'Content-Type': 'application/json' }, options.headers || {});
@@ -90,7 +106,7 @@
       renderGroups(data.items || []);
       statusHint.textContent = '';
     } catch (err) {
-      groupList.innerHTML = '<tr><td colspan="9">加载失败: ' + esc(err.message) + '</td></tr>';
+      groupList.innerHTML = '<tr><td colspan="11">加载失败: ' + esc(err.message) + '</td></tr>';
       statusHint.textContent = '';
     }
   }
@@ -105,6 +121,8 @@
         '<td class="clip">' + esc(g.name || '') + '</td>' +
         '<td>' + esc(g.track_type || '') + '</td>' +
         '<td>' + esc(groupCities(g)) + '</td>' +
+        '<td class="mono">' + esc(g.area_id || '-') + '</td>' +
+        '<td>' + areaInfoHTML(g.area) + '</td>' +
         '<td>' + (g.member_count || 0) + '</td>' +
         '<td>' + esc(g.source || '') + '</td>' +
         '<td class="mono">' + esc(g.representative_track_id || '') + '</td>' +
@@ -135,6 +153,8 @@
     document.getElementById('detailName').textContent = g.name || '';
     document.getElementById('detailTrackType').textContent = g.track_type || '';
     document.getElementById('detailCities').textContent = groupCities(g);
+    document.getElementById('detailAreaID').textContent = g.area_id || '-';
+    document.getElementById('detailAreaInfo').innerHTML = areaInfoHTML(data.area);
     document.getElementById('detailMemberCount').textContent = String(g.member_count || 0);
     document.getElementById('detailRepresentative').textContent = g.representative_track_id || '';
     document.getElementById('renameInput').value = g.name || '';

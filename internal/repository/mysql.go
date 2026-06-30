@@ -173,6 +173,7 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 			track_type VARCHAR(32) NOT NULL DEFAULT '' COMMENT '运动类型',
 			status VARCHAR(16) NOT NULL DEFAULT 'active' COMMENT 'active/archived',
 			city_codes_json TEXT COMMENT '路线覆盖城市 code JSON 数组',
+			area_id VARCHAR(64) NOT NULL DEFAULT '' COMMENT '离线匹配的稳定地图区域ID',
 			coordinate_system VARCHAR(32) NOT NULL DEFAULT '' COMMENT '坐标系',
 			center_lat DOUBLE NOT NULL,
 			center_lng DOUBLE NOT NULL,
@@ -189,6 +190,7 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 			updated_at DATETIME(6) NOT NULL,
 			PRIMARY KEY (group_id),
 			KEY idx_track_route_group_type_status (track_type, status),
+			KEY idx_track_route_group_area (area_id),
 			KEY idx_track_route_group_center (center_lat, center_lng),
 			KEY idx_track_route_group_rep (representative_track_id)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='路线发现路线组表';`,
@@ -425,6 +427,9 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 	if err := ensureMySQLTrackCoordinateSystemColumn(ctx, db); err != nil {
+		return err
+	}
+	if err := ensureMySQLTrackRouteGroupAreaID(ctx, db); err != nil {
 		return err
 	}
 	if err := ensureMySQLUserIDColumnsBigint(ctx, db); err != nil {
@@ -1022,6 +1027,38 @@ func ensureMySQLTrackCoordinateSystemColumn(ctx context.Context, db *sql.DB) err
 	_, err = db.ExecContext(ctx, `ALTER TABLE track_records ADD COLUMN coordinate_system VARCHAR(32) NOT NULL DEFAULT '' COMMENT '坐标系' AFTER track_type`)
 	if err != nil {
 		return fmt.Errorf("add track_records.coordinate_system column: %w", err)
+	}
+	return nil
+}
+
+func ensureMySQLTrackRouteGroupAreaID(ctx context.Context, db *sql.DB) error {
+	var columnCount int
+	if err := db.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM information_schema.COLUMNS
+		WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'track_route_groups' AND COLUMN_NAME = 'area_id'`,
+	).Scan(&columnCount); err != nil {
+		return fmt.Errorf("check track_route_groups.area_id column: %w", err)
+	}
+	if columnCount == 0 {
+		if _, err := db.ExecContext(ctx, `ALTER TABLE track_route_groups ADD COLUMN area_id VARCHAR(64) NOT NULL DEFAULT '' COMMENT '离线匹配的稳定地图区域ID' AFTER city_codes_json`); err != nil {
+			return fmt.Errorf("add track_route_groups.area_id column: %w", err)
+		}
+	}
+
+	var indexCount int
+	if err := db.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM information_schema.STATISTICS
+		WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'track_route_groups' AND INDEX_NAME = 'idx_track_route_group_area'`,
+	).Scan(&indexCount); err != nil {
+		return fmt.Errorf("check track_route_groups area index: %w", err)
+	}
+	if indexCount > 0 {
+		return nil
+	}
+	if _, err := db.ExecContext(ctx, `ALTER TABLE track_route_groups ADD INDEX idx_track_route_group_area (area_id)`); err != nil {
+		return fmt.Errorf("add track_route_groups area index: %w", err)
 	}
 	return nil
 }

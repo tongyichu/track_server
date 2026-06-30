@@ -37,8 +37,9 @@ func TestTrackMapServiceDecorateAreaClusters(t *testing.T) {
 	items := []*models.TrackMapClusterItem{
 		{
 			Type:      "area_cluster",
-			ClusterID: "cell_30.2_120.1",
-			Center:    models.TrackMapPoint{Latitude: 30.25, Longitude: 120.14},
+			ClusterID: "scenic-west-lake",
+			AreaID:    "scenic-west-lake",
+			Center:    models.TrackMapPoint{Latitude: 45, Longitude: 90},
 		},
 	}
 
@@ -60,8 +61,8 @@ func TestTrackMapServiceDecorateAreaClustersLeavesUnknownUnchanged(t *testing.T)
 	svc := &TrackMapService{areas: maparea.DefaultCatalog()}
 	item := &models.TrackMapClusterItem{
 		Type:      "area_cluster",
-		ClusterID: "cell_45.0_90.0",
-		Center:    models.TrackMapPoint{Latitude: 45.0, Longitude: 90.0},
+		ClusterID: "cell_30.2_120.1",
+		Center:    models.TrackMapPoint{Latitude: 30.25, Longitude: 120.14},
 	}
 
 	svc.decorateAreaClusters([]*models.TrackMapClusterItem{item})
@@ -76,6 +77,7 @@ func TestTrackMapServiceViewAreaIncludesSemanticArea(t *testing.T) {
 	now := time.Now()
 	err := repo.UpsertRouteGroup(context.Background(), &models.TrackRouteGroup{
 		GroupID:     "RG.00000001",
+		AreaID:      "scenic-west-lake",
 		TrackType:   "hiking",
 		Status:      models.TrackRouteGroupStatusActive,
 		CenterLat:   30.25,
@@ -91,6 +93,24 @@ func TestTrackMapServiceViewAreaIncludesSemanticArea(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("upsert route group: %v", err)
+	}
+	if err := repo.UpsertRouteGroup(context.Background(), &models.TrackRouteGroup{
+		GroupID:     "RG.00000002",
+		AreaID:      "scenic-west-lake",
+		TrackType:   "hiking",
+		Status:      models.TrackRouteGroupStatusActive,
+		CenterLat:   30.25,
+		CenterLng:   120.095,
+		MinLat:      30.24,
+		MinLng:      120.09,
+		MaxLat:      30.26,
+		MaxLng:      120.10,
+		MemberCount: 1,
+		Source:      models.TrackRouteGroupSourceAuto,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}); err != nil {
+		t.Fatalf("upsert second route group: %v", err)
 	}
 	svc := NewTrackMapService(repo, nil, nil)
 
@@ -108,5 +128,43 @@ func TestTrackMapServiceViewAreaIncludesSemanticArea(t *testing.T) {
 	}
 	if items[0].Name != "西湖景区" || items[0].Area == nil || items[0].Area.IntroductionURL == "" {
 		t.Fatalf("area item=%+v", items[0])
+	}
+	if items[0].ClusterID != "area_scenic-west-lake" || items[0].RouteCount != 2 {
+		t.Fatalf("area_id groups should aggregate together: %+v", items[0])
+	}
+}
+
+func TestTrackMapServiceViewAreaDoesNotResolveMissingAreaIDOnline(t *testing.T) {
+	repo := repository.NewInMemoryTrackMapRepository(nil)
+	now := time.Now()
+	if err := repo.UpsertRouteGroup(context.Background(), &models.TrackRouteGroup{
+		GroupID:     "RG.00000003",
+		TrackType:   "hiking",
+		Status:      models.TrackRouteGroupStatusActive,
+		CenterLat:   30.25,
+		CenterLng:   120.14,
+		MinLat:      30.24,
+		MinLng:      120.13,
+		MaxLat:      30.26,
+		MaxLng:      120.15,
+		MemberCount: 1,
+		Source:      models.TrackRouteGroupSourceAuto,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}); err != nil {
+		t.Fatalf("upsert route group: %v", err)
+	}
+
+	resp, err := NewTrackMapService(repo, nil, nil).View(context.Background(), TrackMapViewInput{
+		BBox:      "120.0,30.1,120.3,30.4",
+		Zoom:      10,
+		TrackType: "hiking",
+	})
+	if err != nil {
+		t.Fatalf("view area: %v", err)
+	}
+	items := resp.Items.([]*models.TrackMapClusterItem)
+	if len(items) != 1 || items[0].Area != nil || items[0].Name != "" {
+		t.Fatalf("missing offline area_id should not be resolved online: %+v", items)
 	}
 }

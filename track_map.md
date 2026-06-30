@@ -389,7 +389,8 @@ track_type=hiking
 
 - `route_count` 表示符合当前 `track_type` 的 RouteGroup 数量。
 - `route_count` 不表示用户数，也不表示具体 Track 数量。
-- 区域聚合中心命中内置 GCJ-02 区域目录时，返回可选的 `name`、`area_type`、`area`、`city_code`、`city_name`。生成区县基线当前覆盖 36 个重点城市的 194 个核心区县，`catalog.json` 中的人工景区/区县条目可按稳定 ID 覆盖基线；景区匹配优先于区县，同优先级选择范围更小的区域，未命中时保持原数量气泡响应。
+- RouteGroup 的 `area_id` 由 `track_route_group` 离线任务计算：先按 `bounds` 预筛，再用 Polygon/MultiPolygon 判断 RouteGroup 中心，无 geometry 的人工区域按 `bounds` 兜底。接口只根据已存 `area_id` 查询内置 GCJ-02 区域目录，并返回可选的 `name`、`area_type`、`area`、`city_code`、`city_name`；相同 `area_id` 的 RouteGroup 聚合为一个气泡，空 `area_id` 继续按原网格聚合。
+- 生成区县基线当前覆盖 36 个重点城市的 194 个核心区县。`catalog.json` 中的人工景区/区县条目可按稳定 ID 覆盖基线，同 ID 人工区县未提供 geometry 时继承生成区县 geometry；景区优先于区县，同优先级选择范围更小的区域，未命中时保持原数量气泡响应。
 - `area.id` 是稳定区域 ID；有介绍内容时，公开的 `area.introduction_url` 可由客户端 WebView 打开，支持 `lang=english` 和 `is_dark=true`。
 - 客户端点击 `city_cluster` 或 `area_cluster` 后，只需要放大地图并重新请求 `/track-map/view`。
 - 客户端点击 `route_group` 后，请求路线组详情或具体轨迹列表。
@@ -636,6 +637,7 @@ CREATE TABLE track_route_groups (
   track_type VARCHAR(32) NOT NULL DEFAULT '',
   status VARCHAR(16) NOT NULL DEFAULT 'active',
   city_codes_json TEXT,
+  area_id VARCHAR(64) NOT NULL DEFAULT '',
   coordinate_system VARCHAR(32) NOT NULL DEFAULT '',
   center_lat DOUBLE NOT NULL,
   center_lng DOUBLE NOT NULL,
@@ -652,6 +654,7 @@ CREATE TABLE track_route_groups (
   updated_at DATETIME(6) NOT NULL,
   PRIMARY KEY (group_id),
   KEY idx_track_route_group_type_status (track_type, status),
+  KEY idx_track_route_group_area (area_id),
   KEY idx_track_route_group_center (center_lat, center_lng),
   KEY idx_track_route_group_rep (representative_track_id)
 );
@@ -661,6 +664,7 @@ CREATE TABLE track_route_groups (
 
 - `member_count` 是服务端内部字段，用于排序和运营观察；第一版接口不返回该字段。
 - `city_codes_json` 支持跨城市路线归属于多个城市。当前自动聚合先继承轨迹 `city_code`，后续可通过轨迹点反查城市后扩展为多城市。
+- `area_id` 是离线任务根据 RouteGroup 最终中心点匹配出的稳定区域 ID；空字符串表示未命中目录，接口不得临时猜测区域。
 - `source=auto/manual/mixed` 预留人工运营能力。自动任务不会覆盖人工改名后的展示诉求，后续 ops 接口可基于该字段做合并、拆分、改名和指定代表轨迹。
 
 #### track_route_group_members
@@ -720,6 +724,7 @@ Scheduler(track_route_group，默认每天 04:00)
   → 排除过短、点数过少或缺少运动类型的轨迹
   → 按 track_type 严格隔离，基于轨迹中心点做空间聚类
   → 计算每个 RouteGroup 的 center_lat/center_lng、radius_m、bbox、member_count
+  → 用内置 GCJ-02 区域目录匹配最终中心点并写入 area_id
   → 重建替换 track_route_groups / track_route_group_members（MySQL 实现使用事务）
 ```
 
@@ -751,6 +756,7 @@ OSS 下载要求：
 - `center_lat` / `center_lng` 使用成员轨迹中心点均值。
 - `radius_m` 取 “成员中心点到 group 中心距离 + 成员 bbox 半径” 的最大值，避免长轨迹覆盖区域被低估。
 - `bbox` 使用所有成员轨迹 bbox 的并集。
+- `area_id` 使用最终 `center_lat` / `center_lng` 离线匹配；人工合并或移除成员导致中心变化时同步重算。
 - 聚合任务会重建替换 `track_route_groups` / `track_route_group_members`，存量结果可清空重算；MySQL 实现使用事务。
 
 中心点距离满足运动类型阈值则归入已有 RouteGroup，否则创建新的 RouteGroup。
@@ -857,8 +863,8 @@ RouteGroup 是路线聚合入口，不展示用户实时位置。
 - 新增数据库表结构。
 - 新增轨迹完成后的索引构建流程。
 - 新增路线组离线聚合任务 `track_route_group`，默认每天 04:00。
-- 新增管理中心聚合路线运营页，支持查看 RouteGroup、改名、合并、移除成员、指定代表轨迹。
-- 新增内置地图区域目录：按 GCJ-02 边界框为区域聚合补充景区/区县语义，并提供统一的双语、明暗主题介绍 H5。
+- 新增管理中心聚合路线运营页，列表和详情展示 RouteGroup 的 `area_id`、区域名称/类型/城市与介绍页入口，并支持改名、合并、移除成员、指定代表轨迹。
+- 新增内置地图区域目录：离线按 GCJ-02 `bounds` 预筛与 Polygon/MultiPolygon 点包含判断写入 RouteGroup `area_id`，接口按 ID 补充景区/区县语义，并提供统一的双语、明暗主题介绍 H5。
 - 更新 `track_api.md` 与 `docs/api/track-map.md`。
 - 更新 `AGENTS.md`。
 

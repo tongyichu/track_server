@@ -617,15 +617,16 @@ func (r *MySQLTrackMapRepository) UpsertRouteGroup(ctx context.Context, group *m
 	group.UpdatedAt = now
 	_, err = r.db.ExecContext(ctx, `
 		INSERT INTO track_route_groups
-			(group_id, name, track_type, status, city_codes_json, coordinate_system,
+			(group_id, name, track_type, status, city_codes_json, area_id, coordinate_system,
 			 center_lat, center_lng, radius_m, min_lat, min_lng, max_lat, max_lng, distance,
 			 representative_track_id, member_count, source, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON DUPLICATE KEY UPDATE
 			name = VALUES(name),
 			track_type = VALUES(track_type),
 			status = VALUES(status),
 			city_codes_json = VALUES(city_codes_json),
+			area_id = VALUES(area_id),
 			coordinate_system = VALUES(coordinate_system),
 			center_lat = VALUES(center_lat),
 			center_lng = VALUES(center_lng),
@@ -639,7 +640,7 @@ func (r *MySQLTrackMapRepository) UpsertRouteGroup(ctx context.Context, group *m
 			member_count = VALUES(member_count),
 			source = VALUES(source),
 			updated_at = VALUES(updated_at)
-	`, group.GroupID, group.Name, group.TrackType, group.Status, string(cityCodesJSON), group.CoordinateSystem,
+	`, group.GroupID, group.Name, group.TrackType, group.Status, string(cityCodesJSON), group.AreaID, group.CoordinateSystem,
 		group.CenterLat, group.CenterLng, group.RadiusM, group.MinLat, group.MinLng, group.MaxLat, group.MaxLng, group.Distance,
 		group.RepresentativeTrackID, group.MemberCount, group.Source, group.CreatedAt, group.UpdatedAt)
 	return err
@@ -705,11 +706,11 @@ func (r *MySQLTrackMapRepository) ReplaceRouteGroups(ctx context.Context, groups
 		}
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO track_route_groups
-				(group_id, name, track_type, status, city_codes_json, coordinate_system,
+				(group_id, name, track_type, status, city_codes_json, area_id, coordinate_system,
 				 center_lat, center_lng, radius_m, min_lat, min_lng, max_lat, max_lng, distance,
 				 representative_track_id, member_count, source, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		`, group.GroupID, group.Name, group.TrackType, group.Status, string(cityCodesJSON), group.CoordinateSystem,
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`, group.GroupID, group.Name, group.TrackType, group.Status, string(cityCodesJSON), group.AreaID, group.CoordinateSystem,
 			group.CenterLat, group.CenterLng, group.RadiusM, group.MinLat, group.MinLng, group.MaxLat, group.MaxLng, group.Distance,
 			group.RepresentativeTrackID, group.MemberCount, group.Source, group.CreatedAt, group.UpdatedAt); err != nil {
 			return err
@@ -841,10 +842,13 @@ func (r *MySQLTrackMapRepository) CountRouteGroupsByArea(ctx context.Context, fi
 	where, args := buildTrackRouteGroupWhere(filter)
 	args = append(args, limit)
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT FLOOR(center_lat * 10) / 10 AS lat_cell, FLOOR(center_lng * 10) / 10 AS lng_cell, track_type, COUNT(*) AS route_count,
+		SELECT area_id,
+		       CASE WHEN area_id = '' THEN FLOOR(center_lat * 10) / 10 ELSE 0 END AS lat_cell,
+		       CASE WHEN area_id = '' THEN FLOOR(center_lng * 10) / 10 ELSE 0 END AS lng_cell,
+		       track_type, COUNT(*) AS route_count,
 		       AVG(center_lat), AVG(center_lng), MIN(min_lat), MIN(min_lng), MAX(max_lat), MAX(max_lng)
 		FROM track_route_groups`+where+`
-		GROUP BY lat_cell, lng_cell, track_type
+		GROUP BY area_id, lat_cell, lng_cell, track_type
 		ORDER BY route_count DESC
 		LIMIT ?`, args...)
 	if err != nil {
@@ -855,10 +859,14 @@ func (r *MySQLTrackMapRepository) CountRouteGroupsByArea(ctx context.Context, fi
 	for rows.Next() {
 		var latCell, lngCell float64
 		item := &models.TrackMapClusterItem{Type: "area_cluster"}
-		if err := rows.Scan(&latCell, &lngCell, &item.TrackType, &item.RouteCount, &item.Center.Latitude, &item.Center.Longitude, &item.BBox.MinLatitude, &item.BBox.MinLongitude, &item.BBox.MaxLatitude, &item.BBox.MaxLongitude); err != nil {
+		if err := rows.Scan(&item.AreaID, &latCell, &lngCell, &item.TrackType, &item.RouteCount, &item.Center.Latitude, &item.Center.Longitude, &item.BBox.MinLatitude, &item.BBox.MinLongitude, &item.BBox.MaxLatitude, &item.BBox.MaxLongitude); err != nil {
 			return nil, err
 		}
-		item.ClusterID = "cell_" + strings.TrimRight(strings.TrimRight(strconvFormatFloat(latCell), "0"), ".") + "_" + strings.TrimRight(strings.TrimRight(strconvFormatFloat(lngCell), "0"), ".")
+		if item.AreaID != "" {
+			item.ClusterID = "area_" + item.AreaID
+		} else {
+			item.ClusterID = "cell_" + strings.TrimRight(strings.TrimRight(strconvFormatFloat(latCell), "0"), ".") + "_" + strings.TrimRight(strings.TrimRight(strconvFormatFloat(lngCell), "0"), ".")
+		}
 		items = append(items, item)
 	}
 	return items, rows.Err()
@@ -870,7 +878,7 @@ func trackRouteGroupSelectSQL() string {
 
 func trackRouteGroupColumns(alias string) string {
 	p := alias + "."
-	return p + `group_id, ` + p + `name, ` + p + `track_type, ` + p + `status, ` + p + `city_codes_json, ` + p + `coordinate_system,
+	return p + `group_id, ` + p + `name, ` + p + `track_type, ` + p + `status, ` + p + `city_codes_json, ` + p + `area_id, ` + p + `coordinate_system,
 		` + p + `center_lat, ` + p + `center_lng, ` + p + `radius_m, ` + p + `min_lat, ` + p + `min_lng, ` + p + `max_lat, ` + p + `max_lng,
 		` + p + `distance, ` + p + `representative_track_id, ` + p + `member_count,
 		` + p + `source, ` + p + `created_at, ` + p + `updated_at`
@@ -878,7 +886,7 @@ func trackRouteGroupColumns(alias string) string {
 
 func trackRouteGroupSummaryColumns(alias string) string {
 	p := alias + "."
-	return p + `group_id, ` + p + `name, ` + p + `track_type, ` + p + `status, ` + p + `city_codes_json, ` + p + `coordinate_system,
+	return p + `group_id, ` + p + `name, ` + p + `track_type, ` + p + `status, ` + p + `city_codes_json, ` + p + `area_id, ` + p + `coordinate_system,
 		` + p + `center_lat, ` + p + `center_lng, ` + p + `radius_m, ` + p + `min_lat, ` + p + `min_lng, ` + p + `max_lat, ` + p + `max_lng,
 		` + p + `distance, ` + p + `representative_track_id, ` + p + `member_count,
 		` + p + `source, ` + p + `created_at, ` + p + `updated_at`
@@ -918,7 +926,7 @@ func buildTrackRouteGroupWhere(filter models.TrackMapQueryFilter) (string, []int
 func scanTrackRouteGroup(row trackGeoIndexScanner) (*models.TrackRouteGroup, error) {
 	var group models.TrackRouteGroup
 	var cityCodesJSON sql.NullString
-	if err := row.Scan(&group.GroupID, &group.Name, &group.TrackType, &group.Status, &cityCodesJSON, &group.CoordinateSystem,
+	if err := row.Scan(&group.GroupID, &group.Name, &group.TrackType, &group.Status, &cityCodesJSON, &group.AreaID, &group.CoordinateSystem,
 		&group.CenterLat, &group.CenterLng, &group.RadiusM, &group.MinLat, &group.MinLng, &group.MaxLat, &group.MaxLng,
 		&group.Distance, &group.RepresentativeTrackID, &group.MemberCount,
 		&group.Source, &group.CreatedAt, &group.UpdatedAt); err != nil {
@@ -934,7 +942,7 @@ func scanTrackRouteGroup(row trackGeoIndexScanner) (*models.TrackRouteGroup, err
 func scanTrackRouteGroupSummary(row trackGeoIndexScanner) (*models.TrackRouteGroup, error) {
 	var group models.TrackRouteGroup
 	var cityCodesJSON sql.NullString
-	if err := row.Scan(&group.GroupID, &group.Name, &group.TrackType, &group.Status, &cityCodesJSON, &group.CoordinateSystem,
+	if err := row.Scan(&group.GroupID, &group.Name, &group.TrackType, &group.Status, &cityCodesJSON, &group.AreaID, &group.CoordinateSystem,
 		&group.CenterLat, &group.CenterLng, &group.RadiusM, &group.MinLat, &group.MinLng, &group.MaxLat, &group.MaxLng,
 		&group.Distance, &group.RepresentativeTrackID, &group.MemberCount,
 		&group.Source, &group.CreatedAt, &group.UpdatedAt); err != nil {
@@ -951,7 +959,7 @@ func scanTrackRouteGroupCandidate(row trackGeoIndexScanner) (*models.TrackRouteG
 	var group models.TrackRouteGroup
 	var cityCodesJSON, indexPolylineJSON sql.NullString
 	var index models.TrackGeoIndex
-	if err := row.Scan(&group.GroupID, &group.Name, &group.TrackType, &group.Status, &cityCodesJSON, &group.CoordinateSystem,
+	if err := row.Scan(&group.GroupID, &group.Name, &group.TrackType, &group.Status, &cityCodesJSON, &group.AreaID, &group.CoordinateSystem,
 		&group.CenterLat, &group.CenterLng, &group.RadiusM, &group.MinLat, &group.MinLng, &group.MaxLat, &group.MaxLng,
 		&group.Distance, &group.RepresentativeTrackID, &group.MemberCount,
 		&group.Source, &group.CreatedAt, &group.UpdatedAt,

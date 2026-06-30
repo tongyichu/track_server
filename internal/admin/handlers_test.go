@@ -201,6 +201,7 @@ func TestAdminRouteGroupOperations(t *testing.T) {
 		TrackType:             "hiking",
 		Status:                models.TrackRouteGroupStatusActive,
 		CityCodes:             []string{"810000"},
+		AreaID:                "scenic-west-lake",
 		CoordinateSystem:      "GCJ02",
 		CenterLat:             index1.CenterLat,
 		CenterLng:             index1.CenterLng,
@@ -246,7 +247,7 @@ func TestAdminRouteGroupOperations(t *testing.T) {
 	}
 	var listOut struct {
 		Data struct {
-			Items []models.TrackRouteGroup `json:"items"`
+			Items []service.AdminRouteGroupSummary `json:"items"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(resp.Body.Bytes(), &listOut); err != nil {
@@ -255,8 +256,28 @@ func TestAdminRouteGroupOperations(t *testing.T) {
 	if len(listOut.Data.Items) != 1 {
 		t.Fatalf("expected 1 route group, got %d", len(listOut.Data.Items))
 	}
-	if listOut.Data.Items[0].RadiusM <= 0 {
+	if listOut.Data.Items[0].TrackRouteGroup == nil || listOut.Data.Items[0].RadiusM <= 0 {
 		t.Fatalf("route group list should include radius_m: %+v", listOut.Data.Items[0])
+	}
+	if listOut.Data.Items[0].AreaID != "scenic-west-lake" || listOut.Data.Items[0].Area == nil ||
+		listOut.Data.Items[0].Area.Name != "西湖景区" || listOut.Data.Items[0].Area.Type != "scenic_spot" ||
+		listOut.Data.Items[0].Area.CityName != "杭州市" || listOut.Data.Items[0].Area.IntroductionURL == "" {
+		t.Fatalf("route group list should include area details: %+v", listOut.Data.Items[0])
+	}
+
+	resp = ut.PerformRequest(h.Engine, http.MethodGet, "/admin/api/route-groups/RG.00001001?limit=10", nil, cookie)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("route group detail status=%d body=%s", resp.Code, resp.Body.String())
+	}
+	var detailOut struct {
+		Data service.AdminRouteGroupDetail `json:"data"`
+	}
+	if err := json.Unmarshal(resp.Body.Bytes(), &detailOut); err != nil {
+		t.Fatalf("decode route group detail: %v", err)
+	}
+	if detailOut.Data.Group == nil || detailOut.Data.Group.AreaID != "scenic-west-lake" ||
+		detailOut.Data.Area == nil || detailOut.Data.Area.Name != "西湖景区" || detailOut.Data.Area.IntroductionURL == "" {
+		t.Fatalf("route group detail should include area details: %+v", detailOut.Data)
 	}
 
 	renameBody := []byte(`{"name":"麦理浩径徒步路线"}`)

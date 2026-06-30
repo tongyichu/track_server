@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/tongyichu/track_server/internal/config"
+	"github.com/tongyichu/track_server/internal/maparea"
 	"github.com/tongyichu/track_server/internal/models"
 	"github.com/tongyichu/track_server/internal/repository"
 )
@@ -24,7 +25,8 @@ const (
 
 // TrackRouteGroupService builds persistent route groups from track_geo_indexes.
 type TrackRouteGroupService struct {
-	repo repository.TrackMapRepository
+	repo  repository.TrackMapRepository
+	areas *maparea.Catalog
 }
 
 type TrackRouteGroupRunResult struct {
@@ -40,8 +42,23 @@ type AdminRouteGroupMemberView struct {
 	GeoIndex *models.TrackGeoIndex         `json:"geo_index,omitempty"`
 }
 
+type AdminRouteGroupArea struct {
+	ID              string `json:"id"`
+	Name            string `json:"name"`
+	Type            string `json:"type"`
+	CityCode        string `json:"city_code,omitempty"`
+	CityName        string `json:"city_name,omitempty"`
+	IntroductionURL string `json:"introduction_url,omitempty"`
+}
+
+type AdminRouteGroupSummary struct {
+	*models.TrackRouteGroup
+	Area *AdminRouteGroupArea `json:"area,omitempty"`
+}
+
 type AdminRouteGroupDetail struct {
 	Group   *models.TrackRouteGroup      `json:"group"`
+	Area    *AdminRouteGroupArea         `json:"area,omitempty"`
 	Members []*AdminRouteGroupMemberView `json:"members"`
 }
 
@@ -52,7 +69,7 @@ type routeGroupCluster struct {
 }
 
 func NewTrackRouteGroupService(repo repository.TrackMapRepository) *TrackRouteGroupService {
-	return &TrackRouteGroupService{repo: repo}
+	return &TrackRouteGroupService{repo: repo, areas: maparea.DefaultCatalog()}
 }
 
 func (s *TrackRouteGroupService) ListRouteGroups(ctx context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackRouteGroup, error) {
@@ -62,11 +79,25 @@ func (s *TrackRouteGroupService) ListRouteGroups(ctx context.Context, filter mod
 	return s.repo.ListRouteGroups(ctx, filter)
 }
 
-func (s *TrackRouteGroupService) ListRouteGroupSummaries(ctx context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackRouteGroup, error) {
+func (s *TrackRouteGroupService) ListRouteGroupSummaries(ctx context.Context, filter models.TrackMapQueryFilter) ([]*AdminRouteGroupSummary, error) {
 	if s == nil || s.repo == nil {
 		return nil, fmt.Errorf("track route group service is not configured")
 	}
-	return s.repo.ListRouteGroupSummaries(ctx, filter)
+	groups, err := s.repo.ListRouteGroupSummaries(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]*AdminRouteGroupSummary, 0, len(groups))
+	for _, group := range groups {
+		if group == nil {
+			continue
+		}
+		items = append(items, &AdminRouteGroupSummary{
+			TrackRouteGroup: group,
+			Area:            s.adminRouteGroupArea(group.AreaID),
+		})
+	}
+	return items, nil
 }
 
 func (s *TrackRouteGroupService) GetRouteGroupDetail(ctx context.Context, groupID string, limit int) (*AdminRouteGroupDetail, error) {
@@ -99,7 +130,29 @@ func (s *TrackRouteGroupService) GetRouteGroupDetail(ctx context.Context, groupI
 		}
 		views = append(views, view)
 	}
-	return &AdminRouteGroupDetail{Group: group, Members: views}, nil
+	return &AdminRouteGroupDetail{Group: group, Area: s.adminRouteGroupArea(group.AreaID), Members: views}, nil
+}
+
+func (s *TrackRouteGroupService) adminRouteGroupArea(areaID string) *AdminRouteGroupArea {
+	areaID = strings.TrimSpace(areaID)
+	if s == nil || s.areas == nil || areaID == "" {
+		return nil
+	}
+	area := s.areas.Find(areaID)
+	if area == nil {
+		return nil
+	}
+	result := &AdminRouteGroupArea{
+		ID:       area.ID,
+		Name:     area.Name(),
+		Type:     area.Type,
+		CityCode: area.CityCode,
+		CityName: config.CityNameByCode(area.CityCode),
+	}
+	if area.HasIntroduction() {
+		result.IntroductionURL = mapAreaIntroductionURL(area.ID, area.ContentVersion)
+	}
+	return result
 }
 
 func (s *TrackRouteGroupService) RenameRouteGroup(ctx context.Context, groupID, name string) (*models.TrackRouteGroup, error) {
@@ -335,6 +388,7 @@ func (s *TrackRouteGroupService) rebuildRouteGroupBounds(ctx context.Context, gr
 	group.CityCodes = compactCityCodes(cityCodes)
 	group.CenterLat = sumLat / float64(validCount)
 	group.CenterLng = sumLng / float64(validCount)
+	s.assignRouteGroupArea(group)
 	for _, index := range indexes {
 		radiusM = math.Max(radiusM, routeGroupCoverageRadiusM(group.CenterLat, group.CenterLng, index))
 	}
@@ -392,10 +446,27 @@ func (s *TrackRouteGroupService) RunOnce(ctx context.Context) (*TrackRouteGroupR
 		result.Merged++
 	}
 	groups, members := flattenRouteGroupClusters(clusters)
+	for _, group := range groups {
+		s.assignRouteGroupArea(group)
+	}
 	if err := s.repo.ReplaceRouteGroups(ctx, groups, members); err != nil {
 		return result, err
 	}
 	return result, nil
+}
+
+func (s *TrackRouteGroupService) assignRouteGroupArea(group *models.TrackRouteGroup) {
+	if group == nil {
+		return
+	}
+	group.AreaID = ""
+	if s == nil || s.areas == nil {
+		return
+	}
+	area := s.areas.Resolve(group.CenterLat, group.CenterLng)
+	if area != nil {
+		group.AreaID = area.ID
+	}
 }
 
 func bestSpatialCluster(clusters []*routeGroupCluster, index *models.TrackGeoIndex) *routeGroupCluster {

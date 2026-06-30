@@ -11,15 +11,15 @@
 
 区县基线当前覆盖 36 个重点城市、194 个核心区县：北京、天津、石家庄、太原、沈阳、大连、长春、哈尔滨、上海、南京、无锡、苏州、杭州、宁波、合肥、福州、厦门、南昌、济南、青岛、郑州、武汉、长沙、广州、深圳、珠海、佛山、南宁、海口、重庆、成都、贵阳、昆明、西安、兰州、乌鲁木齐。
 
-行政区边界基线来自 DataV.GeoAtlas `areas_v3` 与官方文档保留的 `areas/bound` 区县 GeoJSON，`districts.json` 保存根据 GeoJSON 计算出的 GCJ-02 边界框，并逐条记录实际来源；上线使用前应由数据负责人确认数据授权、版本与目标地图 SDK 坐标口径。
+行政区边界基线来自 DataV.GeoAtlas `areas_v3` 与官方文档保留的 `areas/bound` 区县 GeoJSON，`districts.json` 保存 GCJ-02 `Polygon` / `MultiPolygon` 及其预计算边界框，并逐条记录实际来源；上线使用前应由数据负责人确认数据授权、版本与目标地图 SDK 坐标口径。
 
 ## 更新步骤
 
 1. 从已确认的数据源获取城市下属区县 GeoJSON。
 2. 根据产品覆盖范围选择区县 adcode。
-3. 从每个 Polygon/MultiPolygon 的全部坐标计算 `bounds`，生成 `districts.json`，同步更新 `data_version`。
-4. 对需要精修的区县，在 `catalog.json` 增加同 ID 条目覆盖生成内容；不要修改已经发布的 ID。
-5. 景区仅在人工确认边界和介绍内容后加入 `catalog.json`，优先级应高于区县。
+3. 保留每个区县的 `Polygon` / `MultiPolygon`，从全部坐标预计算 `bounds`，生成 `districts.json`，同步更新 `data_version`。
+4. 对需要精修的区县，在 `catalog.json` 增加同 ID 条目覆盖生成内容；不要修改已经发布的 ID。人工条目未提供 `geometry` 时会继承同 ID 生成区县的 geometry。
+5. 景区仅在人工确认边界和介绍内容后加入 `catalog.json`，优先级应高于区县；暂未提供 geometry 的人工景区按 `bounds` 兜底匹配。
 6. 执行：
 
    ```bash
@@ -29,4 +29,4 @@
 
 7. 使用区县内部、相邻区县边界、景区内部和景区外部坐标做人工抽查。
 
-当前匹配依据是区域边界框，重点城市继续扩容前应优先升级为 Polygon/MultiPolygon 点包含判断，减少相邻区县边界框重叠产生的误标。
+`track_route_group` 离线任务生成 RouteGroup 后，先用 `bounds` 快速预筛，再用 `Polygon` / `MultiPolygon` 对 RouteGroup 中心做最终点包含判断，并把稳定 ID 写入 `track_route_groups.area_id`；MultiPolygon 的离散区域和 Polygon 内洞均按 GeoJSON 语义处理。geometry 不存在时才按 `bounds` 兜底，未命中时 `area_id` 保持为空。`/track-map/view` 请求只按已存 `area_id` 查询目录详情，不再执行点包含计算；空 `area_id` 继续使用原网格数量气泡。

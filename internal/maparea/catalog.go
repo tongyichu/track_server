@@ -48,6 +48,7 @@ type Definition struct {
 	CityNameEnglish string           `json:"city_name_en"`
 	Priority        int              `json:"priority"`
 	Bounds          Bounds           `json:"bounds"`
+	Geometry        *Geometry        `json:"geometry,omitempty"`
 	Chinese         LocalizedContent `json:"zh"`
 	English         LocalizedContent `json:"en"`
 	Source          string           `json:"source"`
@@ -57,15 +58,16 @@ type Definition struct {
 // DistrictDefinition is a compact generated district record. Its introduction
 // copy is expanded from a stable template while parsing the catalog.
 type DistrictDefinition struct {
-	ID              string `json:"id"`
-	CityCode        string `json:"city_code"`
-	CityNameEnglish string `json:"city_name_en"`
-	Name            string `json:"name"`
-	NameEnglish     string `json:"name_en"`
-	Priority        int    `json:"priority"`
-	Bounds          Bounds `json:"bounds"`
-	Source          string `json:"source"`
-	ContentVersion  string `json:"content_version"`
+	ID              string    `json:"id"`
+	CityCode        string    `json:"city_code"`
+	CityNameEnglish string    `json:"city_name_en"`
+	Name            string    `json:"name"`
+	NameEnglish     string    `json:"name_en"`
+	Priority        int       `json:"priority"`
+	Bounds          Bounds    `json:"bounds"`
+	Geometry        *Geometry `json:"geometry,omitempty"`
+	Source          string    `json:"source"`
+	ContentVersion  string    `json:"content_version"`
 }
 
 func (d Definition) Name() string {
@@ -166,6 +168,11 @@ func ParseCatalogFiles(raw, districtsRaw []byte) (*Catalog, error) {
 		manualIDs[area.ID] = struct{}{}
 		// Manually curated entries intentionally override generated districts
 		// with the same stable ID (for example richer copy or tighter bounds).
+		// If the override only changes copy or metadata, retain the generated
+		// geometry so it does not silently fall back to bounding-box matching.
+		if generated, exists := catalog.byID[area.ID]; exists && area.Geometry == nil {
+			area.Geometry = generated.Geometry
+		}
 		catalog.byID[area.ID] = area
 	}
 	for _, area := range catalog.byID {
@@ -184,6 +191,11 @@ func normalizeDefinition(area Definition) (Definition, error) {
 	area.ID = strings.TrimSpace(area.ID)
 	area.Type = strings.TrimSpace(area.Type)
 	area.CityCode = strings.TrimSpace(area.CityCode)
+	if area.Geometry != nil {
+		if err := area.Geometry.prepare(); err != nil {
+			return Definition{}, fmt.Errorf("area %q has invalid geometry: %w", area.ID, err)
+		}
+	}
 	if err := validateDefinition(area); err != nil {
 		return Definition{}, err
 	}
@@ -202,6 +214,7 @@ func (d DistrictDefinition) definition() Definition {
 		CityNameEnglish: d.CityNameEnglish,
 		Priority:        d.Priority,
 		Bounds:          d.Bounds,
+		Geometry:        d.Geometry,
 		Chinese: LocalizedContent{
 			Name:       d.Name,
 			Summary:    fmt.Sprintf("%s收录城市街区、公园绿道与周边户外路线，可结合运动类型、距离和路线详情选择合适线路。", d.Name),
@@ -247,10 +260,14 @@ func (c *Catalog) Resolve(latitude, longitude float64) *Definition {
 		return nil
 	}
 	for i := range c.areas {
-		if c.areas[i].Bounds.contains(latitude, longitude) {
-			area := c.areas[i]
-			return &area
+		if !c.areas[i].Bounds.contains(latitude, longitude) {
+			continue
 		}
+		if c.areas[i].Geometry != nil && !c.areas[i].Geometry.contains(latitude, longitude) {
+			continue
+		}
+		area := c.areas[i]
+		return &area
 	}
 	return nil
 }

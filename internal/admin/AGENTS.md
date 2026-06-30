@@ -14,7 +14,7 @@
 - 查看和处理用户意见反馈（含图片预览、状态更新、用户可见反馈意见）。
 - 查看埋点 OSS 同步摘要（任务状态、文件列表、OSS key、字节数、耗时与错误）。
 - 在用户管理页查看、创建和解除账号限制；账号限制会由业务侧中间件拦截上传、发起同行、关注、收藏、修改资料等动作。
-- 查看和人工运营路线发现 RouteGroup（改名、合并、移除成员、指定代表轨迹）。
+- 查看和人工运营路线发现 RouteGroup（展示离线 `area_id` 对应的区域名称、类型与介绍页，支持改名、合并、移除成员、指定代表轨迹）。
 - 查看、修正和删除用户轨迹；列表展示 `track_screenshot_url` 缩略图，OSS 截图需先经共享截图缓存落盘再通过后台静态代理访问；修正仅允许改 `title` / `city_code`，删除为软删除，并同步清理收藏关系与首页地图索引/路线组成员。
 
 模块对外只暴露 `admin.NewModule(...)` 与 `Module.RegisterRoutes(h)`，不被业务 handler 引用。
@@ -88,8 +88,8 @@ internal/admin/
 | PUT | `/admin/api/feedbacks/:feedback_id/status` | 鉴权 | 更新反馈处理状态与用户可见 `reply`；`resolved` 时 `reply` 必填 |
 | GET | `/admin/api/feedbacks/:feedback_id/images/:image_id` | 鉴权 | 读取反馈图片 |
 | GET | `/admin/api/analytics/sync-summaries` | 鉴权 | 埋点 OSS 同步摘要列表，支持 `status` / `limit` / `offset` |
-| GET | `/admin/api/route-groups` | 鉴权 | 路线组列表，支持 `track_type` / `city_code` / `limit` |
-| GET | `/admin/api/route-groups/:group_id` | 鉴权 | 路线组详情与成员轨迹 |
+| GET | `/admin/api/route-groups` | 鉴权 | 路线组列表，支持 `track_type` / `city_code` / `limit`；返回 `area_id` 及目录区域摘要 |
+| GET | `/admin/api/route-groups/:group_id` | 鉴权 | 路线组详情、`area_id` 对应区域信息与成员轨迹 |
 | PUT | `/admin/api/route-groups/:group_id/name` | 鉴权 | 人工改名 |
 | POST | `/admin/api/route-groups/:group_id/merge` | 鉴权 | 将 `source_group_id` 合并到当前路线组，并归档源路线组 |
 | DELETE | `/admin/api/route-groups/:group_id/members/:track_id` | 鉴权 | 从路线组移除成员轨迹 |
@@ -160,6 +160,7 @@ GET /admin/api/users
 [admin UI] /admin/route_groups.html
   → GET /admin/api/route-groups?track_type=&city_code=
   → GET /admin/api/route-groups/:group_id 查看成员轨迹与 geo index
+  → TrackRouteGroupService 按已存 area_id 补区域名称、类型、城市与介绍页链接
   → PUT /admin/api/route-groups/:group_id/name {name}
   → POST /admin/api/route-groups/:group_id/merge {source_group_id}
   → DELETE /admin/api/route-groups/:group_id/members/:track_id
@@ -167,7 +168,7 @@ GET /admin/api/users
        → TrackRouteGroupService 校验运动类型、成员关系与代表轨迹
        → TrackMapRepository 更新 track_route_groups / track_route_group_members
 ```
-路线组列表页只展示摘要信息；代表轨迹只用于封面/运营参考，RouteGroup 不再保存或下发代表折线，客户端用聚合中心点与 `radius_m` 画区域。
+路线组列表页展示路线组摘要及离线 `area_id` 对应的区域摘要，详情页展示同样的区域信息与介绍页入口；不得在 admin 请求链路重新做 Polygon/MultiPolygon 匹配。代表轨迹只用于封面/运营参考，RouteGroup 不再保存或下发代表折线，客户端用聚合中心点与 `radius_m` 画区域。
 
 **管理轨迹**：
 ```
@@ -204,7 +205,7 @@ GET /admin/api/users
 ## 提交前最小检查
 
 - 构建：`go build ./...`
-- 测试：`go test ./...`（admin 模块当前暂无单测，至少保证业务包不被破坏）
+- 测试：`go test ./internal/admin ./internal/service`，提交前再执行 `go test ./...`
 - 路由变更：核对 `routes.go` 与 `static/*.js` 中前端 fetch 的 URL 是否一致。
 - 静态资源新增：确认文件位于 `internal/admin/static/` 下（`go:embed static` 才能打包）。
 - 接口契约变更：同步更新仓库根目录 `track_api.md`（如涉及客户端能感知的接口）。

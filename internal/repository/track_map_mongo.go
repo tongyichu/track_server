@@ -741,12 +741,13 @@ func (r *MongoTrackMapRepository) CountRouteGroupsByArea(ctx context.Context, fi
 	}
 	accs := make(map[string]*trackMapClusterAcc)
 	for _, group := range groups {
-		key := trackMapAreaClusterKey(group.CenterLat, group.CenterLng)
+		key, areaID := trackMapRouteGroupAreaClusterKey(group)
 		a := accs[key]
 		if a == nil {
 			a = &trackMapClusterAcc{}
 			accs[key] = a
 		}
+		a.areaID = areaID
 		a.addRouteGroup(group)
 	}
 	return sortedClusterItems(accs, "area_cluster", filter.TrackType, filter.Limit), nil
