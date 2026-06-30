@@ -389,7 +389,7 @@ track_type=hiking
 
 - `route_count` 表示符合当前 `track_type` 的 RouteGroup 数量。
 - `route_count` 不表示用户数，也不表示具体 Track 数量。
-- 区域聚合中心命中内置 GCJ-02 区域目录时，返回可选的 `name`、`area_type`、`area`、`city_code`、`city_name`。生成区县基线当前覆盖 16 个重点城市的 90 个核心区县，`catalog.json` 中的人工景区/区县条目可按稳定 ID 覆盖基线；景区匹配优先于区县，同优先级选择范围更小的区域，未命中时保持原数量气泡响应。
+- 区域聚合中心命中内置 GCJ-02 区域目录时，返回可选的 `name`、`area_type`、`area`、`city_code`、`city_name`。生成区县基线当前覆盖 36 个重点城市的 194 个核心区县，`catalog.json` 中的人工景区/区县条目可按稳定 ID 覆盖基线；景区匹配优先于区县，同优先级选择范围更小的区域，未命中时保持原数量气泡响应。
 - `area.id` 是稳定区域 ID；有介绍内容时，公开的 `area.introduction_url` 可由客户端 WebView 打开，支持 `lang=english` 和 `is_dark=true`。
 - 客户端点击 `city_cluster` 或 `area_cluster` 后，只需要放大地图并重新请求 `/track-map/view`。
 - 客户端点击 `route_group` 后，请求路线组详情或具体轨迹列表。

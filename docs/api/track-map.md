@@ -141,7 +141,7 @@ GET /api/v1/track-map/view?latitude=22.3000&longitude=114.1700&radius_m=10000&tr
 - `route_count` 是 RouteGroup 数量，不是用户数，也不是具体轨迹数。
 - `area_cluster` 命中内置区域目录时会额外返回 `name`、`area_type`、`area`、`city_code`、`city_name`；`area_type` 当前为 `scenic_spot`（景区）或 `district`（区县）。
 - `area.id` 是稳定区域 ID，不等同于随网格变化的 `cluster_id`；存在介绍内容时 `area.introduction_url` 指向公开 H5 页面。
-- 区域目录使用 GCJ-02 边界框，并按“景区优先于区县、同优先级选择更小区域”的规则匹配聚合中心。当前区县基线覆盖北京、天津、上海、重庆、广州、深圳、杭州、南京、成都、武汉、西安、苏州、厦门、青岛、长沙、昆明 16 个重点城市的 90 个核心区县；未命中时省略上述可选字段，客户端继续只展示路线数量。
+- 区域目录使用 GCJ-02 边界框，并按“景区优先于区县、同优先级选择更小区域”的规则匹配聚合中心。当前区县基线覆盖 36 个重点城市的 194 个核心区县，完整清单见 `internal/maparea/README.md`；未命中时省略上述可选字段，客户端继续只展示路线数量。
 - 点击 `city_cluster` / `area_cluster` 后，客户端放大地图并重新请求本接口。
 - 点击 `route_group` 后，请求路线组详情或路线组轨迹列表。
 

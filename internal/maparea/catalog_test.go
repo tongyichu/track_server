@@ -37,15 +37,21 @@ func TestDefaultCatalogResolveUnknown(t *testing.T) {
 
 func TestDefaultCatalogIncludesMajorCityDistricts(t *testing.T) {
 	catalog := DefaultCatalog()
-	if len(catalog.byID) != 91 {
-		t.Fatalf("catalog has %d areas, want 91", len(catalog.byID))
+	if len(catalog.byID) != 195 {
+		t.Fatalf("catalog has %d areas, want 195", len(catalog.byID))
 	}
 	for _, id := range []string{
 		"district-110101",
+		"district-130102",
+		"district-210102",
 		"district-310101",
+		"district-340102",
+		"district-370102",
 		"district-440304",
+		"district-450103",
 		"district-510104",
 		"district-610113",
+		"district-650102",
 	} {
 		area := catalog.Find(id)
 		if area == nil || area.Type != TypeDistrict || !area.HasIntroduction() {
@@ -62,8 +68,8 @@ func TestEmbeddedDistrictCatalogMetadata(t *testing.T) {
 	if file.CoordinateSystem != "GCJ02" || file.DataVersion == "" || file.Source == "" {
 		t.Fatalf("missing district metadata: %+v", file)
 	}
-	if len(file.Districts) != 90 {
-		t.Fatalf("district count=%d, want 90", len(file.Districts))
+	if len(file.Districts) != 194 {
+		t.Fatalf("district count=%d, want 194", len(file.Districts))
 	}
 	cities := make(map[string]struct{})
 	ids := make(map[string]struct{}, len(file.Districts))
@@ -83,8 +89,8 @@ func TestEmbeddedDistrictCatalogMetadata(t *testing.T) {
 			t.Fatalf("invalid bounds for %s: %+v", district.ID, district.Bounds)
 		}
 	}
-	if len(cities) != 16 {
-		t.Fatalf("city count=%d, want 16", len(cities))
+	if len(cities) != 36 {
+		t.Fatalf("city count=%d, want 36", len(cities))
 	}
 }
 
