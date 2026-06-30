@@ -1,0 +1,59 @@
+{
+  "coordinate_system": "GCJ02",
+  "areas": [
+    {
+      "id": "scenic-west-lake",
+      "type": "scenic_spot",
+      "city_code": "330100",
+      "city_name_en": "Hangzhou",
+      "priority": 200,
+      "bounds": {
+        "min_latitude": 30.203,
+        "min_longitude": 120.091,
+        "max_latitude": 30.292,
+        "max_longitude": 120.177
+      },
+      "zh": {
+        "name": "西湖景区",
+        "summary": "西湖景区以湖泊、堤岸和周边山地步道为核心，适合结合路线难度选择步行、跑步等户外活动。",
+        "highlights": ["湖滨与堤岸路线", "周边山地与林间步道", "可按体力选择不同距离的路线"],
+        "tips": ["出发前确认天气、开放区域和路线状态", "节假日及热门时段注意避开拥挤路段", "长距离活动请准备饮水并合理安排返程时间"]
+      },
+      "en": {
+        "name": "West Lake Scenic Area",
+        "summary": "West Lake Scenic Area combines lakeside paths, causeways, and nearby hill trails for walking, running, and other outdoor activities of varying difficulty.",
+        "highlights": ["Lakeside and causeway routes", "Hill and woodland trails", "Routes with a range of distances"],
+        "tips": ["Check weather, access notices, and route conditions before departure", "Avoid crowded sections during holidays and peak hours", "Carry water and plan your return for longer routes"]
+      },
+      "source": "manual",
+      "content_version": "1"
+    },
+    {
+      "id": "district-330106",
+      "type": "district",
+      "city_code": "330100",
+      "city_name_en": "Hangzhou",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 30.078269,
+        "min_longitude": 119.996332,
+        "max_latitude": 30.355446,
+        "max_longitude": 120.182953
+      },
+      "zh": {
+        "name": "西湖区",
+        "summary": "西湖区拥有湖滨、丘陵、村落和城市绿道等多种路线环境，可根据运动类型与距离筛选合适路线。",
+        "highlights": ["湖滨与城市绿道", "丘陵和茶园周边路线", "适合多种距离和运动类型"],
+        "tips": ["山区路线注意坡度和路面变化", "进入景区、村落或保护区域时遵守现场规定", "请根据天气和个人体力选择路线"]
+      },
+      "en": {
+        "name": "Xihu District",
+        "summary": "Xihu District offers lakeside paths, hills, villages, and urban greenways, with routes suited to different activities and distances.",
+        "highlights": ["Lakeside paths and urban greenways", "Hill and tea-field routes", "Options for different distances and activities"],
+        "tips": ["Watch for steep or changing surfaces on hill routes", "Follow local notices in scenic, village, and protected areas", "Choose routes according to weather and personal fitness"]
+      },
+      "source": "manual+DataV.GeoAtlas",
+      "content_version": "1"
+    }
+  ]
+}

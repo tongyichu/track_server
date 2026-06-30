@@ -331,17 +331,25 @@ track_type=hiking
   "items": [
     {
       "type": "area_cluster",
-      "cluster_id": "cell_810000_11420_2235",
+      "cluster_id": "cell_30.2_120.1",
+      "name": "西湖景区",
+      "area_type": "scenic_spot",
+      "area": {
+        "id": "scenic-west-lake",
+        "introduction_url": "/api/v1/track-map/areas/scenic-west-lake/introduction.html?v=1"
+      },
+      "city_code": "330100",
+      "city_name": "杭州市",
       "track_type": "hiking",
       "center": {
-        "latitude": 22.3500,
-        "longitude": 114.2000
+        "latitude": 30.2500,
+        "longitude": 120.1400
       },
       "bbox": {
-        "min_latitude": 22.3000,
-        "min_longitude": 114.1500,
-        "max_latitude": 22.4000,
-        "max_longitude": 114.2500
+        "min_latitude": 30.2000,
+        "min_longitude": 120.1000,
+        "max_latitude": 30.3000,
+        "max_longitude": 120.2000
       },
       "route_count": 18
     }
@@ -381,6 +389,8 @@ track_type=hiking
 
 - `route_count` 表示符合当前 `track_type` 的 RouteGroup 数量。
 - `route_count` 不表示用户数，也不表示具体 Track 数量。
+- 区域聚合中心命中内置 GCJ-02 区域目录时，返回可选的 `name`、`area_type`、`area`、`city_code`、`city_name`。生成区县基线当前覆盖 16 个重点城市的 90 个核心区县，`catalog.json` 中的人工景区/区县条目可按稳定 ID 覆盖基线；景区匹配优先于区县，同优先级选择范围更小的区域，未命中时保持原数量气泡响应。
+- `area.id` 是稳定区域 ID；有介绍内容时，公开的 `area.introduction_url` 可由客户端 WebView 打开，支持 `lang=english` 和 `is_dark=true`。
 - 客户端点击 `city_cluster` 或 `area_cluster` 后，只需要放大地图并重新请求 `/track-map/view`。
 - 客户端点击 `route_group` 后，请求路线组详情或具体轨迹列表。
 
@@ -840,7 +850,7 @@ RouteGroup 是路线聚合入口，不展示用户实时位置。
 
 当前落地实现已涉及：
 
-- 新增 HTTP 路由：`/track-map/view`、`/track-map/groups`、`/track-map/groups/:group_id/detail`、`/track-map/groups/:group_id/tracks`。
+- 新增 HTTP 路由：`/track-map/view`、`/track-map/groups`、`/track-map/groups/:group_id/detail`、`/track-map/groups/:group_id/tracks`、公开的 `/track-map/areas/:area_id/introduction.html`。
 - 新增模型：TrackGeoIndex、TrackMapIndexJob、地图视野响应模型。
 - 新增模型：TrackRouteGroup、TrackRouteGroupMember。
 - 新增 repository interface 与 MySQL / Mongo / memory 三套实现。
@@ -848,6 +858,7 @@ RouteGroup 是路线聚合入口，不展示用户实时位置。
 - 新增轨迹完成后的索引构建流程。
 - 新增路线组离线聚合任务 `track_route_group`，默认每天 04:00。
 - 新增管理中心聚合路线运营页，支持查看 RouteGroup、改名、合并、移除成员、指定代表轨迹。
+- 新增内置地图区域目录：按 GCJ-02 边界框为区域聚合补充景区/区县语义，并提供统一的双语、明暗主题介绍 H5。
 - 更新 `track_api.md` 与 `docs/api/track-map.md`。
 - 更新 `AGENTS.md`。
 

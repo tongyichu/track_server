@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/tongyichu/track_server/internal/config"
+	"github.com/tongyichu/track_server/internal/maparea"
 	"github.com/tongyichu/track_server/internal/models"
 	"github.com/tongyichu/track_server/internal/repository"
 )
@@ -30,6 +32,7 @@ type TrackMapService struct {
 	maps     repository.TrackMapRepository
 	tracks   repository.TrackRepository
 	trackSvc *TrackService
+	areas    *maparea.Catalog
 }
 
 type TrackMapViewInput struct {
@@ -48,7 +51,7 @@ type TrackMapGroupTracksInput struct {
 }
 
 func NewTrackMapService(maps repository.TrackMapRepository, tracks repository.TrackRepository, trackSvc *TrackService) *TrackMapService {
-	return &TrackMapService{maps: maps, tracks: tracks, trackSvc: trackSvc}
+	return &TrackMapService{maps: maps, tracks: tracks, trackSvc: trackSvc, areas: maparea.DefaultCatalog()}
 }
 
 func (s *TrackMapService) View(ctx context.Context, input TrackMapViewInput) (*models.TrackMapViewResponse, error) {
@@ -69,6 +72,7 @@ func (s *TrackMapService) View(ctx context.Context, input TrackMapViewInput) (*m
 		if err != nil {
 			return nil, err
 		}
+		s.decorateAreaClusters(items)
 		return &models.TrackMapViewResponse{ViewLevel: trackMapViewArea, CoordinateSystem: "GCJ02", Items: items}, nil
 	default:
 		items, err := s.ListGroups(ctx, input)
@@ -409,4 +413,36 @@ func (s *TrackMapService) decorateClusters(items []*models.TrackMapClusterItem) 
 		}
 		item.CityName = config.CityNameByCode(item.CityCode)
 	}
+}
+
+func (s *TrackMapService) decorateAreaClusters(items []*models.TrackMapClusterItem) {
+	if s == nil || s.areas == nil {
+		return
+	}
+	for _, item := range items {
+		if item == nil {
+			continue
+		}
+		area := s.areas.Resolve(item.Center.Latitude, item.Center.Longitude)
+		if area == nil {
+			continue
+		}
+		item.Name = area.Name()
+		item.AreaType = area.Type
+		item.CityCode = area.CityCode
+		item.CityName = config.CityNameByCode(area.CityCode)
+		ref := &models.TrackMapAreaReference{ID: area.ID}
+		if area.HasIntroduction() {
+			ref.IntroductionURL = mapAreaIntroductionURL(area.ID, area.ContentVersion)
+		}
+		item.Area = ref
+	}
+}
+
+func mapAreaIntroductionURL(areaID, version string) string {
+	path := "/api/v1/track-map/areas/" + url.PathEscape(strings.TrimSpace(areaID)) + "/introduction.html"
+	if version == "" {
+		return path
+	}
+	return path + "?v=" + url.QueryEscape(version)
 }

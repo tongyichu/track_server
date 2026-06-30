@@ -1,0 +1,1447 @@
+{
+  "coordinate_system": "GCJ02",
+  "data_version": "2026-06-30",
+  "source": "DataV.GeoAtlas areas_v3",
+  "districts": [
+    {
+      "id": "district-110101",
+      "city_code": "110000",
+      "city_name_en": "Beijing",
+      "name": "东城区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 39.858682,
+        "min_longitude": 116.38059,
+        "max_latitude": 39.973995,
+        "max_longitude": 116.450939
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-110102",
+      "city_code": "110000",
+      "city_name_en": "Beijing",
+      "name": "西城区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 39.86869,
+        "min_longitude": 116.320759,
+        "max_latitude": 39.972858,
+        "max_longitude": 116.399474
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-110105",
+      "city_code": "110000",
+      "city_name_en": "Beijing",
+      "name": "朝阳区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 39.809772,
+        "min_longitude": 116.350873,
+        "max_latitude": 40.107815,
+        "max_longitude": 116.645277
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-110108",
+      "city_code": "110000",
+      "city_name_en": "Beijing",
+      "name": "海淀区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 39.886833,
+        "min_longitude": 116.048878,
+        "max_latitude": 40.160984,
+        "max_longitude": 116.395103
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-120101",
+      "city_code": "120000",
+      "city_name_en": "Tianjin",
+      "name": "和平区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 39.10095,
+        "min_longitude": 117.17929,
+        "max_latitude": 39.137091,
+        "max_longitude": 117.222503
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-120102",
+      "city_code": "120000",
+      "city_name_en": "Tianjin",
+      "name": "河东区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 39.079803,
+        "min_longitude": 117.20351,
+        "max_latitude": 39.162991,
+        "max_longitude": 117.30966
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-120103",
+      "city_code": "120000",
+      "city_name_en": "Tianjin",
+      "name": "河西区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 39.033377,
+        "min_longitude": 117.17929,
+        "max_latitude": 39.117489,
+        "max_longitude": 117.292446
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-120104",
+      "city_code": "120000",
+      "city_name_en": "Tianjin",
+      "name": "南开区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 39.061448,
+        "min_longitude": 117.109768,
+        "max_latitude": 39.15224,
+        "max_longitude": 117.194441
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-120105",
+      "city_code": "120000",
+      "city_name_en": "Tianjin",
+      "name": "河北区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 39.130495,
+        "min_longitude": 117.167547,
+        "max_latitude": 39.193054,
+        "max_longitude": 117.260624
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-120106",
+      "city_code": "120000",
+      "city_name_en": "Tianjin",
+      "name": "红桥区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 39.14159,
+        "min_longitude": 117.125611,
+        "max_latitude": 39.203458,
+        "max_longitude": 117.194441
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-310101",
+      "city_code": "310000",
+      "city_name_en": "Shanghai",
+      "name": "黄浦区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 31.187885,
+        "min_longitude": 121.456758,
+        "max_latitude": 31.244186,
+        "max_longitude": 121.509911
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-310104",
+      "city_code": "310000",
+      "city_name_en": "Shanghai",
+      "name": "徐汇区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 31.100755,
+        "min_longitude": 121.391508,
+        "max_latitude": 31.220196,
+        "max_longitude": 121.475987
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-310105",
+      "city_code": "310000",
+      "city_name_en": "Shanghai",
+      "name": "长宁区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 31.179436,
+        "min_longitude": 121.331806,
+        "max_latitude": 31.243863,
+        "max_longitude": 121.439462
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-310106",
+      "city_code": "310000",
+      "city_name_en": "Shanghai",
+      "name": "静安区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 31.214482,
+        "min_longitude": 121.418648,
+        "max_latitude": 31.321397,
+        "max_longitude": 121.482994
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-310107",
+      "city_code": "310000",
+      "city_name_en": "Shanghai",
+      "name": "普陀区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 31.218639,
+        "min_longitude": 121.326384,
+        "max_latitude": 31.302741,
+        "max_longitude": 121.451461
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-310109",
+      "city_code": "310000",
+      "city_name_en": "Shanghai",
+      "name": "虹口区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 31.241923,
+        "min_longitude": 121.460081,
+        "max_latitude": 31.316036,
+        "max_longitude": 121.517642
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-310110",
+      "city_code": "310000",
+      "city_name_en": "Shanghai",
+      "name": "杨浦区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 31.246953,
+        "min_longitude": 121.485413,
+        "max_latitude": 31.346797,
+        "max_longitude": 121.56953
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-320102",
+      "city_code": "320100",
+      "city_name_en": "Nanjing",
+      "name": "玄武区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 32.014842,
+        "min_longitude": 118.784096,
+        "max_latitude": 32.106036,
+        "max_longitude": 118.90834
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-320104",
+      "city_code": "320100",
+      "city_name_en": "Nanjing",
+      "name": "秦淮区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 31.974726,
+        "min_longitude": 118.764079,
+        "max_latitude": 32.042896,
+        "max_longitude": 118.880638
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-320105",
+      "city_code": "320100",
+      "city_name_en": "Nanjing",
+      "name": "建邺区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 31.955867,
+        "min_longitude": 118.653247,
+        "max_latitude": 32.092946,
+        "max_longitude": 118.768471
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-320106",
+      "city_code": "320100",
+      "city_name_en": "Nanjing",
+      "name": "鼓楼区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 32.029106,
+        "min_longitude": 118.718698,
+        "max_latitude": 32.132458,
+        "max_longitude": 118.806132
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-320111",
+      "city_code": "320100",
+      "city_name_en": "Nanjing",
+      "name": "浦口区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 31.841577,
+        "min_longitude": 118.363373,
+        "max_latitude": 32.251054,
+        "max_longitude": 118.776744
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-320113",
+      "city_code": "320100",
+      "city_name_en": "Nanjing",
+      "name": "栖霞区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 32.02599,
+        "min_longitude": 118.764747,
+        "max_latitude": 32.245156,
+        "max_longitude": 119.241663
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-320114",
+      "city_code": "320100",
+      "city_name_en": "Nanjing",
+      "name": "雨花台区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 31.866563,
+        "min_longitude": 118.593733,
+        "max_latitude": 32.013208,
+        "max_longitude": 118.813115
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-320505",
+      "city_code": "320500",
+      "city_name_en": "Suzhou",
+      "name": "虎丘区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 31.219915,
+        "min_longitude": 120.206593,
+        "max_latitude": 31.420612,
+        "max_longitude": 120.610033
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-320506",
+      "city_code": "320500",
+      "city_name_en": "Suzhou",
+      "name": "吴中区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 30.926134,
+        "min_longitude": 119.920013,
+        "max_latitude": 31.435871,
+        "max_longitude": 120.901376
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-320507",
+      "city_code": "320500",
+      "city_name_en": "Suzhou",
+      "name": "相城区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 31.335554,
+        "min_longitude": 120.317586,
+        "max_latitude": 31.550846,
+        "max_longitude": 120.830333
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-320508",
+      "city_code": "320500",
+      "city_name_en": "Suzhou",
+      "name": "姑苏区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 31.259539,
+        "min_longitude": 120.528636,
+        "max_latitude": 31.379136,
+        "max_longitude": 120.655138
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-320509",
+      "city_code": "320500",
+      "city_name_en": "Suzhou",
+      "name": "吴江区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 30.75797,
+        "min_longitude": 120.356926,
+        "max_latitude": 31.229826,
+        "max_longitude": 120.90473
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-330102",
+      "city_code": "330100",
+      "city_name_en": "Hangzhou",
+      "name": "上城区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 30.19284,
+        "min_longitude": 120.1371,
+        "max_latitude": 30.393544,
+        "max_longitude": 120.295505
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-330105",
+      "city_code": "330100",
+      "city_name_en": "Hangzhou",
+      "name": "拱墅区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 30.257783,
+        "min_longitude": 120.085779,
+        "max_latitude": 30.396148,
+        "max_longitude": 120.221294
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-330106",
+      "city_code": "330100",
+      "city_name_en": "Hangzhou",
+      "name": "西湖区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 30.078269,
+        "min_longitude": 119.996332,
+        "max_latitude": 30.355446,
+        "max_longitude": 120.182953
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-330108",
+      "city_code": "330100",
+      "city_name_en": "Hangzhou",
+      "name": "滨江区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 30.136375,
+        "min_longitude": 120.124596,
+        "max_latitude": 30.23766,
+        "max_longitude": 120.23684
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-330110",
+      "city_code": "330100",
+      "city_name_en": "Hangzhou",
+      "name": "余杭区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 30.158704,
+        "min_longitude": 119.681089,
+        "max_latitude": 30.566516,
+        "max_longitude": 120.150482
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-350203",
+      "city_code": "350200",
+      "city_name_en": "Xiamen",
+      "name": "思明区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 24.419686,
+        "min_longitude": 118.056345,
+        "max_latitude": 24.504795,
+        "max_longitude": 118.212105
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-350205",
+      "city_code": "350200",
+      "city_name_en": "Xiamen",
+      "name": "海沧区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 24.418307,
+        "min_longitude": 117.886012,
+        "max_latitude": 24.643436,
+        "max_longitude": 118.089642
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-350206",
+      "city_code": "350200",
+      "city_name_en": "Xiamen",
+      "name": "湖里区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 24.473949,
+        "min_longitude": 118.072161,
+        "max_latitude": 24.5618,
+        "max_longitude": 118.204454
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-350211",
+      "city_code": "350200",
+      "city_name_en": "Xiamen",
+      "name": "集美区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 24.53608,
+        "min_longitude": 117.941036,
+        "max_latitude": 24.750415,
+        "max_longitude": 118.150514
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-370202",
+      "city_code": "370200",
+      "city_name_en": "Qingdao",
+      "name": "市南区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 36.042182,
+        "min_longitude": 120.286117,
+        "max_latitude": 36.092223,
+        "max_longitude": 120.426658
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-370203",
+      "city_code": "370200",
+      "city_name_en": "Qingdao",
+      "name": "市北区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 36.068201,
+        "min_longitude": 120.305018,
+        "max_latitude": 36.160899,
+        "max_longitude": 120.434309
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-370211",
+      "city_code": "370200",
+      "city_name_en": "Qingdao",
+      "name": "黄岛区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 35.576062,
+        "min_longitude": 119.514841,
+        "max_latitude": 36.145483,
+        "max_longitude": 120.320038
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-370212",
+      "city_code": "370200",
+      "city_name_en": "Qingdao",
+      "name": "崂山区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 35.888432,
+        "min_longitude": 120.411017,
+        "max_latitude": 36.341494,
+        "max_longitude": 120.955088
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-370213",
+      "city_code": "370200",
+      "city_name_en": "Qingdao",
+      "name": "李沧区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 36.134357,
+        "min_longitude": 120.343439,
+        "max_latitude": 36.238436,
+        "max_longitude": 120.511275
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-420102",
+      "city_code": "420100",
+      "city_name_en": "Wuhan",
+      "name": "江岸区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 30.573438,
+        "min_longitude": 114.256998,
+        "max_latitude": 30.698807,
+        "max_longitude": 114.4028
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-420103",
+      "city_code": "420100",
+      "city_name_en": "Wuhan",
+      "name": "江汉区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 30.56353,
+        "min_longitude": 114.225279,
+        "max_latitude": 30.64163,
+        "max_longitude": 114.30368
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-420104",
+      "city_code": "420100",
+      "city_name_en": "Wuhan",
+      "name": "硚口区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 30.561007,
+        "min_longitude": 114.154234,
+        "max_latitude": 30.631672,
+        "max_longitude": 114.284853
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-420105",
+      "city_code": "420100",
+      "city_name_en": "Wuhan",
+      "name": "汉阳区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 30.453782,
+        "min_longitude": 114.124986,
+        "max_latitude": 30.604273,
+        "max_longitude": 114.298807
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-420106",
+      "city_code": "420100",
+      "city_name_en": "Wuhan",
+      "name": "武昌区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 30.3343,
+        "min_longitude": 114.260421,
+        "max_latitude": 30.627285,
+        "max_longitude": 114.420316
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-420107",
+      "city_code": "420100",
+      "city_name_en": "Wuhan",
+      "name": "青山区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 30.56753,
+        "min_longitude": 114.343764,
+        "max_latitude": 30.676856,
+        "max_longitude": 114.562749
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-420111",
+      "city_code": "420100",
+      "city_name_en": "Wuhan",
+      "name": "洪山区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 30.381898,
+        "min_longitude": 114.172868,
+        "max_latitude": 30.69349,
+        "max_longitude": 114.640971
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-430102",
+      "city_code": "430100",
+      "city_name_en": "Changsha",
+      "name": "芙蓉区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 28.17299,
+        "min_longitude": 112.976012,
+        "max_latitude": 28.223091,
+        "max_longitude": 113.110984
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-430103",
+      "city_code": "430100",
+      "city_name_en": "Changsha",
+      "name": "天心区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 27.965156,
+        "min_longitude": 112.927954,
+        "max_latitude": 28.195622,
+        "max_longitude": 113.041286
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-430104",
+      "city_code": "430100",
+      "city_name_en": "Changsha",
+      "name": "岳麓区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 27.971062,
+        "min_longitude": 112.612861,
+        "max_latitude": 28.275308,
+        "max_longitude": 112.971802
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-430105",
+      "city_code": "430100",
+      "city_name_en": "Changsha",
+      "name": "开福区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 28.195305,
+        "min_longitude": 112.907568,
+        "max_latitude": 28.390879,
+        "max_longitude": 113.082178
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-430111",
+      "city_code": "430100",
+      "city_name_en": "Changsha",
+      "name": "雨花区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 27.912706,
+        "min_longitude": 112.983982,
+        "max_latitude": 28.189655,
+        "max_longitude": 113.186736
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-440103",
+      "city_code": "440100",
+      "city_name_en": "Guangzhou",
+      "name": "荔湾区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 23.041862,
+        "min_longitude": 113.177412,
+        "max_latitude": 23.159608,
+        "max_longitude": 113.276885
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-440104",
+      "city_code": "440100",
+      "city_name_en": "Guangzhou",
+      "name": "越秀区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 23.105321,
+        "min_longitude": 113.24047,
+        "max_latitude": 23.168735,
+        "max_longitude": 113.323058
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-440105",
+      "city_code": "440100",
+      "city_name_en": "Guangzhou",
+      "name": "海珠区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 23.043638,
+        "min_longitude": 113.242078,
+        "max_latitude": 23.113726,
+        "max_longitude": 113.419711
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-440106",
+      "city_code": "440100",
+      "city_name_en": "Guangzhou",
+      "name": "天河区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 23.098121,
+        "min_longitude": 113.300974,
+        "max_latitude": 23.245566,
+        "max_longitude": 113.44804
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-440111",
+      "city_code": "440100",
+      "city_name_en": "Guangzhou",
+      "name": "白云区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 23.138046,
+        "min_longitude": 113.150018,
+        "max_latitude": 23.428662,
+        "max_longitude": 113.510163
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-440303",
+      "city_code": "440300",
+      "city_name_en": "Shenzhen",
+      "name": "罗湖区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 22.526975,
+        "min_longitude": 114.066304,
+        "max_latitude": 22.61619,
+        "max_longitude": 114.219967
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-440304",
+      "city_code": "440300",
+      "city_name_en": "Shenzhen",
+      "name": "福田区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 22.499623,
+        "min_longitude": 113.990547,
+        "max_latitude": 22.587533,
+        "max_longitude": 114.105173
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-440305",
+      "city_code": "440300",
+      "city_name_en": "Shenzhen",
+      "name": "南山区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 22.396343,
+        "min_longitude": 113.78628,
+        "max_latitude": 22.652477,
+        "max_longitude": 114.026417
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-440306",
+      "city_code": "440300",
+      "city_name_en": "Shenzhen",
+      "name": "宝安区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 22.526416,
+        "min_longitude": 113.751453,
+        "max_latitude": 22.861749,
+        "max_longitude": 113.980092
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-440307",
+      "city_code": "440300",
+      "city_name_en": "Shenzhen",
+      "name": "龙岗区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 22.438579,
+        "min_longitude": 114.050228,
+        "max_latitude": 22.813694,
+        "max_longitude": 114.628466
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-440308",
+      "city_code": "440300",
+      "city_name_en": "Shenzhen",
+      "name": "盐田区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 22.540044,
+        "min_longitude": 114.202882,
+        "max_latitude": 22.653831,
+        "max_longitude": 114.353519
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-440309",
+      "city_code": "440300",
+      "city_name_en": "Shenzhen",
+      "name": "龙华区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 22.580564,
+        "min_longitude": 113.96663,
+        "max_latitude": 22.77182,
+        "max_longitude": 114.113365
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-500103",
+      "city_code": "500000",
+      "city_name_en": "Chongqing",
+      "name": "渝中区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 29.52869,
+        "min_longitude": 106.482778,
+        "max_latitude": 29.571242,
+        "max_longitude": 106.589623
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-500105",
+      "city_code": "500000",
+      "city_name_en": "Chongqing",
+      "name": "江北区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 29.552369,
+        "min_longitude": 106.451942,
+        "max_latitude": 29.678599,
+        "max_longitude": 106.893659
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-500106",
+      "city_code": "500000",
+      "city_name_en": "Chongqing",
+      "name": "沙坪坝区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 29.492918,
+        "min_longitude": 106.251707,
+        "max_latitude": 29.750202,
+        "max_longitude": 106.494022
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-500107",
+      "city_code": "500000",
+      "city_name_en": "Chongqing",
+      "name": "九龙坡区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 29.254769,
+        "min_longitude": 106.253278,
+        "max_latitude": 29.559772,
+        "max_longitude": 106.552011
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-500108",
+      "city_code": "500000",
+      "city_name_en": "Chongqing",
+      "name": "南岸区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 29.458437,
+        "min_longitude": 106.532272,
+        "max_latitude": 29.615565,
+        "max_longitude": 106.801152
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-500112",
+      "city_code": "500000",
+      "city_name_en": "Chongqing",
+      "name": "渝北区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 29.573032,
+        "min_longitude": 106.45209,
+        "max_latitude": 30.124031,
+        "max_longitude": 106.98489
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-510104",
+      "city_code": "510100",
+      "city_name_en": "Chengdu",
+      "name": "锦江区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 30.546454,
+        "min_longitude": 104.059956,
+        "max_latitude": 30.670094,
+        "max_longitude": 104.171626
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-510105",
+      "city_code": "510100",
+      "city_name_en": "Chengdu",
+      "name": "青羊区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 30.647001,
+        "min_longitude": 103.896231,
+        "max_latitude": 30.723817,
+        "max_longitude": 104.089611
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-510106",
+      "city_code": "510100",
+      "city_name_en": "Chengdu",
+      "name": "金牛区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 30.663075,
+        "min_longitude": 103.944876,
+        "max_latitude": 30.806693,
+        "max_longitude": 104.139818
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-510107",
+      "city_code": "510100",
+      "city_name_en": "Chengdu",
+      "name": "武侯区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 30.529106,
+        "min_longitude": 103.947885,
+        "max_latitude": 30.664032,
+        "max_longitude": 104.09422
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-510108",
+      "city_code": "510100",
+      "city_name_en": "Chengdu",
+      "name": "成华区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 30.616665,
+        "min_longitude": 104.069688,
+        "max_latitude": 30.749328,
+        "max_longitude": 104.236251
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-510117",
+      "city_code": "510100",
+      "city_name_en": "Chengdu",
+      "name": "郫都区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 30.719185,
+        "min_longitude": 103.715821,
+        "max_latitude": 30.959902,
+        "max_longitude": 104.048566
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-530102",
+      "city_code": "530100",
+      "city_name_en": "Kunming",
+      "name": "五华区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 25.031459,
+        "min_longitude": 102.55894,
+        "max_latitude": 25.418427,
+        "max_longitude": 102.748406
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-530103",
+      "city_code": "530100",
+      "city_name_en": "Kunming",
+      "name": "盘龙区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 25.027542,
+        "min_longitude": 102.698004,
+        "max_latitude": 25.46017,
+        "max_longitude": 103.037282
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-530111",
+      "city_code": "530100",
+      "city_name_en": "Kunming",
+      "name": "官渡区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 24.881387,
+        "min_longitude": 102.655622,
+        "max_latitude": 25.25416,
+        "max_longitude": 103.048796
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-530112",
+      "city_code": "530100",
+      "city_name_en": "Kunming",
+      "name": "西山区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 24.733519,
+        "min_longitude": 102.351529,
+        "max_latitude": 25.211222,
+        "max_longitude": 102.739786
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-530114",
+      "city_code": "530100",
+      "city_name_en": "Kunming",
+      "name": "呈贡区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 24.69793,
+        "min_longitude": 102.70511,
+        "max_latitude": 24.990132,
+        "max_longitude": 103.001122
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-610102",
+      "city_code": "610100",
+      "city_name_en": "Xi’an",
+      "name": "新城区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 34.232939,
+        "min_longitude": 108.947252,
+        "max_latitude": 34.296815,
+        "max_longitude": 109.030966
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-610103",
+      "city_code": "610100",
+      "city_name_en": "Xi’an",
+      "name": "碑林区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 34.229519,
+        "min_longitude": 108.909475,
+        "max_latitude": 34.267929,
+        "max_longitude": 109.006336
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-610104",
+      "city_code": "610100",
+      "city_name_en": "Xi’an",
+      "name": "莲湖区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 34.239317,
+        "min_longitude": 108.853823,
+        "max_latitude": 34.292684,
+        "max_longitude": 108.953404
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-610112",
+      "city_code": "610100",
+      "city_name_en": "Xi’an",
+      "name": "未央区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 34.247069,
+        "min_longitude": 108.790444,
+        "max_latitude": 34.439941,
+        "max_longitude": 109.044286
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-610113",
+      "city_code": "610100",
+      "city_name_en": "Xi’an",
+      "name": "雁塔区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 34.164122,
+        "min_longitude": 108.808966,
+        "max_latitude": 34.254715,
+        "max_longitude": 109.056374
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    },
+    {
+      "id": "district-610116",
+      "city_code": "610100",
+      "city_name_en": "Xi’an",
+      "name": "长安区",
+      "name_en": "",
+      "priority": 100,
+      "bounds": {
+        "min_latitude": 33.791141,
+        "min_longitude": 108.64199,
+        "max_latitude": 34.296186,
+        "max_longitude": 109.23151
+      },
+      "source": "DataV.GeoAtlas",
+      "content_version": "1"
+    }
+  ]
+}

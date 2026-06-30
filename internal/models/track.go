@@ -357,16 +357,25 @@ type TrackMapRouteGroupItem struct {
 	Track            *Track              `json:"-"`
 }
 
+// TrackMapAreaReference identifies an area and its optional public introduction page.
+type TrackMapAreaReference struct {
+	ID              string `json:"id"`
+	IntroductionURL string `json:"introduction_url,omitempty"`
+}
+
 // TrackMapClusterItem is the area/city aggregate item returned to map clients.
 type TrackMapClusterItem struct {
-	Type       string        `json:"type"`
-	ClusterID  string        `json:"cluster_id,omitempty"`
-	CityCode   string        `json:"city_code,omitempty"`
-	CityName   string        `json:"city_name,omitempty"`
-	TrackType  string        `json:"track_type"`
-	Center     TrackMapPoint `json:"center"`
-	BBox       TrackMapBBox  `json:"bbox"`
-	RouteCount int64         `json:"route_count"`
+	Type       string                 `json:"type"`
+	ClusterID  string                 `json:"cluster_id,omitempty"`
+	Name       string                 `json:"name,omitempty"`
+	AreaType   string                 `json:"area_type,omitempty"`
+	Area       *TrackMapAreaReference `json:"area,omitempty"`
+	CityCode   string                 `json:"city_code,omitempty"`
+	CityName   string                 `json:"city_name,omitempty"`
+	TrackType  string                 `json:"track_type"`
+	Center     TrackMapPoint          `json:"center"`
+	BBox       TrackMapBBox           `json:"bbox"`
+	RouteCount int64                  `json:"route_count"`
 }
 
 // TrackMapViewResponse is the main map viewport response.

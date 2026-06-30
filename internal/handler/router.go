@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/cloudwego/hertz/pkg/app"
+	"github.com/tongyichu/track_server/internal/maparea"
 	"github.com/tongyichu/track_server/internal/middleware"
 	"github.com/tongyichu/track_server/internal/service"
 
@@ -44,6 +45,7 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 
 	trackHandler := NewTrackHandler(deps.TrackService)
 	trackMapHandler := NewTrackMapHandler(deps.TrackMapService)
+	mapAreaHandler := NewMapAreaHandler(maparea.DefaultCatalog())
 	userHandler := NewUserHandler(deps.UserService)
 	loginHandler := NewLoginHandler(deps.LoginService, deps.TokenBlacklist, deps.AchievementService)
 	ossHandler := NewOSSHandler(deps.OSSTokenService)
@@ -87,6 +89,8 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 	api.GET("/upgrade/check", appReleaseHandler.CheckUpgrade)
 	// public: achievement level rule H5 page for app WebView.
 	api.GET("/achievement/level-rules.html", achievementHandler.LevelRulesPage)
+	// public: curated district/scenic-spot introduction page for app WebView.
+	api.GET("/track-map/areas/:area_id/introduction.html", mapAreaHandler.IntroductionPage)
 	// public: app release package download.
 	// 升级检查接口本身无需登录，因此其返回的安装包 URL 也必须能被系统下载器直接访问。
 	// 只公开 static/release 子目录；轨迹截图、头像、原始轨迹文件仍在下方 auth.StaticFS 里鉴权访问。

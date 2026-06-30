@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="{{.Language}}"{{if .Dark}} class="dark"{{end}}>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <title>{{.Name}}</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --background: #f4f7f2;
+      --surface: rgba(255, 255, 255, .92);
+      --text: #172019;
+      --muted: #68736a;
+      --accent: #247a45;
+      --accent-soft: #e4f1e8;
+      --border: rgba(23, 32, 25, .08);
+      --shadow: 0 18px 42px rgba(24, 56, 34, .09);
+    }
+    html.dark {
+      color-scheme: dark;
+      --background: #101512;
+      --surface: rgba(27, 35, 30, .94);
+      --text: #eff6f0;
+      --muted: #aeb9b0;
+      --accent: #78d49a;
+      --accent-soft: #213c2b;
+      --border: rgba(255, 255, 255, .08);
+      --shadow: 0 18px 42px rgba(0, 0, 0, .24);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 92% 2%, rgba(81, 167, 103, .20), transparent 32%),
+        linear-gradient(180deg, var(--background), var(--background));
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Noto Sans CJK SC", sans-serif;
+      line-height: 1.65;
+    }
+    main {
+      width: min(720px, 100%);
+      margin: 0 auto;
+      padding: max(28px, env(safe-area-inset-top)) 18px max(36px, env(safe-area-inset-bottom));
+    }
+    .hero { padding: 14px 4px 24px; }
+    .eyebrow {
+      display: inline-flex;
+      gap: 8px;
+      align-items: center;
+      padding: 5px 10px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 650;
+    }
+    h1 {
+      margin: 16px 0 6px;
+      font-size: clamp(31px, 9vw, 48px);
+      line-height: 1.13;
+      letter-spacing: -.035em;
+    }
+    .city { color: var(--muted); font-size: 15px; }
+    .summary { margin: 18px 0 0; font-size: 17px; }
+    section {
+      margin-top: 14px;
+      padding: 21px 20px;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(14px);
+    }
+    h2 { margin: 0 0 10px; font-size: 18px; letter-spacing: -.01em; }
+    ul { margin: 0; padding-left: 21px; }
+    li + li { margin-top: 8px; }
+    .tip li::marker { color: var(--accent); }
+    footer { padding: 24px 4px 0; color: var(--muted); font-size: 12px; text-align: center; }
+  </style>
+</head>
+<body>
+  <main>
+    <header class="hero">
+      <span class="eyebrow">{{.AreaTypeLabel}}</span>
+      <h1>{{.Name}}</h1>
+      {{if .CityName}}<div class="city">{{.CityName}}</div>{{end}}
+      <p class="summary">{{.Summary}}</p>
+    </header>
+    {{if .Highlights}}
+    <section>
+      <h2>{{.HighlightsTitle}}</h2>
+      <ul>{{range .Highlights}}<li>{{.}}</li>{{end}}</ul>
+    </section>
+    {{end}}
+    {{if .Tips}}
+    <section>
+      <h2>{{.TipsTitle}}</h2>
+      <ul class="tip">{{range .Tips}}<li>{{.}}</li>{{end}}</ul>
+    </section>
+    {{end}}
+    <footer>Track · Explore with care</footer>
+  </main>
+</body>
+</html>

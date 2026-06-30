@@ -209,6 +209,37 @@ func TestAchievementLevelRulesPage_PublicHTML(t *testing.T) {
 	}
 }
 
+func TestMapAreaIntroductionPage_PublicHTML(t *testing.T) {
+	e := newTestEnv()
+	defer e.close()
+
+	w := e.perform(http.MethodGet, "/api/v1/track-map/areas/scenic-west-lake/introduction.html", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+	}
+	if body := w.Body.String(); !strings.Contains(body, "西湖景区") || !strings.Contains(body, "景区") {
+		t.Fatalf("unexpected Chinese page: %s", body)
+	}
+
+	w = e.perform(http.MethodGet, "/api/v1/track-map/areas/district-330106/introduction.html?lang=english&is_dark=true", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+	}
+	if body := w.Body.String(); !strings.Contains(body, "Xihu District") || !strings.Contains(body, `class="dark"`) {
+		t.Fatalf("unexpected English dark page: %s", body)
+	}
+
+	w = e.perform(http.MethodGet, "/api/v1/track-map/areas/not-found/introduction.html", nil)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+	}
+
+	w = e.perform(http.MethodGet, "/api/v1/track-map/areas/district-110101/introduction.html", nil)
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "东城区") {
+		t.Fatalf("generated district page status=%d body=%s", w.Code, w.Body.String())
+	}
+}
+
 // TestCreateTrack_Success verifies POST /api/track/create succeeds with valid headers.
 func TestCreateTrack_Success(t *testing.T) {
 	e := newTestEnv()
