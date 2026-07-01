@@ -174,6 +174,7 @@ GET /admin/api/users
        → TrackMapRepository 更新 track_route_groups / track_route_group_members
 ```
 路线组列表页展示路线组摘要及离线 `area_id` 对应的区域摘要，详情页展示同样的区域信息与介绍页入口；不得在 admin 请求链路重新做 Polygon/MultiPolygon 匹配。代表轨迹只用于封面/运营参考，RouteGroup 不再保存或下发代表折线，客户端用聚合中心点与 `radius_m` 画区域。
+人工改名会把 RouteGroup 标记为 `mixed`，离线重聚合通过历史成员重合复用 GroupID 并保留该名称；不要把名称重新改为城市级默认值。代表轨迹由离线任务按折线 medoid 重算，管理员仍可在两次任务之间临时调整代表轨迹。
 
 **管理轨迹**：
 ```

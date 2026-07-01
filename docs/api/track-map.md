@@ -10,7 +10,7 @@
 - `area`：区域聚合气泡。
 - `city`：城市聚合气泡。
 
-服务端已使用 `track_route_groups` 聚合表作为数据源，`group_id` 是路线组 ID，不等同于单条轨迹 ID。路线组由后台离线任务基于 `track_geo_indexes` 的轨迹中心点聚类生成，并离线写入 `area_id`；`route_group` 返回 `center` 与 `radius_m`，客户端可直接绘制聚合区域，不再依赖代表路线折线。
+服务端已使用 `track_route_groups` 聚合表作为数据源，`group_id` 是路线组 ID，不等同于单条轨迹 ID。路线组由后台离线任务对 `track_geo_indexes` 执行中心召回、距离/正反向起终点/折线相似关系图聚类并选择 medoid 代表轨迹；任务按历史成员重合复用 `group_id`，再离线写入 `area_id`。`route_group` 返回 `center` 与 `radius_m`，客户端可直接绘制聚合区域，不再依赖代表路线折线。
 
 **需要认证**
 

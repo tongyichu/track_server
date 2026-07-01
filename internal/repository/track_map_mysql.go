@@ -544,6 +544,44 @@ func (r *MySQLTrackMapRepository) ListRouteGroupSummaries(ctx context.Context, f
 	return items, rows.Err()
 }
 
+func (r *MySQLTrackMapRepository) ListAllRouteGroups(ctx context.Context) ([]*models.TrackRouteGroup, error) {
+	rows, err := r.db.QueryContext(ctx, trackRouteGroupSelectSQL()+` WHERE track_route_groups.status = ? ORDER BY track_route_groups.group_id`, models.TrackRouteGroupStatusActive)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := make([]*models.TrackRouteGroup, 0)
+	for rows.Next() {
+		group, err := scanTrackRouteGroup(rows)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, group)
+	}
+	return items, rows.Err()
+}
+
+func (r *MySQLTrackMapRepository) ListAllRouteGroupMembers(ctx context.Context) ([]*models.TrackRouteGroupMember, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT m.group_id, m.track_id, m.similarity_score, m.match_direction, m.role, m.source, m.created_at, m.updated_at
+		FROM track_route_group_members m
+		JOIN track_route_groups g ON g.group_id=m.group_id
+		WHERE g.status=? ORDER BY m.group_id, m.track_id`, models.TrackRouteGroupStatusActive)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := make([]*models.TrackRouteGroupMember, 0)
+	for rows.Next() {
+		member, err := scanTrackRouteGroupMember(rows)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, member)
+	}
+	return items, rows.Err()
+}
+
 func (r *MySQLTrackMapRepository) ListRouteGroupCandidates(ctx context.Context, index *models.TrackGeoIndex, limit int) ([]*models.TrackRouteGroupCandidate, error) {
 	if index == nil {
 		return nil, nil

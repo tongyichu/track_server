@@ -352,6 +352,7 @@ func main() {
 	if trackMapRepo != nil && rawTrackCache != nil {
 		trackMapIndexSvc = service.NewTrackMapIndexService(trackMapRepo, trackRepo, rawTrackCache)
 		trackRouteGroupSvc = service.NewTrackRouteGroupService(trackMapRepo)
+		trackRouteGroupSvc.SetTrackRepository(trackRepo)
 		trackMapSvc = service.NewTrackMapService(trackMapRepo, trackRepo, trackSvc)
 		trackSvc.SetTrackMapIndexService(trackMapIndexSvc)
 		log.Printf("track map services enabled")

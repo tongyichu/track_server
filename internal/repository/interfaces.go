@@ -117,6 +117,8 @@ type TrackMapRepository interface {
 	CountTrackGeoIndexesByArea(ctx context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackMapClusterItem, error)
 	FindRouteGroup(ctx context.Context, groupID string) (*models.TrackRouteGroup, error)
 	ListRouteGroups(ctx context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackRouteGroup, error)
+	ListAllRouteGroups(ctx context.Context) ([]*models.TrackRouteGroup, error)
+	ListAllRouteGroupMembers(ctx context.Context) ([]*models.TrackRouteGroupMember, error)
 	ListRouteGroupSummaries(ctx context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackRouteGroup, error)
 	ListRouteGroupCandidates(ctx context.Context, index *models.TrackGeoIndex, limit int) ([]*models.TrackRouteGroupCandidate, error)
 	ListGeoIndexesWithoutRouteGroup(ctx context.Context, limit int) ([]*models.TrackGeoIndex, error)

@@ -1757,6 +1757,45 @@ func (r *InMemoryTrackMapRepository) ListRouteGroupSummaries(ctx context.Context
 	return r.ListRouteGroups(ctx, filter)
 }
 
+func (r *InMemoryTrackMapRepository) ListAllRouteGroups(_ context.Context) ([]*models.TrackRouteGroup, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	items := make([]*models.TrackRouteGroup, 0, len(r.routeGroups))
+	for _, group := range r.routeGroups {
+		if group == nil || group.Status != models.TrackRouteGroupStatusActive {
+			continue
+		}
+		items = append(items, cloneTrackRouteGroup(group))
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].GroupID < items[j].GroupID })
+	return items, nil
+}
+
+func (r *InMemoryTrackMapRepository) ListAllRouteGroupMembers(_ context.Context) ([]*models.TrackRouteGroupMember, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	items := make([]*models.TrackRouteGroupMember, 0)
+	for groupID, members := range r.routeMembers {
+		group := r.routeGroups[groupID]
+		if group == nil || group.Status != models.TrackRouteGroupStatusActive {
+			continue
+		}
+		for _, member := range members {
+			if member != nil {
+				clone := *member
+				items = append(items, &clone)
+			}
+		}
+	}
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].GroupID == items[j].GroupID {
+			return items[i].TrackID < items[j].TrackID
+		}
+		return items[i].GroupID < items[j].GroupID
+	})
+	return items, nil
+}
+
 func (r *InMemoryTrackMapRepository) ListRouteGroupCandidates(_ context.Context, index *models.TrackGeoIndex, limit int) ([]*models.TrackRouteGroupCandidate, error) {
 	if index == nil {
 		return nil, nil

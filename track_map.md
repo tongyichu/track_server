@@ -39,7 +39,7 @@
 - 不做复杂社交热度外显。
 - 不做实时轨迹展示。
 - 不做路线人工运营后台。
-- 不强依赖高精度地图匹配算法，先用可解释、可迭代的中心点空间聚类规则。
+- 不强依赖道路级地图匹配，使用可解释、可迭代的中心召回与轨迹形状相似规则。
 
 ## 2. 核心概念
 
@@ -390,7 +390,7 @@ track_type=hiking
 
 - `route_count` 表示符合当前 `track_type` 的 RouteGroup 数量。
 - `route_count` 不表示用户数，也不表示具体 Track 数量。
-- RouteGroup 的 `area_id` 由 `track_route_group` 离线任务计算：先按 `bounds` 预筛，再用 Polygon/MultiPolygon 判断 RouteGroup 中心，无 geometry 的人工区域按 `bounds` 兜底。接口只根据已存 `area_id` 查询内置 GCJ-02 区域目录，并返回可选的 `name`、`area_type`、`area`、`city_code`、`city_name`；相同 `area_id` 的 RouteGroup 聚合为一个气泡，空 `area_id` 继续按原网格聚合。
+- RouteGroup 的 `area_id` 由 `track_route_group` 离线任务计算：先按 `bounds` 预筛，再用 Polygon/MultiPolygon 判断 RouteGroup medoid 中心，无 geometry 的人工区域按 `bounds` 兜底。接口只根据已存 `area_id` 查询内置 GCJ-02 区域目录，并返回可选的 `name`、`area_type`、`area`、`city_code`、`city_name`；相同 `area_id` 的 RouteGroup 聚合为一个气泡，空 `area_id` 继续按原网格聚合。
 - 生成区县基线当前覆盖 36 个重点城市的 194 个核心区县。`catalog.json` 中的人工景区/区县条目可按稳定 ID 覆盖基线，同 ID 人工区县未提供 geometry 时继承生成区县 geometry；景区优先于区县，同优先级选择范围更小的区域，未命中时保持原数量气泡响应。
 - `area.id` 是稳定区域 ID；有介绍内容时，公开的 `area.introduction_url` 可由客户端 WebView 打开，支持 `lang=english` 和 `is_dark=true`。
 - RouteGroup 的运营介绍独立存储在 `track_route_introductions`，已发布时在路线视野、列表和详情对象中返回公开 `introduction_url`。介绍以代表轨迹作为稳定锚点，离线全量重聚合后按锚点所在成员关系自动更新 `current_group_id`，避免内容随 `track_route_groups` 重建丢失。
@@ -670,7 +670,7 @@ CREATE TABLE track_route_groups (
 
 - `member_count` 是服务端内部字段，用于排序和运营观察；第一版接口不返回该字段。
 - `city_codes_json` 支持跨城市路线归属于多个城市。当前自动聚合先继承轨迹 `city_code`，后续可通过轨迹点反查城市后扩展为多城市。
-- `area_id` 是离线任务根据 RouteGroup 最终中心点匹配出的稳定区域 ID；空字符串表示未命中目录，接口不得临时猜测区域。
+- `area_id` 是离线任务根据 RouteGroup medoid 中心匹配出的稳定区域 ID；空字符串表示未命中目录，接口不得临时猜测区域。
 - `source=auto/manual/mixed` 预留人工运营能力。自动任务不会覆盖人工改名后的展示诉求，后续 ops 接口可基于该字段做合并、拆分、改名和指定代表轨迹。
 
 #### track_route_group_members
@@ -709,7 +709,7 @@ CREATE TABLE track_route_group_members (
 - 解析大量轨迹点。
 - 坐标转换。
 - 计算 bbox / 中心点 / 起终点 / 简化折线。
-- RouteGroup 中心点空间聚类。
+- RouteGroup 中心召回、起终点/距离/折线相似关系图聚类与 medoid 选择。
 
 这样可以保证 `track/create`、`/track/:track_id/upload_cloud`、`/track/:track_id/update` 的响应速度主要受轨迹记录写入影响，不受 OSS 下载和轨迹点解析影响。
 
@@ -734,9 +734,10 @@ Scheduler(track_map_index，默认每 1 分钟)
 Scheduler(track_route_group，默认每天 04:00)
   → 全量读取 track_geo_indexes
   → 排除过短、点数过少或缺少运动类型的轨迹
-  → 按 track_type 严格隔离，基于轨迹中心点做空间聚类
-  → 计算每个 RouteGroup 的 center_lat/center_lng、radius_m、bbox、member_count
-  → 用内置 GCJ-02 区域目录匹配最终中心点并写入 area_id
+  → 按 track_type 严格隔离，中心距离召回后计算距离、起终点和折线相似关系
+  → 关系图连通分量按 medoid 直接相似约束拆组，选择代表轨迹
+  → 按历史成员重合复用 group_id 与人工名称
+  → 计算 radius_m、bbox、member_count，用 medoid 中心匹配 area_id
   → 重建替换 track_route_groups / track_route_group_members（MySQL 实现使用事务）
 ```
 
@@ -755,36 +756,42 @@ OSS 下载要求：
 
 ### 6.3 路线聚合规则
 
-当前实现使用简单、可解释、偏保守的中心点空间聚类规则。
+当前实现使用“中心距离候选召回 + 距离比例 + 正反向起终点 + 离散 Fréchet 折线相似度 + 受 medoid 约束的关系图聚类”。
 
-聚类范围：
+聚类规则：
 
 - 不强制同城市；跨城市路线可以合并，RouteGroup 会记录多个 `city_code`，城市聚合时每个城市都计数。
-- 同运动类型。运动类型是硬性分组条件，不能跨类型聚合。
-- 中心点距离在运动类型对应阈值内：徒步/跑步/爬山默认 3km，骑行 8km，自驾 15km。
+- `track_type` 是硬约束，不能跨运动类型聚合。
+- 中心距离只负责候选召回：徒步/跑步/爬山 3km，骑行 8km，自驾 15km。
+- 两条候选轨迹的距离比例不得低于 0.65。
+- 起终点同时计算正向与反向匹配；徒步类阈值 1.2km、骑行 2.5km、自驾 6km，并将成员方向记录为 `forward/reverse`。
+- 简化折线按弧长重采样为 32 点，计算离散 Fréchet 距离；徒步类阈值 700m、骑行 1.5km、自驾 3km。
+- 满足关系的轨迹先形成候选连通分量，再选择总不相似度最低的 medoid；每个最终成员必须与 medoid 直接满足路线相似规则，避免单链接桥接无限扩张。
+- 不设置最小成员数，无法匹配其他轨迹的有效轨迹仍形成单成员 RouteGroup。
 
-聚合区域计算：
+聚合结果：
 
-- `center_lat` / `center_lng` 使用成员轨迹中心点均值。
-- `radius_m` 取 “成员中心点到 group 中心距离 + 成员 bbox 半径” 的最大值，避免长轨迹覆盖区域被低估。
-- `bbox` 使用所有成员轨迹 bbox 的并集。
-- `area_id` 使用最终 `center_lat` / `center_lng` 离线匹配；人工合并或移除成员导致中心变化时同步重算。
-- 聚合任务会重建替换 `track_route_groups` / `track_route_group_members`，存量结果可清空重算；MySQL 实现使用事务。
-
-中心点距离满足运动类型阈值则归入已有 RouteGroup，否则创建新的 RouteGroup。
+- `representative_track_id` 取 medoid 轨迹，成员相对 medoid 计算 `similarity_score` 与方向。
+- `center_lat` / `center_lng`、`distance` 使用 medoid 轨迹口径；`bbox` 使用成员 bbox 并集，`radius_m` 覆盖全部成员。
+- `area_id` 使用 medoid 中心离线匹配；人工合并或移除成员导致中心变化时同步重算。
+- 新结果按成员重合数和 Jaccard 比例匹配历史 RouteGroup；匹配成功时复用历史 `group_id`，并保留人工/混合来源名称和已发布介绍名称。
+- 自动名称优先使用人工冷启动轨迹标题或成员标题共识，其次使用内置区域名，最后回退城市名。
+- 聚合任务仍会重建替换 `track_route_groups` / `track_route_group_members`；MySQL 实现使用事务，运营介绍通过独立表和锚点轨迹重绑定。
 
 不合并的情况：
 
 - 不同运动类型。
 - 中心点距离超过当前运动类型阈值。
+- 距离比例低于 0.65。
+- 正向和反向起终点距离均超过对应运动类型阈值。
+- 重采样折线的离散 Fréchet 距离超过对应运动类型阈值。
 - 距离太短、点数太少、GPS 数据质量明显不足的轨迹。
 
 后续可升级为：
 
-- DBSCAN / HDBSCAN 等密度聚类。
 - S2/H3 网格聚合。
 - 基于城市、行政区或业务热区的动态阈值。
-- 人工合并/拆分聚合区域。
+- 根据线上样本评估 HDBSCAN、道路匹配或分段路线层级。
 
 ## 7. 排序策略
 
@@ -852,10 +859,9 @@ RouteGroup 是路线聚合入口，不展示用户实时位置。
 
 ### 第二阶段
 
-- 支持路线人工命名和人工合并的服务端数据结构，后续补 ops 接口或管理后台。
-- 支持更好的空间聚类算法。
 - 支持路线详情页展示难度、爬升、距离区间、推荐季节等。
 - 支持路线搜索。
+- 支持主路线、分段路线和绕行变体的层级关系。
 
 ### 第三阶段
 

@@ -91,7 +91,7 @@ track_server/
 - 轨迹 `locate_addr` 最大长度为 255 字符，对应 `track_records.locate_addr VARCHAR(255)`；修改该字段长度时同步更新 `mysql.sql`、`internal/repository/mysql.go` 与 `docs/api/track.md`。
 - 轨迹 `source_tag` 是来源/运营标签，对应 `track_records.source_tag VARCHAR(64)`；业务接口只允许空字符串或 `manual_seed`（人工录入冷启动轨迹），更新接口仅在原值为空时补写，普通列表摘要不返回该字段；修改该字段口径时同步更新 `internal/service/track_service.go`、`mysql.sql` 与 `docs/api/track.md`。
 - 首页地图模式的轨迹空间索引由 `track_map_index` 后台任务异步构建：轨迹完成接口只写入 `track_map_index_jobs`，不得在请求主链路同步下载 OSS raw track 或解析轨迹点；后台下载 raw track 必须通过 `OSS_INTERNAL_ENDPOINT` 内网域名，未配置时失败重试且不回退公网；raw track 解析支持 JSON / GeoJSON / KML / KMZ。路线组由 `track_route_group` 离线任务基于 `track_geo_indexes` 聚合生成并写入 `track_route_groups.area_id`，默认每天 04:00 执行。
-- 地图 `area_cluster` 的景区/区县语义来自随二进制内置的 `internal/maparea/districts.json` 与 `catalog.json`；当前生成基线覆盖 36 个重点城市的 194 个核心区县，完整清单见 `internal/maparea/README.md`。不得在 `/track-map/view` 请求主链路调用外部逆地理编码或 Polygon/MultiPolygon 点包含计算。生成区县先加载，`catalog.json` 相同 ID 的人工条目随后覆盖；同 ID 人工区县未提供 geometry 时继承生成区县 geometry。`track_route_group` 离线任务使用 GCJ-02 `bounds` 预筛、Polygon/MultiPolygon 最终判断 RouteGroup 中心，无 geometry 的人工区域才按 `bounds` 兜底，并将结果持久化到 `area_id`；接口按 `area_id` 查询目录详情。优先级高者优先、同优先级范围更小者优先。未命中的 RouteGroup 必须保留空 `area_id` 并继续按原网格生成数量气泡，不能臆造区域名。`area.id` 是稳定目录 ID。
+- 地图 `area_cluster` 的景区/区县语义来自随二进制内置的 `internal/maparea/districts.json` 与 `catalog.json`；当前生成基线覆盖 36 个重点城市的 194 个核心区县，完整清单见 `internal/maparea/README.md`。不得在 `/track-map/view` 请求主链路调用外部逆地理编码或 Polygon/MultiPolygon 点包含计算。生成区县先加载，`catalog.json` 相同 ID 的人工条目随后覆盖；同 ID 人工区县未提供 geometry 时继承生成区县 geometry。`track_route_group` 离线任务使用 GCJ-02 `bounds` 预筛、Polygon/MultiPolygon 最终判断 RouteGroup medoid 中心，无 geometry 的人工区域才按 `bounds` 兜底，并将结果持久化到 `area_id`；接口按 `area_id` 查询目录详情。优先级高者优先、同优先级范围更小者优先。未命中的 RouteGroup 必须保留空 `area_id` 并继续按原网格生成数量气泡，不能臆造区域名。`area.id` 是稳定目录 ID。
 - `track_map_index_jobs` 补偿入队必须保持幂等：对已有 `pending` job 只能保留或提前 `next_run_at`，不能刷新到更晚时间，否则补偿扫描会反复推迟任务导致 `claimed=0`。
 - Docker 镜像与 `deploy/docker-compose.yml` 默认设置 `TZ=Asia/Shanghai`；robfig/cron 按服务进程本地时区解释 `TRACK_*_CRON`、`ANALYTICS_SYNC_CRON` 等表达式，调整镜像/compose 时区时必须同步评估定时任务触发时间。
 - 埋点采集接口 `POST /api/v1/analytics/events` 默认公开可访问，用于未登录启动/登录页等事件；服务端只做校验、脱敏和本地 JSONL 落盘，不把原始埋点写入业务 MySQL，凌晨同步 OSS 的任务由 `SCHEDULER_ENABLED` 控制。同步时按 `event_date/hour` 合并小 JSONL，单个 OSS part 目标上限 128 MB。`analytics_sync_summaries` 只记录每次 OSS 同步摘要（源文件列表、OSS part key、字节数、耗时、错误等），不保存原始事件。调整事件协议、认证策略、本地目录、OSS 前缀、批量上限、同步时间或同步摘要字段时，同步更新 `track_analytics.md`、`docs/api/analytics.md` 与 `mysql.sql`。
@@ -149,13 +149,15 @@ track/create(is_running=false) 或 track upload/update 完成轨迹
   → 解析 JSON/GeoJSON 轨迹点，计算 bbox/中心点/起终点/简化折线
   → Upsert track_geo_indexes，任务标记 succeeded；失败则延迟重试
   → Scheduler(track_route_group，默认 TRACK_ROUTE_GROUP_CRON=0 4 * * *)
-  → 全量读取 eligible track_geo_indexes，按 track_type 严格隔离并基于轨迹中心点做空间聚类
-  → 计算每个 track_route_groups 的 center_lat/center_lng、radius_m、bbox、member_count
-  → 用内置区域目录离线匹配中心点并写入 area_id；未命中保持空字符串
+  → 全量读取 eligible track_geo_indexes，按 track_type 严格隔离；中心距离召回后按距离比例、正反向起终点、离散 Fréchet 折线相似度构建候选关系图
+  → 连通分量按 medoid 直接相似约束拆组，选择 medoid 作为 representative_track_id，并计算 radius_m、bbox、member_count
+  → 按新旧成员重合复用历史 group_id 与人工名称；自动名称按人工种子/标题共识、区域名、城市名依次兜底
+  → 用内置区域目录离线匹配 medoid 中心并写入 area_id；未命中保持空字符串
   → 重建替换 track_route_groups / track_route_group_members（存量聚合结果可清空重算；MySQL 实现使用事务）
 ```
 首页地图模式客户端接口挂在 auth 组：`GET /api/v1/track-map/view`、`GET /api/v1/track-map/groups`、`GET /api/v1/track-map/groups/:group_id/detail`、`GET /api/v1/track-map/groups/:group_id/tracks`。区域介绍页 `GET /api/v1/track-map/areas/:area_id/introduction.html` 和聚合路线介绍页 `GET /api/v1/track-map/groups/:group_id/introduction.html` 是公开 H5，不走业务 JWT。只有 `track_route_introductions.status=published` 时路线对象才返回 `introduction_url`；介绍以 `anchor_track_id` 为稳定锚点，路线组全量重建后仓储必须按新成员关系更新 `current_group_id`，禁止把运营介绍直接存进会被清空的 `track_route_groups`。`group_id` 来自 `track_route_groups.group_id`，不等同于单条 `track_id`；列表和地图聚合使用 RouteGroup 数量口径，不返回 `user_count` / `track_count`。调整字段、缩放分层、区域/路线介绍协议、聚合数量口径或 group_id 语义时，同步更新 `docs/api/track-map.md`、`docs/api/route-index.md` 与 `track_map.md`。
 管理中心聚合路线列表和详情展示路线组摘要，以及已存 `area_id` 对应的区域名称、类型、城市与介绍页入口；admin 请求链路只按 ID 查询目录，不重新执行空间匹配。RouteGroup 对客户端表示聚合区域，使用 `center` + `radius_m` 绘制，不再下发代表路线折线。
+路线组离线重建必须先通过 `ListAllRouteGroups` / `ListAllRouteGroupMembers` 读取历史身份，按成员重合复用 `group_id`；人工改名后的 `manual/mixed` 名称不得被自动任务覆盖。medoid 变化只更新 `representative_track_id`，不能据此无条件更换已有 GroupID。
 
 **短信登录等级信息**：`POST /api/v1/login/sms` 成功响应会附带 `achievement_level`，由 `LoginHandler` 调用 `AchievementService.GetLevelInfo` 基于当前有效轨迹实时计算；修改登录响应或等级字段时同步更新 `login.md`。
 

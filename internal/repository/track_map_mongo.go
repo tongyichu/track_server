@@ -485,6 +485,40 @@ func (r *MongoTrackMapRepository) ListRouteGroupSummaries(ctx context.Context, f
 	return items, cur.Err()
 }
 
+func (r *MongoTrackMapRepository) ListAllRouteGroups(ctx context.Context) ([]*models.TrackRouteGroup, error) {
+	cur, err := r.groups.Find(ctx, bson.M{"status": models.TrackRouteGroupStatusActive}, options.Find().SetSort(bson.D{{Key: "_id", Value: 1}}))
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+	items := make([]*models.TrackRouteGroup, 0)
+	for cur.Next(ctx) {
+		var group models.TrackRouteGroup
+		if err := cur.Decode(&group); err != nil {
+			return nil, err
+		}
+		items = append(items, &group)
+	}
+	return items, cur.Err()
+}
+
+func (r *MongoTrackMapRepository) ListAllRouteGroupMembers(ctx context.Context) ([]*models.TrackRouteGroupMember, error) {
+	cur, err := r.members.Find(ctx, bson.M{}, options.Find().SetSort(bson.D{{Key: "group_id", Value: 1}, {Key: "track_id", Value: 1}}))
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+	items := make([]*models.TrackRouteGroupMember, 0)
+	for cur.Next(ctx) {
+		var member models.TrackRouteGroupMember
+		if err := cur.Decode(&member); err != nil {
+			return nil, err
+		}
+		items = append(items, &member)
+	}
+	return items, cur.Err()
+}
+
 func (r *MongoTrackMapRepository) ListRouteGroupCandidates(ctx context.Context, index *models.TrackGeoIndex, limit int) ([]*models.TrackRouteGroupCandidate, error) {
 	if index == nil {
 		return nil, nil
