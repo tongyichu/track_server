@@ -133,6 +133,40 @@ func TestTrackRouteGroupService_SkipsShortRoute(t *testing.T) {
 	}
 }
 
+func TestTrackRouteIntroductionRebindsAfterRegroup(t *testing.T) {
+	ctx := context.Background()
+	mapRepo := repository.NewInMemoryTrackMapRepository(nil)
+	now := time.Now()
+	oldGroup := &models.TrackRouteGroup{GroupID: "RG.old", TrackType: "hiking", Status: models.TrackRouteGroupStatusActive, RepresentativeTrackID: "NO.00000021", CreatedAt: now, UpdatedAt: now}
+	if err := mapRepo.UpsertRouteGroup(ctx, oldGroup); err != nil {
+		t.Fatal(err)
+	}
+	if err := mapRepo.UpsertRouteGroupMember(ctx, &models.TrackRouteGroupMember{GroupID: oldGroup.GroupID, TrackID: oldGroup.RepresentativeTrackID, Role: models.TrackRouteGroupMemberRoleRepresentative}); err != nil {
+		t.Fatal(err)
+	}
+	svc := NewTrackRouteGroupService(mapRepo)
+	intro, err := svc.SaveRouteIntroduction(ctx, oldGroup.GroupID, &models.TrackRouteIntroduction{Chinese: models.TrackRouteIntroductionContent{Name: "测试路线", Summary: "测试摘要"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.SetRouteIntroductionPublished(ctx, oldGroup.GroupID, true); err != nil {
+		t.Fatal(err)
+	}
+	newGroup := *oldGroup
+	newGroup.GroupID = "RG.new"
+	newMember := &models.TrackRouteGroupMember{GroupID: newGroup.GroupID, TrackID: intro.AnchorTrackID, Role: models.TrackRouteGroupMemberRoleRepresentative}
+	if err := mapRepo.ReplaceRouteGroups(ctx, []*models.TrackRouteGroup{&newGroup}, []*models.TrackRouteGroupMember{newMember}); err != nil {
+		t.Fatal(err)
+	}
+	rebound, err := mapRepo.FindRouteIntroductionByGroupID(ctx, newGroup.GroupID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rebound.Status != models.TrackRouteIntroductionStatusPublished || rebound.AnchorTrackID != intro.AnchorTrackID {
+		t.Fatalf("rebound=%+v", rebound)
+	}
+}
+
 func testRouteGroupIndex(trackID, trackType string, base []models.TrackPoint, now time.Time) *models.TrackGeoIndex {
 	points := make([]models.TrackPoint, 0, 30)
 	start := base[0]

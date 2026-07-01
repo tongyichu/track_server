@@ -14,7 +14,7 @@
 - 查看和处理用户意见反馈（含图片预览、状态更新、用户可见反馈意见）。
 - 查看埋点 OSS 同步摘要（任务状态、文件列表、OSS key、字节数、耗时与错误）。
 - 在用户管理页查看、创建和解除账号限制；账号限制会由业务侧中间件拦截上传、发起同行、关注、收藏、修改资料等动作。
-- 查看和人工运营路线发现 RouteGroup（展示离线 `area_id` 对应的区域名称、类型与介绍页，支持改名、合并、移除成员、指定代表轨迹）。
+- 查看和人工运营路线发现 RouteGroup（展示离线 `area_id` 对应的区域名称、类型与介绍页，支持改名、合并、移除成员、指定代表轨迹，以及编辑、发布和下线双语路线介绍）。
 - 查看、修正和删除用户轨迹；列表展示 `track_screenshot_url` 缩略图，OSS 截图需先经共享截图缓存落盘再通过后台静态代理访问；修正仅允许改 `title` / `city_code`，删除为软删除，并同步清理收藏关系与首页地图索引/路线组成员。
 
 模块对外只暴露 `admin.NewModule(...)` 与 `Module.RegisterRoutes(h)`，不被业务 handler 引用。
@@ -94,6 +94,9 @@ internal/admin/
 | POST | `/admin/api/route-groups/:group_id/merge` | 鉴权 | 将 `source_group_id` 合并到当前路线组，并归档源路线组 |
 | DELETE | `/admin/api/route-groups/:group_id/members/:track_id` | 鉴权 | 从路线组移除成员轨迹 |
 | PUT | `/admin/api/route-groups/:group_id/representative` | 鉴权 | 指定代表轨迹 |
+| GET/PUT | `/admin/api/route-groups/:group_id/introduction` | 鉴权 | 查询或保存结构化双语路线介绍 |
+| POST | `/admin/api/route-groups/:group_id/introduction/publish` | 鉴权 | 发布路线介绍 |
+| POST | `/admin/api/route-groups/:group_id/introduction/unpublish` | 鉴权 | 下线路线介绍 |
 
 ## 关键流程
 
@@ -165,6 +168,8 @@ GET /admin/api/users
   → POST /admin/api/route-groups/:group_id/merge {source_group_id}
   → DELETE /admin/api/route-groups/:group_id/members/:track_id
   → PUT /admin/api/route-groups/:group_id/representative {track_id}
+  → PUT /admin/api/route-groups/:group_id/introduction 保存中英文介绍
+  → POST /admin/api/route-groups/:group_id/introduction/publish|unpublish 发布或下线
        → TrackRouteGroupService 校验运动类型、成员关系与代表轨迹
        → TrackMapRepository 更新 track_route_groups / track_route_group_members
 ```

@@ -1206,6 +1206,63 @@ func (h *Handler) RenameRouteGroup(ctx context.Context, c *app.RequestContext) {
 	c.JSON(http.StatusOK, utils.H{"code": 0, "data": group})
 }
 
+func (h *Handler) GetRouteGroupIntroduction(ctx context.Context, c *app.RequestContext) {
+	if h == nil || h.routeGroupSvc == nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "route group service not configured"})
+		return
+	}
+	introduction, err := h.routeGroupSvc.GetRouteIntroduction(ctx, c.Param("group_id"))
+	if errors.Is(err, repository.ErrNotFound) {
+		c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"status": models.TrackRouteIntroductionStatusDraft}})
+		return
+	}
+	if err != nil {
+		writeAdminRouteGroupError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": introduction})
+}
+
+func (h *Handler) SaveRouteGroupIntroduction(ctx context.Context, c *app.RequestContext) {
+	if h == nil || h.routeGroupSvc == nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "route group service not configured"})
+		return
+	}
+	var body models.TrackRouteIntroduction
+	data, err := c.Body()
+	if err != nil || json.Unmarshal(data, &body) != nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid payload"})
+		return
+	}
+	introduction, err := h.routeGroupSvc.SaveRouteIntroduction(ctx, c.Param("group_id"), &body)
+	if err != nil {
+		writeAdminRouteGroupError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": introduction})
+}
+
+func (h *Handler) PublishRouteGroupIntroduction(ctx context.Context, c *app.RequestContext) {
+	h.setRouteGroupIntroductionPublished(ctx, c, true)
+}
+
+func (h *Handler) UnpublishRouteGroupIntroduction(ctx context.Context, c *app.RequestContext) {
+	h.setRouteGroupIntroductionPublished(ctx, c, false)
+}
+
+func (h *Handler) setRouteGroupIntroductionPublished(ctx context.Context, c *app.RequestContext, published bool) {
+	if h == nil || h.routeGroupSvc == nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "route group service not configured"})
+		return
+	}
+	introduction, err := h.routeGroupSvc.SetRouteIntroductionPublished(ctx, c.Param("group_id"), published)
+	if err != nil {
+		writeAdminRouteGroupError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": introduction})
+}
+
 type mergeRouteGroupBody struct {
 	SourceGroupID string `json:"source_group_id"`
 }

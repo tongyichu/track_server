@@ -51,6 +51,7 @@ GET /api/v1/track-map/view?latitude=22.3000&longitude=114.1700&radius_m=10000&tr
         "type": "route_group",
         "group_id": "RG.00000001",
         "name": "麦理浩径徒步路线",
+        "introduction_url": "/api/v1/track-map/groups/RG.00000001/introduction.html?v=3",
         "city_code": "810000",
         "city_name": "香港",
         "track_type": "hiking",
@@ -145,6 +146,7 @@ GET /api/v1/track-map/view?latitude=22.3000&longitude=114.1700&radius_m=10000&tr
 - 匹配顺序遵循“景区优先于区县、同优先级选择更小区域”。当前区县基线覆盖 36 个重点城市的 194 个核心区县，完整清单见 `internal/maparea/README.md`；未命中时省略上述可选字段，客户端继续只展示路线数量。
 - 点击 `city_cluster` / `area_cluster` 后，客户端放大地图并重新请求本接口。
 - 点击 `route_group` 后，请求路线组详情或路线组轨迹列表。
+- `route_group.introduction_url` 仅在路线介绍已发布时返回，客户端可直接用 WebView 打开。
 
 ## 49. 查询地图路线组列表
 
@@ -204,6 +206,8 @@ Authorization: Bearer <token>
 `:group_id` 传路线组 ID，例如 `RG.00000001`。
 
 响应 `data` 为单个 `route_group` 对象，字段同 [查询地图路线组列表](#49-查询地图路线组列表)。
+
+已发布介绍的路线组会在视野、列表和详情接口中返回相同的 `introduction_url`；未配置或草稿状态时省略该字段。
 
 ## 51. 查询路线组下的具体轨迹列表
 
@@ -267,3 +271,15 @@ GET /api/v1/track-map/areas/scenic-west-lake/introduction.html
 | `is_dark` | string | 否 | 传 `true` 使用深色主题 |
 
 仅当区域目录中存在介绍内容时，`area_cluster.area.introduction_url` 才会返回。未知 `area_id` 返回 `404`。
+
+## 53. 查看聚合路线介绍页
+
+聚合路线的公开介绍 H5，内容由管理中心维护。
+
+**无需认证**
+
+```http
+GET /api/v1/track-map/groups/RG.00000001/introduction.html?lang=english&is_dark=true
+```
+
+仅已发布的路线介绍可访问。页面支持 `lang=english` 切换英文、`is_dark=true` 切换夜间模式；未知路线组、未配置介绍或草稿状态均返回 `404`。接口返回的 `introduction_url` 携带内容版本 `v`，用于缓存失效。

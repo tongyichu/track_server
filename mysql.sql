@@ -199,6 +199,26 @@ CREATE TABLE `track_route_group_members` (
                                              KEY `idx_track_route_member_group` (`group_id`, `role`, `created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='路线组成员轨迹表';
 
+CREATE TABLE `track_route_introductions` (
+                                             `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                                             `anchor_track_id` VARCHAR(64) NOT NULL COMMENT '重聚合后重新绑定路线组的锚点轨迹ID',
+                                             `current_group_id` VARCHAR(64) NOT NULL DEFAULT '' COMMENT '当前绑定的路线组ID',
+                                             `status` VARCHAR(16) NOT NULL DEFAULT 'draft' COMMENT 'draft/published/archived',
+                                             `content_zh_json` MEDIUMTEXT NOT NULL,
+                                             `content_en_json` MEDIUMTEXT NOT NULL,
+                                             `difficulty` VARCHAR(16) NOT NULL DEFAULT '',
+                                             `estimated_duration_min` INT NOT NULL DEFAULT 0,
+                                             `estimated_duration_max` INT NOT NULL DEFAULT 0,
+                                             `best_seasons_json` TEXT NOT NULL,
+                                             `content_version` BIGINT NOT NULL DEFAULT 1,
+                                             `created_at` DATETIME(6) NOT NULL,
+                                             `updated_at` DATETIME(6) NOT NULL,
+                                             `published_at` DATETIME(6) NULL,
+                                             PRIMARY KEY (`id`),
+                                             UNIQUE KEY `uk_track_route_intro_anchor` (`anchor_track_id`),
+                                             KEY `idx_track_route_intro_group_status` (`current_group_id`, `status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='聚合路线运营介绍内容';
+
 
 CREATE TABLE `user_achievement_rewards` (
                                             `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,

@@ -54,7 +54,7 @@ track_server/
 │   ├── handler/            # Hertz HTTP handler + router.go 路由表（权威）
 │   ├── maparea/            # 内置 GCJ-02 景区/区县目录；生成区县基线 + 人工覆盖 + 介绍页内容
 │   ├── middleware/         # JWT 鉴权、请求元信息、Token 黑名单
-│   ├── models/             # 领域模型（Track / User / UserFollow / AccountRestriction / Companion / CompanionEvent / Achievement / Feedback / Analytics / 相关光标/子结构）
+│   ├── models/             # 领域模型（Track / RouteGroup 路线介绍 / User / UserFollow / AccountRestriction / Companion / CompanionEvent / Achievement / Feedback / Analytics / 相关光标/子结构）
 │   ├── repository/         # 持久化接口 + mysql / mongo / memory 三实现
 │   ├── scheduler/          # 进程内定时任务（基于 robfig/cron/v3，按 SCHEDULER_ENABLED 启停）
 │   └── service/            # 业务编排：登录、轨迹、用户、同行控制面、成就、OSS STS、资源缓存、埋点落盘
@@ -154,7 +154,7 @@ track/create(is_running=false) 或 track upload/update 完成轨迹
   → 用内置区域目录离线匹配中心点并写入 area_id；未命中保持空字符串
   → 重建替换 track_route_groups / track_route_group_members（存量聚合结果可清空重算；MySQL 实现使用事务）
 ```
-首页地图模式客户端接口挂在 auth 组：`GET /api/v1/track-map/view`、`GET /api/v1/track-map/groups`、`GET /api/v1/track-map/groups/:group_id/detail`、`GET /api/v1/track-map/groups/:group_id/tracks`。区域介绍页 `GET /api/v1/track-map/areas/:area_id/introduction.html` 是公开 H5，不走业务 JWT。`group_id` 来自 `track_route_groups.group_id`，不等同于单条 `track_id`；列表和地图聚合使用 RouteGroup 数量口径，不返回 `user_count` / `track_count`。调整字段、缩放分层、区域目录/介绍协议、聚合数量口径或 group_id 语义时，同步更新 `docs/api/track-map.md`、`docs/api/route-index.md` 与 `track_map.md`。
+首页地图模式客户端接口挂在 auth 组：`GET /api/v1/track-map/view`、`GET /api/v1/track-map/groups`、`GET /api/v1/track-map/groups/:group_id/detail`、`GET /api/v1/track-map/groups/:group_id/tracks`。区域介绍页 `GET /api/v1/track-map/areas/:area_id/introduction.html` 和聚合路线介绍页 `GET /api/v1/track-map/groups/:group_id/introduction.html` 是公开 H5，不走业务 JWT。只有 `track_route_introductions.status=published` 时路线对象才返回 `introduction_url`；介绍以 `anchor_track_id` 为稳定锚点，路线组全量重建后仓储必须按新成员关系更新 `current_group_id`，禁止把运营介绍直接存进会被清空的 `track_route_groups`。`group_id` 来自 `track_route_groups.group_id`，不等同于单条 `track_id`；列表和地图聚合使用 RouteGroup 数量口径，不返回 `user_count` / `track_count`。调整字段、缩放分层、区域/路线介绍协议、聚合数量口径或 group_id 语义时，同步更新 `docs/api/track-map.md`、`docs/api/route-index.md` 与 `track_map.md`。
 管理中心聚合路线列表和详情展示路线组摘要，以及已存 `area_id` 对应的区域名称、类型、城市与介绍页入口；admin 请求链路只按 ID 查询目录，不重新执行空间匹配。RouteGroup 对客户端表示聚合区域，使用 `center` + `radius_m` 绘制，不再下发代表路线折线。
 
 **短信登录等级信息**：`POST /api/v1/login/sms` 成功响应会附带 `achievement_level`，由 `LoginHandler` 调用 `AchievementService.GetLevelInfo` 基于当前有效轨迹实时计算；修改登录响应或等级字段时同步更新 `login.md`。

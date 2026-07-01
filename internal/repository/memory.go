@@ -44,12 +44,14 @@ type InMemoryAchievementRepository struct {
 
 // InMemoryTrackMapRepository stores async map index jobs and geo indexes in memory.
 type InMemoryTrackMapRepository struct {
-	mu           sync.RWMutex
-	tracks       *InMemoryTrackRepository
-	jobs         map[string]*models.TrackMapIndexJob
-	indexes      map[string]*models.TrackGeoIndex
-	routeGroups  map[string]*models.TrackRouteGroup
-	routeMembers map[string]map[string]*models.TrackRouteGroupMember
+	mu                      sync.RWMutex
+	tracks                  *InMemoryTrackRepository
+	jobs                    map[string]*models.TrackMapIndexJob
+	indexes                 map[string]*models.TrackGeoIndex
+	routeGroups             map[string]*models.TrackRouteGroup
+	routeMembers            map[string]map[string]*models.TrackRouteGroupMember
+	routeIntroductions      map[int64]*models.TrackRouteIntroduction
+	nextRouteIntroductionID int64
 }
 
 type InMemoryFeedbackRepository struct {
@@ -77,11 +79,13 @@ func NewInMemoryAchievementRepository() *InMemoryAchievementRepository {
 
 func NewInMemoryTrackMapRepository(tracks *InMemoryTrackRepository) *InMemoryTrackMapRepository {
 	return &InMemoryTrackMapRepository{
-		tracks:       tracks,
-		jobs:         make(map[string]*models.TrackMapIndexJob),
-		indexes:      make(map[string]*models.TrackGeoIndex),
-		routeGroups:  make(map[string]*models.TrackRouteGroup),
-		routeMembers: make(map[string]map[string]*models.TrackRouteGroupMember),
+		tracks:                  tracks,
+		jobs:                    make(map[string]*models.TrackMapIndexJob),
+		indexes:                 make(map[string]*models.TrackGeoIndex),
+		routeGroups:             make(map[string]*models.TrackRouteGroup),
+		routeMembers:            make(map[string]map[string]*models.TrackRouteGroupMember),
+		routeIntroductions:      make(map[int64]*models.TrackRouteIntroduction),
+		nextRouteIntroductionID: 1,
 	}
 }
 
@@ -1881,6 +1885,92 @@ func (r *InMemoryTrackMapRepository) ReplaceRouteGroups(_ context.Context, group
 		}
 		r.routeMembers[clone.GroupID][clone.TrackID] = &clone
 	}
+	anchorGroups := make(map[string]string, len(members))
+	for _, member := range members {
+		if member != nil {
+			anchorGroups[member.TrackID] = member.GroupID
+		}
+	}
+	for _, introduction := range r.routeIntroductions {
+		introduction.CurrentGroupID = anchorGroups[introduction.AnchorTrackID]
+		introduction.UpdatedAt = time.Now()
+	}
+	oldestByGroup := make(map[string]int64)
+	for id, introduction := range r.routeIntroductions {
+		if introduction.CurrentGroupID == "" {
+			continue
+		}
+		oldest, exists := oldestByGroup[introduction.CurrentGroupID]
+		if !exists || id < oldest {
+			oldestByGroup[introduction.CurrentGroupID] = id
+		}
+	}
+	for id, introduction := range r.routeIntroductions {
+		if introduction.CurrentGroupID != "" && oldestByGroup[introduction.CurrentGroupID] != id {
+			introduction.CurrentGroupID = ""
+			introduction.Status = models.TrackRouteIntroductionStatusArchived
+		}
+	}
+	return nil
+}
+
+func (r *InMemoryTrackMapRepository) FindRouteIntroductionByGroupID(_ context.Context, groupID string) (*models.TrackRouteIntroduction, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, introduction := range r.routeIntroductions {
+		if introduction.CurrentGroupID == groupID {
+			clone := *introduction
+			return &clone, nil
+		}
+	}
+	return nil, ErrNotFound
+}
+
+func (r *InMemoryTrackMapRepository) ListPublishedRouteIntroductions(_ context.Context, groupIDs []string) (map[string]*models.TrackRouteIntroduction, error) {
+	wanted := make(map[string]struct{}, len(groupIDs))
+	for _, groupID := range groupIDs {
+		wanted[groupID] = struct{}{}
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	result := make(map[string]*models.TrackRouteIntroduction)
+	for _, introduction := range r.routeIntroductions {
+		if introduction.Status != models.TrackRouteIntroductionStatusPublished {
+			continue
+		}
+		if _, ok := wanted[introduction.CurrentGroupID]; !ok {
+			continue
+		}
+		clone := *introduction
+		result[introduction.CurrentGroupID] = &clone
+	}
+	return result, nil
+}
+
+func (r *InMemoryTrackMapRepository) UpsertRouteIntroduction(_ context.Context, introduction *models.TrackRouteIntroduction) error {
+	if introduction == nil || introduction.AnchorTrackID == "" {
+		return errors.New("route introduction is required")
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	now := time.Now()
+	for id, existing := range r.routeIntroductions {
+		if (introduction.ID > 0 && id == introduction.ID) || existing.AnchorTrackID == introduction.AnchorTrackID {
+			clone := *introduction
+			clone.ID = id
+			clone.CreatedAt = existing.CreatedAt
+			clone.UpdatedAt = now
+			r.routeIntroductions[id] = &clone
+			*introduction = clone
+			return nil
+		}
+	}
+	clone := *introduction
+	clone.ID = r.nextRouteIntroductionID
+	r.nextRouteIntroductionID++
+	clone.CreatedAt, clone.UpdatedAt = now, now
+	r.routeIntroductions[clone.ID] = &clone
+	*introduction = clone
 	return nil
 }
 

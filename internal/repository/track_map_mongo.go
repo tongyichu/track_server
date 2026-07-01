@@ -14,15 +14,16 @@ import (
 
 // MongoTrackMapRepository implements TrackMapRepository using MongoDB.
 type MongoTrackMapRepository struct {
-	jobs    *mongo.Collection
-	index   *mongo.Collection
-	tracks  *mongo.Collection
-	groups  *mongo.Collection
-	members *mongo.Collection
+	jobs          *mongo.Collection
+	index         *mongo.Collection
+	tracks        *mongo.Collection
+	groups        *mongo.Collection
+	members       *mongo.Collection
+	introductions *mongo.Collection
 }
 
 func NewMongoTrackMapRepository(jobs, index, tracks, groups, members *mongo.Collection) *MongoTrackMapRepository {
-	return &MongoTrackMapRepository{jobs: jobs, index: index, tracks: tracks, groups: groups, members: members}
+	return &MongoTrackMapRepository{jobs: jobs, index: index, tracks: tracks, groups: groups, members: members, introductions: groups.Database().Collection("track_route_introductions")}
 }
 
 func (r *MongoTrackMapRepository) EnqueueIndexJob(ctx context.Context, trackID string, runAt time.Time) error {
@@ -644,7 +645,90 @@ func (r *MongoTrackMapRepository) ReplaceRouteGroups(ctx context.Context, groups
 			}
 		}
 	}
+	cursor, err := r.introductions.Find(ctx, bson.M{}, options.Find().SetSort(bson.D{{Key: "id", Value: 1}}))
+	if err != nil {
+		return err
+	}
+	defer cursor.Close(ctx)
+	boundGroups := make(map[string]struct{})
+	for cursor.Next(ctx) {
+		var introduction models.TrackRouteIntroduction
+		if err := cursor.Decode(&introduction); err != nil {
+			return err
+		}
+		var member models.TrackRouteGroupMember
+		groupID := ""
+		if err := r.members.FindOne(ctx, bson.M{"track_id": introduction.AnchorTrackID}).Decode(&member); err == nil {
+			groupID = member.GroupID
+		} else if !errors.Is(err, mongo.ErrNoDocuments) {
+			return err
+		}
+		status := introduction.Status
+		if groupID != "" {
+			if _, exists := boundGroups[groupID]; exists {
+				groupID, status = "", models.TrackRouteIntroductionStatusArchived
+			} else {
+				boundGroups[groupID] = struct{}{}
+			}
+		}
+		if _, err := r.introductions.UpdateOne(ctx, bson.M{"anchor_track_id": introduction.AnchorTrackID}, bson.M{"$set": bson.M{"current_group_id": groupID, "status": status, "updated_at": time.Now()}}); err != nil {
+			return err
+		}
+	}
+	if err := cursor.Err(); err != nil {
+		return err
+	}
 	return nil
+}
+
+func (r *MongoTrackMapRepository) FindRouteIntroductionByGroupID(ctx context.Context, groupID string) (*models.TrackRouteIntroduction, error) {
+	var introduction models.TrackRouteIntroduction
+	err := r.introductions.FindOne(ctx, bson.M{"current_group_id": strings.TrimSpace(groupID)}).Decode(&introduction)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return nil, ErrNotFound
+	}
+	return &introduction, err
+}
+
+func (r *MongoTrackMapRepository) ListPublishedRouteIntroductions(ctx context.Context, groupIDs []string) (map[string]*models.TrackRouteIntroduction, error) {
+	result := make(map[string]*models.TrackRouteIntroduction)
+	if len(groupIDs) == 0 {
+		return result, nil
+	}
+	cursor, err := r.introductions.Find(ctx, bson.M{"status": models.TrackRouteIntroductionStatusPublished, "current_group_id": bson.M{"$in": groupIDs}})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	for cursor.Next(ctx) {
+		var introduction models.TrackRouteIntroduction
+		if err := cursor.Decode(&introduction); err != nil {
+			return nil, err
+		}
+		clone := introduction
+		result[introduction.CurrentGroupID] = &clone
+	}
+	return result, cursor.Err()
+}
+
+func (r *MongoTrackMapRepository) UpsertRouteIntroduction(ctx context.Context, introduction *models.TrackRouteIntroduction) error {
+	if introduction == nil || strings.TrimSpace(introduction.AnchorTrackID) == "" {
+		return errors.New("route introduction is required")
+	}
+	now := time.Now()
+	if introduction.ID == 0 {
+		introduction.ID = now.UnixNano()
+	}
+	if introduction.CreatedAt.IsZero() {
+		introduction.CreatedAt = now
+	}
+	introduction.UpdatedAt = now
+	filter := bson.M{"anchor_track_id": introduction.AnchorTrackID}
+	if introduction.ID != 0 {
+		filter = bson.M{"id": introduction.ID}
+	}
+	_, err := r.introductions.ReplaceOne(ctx, filter, introduction, options.Replace().SetUpsert(true))
+	return err
 }
 
 func (r *MongoTrackMapRepository) DeleteRouteGroupMember(ctx context.Context, groupID, trackID string) error {

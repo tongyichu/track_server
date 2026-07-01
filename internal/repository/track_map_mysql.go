@@ -735,7 +735,146 @@ func (r *MySQLTrackMapRepository) ReplaceRouteGroups(ctx context.Context, groups
 			return err
 		}
 	}
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE track_route_introductions i
+		LEFT JOIN track_route_group_members m ON m.track_id = i.anchor_track_id
+		SET i.current_group_id = COALESCE(m.group_id, ''), i.updated_at = ?
+	`, time.Now()); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE track_route_introductions newer
+		JOIN track_route_introductions older
+		  ON older.current_group_id = newer.current_group_id AND older.id < newer.id
+		SET newer.current_group_id = '', newer.status = 'archived', newer.updated_at = ?
+		WHERE newer.current_group_id <> ''
+	`, time.Now()); err != nil {
+		return err
+	}
 	return tx.Commit()
+}
+
+func (r *MySQLTrackMapRepository) FindRouteIntroductionByGroupID(ctx context.Context, groupID string) (*models.TrackRouteIntroduction, error) {
+	row := r.db.QueryRowContext(ctx, `
+		SELECT id, anchor_track_id, current_group_id, status, content_zh_json, content_en_json,
+		       difficulty, estimated_duration_min, estimated_duration_max, best_seasons_json,
+		       content_version, created_at, updated_at, published_at
+		FROM track_route_introductions WHERE current_group_id=? LIMIT 1
+	`, strings.TrimSpace(groupID))
+	return scanMySQLRouteIntroduction(row)
+}
+
+func (r *MySQLTrackMapRepository) ListPublishedRouteIntroductions(ctx context.Context, groupIDs []string) (map[string]*models.TrackRouteIntroduction, error) {
+	result := make(map[string]*models.TrackRouteIntroduction)
+	if len(groupIDs) == 0 {
+		return result, nil
+	}
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(groupIDs)), ",")
+	args := make([]interface{}, 0, len(groupIDs)+1)
+	args = append(args, models.TrackRouteIntroductionStatusPublished)
+	for _, groupID := range groupIDs {
+		args = append(args, strings.TrimSpace(groupID))
+	}
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT id, anchor_track_id, current_group_id, status, content_zh_json, content_en_json,
+		       difficulty, estimated_duration_min, estimated_duration_max, best_seasons_json,
+		       content_version, created_at, updated_at, published_at
+		FROM track_route_introductions WHERE status=? AND current_group_id IN (`+placeholders+`)`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		introduction, err := scanMySQLRouteIntroduction(rows)
+		if err != nil {
+			return nil, err
+		}
+		result[introduction.CurrentGroupID] = introduction
+	}
+	return result, rows.Err()
+}
+
+type routeIntroductionScanner interface {
+	Scan(dest ...interface{}) error
+}
+
+func scanMySQLRouteIntroduction(scanner routeIntroductionScanner) (*models.TrackRouteIntroduction, error) {
+	var introduction models.TrackRouteIntroduction
+	var zhJSON, enJSON, seasonsJSON []byte
+	var publishedAt sql.NullTime
+	err := scanner.Scan(&introduction.ID, &introduction.AnchorTrackID, &introduction.CurrentGroupID, &introduction.Status,
+		&zhJSON, &enJSON, &introduction.Difficulty, &introduction.EstimatedDurationMin, &introduction.EstimatedDurationMax,
+		&seasonsJSON, &introduction.ContentVersion, &introduction.CreatedAt, &introduction.UpdatedAt, &publishedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(zhJSON, &introduction.Chinese); err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(enJSON, &introduction.English); err != nil {
+		return nil, err
+	}
+	if len(seasonsJSON) > 0 {
+		if err := json.Unmarshal(seasonsJSON, &introduction.BestSeasons); err != nil {
+			return nil, err
+		}
+	}
+	if publishedAt.Valid {
+		introduction.PublishedAt = &publishedAt.Time
+	}
+	return &introduction, nil
+}
+
+func (r *MySQLTrackMapRepository) UpsertRouteIntroduction(ctx context.Context, introduction *models.TrackRouteIntroduction) error {
+	if introduction == nil || strings.TrimSpace(introduction.AnchorTrackID) == "" {
+		return errors.New("route introduction is required")
+	}
+	zhJSON, err := json.Marshal(introduction.Chinese)
+	if err != nil {
+		return err
+	}
+	enJSON, err := json.Marshal(introduction.English)
+	if err != nil {
+		return err
+	}
+	seasonsJSON, err := json.Marshal(introduction.BestSeasons)
+	if err != nil {
+		return err
+	}
+	now := time.Now()
+	if introduction.CreatedAt.IsZero() {
+		introduction.CreatedAt = now
+	}
+	introduction.UpdatedAt = now
+	if introduction.ID > 0 {
+		_, err = r.db.ExecContext(ctx, `
+			UPDATE track_route_introductions SET anchor_track_id=?,current_group_id=?,status=?,content_zh_json=?,content_en_json=?,difficulty=?,
+				estimated_duration_min=?,estimated_duration_max=?,best_seasons_json=?,content_version=?,updated_at=?,published_at=? WHERE id=?
+		`, introduction.AnchorTrackID, introduction.CurrentGroupID, introduction.Status, zhJSON, enJSON, introduction.Difficulty,
+			introduction.EstimatedDurationMin, introduction.EstimatedDurationMax, seasonsJSON, introduction.ContentVersion,
+			introduction.UpdatedAt, introduction.PublishedAt, introduction.ID)
+		return err
+	}
+	result, err := r.db.ExecContext(ctx, `
+		INSERT INTO track_route_introductions
+			(anchor_track_id,current_group_id,status,content_zh_json,content_en_json,difficulty,
+			 estimated_duration_min,estimated_duration_max,best_seasons_json,content_version,created_at,updated_at,published_at)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+		ON DUPLICATE KEY UPDATE current_group_id=VALUES(current_group_id),status=VALUES(status),
+			content_zh_json=VALUES(content_zh_json),content_en_json=VALUES(content_en_json),difficulty=VALUES(difficulty),
+			estimated_duration_min=VALUES(estimated_duration_min),estimated_duration_max=VALUES(estimated_duration_max),
+			id=LAST_INSERT_ID(id),best_seasons_json=VALUES(best_seasons_json),content_version=VALUES(content_version),updated_at=VALUES(updated_at),published_at=VALUES(published_at)
+	`, introduction.AnchorTrackID, introduction.CurrentGroupID, introduction.Status, zhJSON, enJSON, introduction.Difficulty,
+		introduction.EstimatedDurationMin, introduction.EstimatedDurationMax, seasonsJSON, introduction.ContentVersion,
+		introduction.CreatedAt, introduction.UpdatedAt, introduction.PublishedAt)
+	if err != nil {
+		return err
+	}
+	introduction.ID, _ = result.LastInsertId()
+	return nil
 }
 
 func (r *MySQLTrackMapRepository) DeleteRouteGroupMember(ctx context.Context, groupID, trackID string) error {

@@ -299,6 +299,7 @@ track_type=hiking
       "type": "route_group",
       "group_id": "rg_810000_hiking_000001",
       "name": "麦理浩径徒步路线",
+      "introduction_url": "/api/v1/track-map/groups/rg_810000_hiking_000001/introduction.html?v=3",
       "city_code": "810000",
       "city_name": "香港",
       "track_type": "hiking",
@@ -392,6 +393,7 @@ track_type=hiking
 - RouteGroup 的 `area_id` 由 `track_route_group` 离线任务计算：先按 `bounds` 预筛，再用 Polygon/MultiPolygon 判断 RouteGroup 中心，无 geometry 的人工区域按 `bounds` 兜底。接口只根据已存 `area_id` 查询内置 GCJ-02 区域目录，并返回可选的 `name`、`area_type`、`area`、`city_code`、`city_name`；相同 `area_id` 的 RouteGroup 聚合为一个气泡，空 `area_id` 继续按原网格聚合。
 - 生成区县基线当前覆盖 36 个重点城市的 194 个核心区县。`catalog.json` 中的人工景区/区县条目可按稳定 ID 覆盖基线，同 ID 人工区县未提供 geometry 时继承生成区县 geometry；景区优先于区县，同优先级选择范围更小的区域，未命中时保持原数量气泡响应。
 - `area.id` 是稳定区域 ID；有介绍内容时，公开的 `area.introduction_url` 可由客户端 WebView 打开，支持 `lang=english` 和 `is_dark=true`。
+- RouteGroup 的运营介绍独立存储在 `track_route_introductions`，已发布时在路线视野、列表和详情对象中返回公开 `introduction_url`。介绍以代表轨迹作为稳定锚点，离线全量重聚合后按锚点所在成员关系自动更新 `current_group_id`，避免内容随 `track_route_groups` 重建丢失。
 - 客户端点击 `city_cluster` 或 `area_cluster` 后，只需要放大地图并重新请求 `/track-map/view`。
 - 客户端点击 `route_group` 后，请求路线组详情或具体轨迹列表。
 
@@ -472,6 +474,7 @@ city_code=810000
 | --- | --- | --- |
 | `group_id` | string | 路线组 ID |
 | `name` | string | 路线展示名称 |
+| `introduction_url` | string | 可选；仅路线介绍已发布时返回的公开 H5 地址 |
 | `city_code` | string | 城市 Code |
 | `city_name` | string | 城市名称 |
 | `track_type` | string | 运动类型 |
@@ -495,6 +498,7 @@ GET /api/v1/track-map/groups/:group_id/detail
 {
   "group_id": "rg_810000_hiking_000001",
   "name": "麦理浩径徒步路线",
+  "introduction_url": "/api/v1/track-map/groups/rg_810000_hiking_000001/introduction.html?v=3",
   "city_code": "810000",
   "city_name": "香港",
   "track_type": "hiking",
@@ -517,7 +521,9 @@ GET /api/v1/track-map/groups/:group_id/detail
 }
 ```
 
-详情第一版同样不展示人数和轨迹数量。如果客户端需要列表入口，直接展示“相关轨迹”。
+详情第一版同样不展示人数和轨迹数量。如果客户端需要列表入口，直接展示“相关轨迹”。已发布路线介绍时，详情和列表均返回相同的 `introduction_url`。
+
+聚合路线介绍页使用公开路由 `GET /api/v1/track-map/groups/:group_id/introduction.html`；仅发布内容可访问，并支持 `lang=english` 与 `is_dark=true`。内容由管理中心按结构化中英文文案维护，不接受任意 HTML。
 
 ### 5.4 查询路线组下的具体轨迹列表
 
@@ -686,6 +692,12 @@ CREATE TABLE track_route_group_members (
   KEY idx_track_route_member_group (group_id, role, created_at)
 );
 ```
+
+#### track_route_introductions
+
+用于保存不会随离线路线组全量重建而丢失的运营介绍。`anchor_track_id` 唯一标识介绍档案；重聚合完成后，根据锚点轨迹所在的 `track_route_group_members` 更新 `current_group_id`。内容按结构化中英文 JSON 保存，`status=published` 时才对客户端返回介绍 URL。
+
+主要字段包括 `anchor_track_id`、`current_group_id`、`status`、`content_zh_json`、`content_en_json`、`difficulty`、预计时长、适宜季节、`content_version` 与发布时间；完整基线见 `mysql.sql`。
 
 ### 6.2 索引构建流程
 
@@ -856,9 +868,9 @@ RouteGroup 是路线聚合入口，不展示用户实时位置。
 
 当前落地实现已涉及：
 
-- 新增 HTTP 路由：`/track-map/view`、`/track-map/groups`、`/track-map/groups/:group_id/detail`、`/track-map/groups/:group_id/tracks`、公开的 `/track-map/areas/:area_id/introduction.html`。
+- 新增 HTTP 路由：`/track-map/view`、`/track-map/groups`、`/track-map/groups/:group_id/detail`、`/track-map/groups/:group_id/tracks`、公开的 `/track-map/areas/:area_id/introduction.html` 与 `/track-map/groups/:group_id/introduction.html`。
 - 新增模型：TrackGeoIndex、TrackMapIndexJob、地图视野响应模型。
-- 新增模型：TrackRouteGroup、TrackRouteGroupMember。
+- 新增模型：TrackRouteGroup、TrackRouteGroupMember、TrackRouteIntroduction。
 - 新增 repository interface 与 MySQL / Mongo / memory 三套实现。
 - 新增数据库表结构。
 - 新增轨迹完成后的索引构建流程。

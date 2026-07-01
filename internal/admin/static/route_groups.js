@@ -92,6 +92,9 @@
       alert(err.message);
     }
   });
+  document.getElementById('introSaveBtn').addEventListener('click', saveIntroduction);
+  document.getElementById('introPublishBtn').addEventListener('click', function () { setIntroductionPublished(true); });
+  document.getElementById('introUnpublishBtn').addEventListener('click', function () { setIntroductionPublished(false); });
 
   async function loadGroups() {
     statusHint.textContent = '加载中...';
@@ -141,10 +144,49 @@
     try {
       var data = await apiJSON('/admin/api/route-groups/' + encodeURIComponent(groupID) + '?limit=100');
       renderDetail(data);
+      await loadIntroduction(groupID);
       detailHint.textContent = '';
     } catch (err) {
       detailHint.textContent = '加载失败: ' + err.message;
     }
+  }
+
+  function lines(id) { return document.getElementById(id).value.split('\n').map(function (s) { return s.trim(); }).filter(Boolean); }
+  function putLines(id, values) { document.getElementById(id).value = (values || []).join('\n'); }
+  async function loadIntroduction(groupID) {
+    var intro = await apiJSON('/admin/api/route-groups/' + encodeURIComponent(groupID) + '/introduction');
+    var zh = intro.zh || {}, en = intro.en || {};
+    document.getElementById('introZhName').value = zh.name || '';
+    document.getElementById('introEnName').value = en.name || '';
+    document.getElementById('introZhSummary').value = zh.summary || '';
+    document.getElementById('introEnSummary').value = en.summary || '';
+    putLines('introZhDescription', zh.description); putLines('introEnDescription', en.description);
+    putLines('introZhHighlights', zh.highlights); putLines('introEnHighlights', en.highlights);
+    putLines('introZhTips', zh.tips); putLines('introEnTips', en.tips);
+    document.getElementById('introDifficulty').value = intro.difficulty || '';
+    document.getElementById('introBestSeasons').value = (intro.best_seasons || []).join(',');
+    document.getElementById('introDurationMin').value = intro.estimated_duration_min || 0;
+    document.getElementById('introDurationMax').value = intro.estimated_duration_max || 0;
+    document.getElementById('introStatus').textContent = '状态：' + (intro.status || 'draft') + '；版本：' + (intro.content_version || 0);
+    var link = document.getElementById('introPreviewLink');
+    link.hidden = intro.status !== 'published';
+    link.href = '/api/v1/track-map/groups/' + encodeURIComponent(groupID) + '/introduction.html?v=' + (intro.content_version || 1);
+  }
+  function introductionPayload() {
+    return {zh:{name:document.getElementById('introZhName').value.trim(),summary:document.getElementById('introZhSummary').value.trim(),description:lines('introZhDescription'),highlights:lines('introZhHighlights'),tips:lines('introZhTips')},
+      en:{name:document.getElementById('introEnName').value.trim(),summary:document.getElementById('introEnSummary').value.trim(),description:lines('introEnDescription'),highlights:lines('introEnHighlights'),tips:lines('introEnTips')},
+      difficulty:document.getElementById('introDifficulty').value.trim(),best_seasons:document.getElementById('introBestSeasons').value.split(',').map(function(s){return s.trim();}).filter(Boolean),
+      estimated_duration_min:Number(document.getElementById('introDurationMin').value||0),estimated_duration_max:Number(document.getElementById('introDurationMax').value||0)};
+  }
+  async function saveIntroduction() {
+    if (!selectedGroupID) return;
+    try { await apiJSON('/admin/api/route-groups/'+encodeURIComponent(selectedGroupID)+'/introduction',{method:'PUT',body:JSON.stringify(introductionPayload())}); await loadIntroduction(selectedGroupID); }
+    catch(err){ alert(err.message); }
+  }
+  async function setIntroductionPublished(published) {
+    if (!selectedGroupID) return;
+    try { await apiJSON('/admin/api/route-groups/'+encodeURIComponent(selectedGroupID)+'/introduction/'+(published?'publish':'unpublish'),{method:'POST'}); await loadIntroduction(selectedGroupID); await loadGroups(); }
+    catch(err){ alert(err.message); }
   }
 
   function renderDetail(data) {

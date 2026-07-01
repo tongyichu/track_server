@@ -1,0 +1,9 @@
+<!doctype html>
+<html lang="{{.Language}}"{{if .Dark}} class="dark"{{end}}><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{.Name}}</title><style>
+:root{color-scheme:light;--bg:#f6f8f5;--card:#fff;--text:#172019;--muted:#667268;--accent:#287a45;--line:#dfe7e0}.dark{color-scheme:dark;--bg:#111612;--card:#1b221c;--text:#edf5ee;--muted:#a9b5aa;--accent:#6fd28f;--line:#344036}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:16px/1.65 system-ui,-apple-system,sans-serif}.page{max-width:760px;margin:auto;padding:24px 18px 48px}.hero,.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px;margin-bottom:14px}h1{font-size:28px;line-height:1.25;margin:0 0 10px}h2{font-size:18px;margin:0 0 10px;color:var(--accent)}p{margin:8px 0}.summary{color:var(--muted)}.facts{display:flex;gap:10px;flex-wrap:wrap}.pill{padding:6px 11px;border-radius:999px;background:var(--bg);border:1px solid var(--line)}ul{margin:0;padding-left:22px}
+</style></head><body><main class="page"><section class="hero"><h1>{{.Name}}</h1><p class="summary">{{.Summary}}</p></section>
+{{if or .Distance .Duration .Difficulty .BestSeasons}}<section class="card"><h2>{{.FactsTitle}}</h2><div class="facts">{{if .Distance}}<span class="pill">{{.Distance}}</span>{{end}}{{if .Duration}}<span class="pill">{{.Duration}}</span>{{end}}{{if .Difficulty}}<span class="pill">{{.Difficulty}}</span>{{end}}{{range .BestSeasons}}<span class="pill">{{.}}</span>{{end}}</div></section>{{end}}
+{{if .Description}}<section class="card"><h2>{{.DescriptionTitle}}</h2>{{range .Description}}<p>{{.}}</p>{{end}}</section>{{end}}
+{{if .Highlights}}<section class="card"><h2>{{.HighlightsTitle}}</h2><ul>{{range .Highlights}}<li>{{.}}</li>{{end}}</ul></section>{{end}}
+{{if .Tips}}<section class="card"><h2>{{.TipsTitle}}</h2><ul>{{range .Tips}}<li>{{.}}</li>{{end}}</ul></section>{{end}}</main></body></html>

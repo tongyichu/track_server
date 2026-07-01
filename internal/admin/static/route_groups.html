@@ -76,6 +76,28 @@
         </div>
       </div>
 
+      <h2 class="subhead">路线介绍 <span class="hint" id="introStatus"></span></h2>
+      <div class="grid compact-grid">
+        <label>中文标题<input id="introZhName" type="text" placeholder="麦理浩径徒步路线" /></label>
+        <label>英文标题<input id="introEnName" type="text" placeholder="MacLehose Trail Hiking Route" /></label>
+        <label>中文摘要<textarea id="introZhSummary" rows="3"></textarea></label>
+        <label>英文摘要<textarea id="introEnSummary" rows="3"></textarea></label>
+        <label>中文路线介绍（每行一段）<textarea id="introZhDescription" rows="5"></textarea></label>
+        <label>英文路线介绍（每行一段）<textarea id="introEnDescription" rows="5"></textarea></label>
+        <label>中文亮点（每行一项）<textarea id="introZhHighlights" rows="4"></textarea></label>
+        <label>英文亮点（每行一项）<textarea id="introEnHighlights" rows="4"></textarea></label>
+        <label>中文提示（每行一项）<textarea id="introZhTips" rows="4"></textarea></label>
+        <label>英文提示（每行一项）<textarea id="introEnTips" rows="4"></textarea></label>
+        <label>难度<input id="introDifficulty" type="text" placeholder="easy / medium / hard" /></label>
+        <label>适宜季节（逗号分隔）<input id="introBestSeasons" type="text" placeholder="autumn,winter" /></label>
+        <label>预计最短时长（分钟）<input id="introDurationMin" type="number" min="0" /></label>
+        <label>预计最长时长（分钟）<input id="introDurationMax" type="number" min="0" /></label>
+      </div>
+      <div class="actions">
+        <button id="introSaveBtn">保存</button><button id="introPublishBtn">发布</button><button id="introUnpublishBtn">下线</button>
+        <a id="introPreviewLink" class="admin-link" target="_blank" rel="noopener" hidden>预览已发布页面</a>
+      </div>
+
       <h2 class="subhead">成员轨迹</h2>
       <table class="data">
         <thead>

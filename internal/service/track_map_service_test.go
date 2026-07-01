@@ -168,3 +168,30 @@ func TestTrackMapServiceViewAreaDoesNotResolveMissingAreaIDOnline(t *testing.T) 
 		t.Fatalf("missing offline area_id should not be resolved online: %+v", items)
 	}
 }
+
+func TestTrackMapServiceRouteGroupIncludesPublishedIntroductionURL(t *testing.T) {
+	ctx := context.Background()
+	trackRepo := repository.NewInMemoryTrackRepository()
+	mapRepo := repository.NewInMemoryTrackMapRepository(trackRepo)
+	now := time.Now()
+	track := &models.Track{ID: "NO.00000011", UserID: 1, Status: models.TrackStatusNormal, TrackType: "hiking", CreatedAt: now, UpdatedAt: now}
+	if err := trackRepo.Create(ctx, track); err != nil {
+		t.Fatal(err)
+	}
+	group := &models.TrackRouteGroup{GroupID: "RG.00000011", Name: "麦理浩径徒步路线", TrackType: "hiking", Status: models.TrackRouteGroupStatusActive,
+		RepresentativeTrackID: track.ID, CenterLat: 22.3, CenterLng: 114.1, MinLat: 22.2, MinLng: 114, MaxLat: 22.4, MaxLng: 114.2, CreatedAt: now, UpdatedAt: now}
+	if err := mapRepo.UpsertRouteGroup(ctx, group); err != nil {
+		t.Fatal(err)
+	}
+	if err := mapRepo.UpsertRouteIntroduction(ctx, &models.TrackRouteIntroduction{AnchorTrackID: track.ID, CurrentGroupID: group.GroupID,
+		Status: models.TrackRouteIntroductionStatusPublished, Chinese: models.TrackRouteIntroductionContent{Name: group.Name, Summary: "经典路线"}, ContentVersion: 3}); err != nil {
+		t.Fatal(err)
+	}
+	item, err := NewTrackMapService(mapRepo, trackRepo, nil).GetGroupDetail(ctx, group.GroupID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if item.IntroductionURL != "/api/v1/track-map/groups/RG.00000011/introduction.html?v=3" {
+		t.Fatalf("introduction_url=%q", item.IntroductionURL)
+	}
+}

@@ -31,6 +31,7 @@
 | 查询路线组详情 | GET | `/track-map/groups/:group_id/detail` | 是 | [track-map.md](track-map.md#50-查询路线组详情) |
 | 查询路线组下的具体轨迹列表 | GET | `/track-map/groups/:group_id/tracks` | 是 | [track-map.md](track-map.md#51-查询路线组下的具体轨迹列表) |
 | 查看地图区域介绍页 | GET | `/track-map/areas/:area_id/introduction.html` | 否 | [track-map.md](track-map.md#52-查看地图区域介绍页) |
+| 查看聚合路线介绍页 | GET | `/track-map/groups/:group_id/introduction.html` | 否 | [track-map.md](track-map.md#53-查看聚合路线介绍页) |
 | 创建同行会话 | POST | `/companion/session/create` | 是 | [companion.md](companion.md#17-创建同行会话) |
 | 加入同行会话 | POST | `/companion/session/join` | 是 | [companion.md](companion.md#18-加入同行会话) |
 | 预览同行会话 | GET | `/companion/session/preview` | 是 | [companion.md](companion.md#181-预览同行会话) |

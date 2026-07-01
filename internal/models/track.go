@@ -292,6 +292,40 @@ type TrackRouteGroup struct {
 	UpdatedAt             time.Time             `json:"updated_at" bson:"updated_at"`
 }
 
+const (
+	TrackRouteIntroductionStatusDraft     = "draft"
+	TrackRouteIntroductionStatusPublished = "published"
+	TrackRouteIntroductionStatusArchived  = "archived"
+)
+
+// TrackRouteIntroductionContent is localized, structured copy rendered by the route introduction H5.
+type TrackRouteIntroductionContent struct {
+	Name        string   `json:"name" bson:"name"`
+	Summary     string   `json:"summary" bson:"summary"`
+	Description []string `json:"description,omitempty" bson:"description,omitempty"`
+	Highlights  []string `json:"highlights,omitempty" bson:"highlights,omitempty"`
+	Tips        []string `json:"tips,omitempty" bson:"tips,omitempty"`
+}
+
+// TrackRouteIntroduction stores editorial copy separately from the rebuilt route-group tables.
+// AnchorTrackID is used to bind the copy to the new group after every offline regrouping.
+type TrackRouteIntroduction struct {
+	ID                   int64                         `json:"id" bson:"id"`
+	AnchorTrackID        string                        `json:"anchor_track_id" bson:"anchor_track_id"`
+	CurrentGroupID       string                        `json:"current_group_id" bson:"current_group_id"`
+	Status               string                        `json:"status" bson:"status"`
+	Chinese              TrackRouteIntroductionContent `json:"zh" bson:"zh"`
+	English              TrackRouteIntroductionContent `json:"en" bson:"en"`
+	Difficulty           string                        `json:"difficulty,omitempty" bson:"difficulty,omitempty"`
+	EstimatedDurationMin int                           `json:"estimated_duration_min,omitempty" bson:"estimated_duration_min,omitempty"`
+	EstimatedDurationMax int                           `json:"estimated_duration_max,omitempty" bson:"estimated_duration_max,omitempty"`
+	BestSeasons          []string                      `json:"best_seasons,omitempty" bson:"best_seasons,omitempty"`
+	ContentVersion       int64                         `json:"content_version" bson:"content_version"`
+	CreatedAt            time.Time                     `json:"created_at" bson:"created_at"`
+	UpdatedAt            time.Time                     `json:"updated_at" bson:"updated_at"`
+	PublishedAt          *time.Time                    `json:"published_at,omitempty" bson:"published_at,omitempty"`
+}
+
 // TrackRouteGroupMember stores the many-to-many membership between groups and tracks.
 type TrackRouteGroupMember struct {
 	GroupID         string                         `json:"group_id" bson:"group_id"`
@@ -345,6 +379,7 @@ type TrackMapRouteGroupItem struct {
 	Type             string              `json:"type"`
 	GroupID          string              `json:"group_id"`
 	Name             string              `json:"name"`
+	IntroductionURL  string              `json:"introduction_url,omitempty"`
 	CityCode         string              `json:"city_code"`
 	CityName         string              `json:"city_name"`
 	TrackType        string              `json:"track_type"`

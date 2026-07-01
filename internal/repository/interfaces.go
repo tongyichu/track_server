@@ -123,6 +123,9 @@ type TrackMapRepository interface {
 	UpsertRouteGroup(ctx context.Context, group *models.TrackRouteGroup) error
 	UpsertRouteGroupMember(ctx context.Context, member *models.TrackRouteGroupMember) error
 	ReplaceRouteGroups(ctx context.Context, groups []*models.TrackRouteGroup, members []*models.TrackRouteGroupMember) error
+	FindRouteIntroductionByGroupID(ctx context.Context, groupID string) (*models.TrackRouteIntroduction, error)
+	ListPublishedRouteIntroductions(ctx context.Context, groupIDs []string) (map[string]*models.TrackRouteIntroduction, error)
+	UpsertRouteIntroduction(ctx context.Context, introduction *models.TrackRouteIntroduction) error
 	DeleteRouteGroupMember(ctx context.Context, groupID, trackID string) error
 	ArchiveRouteGroup(ctx context.Context, groupID string, now time.Time) error
 	ListRouteGroupMembers(ctx context.Context, groupID string, limit int) ([]*models.TrackRouteGroupMember, error)
