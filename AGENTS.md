@@ -69,6 +69,7 @@ track_server/
 ├── track_achievement.md    # 轨迹成就产品/规则方案（等级、XP、勋章、会员边界）
 ├── track_achievement_client.md # 成就系统客户端对接文档
 ├── track_analytics.md      # 客户端埋点方案（事件命名 / 公共属性 / 业务事件 / 隐私验收）
+├── track_submission.md     # 轨迹投稿功能方案（审核、结构化路线资料、图片缓存、推荐与代表轨迹；待实现）
 └── login.md                # 登录流程与协议说明
 ```
 
@@ -84,6 +85,7 @@ track_server/
 | 接口协议 | `docs/api/`（入口 `track_api.md`，路由索引 `docs/api/route-index.md`，账号限制接口 `docs/api/account-restriction.md`，首页地图接口 `docs/api/track-map.md`）、`login.md`、`track_companion.md`、`track_achievement_client.md`、`track_map.md` |
 | 客户端埋点方案 | `track_analytics.md`、`docs/api/analytics.md` |
 | 成就规则方案 | `track_achievement.md` |
+| 轨迹投稿功能方案（待实现） | `track_submission.md`；正式实现后的接口协议仍以 `docs/api/` 与 `internal/handler/router.go` 为准 |
 
 ### 稳定默认值
 
