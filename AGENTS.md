@@ -54,7 +54,7 @@ track_server/
 │   ├── handler/            # Hertz HTTP handler + router.go 路由表（权威）
 │   ├── maparea/            # 内置 GCJ-02 景区/区县目录；生成区县基线 + 人工覆盖 + 介绍页内容
 │   ├── middleware/         # JWT 鉴权、请求元信息、Token 黑名单
-│   ├── models/             # 领域模型（Track / RouteGroup 路线介绍 / User / UserFollow / AccountRestriction / Companion / CompanionEvent / Achievement / Feedback / Analytics / 相关光标/子结构）
+│   ├── models/             # 领域模型（Track / TrackSubmission / RouteGroup 路线介绍 / User / UserFollow / AccountRestriction / Companion / CompanionEvent / Achievement / Feedback / Analytics / 相关光标/子结构）
 │   ├── repository/         # 持久化接口 + mysql / mongo / memory 三实现
 │   ├── scheduler/          # 进程内定时任务（基于 robfig/cron/v3，按 SCHEDULER_ENABLED 启停）
 │   └── service/            # 业务编排：登录、轨迹、用户、同行控制面、成就、OSS STS、资源缓存、埋点落盘
@@ -69,7 +69,7 @@ track_server/
 ├── track_achievement.md    # 轨迹成就产品/规则方案（等级、XP、勋章、会员边界）
 ├── track_achievement_client.md # 成就系统客户端对接文档
 ├── track_analytics.md      # 客户端埋点方案（事件命名 / 公共属性 / 业务事件 / 隐私验收）
-├── track_submission.md     # 轨迹投稿功能方案（审核、结构化路线资料、图片缓存、推荐与代表轨迹；待实现）
+├── track_submission.md     # 轨迹投稿功能方案（审核、结构化路线资料、图片缓存、推荐与代表轨迹）
 └── login.md                # 登录流程与协议说明
 ```
 
@@ -79,13 +79,13 @@ track_server/
 | HTTP 路由清单 | `internal/handler/router.go` |
 | 配置项与默认值 | `internal/config/config.go` |
 | Repository 接口契约 | `internal/repository/interfaces.go` |
-| 领域模型 | `internal/models/track.go`、`internal/models/user.go`（含 AccountRestriction）、`internal/models/companion.go`、`internal/models/achievement.go`、`internal/models/feedback.go`、`internal/models/analytics.go` |
+| 领域模型 | `internal/models/track.go`、`internal/models/track_submission.go`、`internal/models/user.go`（含 AccountRestriction）、`internal/models/companion.go`、`internal/models/achievement.go`、`internal/models/feedback.go`、`internal/models/analytics.go` |
 | 地图区域语义与介绍内容 | `internal/maparea/districts.json`（生成区县基线）+ `internal/maparea/catalog.json`（人工景区/区县覆盖）；解析规则见 `internal/maparea/catalog.go`，维护流程见 `internal/maparea/README.md` |
 | MySQL 表结构 | `mysql.sql` |
 | 接口协议 | `docs/api/`（入口 `track_api.md`，路由索引 `docs/api/route-index.md`，账号限制接口 `docs/api/account-restriction.md`，首页地图接口 `docs/api/track-map.md`）、`login.md`、`track_companion.md`、`track_achievement_client.md`、`track_map.md` |
 | 客户端埋点方案 | `track_analytics.md`、`docs/api/analytics.md` |
 | 成就规则方案 | `track_achievement.md` |
-| 轨迹投稿功能方案（待实现） | `track_submission.md`；正式实现后的接口协议仍以 `docs/api/` 与 `internal/handler/router.go` 为准 |
+| 轨迹投稿功能与协议 | `track_submission.md`、`docs/api/track-submission.md`；路由权威仍为 `internal/handler/router.go` |
 
 ### 稳定默认值
 
@@ -95,6 +95,7 @@ track_server/
 - 首页地图模式的轨迹空间索引由 `track_map_index` 后台任务异步构建：轨迹完成接口只写入 `track_map_index_jobs`，不得在请求主链路同步下载 OSS raw track 或解析轨迹点；后台下载 raw track 必须通过 `OSS_INTERNAL_ENDPOINT` 内网域名，未配置时失败重试且不回退公网；raw track 解析支持 JSON / GeoJSON / KML / KMZ。路线组由 `track_route_group` 离线任务基于 `track_geo_indexes` 聚合生成并写入 `track_route_groups.area_id`，默认每天 04:00 执行。
 - 地图 `area_cluster` 的景区/区县语义来自随二进制内置的 `internal/maparea/districts.json` 与 `catalog.json`；当前生成基线覆盖 36 个重点城市的 194 个核心区县，完整清单见 `internal/maparea/README.md`。不得在 `/track-map/view` 请求主链路调用外部逆地理编码或 Polygon/MultiPolygon 点包含计算。生成区县先加载，`catalog.json` 相同 ID 的人工条目随后覆盖；同 ID 人工区县未提供 geometry 时继承生成区县 geometry。`track_route_group` 离线任务使用 GCJ-02 `bounds` 预筛、Polygon/MultiPolygon 最终判断 RouteGroup medoid 中心，无 geometry 的人工区域才按 `bounds` 兜底，并将结果持久化到 `area_id`；接口按 `area_id` 查询目录详情。优先级高者优先、同优先级范围更小者优先。未命中的 RouteGroup 必须保留空 `area_id` 并继续按原网格生成数量气泡，不能臆造区域名。`area.id` 是稳定目录 ID。
 - `track_map_index_jobs` 补偿入队必须保持幂等：对已有 `pending` job 只能保留或提前 `next_run_at`，不能刷新到更晚时间，否则补偿扫描会反复推迟任务导致 `claimed=0`。
+- 轨迹投稿图片可选（0～9 张）：客户端直传 OSS，服务端只保存 OSS URL；读取时经独立 `submission_images` AssetCache 缓存到 `<LogDir>/static/submission_images/`，业务响应改写为 `/api/v1/static/submission_images/*`，admin 响应继续改写为 `/admin/api/static/submission_images/*`。撤回投稿使用 `POST /api/v1/track/:track_id/submission/withdraw` 并保留投稿、图片和审核流水，不使用 DELETE。
 - Docker 镜像与 `deploy/docker-compose.yml` 默认设置 `TZ=Asia/Shanghai`；robfig/cron 按服务进程本地时区解释 `TRACK_*_CRON`、`ANALYTICS_SYNC_CRON` 等表达式，调整镜像/compose 时区时必须同步评估定时任务触发时间。
 - 埋点采集接口 `POST /api/v1/analytics/events` 默认公开可访问，用于未登录启动/登录页等事件；服务端只做校验、脱敏和本地 JSONL 落盘，不把原始埋点写入业务 MySQL，凌晨同步 OSS 的任务由 `SCHEDULER_ENABLED` 控制。同步时按 `event_date/hour` 合并小 JSONL，单个 OSS part 目标上限 128 MB。`analytics_sync_summaries` 只记录每次 OSS 同步摘要（源文件列表、OSS part key、字节数、耗时、错误等），不保存原始事件。调整事件协议、认证策略、本地目录、OSS 前缀、批量上限、同步时间或同步摘要字段时，同步更新 `track_analytics.md`、`docs/api/analytics.md` 与 `mysql.sql`。
 
@@ -103,7 +104,7 @@ track_server/
 **启动流程**（`cmd/server/main.go`）：
 ```
 Load Config → 选择 Repository（Memory/MySQL/Mongo，失败降级为 Memory）
-→ 构造 Service（Track / User / Login / OSSToken / AssetCache×3）
+→ 构造 Service（Track / TrackSubmission / User / Login / OSSToken / AssetCache）
 → 将 OSSTokenService 作为 downloader 注入 AssetCache
 → （可选）加载 TLS 证书
 → RegisterRoutes(Hertz, Deps)
@@ -139,6 +140,17 @@ track/create(is_running=false) 或 track upload/update 完成轨迹
 运维可通过 `POST /api/v1/ops/achievement/refresh` 按手机号手动触发单用户成就幂等补齐；该接口不走业务 JWT，使用 `OPS_INTERNAL_TOKEN` 配置值对应的 `X-Internal-Token` 鉴权。
 成就系统 MVP 只实现成长等级与勋章体系；里程碑体系暂不结算、不下发 `type=milestone` 奖励。调整成就定义时同步更新 `track_achievement.md`、`track_achievement_client.md` 和 `docs/api/achievement.md`。
 
+**轨迹投稿流程**：
+```
+POST/PUT /api/v1/track/:track_id/submission（业务 JWT + 账号限制）
+  → TrackSubmissionService 校验轨迹归属、完成状态和结构化路线资料
+  → TrackSubmissionRepository 原子写入当前投稿、可选图片和事件流水
+  → 管理后台 /admin/api/track-submissions/:submission_id/review 审核
+  → approved 投稿在推荐列表当前分页窗口内优先，并成为 RouteGroup 代表轨迹候选
+  → POST /api/v1/track/:track_id/submission/withdraw 转为 withdrawn 并取消资格
+```
+投稿状态为 `pending/approved/rejected/withdrawn/invalidated`；重投增加 `revision`，管理审核使用 `expected_revision` 防止审核旧版本。离线聚合仍先用 medoid 计算中心、半径、区域和相似度，再按“存量人工代表 > approved 投稿中与 medoid 最相似者 > medoid”选择展示代表；自动选择投稿代表不得修改路线介绍稳定锚点。
+
 **首页地图索引流程**：
 ```
 track/create(is_running=false) 或 track upload/update 完成轨迹
@@ -152,14 +164,15 @@ track/create(is_running=false) 或 track upload/update 完成轨迹
   → Upsert track_geo_indexes，任务标记 succeeded；失败则延迟重试
   → Scheduler(track_route_group，默认 TRACK_ROUTE_GROUP_CRON=0 4 * * *)
   → 全量读取 eligible track_geo_indexes，按 track_type 严格隔离；中心距离召回后按距离比例、正反向起终点、离散 Fréchet 折线相似度构建候选关系图
-  → 连通分量按 medoid 直接相似约束拆组，选择 medoid 作为 representative_track_id，并计算 radius_m、bbox、member_count
+  → 连通分量按 medoid 直接相似约束拆组，先用 medoid 计算 center、radius_m、bbox、member_count 与相似度
+  → 再按人工代表、approved 投稿候选、medoid 的优先级选择 representative_track_id
   → 按新旧成员重合复用历史 group_id 与人工名称；自动名称按人工种子/标题共识、区域名、城市名依次兜底
   → 用内置区域目录离线匹配 medoid 中心并写入 area_id；未命中保持空字符串
   → 重建替换 track_route_groups / track_route_group_members（存量聚合结果可清空重算；MySQL 实现使用事务）
 ```
 首页地图模式客户端接口挂在 auth 组：`GET /api/v1/track-map/view`、`GET /api/v1/track-map/groups`、`GET /api/v1/track-map/groups/:group_id/detail`、`GET /api/v1/track-map/groups/:group_id/tracks`。区域介绍页 `GET /api/v1/track-map/areas/:area_id/introduction.html` 和聚合路线介绍页 `GET /api/v1/track-map/groups/:group_id/introduction.html` 是公开 H5，不走业务 JWT。只有 `track_route_introductions.status=published` 时路线对象才返回 `introduction_url`；介绍以 `anchor_track_id` 为稳定锚点，路线组全量重建后仓储必须按新成员关系更新 `current_group_id`，禁止把运营介绍直接存进会被清空的 `track_route_groups`。`group_id` 来自 `track_route_groups.group_id`，不等同于单条 `track_id`；列表和地图聚合使用 RouteGroup 数量口径，不返回 `user_count` / `track_count`。调整字段、缩放分层、区域/路线介绍协议、聚合数量口径或 group_id 语义时，同步更新 `docs/api/track-map.md`、`docs/api/route-index.md` 与 `track_map.md`。
 管理中心聚合路线列表和详情展示路线组摘要，以及已存 `area_id` 对应的区域名称、类型、城市与介绍页入口；admin 请求链路只按 ID 查询目录，不重新执行空间匹配。RouteGroup 对客户端表示聚合区域，使用 `center` + `radius_m` 绘制，不再下发代表路线折线。
-路线组离线重建必须先通过 `ListAllRouteGroups` / `ListAllRouteGroupMembers` 读取历史身份，按成员重合复用 `group_id`；人工改名后的 `manual/mixed` 名称不得被自动任务覆盖。medoid 变化只更新 `representative_track_id`，不能据此无条件更换已有 GroupID。
+路线组离线重建必须先通过 `ListAllRouteGroups` / `ListAllRouteGroupMembers` 读取历史身份，按成员重合复用 `group_id`；人工改名后的 `manual/mixed` 名称不得被自动任务覆盖。medoid 或展示代表变化都不能据此无条件更换已有 GroupID；仍属于新组的人工代表优先保留。
 
 **短信登录等级信息**：`POST /api/v1/login/sms` 成功响应会附带 `achievement_level`，由 `LoginHandler` 调用 `AchievementService.GetLevelInfo` 基于当前有效轨迹实时计算；修改登录响应或等级字段时同步更新 `login.md`。
 

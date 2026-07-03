@@ -56,6 +56,7 @@ func main() {
 	var feedbackRepo repository.FeedbackRepository
 	var analyticsRepo repository.AnalyticsRepository
 	var trackMapRepo repository.TrackMapRepository
+	var trackSubmissionRepo repository.TrackSubmissionRepository
 
 	if cfg.UseInMemory {
 		trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo, companionRepo = repository.NewInMemoryRepositories()
@@ -118,6 +119,7 @@ func main() {
 				accountRestrictionRepo = repository.NewMySQLAccountRestrictionRepository(db)
 				feedbackRepo = repository.NewMySQLFeedbackRepository(db)
 				analyticsRepo = repository.NewMySQLAnalyticsRepository(db)
+				trackSubmissionRepo = repository.NewMySQLTrackSubmissionRepository(db)
 				log.Println("using mysql repositories")
 			}
 		}
@@ -148,6 +150,7 @@ func main() {
 			accountRestrictionRepo = repository.NewMongoAccountRestrictionRepository(db.Collection("user_account_restrictions"))
 			feedbackRepo = repository.NewMongoFeedbackRepository(db.Collection("user_feedbacks"))
 			analyticsRepo = repository.NewMongoAnalyticsRepository(db.Collection("analytics_sync_summaries"))
+			trackSubmissionRepo = repository.NewMongoTrackSubmissionRepository(db.Collection("track_submissions"))
 			trackMapRepo = repository.NewMongoTrackMapRepository(
 				db.Collection("track_map_index_jobs"),
 				db.Collection("track_geo_indexes"),
@@ -163,8 +166,13 @@ func main() {
 			log.Println("mongo repositories initialized")
 		}
 	}
+	if trackSubmissionRepo == nil {
+		trackSubmissionRepo = repository.NewInMemoryTrackSubmissionRepository()
+	}
 
 	trackSvc := service.NewTrackService(trackRepo, collectRepo)
+	trackSubmissionSvc := service.NewTrackSubmissionService(trackSubmissionRepo, trackRepo)
+	trackSvc.SetTrackSubmissionService(trackSubmissionSvc)
 	trackSvc.SetTrackTypes(cfg.TrackTypes)
 	trackSvc.SetUserRepository(userRepo)
 	trackSvc.SetNavigationRepository(navigationRepo)
@@ -275,6 +283,21 @@ func main() {
 		log.Printf("raw track cache enabled: %s", rawTrackCacheDir)
 	}
 
+	submissionImageCacheDir := filepath.Join(staticRoot, "submission_images")
+	submissionImageCache, err := service.NewAssetCacheService(
+		submissionImageCacheDir,
+		"/api/v1/static/submission_images",
+		[]string{".png", ".jpg", ".jpeg", ".webp"},
+		".jpg",
+	)
+	if err != nil {
+		log.Printf("submission image cache disabled: %v", err)
+		submissionImageCache = nil
+	} else {
+		trackSubmissionSvc.SetImageCache(submissionImageCache)
+		log.Printf("submission image cache enabled: %s", submissionImageCacheDir)
+	}
+
 	// Aliyun OSS STS（用于客户端直传）
 	// 相关启动参数在 internal/config/config.go 中通过环境变量加载：
 	// - ALIYUN_ACCESS_KEY_ID / ALIYUN_ACCESS_KEY_SECRET / ALIYUN_ROLE_ARN / ALIYUN_STS_REGION
@@ -340,8 +363,11 @@ func main() {
 		if rawTrackCache != nil {
 			rawTrackCache.SetDownloader(ossTokenSvc)
 		}
+		if submissionImageCache != nil {
+			submissionImageCache.SetDownloader(ossTokenSvc)
+		}
 	} else {
-		if avatarCache != nil || screenshotCache != nil || rawTrackCache != nil {
+		if avatarCache != nil || screenshotCache != nil || rawTrackCache != nil || submissionImageCache != nil {
 			log.Printf("asset cache has no OSS downloader; only serves already-cached files")
 		}
 	}
@@ -353,6 +379,7 @@ func main() {
 		trackMapIndexSvc = service.NewTrackMapIndexService(trackMapRepo, trackRepo, rawTrackCache)
 		trackRouteGroupSvc = service.NewTrackRouteGroupService(trackMapRepo)
 		trackRouteGroupSvc.SetTrackRepository(trackRepo)
+		trackRouteGroupSvc.SetTrackSubmissionService(trackSubmissionSvc)
 		trackMapSvc = service.NewTrackMapService(trackMapRepo, trackRepo, trackSvc)
 		trackSvc.SetTrackMapIndexService(trackMapIndexSvc)
 		log.Printf("track map services enabled")
@@ -390,6 +417,7 @@ func main() {
 	handler.RegisterRoutes(h, handler.Deps{
 		TrackService:               trackSvc,
 		TrackMapService:            trackMapSvc,
+		TrackSubmissionService:     trackSubmissionSvc,
 		UserService:                userSvc,
 		LoginService:               loginSvc,
 		OSSTokenService:            ossTokenSvc,
@@ -411,6 +439,7 @@ func main() {
 	adminModule := admin.NewModule(cfg.AdminAccounts, appReleaseSvc, ossTokenSvc, staticRoot, userRepo, trackRepo, collectRepo, trackMapRepo, companionRepo, analyticsRepo, userSvc, feedbackSvc, accountRestrictionSvc, trackRouteGroupSvc)
 	if adminModule != nil && adminModule.Handler != nil {
 		adminModule.Handler.SetScreenshotCache(screenshotCache)
+		adminModule.Handler.SetTrackSubmissionService(trackSubmissionSvc)
 	}
 	defer adminModule.Close()
 	adminModule.RegisterRoutes(h)

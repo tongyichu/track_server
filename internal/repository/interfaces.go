@@ -66,6 +66,21 @@ type TrackRepository interface {
 	CountAll(ctx context.Context) (int64, error)
 }
 
+// TrackSubmissionRepository defines the audited lifecycle of user track submissions.
+// Implementations must keep the current submission, its images and the appended event
+// consistent within one storage transaction/atomic operation.
+type TrackSubmissionRepository interface {
+	SavePending(ctx context.Context, submission *models.TrackSubmission, event *models.TrackSubmissionEvent) error
+	FindByTrackID(ctx context.Context, trackID string) (*models.TrackSubmission, error)
+	FindBySubmissionID(ctx context.Context, submissionID string) (*models.TrackSubmission, error)
+	ListByTrackIDs(ctx context.Context, trackIDs []string) (map[string]*models.TrackSubmission, error)
+	List(ctx context.Context, filter models.TrackSubmissionListFilter) ([]*models.TrackSubmission, error)
+	Review(ctx context.Context, submissionID string, expectedRevision int64, status models.TrackSubmissionStatus, reviewer, reason string, now time.Time, event *models.TrackSubmissionEvent) error
+	Withdraw(ctx context.Context, trackID string, userID int64, now time.Time, event *models.TrackSubmissionEvent) error
+	Invalidate(ctx context.Context, trackID, reason string, now time.Time, event *models.TrackSubmissionEvent) error
+	ListEvents(ctx context.Context, submissionID string) ([]*models.TrackSubmissionEvent, error)
+}
+
 // encodeTrackID 将全局递增序列编码成业务侧使用的轨迹 ID。
 // 编码规则：
 //  1. 输入必须是大于 0 的正整数序列；

@@ -771,7 +771,8 @@ OSS 下载要求：
 
 聚合结果：
 
-- `representative_track_id` 取 medoid 轨迹，成员相对 medoid 计算 `similarity_score` 与方向。
+- 聚类阶段先选 medoid，成员相对 medoid 计算 `similarity_score` 与方向；无人工代表和 approved 投稿候选时，`representative_track_id` 才回退 medoid。
+- 接入轨迹投稿后，几何属性和 `similarity_score` 仍先按 medoid 计算；展示用 `representative_track_id` 再按“人工代表 > approved 投稿中最接近 medoid 者 > medoid”选择，投稿代表成员使用 `source=submission`，不得改变几何结果或路线介绍锚点。
 - `center_lat` / `center_lng`、`distance` 使用 medoid 轨迹口径；`bbox` 使用成员 bbox 并集，`radius_m` 覆盖全部成员。
 - `area_id` 使用 medoid 中心离线匹配；人工合并或移除成员导致中心变化时同步重算。
 - 新结果按成员重合数和 Jaccard 比例匹配历史 RouteGroup；匹配成功时复用历史 `group_id`，并保留人工/混合来源名称和已发布介绍名称。

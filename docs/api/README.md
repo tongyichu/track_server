@@ -11,6 +11,7 @@
 | 只需要认证、请求头、错误码 | [common.md](common.md) |
 | 只需要对象字段定义 | [models.md](models.md) |
 | 轨迹创建、详情、列表、搜索、更新、删除、运动类型 | [track.md](track.md) |
+| 轨迹投稿、审核状态、优质投稿展示 | [track-submission.md](track-submission.md) |
 | 首页地图模式、路线发现、地图聚合 | [track-map.md](track-map.md) |
 | 收藏、取消收藏、收藏列表、导航上报 | [collect-navigation.md](collect-navigation.md) |
 | OSS 直传临时凭证 | [oss.md](oss.md) |

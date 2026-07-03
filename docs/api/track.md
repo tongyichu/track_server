@@ -2,6 +2,8 @@
 
 > 公共请求、认证和错误响应见 [common.md](common.md)；通用对象字段见 [models.md](models.md)。
 
+轨迹投稿、审核状态和优质投稿展示字段见 [track-submission.md](track-submission.md)。审核通过的推荐/搜索摘要会返回 `is_featured`、`featured_description`、`featured_cover_url`，并用投稿标题覆盖响应中的 `title`；`track_records.title` 不会被修改。
+
 ## 1. 创建轨迹
 
 创建一个新的轨迹记录；支持在请求体中直接传入轨迹摘要字段。未传的字段会使用默认值。

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -144,7 +145,8 @@ func (s *TrackMapService) ListGroupTracks(ctx context.Context, userID int64, gro
 	if groupID == "" {
 		return nil, invalidArg("group_id is required")
 	}
-	if _, err := s.maps.FindRouteGroup(ctx, groupID); err != nil {
+	group, err := s.maps.FindRouteGroup(ctx, groupID)
+	if err != nil {
 		return nil, err
 	}
 	limit := input.Limit
@@ -196,6 +198,23 @@ func (s *TrackMapService) ListGroupTracks(ctx context.Context, userID int64, gro
 			if err := s.trackSvc.fillTrackSummaryExtras(ctx, userID, summaries); err != nil {
 				return nil, err
 			}
+			if s.trackSvc.submissions != nil {
+				if err := s.trackSvc.submissions.DecorateSummaries(ctx, summaries); err != nil {
+					return nil, err
+				}
+				sort.SliceStable(summaries, func(i, j int) bool {
+					rank := func(item *models.TrackSummary) int {
+						if item.ID == group.RepresentativeTrackID {
+							return 0
+						}
+						if item.IsFeatured {
+							return 1
+						}
+						return 2
+					}
+					return rank(summaries[i]) < rank(summaries[j])
+				})
+			}
 		}
 	}
 	return &models.TrackSummaryPage{Items: summaries, HasMore: false}, nil
@@ -240,6 +259,11 @@ func (s *TrackMapService) routeGroupItem(ctx context.Context, group *models.Trac
 		cacheCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 		item.CoverTrack.TrackScreenshotURL = s.trackSvc.screenshotCache.EnsureCached(cacheCtx, track.UserID, track.ID, track.TrackScreenshotURL)
 		cancel()
+	}
+	if s.trackSvc != nil && s.trackSvc.submissions != nil {
+		if sub, subErr := s.trackSvc.submissions.PublicForTrack(ctx, track.ID); subErr == nil && sub != nil && len(sub.Images) > 0 && sub.Images[0] != nil && sub.Images[0].URL != "" {
+			item.CoverTrack.TrackScreenshotURL = sub.Images[0].URL
+		}
 	}
 	return item, nil
 }

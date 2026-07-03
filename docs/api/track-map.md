@@ -10,7 +10,9 @@
 - `area`：区域聚合气泡。
 - `city`：城市聚合气泡。
 
-服务端已使用 `track_route_groups` 聚合表作为数据源，`group_id` 是路线组 ID，不等同于单条轨迹 ID。路线组由后台离线任务对 `track_geo_indexes` 执行中心召回、距离/正反向起终点/折线相似关系图聚类并选择 medoid 代表轨迹；任务按历史成员重合复用 `group_id`，再离线写入 `area_id`。`route_group` 返回 `center` 与 `radius_m`，客户端可直接绘制聚合区域，不再依赖代表路线折线。
+服务端已使用 `track_route_groups` 聚合表作为数据源，`group_id` 是路线组 ID，不等同于单条轨迹 ID。路线组由后台离线任务对 `track_geo_indexes` 执行中心召回、距离/正反向起终点/折线相似关系图聚类并选择 medoid 计算几何结果；任务按历史成员重合复用 `group_id`，再离线写入 `area_id`。`route_group` 返回 `center` 与 `radius_m`，客户端可直接绘制聚合区域，不再依赖代表路线折线。
+
+离线任务先使用 medoid 计算路线组几何属性，再按“管理员人工代表 > 已通过投稿中与 medoid 最相似者 > medoid”选择展示代表轨迹。投稿代表只影响 `representative_track_id` 和成员 role/source，不改变 center、radius、area_id 或路线介绍锚点。
 
 **需要认证**
 

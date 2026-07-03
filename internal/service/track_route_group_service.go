@@ -25,9 +25,10 @@ const (
 
 // TrackRouteGroupService builds persistent route groups from track_geo_indexes.
 type TrackRouteGroupService struct {
-	repo   repository.TrackMapRepository
-	areas  *maparea.Catalog
-	tracks repository.TrackRepository
+	repo        repository.TrackMapRepository
+	areas       *maparea.Catalog
+	tracks      repository.TrackRepository
+	submissions *TrackSubmissionService
 }
 
 type TrackRouteGroupRunResult struct {
@@ -76,6 +77,12 @@ func NewTrackRouteGroupService(repo repository.TrackMapRepository) *TrackRouteGr
 func (s *TrackRouteGroupService) SetTrackRepository(tracks repository.TrackRepository) {
 	if s != nil {
 		s.tracks = tracks
+	}
+}
+
+func (s *TrackRouteGroupService) SetTrackSubmissionService(submissions *TrackSubmissionService) {
+	if s != nil {
+		s.submissions = submissions
 	}
 }
 
@@ -609,11 +616,73 @@ func (s *TrackRouteGroupService) RunOnce(ctx context.Context) (*TrackRouteGroupR
 	}
 	semanticNames := s.routeClusterSemanticNames(ctx, clusters)
 	applyRouteGroupHistory(clusters, oldGroups, oldMembers, introductions, semanticNames, s.areas)
+	if err := s.applySubmissionRepresentatives(ctx, clusters, oldMembers); err != nil {
+		return result, err
+	}
 	groups, members = flattenRouteGroupClusters(clusters)
 	if err := s.repo.ReplaceRouteGroups(ctx, groups, members); err != nil {
 		return result, err
 	}
 	return result, nil
+}
+
+func (s *TrackRouteGroupService) applySubmissionRepresentatives(ctx context.Context, clusters []*routeGroupCluster, oldMembers []*models.TrackRouteGroupMember) error {
+	if s == nil || s.submissions == nil {
+		return nil
+	}
+	manualRepresentatives := make(map[string]string)
+	for _, member := range oldMembers {
+		if member != nil && member.Role == models.TrackRouteGroupMemberRoleRepresentative && member.Source == models.TrackRouteGroupSourceManual {
+			manualRepresentatives[member.GroupID] = member.TrackID
+		}
+	}
+	for _, cluster := range clusters {
+		if cluster == nil || cluster.group == nil {
+			continue
+		}
+		trackIDs := make([]string, 0, len(cluster.members))
+		memberByID := make(map[string]*models.TrackRouteGroupMember, len(cluster.members))
+		for _, member := range cluster.members {
+			if member != nil {
+				trackIDs = append(trackIDs, member.TrackID)
+				memberByID[member.TrackID] = member
+			}
+		}
+		selectedID := ""
+		selectedSource := models.TrackRouteGroupSourceSubmission
+		if manualID := manualRepresentatives[cluster.group.GroupID]; memberByID[manualID] != nil {
+			selectedID, selectedSource = manualID, models.TrackRouteGroupSourceManual
+		} else {
+			approved, err := s.submissions.ApprovedTrackIDs(ctx, trackIDs)
+			if err != nil {
+				return err
+			}
+			var bestScore float64 = -1
+			for trackID := range approved {
+				member := memberByID[trackID]
+				if member != nil && (member.SimilarityScore > bestScore || member.SimilarityScore == bestScore && (selectedID == "" || trackID < selectedID)) {
+					selectedID, bestScore = trackID, member.SimilarityScore
+				}
+			}
+		}
+		if selectedID == "" {
+			continue
+		}
+		cluster.group.RepresentativeTrackID = selectedID
+		if selectedSource == models.TrackRouteGroupSourceManual {
+			cluster.group.Source = routeGroupSourceAfterManual(cluster.group.Source)
+		}
+		for _, member := range cluster.members {
+			if member == nil {
+				continue
+			}
+			member.Role = models.TrackRouteGroupMemberRoleMember
+			if member.TrackID == selectedID {
+				member.Role, member.Source = models.TrackRouteGroupMemberRoleRepresentative, selectedSource
+			}
+		}
+	}
+	return nil
 }
 
 func (s *TrackRouteGroupService) assignRouteGroupArea(group *models.TrackRouteGroup) {

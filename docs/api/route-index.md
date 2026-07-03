@@ -26,6 +26,11 @@
 | 批量上报埋点事件 | POST | `/analytics/events` | 否 | [analytics.md](analytics.md#47-批量上报埋点事件) |
 | App 升级检查 | GET | `/upgrade/check` | 否 | [upgrade.md](upgrade.md#15-app-升级检查) |
 | 获取运动类型 | GET | `/track/types` | 是 | [track.md](track.md#16-获取运动类型) |
+| 获取轨迹投稿选项 | GET | `/track/submission/options` | 是 | [track-submission.md](track-submission.md#1-投稿选项) |
+| 创建或重新投稿 | POST | `/track/:track_id/submission` | 是 | [track-submission.md](track-submission.md#2-创建或重新投稿) |
+| 修改待审核投稿 | PUT | `/track/:track_id/submission` | 是 | [track-submission.md](track-submission.md#3-修改待审核投稿) |
+| 查询轨迹投稿 | GET | `/track/:track_id/submission` | 是 | [track-submission.md](track-submission.md#4-查询投稿) |
+| 撤回轨迹投稿 | POST | `/track/:track_id/submission/withdraw` | 是 | [track-submission.md](track-submission.md#5-撤回投稿) |
 | 查询地图视野数据（含离线区域语义） | GET | `/track-map/view` | 是 | [track-map.md](track-map.md#48-查询地图视野数据) |
 | 查询地图路线组列表 | GET | `/track-map/groups` | 是 | [track-map.md](track-map.md#49-查询地图路线组列表) |
 | 查询路线组详情 | GET | `/track-map/groups/:group_id/detail` | 是 | [track-map.md](track-map.md#50-查询路线组详情) |

@@ -25,20 +25,21 @@ import (
 
 // Handler 聚合管理后台需要的业务依赖。
 type Handler struct {
-	releaseSvc      *service.AppReleaseService
-	stsSvc          *service.OSSTokenService
-	auth            *Authenticator
-	userRepo        repository.UserRepository
-	userSvc         *service.UserService
-	trackRepo       repository.TrackRepository
-	collectRepo     repository.CollectRepository
-	trackMapRepo    repository.TrackMapRepository
-	companionRepo   repository.CompanionRepository
-	analyticsRepo   repository.AnalyticsRepository
-	feedbackSvc     *service.FeedbackService
-	restrictionSvc  *service.AccountRestrictionService
-	routeGroupSvc   *service.TrackRouteGroupService
-	screenshotCache *service.AssetCacheService
+	releaseSvc         *service.AppReleaseService
+	stsSvc             *service.OSSTokenService
+	auth               *Authenticator
+	userRepo           repository.UserRepository
+	userSvc            *service.UserService
+	trackRepo          repository.TrackRepository
+	collectRepo        repository.CollectRepository
+	trackMapRepo       repository.TrackMapRepository
+	companionRepo      repository.CompanionRepository
+	analyticsRepo      repository.AnalyticsRepository
+	feedbackSvc        *service.FeedbackService
+	restrictionSvc     *service.AccountRestrictionService
+	routeGroupSvc      *service.TrackRouteGroupService
+	trackSubmissionSvc *service.TrackSubmissionService
+	screenshotCache    *service.AssetCacheService
 	// staticRoot 是服务端本地静态资源根目录（通常为 <LogDir>/static）。
 	// 管理后台上传的安装包会落到 <staticRoot>/release/<platform>/ 下，
 	// 并通过 /api/v1/static/release/<platform>/<file> 对外下发。
@@ -100,6 +101,111 @@ func (h *Handler) SetScreenshotCache(cache *service.AssetCacheService) {
 		return
 	}
 	h.screenshotCache = cache
+}
+
+func (h *Handler) SetTrackSubmissionService(svc *service.TrackSubmissionService) {
+	if h != nil {
+		h.trackSubmissionSvc = svc
+	}
+}
+
+// ----- 轨迹投稿审核 -----
+
+func (h *Handler) ListTrackSubmissions(ctx context.Context, c *app.RequestContext) {
+	if h == nil || h.trackSubmissionSvc == nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "track submission service not configured"})
+		return
+	}
+	userID, _ := strconv.ParseInt(strings.TrimSpace(string(c.Query("user_id"))), 10, 64)
+	items, err := h.trackSubmissionSvc.ListAdmin(ctx, models.TrackSubmissionListFilter{Status: models.TrackSubmissionStatus(strings.TrimSpace(string(c.Query("status")))), Difficulty: strings.TrimSpace(string(c.Query("difficulty"))), RiskLevel: strings.TrimSpace(string(c.Query("risk_level"))), TrackType: strings.TrimSpace(string(c.Query("track_type"))), UserID: userID, Limit: parseAdminListLimit(string(c.Query("limit")))})
+	if err != nil {
+		writeAdminTrackSubmissionError(c, err)
+		return
+	}
+	for _, sub := range items {
+		rewriteAdminSubmissionImages(sub)
+	}
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"items": items, "total": len(items)}})
+}
+
+func (h *Handler) GetTrackSubmission(ctx context.Context, c *app.RequestContext) {
+	if h == nil || h.trackSubmissionSvc == nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "track submission service not configured"})
+		return
+	}
+	selected, err := h.trackSubmissionSvc.GetAdmin(ctx, c.Param("submission_id"))
+	if err != nil {
+		writeAdminTrackSubmissionError(c, err)
+		return
+	}
+	rewriteAdminSubmissionImages(selected)
+	events, err := h.trackSubmissionSvc.Events(ctx, selected.SubmissionID)
+	if err != nil {
+		writeAdminTrackSubmissionError(c, err)
+		return
+	}
+	var track *models.Track
+	if h.trackRepo != nil {
+		track, _ = h.trackRepo.FindByID(ctx, selected.TrackID)
+		if track != nil {
+			h.decorateAdminTrackAssetURLs(ctx, []*models.Track{track})
+		}
+	}
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"submission": selected, "track": track, "events": events}})
+}
+
+func (h *Handler) ReviewTrackSubmission(ctx context.Context, c *app.RequestContext) {
+	if h == nil || h.trackSubmissionSvc == nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "track submission service not configured"})
+		return
+	}
+	var body struct {
+		Decision         string `json:"decision"`
+		Reason           string `json:"reason"`
+		ExpectedRevision int64  `json:"expected_revision"`
+	}
+	data, err := c.Body()
+	if err != nil || json.Unmarshal(data, &body) != nil || body.ExpectedRevision <= 0 {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid payload"})
+		return
+	}
+	reviewer := "admin"
+	if h.auth != nil {
+		if session := h.auth.SessionFromRequest(c); session != nil && strings.TrimSpace(session.Username) != "" {
+			reviewer = session.Username
+		}
+	}
+	sub, err := h.trackSubmissionSvc.Review(ctx, c.Param("submission_id"), body.ExpectedRevision, strings.TrimSpace(body.Decision), reviewer, body.Reason)
+	if err != nil {
+		writeAdminTrackSubmissionError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": sub})
+}
+
+func rewriteAdminSubmissionImages(sub *models.TrackSubmission) {
+	if sub == nil {
+		return
+	}
+	for _, image := range sub.Images {
+		if image != nil {
+			image.URL = rewriteAdminStaticURL(image.URL)
+		}
+	}
+}
+
+func writeAdminTrackSubmissionError(c *app.RequestContext, err error) {
+	var invalid *service.InvalidArgumentError
+	switch {
+	case errors.As(err, &invalid):
+		c.JSON(http.StatusBadRequest, utils.H{"error": err.Error()})
+	case errors.Is(err, repository.ErrNotFound):
+		c.JSON(http.StatusNotFound, utils.H{"error": "not found"})
+	case errors.Is(err, repository.ErrAlreadyExists):
+		c.JSON(http.StatusConflict, utils.H{"error": "submission revision conflict"})
+	default:
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+	}
 }
 
 // ----- 发布列表 -----
@@ -671,6 +777,12 @@ func (h *Handler) DeleteTrack(ctx context.Context, c *app.RequestContext) {
 			handleAdminRepoError(c, err)
 			return
 		}
+		if h.trackSubmissionSvc != nil {
+			if err := h.trackSubmissionSvc.Invalidate(ctx, trackID, "track deleted by admin"); err != nil {
+				c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+				return
+			}
+		}
 		c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"status": "ok"}})
 		return
 	}
@@ -690,6 +802,12 @@ func (h *Handler) DeleteTrack(ctx context.Context, c *app.RequestContext) {
 	if err := h.trackRepo.Update(ctx, track); err != nil {
 		handleAdminRepoError(c, err)
 		return
+	}
+	if h.trackSubmissionSvc != nil {
+		if err := h.trackSubmissionSvc.Invalidate(ctx, trackID, "track deleted by admin"); err != nil {
+			c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+			return
+		}
 	}
 	if h.collectRepo != nil {
 		if err := h.collectRepo.RemoveByTrackID(ctx, trackID); err != nil {

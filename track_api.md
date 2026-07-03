@@ -12,6 +12,7 @@
 | 通用对象字段 | [docs/api/models.md](docs/api/models.md) |
 | 按 method/path 查接口位置 | [docs/api/route-index.md](docs/api/route-index.md) |
 | 轨迹创建、列表、详情、更新、删除、运动类型 | [docs/api/track.md](docs/api/track.md) |
+| 轨迹投稿与审核状态 | [docs/api/track-submission.md](docs/api/track-submission.md) |
 | 首页地图模式、路线发现、地图聚合 | [docs/api/track-map.md](docs/api/track-map.md) |
 | 收藏、取消收藏、导航上报 | [docs/api/collect-navigation.md](docs/api/collect-navigation.md) |
 | OSS 上传临时凭证 | [docs/api/oss.md](docs/api/oss.md) |

@@ -1,6 +1,6 @@
 # 轨迹投稿功能方案
 
-> 状态：方案设计，尚未实现。
+> 状态：已实现第一版投稿与审核闭环、图片缓存、分页窗口内优先展示和 RouteGroup 投稿代表候选。
 >
 > 本文描述轨迹投稿的产品规则、客户端交互、服务端模型、接口草案、审核流程、图片缓存、推荐排序与 RouteGroup 代表轨迹选择。正式实现时以代码、`internal/handler/router.go` 和 `docs/api/` 为准。
 
@@ -20,7 +20,7 @@
 
 ### 2.1 目标
 
-- 让用户用清晰标题、路线简介、难度、风险、月份、路面、交通和沿途图片描述一条路线。
+- 让用户用清晰标题、路线简介、难度、风险、月份、路面、交通和可选的沿途图片描述一条路线。
 - 建立可追踪、可驳回、可重投、可撤回的审核流程。
 - 让审核通过的轨迹获得稳定、可分页的推荐曝光。
 - 让审核通过的投稿成为 RouteGroup 代表轨迹候选，同时保持地图聚类几何语义稳定。
@@ -54,7 +54,7 @@
 - `raw_track_url` 非空；
 - `track_screenshot_url` 非空；
 - `track_type` 是服务端支持的标准英文 code；
-- 标题、简介、难度、风险、适宜月份、路面类型、交通信息和图片满足校验规则；
+- 标题、简介、难度、风险、适宜月份和交通信息满足校验规则；若提供沿途图片，图片也必须满足格式、数量和 OSS 地址校验规则；
 - 当前账号不存在阻止内容发布的账号限制。
 
 地图索引尚未完成时允许提交，但管理后台应显示“地图索引待就绪”。地图索引失败不应导致投稿数据丢失。审核人员可以等待索引完成后再审核；缺少地图索引的投稿不能被自动选为 RouteGroup 代表轨迹。
@@ -193,7 +193,7 @@ approved
 
 ### 6.7 投稿图片
 
-- 必填，1～9 张；
+- 可选，0～9 张；不上传沿途图片也可以正常投稿；
 - 单张建议不超过 10 MB，总计不超过 50 MB；
 - 支持 JPEG、PNG、WebP；
 - 客户端上传前建议压缩至长边不超过 2560 px，并移除 EXIF 中的精确 GPS 信息；
@@ -209,6 +209,7 @@ CREATE TABLE `track_submissions` (
   `submission_id` VARCHAR(64) NOT NULL COMMENT '投稿ID',
   `track_id` VARCHAR(64) NOT NULL COMMENT '轨迹ID',
   `user_id` BIGINT UNSIGNED NOT NULL COMMENT '投稿用户ID',
+  `track_type` VARCHAR(32) NOT NULL DEFAULT '' COMMENT '投稿时的标准运动类型英文code',
   `title` VARCHAR(128) NOT NULL DEFAULT '' COMMENT '投稿标题',
   `description` TEXT NOT NULL COMMENT '路线简介',
   `difficulty` VARCHAR(16) NOT NULL DEFAULT '' COMMENT 'easy/standard/hard/challenge/extreme',
@@ -306,7 +307,7 @@ GET /api/v1/track/submission/options
     "surface_type_options": [],
     "transport_mode_options": [],
     "image_limits": {
-      "min_count": 1,
+      "min_count": 0,
       "max_count": 9,
       "max_file_size": 10485760,
       "max_total_size": 52428800
@@ -333,7 +334,7 @@ POST /api/v1/track/:track_id/submission
   "transport_description": "导航至云栖竹径停车场；节假日建议打车。",
   "images": [
     {
-      "oss_url": "https://example-bucket.oss-cn-hangzhou.aliyuncs.com/user/1001/track_submission/a.jpg",
+      "oss_url": "https://example-bucket.oss-cn-hangzhou.aliyuncs.com/user/1001/submission/1001/a.jpg",
       "caption": "五云山观景台",
       "sort_order": 1
     }
@@ -347,7 +348,8 @@ POST /api/v1/track/:track_id/submission
 - `rejected` 或 `withdrawn` 状态再次提交时 `revision+1` 并回到 `pending`；
 - `pending` 状态重复 POST 返回 `409`，客户端应使用更新接口；
 - `approved` 状态不允许直接覆盖，用户需先撤回；
-- 主记录、图片记录和事件流水应在同一存储事务/原子操作中完成。
+- `images` 可以省略或传空数组；提供图片时才创建图片记录；
+- 主记录、可选图片记录和事件流水应在同一存储事务/原子操作中完成。
 
 ### 8.3 修改待审核投稿
 
@@ -370,9 +372,10 @@ GET /api/v1/track/:track_id/submission
 ### 8.5 撤回投稿
 
 ```http
-DELETE /api/v1/track/:track_id/submission
+POST /api/v1/track/:track_id/submission/withdraw
 ```
 
+- 撤回是投稿状态变化，不删除投稿主记录、图片或审核流水，因此不使用 `DELETE`；
 - `pending` 撤回后变为 `withdrawn`；
 - `approved` 撤回后立即取消推荐和代表候选资格；
 - 若该轨迹正是 RouteGroup 的投稿代表轨迹，服务端应触发代表轨迹回退；下一次离线全量聚合再次校正。
@@ -411,7 +414,8 @@ DELETE /api/v1/track/:track_id/submission
 - `title` 直接使用审核通过的投稿标题，旧客户端无需新增字段即可获得更好的标题；
 - 原始 `track_records.title` 不被覆盖；
 - 投稿失效后恢复返回原始轨迹标题；
-- 推荐列表只返回第一张投稿图片作为封面；投稿详情返回全部结构化字段和图片。
+- 有投稿图片时，推荐列表只返回第一张投稿图片作为封面；未上传投稿图片时回退使用轨迹原有 `track_screenshot_url`；
+- 投稿详情返回全部结构化字段，未上传投稿图片时 `images` 返回空数组。
 
 ## 9. 图片上传、缓存与地址改写
 
@@ -419,7 +423,7 @@ DELETE /api/v1/track/:track_id/submission
 
 ```text
 客户端 GET /api/v1/oss/sts-token
-  → 使用临时凭证将图片直接上传到 OSS 用户目录
+  → 使用临时凭证将图片直接上传到 <OSS_UPLOAD_PREFIX>/<bucket_id>/submission/<user_id>/
   → POST/PUT 投稿时提交图片 OSS URL
   → 服务端校验 URL 并持久化到 track_submission_images.oss_url
 ```
@@ -492,7 +496,7 @@ DELETE /api/v1/track/:track_id/submission
 
 ### 9.5 缓存时机与性能
 
-- 投稿成功后异步预热全部图片，预热失败不影响投稿主流程；
+- 投稿包含图片时异步预热全部图片，预热失败不影响投稿主流程；未提供图片时不执行投稿图片缓存逻辑；
 - 列表页只处理第一张封面图；
 - 投稿详情页处理全部图片，但使用共享的请求级超时并限制并发，建议总超时 5 秒、并发数 3；
 - 缓存未命中时同步兜底下载，失败的单张图片返回空 `url`，不影响其他字段和图片；
@@ -550,7 +554,7 @@ POST /admin/api/track-submissions/:submission_id/review
 - 适宜月份；
 - 路面与地形标签；
 - 交通方式及补充说明；
-- 投稿图片画廊和大图预览；
+- 投稿图片画廊和大图预览（有图片时展示）；
 - 原始轨迹截图、路线地图、距离、时长、爬升、运动类型；
 - 投稿用户和当前账号限制；
 - 地图索引状态；
@@ -569,50 +573,25 @@ POST /admin/api/track-submissions/:submission_id/review
 
 现有推荐列表按 `start_time DESC, id DESC` 使用游标分页。不能仅增加 `is_featured DESC` 排序，否则会破坏旧游标语义，并让历史优质投稿长期压住新轨迹。
 
-### 11.1 双通道混排
+### 11.1 当前实现：分页窗口内优先
 
-- 投稿通道：有效 `approved` 投稿，按 `approved_at DESC, track_id DESC`；
-- 普通通道：排除有效投稿，按 `start_time DESC, track_id DESC`；
-- 默认每 3 条中插入 1 条投稿轨迹；
-- 第一版混排比例使用服务端稳定常量，后续如改为配置项需同步更新配置文档；
+- Repository 仍按 `start_time DESC, track_id DESC` 划分稳定分页窗口；
+- 服务端批量查询当前窗口内的有效 `approved` 投稿，并在该窗口内稳定前置；
+- 下一页游标继续使用 Repository 原始窗口最后一条轨迹，避免重排后的重复和遗漏；
 - 搜索、收藏和“我的轨迹”保持原排序，只展示投稿状态或徽标；
 - RouteGroup 的轨迹列表按“代表轨迹 → 其他已通过投稿 → 普通成员”排序。
 
-### 11.2 新版游标
+全局双通道比例混排及独立投稿游标可作为后续推荐系统升级项，第一版不引入新游标协议。
 
-推荐列表使用版本化不透明游标：
+### 11.2 当前游标
 
-```json
-{
-  "v": 2,
-  "snapshot_at": "2026-07-02T10:00:00+08:00",
-  "featured_cursor": {
-    "approved_at": "2026-07-01T12:00:00+08:00",
-    "track_id": "NO.0000000A"
-  },
-  "normal_cursor": {
-    "start_time": "2026-06-30T08:00:00+08:00",
-    "track_id": "NO.00000009"
-  },
-  "phase": 1
-}
-```
-
-`snapshot_at` 用于降低翻页期间新审核投稿造成的重复和跳动。服务端仍返回 base64url 编码后的不透明字符串，客户端不能解析或自行构造。
+推荐列表继续使用现有 `(start_time,id)` base64url 不透明游标。客户端不能解析或自行构造。
 
 ## 12. RouteGroup 代表轨迹
 
 ### 12.1 几何锚点与展示代表解耦
 
-当前 RouteGroup 的 `representative_track_id` 由离线任务按 medoid 重新计算，并同时影响中心点语义。投稿代表轨迹可能更适合展示，但不一定是最佳几何中心，因此建议新增：
-
-| 字段 | 说明 |
-| --- | --- |
-| `geometry_anchor_track_id` | medoid，用于中心点、区域匹配、半径和相似度 |
-| `representative_track_id` | 对客户端和运营展示的代表轨迹 |
-| `representative_source` | `medoid` / `approved_submission` / `manual` |
-
-RouteGroup 的 `center`、`radius_m`、`area_id`、bbox 和成员相似度始终由 Geometry Anchor 计算，不能因为投稿内容质量改变地图聚类几何结果。
+离线任务先按 medoid 计算 RouteGroup 的 `center`、`radius_m`、`area_id`、bbox 和成员相似度，再独立选择展示用 `representative_track_id`。投稿代表轨迹只改变展示代表以及成员的 `role/source`，不改变已经计算完成的地图聚类几何结果。
 
 ### 12.2 代表轨迹选择顺序
 
@@ -621,7 +600,7 @@ RouteGroup 的 `center`、`radius_m`、`area_id`、bbox 和成员相似度始终
 1. 若历史管理员手动代表轨迹仍属于新组，保留该轨迹；
 2. 否则，从当前组有效的 `approved` 投稿中选择与 medoid 相似度最高的轨迹；
 3. 若没有合格投稿，使用 medoid；
-4. 相似度相同则按 `approved_at DESC, track_id ASC` 稳定选择。
+4. 相似度相同则按 `track_id ASC` 稳定选择。
 
 投稿审核通过只让轨迹获得候选资格，不同步改变聚类成员关系。若轨迹已经属于 RouteGroup，可以在审核后异步刷新该组代表轨迹；每日全量任务负责最终校正。
 
@@ -629,8 +608,8 @@ RouteGroup 的 `center`、`radius_m`、`area_id`、bbox 和成员相似度始终
 
 `track_route_introductions.anchor_track_id` 是运营介绍的稳定锚点，不能随着自动投稿代表轨迹切换而变化。
 
-- 自动选中投稿代表轨迹：只更新 `representative_track_id` 和 `representative_source`；
-- 管理员手动指定代表轨迹：默认也不自动重绑介绍锚点；如确需重绑，应提供明确、独立且有确认提示的操作；
+- 自动选中投稿代表轨迹：只更新 `representative_track_id`，并把对应成员标记为 `role=representative,source=submission`；
+- 管理员通过现有“指定代表轨迹”操作时，沿用当前行为并将已有路线介绍锚点切换到该轨迹；投稿离线自动选择不调用该操作；
 - 投稿内容可以在后台“一键复制为路线介绍草稿”，但不能自动覆盖已发布介绍；
 - 已发布 RouteGroup 介绍仍是聚合路线内容的权威来源。
 
@@ -665,7 +644,7 @@ RouteGroup 的 `center`、`radius_m`、`area_id`、bbox 和成员相似度始终
 1. 路线介绍：标题、简介；
 2. 路线属性：难度、风险、适宜月份、路面与地形；
 3. 到达方式：交通多选、交通说明；
-4. 沿途图片：上传、排序、说明、封面预览。
+4. 沿途图片（可选）：上传、排序、说明、封面预览。
 
 提交前显示完整预览和审核提示。客户端只做体验层校验，服务端必须重复全部校验。
 
@@ -735,7 +714,7 @@ type TrackSubmissionRepository interface {
 - `submission is already pending`；
 - `submission revision conflict`；
 - `at least one suitable month is required`；
-- `submission image count must be between 1 and 9`；
+- `submission image count must not exceed 9`；
 - `submission image does not belong to current user`。
 
 ## 18. 监控与运营指标
@@ -759,7 +738,7 @@ type TrackSubmissionRepository interface {
 - 各投稿状态转换及非法转换；
 - Track 所有权、账号限制和公开可见性；
 - 所有枚举、月份、数组去重和字符长度；
-- 图片数量、排序、OSS URL 归属校验；
+- 零张图片可以投稿，以及图片数量上限、排序、OSS URL 归属校验；
 - 投稿图片缓存命中、未命中、失败和 admin URL 改写；
 - MySQL、Mongo、in-memory 行为一致；
 - 审核 `expected_revision` 冲突；
@@ -771,12 +750,12 @@ type TrackSubmissionRepository interface {
 
 ### 19.2 客户端验收
 
-- 投稿表单完整填写、图片上传、排序和预览；
+- 投稿表单完整填写，无图片时可以提交；有图片时支持上传、排序和预览；
 - 枚举与服务端 options 一致；
 - 待审核、通过、驳回、撤回和失效状态正确展示；
 - 驳回后可以修改并重投；
 - 推荐列表正确显示投稿标题、徽标和封面；
-- 投稿详情显示全部路线属性和沿途图片；
+- 投稿详情显示全部路线属性；有沿途图片时正确展示，无图片时返回空数组；
 - 图片只使用服务端静态缓存地址。
 
 ### 19.3 管理后台验收

@@ -15,6 +15,7 @@
 - 查看埋点 OSS 同步摘要（任务状态、文件列表、OSS key、字节数、耗时与错误）。
 - 在用户管理页查看、创建和解除账号限制；账号限制会由业务侧中间件拦截上传、发起同行、关注、收藏、修改资料等动作。
 - 查看和人工运营路线发现 RouteGroup（展示离线 `area_id` 对应的区域名称、类型与介绍页，支持改名、合并、移除成员、指定代表轨迹，以及编辑、发布和下线双语路线介绍）。
+- 审核用户轨迹投稿，查看结构化路线资料和经本地缓存改写的投稿图片，按 revision 通过或驳回。
 - 查看、修正和删除用户轨迹；列表展示 `track_screenshot_url` 缩略图，OSS 截图需先经共享截图缓存落盘再通过后台静态代理访问；修正仅允许改 `title` / `city_code`，删除为软删除，并同步清理收藏关系与首页地图索引/路线组成员。
 
 模块对外只暴露 `admin.NewModule(...)` 与 `Module.RegisterRoutes(h)`，不被业务 handler 引用。
@@ -38,7 +39,7 @@
 internal/admin/
 ├── auth.go         # Authenticator + bcrypt 校验 + cookie + AuthMiddleware
 ├── session.go      # SessionStore (内存 + GC 协程，TTL 默认 12h)
-├── handlers.go     # /admin/api/releases*、/admin/api/feedbacks*、/admin/api/route-groups*、安装包上传、列表查询
+├── handlers.go     # /admin/api/releases*、/admin/api/feedbacks*、/admin/api/route-groups*、/admin/api/track-submissions*、安装包上传、列表查询
 ├── routes.go       # NewModule / RegisterRoutes / go:embed static
 └── static/
     ├── login.html  ├── login.js
@@ -50,13 +51,14 @@ internal/admin/
 | --- | --- |
 | 路由清单 | `routes.go` 中 `RegisterRoutes` |
 | 鉴权与 cookie | `auth.go`（`sessionCookieName = "admin_session"`） |
-| 业务依赖注入 | `routes.go` 的 `NewModule(accounts, releaseSvc, stsSvc, staticRoot, userRepo, trackRepo, collectRepo, trackMapRepo, ..., restrictionSvc, routeGroupSvc)`；`cmd/server/main.go` 创建后通过 `Handler.SetScreenshotCache(screenshotCache)` 注入截图缓存 |
+| 业务依赖注入 | `routes.go` 的 `NewModule(accounts, releaseSvc, stsSvc, staticRoot, userRepo, trackRepo, collectRepo, trackMapRepo, ..., restrictionSvc, routeGroupSvc)`；`cmd/server/main.go` 创建后通过 `Handler.SetScreenshotCache(screenshotCache)` 和 `Handler.SetTrackSubmissionService(trackSubmissionSvc)` 注入缓存与投稿服务 |
 | 前端入口 | `static/login.html`、`static/index.html` |
 | 安装包上传 | `handlers.go` 中 `UploadPackage`、`static/app.js` 中 `/admin/api/releases/upload-package` |
 | 用户与账号限制 | `handlers.go` 中 `ListUsers` / `CreateAccountRestriction` / `GetCurrentAccountRestriction` / `RevokeCurrentAccountRestriction`，`static/users.html`、`static/users.js` |
 | 意见反馈管理 | `handlers.go` 中 `ListFeedbacks` / `GetFeedback` / `UpdateFeedbackStatus` / `GetFeedbackImage`，`static/feedbacks.html`、`static/feedbacks.js` |
 | 埋点同步摘要 | `handlers.go` 中 `ListAnalyticsSyncSummaries`，`static/analytics.html`、`static/analytics.js` |
 | 聚合路线运营 | `handlers.go` 中 `ListRouteGroups` / `GetRouteGroup` / `RenameRouteGroup` / `MergeRouteGroup` / `RemoveRouteGroupMember` / `SetRouteGroupRepresentative`，`static/route_groups.html`、`static/route_groups.js` |
+| 轨迹投稿审核 | `handlers.go` 中 `ListTrackSubmissions` / `GetTrackSubmission` / `ReviewTrackSubmission`，`static/track_submissions.html`、`static/track_submissions.js` |
 
 ## 路由清单（与 `routes.go` 对齐）
 
@@ -66,6 +68,7 @@ internal/admin/
 | GET | `/admin/login.html` | 公开 | 登录页 |
 | GET | `/admin/index.html` | 公开 | 管理首页（页面内会拉 `/admin/api/me` 校验） |
 | GET | `/admin/route_groups.html` | 公开 | 聚合路线运营页（页面内会拉 `/admin/api/me` 校验） |
+| GET | `/admin/track_submissions.html` | 公开 | 轨迹投稿审核页（页面内会拉 `/admin/api/me` 校验） |
 | GET | `/admin/static/*filepath` | 公开 | 内置静态资源 |
 | POST | `/admin/api/login` | 公开 | bcrypt 校验，成功后下发 `admin_session` cookie |
 | POST | `/admin/api/logout` | 公开 | 删除 session + 清 cookie |
@@ -97,6 +100,9 @@ internal/admin/
 | GET/PUT | `/admin/api/route-groups/:group_id/introduction` | 鉴权 | 查询或保存结构化双语路线介绍 |
 | POST | `/admin/api/route-groups/:group_id/introduction/publish` | 鉴权 | 发布路线介绍 |
 | POST | `/admin/api/route-groups/:group_id/introduction/unpublish` | 鉴权 | 下线路线介绍 |
+| GET | `/admin/api/track-submissions` | 鉴权 | 投稿审核列表，支持状态、难度、风险、运动类型、用户过滤 |
+| GET | `/admin/api/track-submissions/:submission_id` | 鉴权 | 投稿、轨迹和审核流水详情 |
+| POST | `/admin/api/track-submissions/:submission_id/review` | 鉴权 | 按 expected_revision 通过或驳回投稿 |
 
 ## 关键流程
 
@@ -174,7 +180,18 @@ GET /admin/api/users
        → TrackMapRepository 更新 track_route_groups / track_route_group_members
 ```
 路线组列表页展示路线组摘要及离线 `area_id` 对应的区域摘要，详情页展示同样的区域信息与介绍页入口；不得在 admin 请求链路重新做 Polygon/MultiPolygon 匹配。代表轨迹只用于封面/运营参考，RouteGroup 不再保存或下发代表折线，客户端用聚合中心点与 `radius_m` 画区域。
-人工改名会把 RouteGroup 标记为 `mixed`，离线重聚合通过历史成员重合复用 GroupID 并保留该名称；不要把名称重新改为城市级默认值。代表轨迹由离线任务按折线 medoid 重算，管理员仍可在两次任务之间临时调整代表轨迹。
+人工改名会把 RouteGroup 标记为 `mixed`，离线重聚合通过历史成员重合复用 GroupID 并保留该名称；不要把名称重新改为城市级默认值。离线任务先按 medoid 计算几何结果，再按“存量人工代表 > approved 投稿候选 > medoid”选择展示代表；人工代表只要仍属于重建后的组就必须保留。
+
+**审核轨迹投稿**：
+```
+[admin UI] /admin/track_submissions.html
+  → GET /admin/api/track-submissions?status=pending
+  → GET /admin/api/track-submissions/:submission_id 查看投稿、轨迹与审核流水
+  → POST /admin/api/track-submissions/:submission_id/review
+       {decision, reason, expected_revision}
+       → TrackSubmissionService 按 revision 原子审核并追加事件
+```
+投稿图片先经 `submission_images` AssetCache 缓存，再把 `/api/v1/static/submission_images/*` 改写为 `/admin/api/static/submission_images/*`；后台响应不得暴露原始 OSS URL。
 
 **管理轨迹**：
 ```

@@ -66,6 +66,64 @@ CREATE TABLE `track_id_sequences` (
                                      PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='轨迹ID全局序列表';
 
+CREATE TABLE `track_submissions` (
+  `submission_id` VARCHAR(64) NOT NULL COMMENT '投稿ID',
+  `track_id` VARCHAR(64) NOT NULL COMMENT '轨迹ID',
+  `user_id` BIGINT UNSIGNED NOT NULL COMMENT '投稿用户ID',
+  `track_type` VARCHAR(32) NOT NULL DEFAULT '' COMMENT '运动类型英文code',
+  `title` VARCHAR(128) NOT NULL DEFAULT '' COMMENT '投稿标题',
+  `description` TEXT NOT NULL COMMENT '路线简介',
+  `difficulty` VARCHAR(16) NOT NULL DEFAULT '' COMMENT 'easy/standard/hard/challenge/extreme',
+  `risk_level` VARCHAR(16) NOT NULL DEFAULT '' COMMENT 'none/low/medium/high',
+  `suitable_months_json` VARCHAR(128) NOT NULL COMMENT '适宜月份JSON数组',
+  `surface_types_json` TEXT NOT NULL COMMENT '路面与地形类型JSON数组',
+  `transport_modes_json` TEXT NOT NULL COMMENT '交通方式JSON数组',
+  `transport_description` VARCHAR(500) NOT NULL DEFAULT '' COMMENT '交通补充说明',
+  `status` VARCHAR(16) NOT NULL DEFAULT 'pending' COMMENT 'pending/approved/rejected/withdrawn/invalidated',
+  `revision` BIGINT UNSIGNED NOT NULL DEFAULT 1 COMMENT '重投版本号',
+  `submitted_at` DATETIME(6) NOT NULL,
+  `approved_at` DATETIME(6) NULL,
+  `reviewed_at` DATETIME(6) NULL,
+  `reviewed_by` VARCHAR(64) NOT NULL DEFAULT '' COMMENT '管理员账号',
+  `review_reason` VARCHAR(500) NOT NULL DEFAULT '',
+  `created_at` DATETIME(6) NOT NULL,
+  `updated_at` DATETIME(6) NOT NULL,
+  PRIMARY KEY (`submission_id`),
+  UNIQUE KEY `uk_track_submission_track` (`track_id`),
+  KEY `idx_track_submission_status_submitted` (`status`, `submitted_at`),
+  KEY `idx_track_submission_status_approved` (`status`, `approved_at`),
+  KEY `idx_track_submission_user_updated` (`user_id`, `updated_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户轨迹投稿';
+
+CREATE TABLE `track_submission_images` (
+  `image_id` VARCHAR(64) NOT NULL COMMENT '投稿图片ID',
+  `submission_id` VARCHAR(64) NOT NULL COMMENT '投稿ID',
+  `oss_url` VARCHAR(1024) NOT NULL COMMENT '客户端直传后的OSS地址',
+  `caption` VARCHAR(200) NOT NULL DEFAULT '',
+  `sort_order` INT NOT NULL DEFAULT 0,
+  `created_at` DATETIME(6) NOT NULL,
+  `updated_at` DATETIME(6) NOT NULL,
+  PRIMARY KEY (`image_id`),
+  UNIQUE KEY `uk_track_submission_image_order` (`submission_id`, `sort_order`),
+  KEY `idx_track_submission_image_submission` (`submission_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='轨迹投稿图片';
+
+CREATE TABLE `track_submission_events` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `submission_id` VARCHAR(64) NOT NULL,
+  `revision` BIGINT UNSIGNED NOT NULL,
+  `event_type` VARCHAR(32) NOT NULL,
+  `from_status` VARCHAR(16) NOT NULL DEFAULT '',
+  `to_status` VARCHAR(16) NOT NULL DEFAULT '',
+  `operator_type` VARCHAR(16) NOT NULL,
+  `operator` VARCHAR(64) NOT NULL DEFAULT '',
+  `reason` VARCHAR(500) NOT NULL DEFAULT '',
+  `snapshot_json` MEDIUMTEXT NOT NULL,
+  `created_at` DATETIME(6) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_track_submission_event_submission` (`submission_id`, `id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='轨迹投稿审核流水';
+
 
 CREATE TABLE `track_waypoints` (
                                    `id` bigint unsigned NOT NULL AUTO_INCREMENT,
@@ -191,7 +249,7 @@ CREATE TABLE `track_route_group_members` (
                                              `similarity_score` DOUBLE NOT NULL DEFAULT 0 COMMENT '自动聚合相似度',
                                              `match_direction` VARCHAR(16) NOT NULL DEFAULT 'forward' COMMENT 'forward/reverse',
                                              `role` VARCHAR(16) NOT NULL DEFAULT 'member' COMMENT 'representative/member',
-                                             `source` VARCHAR(16) NOT NULL DEFAULT 'auto' COMMENT 'auto/manual',
+                                             `source` VARCHAR(16) NOT NULL DEFAULT 'auto' COMMENT 'auto/manual/submission',
                                              `created_at` DATETIME(6) NOT NULL,
                                              `updated_at` DATETIME(6) NOT NULL,
                                              PRIMARY KEY (`group_id`, `track_id`),

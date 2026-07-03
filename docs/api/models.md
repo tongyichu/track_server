@@ -15,6 +15,9 @@
 | `source_tag` | string | 轨迹来源/运营标签；允许值为空字符串或 `manual_seed`（人工录入冷启动轨迹）；普通列表摘要不返回该字段 |
 | `coordinate_system` | string | 坐标系，例如 `WGS84` / `GCJ02` / `BD09` |
 | `title` | string | 轨迹标题 |
+| `is_featured` | boolean | 推荐/搜索摘要中表示轨迹投稿当前已审核通过 |
+| `featured_description` | string | 审核通过的投稿简介；非优质投稿省略 |
+| `featured_cover_url` | string | 投稿首图的本地静态缓存地址；无投稿图时回退轨迹截图 |
 | `start_time` | string | 开始时间（RFC3339/ISO8601，服务端序列化时间格式） |
 | `end_time` | string | 结束时间（RFC3339/ISO8601，服务端序列化时间格式） |
 | `distance` | number | 距离（米） |
@@ -33,4 +36,3 @@
 | `earned_rewards` | array | 本次轨迹完成即时新获得的成就奖励；仅完成轨迹结算产生新奖励时返回，结构同 `/achievement/rewards` 单条奖励 |
 
 ---
-

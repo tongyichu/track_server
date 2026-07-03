@@ -9,6 +9,7 @@ import (
 	"log"
 	"math"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -32,6 +33,7 @@ type TrackService struct {
 	rawTrackCache   *AssetCacheService
 	trackTypes      []string
 	trackMapIndex   *TrackMapIndexService
+	submissions     *TrackSubmissionService
 }
 
 const (
@@ -441,6 +443,11 @@ func (s *TrackService) SetRawTrackCache(cache *AssetCacheService) {
 	s.rawTrackCache = cache
 }
 
+// SetTrackSubmissionService injects track submission decoration and owner-status support.
+func (s *TrackService) SetTrackSubmissionService(submissions *TrackSubmissionService) {
+	s.submissions = submissions
+}
+
 // SetTrackMapIndexService injects the async track map index service.
 func (s *TrackService) SetTrackMapIndexService(indexSvc *TrackMapIndexService) {
 	s.trackMapIndex = indexSvc
@@ -611,6 +618,14 @@ func (s *TrackService) GetTrackDetail(ctx context.Context, trackID string) (*mod
 	// Recompute summary metrics from points if available.
 	updateTrackMetrics(track)
 	s.decorateTrackAssets(ctx, track)
+	if s.submissions != nil {
+		if sub, subErr := s.submissions.PublicForTrack(ctx, track.ID); subErr == nil {
+			track.Submission = sub
+			if sub != nil {
+				track.Title = sub.Title
+			}
+		}
+	}
 	return track, nil
 }
 
@@ -805,7 +820,26 @@ func (s *TrackService) ListRecommend(ctx context.Context, userID int64, input Li
 	if err := s.fillTrackSummaryExtras(ctx, userID, summaries); err != nil {
 		return nil, err
 	}
-	return buildTrackSummaryPage(summaries, hasMore)
+	var cursorAnchor *models.Track
+	if len(tracks) > 0 {
+		cursorAnchor = tracks[len(tracks)-1]
+	}
+	if s.submissions != nil {
+		if err := s.submissions.DecorateSummaries(ctx, summaries); err != nil {
+			return nil, err
+		}
+		sort.SliceStable(summaries, func(i, j int) bool {
+			return summaries[i].IsFeatured && !summaries[j].IsFeatured
+		})
+	}
+	page := &models.TrackSummaryPage{Items: summaries, HasMore: hasMore}
+	if hasMore && cursorAnchor != nil {
+		page.NextCursor, err = encodeTrackListCursor(cursorAnchor.StartTime, cursorAnchor.ID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return page, nil
 }
 
 // ListMyTracks returns tracks that belong to the given user.
@@ -848,6 +882,11 @@ func (s *TrackService) ListMyTracks(ctx context.Context, userID int64, input Lis
 	}
 	if err := s.fillMyTrackSummaryExtras(ctx, summaries); err != nil {
 		return nil, err
+	}
+	if s.submissions != nil {
+		if err := s.submissions.DecorateMySummaries(ctx, summaries); err != nil {
+			return nil, err
+		}
 	}
 	return buildMyTrackSummaryPage(summaries, hasMore, totalCount)
 }
@@ -989,6 +1028,11 @@ func (s *TrackService) SearchTracks(ctx context.Context, userID int64, input Sea
 	}
 	if err := s.fillTrackSummaryExtras(ctx, userID, summaries); err != nil {
 		return nil, err
+	}
+	if s.submissions != nil {
+		if err := s.submissions.DecorateSummaries(ctx, summaries); err != nil {
+			return nil, err
+		}
 	}
 	return buildTrackSummaryPage(summaries, hasMore)
 }
@@ -1325,6 +1369,11 @@ func (s *TrackService) UpdateTrackInfo(ctx context.Context, userID int64, trackI
 		if err := s.tracks.Update(ctx, track); err != nil {
 			return nil, err
 		}
+		if s.submissions != nil && (updatedRaw || patch.TrackType != nil || patch.CoordinateSystem != nil) {
+			if err := s.submissions.Invalidate(ctx, track.ID, "track content changed"); err != nil {
+				return nil, err
+			}
+		}
 		if !track.IsRunning && s.achievements != nil {
 			rewards, err := s.achievements.SettleTrackCompleted(ctx, track)
 			if err != nil {
@@ -1382,6 +1431,11 @@ func (s *TrackService) DeleteTrack(ctx context.Context, userID int64, trackID st
 			}
 			return err
 		}
+		if s.submissions != nil {
+			if err := s.submissions.Invalidate(ctx, trackID, "track deleted"); err != nil {
+				return err
+			}
+		}
 		return nil
 	}
 
@@ -1403,6 +1457,11 @@ func (s *TrackService) DeleteTrack(ctx context.Context, userID int64, trackID st
 	track.IsRunning = false
 	if err := s.tracks.Update(ctx, track); err != nil {
 		return err
+	}
+	if s.submissions != nil {
+		if err := s.submissions.Invalidate(ctx, trackID, "track deleted"); err != nil {
+			return err
+		}
 	}
 	// 同步清理收藏记录：用户删除轨迹后，track_collects 中不应继续保留该轨迹的收藏关系。
 	if s.collects != nil {

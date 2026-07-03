@@ -15,6 +15,7 @@ import (
 type Deps struct {
 	TrackService               *service.TrackService
 	TrackMapService            *service.TrackMapService
+	TrackSubmissionService     *service.TrackSubmissionService
 	UserService                *service.UserService
 	LoginService               *service.LoginService
 	OSSTokenService            *service.OSSTokenService
@@ -44,6 +45,7 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 	// 注意：静态资源下载必须走 auth group，保证鉴权逻辑与其他接口一致。
 
 	trackHandler := NewTrackHandler(deps.TrackService)
+	trackSubmissionHandler := NewTrackSubmissionHandler(deps.TrackSubmissionService)
 	trackMapHandler := NewTrackMapHandler(deps.TrackMapService)
 	mapAreaHandler := NewMapAreaHandler(maparea.DefaultCatalog())
 	mapRouteIntroductionHandler := NewMapRouteIntroductionHandler(deps.TrackMapService)
@@ -180,6 +182,13 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 
 	// track related
 	auth.GET("/track/types", trackHandler.ListTrackTypes)
+	if deps.TrackSubmissionService != nil {
+		auth.GET("/track/submission/options", trackSubmissionHandler.Options)
+		auth.POST("/track/:track_id/submission", trackSubmissionHandler.Submit)
+		auth.PUT("/track/:track_id/submission", trackSubmissionHandler.Update)
+		auth.GET("/track/:track_id/submission", trackSubmissionHandler.Get)
+		auth.POST("/track/:track_id/submission/withdraw", trackSubmissionHandler.Withdraw)
+	}
 	auth.POST("/track/create", trackHandler.CreateTrack)
 	auth.PUT("/track/:track_id/update", trackHandler.UpdateTrackInfo)
 	auth.DELETE("/track/:track_id", trackHandler.DeleteTrack)
