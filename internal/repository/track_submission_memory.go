@@ -103,6 +103,34 @@ func (r *InMemoryTrackSubmissionRepository) ListByTrackIDs(_ context.Context, tr
 	return result, nil
 }
 
+func (r *InMemoryTrackSubmissionRepository) ListApprovedTrackIDs(_ context.Context, limit int) ([]string, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	items := make([]*models.TrackSubmission, 0)
+	for _, sub := range r.byID {
+		if sub != nil && sub.Status == models.TrackSubmissionStatusApproved {
+			items = append(items, sub)
+		}
+	}
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].SubmittedAt.Equal(items[j].SubmittedAt) {
+			return items[i].SubmissionID > items[j].SubmissionID
+		}
+		return items[i].SubmittedAt.After(items[j].SubmittedAt)
+	})
+	if limit <= 0 || limit > 100 {
+		limit = 100
+	}
+	if len(items) > limit {
+		items = items[:limit]
+	}
+	ids := make([]string, 0, len(items))
+	for _, item := range items {
+		ids = append(ids, item.TrackID)
+	}
+	return ids, nil
+}
+
 func (r *InMemoryTrackSubmissionRepository) List(_ context.Context, filter models.TrackSubmissionListFilter) ([]*models.TrackSubmission, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

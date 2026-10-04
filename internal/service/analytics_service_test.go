@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -58,6 +59,7 @@ func TestAnalyticsServiceIngestWritesSanitizedJSONL(t *testing.T) {
 			{
 				"event_id":    "evt-1",
 				"event_name":  "track_create_success",
+				"user_id":     "1001",
 				"phone":       "13800000000",
 				"latitude":    39.9,
 				"oss_url":     "https://bucket.oss-cn.aliyuncs.com/a.jpg?OSSAccessKeyId=secret",
@@ -65,11 +67,12 @@ func TestAnalyticsServiceIngestWritesSanitizedJSONL(t *testing.T) {
 			},
 		},
 	}, AnalyticsIngestMeta{
-		UserID:     1001,
-		Platform:   "ios",
-		AppVersion: "1.0.0",
-		DeviceID:   "anon-1",
-		ClientLang: "zh-CN",
+		UserID:        1001,
+		Platform:      "ios",
+		AppVersion:    "1.0.0",
+		DeviceID:      "anon-1",
+		ClientLang:    "zh-CN",
+		Authorization: true,
 	})
 	if err != nil {
 		t.Fatalf("Ingest failed: %v", err)
@@ -97,6 +100,40 @@ func TestAnalyticsServiceIngestWritesSanitizedJSONL(t *testing.T) {
 	}
 	if row["server_user_id"] != "1001" || row["platform"] != "ios" || row["app_version"] != "1.0.0" {
 		t.Fatalf("request metadata not applied: %#v", row)
+	}
+}
+
+func TestAnalyticsServiceRejectsMismatchedIdentityBatch(t *testing.T) {
+	svc, err := NewAnalyticsService(AnalyticsConfig{Enabled: true, LocalDir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	batch := AnalyticsEventBatch{Events: []map[string]any{{"event_id": "evt-1", "event_name": "track_recommend_impression", "user_id": "1001"}}}
+	if _, err := svc.Ingest(context.Background(), batch, AnalyticsIngestMeta{}); !errors.Is(err, ErrAnalyticsAuthRequired) {
+		t.Fatalf("got %v", err)
+	}
+	if _, err := svc.Ingest(context.Background(), batch, AnalyticsIngestMeta{UserID: 1002, Authorization: true}); !errors.Is(err, ErrAnalyticsUserMismatch) {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestAnalyticsServiceKeepsAuthenticatedAnonymousEventAnonymous(t *testing.T) {
+	now := time.Date(2026, 6, 12, 15, 0, 0, 0, time.UTC)
+	dir := t.TempDir()
+	svc, err := NewAnalyticsService(AnalyticsConfig{Enabled: true, LocalDir: dir, InstanceID: "anonymous", Now: func() time.Time { return now }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = svc.Ingest(context.Background(), AnalyticsEventBatch{Events: []map[string]any{{"event_id": "evt-anon", "event_name": "app_launch"}}}, AnalyticsIngestMeta{UserID: 1001, Authorization: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, err := readAnalyticsJSONLLines(filepath.Join(dir, "2026-06-12", "15", "events-anonymous-000001.jsonl.writing"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := rows[0]["server_user_id"]; ok {
+		t.Fatalf("anonymous event was attributed: %#v", rows[0])
 	}
 }
 

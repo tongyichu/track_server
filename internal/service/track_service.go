@@ -52,9 +52,10 @@ var allowedTrackSourceTags = map[string]struct{}{
 }
 
 type ListRecommendInput struct {
-	CityCode string
-	Cursor   string
-	Limit    int
+	CityCode       string
+	Cursor         string
+	Limit          int
+	ClientLanguage string
 }
 
 type ListMyTracksInput struct {
@@ -773,6 +774,32 @@ func (s *TrackService) ListRecommend(ctx context.Context, userID int64, input Li
 	if err != nil {
 		return nil, err
 	}
+	summaries, err := s.BuildTrackSummaries(ctx, userID, tracks)
+	if err != nil {
+		return nil, err
+	}
+	var cursorAnchor *models.Track
+	if len(tracks) > 0 {
+		cursorAnchor = tracks[len(tracks)-1]
+	}
+	if s.submissions != nil {
+		sort.SliceStable(summaries, func(i, j int) bool {
+			return summaries[i].IsFeatured && !summaries[j].IsFeatured
+		})
+	}
+	page := &models.TrackSummaryPage{Items: summaries, HasMore: hasMore}
+	if hasMore && cursorAnchor != nil {
+		page.NextCursor, err = encodeTrackListCursor(cursorAnchor.StartTime, cursorAnchor.ID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return page, nil
+}
+
+// BuildTrackSummaries decorates tracks while preserving the caller's order.
+// Recommendation sessions use this method so ranking and pagination are not changed by presentation enrichment.
+func (s *TrackService) BuildTrackSummaries(ctx context.Context, userID int64, tracks []*models.Track) ([]*models.TrackSummary, error) {
 	summaries := toSummaries(tracks)
 	// 填充服务器本地可下载截图 URL：
 	// - 命中本地缓存则直接返回本地 URL
@@ -822,26 +849,12 @@ func (s *TrackService) ListRecommend(ctx context.Context, userID int64, input Li
 	if err := s.fillTrackSummaryExtras(ctx, userID, summaries); err != nil {
 		return nil, err
 	}
-	var cursorAnchor *models.Track
-	if len(tracks) > 0 {
-		cursorAnchor = tracks[len(tracks)-1]
-	}
 	if s.submissions != nil {
 		if err := s.submissions.DecorateSummaries(ctx, summaries); err != nil {
 			return nil, err
 		}
-		sort.SliceStable(summaries, func(i, j int) bool {
-			return summaries[i].IsFeatured && !summaries[j].IsFeatured
-		})
 	}
-	page := &models.TrackSummaryPage{Items: summaries, HasMore: hasMore}
-	if hasMore && cursorAnchor != nil {
-		page.NextCursor, err = encodeTrackListCursor(cursorAnchor.StartTime, cursorAnchor.ID)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return page, nil
+	return summaries, nil
 }
 
 // ListMyTracks returns tracks that belong to the given user.
@@ -1679,10 +1692,14 @@ func (s *TrackService) fillTrackSummaryExtras(ctx context.Context, userID int64,
 	}
 	users := make(map[int64]userBrief, len(userIDs))
 	if s.users != nil {
+		usersByID, err := s.users.FindByIDs(ctx, userIDs)
+		if err != nil {
+			return err
+		}
 		for _, uid := range userIDs {
-			u, err := s.users.FindByID(ctx, uid)
+			u := usersByID[uid]
 			switch {
-			case err == nil && u != nil:
+			case u != nil:
 				avatar := fallbackAvatarURL(uid, u.AvatarURL)
 				if s.avatarCache != nil && shouldRewriteAvatarURL(avatar) {
 					cacheCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -1692,11 +1709,17 @@ func (s *TrackService) fillTrackSummaryExtras(ctx context.Context, userID int64,
 					cancel()
 				}
 				users[uid] = userBrief{avatar: avatar, nick: u.Nickname}
-			case errors.Is(err, repository.ErrNotFound):
+			case u == nil:
 				users[uid] = userBrief{avatar: defaultAvatarURL(uid)}
-			case err != nil:
-				return err
 			}
+		}
+	}
+	collectedByTrack := map[string]bool{}
+	if s.collects != nil && userID > 0 {
+		var err error
+		collectedByTrack, err = s.collects.ListCollectedByTrackIDs(ctx, userID, trackIDs)
+		if err != nil {
+			return err
 		}
 	}
 
@@ -1712,11 +1735,7 @@ func (s *TrackService) fillTrackSummaryExtras(ctx context.Context, userID int64,
 			summary.CollectCount = counts[summary.ID]
 			// 当前用户是否收藏（需要 userID）
 			if userID > 0 {
-				collected, err := s.collects.IsCollected(ctx, userID, summary.ID)
-				if err != nil {
-					return err
-				}
-				summary.Collected = collected
+				summary.Collected = collectedByTrack[summary.ID]
 			}
 		}
 

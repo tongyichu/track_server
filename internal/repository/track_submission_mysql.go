@@ -165,6 +165,26 @@ func (r *MySQLTrackSubmissionRepository) ListByTrackIDs(ctx context.Context, tra
 	return result, nil
 }
 
+func (r *MySQLTrackSubmissionRepository) ListApprovedTrackIDs(ctx context.Context, limit int) ([]string, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 100
+	}
+	rows, err := r.db.QueryContext(ctx, `SELECT track_id FROM track_submissions WHERE status=? ORDER BY submitted_at DESC,submission_id DESC LIMIT ?`, models.TrackSubmissionStatusApproved, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	ids := make([]string, 0, limit)
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
 func (r *MySQLTrackSubmissionRepository) List(ctx context.Context, filter models.TrackSubmissionListFilter) ([]*models.TrackSubmission, error) {
 	query := `SELECT ` + submissionColumns + ` FROM track_submissions WHERE 1=1`
 	args := make([]interface{}, 0)

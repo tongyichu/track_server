@@ -32,7 +32,8 @@ type InMemoryTrackWaypointRepository struct {
 // It stores navigation usage as append-only records.
 type InMemoryNavigationRepository struct {
 	mu      sync.RWMutex
-	byTrack map[string][]int64
+	nextID  int64
+	byTrack map[string][]*models.TrackNavigation
 }
 
 // InMemoryAchievementRepository is an in-memory implementation of AchievementRepository.
@@ -67,7 +68,7 @@ type InMemoryAccountRestrictionRepository struct {
 }
 
 func NewInMemoryNavigationRepository() *InMemoryNavigationRepository {
-	return &InMemoryNavigationRepository{byTrack: make(map[string][]int64)}
+	return &InMemoryNavigationRepository{nextID: 1, byTrack: make(map[string][]*models.TrackNavigation)}
 }
 
 func NewInMemoryAchievementRepository() *InMemoryAchievementRepository {
@@ -172,6 +173,19 @@ func (r *InMemoryTrackRepository) FindByID(_ context.Context, id string) (*model
 	}
 	clone := *t
 	return &clone, nil
+}
+
+func (r *InMemoryTrackRepository) FindByIDs(_ context.Context, ids []string) (map[string]*models.Track, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	result := make(map[string]*models.Track, len(ids))
+	for _, id := range ids {
+		if track, ok := r.tracks[id]; id != "" && ok && track != nil {
+			clone := *track
+			result[id] = &clone
+		}
+	}
+	return result, nil
 }
 
 // FindRunningByUserID finds the running track of a user.
@@ -507,6 +521,19 @@ func (r *InMemoryUserRepository) FindByID(_ context.Context, id int64) (*models.
 	return u, nil
 }
 
+func (r *InMemoryUserRepository) FindByIDs(_ context.Context, ids []int64) (map[int64]*models.User, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	result := make(map[int64]*models.User, len(ids))
+	for _, id := range ids {
+		if user, ok := r.users[id]; ok && user != nil {
+			clone := *user
+			result[id] = &clone
+		}
+	}
+	return result, nil
+}
+
 // FindByPhone finds a user by phone.
 func (r *InMemoryUserRepository) FindByPhone(_ context.Context, phone string) (*models.User, error) {
 	r.mu.RLock()
@@ -709,6 +736,19 @@ func (r *InMemoryCollectRepository) IsCollected(_ context.Context, userID int64,
 	}
 	_, ok = tracks[trackID]
 	return ok, nil
+}
+
+func (r *InMemoryCollectRepository) ListCollectedByTrackIDs(_ context.Context, userID int64, trackIDs []string) (map[string]bool, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	result := make(map[string]bool, len(trackIDs))
+	userCollects := r.collects[userID]
+	for _, id := range trackIDs {
+		if id != "" {
+			_, result[id] = userCollects[id]
+		}
+	}
+	return result, nil
 }
 
 // ListByUserID lists collect records of a user in reverse chronological order.
@@ -1160,7 +1200,10 @@ func (r *InMemoryNavigationRepository) AddNavigation(_ context.Context, navigato
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.byTrack[trackID] = append(r.byTrack[trackID], navigatorUserID)
+	r.byTrack[trackID] = append(r.byTrack[trackID], &models.TrackNavigation{
+		ID: r.nextID, TrackID: trackID, NavigatorUserID: navigatorUserID, CreatedAt: time.Now(),
+	})
+	r.nextID++
 	return nil
 }
 
@@ -1192,6 +1235,30 @@ func (r *InMemoryNavigationRepository) CountByTrackIDs(_ context.Context, trackI
 		res[id] = int64(len(r.byTrack[id]))
 	}
 	return res, nil
+}
+
+func (r *InMemoryNavigationRepository) ListByUserID(_ context.Context, userID int64, limit int) ([]*models.TrackNavigation, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	items := make([]*models.TrackNavigation, 0)
+	for _, rows := range r.byTrack {
+		for _, row := range rows {
+			if row != nil && row.NavigatorUserID == userID {
+				clone := *row
+				items = append(items, &clone)
+			}
+		}
+	}
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].CreatedAt.Equal(items[j].CreatedAt) {
+			return items[i].ID > items[j].ID
+		}
+		return items[i].CreatedAt.After(items[j].CreatedAt)
+	})
+	if limit > 0 && len(items) > limit {
+		items = items[:limit]
+	}
+	return items, nil
 }
 
 func (r *InMemoryAchievementRepository) UpsertUserReward(_ context.Context, reward *models.UserAchievementReward) (bool, error) {

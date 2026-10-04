@@ -24,7 +24,8 @@ func Ping(ctx context.Context, c *app.RequestContext) {
 
 // TrackHandler handles HTTP requests related to tracks.
 type TrackHandler struct {
-	trackSvc *service.TrackService
+	trackSvc          *service.TrackService
+	recommendationSvc *service.RecommendationService
 }
 
 type RunningTrackResult struct {
@@ -37,8 +38,12 @@ type StatusResult struct {
 }
 
 // NewTrackHandler creates a new TrackHandler.
-func NewTrackHandler(trackSvc *service.TrackService) *TrackHandler {
-	return &TrackHandler{trackSvc: trackSvc}
+func NewTrackHandler(trackSvc *service.TrackService, recommendationSvc ...*service.RecommendationService) *TrackHandler {
+	h := &TrackHandler{trackSvc: trackSvc}
+	if len(recommendationSvc) > 0 {
+		h.recommendationSvc = recommendationSvc[0]
+	}
+	return h
 }
 
 // ListTrackTypes handles GET /api/v1/track/types.
@@ -188,12 +193,26 @@ func (h *TrackHandler) ListRecommend(ctx context.Context, c *app.RequestContext)
 		}
 		limit = parsed
 	}
-	page, err := h.trackSvc.ListRecommend(ctx, userID, service.ListRecommendInput{
-		CityCode: string(c.Query("city_code")),
-		Cursor:   string(c.Query("cursor")),
-		Limit:    limit,
-	})
+	input := service.ListRecommendInput{CityCode: string(c.Query("city_code")), Cursor: string(c.Query("cursor")), Limit: limit}
+	if meta != nil {
+		input.ClientLanguage = meta.ClientLanguage
+	}
+	var page *models.TrackSummaryPage
+	var err error
+	if h.recommendationSvc != nil {
+		page, err = h.recommendationSvc.ListRecommend(ctx, userID, input)
+	} else {
+		page, err = h.trackSvc.ListRecommend(ctx, userID, input)
+	}
 	if err != nil {
+		if errors.Is(err, service.ErrRecommendCursorExpired) {
+			c.JSON(http.StatusBadRequest, utils.H{"error": "recommend cursor expired", "error_code": "recommend_cursor_expired"})
+			return
+		}
+		if errors.Is(err, service.ErrRecommendSessionUnavailable) {
+			c.JSON(http.StatusServiceUnavailable, utils.H{"error": "recommend session unavailable", "error_code": "recommend_session_unavailable"})
+			return
+		}
 		var iae *service.InvalidArgumentError
 		if errors.As(err, &iae) {
 			c.JSON(http.StatusBadRequest, utils.H{"error": iae.Error()})

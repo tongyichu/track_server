@@ -16,6 +16,7 @@ type Deps struct {
 	TrackService               *service.TrackService
 	TrackMapService            *service.TrackMapService
 	TrackSubmissionService     *service.TrackSubmissionService
+	RecommendationService      *service.RecommendationService
 	UserService                *service.UserService
 	LoginService               *service.LoginService
 	OSSTokenService            *service.OSSTokenService
@@ -44,7 +45,7 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 	// 路径与各 AssetCacheService 的 urlPrefix 保持一致（/api/v1/static/...）。
 	// 注意：静态资源下载必须走 auth group，保证鉴权逻辑与其他接口一致。
 
-	trackHandler := NewTrackHandler(deps.TrackService)
+	trackHandler := NewTrackHandler(deps.TrackService, deps.RecommendationService)
 	trackSubmissionHandler := NewTrackSubmissionHandler(deps.TrackSubmissionService)
 	trackMapHandler := NewTrackMapHandler(deps.TrackMapService)
 	mapAreaHandler := NewMapAreaHandler(maparea.DefaultCatalog())
@@ -70,7 +71,7 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 	api.POST("/login/sms", loginHandler.LoginBySMS)
 	api.POST("/login/wechat", loginHandler.LoginByWechat)
 	api.POST("/login/apple", loginHandler.LoginByApple)
-	api.POST("/analytics/events", analyticsHandler.Ingest)
+	api.POST("/analytics/events", middleware.OptionalAnalyticsJWTAuthMiddleware(deps.LoginService, deps.TokenBlacklist), analyticsHandler.Ingest)
 	api.POST("/internal/mqtt/auth", companionHandler.MQTTAuth)
 	api.POST("/internal/mqtt/acl", companionHandler.MQTTACL)
 	api.POST("/internal/companion/mqtt/location-ingest", companionHandler.IngestMQTTLocation)

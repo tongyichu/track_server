@@ -129,6 +129,7 @@ Nginx 反向代理配置示例。
 ## 使用建议
 
 - 如果使用 Docker 部署，优先关注 `Dockerfile`、`docker-compose.yml` 和 `.env.example`。
+- 个性化推荐上线前保持 `RECOMMENDATION_ENABLED=false`，先设置 `SCHEDULER_ENABLED=true` 预热画像和物料统计；确认 `recommendation_item_stats` 至少成功生成一批、两端联调通过后，再开启推荐总开关。
 - 如果使用传统 Linux 部署，优先关注 `scripts/deploy_binary.sh` 和 `systemd/hertz-track.service`。
 - 如果需要通过域名对外提供服务，额外参考 `nginx/hertz-track.conf`。
 - 启用 TLS 时，要统一确认是由应用自身处理 HTTPS，还是由 Nginx 终止 TLS，避免两套配置重复启用。

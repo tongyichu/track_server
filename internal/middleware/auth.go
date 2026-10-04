@@ -123,3 +123,73 @@ func JWTAuthMiddleware(loginSvc *service.LoginService, blacklist *TokenBlacklist
 		c.Response.Header.Set("X-Renewed-Token", renewedToken)
 	}
 }
+
+// OptionalAnalyticsJWTAuthMiddleware accepts anonymous analytics requests, but validates any supplied JWT.
+// It uses a stable analytics error code because clients persist and retry batches by identity domain.
+func OptionalAnalyticsJWTAuthMiddleware(loginSvc *service.LoginService, blacklist *TokenBlacklist) app.HandlerFunc {
+	return func(ctx context.Context, c *app.RequestContext) {
+		authHeader := strings.TrimSpace(string(c.Request.Header.Peek("Authorization")))
+		if authHeader == "" {
+			c.Next(ctx)
+			return
+		}
+		reject := func() {
+			c.JSON(http.StatusUnauthorized, utils.H{"error": "analytics authorization required", "error_code": "analytics_auth_required"})
+			c.Abort()
+		}
+		if loginSvc == nil || !strings.HasPrefix(authHeader, "Bearer ") {
+			reject()
+			return
+		}
+		tokenStr := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
+		if tokenStr == "" || (blacklist != nil && blacklist.IsBlacklisted(tokenStr)) {
+			reject()
+			return
+		}
+		token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
+			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, jwt.ErrSignatureInvalid
+			}
+			return []byte(loginSvc.JWTSecret()), nil
+		})
+		if err != nil || !token.Valid {
+			reject()
+			return
+		}
+		claims, ok := token.Claims.(jwt.MapClaims)
+		if !ok {
+			reject()
+			return
+		}
+		var userID int64
+		switch value := claims["user_id"].(type) {
+		case float64:
+			userID = int64(value)
+		case string:
+			userID, _ = strconv.ParseInt(value, 10, 64)
+		}
+		if userID <= 0 {
+			reject()
+			return
+		}
+		tokenVersion := int64(1)
+		switch value := claims["token_version"].(type) {
+		case float64:
+			tokenVersion = int64(value)
+		case string:
+			if parsed, parseErr := strconv.ParseInt(value, 10, 64); parseErr == nil && parsed > 0 {
+				tokenVersion = parsed
+			}
+		}
+		currentVersion, err := loginSvc.GetUserTokenVersion(ctx, userID)
+		if err != nil || currentVersion != tokenVersion {
+			reject()
+			return
+		}
+		if meta := GetRequestMeta(c); meta != nil {
+			meta.AuthUserID = userID
+			meta.RawUserID = strconv.FormatInt(userID, 10)
+		}
+		c.Next(ctx)
+	}
+}

@@ -496,12 +496,11 @@ score =
 | `user_id` | Session 所属用户 |
 | `city_code` | 本次硬过滤城市，可为空 |
 | `strategy` | `personalized` / `hybrid` / `legacy` |
-| `track_ids_json` | 最终有序 Track ID 列表 |
-| `sources_json` | 每个 Track 的候选来源和原因 |
+| `items_json` | 最终有序 Track ID、候选来源和推荐原因列表 |
 | `created_at` | 创建时间 |
 | `expires_at` | 过期时间，固定为创建后 60 分钟 |
 
-`track_ids_json` 与 `sources_json` 必须按位置一一对应；后续分页直接使用 Session 中固化的主要候选来源，并根据列表 offset 计算 `recommend_rank`，不能重新召回或重新判定 `candidate_source`。
+`items_json` 中每个元素同时保存 Track ID、主要候选来源和推荐原因；后续分页直接使用 Session 中固化的信息，并根据列表 offset 计算 `recommend_rank`，不能重新召回、重新判定 `candidate_source` 或重新生成文案。
 
 读取 Session 时必须校验 `user_id`，不能仅凭 request ID 返回其他用户的推荐列表。
 
@@ -514,17 +513,15 @@ score =
 | 字段 | 说明 |
 | --- | --- |
 | `user_id` | 用户 ID |
-| `profile_json` | 运动类型、城市、距离、时长、RouteGroup 和作者偏好 |
-| `positive_event_count` | 有效正反馈数量 |
-| `data_through_at` | 本批画像实际包含的行为数据截止时间，用于判断 T+1 新鲜度 |
+| `profile_json` | 运动类型、城市和作者偏好、已收藏/已导航集合、有效正反馈数量 |
+| `data_through` | 本批画像实际包含的行为数据截止时间，用于判断数据新鲜度 |
 | `generated_at` | 生成时间 |
-| `updated_at` | 更新时间 |
 
 画像是可重建派生数据，不是收藏、导航等行为的权威来源。
 
 ### 13.3 内容统计
 
-`recommend_item_stats_daily` 可保存按天聚合的收藏、导航，以及 T+1 可用的曝光、点击和详情浏览统计；每个批次必须记录 `event_date`、`data_through_at` 和 `generated_at`。原始埋点仍归档到 OSS，不把全量原始事件写入业务 MySQL。第一版的收藏、导航和关注关系直接来源于业务权威表；曝光、点击和详情浏览聚合不可用时使用上一批可用值或零值，并降级为以强行为为主的热度和画像。推荐原始事件保留 180 天，过期后依赖日聚合数据继续提供趋势和画像输入。
+`recommend_item_stats_daily` 按 `track_id + stat_date` 保存收藏、导航，以及 T+1 可用的曝光、点击和详情浏览统计；每个批次记录 `data_through`、`generated_at` 和 `updated_at`。原始埋点仍归档到 OSS，不把全量原始事件写入业务 MySQL。第一版的收藏、导航和关注关系直接来源于业务权威表；曝光、点击和详情浏览由下游清洗任务回写日统计，暂不可用时保留上一批值或使用零值，并降级为以强行为为主的热度和画像。推荐原始事件保留 180 天，过期后依赖日聚合数据继续提供趋势和画像输入。
 
 ## 14. Repository 和服务接口草案
 
@@ -532,13 +529,13 @@ score =
 
 ```go
 type RecommendationRepository interface {
-    GetUserProfile(ctx context.Context, userID int64) (*RecommendationUserProfile, error)
-    SaveUserProfile(ctx context.Context, profile *RecommendationUserProfile) error
-    ListItemStats(ctx context.Context, trackIDs []string, from, to time.Time) (map[string]*RecommendationItemStats, error)
-    SaveItemStats(ctx context.Context, stats []*RecommendationItemStats) error
     SaveFeedSession(ctx context.Context, session *RecommendationFeedSession) error
     GetFeedSession(ctx context.Context, requestID string) (*RecommendationFeedSession, error)
-    DeleteExpiredFeedSessions(ctx context.Context, before time.Time, limit int) (int64, error)
+    DeleteExpiredFeedSessions(ctx context.Context, now time.Time, limit int) (int64, error)
+    GetUserProfile(ctx context.Context, userID int64) (*RecommendationUserProfile, error)
+    UpsertUserProfiles(ctx context.Context, profiles []*RecommendationUserProfile) error
+    ListItemStats(ctx context.Context, trackIDs []string) (map[string]*RecommendationItemStats, error)
+    UpsertItemStats(ctx context.Context, stats []*RecommendationItemStats) error
 }
 ```
 
@@ -754,11 +751,12 @@ Feed Session 过期时返回 `400 Bad Request` 和稳定机器码，客户端不
 | 配置项 | 建议默认值 | 说明 |
 | --- | --- | --- |
 | `RECOMMENDATION_ENABLED` | `false` | 总开关，首版默认关闭，验收通过后整体开启 |
-| `RECOMMENDATION_TIMEOUT_MS` | `250` | 新推荐计算超时，不含资源缓存 |
-| `RECOMMENDATION_FEED_TTL` | `60m` | Feed Session 有效期 |
-| `RECOMMENDATION_DATA_MAX_AGE` | `48h` | 用户画像和统计数据最大允许年龄 |
+| `RECOMMENDATION_TIMEOUT_MILLIS` | `250` | 新推荐计算超时，不含资源缓存 |
+| `RECOMMENDATION_FEED_TTL_MINUTES` | `60` | Feed Session 有效期；首版使用 60 分钟 |
+| `RECOMMENDATION_DATA_MAX_AGE_HOURS` | `48` | 用户画像和统计数据最大允许年龄 |
 | `RECOMMENDATION_PROFILE_CRON` | `0 5 * * *` | 用户画像任务，需在 T+1 行为数据可查询后执行 |
-| `RECOMMENDATION_STATS_CRON` | `30 5 * * *` | 内容统计任务，需在 T+1 行为数据可查询后执行 |
+| `RECOMMENDATION_ITEM_STATS_CRON` | `30 5 * * *` | 内容统计任务，需在 T+1 行为数据可查询后执行 |
+| `RECOMMENDATION_SESSION_CLEAN_CRON` | `@every 20m` | 过期 Feed Session 清理任务 |
 | `RECOMMENDATION_CANDIDATE_LIMIT` | `300` | 合并前最大候选规模 |
 | `RECOMMENDATION_FEED_SIZE` | `200` | 首次请求最终固化的最大 Track 数量 |
 

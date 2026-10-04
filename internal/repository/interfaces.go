@@ -43,6 +43,8 @@ type TrackRepository interface {
 	Create(ctx context.Context, t *models.Track) error
 	Update(ctx context.Context, t *models.Track) error
 	FindByID(ctx context.Context, id string) (*models.Track, error)
+	// FindByIDs returns existing tracks keyed by ID. Missing IDs are omitted.
+	FindByIDs(ctx context.Context, ids []string) (map[string]*models.Track, error)
 	FindRunningByUserID(ctx context.Context, userID int64) (*models.Track, error)
 	StatsSummaryByUserID(ctx context.Context, userID int64) (*models.TrackUserStats, error)
 	// ListByUserID 返回指定用户的轨迹列表（通常用于“我的轨迹”）。
@@ -75,6 +77,7 @@ type TrackSubmissionRepository interface {
 	FindByTrackID(ctx context.Context, trackID string) (*models.TrackSubmission, error)
 	FindBySubmissionID(ctx context.Context, submissionID string) (*models.TrackSubmission, error)
 	ListByTrackIDs(ctx context.Context, trackIDs []string) (map[string]*models.TrackSubmission, error)
+	ListApprovedTrackIDs(ctx context.Context, limit int) ([]string, error)
 	List(ctx context.Context, filter models.TrackSubmissionListFilter) ([]*models.TrackSubmission, error)
 	Review(ctx context.Context, submissionID string, expectedRevision int64, status models.TrackSubmissionStatus, reviewer, reason string, now time.Time, event *models.TrackSubmissionEvent) error
 	Withdraw(ctx context.Context, trackID string, userID int64, now time.Time, event *models.TrackSubmissionEvent) error
@@ -156,6 +159,7 @@ type TrackMapRepository interface {
 type UserRepository interface {
 	CreateIfNotExists(ctx context.Context, u *models.User) (*models.User, error)
 	FindByID(ctx context.Context, id int64) (*models.User, error)
+	FindByIDs(ctx context.Context, ids []int64) (map[int64]*models.User, error)
 	FindByPhone(ctx context.Context, phone string) (*models.User, error)
 	FindByNickname(ctx context.Context, nickname string) (*models.User, error)
 	Update(ctx context.Context, u *models.User) error
@@ -181,6 +185,7 @@ type AccountRestrictionRepository interface {
 // CollectRepository defines persistence operations for track collections.
 type CollectRepository interface {
 	IsCollected(ctx context.Context, userID int64, trackID string) (bool, error)
+	ListCollectedByTrackIDs(ctx context.Context, userID int64, trackIDs []string) (map[string]bool, error)
 	// ListByUserID lists collect records of a user in reverse chronological order.
 	//
 	// Order: created_at desc, track_id desc.
@@ -233,6 +238,19 @@ type NavigationRepository interface {
 	// - 入参允许重复/包含空串，实现应自行去重并忽略空串；
 	// - 返回 map 中未出现的 track_id 视为 0。
 	CountByTrackIDs(ctx context.Context, trackIDs []string) (map[string]int64, error)
+	// ListByUserID returns confirmed navigation rows in reverse chronological order.
+	ListByUserID(ctx context.Context, userID int64, limit int) ([]*models.TrackNavigation, error)
+}
+
+// RecommendationRepository stores immutable feed sessions and offline aggregates.
+type RecommendationRepository interface {
+	SaveFeedSession(ctx context.Context, session *models.RecommendationFeedSession) error
+	GetFeedSession(ctx context.Context, requestID string) (*models.RecommendationFeedSession, error)
+	DeleteExpiredFeedSessions(ctx context.Context, now time.Time, limit int) (int64, error)
+	GetUserProfile(ctx context.Context, userID int64) (*models.RecommendationUserProfile, error)
+	UpsertUserProfiles(ctx context.Context, profiles []*models.RecommendationUserProfile) error
+	ListItemStats(ctx context.Context, trackIDs []string) (map[string]*models.RecommendationItemStats, error)
+	UpsertItemStats(ctx context.Context, stats []*models.RecommendationItemStats) error
 }
 
 // AchievementRepository defines persistence operations for earned achievement rewards.

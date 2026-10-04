@@ -32,9 +32,11 @@ const (
 )
 
 var (
-	ErrAnalyticsDisabled  = errors.New("analytics disabled")
-	ErrAnalyticsTooLarge  = errors.New("analytics payload too large")
-	ErrAnalyticsBadEvents = errors.New("analytics events invalid")
+	ErrAnalyticsDisabled     = errors.New("analytics disabled")
+	ErrAnalyticsTooLarge     = errors.New("analytics payload too large")
+	ErrAnalyticsBadEvents    = errors.New("analytics events invalid")
+	ErrAnalyticsAuthRequired = errors.New("analytics authorization required")
+	ErrAnalyticsUserMismatch = errors.New("analytics user mismatch")
 )
 
 // AnalyticsOSSUploader abstracts OSS upload for local analytics files.
@@ -185,6 +187,25 @@ func (s *AnalyticsService) Ingest(ctx context.Context, batch AnalyticsEventBatch
 	if len(batch.Events) == 0 || len(batch.Events) > s.maxBatchSize {
 		return AnalyticsIngestResult{}, fmt.Errorf("%w: events length must be 1..%d", ErrAnalyticsBadEvents, s.maxBatchSize)
 	}
+	identity := ""
+	identitySet := false
+	for index, event := range batch.Events {
+		declared := strings.TrimSpace(asString(event["user_id"]))
+		if !identitySet {
+			identity, identitySet = declared, true
+		} else if identity != declared {
+			return AnalyticsIngestResult{}, fmt.Errorf("%w: event[%d]: mixed user identity", ErrAnalyticsBadEvents, index)
+		}
+	}
+	if identity != "" {
+		if meta.UserID <= 0 || !meta.Authorization {
+			return AnalyticsIngestResult{}, ErrAnalyticsAuthRequired
+		}
+		declaredUserID, err := strconv.ParseInt(identity, 10, 64)
+		if err != nil || declaredUserID <= 0 || declaredUserID != meta.UserID {
+			return AnalyticsIngestResult{}, ErrAnalyticsUserMismatch
+		}
+	}
 	now := s.now().UTC()
 	lines := make([][]byte, 0, len(batch.Events))
 	for i, event := range batch.Events {
@@ -229,11 +250,12 @@ func (s *AnalyticsService) normalizeEvent(event map[string]any, meta AnalyticsIn
 	clean["event_name"] = eventName
 	clean["server_time"] = now.Format(time.RFC3339Nano)
 	clean["schema_version"] = defaultAnalyticsSchema
-	if meta.UserID > 0 {
+	declaredUserID := strings.TrimSpace(asString(clean["user_id"]))
+	if declaredUserID != "" && meta.UserID > 0 {
+		clean["user_id"] = strconv.FormatInt(meta.UserID, 10)
 		clean["server_user_id"] = strconv.FormatInt(meta.UserID, 10)
-		if strings.TrimSpace(asString(clean["user_id"])) == "" {
-			clean["user_id"] = strconv.FormatInt(meta.UserID, 10)
-		}
+	} else {
+		delete(clean, "server_user_id")
 	}
 	if meta.Platform != "" && strings.TrimSpace(asString(clean["platform"])) == "" {
 		clean["platform"] = meta.Platform
@@ -250,8 +272,10 @@ func (s *AnalyticsService) normalizeEvent(event map[string]any, meta AnalyticsIn
 	if meta.RemoteIP != "" {
 		clean["ip_region"] = meta.RemoteIP
 	}
-	if meta.Authorization {
+	if meta.Authorization && declaredUserID != "" {
 		clean["auth_state"] = "authorized"
+	} else {
+		delete(clean, "auth_state")
 	}
 	return json.Marshal(clean)
 }

@@ -57,6 +57,7 @@ func main() {
 	var analyticsRepo repository.AnalyticsRepository
 	var trackMapRepo repository.TrackMapRepository
 	var trackSubmissionRepo repository.TrackSubmissionRepository
+	var recommendationRepo repository.RecommendationRepository
 
 	if cfg.UseInMemory {
 		trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo, companionRepo = repository.NewInMemoryRepositories()
@@ -120,6 +121,7 @@ func main() {
 				feedbackRepo = repository.NewMySQLFeedbackRepository(db)
 				analyticsRepo = repository.NewMySQLAnalyticsRepository(db)
 				trackSubmissionRepo = repository.NewMySQLTrackSubmissionRepository(db)
+				recommendationRepo = repository.NewMySQLRecommendationRepository(db)
 				log.Println("using mysql repositories")
 			}
 		}
@@ -151,6 +153,11 @@ func main() {
 			feedbackRepo = repository.NewMongoFeedbackRepository(db.Collection("user_feedbacks"))
 			analyticsRepo = repository.NewMongoAnalyticsRepository(db.Collection("analytics_sync_summaries"))
 			trackSubmissionRepo = repository.NewMongoTrackSubmissionRepository(db.Collection("track_submissions"))
+			recommendationRepo = repository.NewMongoRecommendationRepository(
+				db.Collection("recommend_feed_sessions"),
+				db.Collection("recommend_user_profiles"),
+				db.Collection("recommend_item_stats_daily"),
+			)
 			trackMapRepo = repository.NewMongoTrackMapRepository(
 				db.Collection("track_map_index_jobs"),
 				db.Collection("track_geo_indexes"),
@@ -169,9 +176,21 @@ func main() {
 	if trackSubmissionRepo == nil {
 		trackSubmissionRepo = repository.NewInMemoryTrackSubmissionRepository()
 	}
+	if recommendationRepo == nil {
+		recommendationRepo = repository.NewInMemoryRecommendationRepository()
+	}
 
 	trackSvc := service.NewTrackService(trackRepo, collectRepo)
 	trackSubmissionSvc := service.NewTrackSubmissionService(trackSubmissionRepo, trackRepo)
+	recommendationSvc := service.NewRecommendationService(service.RecommendationConfig{
+		Enabled:        cfg.RecommendationEnabled,
+		Timeout:        time.Duration(cfg.RecommendationTimeoutMillis) * time.Millisecond,
+		FeedTTL:        time.Duration(cfg.RecommendationFeedTTLMinutes) * time.Minute,
+		DataMaxAge:     time.Duration(cfg.RecommendationDataMaxAgeHours) * time.Hour,
+		CandidateLimit: cfg.RecommendationCandidateLimit,
+		FeedSize:       cfg.RecommendationFeedSize,
+	}, recommendationRepo, trackRepo, userRepo, collectRepo, navigationRepo, followRepo, trackSvc, trackSubmissionSvc)
+	recommendationSvc.SetTrackMapRepository(trackMapRepo)
 	trackSvc.SetTrackSubmissionService(trackSubmissionSvc)
 	trackSvc.SetTrackTypes(cfg.TrackTypes)
 	trackSvc.SetUserRepository(userRepo)
@@ -418,6 +437,7 @@ func main() {
 		TrackService:               trackSvc,
 		TrackMapService:            trackMapSvc,
 		TrackSubmissionService:     trackSubmissionSvc,
+		RecommendationService:      recommendationSvc,
 		UserService:                userSvc,
 		LoginService:               loginSvc,
 		OSSTokenService:            ossTokenSvc,
@@ -464,6 +484,11 @@ func main() {
 		if analyticsSvc != nil && cfg.AnalyticsEnabled {
 			schedulerJobs = append(schedulerJobs, jobs.NewAnalyticsSync(analyticsSvc, cfg.AnalyticsSyncCron))
 		}
+		schedulerJobs = append(schedulerJobs,
+			jobs.NewRecommendationProfile(recommendationSvc, cfg.RecommendationProfileCron),
+			jobs.NewRecommendationItemStats(recommendationSvc, cfg.RecommendationItemStatsCron),
+			jobs.NewRecommendationSessionCleanup(recommendationSvc, cfg.RecommendationSessionCleanCron),
+		)
 		if err := sch.Register(schedulerJobs...); err != nil {
 			log.Printf("scheduler register failed, scheduler disabled: %v", err)
 		} else {

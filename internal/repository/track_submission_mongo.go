@@ -82,6 +82,28 @@ func (r *MongoTrackSubmissionRepository) ListByTrackIDs(ctx context.Context, tra
 	return result, cur.Err()
 }
 
+func (r *MongoTrackSubmissionRepository) ListApprovedTrackIDs(ctx context.Context, limit int) ([]string, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 100
+	}
+	cur, err := r.collection.Find(ctx, bson.M{"status": models.TrackSubmissionStatusApproved}, options.Find().SetProjection(bson.M{"track_id": 1}).SetSort(bson.D{{Key: "submitted_at", Value: -1}, {Key: "_id", Value: -1}}).SetLimit(int64(limit)))
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+	ids := make([]string, 0, limit)
+	for cur.Next(ctx) {
+		var row struct {
+			TrackID string `bson:"track_id"`
+		}
+		if err := cur.Decode(&row); err != nil {
+			return nil, err
+		}
+		ids = append(ids, row.TrackID)
+	}
+	return ids, cur.Err()
+}
+
 func (r *MongoTrackSubmissionRepository) List(ctx context.Context, filter models.TrackSubmissionListFilter) ([]*models.TrackSubmission, error) {
 	query := bson.M{}
 	if filter.Status != "" {

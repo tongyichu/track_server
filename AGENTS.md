@@ -54,7 +54,7 @@ track_server/
 │   ├── handler/            # Hertz HTTP handler + router.go 路由表（权威）
 │   ├── maparea/            # 内置 GCJ-02 景区/区县目录；生成区县基线 + 人工覆盖 + 介绍页内容
 │   ├── middleware/         # JWT 鉴权、请求元信息、Token 黑名单
-│   ├── models/             # 领域模型（Track / TrackSubmission / RouteGroup 路线介绍 / User / UserFollow / AccountRestriction / Companion / CompanionEvent / Achievement / Feedback / Analytics / 相关光标/子结构）
+│   ├── models/             # 领域模型（Track / Recommendation / TrackSubmission / RouteGroup 路线介绍 / User / UserFollow / AccountRestriction / Companion / CompanionEvent / Achievement / Feedback / Analytics / 相关光标/子结构）
 │   ├── repository/         # 持久化接口 + mysql / mongo / memory 三实现
 │   ├── scheduler/          # 进程内定时任务（基于 robfig/cron/v3，按 SCHEDULER_ENABLED 启停）
 │   └── service/            # 业务编排：登录、轨迹、用户、同行控制面、成就、OSS STS、资源缓存、埋点落盘
@@ -80,7 +80,7 @@ track_server/
 | HTTP 路由清单 | `internal/handler/router.go` |
 | 配置项与默认值 | `internal/config/config.go` |
 | Repository 接口契约 | `internal/repository/interfaces.go` |
-| 领域模型 | `internal/models/track.go`、`internal/models/track_submission.go`、`internal/models/user.go`（含 AccountRestriction）、`internal/models/companion.go`、`internal/models/achievement.go`、`internal/models/feedback.go`、`internal/models/analytics.go` |
+| 领域模型 | `internal/models/track.go`、`internal/models/recommendation.go`、`internal/models/track_submission.go`、`internal/models/user.go`（含 AccountRestriction）、`internal/models/companion.go`、`internal/models/achievement.go`、`internal/models/feedback.go`、`internal/models/analytics.go` |
 | 地图区域语义与介绍内容 | `internal/maparea/districts.json`（生成区县基线）+ `internal/maparea/catalog.json`（人工景区/区县覆盖）；解析规则见 `internal/maparea/catalog.go`，维护流程见 `internal/maparea/README.md` |
 | MySQL 表结构 | `mysql.sql` |
 | 接口协议 | `docs/api/`（入口 `track_api.md`，路由索引 `docs/api/route-index.md`，账号限制接口 `docs/api/account-restriction.md`，首页地图接口 `docs/api/track-map.md`）、`login.md`、`track_companion.md`、`track_achievement_client.md`、`track_map.md`；推荐第一版设计与客户端归因协议见 `track_recommendation.md`、`track_analytics.md` |
@@ -102,18 +102,31 @@ track_server/
 - 埋点采集接口 `POST /api/v1/analytics/events` 位于公开路由，用于未登录启动/登录页等匿名事件；`user_id` 非空的事件必须携带同一用户的有效 JWT，`X-User-ID` 不能建立可信身份。事件身份在发生时固化，客户端按身份域隔离队列，账号切换和离线补发不得改写；服务端不得把 A 用户历史事件归属给当前 B 用户。批量接口只做整批确认，200 时 `accepted` 必须等于发送数，不返回部分成功；可重试错误使用原 `event_id` 整批退避重试。服务端完成校验、脱敏和本地 JSONL 落盘，不把原始埋点写入业务 MySQL，凌晨同步 OSS 的任务由 `SCHEDULER_ENABLED` 控制。同步时按 `event_date/hour` 合并小 JSONL，单个 OSS part 目标上限 128 MB。`analytics_sync_summaries` 只记录每次 OSS 同步摘要（源文件列表、OSS part key、字节数、耗时、错误等），不保存原始事件。推荐的收藏、导航、关注等强行为从业务数据库聚合，曝光、点击、详情浏览按每天 03:00 同步链路以 T+1、24 小时级可用，推荐原始事件保留 180 天。调整事件协议、认证策略、本地目录、OSS 前缀、批量上限、同步时间或同步摘要字段时，同步更新 `track_analytics.md`、`docs/api/analytics.md` 与 `mysql.sql`。
 - 导航强反馈只认 `track_navigations` 业务记录：客户端在用户已成功开始导航并主动结束后，先持久化本地会话“已尝试上报”标记，再最多调用一次非幂等的 `POST /api/v1/track/:track_id/navigation/report`；点击、取消、初始化失败、开始前退出、崩溃或强杀不计强反馈，响应不确定不得自动重试。只有明确收到 200 才生成 `track_navigation_report_success`；该成功埋点可以按埋点批量接口规则重试。调整此口径时同步更新 `docs/api/collect-navigation.md`、`track_analytics.md` 与 `track_recommendation.md`。
 - 推荐第一版归因协议要求推荐响应提供响应级 `request_id` / `strategy` 和 item 级 `recommend_rank` / `candidate_source` / `recommend_reason`；客户端通过 `track_recommend_impression` 上报真实卡片曝光，并在点击、详情、收藏、取消收藏、导航和分享链路中透传同一推荐上下文。曝光必须同时满足 App 前台、推荐页实际可见、卡片至少 50% 可见并连续 500 ms，页面重建继续使用 Feed 级去重；空结果页成功展示也上报 `track_recommend_view`。第一版默认排除本人轨迹，已收藏/导航轨迹只降频不硬排除，Feed Session TTL 为 60 分钟且最多固化 200 条；Session 内内容失效时向后扫描补页并保留原始排名跳号，不得返回 `items=[]`、`has_more=true`。Session 过期后客户端保留筛选条件静默刷新第一页且只自动重试一次，新 Feed 使用新 `request_id`，但历史队列事件和旧详情页后续转化保持原上下文；Session 仓储暂时不可用返回 `recommend_session_unavailable`，不得刷新或切换 Legacy。离线任务由现有进程内 Scheduler 承担。推荐功能只对支持新协议的首发客户端开放：服务端可提前部署但必须保持 `RECOMMENDATION_ENABLED=false`，待两端联调验收通过后再整体启用；不增加客户端能力头或版本分流，旧内部测试包不在兼容范围内。字段、错误码、曝光与归因验收规则以 `track_recommendation.md` 和 `track_analytics.md` 为准。
+- 推荐派生数据使用 `recommend_feed_sessions`、`recommend_user_profiles`、`recommend_item_stats_daily`；MySQL/Mongo/in-memory 都必须实现 `RecommendationRepository`。强行为画像和物料统计由 `recommendation_profile`（默认 05:00）与 `recommendation_item_stats`（默认 05:30）离线任务重建，`recommendation_session_cleanup` 默认每 20 分钟清理过期 Session。在线推荐只依赖本进程仓储，不新增外部服务；画像/统计缺失或过期时首屏固化 Legacy Session，已有 Session 读取失败时返回稳定错误，不能换序。
+- 推荐运行参数统一在 `internal/config/config.go` 读取：`RECOMMENDATION_ENABLED` 默认 `false`；计算超时默认 250 ms；Session TTL 默认 60 分钟；派生数据最大年龄默认 48 小时；候选上限默认 300、最终 Feed 上限固定钳制为 200。`SCHEDULER_ENABLED=true` 时推荐离线任务会独立于接口总开关运行，允许上线前预热画像和物料统计；待首批任务成功且两端联调通过后再开启总开关。
 
 ### 关键流程
 
 **启动流程**（`cmd/server/main.go`）：
 ```
 Load Config → 选择 Repository（Memory/MySQL/Mongo，失败降级为 Memory）
-→ 构造 Service（Track / TrackSubmission / User / Login / OSSToken / AssetCache）
+→ 构造 Service（Track / TrackSubmission / Recommendation / User / Login / OSSToken / AssetCache）
 → 将 OSSTokenService 作为 downloader 注入 AssetCache
 → （可选）加载 TLS 证书
 → RegisterRoutes(Hertz, Deps)
-→ （可选）SCHEDULER_ENABLED=true 时启动 Scheduler（注册 danmaku_cleanup、companion_session_autoclose、track_map_index、track_route_group 等任务）
+→ （可选）SCHEDULER_ENABLED=true 时启动 Scheduler（注册 danmaku_cleanup、companion_session_autoclose、track_map_index、track_route_group、recommendation_* 等任务）
 → h.Spin()
+```
+
+**推荐第一版流程**：
+```
+GET /api/v1/track/recommend/list
+  → RECOMMENDATION_ENABLED=false：原 TrackService Legacy 响应
+  → 新 Feed：RecommendationService 读取画像/物料统计
+  → 城市硬过滤 + 排除本人 → 内容偏好/城市热度/关注作者/质量/探索打分
+  → 已收藏/已导航强降权 → RouteGroup/作者/运动类型多样性重排
+  → 不足时 Legacy 补位 → 固化最多 200 条、TTL 60 分钟的 Feed Session
+  → 后续游标只读取 Session；批量加载 Track，失效内容向后扫描并保留原始 recommend_rank
 ```
 
 **埋点采集与同步流程**：

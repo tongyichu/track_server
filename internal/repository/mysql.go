@@ -128,6 +128,41 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 			INDEX idx_nav_track (track_id),
 			INDEX idx_nav_user (navigator_user_id)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='轨迹导航使用记录表';`,
+		`CREATE TABLE IF NOT EXISTS recommend_feed_sessions (
+			request_id VARCHAR(64) NOT NULL,
+			user_id BIGINT NOT NULL,
+			city_code VARCHAR(16) NOT NULL DEFAULT '',
+			strategy VARCHAR(32) NOT NULL,
+			items_json JSON NOT NULL,
+			created_at DATETIME(6) NOT NULL,
+			expires_at DATETIME(6) NOT NULL,
+			PRIMARY KEY (request_id),
+			KEY idx_recommend_feed_user (user_id, created_at),
+			KEY idx_recommend_feed_expire (expires_at)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='推荐 Feed Session';`,
+		`CREATE TABLE IF NOT EXISTS recommend_user_profiles (
+			user_id BIGINT NOT NULL,
+			profile_json JSON NOT NULL,
+			data_through DATETIME(6) NOT NULL,
+			generated_at DATETIME(6) NOT NULL,
+			PRIMARY KEY (user_id),
+			KEY idx_recommend_profile_generated (generated_at)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='推荐用户画像';`,
+		`CREATE TABLE IF NOT EXISTS recommend_item_stats_daily (
+			track_id VARCHAR(64) NOT NULL,
+			stat_date DATE NOT NULL,
+			collect_count BIGINT NOT NULL DEFAULT 0,
+			navigate_count BIGINT NOT NULL DEFAULT 0,
+			impression_count BIGINT NOT NULL DEFAULT 0,
+			click_count BIGINT NOT NULL DEFAULT 0,
+			detail_view_count BIGINT NOT NULL DEFAULT 0,
+			hot_score DOUBLE NOT NULL DEFAULT 0,
+			data_through DATETIME(6) NOT NULL,
+			generated_at DATETIME(6) NOT NULL,
+			updated_at DATETIME(6) NOT NULL,
+			PRIMARY KEY (track_id, stat_date),
+			KEY idx_recommend_stats_date (stat_date, hot_score)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='推荐物料日统计';`,
 		`CREATE TABLE IF NOT EXISTS track_submissions (
 			submission_id VARCHAR(64) NOT NULL,
 			track_id VARCHAR(64) NOT NULL,
@@ -1569,6 +1604,79 @@ func (r *MySQLTrackRepository) FindByID(ctx context.Context, id string) (*models
 	return &t, nil
 }
 
+func (r *MySQLTrackRepository) FindByIDs(ctx context.Context, ids []string) (map[string]*models.Track, error) {
+	ids = uniqueNonEmptyStrings(ids)
+	result := make(map[string]*models.Track, len(ids))
+	if len(ids) == 0 {
+		return result, nil
+	}
+	placeholders := strings.TrimRight(strings.Repeat("?,", len(ids)), ",")
+	query := fmt.Sprintf(`SELECT id, user_id, session_id, city_code, locate_addr, track_type, source_tag, coordinate_system, title, start_time, end_time,
+		distance, duration, calories_burned, elevation_gain, raw_track_url, track_screenshot_url, track_no_map_bg_screenshot_url, is_running, status, avg_speed_kmh,
+		created_at, updated_at, deleted_at FROM track_records WHERE id IN (%s)`, placeholders)
+	args := make([]any, 0, len(ids))
+	for _, id := range ids {
+		args = append(args, id)
+	}
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		track, err := scanMySQLTrack(rows)
+		if err != nil {
+			return nil, err
+		}
+		result[track.ID] = track
+	}
+	return result, rows.Err()
+}
+
+type mysqlRowScanner interface{ Scan(dest ...any) error }
+
+func scanMySQLTrack(scanner mysqlRowScanner) (*models.Track, error) {
+	var t models.Track
+	var endTime, deletedAt sql.NullTime
+	var distance, caloriesBurned sql.NullFloat64
+	var duration, elevationGain sql.NullInt64
+	var rawTrackURL, trackScreenshot, noMapBgShot, coordinateSys sql.NullString
+	if err := scanner.Scan(&t.ID, &t.UserID, &t.SessionID, &t.CityCode, &t.LocateAddr, &t.TrackType, &t.SourceTag, &coordinateSys, &t.Title, &t.StartTime, &endTime, &distance, &duration, &caloriesBurned, &elevationGain, &rawTrackURL, &trackScreenshot, &noMapBgShot, &t.IsRunning, &t.Status, &t.AvgSpeedKmh, &t.CreatedAt, &t.UpdatedAt, &deletedAt); err != nil {
+		return nil, err
+	}
+	if endTime.Valid {
+		t.EndTime = endTime.Time
+	}
+	if deletedAt.Valid {
+		t.DeletedAt = deletedAt.Time
+	}
+	if distance.Valid {
+		t.Distance = distance.Float64
+	}
+	if duration.Valid {
+		t.Duration = uint32(duration.Int64)
+	}
+	if caloriesBurned.Valid {
+		t.CaloriesBurned = caloriesBurned.Float64
+	}
+	if elevationGain.Valid {
+		t.ElevationGain = int(elevationGain.Int64)
+	}
+	if rawTrackURL.Valid {
+		t.RawTrackURL = rawTrackURL.String
+	}
+	if trackScreenshot.Valid {
+		t.TrackScreenshotURL = trackScreenshot.String
+	}
+	if noMapBgShot.Valid {
+		t.TrackNoMapBgScreenshotURL = noMapBgShot.String
+	}
+	if coordinateSys.Valid {
+		t.CoordinateSystem = coordinateSys.String
+	}
+	return &t, nil
+}
+
 func (r *MySQLTrackRepository) FindRunningByUserID(ctx context.Context, userID int64) (*models.Track, error) {
 	row := r.db.QueryRowContext(ctx,
 		`SELECT id FROM track_records WHERE user_id=? AND is_running=1 ORDER BY start_time DESC LIMIT 1`,
@@ -1673,16 +1781,15 @@ func (r *MySQLTrackRepository) ListByUserID(ctx context.Context, userID int64, c
 		return nil, err
 	}
 
+	byID, err := r.FindByIDs(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
 	res := make([]*models.Track, 0, len(ids))
 	for _, id := range ids {
-		t, err := r.FindByID(ctx, id)
-		if err != nil {
-			if errors.Is(err, ErrNotFound) {
-				continue
-			}
-			return nil, err
+		if track := byID[id]; track != nil {
+			res = append(res, track)
 		}
-		res = append(res, t)
 	}
 	return res, nil
 }
@@ -1722,16 +1829,15 @@ func (r *MySQLTrackRepository) ListRecommend(ctx context.Context, _ int64, cityC
 		return nil, err
 	}
 
+	byID, err := r.FindByIDs(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
 	res := make([]*models.Track, 0, len(ids))
 	for _, id := range ids {
-		t, err := r.FindByID(ctx, id)
-		if err != nil {
-			if errors.Is(err, ErrNotFound) {
-				continue
-			}
-			return nil, err
+		if track := byID[id]; track != nil {
+			res = append(res, track)
 		}
-		res = append(res, t)
 	}
 	return res, nil
 }
@@ -1976,6 +2082,55 @@ func (r *MySQLUserRepository) FindByID(ctx context.Context, id int64) (*models.U
 		u.TokenVersion = 1
 	}
 	return &u, nil
+}
+
+func (r *MySQLUserRepository) FindByIDs(ctx context.Context, ids []int64) (map[int64]*models.User, error) {
+	result := make(map[int64]*models.User, len(ids))
+	seen := make(map[int64]struct{}, len(ids))
+	unique := make([]int64, 0, len(ids))
+	for _, id := range ids {
+		if id <= 0 {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		unique = append(unique, id)
+	}
+	if len(unique) == 0 {
+		return result, nil
+	}
+	placeholders := strings.TrimRight(strings.Repeat("?,", len(unique)), ",")
+	query := fmt.Sprintf(`SELECT id,nickname,avatar_url,signature,phone,client_language,token_version,created_at,updated_at FROM users WHERE id IN (%s)`, placeholders)
+	args := make([]any, 0, len(unique))
+	for _, id := range unique {
+		args = append(args, id)
+	}
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var user models.User
+		var avatar, signature sql.NullString
+		if err := rows.Scan(&user.ID, &user.Nickname, &avatar, &signature, &user.Phone, &user.ClientLanguage, &user.TokenVersion, &user.CreatedAt, &user.UpdatedAt); err != nil {
+			return nil, err
+		}
+		if avatar.Valid {
+			user.AvatarURL = avatar.String
+		}
+		if signature.Valid {
+			user.Signature = signature.String
+		}
+		if user.TokenVersion <= 0 {
+			user.TokenVersion = 1
+		}
+		clone := user
+		result[user.ID] = &clone
+	}
+	return result, rows.Err()
 }
 
 func (r *MySQLUserRepository) FindByPhone(ctx context.Context, phone string) (*models.User, error) {
@@ -2256,6 +2411,37 @@ func (r *MySQLCollectRepository) IsCollected(ctx context.Context, userID int64, 
 		return false, err
 	}
 	return true, nil
+}
+
+func (r *MySQLCollectRepository) ListCollectedByTrackIDs(ctx context.Context, userID int64, trackIDs []string) (map[string]bool, error) {
+	ids := uniqueNonEmptyStrings(trackIDs)
+	result := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		result[id] = false
+	}
+	if userID <= 0 || len(ids) == 0 {
+		return result, nil
+	}
+	placeholders := strings.TrimRight(strings.Repeat("?,", len(ids)), ",")
+	query := fmt.Sprintf(`SELECT track_id FROM track_collects WHERE user_id=? AND track_id IN (%s)`, placeholders)
+	args := make([]any, 0, len(ids)+1)
+	args = append(args, userID)
+	for _, id := range ids {
+		args = append(args, id)
+	}
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		result[id] = true
+	}
+	return result, rows.Err()
 }
 
 func (r *MySQLCollectRepository) ListByUserID(ctx context.Context, userID int64, cursor *models.TrackCollectCursor, limit int) ([]*models.TrackCollect, error) {
@@ -2586,6 +2772,33 @@ func (r *MySQLNavigationRepository) CountByTrackIDs(ctx context.Context, trackID
 		return nil, err
 	}
 	return res, nil
+}
+
+func (r *MySQLNavigationRepository) ListByUserID(ctx context.Context, userID int64, limit int) ([]*models.TrackNavigation, error) {
+	if userID <= 0 {
+		return []*models.TrackNavigation{}, nil
+	}
+	if limit <= 0 {
+		limit = 1000
+	}
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT id, track_id, navigator_user_id, created_at
+		 FROM track_navigations WHERE navigator_user_id=? ORDER BY created_at DESC, id DESC LIMIT ?`,
+		userID, limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := make([]*models.TrackNavigation, 0)
+	for rows.Next() {
+		item := &models.TrackNavigation{}
+		if err := rows.Scan(&item.ID, &item.TrackID, &item.NavigatorUserID, &item.CreatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
 }
 
 // CountByTrackOwnerUserID returns total navigation usage count for tracks owned by the user.

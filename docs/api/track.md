@@ -190,7 +190,7 @@ curl -X POST "http://<host>:<port>/api/v1/track/create" \
 - 返回结果中的 `avg_speed_kmh` 为平均速度（km/h）。
 - 返回结果中的 `calories_burned` 为热量消耗（千卡）。
 - 返回结果中的 `raw_track_url` / `track_screenshot_url` / `track_no_map_bg_screenshot_url` 为服务端本地可下载链接（不是 OSS 地址）。
-- 接口已支持基于 `cursor` 的瀑布流分页，排序规则为 `start_time DESC, id DESC`。
+- `RECOMMENDATION_ENABLED=false` 时完整沿用 Legacy 推荐和旧游标；开启后首次请求生成固定 Feed Session，并使用不透明的新游标稳定分页。
 - `city_code` 非空时仅返回该城市的轨迹；不传、空字符串或仅包含空白字符时保持全城市推荐。
 - `city_code` 使用精确匹配；没有匹配轨迹或传入未知 Code 时返回空列表，不返回参数错误。
 - 首次请求不传 `cursor`；继续翻页时透传上一次返回的 `next_cursor`。
@@ -246,11 +246,18 @@ Authorization: Bearer <token>
         "track_no_map_bg_screenshot_url": "/api/v1/static/screenshots/trk1_no_map_bg.jpg",
         "collected": true,
         "collect_count": 12,
-        "navigate_count": 3
+        "navigate_count": 3,
+        "recommend_rank": 1,
+        "candidate_source": "content_affinity",
+        "recommend_reason": "你常看的徒步路线"
       }
     ],
-    "next_cursor": "eyJzdGFydF90aW1lIjoiMjAyNi0wNC0yMFQxMjowMDowMFoiLCJpZCI6InRyazEifQ",
-    "has_more": true
+    "next_cursor": "eyJwcm90b2NvbCI6ImZlZWQtdjEiLCJyZXF1ZXN0X2lkIjoicmVjX3h4eCIsIm9mZnNldCI6MjB9",
+    "has_more": true,
+    "recommendation": {
+      "request_id": "rec_xxx",
+      "strategy": "hybrid"
+    }
   }
 }
 ```
@@ -262,6 +269,20 @@ Authorization: Bearer <token>
 | `data.items` | `TrackSummary[]` | 当前页轨迹列表。 |
 | `data.next_cursor` | string | 下一页游标；当 `has_more=false` 时为空或不返回。 |
 | `data.has_more` | bool | 是否还有下一页数据。 |
+| `data.recommendation.request_id` | string | 本次 Feed Session 的归因 ID；新推荐成功响应（含空列表）必返。 |
+| `data.recommendation.strategy` | string | `personalized` / `hybrid` / `legacy`。 |
+| `data.items[].recommend_rank` | int | Session 中从 1 开始的原始排名；内容失效被跳过时允许跳号。 |
+| `data.items[].candidate_source` | string | 主召回来源：`content_affinity` / `city_hot` / `followed_author` / `quality` / `exploration` / `legacy_fill` / `legacy`。 |
+| `data.items[].recommend_reason` | string | 服务端生成的展示文案，客户端原样展示。 |
+
+Feed Session 固定 60 分钟、最多 200 条。Session 内轨迹删除或转私密后，服务端会向后扫描补足当前页；不会返回 `items=[]` 且 `has_more=true`。客户端必须原样传递游标，不得解析或自行计算排名。
+
+**游标错误：**
+
+- Session 过期、不存在或与当前用户不匹配：`400`，`error_code=recommend_cursor_expired`；客户端保持筛选条件、去掉游标静默刷新第一页，最多自动重试一次。
+- Session 仓储暂时不可用：`503`，`error_code=recommend_session_unavailable`；客户端保留当前页面和游标有限重试，不得刷新 Feed 或切换 Legacy。
+
+开关关闭或新 Feed 首次建立时 Session 仓储不可用，服务端允许返回不含上述推荐字段的兼容 Legacy 响应。已有新 Session 的后续分页绝不切换 Legacy。
 
 ### 示例（curl）
 

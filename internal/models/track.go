@@ -64,32 +64,35 @@ type Track struct {
 // - 若用户信息不存在/查询失败（not found），nickname/avatar_url 将返回空字符串；
 // - collect_count 为该轨迹被收藏的总数；collected 为“当前鉴权用户”是否收藏。
 type TrackSummary struct {
-	ID                        string    `json:"id"`                             // ID 是轨迹记录唯一标识。
-	UserID                    int64     `json:"user_id"`                        // UserID 是轨迹所属用户 ID。
-	SessionID                 string    `json:"session_id"`                     // SessionID 是关联的同行会话 ID，可为空。
-	CityCode                  string    `json:"city_code"`                      // CityCode 是轨迹所属的城市 Code。
-	LocateAddr                string    `json:"locate_addr"`                    // LocateAddr 是轨迹的具体位置信息。
-	TrackType                 string    `json:"track_type"`                     // TrackType 是轨迹类型，例如徒步、跑步、骑车、自驾。
-	StartTime                 time.Time `json:"start_time"`                     // StartTime 是运动开始时间。
-	EndTime                   time.Time `json:"end_time"`                       // EndTime 是运动结束时间。
-	CityName                  string    `json:"city_name"`                      // CityName 是城市名称（由 city_code 映射得到；映射关系由配置文件维护）。
-	Nickname                  string    `json:"nickname"`                       // Nickname 是轨迹所属用户的昵称（字段定义与 User struct 保持一致）。
-	UserAvatarURL             string    `json:"user_avatar_url"`                // UserAvatarURL 是轨迹所属用户的头像 URI。
-	Title                     string    `json:"title"`                          // Title 是轨迹名称。
-	Distance                  float64   `json:"distance"`                       // Distance 是总距离，单位米。
-	Duration                  uint32    `json:"duration"`                       // Duration 是运动耗时，单位秒。
-	AvgSpeedKmh               float64   `json:"avg_speed_kmh"`                  // AvgSpeedKmh 是平均速度，单位 km/h。
-	CaloriesBurned            float64   `json:"calories_burned"`                // CaloriesBurned 是热量消耗，单位千卡。
-	ElevationGain             int       `json:"elevation_gain"`                 // ElevationGain 是累计爬升，单位米。
-	Collected                 bool      `json:"collected"`                      // Collected 表示当前鉴权用户是否已收藏该轨迹。
-	CollectCount              int64     `json:"collect_count"`                  // CollectCount 是轨迹被收藏的总数。
-	NavigateCount             int64     `json:"navigate_count"`                 // NavigateCount 是该轨迹被其他用户用于导航的次数。
-	TrackScreenshotURL        string    `json:"track_screenshot_url"`           // TrackScreenshotURL 是服务器本地缓存的轨迹截图可下载 URL。
-	TrackNoMapBgScreenshotURL string    `json:"track_no_map_bg_screenshot_url"` // TrackNoMapBgScreenshotURL 是服务器本地缓存的“无地图背景轨迹截图”可下载 URL。
-	RawTrackURL               string    `json:"raw_track_url"`                  // RawTrackURL 是服务器本地缓存的原始轨迹文件可下载 URL。
-	IsFeatured                bool      `json:"is_featured"`                    // IsFeatured 表示轨迹投稿已审核通过。
-	FeaturedDescription       string    `json:"featured_description,omitempty"` // FeaturedDescription 是审核通过的投稿简介。
-	FeaturedCoverURL          string    `json:"featured_cover_url,omitempty"`   // FeaturedCoverURL 优先使用投稿首图，无投稿图片时回退轨迹截图。
+	ID                        string                        `json:"id"`                             // ID 是轨迹记录唯一标识。
+	UserID                    int64                         `json:"user_id"`                        // UserID 是轨迹所属用户 ID。
+	SessionID                 string                        `json:"session_id"`                     // SessionID 是关联的同行会话 ID，可为空。
+	CityCode                  string                        `json:"city_code"`                      // CityCode 是轨迹所属的城市 Code。
+	LocateAddr                string                        `json:"locate_addr"`                    // LocateAddr 是轨迹的具体位置信息。
+	TrackType                 string                        `json:"track_type"`                     // TrackType 是轨迹类型，例如徒步、跑步、骑车、自驾。
+	StartTime                 time.Time                     `json:"start_time"`                     // StartTime 是运动开始时间。
+	EndTime                   time.Time                     `json:"end_time"`                       // EndTime 是运动结束时间。
+	CityName                  string                        `json:"city_name"`                      // CityName 是城市名称（由 city_code 映射得到；映射关系由配置文件维护）。
+	Nickname                  string                        `json:"nickname"`                       // Nickname 是轨迹所属用户的昵称（字段定义与 User struct 保持一致）。
+	UserAvatarURL             string                        `json:"user_avatar_url"`                // UserAvatarURL 是轨迹所属用户的头像 URI。
+	Title                     string                        `json:"title"`                          // Title 是轨迹名称。
+	Distance                  float64                       `json:"distance"`                       // Distance 是总距离，单位米。
+	Duration                  uint32                        `json:"duration"`                       // Duration 是运动耗时，单位秒。
+	AvgSpeedKmh               float64                       `json:"avg_speed_kmh"`                  // AvgSpeedKmh 是平均速度，单位 km/h。
+	CaloriesBurned            float64                       `json:"calories_burned"`                // CaloriesBurned 是热量消耗，单位千卡。
+	ElevationGain             int                           `json:"elevation_gain"`                 // ElevationGain 是累计爬升，单位米。
+	Collected                 bool                          `json:"collected"`                      // Collected 表示当前鉴权用户是否已收藏该轨迹。
+	CollectCount              int64                         `json:"collect_count"`                  // CollectCount 是轨迹被收藏的总数。
+	NavigateCount             int64                         `json:"navigate_count"`                 // NavigateCount 是该轨迹被其他用户用于导航的次数。
+	TrackScreenshotURL        string                        `json:"track_screenshot_url"`           // TrackScreenshotURL 是服务器本地缓存的轨迹截图可下载 URL。
+	TrackNoMapBgScreenshotURL string                        `json:"track_no_map_bg_screenshot_url"` // TrackNoMapBgScreenshotURL 是服务器本地缓存的“无地图背景轨迹截图”可下载 URL。
+	RawTrackURL               string                        `json:"raw_track_url"`                  // RawTrackURL 是服务器本地缓存的原始轨迹文件可下载 URL。
+	IsFeatured                bool                          `json:"is_featured"`                    // IsFeatured 表示轨迹投稿已审核通过。
+	FeaturedDescription       string                        `json:"featured_description,omitempty"` // FeaturedDescription 是审核通过的投稿简介。
+	FeaturedCoverURL          string                        `json:"featured_cover_url,omitempty"`   // FeaturedCoverURL 优先使用投稿首图，无投稿图片时回退轨迹截图。
+	RecommendRank             int                           `json:"recommend_rank,omitempty"`       // RecommendRank 是 Feed Session 中从 1 开始的原始排名。
+	CandidateSource           RecommendationCandidateSource `json:"candidate_source,omitempty"`     // CandidateSource 是该条内容的主召回来源。
+	RecommendReason           string                        `json:"recommend_reason,omitempty"`     // RecommendReason 是面向客户端展示的推荐理由。
 }
 
 // CollectedTrackSummary is used by "user collected tracks list".
@@ -132,9 +135,10 @@ type TrackListCursor struct {
 
 // TrackSummaryPage 是推荐轨迹列表的分页返回模型。
 type TrackSummaryPage struct {
-	Items      []*TrackSummary `json:"items"`
-	NextCursor string          `json:"next_cursor,omitempty"`
-	HasMore    bool            `json:"has_more"`
+	Items          []*TrackSummary         `json:"items"`
+	NextCursor     string                  `json:"next_cursor,omitempty"`
+	HasMore        bool                    `json:"has_more"`
+	Recommendation *RecommendationMetadata `json:"recommendation,omitempty"`
 }
 
 // CollectedTrackSummaryPage is the paging response of collected track list.

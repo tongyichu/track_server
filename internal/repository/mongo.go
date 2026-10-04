@@ -144,6 +144,27 @@ func (r *MongoTrackRepository) FindByID(ctx context.Context, id string) (*models
 	return &track, nil
 }
 
+func (r *MongoTrackRepository) FindByIDs(ctx context.Context, ids []string) (map[string]*models.Track, error) {
+	result := make(map[string]*models.Track, len(ids))
+	ids = uniqueNonEmptyStrings(ids)
+	if len(ids) == 0 {
+		return result, nil
+	}
+	cursor, err := r.collection.Find(ctx, bson.M{"_id": bson.M{"$in": ids}})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	for cursor.Next(ctx) {
+		track := &models.Track{}
+		if err := cursor.Decode(track); err != nil {
+			return nil, err
+		}
+		result[track.ID] = track
+	}
+	return result, cursor.Err()
+}
+
 // FindRunningByUserID finds the latest running track of a user.
 func (r *MongoTrackRepository) FindRunningByUserID(ctx context.Context, userID int64) (*models.Track, error) {
 	var track models.Track
@@ -406,8 +427,33 @@ func (r *MongoUserRepository) CreateIfNotExists(context.Context, *models.User) (
 }
 
 // FindByID is not implemented in this demo and returns an error.
-func (r *MongoUserRepository) FindByID(context.Context, int64) (*models.User, error) {
-	return nil, errors.New("MongoUserRepository.FindByID not implemented")
+func (r *MongoUserRepository) FindByID(ctx context.Context, id int64) (*models.User, error) {
+	user := &models.User{}
+	err := r.collection.FindOne(ctx, bson.M{"_id": id}).Decode(user)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return nil, ErrNotFound
+	}
+	return user, err
+}
+
+func (r *MongoUserRepository) FindByIDs(ctx context.Context, ids []int64) (map[int64]*models.User, error) {
+	result := make(map[int64]*models.User, len(ids))
+	if len(ids) == 0 {
+		return result, nil
+	}
+	rows, err := r.collection.Find(ctx, bson.M{"_id": bson.M{"$in": ids}})
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close(ctx)
+	for rows.Next(ctx) {
+		user := &models.User{}
+		if err := rows.Decode(user); err != nil {
+			return nil, err
+		}
+		result[user.ID] = user
+	}
+	return result, rows.Err()
 }
 
 func (r *MongoUserRepository) FindByPhone(ctx context.Context, phone string) (*models.User, error) {
@@ -433,8 +479,28 @@ func (r *MongoUserRepository) Update(context.Context, *models.User) error {
 }
 
 // ListAll is not implemented in this demo and returns an error.
-func (r *MongoUserRepository) ListAll(context.Context, *models.UserListCursor, int) ([]*models.User, error) {
-	return nil, errors.New("MongoUserRepository.ListAll not implemented")
+func (r *MongoUserRepository) ListAll(ctx context.Context, cursor *models.UserListCursor, limit int) ([]*models.User, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	filter := bson.M{}
+	if cursor != nil {
+		filter["$or"] = bson.A{bson.M{"created_at": bson.M{"$lt": cursor.CreatedAt}}, bson.M{"created_at": cursor.CreatedAt, "_id": bson.M{"$lt": cursor.ID}}}
+	}
+	rows, err := r.collection.Find(ctx, filter, options.Find().SetSort(bson.D{{Key: "created_at", Value: -1}, {Key: "_id", Value: -1}}).SetLimit(int64(limit)))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close(ctx)
+	items := make([]*models.User, 0)
+	for rows.Next(ctx) {
+		item := &models.User{}
+		if err := rows.Decode(item); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
 }
 
 // CountAll is not implemented in this demo and returns an error.
@@ -473,24 +539,101 @@ type MongoCollectRepository struct {
 
 // NewMongoCollectRepository constructs a Mongo-backed CollectRepository.
 func NewMongoCollectRepository(collection *mongo.Collection) *MongoCollectRepository {
+	if collection != nil {
+		_, _ = collection.Indexes().CreateOne(context.Background(), mongo.IndexModel{Keys: bson.D{{Key: "user_id", Value: 1}, {Key: "track_id", Value: 1}}, Options: options.Index().SetName("uk_collect_user_track").SetUnique(true)})
+	}
 	return &MongoCollectRepository{collection: collection}
 }
 
 // IsCollected is not implemented in this demo and returns an error.
-func (r *MongoCollectRepository) IsCollected(context.Context, int64, string) (bool, error) {
-	return false, errors.New("MongoCollectRepository.IsCollected not implemented")
+func (r *MongoCollectRepository) IsCollected(ctx context.Context, userID int64, trackID string) (bool, error) {
+	err := r.collection.FindOne(ctx, bson.M{"user_id": userID, "track_id": trackID}).Err()
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return false, nil
+	}
+	return err == nil, err
 }
 
-func (r *MongoCollectRepository) ListByUserID(context.Context, int64, *models.TrackCollectCursor, int) ([]*models.TrackCollect, error) {
-	return nil, errors.New("MongoCollectRepository.ListByUserID not implemented")
+func (r *MongoCollectRepository) ListCollectedByTrackIDs(ctx context.Context, userID int64, trackIDs []string) (map[string]bool, error) {
+	ids := uniqueNonEmptyStrings(trackIDs)
+	result := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		result[id] = false
+	}
+	if len(ids) == 0 {
+		return result, nil
+	}
+	rows, err := r.collection.Find(ctx, bson.M{"user_id": userID, "track_id": bson.M{"$in": ids}}, options.Find().SetProjection(bson.M{"track_id": 1}))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close(ctx)
+	for rows.Next(ctx) {
+		var row struct {
+			TrackID string `bson:"track_id"`
+		}
+		if err := rows.Decode(&row); err != nil {
+			return nil, err
+		}
+		result[row.TrackID] = true
+	}
+	return result, rows.Err()
+}
+
+func (r *MongoCollectRepository) ListByUserID(ctx context.Context, userID int64, cursor *models.TrackCollectCursor, limit int) ([]*models.TrackCollect, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	filter := bson.M{"user_id": userID}
+	if cursor != nil {
+		filter["$or"] = bson.A{bson.M{"created_at": bson.M{"$lt": cursor.CreatedAt}}, bson.M{"created_at": cursor.CreatedAt, "track_id": bson.M{"$lt": cursor.TrackID}}}
+	}
+	rows, err := r.collection.Find(ctx, filter, options.Find().SetSort(bson.D{{Key: "created_at", Value: -1}, {Key: "track_id", Value: -1}}).SetLimit(int64(limit)))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close(ctx)
+	items := make([]*models.TrackCollect, 0)
+	for rows.Next(ctx) {
+		item := &models.TrackCollect{}
+		if err := rows.Decode(item); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
 }
 
 func (r *MongoCollectRepository) RemoveByTrackID(context.Context, string) error {
 	return errors.New("MongoCollectRepository.RemoveByTrackID not implemented")
 }
 
-func (r *MongoCollectRepository) CountByTrackIDs(context.Context, []string) (map[string]int64, error) {
-	return nil, errors.New("MongoCollectRepository.CountByTrackIDs not implemented")
+func (r *MongoCollectRepository) CountByTrackIDs(ctx context.Context, trackIDs []string) (map[string]int64, error) {
+	ids := uniqueNonEmptyStrings(trackIDs)
+	result := make(map[string]int64, len(ids))
+	for _, id := range ids {
+		result[id] = 0
+	}
+	if len(ids) == 0 {
+		return result, nil
+	}
+	pipeline := mongo.Pipeline{bson.D{{Key: "$match", Value: bson.M{"track_id": bson.M{"$in": ids}}}}, bson.D{{Key: "$group", Value: bson.M{"_id": "$track_id", "count": bson.M{"$sum": 1}}}}}
+	rows, err := r.collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close(ctx)
+	for rows.Next(ctx) {
+		var row struct {
+			TrackID string `bson:"_id"`
+			Count   int64  `bson:"count"`
+		}
+		if err := rows.Decode(&row); err != nil {
+			return nil, err
+		}
+		result[row.TrackID] = row.Count
+	}
+	return result, rows.Err()
 }
 
 // AddCollect is not implemented in this demo and returns an error.
@@ -525,8 +668,28 @@ func (r *MongoFollowRepository) RemoveFollow(context.Context, int64, int64) erro
 	return errors.New("MongoFollowRepository.RemoveFollow not implemented")
 }
 
-func (r *MongoFollowRepository) ListFollowing(context.Context, int64, *models.UserFollowCursor, int) ([]*models.UserFollow, error) {
-	return nil, errors.New("MongoFollowRepository.ListFollowing not implemented")
+func (r *MongoFollowRepository) ListFollowing(ctx context.Context, userID int64, cursor *models.UserFollowCursor, limit int) ([]*models.UserFollow, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	filter := bson.M{"follower_user_id": userID}
+	if cursor != nil {
+		filter["$or"] = bson.A{bson.M{"created_at": bson.M{"$lt": cursor.CreatedAt}}, bson.M{"created_at": cursor.CreatedAt, "followee_user_id": bson.M{"$lt": cursor.UserID}}}
+	}
+	rows, err := r.collection.Find(ctx, filter, options.Find().SetSort(bson.D{{Key: "created_at", Value: -1}, {Key: "followee_user_id", Value: -1}}).SetLimit(int64(limit)))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close(ctx)
+	items := make([]*models.UserFollow, 0)
+	for rows.Next(ctx) {
+		item := &models.UserFollow{}
+		if err := rows.Decode(item); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
 }
 
 func (r *MongoFollowRepository) ListFollowers(context.Context, int64, *models.UserFollowCursor, int) ([]*models.UserFollow, error) {
@@ -541,7 +704,7 @@ func (r *MongoFollowRepository) CountFollowers(context.Context, int64) (int64, e
 	return 0, errors.New("MongoFollowRepository.CountFollowers not implemented")
 }
 
-// MongoNavigationRepository is a stub of NavigationRepository backed by MongoDB.
+// MongoNavigationRepository implements NavigationRepository backed by MongoDB.
 type MongoNavigationRepository struct {
 	collection *mongo.Collection
 }
@@ -551,12 +714,65 @@ func NewMongoNavigationRepository(collection *mongo.Collection) *MongoNavigation
 	return &MongoNavigationRepository{collection: collection}
 }
 
-func (r *MongoNavigationRepository) AddNavigation(context.Context, int64, string) error {
-	return errors.New("MongoNavigationRepository.AddNavigation not implemented")
+func (r *MongoNavigationRepository) AddNavigation(ctx context.Context, userID int64, trackID string) error {
+	if userID <= 0 || trackID == "" {
+		return nil
+	}
+	_, err := r.collection.InsertOne(ctx, &models.TrackNavigation{
+		ID: time.Now().UnixNano(), TrackID: trackID, NavigatorUserID: userID, CreatedAt: time.Now(),
+	})
+	return err
 }
 
-func (r *MongoNavigationRepository) CountByTrackIDs(context.Context, []string) (map[string]int64, error) {
-	return nil, errors.New("MongoNavigationRepository.CountByTrackIDs not implemented")
+func (r *MongoNavigationRepository) CountByTrackIDs(ctx context.Context, trackIDs []string) (map[string]int64, error) {
+	ids := uniqueNonEmptyStrings(trackIDs)
+	result := make(map[string]int64, len(ids))
+	for _, id := range ids {
+		result[id] = 0
+	}
+	if len(ids) == 0 {
+		return result, nil
+	}
+	pipeline := mongo.Pipeline{
+		bson.D{{Key: "$match", Value: bson.M{"track_id": bson.M{"$in": ids}}}},
+		bson.D{{Key: "$group", Value: bson.M{"_id": "$track_id", "count": bson.M{"$sum": 1}}}},
+	}
+	cursor, err := r.collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	for cursor.Next(ctx) {
+		var row struct {
+			TrackID string `bson:"_id"`
+			Count   int64  `bson:"count"`
+		}
+		if err := cursor.Decode(&row); err != nil {
+			return nil, err
+		}
+		result[row.TrackID] = row.Count
+	}
+	return result, cursor.Err()
+}
+
+func (r *MongoNavigationRepository) ListByUserID(ctx context.Context, userID int64, limit int) ([]*models.TrackNavigation, error) {
+	if limit <= 0 {
+		limit = 1000
+	}
+	cursor, err := r.collection.Find(ctx, bson.M{"navigator_user_id": userID}, options.Find().SetSort(bson.D{{Key: "created_at", Value: -1}, {Key: "_id", Value: -1}}).SetLimit(int64(limit)))
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	items := make([]*models.TrackNavigation, 0)
+	for cursor.Next(ctx) {
+		item := &models.TrackNavigation{}
+		if err := cursor.Decode(item); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, cursor.Err()
 }
 
 // MongoLoginLogRepository is a stub of LoginLogRepository backed by MongoDB.

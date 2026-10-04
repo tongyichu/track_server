@@ -172,6 +172,44 @@ CREATE TABLE `track_navigations` (
                                      KEY `idx_nav_user` (`navigator_user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='轨迹导航使用记录表';
 
+CREATE TABLE `recommend_feed_sessions` (
+    `request_id` VARCHAR(64) NOT NULL,
+    `user_id` BIGINT NOT NULL,
+    `city_code` VARCHAR(16) NOT NULL DEFAULT '',
+    `strategy` VARCHAR(32) NOT NULL,
+    `items_json` JSON NOT NULL,
+    `created_at` DATETIME(6) NOT NULL,
+    `expires_at` DATETIME(6) NOT NULL,
+    PRIMARY KEY (`request_id`),
+    KEY `idx_recommend_feed_user` (`user_id`, `created_at`),
+    KEY `idx_recommend_feed_expire` (`expires_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='推荐 Feed Session';
+
+CREATE TABLE `recommend_user_profiles` (
+    `user_id` BIGINT NOT NULL,
+    `profile_json` JSON NOT NULL,
+    `data_through` DATETIME(6) NOT NULL,
+    `generated_at` DATETIME(6) NOT NULL,
+    PRIMARY KEY (`user_id`),
+    KEY `idx_recommend_profile_generated` (`generated_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='推荐用户画像';
+
+CREATE TABLE `recommend_item_stats_daily` (
+    `track_id` VARCHAR(64) NOT NULL,
+    `stat_date` DATE NOT NULL,
+    `collect_count` BIGINT NOT NULL DEFAULT 0,
+    `navigate_count` BIGINT NOT NULL DEFAULT 0,
+	`impression_count` BIGINT NOT NULL DEFAULT 0,
+	`click_count` BIGINT NOT NULL DEFAULT 0,
+	`detail_view_count` BIGINT NOT NULL DEFAULT 0,
+    `hot_score` DOUBLE NOT NULL DEFAULT 0,
+	`data_through` DATETIME(6) NOT NULL,
+	`generated_at` DATETIME(6) NOT NULL,
+    `updated_at` DATETIME(6) NOT NULL,
+    PRIMARY KEY (`track_id`, `stat_date`),
+    KEY `idx_recommend_stats_date` (`stat_date`, `hot_score`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='推荐物料日统计';
+
 
 CREATE TABLE `track_map_index_jobs` (
                                         `track_id` VARCHAR(64) NOT NULL COMMENT '轨迹ID',

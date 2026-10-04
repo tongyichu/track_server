@@ -387,6 +387,10 @@ func (s *TrackSubmissionService) ListByTrackIDs(ctx context.Context, trackIDs []
 	return s.repo.ListByTrackIDs(ctx, trackIDs)
 }
 
+func (s *TrackSubmissionService) ListApprovedTrackIDs(ctx context.Context, limit int) ([]string, error) {
+	return s.repo.ListApprovedTrackIDs(ctx, limit)
+}
+
 func (s *TrackSubmissionService) DecorateSummaries(ctx context.Context, summaries []*models.TrackSummary) error {
 	ids := make([]string, 0, len(summaries))
 	for _, item := range summaries {

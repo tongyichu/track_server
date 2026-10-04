@@ -125,6 +125,17 @@ type Config struct {
 	AnalyticsOSSPrefix    string
 	AnalyticsMaxBatchSize int
 	AnalyticsMaxBodyBytes int64
+
+	// 第一版个性化推荐。关闭时 /track/recommend/list 完整沿用 Legacy 协议与排序。
+	RecommendationEnabled          bool
+	RecommendationTimeoutMillis    int
+	RecommendationFeedTTLMinutes   int
+	RecommendationDataMaxAgeHours  int
+	RecommendationCandidateLimit   int
+	RecommendationFeedSize         int
+	RecommendationProfileCron      string
+	RecommendationItemStatsCron    string
+	RecommendationSessionCleanCron string
 }
 
 // Load reads configuration from environment variables with sensible defaults.
@@ -216,6 +227,28 @@ func Load() *Config {
 		AnalyticsOSSPrefix:    getEnv("ANALYTICS_OSS_PREFIX", DefaultAnalyticsOSSPrefix),
 		AnalyticsMaxBatchSize: int(getEnvInt64("ANALYTICS_MAX_BATCH_SIZE", 50)),
 		AnalyticsMaxBodyBytes: getEnvInt64("ANALYTICS_MAX_BODY_BYTES", 256*1024),
+
+		RecommendationEnabled:          getEnv("RECOMMENDATION_ENABLED", "false") == "true",
+		RecommendationTimeoutMillis:    int(getEnvInt64("RECOMMENDATION_TIMEOUT_MILLIS", 250)),
+		RecommendationFeedTTLMinutes:   int(getEnvInt64("RECOMMENDATION_FEED_TTL_MINUTES", 60)),
+		RecommendationDataMaxAgeHours:  int(getEnvInt64("RECOMMENDATION_DATA_MAX_AGE_HOURS", 48)),
+		RecommendationCandidateLimit:   int(getEnvInt64("RECOMMENDATION_CANDIDATE_LIMIT", 300)),
+		RecommendationFeedSize:         int(getEnvInt64("RECOMMENDATION_FEED_SIZE", 200)),
+		RecommendationProfileCron:      getEnv("RECOMMENDATION_PROFILE_CRON", "0 5 * * *"),
+		RecommendationItemStatsCron:    getEnv("RECOMMENDATION_ITEM_STATS_CRON", "30 5 * * *"),
+		RecommendationSessionCleanCron: getEnv("RECOMMENDATION_SESSION_CLEAN_CRON", "@every 20m"),
+	}
+	if cfg.RecommendationFeedSize <= 0 || cfg.RecommendationFeedSize > 200 {
+		cfg.RecommendationFeedSize = 200
+	}
+	if cfg.RecommendationCandidateLimit < cfg.RecommendationFeedSize {
+		cfg.RecommendationCandidateLimit = cfg.RecommendationFeedSize
+	}
+	if cfg.RecommendationFeedTTLMinutes <= 0 {
+		cfg.RecommendationFeedTTLMinutes = 60
+	}
+	if cfg.RecommendationTimeoutMillis <= 0 {
+		cfg.RecommendationTimeoutMillis = 250
 	}
 
 	// Priority:
