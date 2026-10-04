@@ -69,6 +69,7 @@ track_server/
 ├── track_achievement.md    # 轨迹成就产品/规则方案（等级、XP、勋章、会员边界）
 ├── track_achievement_client.md # 成就系统客户端对接文档
 ├── track_analytics.md      # 客户端埋点方案（事件命名 / 公共属性 / 业务事件 / 隐私验收）
+├── track_recommendation.md # 推荐轨迹个性化推荐第一版设计（规则召回 / Feed Session / Legacy 兜底 / 推荐归因）
 ├── track_submission.md     # 轨迹投稿功能方案（审核、结构化路线资料、图片缓存、推荐与代表轨迹）
 └── login.md                # 登录流程与协议说明
 ```
@@ -82,7 +83,7 @@ track_server/
 | 领域模型 | `internal/models/track.go`、`internal/models/track_submission.go`、`internal/models/user.go`（含 AccountRestriction）、`internal/models/companion.go`、`internal/models/achievement.go`、`internal/models/feedback.go`、`internal/models/analytics.go` |
 | 地图区域语义与介绍内容 | `internal/maparea/districts.json`（生成区县基线）+ `internal/maparea/catalog.json`（人工景区/区县覆盖）；解析规则见 `internal/maparea/catalog.go`，维护流程见 `internal/maparea/README.md` |
 | MySQL 表结构 | `mysql.sql` |
-| 接口协议 | `docs/api/`（入口 `track_api.md`，路由索引 `docs/api/route-index.md`，账号限制接口 `docs/api/account-restriction.md`，首页地图接口 `docs/api/track-map.md`）、`login.md`、`track_companion.md`、`track_achievement_client.md`、`track_map.md` |
+| 接口协议 | `docs/api/`（入口 `track_api.md`，路由索引 `docs/api/route-index.md`，账号限制接口 `docs/api/account-restriction.md`，首页地图接口 `docs/api/track-map.md`）、`login.md`、`track_companion.md`、`track_achievement_client.md`、`track_map.md`；推荐第一版设计与客户端归因协议见 `track_recommendation.md`、`track_analytics.md` |
 | 客户端埋点方案 | `track_analytics.md`、`docs/api/analytics.md` |
 | 成就规则方案 | `track_achievement.md` |
 | 轨迹投稿功能与协议 | `track_submission.md`、`docs/api/track-submission.md`；路由权威仍为 `internal/handler/router.go` |
@@ -98,7 +99,9 @@ track_server/
 - `track_map_index_jobs` 补偿入队必须保持幂等：对已有 `pending` job 只能保留或提前 `next_run_at`，不能刷新到更晚时间，否则补偿扫描会反复推迟任务导致 `claimed=0`。
 - 轨迹投稿图片可选（0～9 张）：客户端直传 OSS，服务端只保存 OSS URL；读取时经独立 `submission_images` AssetCache 缓存到 `<LogDir>/static/submission_images/`，业务响应改写为 `/api/v1/static/submission_images/*`，admin 响应继续改写为 `/admin/api/static/submission_images/*`。撤回投稿使用 `POST /api/v1/track/:track_id/submission/withdraw` 并保留投稿、图片和审核流水，不使用 DELETE。
 - Docker 镜像与 `deploy/docker-compose.yml` 默认设置 `TZ=Asia/Shanghai`；robfig/cron 按服务进程本地时区解释 `TRACK_*_CRON`、`ANALYTICS_SYNC_CRON` 等表达式，调整镜像/compose 时区时必须同步评估定时任务触发时间。
-- 埋点采集接口 `POST /api/v1/analytics/events` 默认公开可访问，用于未登录启动/登录页等事件；服务端只做校验、脱敏和本地 JSONL 落盘，不把原始埋点写入业务 MySQL，凌晨同步 OSS 的任务由 `SCHEDULER_ENABLED` 控制。同步时按 `event_date/hour` 合并小 JSONL，单个 OSS part 目标上限 128 MB。`analytics_sync_summaries` 只记录每次 OSS 同步摘要（源文件列表、OSS part key、字节数、耗时、错误等），不保存原始事件。调整事件协议、认证策略、本地目录、OSS 前缀、批量上限、同步时间或同步摘要字段时，同步更新 `track_analytics.md`、`docs/api/analytics.md` 与 `mysql.sql`。
+- 埋点采集接口 `POST /api/v1/analytics/events` 位于公开路由，用于未登录启动/登录页等匿名事件；`user_id` 非空的事件必须携带同一用户的有效 JWT，`X-User-ID` 不能建立可信身份。事件身份在发生时固化，客户端按身份域隔离队列，账号切换和离线补发不得改写；服务端不得把 A 用户历史事件归属给当前 B 用户。批量接口只做整批确认，200 时 `accepted` 必须等于发送数，不返回部分成功；可重试错误使用原 `event_id` 整批退避重试。服务端完成校验、脱敏和本地 JSONL 落盘，不把原始埋点写入业务 MySQL，凌晨同步 OSS 的任务由 `SCHEDULER_ENABLED` 控制。同步时按 `event_date/hour` 合并小 JSONL，单个 OSS part 目标上限 128 MB。`analytics_sync_summaries` 只记录每次 OSS 同步摘要（源文件列表、OSS part key、字节数、耗时、错误等），不保存原始事件。推荐的收藏、导航、关注等强行为从业务数据库聚合，曝光、点击、详情浏览按每天 03:00 同步链路以 T+1、24 小时级可用，推荐原始事件保留 180 天。调整事件协议、认证策略、本地目录、OSS 前缀、批量上限、同步时间或同步摘要字段时，同步更新 `track_analytics.md`、`docs/api/analytics.md` 与 `mysql.sql`。
+- 导航强反馈只认 `track_navigations` 业务记录：客户端在用户已成功开始导航并主动结束后，先持久化本地会话“已尝试上报”标记，再最多调用一次非幂等的 `POST /api/v1/track/:track_id/navigation/report`；点击、取消、初始化失败、开始前退出、崩溃或强杀不计强反馈，响应不确定不得自动重试。只有明确收到 200 才生成 `track_navigation_report_success`；该成功埋点可以按埋点批量接口规则重试。调整此口径时同步更新 `docs/api/collect-navigation.md`、`track_analytics.md` 与 `track_recommendation.md`。
+- 推荐第一版归因协议要求推荐响应提供响应级 `request_id` / `strategy` 和 item 级 `recommend_rank` / `candidate_source` / `recommend_reason`；客户端通过 `track_recommend_impression` 上报真实卡片曝光，并在点击、详情、收藏、取消收藏、导航和分享链路中透传同一推荐上下文。曝光必须同时满足 App 前台、推荐页实际可见、卡片至少 50% 可见并连续 500 ms，页面重建继续使用 Feed 级去重；空结果页成功展示也上报 `track_recommend_view`。第一版默认排除本人轨迹，已收藏/导航轨迹只降频不硬排除，Feed Session TTL 为 60 分钟且最多固化 200 条；Session 内内容失效时向后扫描补页并保留原始排名跳号，不得返回 `items=[]`、`has_more=true`。Session 过期后客户端保留筛选条件静默刷新第一页且只自动重试一次，新 Feed 使用新 `request_id`，但历史队列事件和旧详情页后续转化保持原上下文；Session 仓储暂时不可用返回 `recommend_session_unavailable`，不得刷新或切换 Legacy。离线任务由现有进程内 Scheduler 承担。推荐功能只对支持新协议的首发客户端开放：服务端可提前部署但必须保持 `RECOMMENDATION_ENABLED=false`，待两端联调验收通过后再整体启用；不增加客户端能力头或版本分流，旧内部测试包不在兼容范围内。字段、错误码、曝光与归因验收规则以 `track_recommendation.md` 和 `track_analytics.md` 为准。
 
 ### 关键流程
 

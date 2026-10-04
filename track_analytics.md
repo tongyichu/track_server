@@ -31,6 +31,14 @@
 - 每条事件必须有 `event_id`，建议 UUID；补发时保持不变，供数据侧去重。
 - `client_time` 使用客户端本地时间，`send_time` 使用实际发送时间；服务端或数据平台应补充接收时间。
 
+### 2.4 用户身份与账号切换
+
+- `user_id` 表示事件发生时的登录用户，事件创建并进入本地队列后必须保持不变；发送时不得使用当前登录用户覆盖历史值。
+- 客户端本地队列按身份域隔离为匿名队列和 `user:<user_id>` 队列。退出登录或切换账号前应尽力 flush 原用户队列，但 flush 失败不能阻塞正常退出。
+- A 用户的事件未发出而 B 用户已经登录时，不得携带 B 的 Authorization 补发 A 的队列，也不得把事件改写成 B；应保留 A 队列，等 A 再次完成鉴权后补发，超过本地保留周期后按队列淘汰规则处理。
+- 未登录时产生的事件始终保持 `user_id` 为空；即使登录后才补发，也不能追溯改写为新登录用户。
+- 同一个上报批次只包含同一身份域的事件。登录用户事件必须携带与事件 `user_id` 一致的有效 JWT；匿名事件可不带 JWT。
+
 ## 3. 公共属性
 
 所有事件必须携带以下公共属性。
@@ -41,7 +49,7 @@
 | `event_name` | string | 是 | 事件名 |
 | `client_time` | string | 是 | 事件发生时间，ISO 8601 |
 | `send_time` | string | 是 | 事件发送时间，ISO 8601 |
-| `user_id` | string | 否 | 登录后用户 ID；未登录为空 |
+| `user_id` | string | 否 | 事件发生时的登录用户 ID；未登录为空，进入队列后不可改写 |
 | `anonymous_id` | string | 是 | 设备级匿名 ID，卸载重装可重置 |
 | `session_id` | string | 是 | App 前台会话 ID |
 | `platform` | string | 是 | `ios` / `android` / `web` |
@@ -52,7 +60,6 @@
 | `network_type` | string | 否 | `wifi` / `cellular` / `offline` / `unknown` |
 | `locale` | string | 否 | 语言地区 |
 | `source_page` | string | 否 | 来源页面 |
-| `ab_bucket` | string | 否 | 实验桶，多个实验用逗号分隔 |
 
 ## 4. 业务公共属性
 
@@ -71,6 +78,34 @@
 | `error_code` | string | -             | 业务或 SDK 错误码 |
 | `error_message` | string | -             | 错误摘要，不带手机号、token、URL 签名等敏感信息 |
 
+### 4.1 推荐归因属性
+
+第一版推荐功能只对支持新协议的首发客户端开放。服务端正式启用推荐开关后，当 `GET /api/v1/track/recommend/list` 响应包含 `recommendation` 以及 item 级推荐字段时，客户端必须在相关事件的 `properties` 中携带推荐上下文；旧内部测试包不纳入兼容和埋点验收范围。直接从搜索、个人主页、收藏列表等非推荐入口进入时不携带这些字段。若服务端因极端故障返回不含推荐字段的兼容 Legacy 响应，客户端继续上报原有通用事件，但不得伪造推荐上下文。
+
+| 字段 | 类型 | 条件必填 | 说明 |
+| --- | --- | --- | --- |
+| `recommend_request_id` | string | 是 | 推荐响应中的 `recommendation.request_id`，用于串联同一次 Feed 的曝光、点击和后续转化 |
+| `recommend_strategy` | string | 是 | 推荐响应中的 `recommendation.strategy`：`personalized` / `hybrid` / `legacy` |
+| `candidate_source` | string | 单条内容事件必填 | item 中的主要候选来源，客户端原样回传，不自行推断 |
+| `rank_index` | integer | 单条内容事件必填 | item 在整个 Feed Session 原始有序列表中从 1 开始的全局位置，不按页重排；前序内容失效被服务端过滤时允许跳号 |
+| `city_code` | string | 是 | 本次推荐请求使用的城市 Code；未限定城市时传空字符串 |
+
+`candidate_source` 第一版使用以下稳定值：
+
+| 值 | 含义 |
+| --- | --- |
+| `content_affinity` | 用户内容偏好召回 |
+| `city_hot` | 城市近期热门召回 |
+| `followed_author` | 关注作者召回 |
+| `quality` | 优质内容召回 |
+| `exploration` | 新内容探索召回 |
+| `legacy_fill` | 个性化候选不足时由 Legacy Recommend 补位 |
+| `legacy` | 整次请求使用 Legacy Recommend |
+
+同一轨迹命中多个召回源时，由服务端确定一个主要 `candidate_source` 并随 item 返回。客户端只能复制服务端返回值，不得根据页面位置、内容类型或本地规则自行生成。第一版推荐不包含实验分桶字段。
+
+响应 item 的 `recommend_reason` 用于客户端直接展示，不作为埋点属性重复上报；数据分析使用稳定的 `candidate_source`，避免按可能调整或国际化的展示文案分组。
+
 ## 5. 页面曝光事件
 
 | 事件名 | 页面 | 关键属性 |
@@ -78,8 +113,8 @@
 | `app_launch` | App 启动 | `launch_type`、`from_push` |
 | `login_page_view` | 登录页 | `login_entry` |
 | `home_map_view` | 首页地图 | `map_mode`、`city_code`、`locate_status` |
-| `track_recommend_view` | 推荐路线列表 | `city_code`、`track_type`、`sort_type` |
-| `track_detail_view` | 轨迹详情 | `track_id`、`track_type`、`source_page` |
+| `track_recommend_view` | 推荐路线列表 | `recommend_request_id`、`recommend_strategy`、`city_code`、`track_type`、`result_count`、`is_empty` |
+| `track_detail_view` | 轨迹详情 | `track_id`、`track_type`、`source_page`；从推荐页进入时增加推荐归因属性 |
 | `track_record_view` | 轨迹记录页 | `track_type`、`locate_status`、`gps_quality` |
 | `track_publish_view` | 轨迹发布/补全页 | `track_id`、`track_type` |
 | `profile_view` | 我的页 | `achievement_level` |
@@ -112,7 +147,44 @@
 | `home_map_mode_change` | 切换地图模式 | `from_mode`、`to_mode` |
 | `track_filter_change` | 修改路线筛选 | `track_type`、`city_code`、`sort_type` |
 | `track_search_submit` | 提交搜索 | `keyword_length`、`city_code` |
-| `track_card_click` | 点击路线卡片 | `track_id`、`track_type`、`rank_index`、`source_page` |
+| `track_recommend_impression` | 推荐卡片达到真实曝光条件 | `track_id`、推荐归因属性 |
+| `track_card_click` | 点击路线卡片 | `track_id`、`track_type`、`rank_index`、`source_page`；点击推荐卡片时增加推荐归因属性 |
+
+#### 6.2.1 推荐曝光与归因规则
+
+推荐事件按以下口径上报：
+
+1. `track_recommend_view` 在推荐接口成功返回且推荐页首次实际可见时上报；同一个 `recommend_request_id` 只上报一次，继续翻页不重复上报。成功响应为 `items=[]` 时也要上报，并携带 `result_count=0`、`is_empty=true`；接口失败不报该成功曝光，改报 `api_request_fail`。
+2. `track_recommend_impression` 只有在 App 位于前台、推荐页实际可见、卡片未被其他页面或弹层遮挡，并且卡片可见面积达到 50% 且连续持续至少 500 ms 时上报。卡片离屏、可见面积降到 50% 以下、切换页面、打开覆盖页面或 App 进入后台时立即取消计时，恢复后必须重新连续计满 500 ms；不同可见片段不能累计。
+3. 同一个 `recommend_request_id + track_id` 在整个 Feed Session 中最多上报一次曝光。去重集合属于 Feed 上下文，不属于页面或列表组件生命周期；页面重建、横竖屏切换以及进入详情后返回都不能重置。App 进程重启后，客户端要么恢复该 Feed 对应的去重集合，要么丢弃旧 Feed 并请求新的 `recommend_request_id`，不能恢复旧 Feed 却清空去重集合。用户主动刷新获得新的 `recommend_request_id` 后，可以再次上报同一轨迹的曝光。
+4. `rank_index` 使用服务端 item 返回的 `recommend_rank`，表示整个 Feed Session 的全局位置；客户端不能使用当前页内 RecyclerView 下标替代。
+5. 点击推荐卡片进入详情页时，客户端应把该 item 的完整推荐上下文随页面跳转传递。由该详情页触发的收藏、取消收藏、导航和分享事件继续携带同一上下文。
+6. 通过搜索、个人主页、收藏列表、外部链接等入口进入详情页时，不伪造推荐上下文。
+7. 离线缓存和补发必须保留原始 `event_id`、`client_time`、事件发生时的 `user_id` 和推荐上下文，不能在发送时重新读取当前页面、当前账号或新 Feed 状态。
+8. Feed Session 过期并静默刷新第一页后，以服务端新返回的 `recommend_request_id` 作为新的 Feed 上下文，只有新 Feed 内产生的曝光、点击和转化使用新 ID。过期前已进入本地队列的事件不改写；从旧 Feed 打开的详情页即使在 Session 过期后才发生收藏、取消收藏、导航或分享，也继续使用打开详情时保存的旧推荐上下文。Session 过期只影响分页，不使历史归因失效。
+
+示例：
+
+```json
+{
+  "event_id": "018f7d4a-2b6f-7f3f-9f3d-2a4fb8fdc002",
+  "event_name": "track_recommend_impression",
+  "client_time": "2026-10-04T10:00:00+08:00",
+  "send_time": "2026-10-04T10:00:01+08:00",
+  "anonymous_id": "device-uuid",
+  "session_id": "session-uuid",
+  "platform": "android",
+  "app_version": "1.0.0",
+  "properties": {
+    "track_id": "NO.00001234",
+    "recommend_request_id": "rec_01J...",
+    "recommend_strategy": "hybrid",
+    "candidate_source": "city_hot",
+    "rank_index": 3,
+    "city_code": "330100"
+  }
+}
+```
 
 ### 6.3 轨迹记录与发布
 
@@ -137,13 +209,22 @@
 
 | 事件名 | 时机 | 关键属性 |
 | --- | --- | --- |
-| `track_collect_click` | 点击收藏 | `track_id`、`source_page` |
-| `track_collect_success` | 收藏成功 | `track_id` |
-| `track_collect_fail` | 收藏失败 | `track_id`、`error_code` |
-| `track_uncollect_success` | 取消收藏成功 | `track_id` |
-| `track_navigation_click` | 点击使用路线导航 | `track_id`、`source_page` |
-| `track_navigation_report_success` | 导航使用上报成功 | `track_id` |
-| `track_share_click` | 点击分享 | `track_id`、`share_channel` |
+| `track_collect_click` | 点击收藏 | `track_id`、`source_page`；存在推荐来源时增加推荐归因属性 |
+| `track_collect_success` | 收藏成功 | `track_id`；存在推荐来源时增加推荐归因属性 |
+| `track_collect_fail` | 收藏失败 | `track_id`、`error_code`；存在推荐来源时增加推荐归因属性 |
+| `track_uncollect_success` | 取消收藏成功 | `track_id`；存在推荐来源时增加推荐归因属性 |
+| `track_navigation_click` | 点击使用路线导航；仅表示意图，不代表导航已开始或完成 | `track_id`、`source_page`；存在推荐来源时增加推荐归因属性 |
+| `track_navigation_report_success` | 用户已开始导航后主动结束，导航业务上报接口明确返回 200 | `track_id`；存在推荐来源时增加推荐归因属性 |
+| `track_share_click` | 点击分享 | `track_id`、`share_channel`；存在推荐来源时增加推荐归因属性 |
+
+导航统计按以下口径执行：
+
+1. 点击导航只上报 `track_navigation_click`，不调用导航业务上报接口，也不计推荐强反馈。
+2. “正常结束”限定为用户已经成功开始导航，随后主动结束本次导航；取消、导航初始化失败和开始前退出均不属于正常结束。
+3. 正常结束时，客户端先持久化本地导航会话的“已尝试上报”标记，再调用一次 `POST /api/v1/track/:track_id/navigation/report`；同一个本地导航会话最多调用一次。
+4. 只有明确收到 200 才生成 `track_navigation_report_success`。超时、断网、5xx 或其他响应不确定场景不自动重试导航业务接口，避免其非幂等写入重复增加 `navigate_count`。
+5. App 崩溃或被强杀而未进入正常结束流程时不补报，第一版接受少计。
+6. 上一条限制针对导航业务接口；已经生成的 `track_navigation_report_success` 是普通埋点事件，可以使用固定 `event_id` 进入埋点本地队列，并按批量采集接口规则重试和去重。
 
 ### 6.5 同行
 
@@ -204,16 +285,26 @@
 - 不默认上报原始经纬度、完整轨迹点、精确住址；分析城市分布使用 `city_code` 或行政区编码。
 - `error_message` 必须做摘要化处理，不能直接透传服务端完整响应体。
 - 用户退出登录后，后续事件只保留 `anonymous_id`，不继续带 `user_id`。
+- 已进入本地队列的历史事件仍保留事件发生时的 `user_id`；上一条仅约束退出登录后新产生的事件，不能用于清空或改写历史身份。
 - 若接入第三方 SDK，应在隐私政策和权限弹窗中说明数据用途，并支持用户撤回授权。
 
 ## 9. 数据验收
 
 上线前至少完成以下检查：
 
-- 核对核心漏斗事件是否覆盖：`app_launch`、`login_success`、`home_map_view`、`track_record_start_success`、`track_create_success`、`track_publish_success`、`track_detail_view`、`track_collect_success`、`track_navigation_report_success`。
+- 核对核心漏斗事件是否覆盖：`app_launch`、`login_success`、`home_map_view`、`track_recommend_view`、`track_recommend_impression`、`track_card_click`、`track_record_start_success`、`track_create_success`、`track_publish_success`、`track_detail_view`、`track_collect_success`、`track_navigation_report_success`。
 - 抽样检查公共属性完整率，`event_id`、`anonymous_id`、`session_id`、`platform`、`app_version` 不得为空。
+- 推荐页面验收至少覆盖 personalized、hybrid、legacy 三种策略；`recommend_request_id`、`recommend_strategy`、`candidate_source`、`rank_index` 和 `city_code` 必须符合第 4.1 节定义。
+- 验证曝光口径：App 后台、推荐页不可见、被覆盖、未进入可视区域、可见不足 50% 和快速滑过均不产生 `track_recommend_impression`；计时中断后重新计算连续 500 ms，页面重建和详情返回不重置 Feed 级去重。
+- 验证空结果口径：推荐接口成功返回空列表且页面实际展示时，上报一次 `track_recommend_view`，其中 `result_count=0`、`is_empty=true`；接口失败不报该成功曝光。
+- 验证归因上下文：推荐卡片点击进入详情后，详情、收藏、导航和分享事件携带与曝光事件一致的推荐上下文；从非推荐入口进入时不携带。
+- 验证分页位置：第二页及后续页的 `rank_index` 使用 Feed 全局位置，不能从 1 重新计数。
+- 验证 Session 过期：客户端静默刷新第一页且只自动重试一次；新 Feed 事件使用新的 `recommend_request_id`，已入队历史事件及旧详情页后续转化保持原推荐上下文。
+- 验证 Session 仓储故障：`recommend_session_unavailable` 不触发新 Feed 或 Legacy 切换，保留原列表和游标退避重试。
 - 验证失败场景：定位拒绝、网络断开、上传失败、接口 401/429/500。
-- 验证离线补发：断网产生的事件恢复联网后补发，且 `event_id` 不变化。
+- 验证离线补发和账号切换：断网事件恢复联网后 `event_id`、`client_time`、`user_id` 和推荐上下文均不变化；A 用户历史事件不能在 B 用户身份下发送或归属到 B。
+- 验证批量确认：成功响应 `accepted` 必须等于发送条数；400/401/403 整批不重试原请求，413 拆包，429/500/503/网络超时使用原 `event_id` 整批退避重试。
+- 验证导航口径：点击、取消、初始化失败和开始前退出不调用导航业务上报；正常结束时先写“已尝试”标记再调用且每个本地导航会话最多一次；只有明确 200 才生成 `track_navigation_report_success`，业务接口响应不确定不重试，但成功埋点本身可以按埋点队列规则重试。
 - 验证隐私字段：日志和数据平台中不得出现手机号、token、验证码、OSS 签名 URL、原始经纬度数组。
 
 ## 10. 版本管理
@@ -243,17 +334,30 @@ App SDK 本地队列
 
 - 使用本地轻量队列保存待上报事件，建议 SQLite 或 SDK 内置持久化队列。
 - 每条事件以 JSON 保存，必须包含 `event_id`、`event_name`、`client_time`、`anonymous_id`、`session_id`。
+- 队列必须按匿名身份和登录 `user_id` 分区，事件进入队列后不随登录态变化迁移或改写。
 - 触发上报条件：事件数达到批量阈值、App 进入后台、网络从离线恢复、定时 flush。
 - 建议批量大小：20 到 50 条；单批 payload 控制在 256 KB 以内。
 - 本地保留上限：最多 1000 条或 7 天，超过后优先丢弃最旧的非关键事件。
+
+第一版关键事件名单如下，队列达到容量上限时优先保留：
+
+- 登录与推荐主漏斗：`login_success`、`track_recommend_view`、`track_recommend_impression`、`track_card_click`、`track_detail_view`；
+- 推荐强转化：`track_collect_success`、`track_uncollect_success`、`track_navigation_report_success`、`track_share_click`；
+- 内容生产：`track_record_start_success`、`track_create_success`、`track_publish_success`；
+- 同行核心转化：`companion_create_success`、`companion_join_success`、`companion_end_success`。
+
+如果队列中只剩关键事件且仍达到硬上限，允许淘汰最旧关键事件以保护 App 可用性，但必须记录本地丢弃计数；埋点队列不得阻塞登录、记录轨迹、收藏、导航等业务操作。
 
 ### 11.3 采集入口存储
 
 服务端已提供 `POST /api/v1/analytics/events` 批量接收事件，并满足：
 
-- 默认可接收未登录事件，因此不能强依赖业务 JWT；已登录时可带 `user_id` 或业务 token 做身份补充。
+- 匿名事件默认可不携带业务 JWT；`user_id` 非空的登录用户事件必须携带同一用户的有效 JWT。`X-User-ID` 只能作为诊断字段，不能建立可信用户归属。
+- 服务端从有效 JWT 生成 `server_user_id` 并校验批次内非空 `user_id`；身份不一致时整批拒绝，不能把客户端声明的 A 用户事件归属给当前 B 用户。
+- 服务端不得用请求发生时的登录用户回填或覆盖事件的空 `user_id`；匿名事件即使登录后补发也保持匿名。推荐画像只消费经过服务端校验的登录用户事件。
 - 服务端只做基础校验、限流、脱敏和本地顺序落盘，不在请求链路里调用 OSS 或做复杂聚合。
-- 写入失败时返回可重试错误，客户端用同一批 `event_id` 重试。
+- 批量协议只支持整批确认，不返回逐条部分成功。`200 OK` 时 `accepted` 必须等于请求事件数；任一事件校验失败时整批拒绝。若响应缺失、`accepted` 小于发送数或发生 5xx，客户端保留整批并使用同一批 `event_id` 重试，数据侧按 `event_id` 去重。
+- 429、500、503、网络中断和超时采用指数退避加抖动重试，建议 1、2、4、8、16、32、60 秒后封顶为 60 秒；响应带 `Retry-After` 时优先遵循。400/401/403 不原样自动重试，413 拆分批次后重试。
 - 采集接口协议见 `docs/api/analytics.md`；调整字段、上限、认证策略或错误码时必须同步更新该文档、`docs/api/route-index.md` 和 `AGENTS.md`。
 
 ### 11.4 服务端本地落盘与 OSS 同步
@@ -267,6 +371,7 @@ App SDK 本地队列
 - 写入策略：接口完成校验和脱敏后 append 到当前活跃文件；写入成功即可向客户端返回成功。
 - 文件轮转：按大小或时间轮转，当前服务端本地活跃文件按 64 MB 或 5 分钟轮转。
 - 完成标记：活跃文件使用 `.writing` 后缀，轮转完成后 rename 为 `.jsonl`，只同步已关闭文件。
+- 同步时间：沿用 `ANALYTICS_SYNC_CRON=0 3 * * *`，每天 03:00 扫描和上传已关闭文件。
 - 上传合并：同步任务先按 `event_date/hour` 时间分区合并小 JSONL 文件，单个 OSS part 目标上限为 128 MB，减少 OSS 小文件数量。
 - 上传路径：`analytics/ods/event_date=yyyy-mm-dd/hour=HH/part-<instance_id>-yyyy-mm-dd-HH-*.jsonl`。
 - 上传 Endpoint：服务端强制使用 `OSS_INTERNAL_ENDPOINT` 内网域名，未配置时同步任务失败并保留本地文件等待重试，不回退公网 Endpoint。
@@ -285,6 +390,8 @@ App SDK 本地队列
 
 该链路中的 OSS 原始文件就是 ODS 的低成本归档层；如果后续接入 ClickHouse / Doris，可由离线任务或流式任务从 OSS ODS 导入明细表。
 
+推荐第一版的数据时效约定为：收藏、导航、关注等强行为直接从业务数据库聚合；`track_recommend_impression`、`track_card_click`、`track_detail_view` 等弱行为随每天 03:00 的批次进入 OSS 和下游清洗链路，按 T+1、24 小时级可用，不承诺实时进入用户画像或内容统计。同步或清洗失败时保留上一批可用统计，不能影响在线推荐接口。
+
 ### 11.5 原始明细层
 
 原始明细层用于审计、回放、重新清洗，不直接服务产品看板。
@@ -295,7 +402,7 @@ App SDK 本地队列
 | --- | --- | --- |
 | `event_id` | string | 事件唯一 ID，用于去重 |
 | `event_name` | string | 事件名 |
-| `user_id` | string | 登录用户 ID，未登录为空 |
+| `user_id` | string | 事件发生时的登录用户 ID，未登录为空；离线补发时不可改写 |
 | `anonymous_id` | string | 匿名设备 ID |
 | `session_id` | string | App 前台会话 ID |
 | `client_time` | datetime | 客户端事件发生时间 |
@@ -326,19 +433,20 @@ App SDK 本地队列
 - 日活、周活、月活。
 - 登录转化、轨迹创建转化、轨迹发布转化、收藏/导航转化。
 - 运动类型分布、城市分布、热门路线。
+- 推荐曝光、点击、详情、收藏和导航漏斗，以及按 `recommend_request_id`、策略、候选来源和全局排名的归因统计。
 - 同行创建/加入/结束漏斗。
 - 成就中心曝光、奖励点击、等级规则页访问。
 - 接口失败率、上传失败率、地图渲染慢请求、定位失败率。
 
 ### 11.7 保留周期
 
-建议默认保留：
+第一版按以下周期保留：
 
 | 数据层 | 保留周期 | 说明 |
 | --- | --- | --- |
 | 客户端本地队列 | 7 天 | 超期未上报丢弃 |
-| 原始明细 ODS | 90 到 180 天 | 用于回溯与重新清洗 |
-| 清洗明细 DWD | 180 到 365 天 | 用于明细分析 |
+| 原始明细 ODS | 180 天 | 用于回溯与重新清洗；推荐原始事件采用相同周期 |
+| 清洗明细 DWD | 180 天 | 用于推荐明细分析、归因和画像重建 |
 | 汇总 DWS/ADS | 长期 | 用于趋势看板 |
 
 如涉及合规要求，应支持按用户维度删除或匿名化历史埋点数据。
