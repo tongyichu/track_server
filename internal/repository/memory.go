@@ -288,7 +288,7 @@ func (r *InMemoryTrackRepository) ListByUserID(_ context.Context, userID int64, 
 }
 
 // ListRecommend returns normal completed tracks ordered by start_time desc, id desc.
-func (r *InMemoryTrackRepository) ListRecommend(_ context.Context, _ int64, cursor *models.TrackListCursor, limit int) ([]*models.Track, error) {
+func (r *InMemoryTrackRepository) ListRecommend(_ context.Context, _ int64, cityCode string, cursor *models.TrackListCursor, limit int) ([]*models.Track, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -298,6 +298,9 @@ func (r *InMemoryTrackRepository) ListRecommend(_ context.Context, _ int64, curs
 			continue
 		}
 		if t.Status != models.TrackStatusNormal {
+			continue
+		}
+		if cityCode != "" && t.CityCode != cityCode {
 			continue
 		}
 		if cursor != nil {

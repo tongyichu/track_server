@@ -189,8 +189,9 @@ func (h *TrackHandler) ListRecommend(ctx context.Context, c *app.RequestContext)
 		limit = parsed
 	}
 	page, err := h.trackSvc.ListRecommend(ctx, userID, service.ListRecommendInput{
-		Cursor: string(c.Query("cursor")),
-		Limit:  limit,
+		CityCode: string(c.Query("city_code")),
+		Cursor:   string(c.Query("cursor")),
+		Limit:    limit,
 	})
 	if err != nil {
 		var iae *service.InvalidArgumentError

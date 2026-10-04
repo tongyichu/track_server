@@ -31,6 +31,18 @@ type MongoTrackWaypointRepository struct {
 
 // NewMongoTrackRepository constructs a Mongo-backed TrackRepository.
 func NewMongoTrackRepository(collection *mongo.Collection) *MongoTrackRepository {
+	if collection != nil {
+		_, _ = collection.Indexes().CreateOne(context.Background(), mongo.IndexModel{
+			Keys: bson.D{
+				{Key: "city_code", Value: 1},
+				{Key: "status", Value: 1},
+				{Key: "is_running", Value: 1},
+				{Key: "start_time", Value: -1},
+				{Key: "_id", Value: -1},
+			},
+			Options: options.Index().SetName("idx_track_recommend_city"),
+		})
+	}
 	return &MongoTrackRepository{
 		collection:   collection,
 		nextTrackSeq: uint64(time.Now().UnixNano()%int64(trackIDSequenceLimit-1)) + 1,
@@ -252,20 +264,23 @@ func (r *MongoTrackRepository) ListByUserID(ctx context.Context, userID int64, c
 }
 
 // ListRecommend lists normal-status tracks ordered by start_time desc, id desc.
-func (r *MongoTrackRepository) ListRecommend(ctx context.Context, _ int64, cursor *models.TrackListCursor, limit int) ([]*models.Track, error) {
+func (r *MongoTrackRepository) ListRecommend(ctx context.Context, _ int64, cityCode string, cursor *models.TrackListCursor, limit int) ([]*models.Track, error) {
 	if limit <= 0 {
 		limit = 20
 	}
 	filter := bson.M{"status": models.TrackStatusNormal, "is_running": false}
+	if cityCode != "" {
+		filter["city_code"] = cityCode
+	}
 	if cursor != nil {
 		filter["$or"] = []bson.M{
 			{"start_time": bson.M{"$lt": cursor.StartTime}},
-			{"start_time": cursor.StartTime, "id": bson.M{"$lt": cursor.ID}},
+			{"start_time": cursor.StartTime, "_id": bson.M{"$lt": cursor.ID}},
 		}
 	}
 	return r.listTracks(ctx,
 		filter,
-		options.Find().SetSort(bson.D{{Key: "start_time", Value: -1}, {Key: "id", Value: -1}}).SetLimit(int64(limit)),
+		options.Find().SetSort(bson.D{{Key: "start_time", Value: -1}, {Key: "_id", Value: -1}}).SetLimit(int64(limit)),
 	)
 }
 

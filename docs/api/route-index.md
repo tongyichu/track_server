@@ -5,7 +5,7 @@
 | 接口 | 方法 | 路径 | 需要认证 | 文档 |
 | --- | --- | --- | --- | --- |
 | 创建轨迹 | POST | `/track/create` | 是 | [track.md](track.md#1-创建轨迹) |
-| 推荐轨迹列表 | GET | `/track/recommend/list` | 是 | [track.md](track.md#2-推荐轨迹列表) |
+| 推荐轨迹列表（支持 `city_code` 筛选） | GET | `/track/recommend/list` | 是 | [track.md](track.md#2-推荐轨迹列表) |
 | 轨迹详情 | GET | `/track/:track_id/detail` | 是 | [track.md](track.md#3-轨迹详情) |
 | 获取 OSS STS 临时凭证 | GET | `/oss/sts-token` | 是 | [oss.md](oss.md#4-获取-oss-sts-临时凭证直传上传) |
 | 收藏轨迹 | POST | `/track_collect` | 是 | [collect-navigation.md](collect-navigation.md#5-收藏轨迹) |

@@ -79,7 +79,8 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 			KEY idx_track_session (session_id),
 			KEY idx_track_source_tag (source_tag),
 			KEY idx_user_running (user_id, is_running, start_time),
-			KEY idx_user_time (user_id, start_time)
+			KEY idx_user_time (user_id, start_time),
+			KEY idx_track_recommend_city (city_code, status, is_running, start_time, id)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
 		// `track_id_sequences` 是轨迹 ID 的全局发号表。
 		// 每插入一行就能拿到一个新的自增 id，再由业务层编码成 `NO.` + 8 位 base36 的轨迹 ID。
@@ -479,6 +480,9 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 	if err := ensureMySQLTrackCityCodeColumn(ctx, db); err != nil {
 		return err
 	}
+	if err := ensureMySQLTrackRecommendCityIndex(ctx, db); err != nil {
+		return err
+	}
 	if err := ensureMySQLTrackSessionIDColumn(ctx, db); err != nil {
 		return err
 	}
@@ -770,6 +774,27 @@ func ensureMySQLTrackCityCodeColumn(ctx context.Context, db *sql.DB) error {
 	_, err = db.ExecContext(ctx, `ALTER TABLE track_records ADD COLUMN city_code VARCHAR(16) NOT NULL DEFAULT '' COMMENT '城市Code' AFTER user_id`)
 	if err != nil {
 		return fmt.Errorf("add track_records.city_code column: %w", err)
+	}
+	return nil
+}
+
+// ensureMySQLTrackRecommendCityIndex 为推荐列表的城市过滤和游标排序补齐复合索引。
+func ensureMySQLTrackRecommendCityIndex(ctx context.Context, db *sql.DB) error {
+	var count int
+	err := db.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM information_schema.STATISTICS
+		WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'track_records' AND INDEX_NAME = 'idx_track_recommend_city'`,
+	).Scan(&count)
+	if err != nil {
+		return fmt.Errorf("check track_records.idx_track_recommend_city index: %w", err)
+	}
+	if count > 0 {
+		return nil
+	}
+	_, err = db.ExecContext(ctx, `ALTER TABLE track_records ADD INDEX idx_track_recommend_city (city_code, status, is_running, start_time, id)`)
+	if err != nil {
+		return fmt.Errorf("add track_records.idx_track_recommend_city index: %w", err)
 	}
 	return nil
 }
@@ -1662,13 +1687,17 @@ func (r *MySQLTrackRepository) ListByUserID(ctx context.Context, userID int64, c
 	return res, nil
 }
 
-func (r *MySQLTrackRepository) ListRecommend(ctx context.Context, _ int64, cursor *models.TrackListCursor, limit int) ([]*models.Track, error) {
+func (r *MySQLTrackRepository) ListRecommend(ctx context.Context, _ int64, cityCode string, cursor *models.TrackListCursor, limit int) ([]*models.Track, error) {
 	if limit <= 0 {
 		limit = 20
 	}
 	query := `SELECT id FROM track_records WHERE status=? AND is_running=0`
-	args := make([]interface{}, 0, 4)
+	args := make([]interface{}, 0, 5)
 	args = append(args, models.TrackStatusNormal)
+	if cityCode != "" {
+		query += ` AND city_code=?`
+		args = append(args, cityCode)
+	}
 	if cursor != nil {
 		query += ` AND (start_time < ? OR (start_time = ? AND id < ?))`
 		args = append(args, cursor.StartTime, cursor.StartTime, cursor.ID)

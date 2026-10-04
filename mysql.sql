@@ -57,7 +57,8 @@ CREATE TABLE `track_records` (
                                  PRIMARY KEY (`id`),
                                  KEY `idx_track_session` (`session_id`),
                                  KEY `idx_track_source_tag` (`source_tag`),
-                                 KEY `idx_user_time` (`user_id`,`start_time`)
+                                 KEY `idx_user_time` (`user_id`,`start_time`),
+                                 KEY `idx_track_recommend_city` (`city_code`,`status`,`is_running`,`start_time`,`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='轨迹概要信息表';
 
 

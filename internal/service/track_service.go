@@ -52,8 +52,9 @@ var allowedTrackSourceTags = map[string]struct{}{
 }
 
 type ListRecommendInput struct {
-	Cursor string
-	Limit  int
+	CityCode string
+	Cursor   string
+	Limit    int
 }
 
 type ListMyTracksInput struct {
@@ -761,12 +762,13 @@ func buildMyTrackSummaryPage(summaries []*models.MyTrackSummary, hasMore bool, t
 // ListRecommend returns recommended tracks for the user.
 func (s *TrackService) ListRecommend(ctx context.Context, userID int64, input ListRecommendInput) (*models.TrackSummaryPage, error) {
 	limit := normalizeTrackPageLimit(input.Limit)
+	cityCode := strings.TrimSpace(input.CityCode)
 	cursor, err := decodeTrackListCursor(input.Cursor)
 	if err != nil {
 		return nil, err
 	}
 	tracks, hasMore, err := s.listTracksWithNonEmptyRawTrackURL(ctx, cursor, limit, func(cur *models.TrackListCursor, n int) ([]*models.Track, error) {
-		return s.tracks.ListRecommend(ctx, userID, cur, n)
+		return s.tracks.ListRecommend(ctx, userID, cityCode, cur, n)
 	})
 	if err != nil {
 		return nil, err
