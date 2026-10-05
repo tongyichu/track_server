@@ -340,7 +340,7 @@ func (r *InMemoryTrackRepository) ListRecommend(_ context.Context, _ int64, city
 }
 
 // Search performs a naive keyword search based on track name.
-func (r *InMemoryTrackRepository) Search(_ context.Context, keyword string, cursor *models.TrackListCursor, limit int) ([]*models.Track, error) {
+func (r *InMemoryTrackRepository) Search(_ context.Context, keyword, cityCode string, cursor *models.TrackListCursor, limit int) ([]*models.Track, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -350,6 +350,9 @@ func (r *InMemoryTrackRepository) Search(_ context.Context, keyword string, curs
 			continue
 		}
 		if t.Status != models.TrackStatusNormal {
+			continue
+		}
+		if cityCode != "" && t.CityCode != cityCode {
 			continue
 		}
 		if keyword != "" && !containsIgnoreCase(t.Title, keyword) {

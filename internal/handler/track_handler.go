@@ -313,9 +313,10 @@ func (h *TrackHandler) SearchTracks(ctx context.Context, c *app.RequestContext) 
 		limit = parsed
 	}
 	page, err := h.trackSvc.SearchTracks(ctx, userID, service.SearchTracksInput{
-		Keyword: keyword,
-		Cursor:  string(c.Query("cursor")),
-		Limit:   limit,
+		Keyword:  keyword,
+		CityCode: string(c.Query("city_code")),
+		Cursor:   string(c.Query("cursor")),
+		Limit:    limit,
 	})
 	if err != nil {
 		var iae *service.InvalidArgumentError

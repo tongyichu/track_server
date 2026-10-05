@@ -1295,6 +1295,79 @@ func TestSearchCursorPagination(t *testing.T) {
 	}
 }
 
+func TestSearchFilterByCityCode(t *testing.T) {
+	e := newTestEnv()
+	ctx := context.Background()
+	token := e.generateTestToken(1001)
+
+	newest := time.Date(2026, 5, 3, 12, 0, 0, 0, time.UTC)
+	middle := time.Date(2026, 5, 2, 12, 0, 0, 0, time.UTC)
+	oldest := time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC)
+	tracks := []*models.Track{
+		{ID: "search-city-hz-new", UserID: 1001, CityCode: "330100", Title: "城市筛选杭州新轨迹", StartTime: newest, RawTrackURL: "https://example.com/search-city-hz-new.dat", IsRunning: false, Status: models.TrackStatusNormal},
+		{ID: "search-city-sh", UserID: 1002, CityCode: "310000", Title: "城市筛选上海轨迹", StartTime: middle, RawTrackURL: "https://example.com/search-city-sh.dat", IsRunning: false, Status: models.TrackStatusNormal},
+		{ID: "search-city-hz-old", UserID: 1003, CityCode: "330100", Title: "城市筛选杭州旧轨迹", StartTime: oldest, RawTrackURL: "https://example.com/search-city-hz-old.dat", IsRunning: false, Status: models.TrackStatusNormal},
+		{ID: "search-city-other-keyword", UserID: 1004, CityCode: "330100", Title: "其他关键词", StartTime: middle, RawTrackURL: "https://example.com/search-city-other-keyword.dat", IsRunning: false, Status: models.TrackStatusNormal},
+	}
+	for _, track := range tracks {
+		if err := e.trackRepo.Create(ctx, track); err != nil {
+			t.Fatalf("create track %s: %v", track.ID, err)
+		}
+	}
+
+	w1 := e.perform(http.MethodGet, "/api/v1/track/search/list?keyword=城市筛选&city_code=330100&limit=1", nil, authHeader(token))
+	if w1.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected first city page status 200, got %d", w1.Result().StatusCode())
+	}
+	var page1 handler.StandardResponse[*models.TrackSummaryPage]
+	decodeJSON(t, w1.Result().Body(), &page1)
+	if page1.Data == nil || len(page1.Data.Items) != 1 || page1.Data.Items[0].ID != "search-city-hz-new" {
+		t.Fatalf("unexpected first city page: %+v", page1.Data)
+	}
+	if !page1.Data.HasMore || page1.Data.NextCursor == "" {
+		t.Fatalf("expected first city page to have next cursor: %+v", page1.Data)
+	}
+
+	w2 := e.perform(http.MethodGet, "/api/v1/track/search/list?keyword=城市筛选&city_code=330100&limit=1&cursor="+page1.Data.NextCursor, nil, authHeader(token))
+	if w2.Result().StatusCode() != http.StatusOK {
+		t.Fatalf("expected second city page status 200, got %d", w2.Result().StatusCode())
+	}
+	var page2 handler.StandardResponse[*models.TrackSummaryPage]
+	decodeJSON(t, w2.Result().Body(), &page2)
+	if page2.Data == nil || len(page2.Data.Items) != 1 || page2.Data.Items[0].ID != "search-city-hz-old" {
+		t.Fatalf("unexpected second city page: %+v", page2.Data)
+	}
+	if page2.Data.HasMore || page2.Data.NextCursor != "" {
+		t.Fatalf("expected second city page to be final: %+v", page2.Data)
+	}
+
+	wBlank := e.perform(http.MethodGet, "/api/v1/track/search/list?keyword=城市筛选&city_code=%20%20", nil, authHeader(token))
+	var blankPage handler.StandardResponse[*models.TrackSummaryPage]
+	decodeJSON(t, wBlank.Result().Body(), &blankPage)
+	if wBlank.Result().StatusCode() != http.StatusOK || blankPage.Data == nil || len(blankPage.Data.Items) != 3 {
+		t.Fatalf("expected blank city_code to keep all-city behavior, got status=%d data=%+v", wBlank.Result().StatusCode(), blankPage.Data)
+	}
+
+	wMissing := e.perform(http.MethodGet, "/api/v1/track/search/list?keyword=城市筛选&city_code=440100", nil, authHeader(token))
+	var missingPage handler.StandardResponse[*models.TrackSummaryPage]
+	decodeJSON(t, wMissing.Result().Body(), &missingPage)
+	if wMissing.Result().StatusCode() != http.StatusOK || missingPage.Data == nil || len(missingPage.Data.Items) != 0 {
+		t.Fatalf("expected unmatched city_code to return empty page, got status=%d data=%+v", wMissing.Result().StatusCode(), missingPage.Data)
+	}
+
+	wCityOnly := e.perform(http.MethodGet, "/api/v1/track/search/list?city_code=330100", nil, authHeader(token))
+	var cityOnlyPage handler.StandardResponse[*models.TrackSummaryPage]
+	decodeJSON(t, wCityOnly.Result().Body(), &cityOnlyPage)
+	if wCityOnly.Result().StatusCode() != http.StatusOK || cityOnlyPage.Data == nil || len(cityOnlyPage.Data.Items) != 3 {
+		t.Fatalf("expected city-only search to return three Hangzhou tracks, got status=%d data=%+v", wCityOnly.Result().StatusCode(), cityOnlyPage.Data)
+	}
+	for _, item := range cityOnlyPage.Data.Items {
+		if item.CityCode != "330100" {
+			t.Fatalf("expected city-only search item to be in Hangzhou, got %+v", item)
+		}
+	}
+}
+
 func TestListMyTracks_OmitsFields(t *testing.T) {
 	e := newTestEnv()
 	ctx := context.Background()

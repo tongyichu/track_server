@@ -365,7 +365,7 @@ curl -X GET "http://<host>:<port>/api/v1/track/trk-detail/detail" \
 
 ## 7. 轨迹搜索列表
 
-按关键字搜索轨迹列表。
+按关键字搜索轨迹列表，并可按城市精确筛选。
 
 **需要认证**
 
@@ -385,15 +385,16 @@ curl -X GET "http://<host>:<port>/api/v1/track/trk-detail/detail" \
 - 返回结果中的 `calories_burned` 为热量消耗（千卡）。
 - 返回结果中的 `raw_track_url` / `track_screenshot_url` / `track_no_map_bg_screenshot_url` 为服务端本地可下载链接（不是 OSS 地址）。
 - 接口已支持基于 `cursor` 的瀑布流分页，排序规则为 `start_time DESC, id DESC`。
+- `city_code` 非空时仅返回该城市的轨迹；不传、空字符串或仅包含空白字符时保持全城市搜索。
+- `city_code` 使用精确匹配；没有匹配轨迹或传入未知 Code 时返回空列表，不返回参数错误。
 - 首次请求不传 `cursor`；继续翻页时透传上一次返回的 `next_cursor`。
 - `limit` 为可选参数，默认 `20`，最大 `50`；超出最大值时服务端会自动截断到 `50`。
 - 响应中的 `has_more` 表示是否还有下一页；仅当 `has_more=true` 时才会返回 `next_cursor`。
-- 响应中的 `total_count` 表示“我的轨迹”总数（按本接口口径：排除删除与进行中，包含 `正常/私密`）。
 
 ### 请求
 
 ```
-GET /api/v1/track/search/list?keyword=:keyword&limit=20&cursor=<next_cursor>
+GET /api/v1/track/search/list?keyword=:keyword&city_code=330100&limit=20&cursor=<next_cursor>
 Authorization: Bearer <token>
 ```
 
@@ -402,6 +403,7 @@ Authorization: Bearer <token>
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | `keyword` | string | 否 | 搜索关键字；为空时返回最近轨迹列表。 |
+| `city_code` | string | 否 | 城市 Code。非空时精确筛选对应城市；为空时返回全城市搜索结果。 |
 | `limit` | int | 否 | 每页返回条数，默认 `20`，最大 `50`。 |
 | `cursor` | string | 否 | 分页游标。首屏不传，翻页时透传上一次响应里的 `next_cursor`。 |
 
@@ -459,7 +461,7 @@ Authorization: Bearer <token>
 ### 示例（curl）
 
 ```bash
-curl -X GET "http://<host>:<port>/api/v1/track/search/list?keyword=西湖&limit=20" \
+curl -X GET "http://<host>:<port>/api/v1/track/search/list?keyword=西湖&city_code=330100&limit=20" \
   -H "Authorization: Bearer <token>" \
   -H "X-User-ID: 1001"
 ```
@@ -467,7 +469,7 @@ curl -X GET "http://<host>:<port>/api/v1/track/search/list?keyword=西湖&limit=
 翻下一页：
 
 ```bash
-curl -X GET "http://<host>:<port>/api/v1/track/search/list?keyword=西湖&limit=20&cursor=<next_cursor>" \
+curl -X GET "http://<host>:<port>/api/v1/track/search/list?keyword=西湖&city_code=330100&limit=20&cursor=<next_cursor>" \
   -H "Authorization: Bearer <token>" \
   -H "X-User-ID: 1001"
 ```

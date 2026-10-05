@@ -64,9 +64,10 @@ type ListMyTracksInput struct {
 }
 
 type SearchTracksInput struct {
-	Keyword string
-	Cursor  string
-	Limit   int
+	Keyword  string
+	CityCode string
+	Cursor   string
+	Limit    int
 }
 
 type ListCollectedTracksInput struct {
@@ -1014,12 +1015,13 @@ func (s *TrackService) countVisibleCollectedTotalCount(ctx context.Context, user
 // SearchTracks searches tracks globally by keyword.
 func (s *TrackService) SearchTracks(ctx context.Context, userID int64, input SearchTracksInput) (*models.TrackSummaryPage, error) {
 	limit := normalizeTrackPageLimit(input.Limit)
+	cityCode := strings.TrimSpace(input.CityCode)
 	cursor, err := decodeTrackListCursor(input.Cursor)
 	if err != nil {
 		return nil, err
 	}
 	tracks, hasMore, err := s.listTracksWithNonEmptyRawTrackURL(ctx, cursor, limit, func(cur *models.TrackListCursor, n int) ([]*models.Track, error) {
-		return s.tracks.Search(ctx, input.Keyword, cur, n)
+		return s.tracks.Search(ctx, input.Keyword, cityCode, cur, n)
 	})
 	if err != nil {
 		return nil, err

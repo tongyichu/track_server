@@ -42,6 +42,15 @@ func NewMongoTrackRepository(collection *mongo.Collection) *MongoTrackRepository
 			},
 			Options: options.Index().SetName("idx_track_recommend_city"),
 		})
+		_, _ = collection.Indexes().CreateOne(context.Background(), mongo.IndexModel{
+			Keys: bson.D{
+				{Key: "city_code", Value: 1},
+				{Key: "status", Value: 1},
+				{Key: "start_time", Value: -1},
+				{Key: "_id", Value: -1},
+			},
+			Options: options.Index().SetName("idx_track_search_city"),
+		})
 	}
 	return &MongoTrackRepository{
 		collection:   collection,
@@ -306,23 +315,26 @@ func (r *MongoTrackRepository) ListRecommend(ctx context.Context, _ int64, cityC
 }
 
 // Search performs case-insensitive title search on normal-status tracks.
-func (r *MongoTrackRepository) Search(ctx context.Context, keyword string, cursor *models.TrackListCursor, limit int) ([]*models.Track, error) {
+func (r *MongoTrackRepository) Search(ctx context.Context, keyword, cityCode string, cursor *models.TrackListCursor, limit int) ([]*models.Track, error) {
 	if limit <= 0 {
 		limit = 20
 	}
 	filter := bson.M{"status": models.TrackStatusNormal}
+	if cityCode != "" {
+		filter["city_code"] = cityCode
+	}
 	if keyword != "" {
 		filter["title"] = primitive.Regex{Pattern: regexp.QuoteMeta(keyword), Options: "i"}
 	}
 	if cursor != nil {
 		filter["$or"] = []bson.M{
 			{"start_time": bson.M{"$lt": cursor.StartTime}},
-			{"start_time": cursor.StartTime, "id": bson.M{"$lt": cursor.ID}},
+			{"start_time": cursor.StartTime, "_id": bson.M{"$lt": cursor.ID}},
 		}
 	}
 	return r.listTracks(ctx,
 		filter,
-		options.Find().SetSort(bson.D{{Key: "start_time", Value: -1}, {Key: "id", Value: -1}}).SetLimit(int64(limit)),
+		options.Find().SetSort(bson.D{{Key: "start_time", Value: -1}, {Key: "_id", Value: -1}}).SetLimit(int64(limit)),
 	)
 }
 
