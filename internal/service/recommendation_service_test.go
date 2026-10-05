@@ -176,6 +176,44 @@ func TestRecommendationExplorationQuotaAndRouteGroupDiversity(t *testing.T) {
 	}
 }
 
+func TestRecommendationRouteGroupDiversityBackfillsWithoutPanic(t *testing.T) {
+	candidates := []*recommendationCandidate{
+		{track: &models.Track{ID: "a", UserID: 1, TrackType: "hiking"}, groupID: "group-a"},
+		{track: &models.Track{ID: "b", UserID: 2, TrackType: "hiking"}, groupID: "group-b"},
+		// c 会先被连续运动类型约束跳过，随后 d 选中同一个 RouteGroup。
+		// 旧实现下一轮会删除 c 并在空 remaining 上访问下标 0。
+		{track: &models.Track{ID: "c", UserID: 3, TrackType: "hiking"}, groupID: "group-c"},
+		{track: &models.Track{ID: "d", UserID: 4, TrackType: "running"}, groupID: "group-c"},
+	}
+
+	got := diversifyCandidates(candidates, len(candidates))
+	if len(got) != len(candidates) {
+		t.Fatalf("candidates=%d, want %d: %+v", len(got), len(candidates), got)
+	}
+	seen := make(map[string]struct{}, len(got))
+	for _, candidate := range got {
+		seen[candidate.track.ID] = struct{}{}
+	}
+	for _, candidate := range candidates {
+		if _, ok := seen[candidate.track.ID]; !ok {
+			t.Fatalf("candidate %s was dropped: %+v", candidate.track.ID, got)
+		}
+	}
+}
+
+func TestRecommendationRouteGroupDiversityUsesSameGroupAsFallback(t *testing.T) {
+	candidates := []*recommendationCandidate{
+		{track: &models.Track{ID: "a", UserID: 1, TrackType: "hiking"}, groupID: "same"},
+		{track: &models.Track{ID: "b", UserID: 2, TrackType: "running"}, groupID: "same"},
+		{track: &models.Track{ID: "c", UserID: 3, TrackType: "riding"}, groupID: "same"},
+	}
+
+	got := diversifyCandidates(candidates, len(candidates))
+	if len(got) != len(candidates) {
+		t.Fatalf("same-group candidates=%d, want %d: %+v", len(got), len(candidates), got)
+	}
+}
+
 func TestRecommendationStronglyPenalizesAlreadyCollectedTrack(t *testing.T) {
 	ctx := context.Background()
 	trackRepo := repository.NewInMemoryTrackRepository()

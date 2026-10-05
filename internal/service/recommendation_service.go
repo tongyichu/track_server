@@ -692,7 +692,12 @@ func isRecommendationTrackVisible(track *models.Track, userID int64, cityCode st
 
 func diversifyCandidates(sorted []*recommendationCandidate, limit int) []*recommendationCandidate {
 	result := make([]*recommendationCandidate, 0, min(limit, len(sorted)))
-	remaining := append([]*recommendationCandidate(nil), sorted...)
+	remaining := make([]*recommendationCandidate, 0, len(sorted))
+	for _, candidate := range sorted {
+		if candidate != nil && candidate.track != nil {
+			remaining = append(remaining, candidate)
+		}
+	}
 	selectedGroups := make(map[string]struct{})
 	for len(result) < limit && len(remaining) > 0 {
 		blockAuthors := make(map[int64]int)
@@ -700,40 +705,53 @@ func diversifyCandidates(sorted []*recommendationCandidate, limit int) []*recomm
 		for _, existing := range result[blockStart:] {
 			blockAuthors[existing.track.UserID]++
 		}
-		blockEnd := ((len(result) / 20) + 1) * 20
-		progress := false
-		for index := 0; index < len(remaining) && len(result) < blockEnd && len(result) < limit; {
-			candidate := remaining[index]
-			consecutiveType := 0
-			for cursor := len(result) - 1; cursor >= 0 && result[cursor].track.TrackType == candidate.track.TrackType; cursor-- {
-				consecutiveType++
-			}
-			if candidate.groupID != "" {
-				if _, repeated := selectedGroups[candidate.groupID]; repeated {
-					remaining = append(remaining[:index], remaining[index+1:]...)
+
+		pickCandidate := func(allowRepeatedGroup, enforcePageDiversity bool) int {
+			for index, candidate := range remaining {
+				if !allowRepeatedGroup && candidate.groupID != "" {
+					if _, repeated := selectedGroups[candidate.groupID]; repeated {
+						continue
+					}
+				}
+				if !enforcePageDiversity {
+					return index
+				}
+
+				consecutiveType := 0
+				for cursor := len(result) - 1; cursor >= 0 && result[cursor].track.TrackType == candidate.track.TrackType; cursor-- {
+					consecutiveType++
+				}
+				if blockAuthors[candidate.track.UserID] >= 2 || consecutiveType >= 2 {
 					continue
 				}
+				return index
 			}
-			if blockAuthors[candidate.track.UserID] >= 2 || consecutiveType >= 2 {
-				index++
-				continue
-			}
-			result = append(result, candidate)
-			blockAuthors[candidate.track.UserID]++
-			if candidate.groupID != "" {
-				selectedGroups[candidate.groupID] = struct{}{}
-			}
-			remaining = append(remaining[:index], remaining[index+1:]...)
-			progress = true
+			return -1
 		}
-		if !progress {
-			fallback := remaining[0]
-			result = append(result, fallback)
-			if fallback.groupID != "" {
-				selectedGroups[fallback.groupID] = struct{}{}
-			}
-			remaining = remaining[1:]
+
+		// RouteGroup、作者和运动类型都是多样性软约束：先选同时满足全部
+		// 约束的候选；不足时依次允许同组补位、放宽页内约束，确保不会
+		// 因同组候选被永久丢弃而缩短 Feed。
+		index := pickCandidate(false, true)
+		if index < 0 {
+			index = pickCandidate(true, true)
 		}
+		if index < 0 {
+			index = pickCandidate(false, false)
+		}
+		if index < 0 {
+			index = pickCandidate(true, false)
+		}
+		if index < 0 {
+			break
+		}
+
+		candidate := remaining[index]
+		result = append(result, candidate)
+		if candidate.groupID != "" {
+			selectedGroups[candidate.groupID] = struct{}{}
+		}
+		remaining = append(remaining[:index], remaining[index+1:]...)
 	}
 	return result
 }
