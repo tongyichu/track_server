@@ -365,7 +365,7 @@ curl -X GET "http://<host>:<port>/api/v1/track/trk-detail/detail" \
 
 ## 7. 轨迹搜索列表
 
-按关键字搜索轨迹列表，并可按城市精确筛选。
+按关键字搜索轨迹列表，并可按城市、运动类型精确筛选。
 
 **需要认证**
 
@@ -387,14 +387,17 @@ curl -X GET "http://<host>:<port>/api/v1/track/trk-detail/detail" \
 - 接口已支持基于 `cursor` 的瀑布流分页，排序规则为 `start_time DESC, id DESC`。
 - `city_code` 非空时仅返回该城市的轨迹；不传、空字符串或仅包含空白字符时保持全城市搜索。
 - `city_code` 使用精确匹配；没有匹配轨迹或传入未知 Code 时返回空列表，不返回参数错误。
+- `track_type` 非空时仅返回该运动类型的轨迹，使用 `/track/types` 返回的 `type`；不传、空字符串或仅包含空白字符时不过滤运动类型。
+- `track_type` 使用存储值精确匹配，不对历史中文值做转换；无匹配结果时返回空列表。与 `city_code` 同时传入时，结果必须同时满足两个条件。
 - 首次请求不传 `cursor`；继续翻页时透传上一次返回的 `next_cursor`。
+- 翻页时应保持相同的 `keyword`、`city_code` 和 `track_type` 筛选条件。
 - `limit` 为可选参数，默认 `20`，最大 `50`；超出最大值时服务端会自动截断到 `50`。
 - 响应中的 `has_more` 表示是否还有下一页；仅当 `has_more=true` 时才会返回 `next_cursor`。
 
 ### 请求
 
 ```
-GET /api/v1/track/search/list?keyword=:keyword&city_code=330100&limit=20&cursor=<next_cursor>
+GET /api/v1/track/search/list?keyword=:keyword&city_code=330100&track_type=hiking&limit=20&cursor=<next_cursor>
 Authorization: Bearer <token>
 ```
 
@@ -404,6 +407,7 @@ Authorization: Bearer <token>
 |------|------|------|------|
 | `keyword` | string | 否 | 搜索关键字；为空时返回最近轨迹列表。 |
 | `city_code` | string | 否 | 城市 Code。非空时精确筛选对应城市；为空时返回全城市搜索结果。 |
+| `track_type` | string | 否 | 运动类型，使用 `/track/types` 返回的 `type`；非空时精确筛选，空值不过滤。 |
 | `limit` | int | 否 | 每页返回条数，默认 `20`，最大 `50`。 |
 | `cursor` | string | 否 | 分页游标。首屏不传，翻页时透传上一次响应里的 `next_cursor`。 |
 
@@ -461,7 +465,7 @@ Authorization: Bearer <token>
 ### 示例（curl）
 
 ```bash
-curl -X GET "http://<host>:<port>/api/v1/track/search/list?keyword=西湖&city_code=330100&limit=20" \
+curl -X GET "http://<host>:<port>/api/v1/track/search/list?keyword=西湖&city_code=330100&track_type=hiking&limit=20" \
   -H "Authorization: Bearer <token>" \
   -H "X-User-ID: 1001"
 ```
@@ -469,7 +473,7 @@ curl -X GET "http://<host>:<port>/api/v1/track/search/list?keyword=西湖&city_c
 翻下一页：
 
 ```bash
-curl -X GET "http://<host>:<port>/api/v1/track/search/list?keyword=西湖&city_code=330100&limit=20&cursor=<next_cursor>" \
+curl -X GET "http://<host>:<port>/api/v1/track/search/list?keyword=西湖&city_code=330100&track_type=hiking&limit=20&cursor=<next_cursor>" \
   -H "Authorization: Bearer <token>" \
   -H "X-User-ID: 1001"
 ```

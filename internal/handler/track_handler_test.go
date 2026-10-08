@@ -1368,6 +1368,66 @@ func TestSearchFilterByCityCode(t *testing.T) {
 	}
 }
 
+func TestSearchFilterByTrackType(t *testing.T) {
+	e := newTestEnv()
+	ctx := context.Background()
+	token := e.generateTestToken(1001)
+	newest := time.Date(2026, 5, 6, 12, 0, 0, 0, time.UTC)
+	tracks := []*models.Track{
+		{ID: "type-hz-new", UserID: 1001, CityCode: "330100", TrackType: "hiking", Title: "类型筛选新轨迹", StartTime: newest, RawTrackURL: "https://example.com/type-hz-new.dat", Status: models.TrackStatusNormal},
+		{ID: "type-sh", UserID: 1002, CityCode: "310000", TrackType: "hiking", Title: "类型筛选上海轨迹", StartTime: newest.Add(-time.Hour), RawTrackURL: "https://example.com/type-sh.dat", Status: models.TrackStatusNormal},
+		{ID: "type-running", UserID: 1003, CityCode: "330100", TrackType: "running", Title: "类型筛选跑步轨迹", StartTime: newest.Add(-2 * time.Hour), RawTrackURL: "https://example.com/type-running.dat", Status: models.TrackStatusNormal},
+		{ID: "type-no-raw", UserID: 1004, CityCode: "330100", TrackType: "hiking", Title: "类型筛选无文件轨迹", StartTime: newest.Add(-3 * time.Hour), Status: models.TrackStatusNormal},
+		{ID: "type-hz-old", UserID: 1005, CityCode: "330100", TrackType: "hiking", Title: "类型筛选旧轨迹", StartTime: newest.Add(-4 * time.Hour), RawTrackURL: "https://example.com/type-hz-old.dat", Status: models.TrackStatusNormal},
+		{ID: "type-other-keyword", UserID: 1006, CityCode: "330100", TrackType: "hiking", Title: "其他关键词", StartTime: newest.Add(-5 * time.Hour), RawTrackURL: "https://example.com/type-other-keyword.dat", Status: models.TrackStatusNormal},
+	}
+	for _, track := range tracks {
+		if err := e.trackRepo.Create(ctx, track); err != nil {
+			t.Fatalf("create track %s: %v", track.ID, err)
+		}
+	}
+
+	search := func(path string) *models.TrackSummaryPage {
+		t.Helper()
+		w := e.perform(http.MethodGet, path, nil, authHeader(token))
+		if w.Result().StatusCode() != http.StatusOK {
+			t.Fatalf("search %s: status=%d body=%s", path, w.Result().StatusCode(), w.Result().Body())
+		}
+		var response handler.StandardResponse[*models.TrackSummaryPage]
+		decodeJSON(t, w.Result().Body(), &response)
+		if response.Data == nil {
+			t.Fatalf("search %s: missing page", path)
+		}
+		return response.Data
+	}
+
+	first := search("/api/v1/track/search/list?keyword=类型筛选&city_code=330100&track_type=hiking&limit=1")
+	if len(first.Items) != 1 || first.Items[0].ID != "type-hz-new" || !first.HasMore || first.NextCursor == "" {
+		t.Fatalf("unexpected first filtered page: %+v", first)
+	}
+	second := search("/api/v1/track/search/list?keyword=类型筛选&city_code=330100&track_type=hiking&limit=1&cursor=" + first.NextCursor)
+	if len(second.Items) != 1 || second.Items[0].ID != "type-hz-old" || second.HasMore {
+		t.Fatalf("unexpected second filtered page: %+v", second)
+	}
+
+	typeOnly := search("/api/v1/track/search/list?keyword=类型筛选&track_type=hiking")
+	if len(typeOnly.Items) != 3 || typeOnly.Items[0].ID != "type-hz-new" || typeOnly.Items[1].ID != "type-sh" || typeOnly.Items[2].ID != "type-hz-old" {
+		t.Fatalf("unexpected type-only result: %+v", typeOnly)
+	}
+	blank := search("/api/v1/track/search/list?keyword=类型筛选&track_type=%20%20")
+	if len(blank.Items) != 4 {
+		t.Fatalf("expected blank track_type to keep all types, got %+v", blank)
+	}
+	unknown := search("/api/v1/track/search/list?track_type=unknown")
+	if len(unknown.Items) != 0 || unknown.HasMore {
+		t.Fatalf("expected unknown track_type to return empty page, got %+v", unknown)
+	}
+	withoutKeyword := search("/api/v1/track/search/list?city_code=330100&track_type=hiking")
+	if len(withoutKeyword.Items) != 3 {
+		t.Fatalf("expected city and type filters without keyword to return three tracks, got %+v", withoutKeyword)
+	}
+}
+
 func TestListMyTracks_OmitsFields(t *testing.T) {
 	e := newTestEnv()
 	ctx := context.Background()
