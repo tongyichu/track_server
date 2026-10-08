@@ -37,7 +37,7 @@ docker tag hertz-track:latest crpi-p78v4agazv8zn80d.cn-beijing.personal.cr.aliyu
 docker login --username <用户名> --password <密码> <Registry地址>
 
 # 示例
-docker login --username 359309156@qq.com --password code7app.org crpi-p78v4agazv8zn80d.cn-beijing.personal.cr.aliyuncs.com
+docker login --username 359309156@qq.com --password xxxxx crpi-p78v4agazv8zn80d.cn-beijing.personal.cr.aliyuncs.com
 ```
 
 ### 4. 推送镜像
