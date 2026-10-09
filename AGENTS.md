@@ -49,6 +49,7 @@
 ```
 track_server/
 ├── cmd/server/             # main 入口：加载配置 → 选仓储 → 注入 service → 注册路由
+├── cmd/backfill-track-titles/ # MySQL 存量时间标题回填工具：先生成计划，再按旧标题条件更新
 ├── internal/
 │   ├── config/             # 环境变量加载；内置省市数据 + 昵称字典 + 同行弹幕敏感词词库
 │   ├── handler/            # Hertz HTTP handler + router.go 路由表（权威）
@@ -108,6 +109,8 @@ track_server/
 - 推荐运行参数统一在 `internal/config/config.go` 读取：`RECOMMENDATION_ENABLED` 默认 `false`；计算超时默认 250 ms；Session TTL 默认 60 分钟；派生数据最大年龄默认 48 小时；候选上限默认 300、最终 Feed 上限固定钳制为 200。`SCHEDULER_ENABLED=true` 时推荐离线任务会独立于接口总开关运行，允许上线前预热画像和物料统计；待首批任务成功且两端联调通过后再开启总开关。
 
 ### 关键流程
+
+**存量标题回填**：`cmd/backfill-track-titles` 是一次性 MySQL 工具，操作说明见 `docs/backfill-track-titles.md`，生成逻辑在 `internal/service/track_title_backfill.go`。默认只处理未删除、已结束轨迹的时间型默认标题（包括旧版 • 分隔符），优先复用投稿标题；用户明确要求移除日期前后缀时，以 -include-dated-titles 扩大计划范围，保留已有路线描述。缺少具体地点时按距离和运动类型生成，不再使用日期兜底；没有完整轨迹点时不得臆造环线或终点地址。默认只生成计划，应用时必须匹配计划数据库、作者和原始标题，只更新标题及更新时间，不修改投稿审核状态、资源、统计和索引。不得降级为内存仓储或在回填时自动建表。
 
 **启动流程**（`cmd/server/main.go`）：
 ```
