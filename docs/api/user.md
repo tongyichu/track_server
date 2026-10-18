@@ -39,6 +39,8 @@ Authorization: Bearer <token>
     "nickname": "Alice",
     "avatar_url": "/api/v1/static/default_avatars/girl_01.png",
     "signature": "",
+    "background_url": "",
+    "gender": "",
     "phone": "13800000000",
     "client_language": "zh-CN",
     "created_at": "2026-04-20T12:00:00Z",
@@ -97,6 +99,8 @@ Authorization: Bearer <token>
 | `data.nickname` | string | 用户昵称。 |
 | `data.avatar_url` | string | 用户头像 URL（为空时服务端会返回默认头像；若启用头像缓存，可能返回服务端本地静态下载地址 `/api/v1/static/avatars/...`）。 |
 | `data.signature` | string | 个性签名。 |
+| `data.background_url` | string | 个人主页顶部背景图；空串使用默认背景，启用缓存时为 `/api/v1/static/profile_backgrounds/<user_id>_<source_hash>.jpg`。 |
+| `data.gender` | string | 仅本人详情返回；空串未设置，`male` 男，`female` 女。 |
 | `data.phone` | string | 手机号（可能为空）；仅查看自己时返回。 |
 | `data.client_language` | string | 客户端语言；仅查看自己时返回。 |
 | `data.created_at` | string | 创建时间。 |
@@ -283,7 +287,7 @@ Authorization: Bearer <token>
 
 ## 14. 更新个人信息
 
-支持一次更新一个或多个字段。
+支持一次更新一个或多个字段。省略或 `null` 的字段保持不变，显式空串可清空签名、背景图或性别；旧客户端继续使用原有字段。背景图应用于个人主页顶部。
 
 **需要认证**
 
@@ -291,6 +295,7 @@ Authorization: Bearer <token>
 
 - 用户身份以 `Authorization` 解析出的 `user_id` 为准；接口不接收 `user_id` 参数。
 - 只允许更新自己的个人信息。
+- 背景图沿用 OSS 上传和已鉴权静态资源下载；数据库保存原始 OSS 地址，客户端响应使用独立缓存分类 `profile_backgrounds`，缓存键包含地址摘要以避免旧图缓存。背景图缓存配置启用时，更新前先完成下载，失败返回 502 且保留旧值。
 - 更新头像成功后，响应中的 `avatar_url` 会被服务端替换为本地静态资源下载链接（例如 `/api/v1/static/avatars/<user_id>.png`）。
 
 ### 请求
@@ -307,7 +312,9 @@ Content-Type: application/json
 {
   "avatar_url": "https://example.com/avatar.png",
   "name": "Alice",
-  "signature": "hello world"
+  "signature": "hello world",
+  "background_url": "https://example.com/background.jpg",
+  "gender": "female"
 }
 ```
 
@@ -316,6 +323,8 @@ Content-Type: application/json
 | `avatar_url` | string | 否 | 新头像地址（必须为非空字符串） |
 | `name` | string | 否 | 新昵称（必须为非空字符串） |
 | `signature` | string | 否 | 个性签名（允许传空串用于清空） |
+| `background_url` | string | 否 | 客户端经现有 OSS STS 上传后的 HTTP(S) 原始地址，最多 2048 字节；空串恢复默认背景。不能提交本机文件地址。 |
+| `gender` | string | 否 | 空串未设置、`male` 男、`female` 女；其他值返回 400。 |
 
 ### 响应
 
@@ -331,6 +340,8 @@ Content-Type: application/json
     "nickname": "Alice",
     "avatar_url": "/api/v1/static/avatars/1001.png",
     "signature": "hello world",
+    "background_url": "/api/v1/static/profile_backgrounds/1001_<source_hash>.jpg",
+    "gender": "female",
     "phone": "",
     "client_language": "",
     "created_at": "2026-04-20T12:00:00Z",
@@ -343,11 +354,18 @@ Content-Type: application/json
 
 - `400 Bad Request`
   - 请求体不是合法 JSON（返回 `{"error":"invalid payload"}`）
+  - `gender` 非法或 `background_url` 不是 HTTP(S) 地址、超过 2048 字节
   - 未传任何可更新字段（返回 `{"error":"no fields to update"}`）
   - `avatar_url` 或 `name` 传了空字符串（返回 `{"error":"avatar_url is required"}` / `{"error":"name is required"}`）
 - `401 Unauthorized`
   - 缺少/无效/过期的 Token
+- `502 Bad Gateway`
+  - 新背景图无法缓存，未修改原背景图
 - `500 Internal Server Error`
   - 服务端更新个人信息失败
 
 ---
+
+### 存量数据兼容
+
+MySQL 启动时幂等补充 `users.background_url VARCHAR(2048) NULL`、`users.gender VARCHAR(16) NOT NULL DEFAULT ''`；旧记录均显示默认背景和未设置性别。Mongo 文档缺少新字段时按空值读取；内存仓储保持相同语义。先部署服务端（包含迁移与静态图片缓存），再发布调用新字段的客户端。

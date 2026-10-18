@@ -169,9 +169,11 @@ func (h *UserHandler) UpdateProfile(ctx context.Context, c *app.RequestContext) 
 	authUserID := meta.AuthUserID
 
 	var body struct {
-		AvatarURL *string `json:"avatar_url"`
-		Name      *string `json:"name"`
-		Signature *string `json:"signature"`
+		AvatarURL     *string `json:"avatar_url"`
+		Name          *string `json:"name"`
+		Signature     *string `json:"signature"`
+		BackgroundURL *string `json:"background_url"`
+		Gender        *string `json:"gender"`
 	}
 	data, err := c.Body()
 	if err != nil || json.Unmarshal(data, &body) != nil {
@@ -180,13 +182,19 @@ func (h *UserHandler) UpdateProfile(ctx context.Context, c *app.RequestContext) 
 	}
 
 	user, err := h.userSvc.UpdateProfile(ctx, authUserID, service.UserProfilePatch{
-		AvatarURL: body.AvatarURL,
-		Name:      body.Name,
-		Signature: body.Signature,
+		AvatarURL:     body.AvatarURL,
+		Name:          body.Name,
+		Signature:     body.Signature,
+		BackgroundURL: body.BackgroundURL,
+		Gender:        body.Gender,
 	})
 	if err != nil {
+		if errors.Is(err, service.ErrBackgroundUnavailable) {
+			c.JSON(http.StatusBadGateway, utils.H{"error": err.Error()})
+			return
+		}
 		// Keep consistent with existing handler error style.
-		if errors.Is(err, service.ErrNoFieldsToUpdate) || errors.Is(err, service.ErrAvatarURLRequired) || errors.Is(err, service.ErrNameRequired) {
+		if errors.Is(err, service.ErrNoFieldsToUpdate) || errors.Is(err, service.ErrAvatarURLRequired) || errors.Is(err, service.ErrNameRequired) || errors.Is(err, service.ErrInvalidGender) || errors.Is(err, service.ErrInvalidBackgroundURL) {
 			c.JSON(http.StatusBadRequest, utils.H{"error": err.Error()})
 			return
 		}

@@ -93,6 +93,8 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 	api.GET("/upgrade/check", appReleaseHandler.CheckUpgrade)
 	// public: achievement level rule H5 page for app WebView.
 	api.GET("/achievement/level-rules.html", achievementHandler.LevelRulesPage)
+	api.GET("/legal/privacy-policy.html", PrivacyPolicyPage)
+	api.GET("/legal/terms-of-service.html", TermsOfServicePage)
 	// public: curated district/scenic-spot introduction page for app WebView.
 	api.GET("/track-map/areas/:area_id/introduction.html", mapAreaHandler.IntroductionPage)
 	api.GET("/track-map/groups/:group_id/introduction.html", mapRouteIntroductionHandler.IntroductionPage)

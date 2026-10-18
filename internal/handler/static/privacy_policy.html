@@ -1,0 +1,478 @@
+<!doctype html>
+<html lang="zh-CN" data-lang="zh" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>隐私政策</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f8fa;
+      --panel: #ffffff;
+      --text: #1f2933;
+      --muted: #667085;
+      --line: #e5e7eb;
+      --soft: #e8f0ff;
+      --soft-line: #c7d8ff;
+      --subtle: #f9fafb;
+      --accent: #1d4ed8;
+      --good: #0f8a5f;
+      --radius: 8px;
+    }
+
+    html[data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #0f172a;
+      --panel: #111827;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --line: #263244;
+      --soft: #172554;
+      --soft-line: #1d4ed8;
+      --subtle: #1f2937;
+      --accent: #93c5fd;
+      --good: #6ee7b7;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Arial, sans-serif;
+      font-size: 15px;
+      line-height: 1.65;
+    }
+
+    .page {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 20px 16px 32px;
+    }
+
+    [data-lang-panel] { display: none; }
+    html[data-lang="zh"] [data-lang-panel="zh"] { display: block; }
+    html[data-lang="en"] [data-lang-panel="en"] { display: block; }
+
+    header { padding: 8px 0 14px; }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 25px;
+      line-height: 1.25;
+      font-weight: 750;
+      letter-spacing: 0;
+    }
+
+    .lead {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin: 12px 0;
+    }
+
+    h2 {
+      margin: 0 0 10px;
+      font-size: 17px;
+      line-height: 1.35;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      margin: 14px 0 8px;
+      font-size: 15px;
+      line-height: 1.35;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+
+    p { margin: 8px 0; }
+    ul { margin: 8px 0; padding-left: 22px; }
+    li { margin: 4px 0; }
+
+    .note {
+      background: var(--soft);
+      border: 1px solid var(--soft-line);
+      color: var(--accent);
+      border-radius: var(--radius);
+      padding: 10px 12px;
+      margin: 10px 0 0;
+      font-size: 14px;
+    }
+
+    .formula {
+      background: var(--subtle);
+      border: 1px dashed var(--line);
+      border-radius: var(--radius);
+      padding: 10px 12px;
+      overflow-wrap: anywhere;
+      font-weight: 650;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+      font-size: 13px;
+    }
+
+    th, td {
+      border-bottom: 1px solid var(--line);
+      padding: 9px 8px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      color: var(--text);
+      background: var(--subtle);
+      font-weight: 700;
+    }
+
+    tr:last-child td { border-bottom: 0; }
+
+    .positive {
+      color: var(--good);
+      font-weight: 650;
+    }
+
+    .footer {
+      color: var(--muted);
+      font-size: 12px;
+      text-align: center;
+      padding: 10px 0 0;
+    }
+
+    html { scroll-padding-top: 16px; }
+    body { overflow-wrap: anywhere; }
+    a { color: var(--accent); text-underline-offset: 3px; }
+    a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+    nav ul { margin-bottom: 0; }
+    .metadata { color: var(--muted); font-size: 13px; }
+    .table-scroll { overflow-x: auto; }
+    .table-scroll table { min-width: 480px; }
+    .placeholder { font-weight: 650; }
+    .document-links { display: flex; gap: 16px; flex-wrap: wrap; }
+    @media (max-width: 360px) {
+      .page { padding-left: 12px; padding-right: 12px; }
+      section { padding: 14px; }
+    }
+  </style>
+  <script>
+    (function () {
+      var params = new URLSearchParams(window.location.search);
+      var isEnglish = params.get("lang") === "english";
+      var darkSetting = params.get("is_dark");
+      var systemDark = window.matchMedia("(prefers-color-scheme: dark)");
+      function applyTheme() {
+        var isDark = darkSetting === "true" || (darkSetting !== "false" && systemDark.matches);
+        document.documentElement.dataset.theme = isDark ? "dark" : "light";
+      }
+      document.documentElement.dataset.lang = isEnglish ? "en" : "zh";
+      document.documentElement.lang = isEnglish ? "en" : "zh-CN";
+      document.title = isEnglish ? "Privacy Policy" : "隐私政策";
+      applyTheme();
+      if (systemDark.addEventListener) systemDark.addEventListener("change", applyTheme);
+      document.addEventListener("DOMContentLoaded", function () {
+        document.querySelectorAll("a[data-legal-link]").forEach(function (link) {
+          var url = new URL(link.getAttribute("href"), window.location.href);
+          if (isEnglish) url.searchParams.set("lang", "english");
+          if (darkSetting === "true" || darkSetting === "false") url.searchParams.set("is_dark", darkSetting);
+          link.href = url.toString();
+        });
+      });
+    })();
+  </script>
+</head>
+<body>
+  <main class="page" data-lang-panel="zh">
+    <header>
+      <h1>隐私政策</h1>
+      <p class="lead">时光轨迹（Time Trail）尊重您的个人信息权益。本政策说明轨迹记录、路线发现和同行服务中的信息处理方式。</p>
+      <p class="metadata">版本：{政策版本号} · 更新日期：{更新日期} · 生效日期：{生效日期}</p>
+      <p class="note"><strong>草稿提示：</strong>本页含有 {xxxx} 形式的待补充信息，尚未作为正式生效文本发布。正式版本须补齐信息，并与实际授权、共享和删除流程核对一致。</p>
+    </header>
+    <section>
+      <h2>阅读提示</h2>
+      <p>本政策适用于 {运营主体全称或个人开发者姓名}（以下简称“我们”）提供的时光轨迹 App 及配套服务。联系地址：{运营主体联系地址}；隐私联系邮箱：{隐私联系邮箱}。</p>
+      <p><strong>精确位置和连续行踪轨迹属于敏感个人信息，可能揭示住所、工作地点、活动规律及同行关系。</strong>请重点阅读位置采集、云端可见范围、同行共享和第三方服务条款。阅读本政策本身不构成对敏感信息处理、公开或向第三方提供信息的单独同意。</p>
+      <nav aria-label="隐私政策目录"><ul>
+        <li><a href="#privacy-collection">1. 我们处理哪些信息</a></li>
+        <li><a href="#privacy-permissions">2. 权限与后台运行</a></li>
+        <li><a href="#privacy-sharing">3. 轨迹与同行的可见范围</a></li>
+        <li><a href="#privacy-providers">4. 第三方服务清单</a></li>
+        <li><a href="#privacy-transfer">5. 委托、提供与公开</a></li>
+        <li><a href="#privacy-storage">6. 保存期限与存储地点</a></li>
+        <li><a href="#privacy-security">7. 信息安全</a></li>
+        <li><a href="#privacy-rights">8. 您的权利</a></li>
+        <li><a href="#privacy-children">9. 未成年人保护</a></li>
+        <li><a href="#privacy-web">10. 网页与本地存储</a></li>
+        <li><a href="#privacy-updates">11. 政策更新</a></li>
+        <li><a href="#privacy-contact">12. 联系我们</a></li>
+      </ul></nav>
+    </section>
+    <section id="privacy-collection">
+      <h2>1. 我们处理哪些信息</h2>
+      <h3>1.1 账号与个人资料</h3>
+      <p>使用手机号登录时，我们处理您填写的手机号、验证码及验证结果，以创建或识别账号。使用已开放的微信登录时，处理授权码、微信账号标识及您授权提供的昵称、头像。第三方登录以授权页展示的信息和您作出的授权为准。您可选填或修改昵称、头像等资料。</p>
+      <p>为维持登录、识别请求及保障账号安全，我们处理账号 ID、登录令牌、Android ID 等设备标识、IP 地址、客户端版本、系统平台和语言。不会要求您授权读取短信内容来填写验证码。</p>
+      <h3>1.2 地图、定位与轨迹记录</h3>
+      <p>在您使用定位、轨迹录制或同行位置服务时，相关功能处理经纬度、定位时间、精度、海拔、速度、方向等定位数据；地图和定位服务还可能在授权范围内处理网络、Wi-Fi 或基站信息以辅助定位。步数与运动识别信息用于运动统计和轨迹质量判断。</p>
+      <p>我们据此生成路线、起终点、城市或地址、运动类型、时间、距离、时长、配速、爬升和估算卡路里等记录，并可能做漂移过滤、交通状态识别和轨迹补偿。补偿点和运动估算可能存在误差。</p>
+      <p><strong>没有位置数据便无法提供实际位置录制和实时位置共享。开启这些功能前应向您单独说明敏感信息处理的目的、必要性、方式及影响，并依法取得单独同意；操作系统的位置权限不能替代该同意。</strong>拒绝位置权限会影响对应功能，不影响与位置无关且已开放的功能。</p>
+      <h3>1.3 本地保存、云端同步与投稿</h3>
+      <p>轨迹点及相关记录保存在设备本地。当前完成保存后，App 会尝试向服务端创建轨迹摘要，包括标题、运动类型、城市或起点地址、起止时间及运动统计；网络失败可能导致云端与本地暂不一致。</p>
+      <p>当您使用上传、同步或投稿功能时，服务端还会处理所上传的原始轨迹文件、地图截图、打点内容、路线说明及您选取的图片，用于云端展示、路线发现、投稿审核、成就计算等对应服务。导入文件可能包含其他人的位置或图片，请确保有权使用。</p>
+      <h3>1.4 同行、关注与路线发现</h3>
+      <p>创建或加入同行房间时，我们处理房间 ID、成员账号、角色、加入或离开时间、在线状态、实时位置、速度、方向及会话内文字弹幕和关键事件，以展示成员状态、连接通信并形成同行记录。关注、粉丝、收藏和路线使用记录用于维护关系、收藏列表及路线服务。</p>
+      <p>路线推荐可能使用所选城市、运动类型、浏览、收藏及使用行为调整候选和排序。当前个性化推荐的关闭或非个性化入口为 {非个性化推荐入口}；正式开放个性化服务前须提供可用的选择方式。</p>
+      <h3>1.5 反馈、诊断与使用统计</h3>
+      <p>提交意见反馈时，我们处理您填写的内容、联系方式（如填写）及主动选取的图片。诊断信息可能涉及设备型号、系统与 App 版本、网络状态、错误信息和相关操作记录；上传前请避免包含验证码、令牌或不必要的位置细节。</p>
+      <p>App 使用自建统计接口处理安装标识、会话标识、登录用户 ID（如已登录）、页面浏览、功能点击、录制及上传结果、城市代码、设备和网络信息，用于功能分析、推荐效果评估和故障定位。<strong>去标识化统计仍可能属于个人信息，不等同于匿名信息。</strong>事件属性设置了手机号、令牌、验证码、原始经纬度和轨迹点等内容的脱敏规则；业务录制与同行定位另按前述条款处理。统计授权及关闭入口为 {使用统计授权及关闭入口}。</p>
+    </section>
+    <section id="privacy-permissions">
+      <h2>2. 权限与后台运行</h2>
+      <div class="table-scroll" role="region" aria-label="权限用途表，可横向滚动" tabindex="0"><table>
+        <thead><tr><th scope="col">权限或能力</th><th scope="col">使用场景</th><th scope="col">拒绝或关闭的影响</th></tr></thead>
+        <tbody>
+          <tr><td>精确 / 大致位置</td><td>地图定位、轨迹录制、附近路线或房间、同行共享</td><td>拒绝后相关定位功能不可用；仅大致位置会降低精度</td></tr>
+          <tr><td>位置前台服务</td><td>您主动开启录制或同行后，在切换 App、锁屏时持续运行</td><td>结束录制、退出同行或系统停止服务后，相应连续采集停止</td></tr>
+          <tr><td>身体活动识别</td><td>步数统计、运动状态辅助判断</td><td>步数和部分辅助判断受限</td></tr>
+          <tr><td>相机</td><td>扫描同行二维码</td><td>不能使用相机扫码，可使用已提供的其他加入方式</td></tr>
+          <tr><td>系统图片 / 文件选择器</td><td>选择头像、反馈或投稿图片、识别二维码、导入导出轨迹</td><td>对应文件操作不可用；仅访问您选取或授权的内容</td></tr>
+          <tr><td>通知</td><td>录制、同行与下载状态提示</td><td>部分状态提示不可见，实际服务运行以系统规则为准</td></tr>
+          <tr><td>网络及 Wi-Fi 状态</td><td>联网、同步、定位辅助与断线重连</td><td>网络不可用时云端功能受限</td></tr>
+          <tr><td>保持唤醒 / 电池优化设置</td><td>减少录制和同行在后台中断</td><td>可能出现记录或位置更新间断</td></tr>
+          <tr><td>安装应用包</td><td>您主动选择下载并安装 App 更新</td><td>不能在该流程内安装更新，不影响已有功能</td></tr>
+        </tbody>
+      </table></div>
+      <p><strong>后台持续定位指您开启的录制或同行位置前台服务在 App 切到后台后继续运行，不代表 App 永久追踪设备。</strong>当前 Android 主清单未申请 ACCESS_BACKGROUND_LOCATION。您可在系统“设置 → 应用 → 时光轨迹 → 权限”管理权限；不同设备路径可能不同。停止录制和退出同行是两个独立操作，如需停止全部连续定位，请分别结束仍在运行的功能。</p>
+    </section>
+    <section id="privacy-sharing">
+      <h2>3. 轨迹与同行的可见范围</h2>
+      <p><strong>本地记录与云端记录的可见范围不同。当前普通云端轨迹按可被其他登录用户浏览、搜索或推荐的状态创建，不能把“登录后才能访问”理解为“仅自己可见”。</strong>完成录制后的自动摘要创建、后续原始文件上传和对外展示，应分别在对应流程清楚告知并取得依法所需的同意。正式公开流程及隐私控制入口：{轨迹公开确认及隐私控制入口}。</p>
+      <p>公开资料可能包括昵称、头像、公开成就、关注和粉丝关系及公开轨迹内容；手机号和登录凭证不属于公开主页内容。路线投稿可能被审核人员查看，并在获批后用于推荐或路线展示。撤回投稿不等于删除原轨迹。</p>
+      <p><strong>参与同行会使房间内其他成员获得您的位置及同行状态；房间邀请链接、口令或二维码的转发可能扩大加入范围。</strong>房主及成员可能保存截图或行程记录。退出房间停止后续位置共享，但不会自动撤销其他成员已经看到或保存的内容；服务端既有会话、位置快照和事件的清理规则见保存期限。</p>
+      <p>使用系统分享、导出或发送截图时，您选择的接收方可取得文件内容。请避免将住所、未成年人活动地点或他人的敏感信息分享到不可信的渠道。</p>
+    </section>
+    <section id="privacy-providers">
+      <h2>4. 第三方服务清单</h2>
+      <p>以下为当前代码所涉及的主要服务。地图来源会依据地区、语言、设备可用性和您的设置选择。第三方处理不得超出相应服务和授权范围；我们仍应依法承担对接入服务的管理责任。正式发布前须补齐各接收方主体、联系方式及实际版本的数据清单。</p>
+      <h3>高德地图、定位与搜索 SDK</h3>
+      <p>提供方：{高德服务主体全称及联系方式}。用于地图展示、定位、地点搜索和地址解析，可能处理位置、设备标识及设备信息、IP、网络 / Wi-Fi / 基站信息和服务诊断信息；具体字段须结合实际启用模块核对为 {高德实际收集字段清单}。在使用相关地图或定位功能时调用。<a href="https://lbs.amap.com/pages/privacy/">高德开放平台隐私政策</a>。</p>
+      <h3>Google Maps、Google Play services Location 与 Places</h3>
+      <p>提供方：Google，具体签约主体及联系方式为 {Google服务主体及联系方式}。用于 Google 地图、定位和地点查询，涉及定位或查询内容、设备与应用信息、IP、SDK 标识及诊断数据；各模块实际字段为 {Google各模块实际收集字段清单}。在相应服务可用且被选用时调用。<a href="https://policies.google.com/privacy">Google 隐私政策</a>；<a href="https://developers.google.com/maps/documentation/android-sdk/play-data-disclosure">Maps SDK 数据披露说明</a>。</p>
+      <h3>微信 OpenSDK 与微信登录服务</h3>
+      <p>提供方：腾讯，具体主体及联系方式为 {微信服务主体及联系方式}。在您选择微信登录且该功能已开放时用于授权登录，处理授权码、账号标识及获授权的资料，可能处理 SDK 必要的设备或应用信息。具体字段及政策为 {微信SDK实际收集字段清单}、{微信OpenSDK隐私政策链接}。App 可检查微信是否安装以判断能否发起微信登录，不等于读取全部已安装应用。</p>
+      <h3>Google ML Kit 条码识别</h3>
+      <p>提供方：Google，联系方式为 {ML Kit服务主体联系方式}。用于识别相机或所选图片中的同行二维码，处理待识别图像及识别结果；诊断和用量信息范围为 {ML Kit实际收集字段清单}。<a href="https://developers.google.com/ml-kit/terms">ML Kit 条款与隐私说明</a>。</p>
+      <h3>阿里云 OSS、托管设施与同行通信服务</h3>
+      <p>提供方分别为 {阿里云签约主体及联系方式}、{服务器托管服务商及联系方式}、{同行MQTT服务运营主体及联系方式}。用于保存用户主动上传的轨迹文件与图片、承载业务和同行消息传输，处理相关文件、账号或会话标识、IP、连接记录及同行位置 / 消息。部署区域、受托处理期限和合同安排为 {云及通信服务部署与委托信息}；相关政策链接为 {阿里云及托管通信服务隐私政策链接}。客户端使用开源通信库不等于将数据发送给该开源库作者。</p>
+      <p>短信发送服务商尚待确认；如正式接入，须在启用前补充 {短信服务商全称及联系方式}、{短信服务数据类型与用途} 和 {短信服务隐私政策链接}。</p>
+    </section>
+    <section id="privacy-transfer">
+      <h2>5. 委托、提供与公开</h2>
+      <p>委托云存储、托管或通信服务处理信息时，我们应约定处理目的、期限、数据范围与保护要求，并监督其履约。向独立第三方提供个人信息、公开个人信息或处理敏感个人信息时，应按法律要求履行告知并取得所需的单独同意。您选择的登录和分享操作不构成对其他无关处理的授权。</p>
+      <p>我们不以出售个人轨迹或位置数据作为本服务的用途。遇有依法履行义务、有效法律程序或紧急保护生命健康和财产安全等情形，仅在法定范围内处理。业务合并、转让或终止涉及信息转移时，应告知接收方及其联系方式，并依法安排后续处理。</p>
+    </section>
+    <section id="privacy-storage">
+      <h2>6. 保存期限与存储地点</h2>
+      <p>本地轨迹、设置、缓存及待上报事件保存在您的设备中；系统备份是否包含应用数据取决于设备和系统备份设置。卸载、清除应用数据、删除本地记录与删除云端数据是不同操作，卸载不会自动注销账号或清理服务端记录。</p>
+      <p>业务数据库位置：{业务数据库国家或地区}；轨迹与图片存储位置：{对象存储国家或地区}；日志和统计存储位置：{日志统计存储国家或地区}。Google 等第三方服务可能涉及境外处理，具体接收方、目的、数据类别、存储地点与权利行使方式为 {跨境处理详情}；如发生个人信息出境，应先依法履行相应程序并取得所需的单独同意。</p>
+      <ul>
+        <li>账号、资料及云端轨迹：保存至实现账号与轨迹服务目的所需的最短期限；具体期限和注销后的清理周期为 {账号及轨迹保存期限与清理周期}。</li>
+        <li>同行位置快照、成员和事件记录：{同行数据保存期限与清理周期}。</li>
+        <li>反馈、图片、投稿及审核记录：{反馈投稿保存期限与清理周期}。</li>
+        <li>统计事件、诊断及安全日志：{统计诊断日志保存期限与清理周期}；依法需要留存的记录按适用规定处理。</li>
+        <li>备份和缓存：{备份缓存保留及覆盖周期}；超过目的所需期限的信息应删除或匿名化，不能立即删除的应限制为必要存储和安全保护。</li>
+      </ul>
+      <p><strong>当前云端轨迹删除为软删除：列表隐藏不代表数据库记录、原始文件、截图和备份立即物理清除。</strong>完整清理的处理方式与期限为 {云端轨迹及关联资源清理流程}。您可通过本政策中的渠道提出删除请求。</p>
+    </section>
+    <section id="privacy-security">
+      <h2>7. 信息安全</h2>
+      <p>个人信息保护应覆盖传输、存储、账号权限、日志、备份和运维访问。当前正式环境采用的传输保护、存储保护、访问控制及审计措施为 {已核实的安全保护措施}，请以补齐后的正式说明为准。</p>
+      <p>发生或可能发生个人信息泄露、篡改、丢失时，我们将依法采取补救措施、向主管部门报告，并按要求告知受影响用户。告知内容包括相关信息类型、原因、可能影响、补救措施、您可采取的措施和联系方式。</p>
+    </section>
+    <section id="privacy-rights">
+      <h2>8. 您的权利</h2>
+      <ul>
+        <li><strong>查阅、更正和复制：</strong>通过个人资料、轨迹记录、同行记录等已开放页面查看或修改信息；更多副本或导出需求可向我们提出。</li>
+        <li><strong>删除：</strong>可删除自己的轨迹，并申请清理相关个人信息。请区分本地记录、云端软删除和关联资源清理；已向他人分享的副本需要另行联系接收方。</li>
+        <li><strong>撤回同意和限制处理：</strong>在系统设置关闭权限、停止录制、退出同行，或通过联系渠道撤回相应授权。撤回不影响此前合法处理的效力；依赖该数据的功能将相应停止。</li>
+        <li><strong>注销账号：</strong>当前未提供已核实可用的自助注销入口。申请渠道为 {账号注销申请渠道}；应完成合理的身份核验，并说明账号、轨迹、关系、同行和关联文件的清理范围。不能把退出登录当作注销。</li>
+        <li><strong>解释、异议和投诉：</strong>您可以要求解释处理规则，对推荐或其他自动化处理提出异议，并依法向有关部门投诉或寻求司法救济；符合适用条件的信息转移请求依法办理。</li>
+      </ul>
+      <p>请通过“关于我们 → 联系我们 / 意见反馈”（登录后可用）或 {隐私联系邮箱} 联系我们，未登录用户可使用正式公布的邮箱。我们仅核验办理请求所必需的信息，并在 <strong>15 个工作日内</strong>完成核查和处理或说明依法不能处理的理由；注销和删除的具体执行周期为 {注销删除执行周期}，不得以占位周期延长法定或已承诺时限。</p>
+    </section>
+    <section id="privacy-children">
+      <h2>9. 未成年人保护</h2>
+      <p>未成年人应在监护人指导下使用本服务，避免公开学校、住址和固定活动路线。面向不满十四周岁用户处理信息前，应取得监护人同意并提供专门的儿童信息处理规则，相关规则和核验流程为 {儿童个人信息规则与监护人同意流程}。未完成该流程前，不应开启面向儿童的信息处理服务。</p>
+      <p>监护人发现儿童信息被不当收集、共享或公开，可通过 {隐私联系邮箱} 申请核查、停止处理或删除。</p>
+    </section>
+    <section id="privacy-web">
+      <h2>10. 网页与本地存储</h2>
+      <p>App 使用本地数据库和偏好设置保存记录、登录状态及语言主题选择。本政策和服务协议页面本身不植入第三方广告或统计脚本，不设置用于广告追踪的 Cookie；加载页面时服务器仍可能记录 IP、请求时间及浏览器请求信息。打开外部服务网页时，其 Cookie 和存储规则由相应服务另行说明。</p>
+    </section>
+    <section id="privacy-updates">
+      <h2>11. 政策更新</h2>
+      <p>我们会标明版本、更新日期和生效日期，并通过 App 提示等适当方式告知重要变更。涉及基于同意处理的信息范围、目的或方式变化时，应重新取得同意；需要单独同意的事项仍须单独办理。仅更新网页或您继续使用 App，不视为同意新增的敏感信息处理或公开行为。</p>
+    </section>
+    <section id="privacy-contact">
+      <h2>12. 联系我们</h2>
+      <p>运营及个人信息处理主体：{运营主体全称或个人开发者姓名}<br>联系地址：{运营主体联系地址}<br>隐私及权利请求邮箱：{隐私联系邮箱}<br>其他联系渠道：{其他对外联系渠道}</p>
+      <p>登录后也可从“关于我们 → 联系我们 / 意见反馈”提交问题。请不要在反馈中发送密码、短信验证码或完整登录令牌。</p>
+      <p class="document-links"><a data-legal-link href="terms-of-service.html">阅读用户服务协议</a><a href="#privacy-collection">返回信息处理说明</a></p>
+    </section>
+    <p class="footer">时光轨迹 · 隐私政策草稿</p>
+  </main>
+  <main class="page" data-lang-panel="en">
+    <header>
+      <h1>Privacy Policy</h1>
+      <p class="lead">Time Trail explains how personal information is handled when you record tracks, discover routes and use companion sessions.</p>
+      <p class="metadata">Version: {政策版本号} · Updated: {更新日期} · Effective: {生效日期}</p>
+      <p class="note"><strong>Draft:</strong> fields in {xxxx} format need completion. This is not a published, effective policy. The final text must match the actual consent, sharing and deletion processes.</p>
+    </header>
+    <section>
+      <h2>Please read first</h2>
+      <p>This policy covers the Time Trail app and supporting services provided by {运营主体全称或个人开发者姓名} (“we”). Address: {运营主体联系地址}. Privacy email: {隐私联系邮箱}.</p>
+      <p><strong>Precise location and continuous movement tracks are sensitive personal information. They can reveal your home, workplace, routines and companion relationships.</strong> Reading this policy alone does not provide separate consent to sensitive information processing, disclosure or provision to another controller.</p>
+      <nav aria-label="Privacy policy contents"><ul>
+        <li><a href="#privacy-en-collection">1. Information we handle</a></li>
+        <li><a href="#privacy-en-permissions">2. Permissions and background operation</a></li>
+        <li><a href="#privacy-en-sharing">3. Track and companion visibility</a></li>
+        <li><a href="#privacy-en-providers">4. Third-party services</a></li>
+        <li><a href="#privacy-en-transfer">5. Processing, transfers and disclosure</a></li>
+        <li><a href="#privacy-en-storage">6. Storage and retention</a></li>
+        <li><a href="#privacy-en-security">7. Security</a></li>
+        <li><a href="#privacy-en-rights">8. Your rights</a></li>
+        <li><a href="#privacy-en-children">9. Children</a></li>
+        <li><a href="#privacy-en-web">10. Web pages and local storage</a></li>
+        <li><a href="#privacy-en-updates">11. Updates</a></li>
+        <li><a href="#privacy-en-contact">12. Contact</a></li>
+      </ul></nav>
+    </section>
+    <section id="privacy-en-collection">
+      <h2>1. Information we handle</h2>
+      <h3>1.1 Accounts and profiles</h3>
+      <p>Phone sign-in uses the number and verification code you enter and the verification result. Where WeChat sign-in is available, we process the authorization code, account identifiers and profile details you authorize. Optional profile details include a nickname and avatar. Authorization is subject to the relevant sign-in screen.</p>
+      <p>Account IDs, tokens, device identifiers such as Android ID, IP addresses, client version, platform and language support sign-in, request identification and account security. We do not require permission to read your SMS messages to fill in verification codes.</p>
+      <h3>1.2 Maps, location and recording</h3>
+      <p>Location features process coordinates, timestamps, accuracy, altitude, speed and heading. Map and location services may also process authorized network, Wi-Fi or cell information for positioning. Step counts and activity recognition support movement statistics and track quality checks.</p>
+      <p>These inputs produce routes, endpoints, cities or addresses, activity types, times, distance, duration, pace, ascent and estimated calories. Drift filtering, transport detection and gap compensation may adjust the track and may introduce errors.</p>
+      <p><strong>Actual location recording and live sharing require location data. Before enabling them, the purpose, necessity, method and impact of sensitive data processing must be explained and separate consent obtained where required. A system location permission does not replace that consent.</strong> Refusal affects the relevant feature, without preventing unrelated available features.</p>
+      <h3>1.3 Local records, cloud sync and submissions</h3>
+      <p>Track points and records are stored on your device. After a completed local save, the app currently attempts to create a server summary containing the title, activity type, city or starting address, start and end times and activity statistics. Network failures may leave local and cloud records out of sync.</p>
+      <p>When you use uploads, sync or route submissions, the server also handles the raw files, map screenshots, waypoints, descriptions and selected images you upload for the corresponding display, route discovery, review and achievement features. Ensure you have permission to import information about others.</p>
+      <h3>1.4 Companion sessions, relationships and discovery</h3>
+      <p>Companion sessions use room and account IDs, membership roles, joining and leaving times, online status, live locations, speed, heading, text messages and key events for communication, member display and session records. Following, follower, collection and route-use records support relationships and route services.</p>
+      <p>Recommendations may use selected cities, activity types, browsing, collection and usage behavior to select and rank routes. The control for non-personalized recommendations is {非个性化推荐入口}; a working choice must be provided before personalized services are formally offered.</p>
+      <h3>1.5 Feedback, diagnostics and usage analytics</h3>
+      <p>Feedback includes your text, optional contact details and selected images. Diagnostics may contain device, OS and app versions, network status, errors and related actions. Avoid uploading verification codes, tokens or unnecessary location details.</p>
+      <p>Our own analytics endpoint processes installation and session identifiers, signed-in user IDs where applicable, page views, clicks, recording and upload outcomes, city codes, and device and network information for feature analysis, recommendation evaluation and troubleshooting. <strong>Pseudonymized analytics can still be personal information.</strong> Event properties have redaction rules for phone numbers, tokens, verification codes, raw coordinates and track points. Recording and companion location data are handled separately as described above. Analytics consent and controls: {使用统计授权及关闭入口}.</p>
+    </section>
+    <section id="privacy-en-permissions">
+      <h2>2. Permissions and background operation</h2>
+      <div class="table-scroll" role="region" aria-label="Permissions table; scroll horizontally" tabindex="0"><table>
+        <thead><tr><th scope="col">Permission or capability</th><th scope="col">Purpose</th><th scope="col">If refused or disabled</th></tr></thead>
+        <tbody>
+          <tr><td>Precise / approximate location</td><td>Maps, recording, nearby routes and rooms, live sharing</td><td>Location features unavailable or less accurate</td></tr>
+          <tr><td>Location foreground service</td><td>Continue your active recording or companion service while backgrounded or locked</td><td>Ending the feature or stopping its service ends the corresponding continuous collection</td></tr>
+          <tr><td>Activity recognition</td><td>Steps and movement assistance</td><td>Step statistics and some assistance limited</td></tr>
+          <tr><td>Camera</td><td>Scan companion QR codes</td><td>Camera scanning unavailable; use other available join methods</td></tr>
+          <tr><td>System photo / file picker</td><td>Avatars, feedback, submissions, QR images, track import and export</td><td>Related file operations unavailable; only selected or authorized content accessed</td></tr>
+          <tr><td>Notifications</td><td>Recording, companion and download status</td><td>Some status messages hidden; service behavior follows system rules</td></tr>
+          <tr><td>Network / Wi-Fi state</td><td>Connectivity, sync, positioning assistance and reconnecting</td><td>Cloud features limited without a network</td></tr>
+          <tr><td>Wake lock / battery settings</td><td>Reduce background recording and sharing interruptions</td><td>Updates or recordings may be interrupted</td></tr>
+          <tr><td>Install application packages</td><td>Updates you choose to download and install</td><td>In-app update installation unavailable</td></tr>
+        </tbody>
+      </table></div>
+      <p><strong>Background continuation refers to a recording or companion location foreground service you started; it is not permanent device tracking.</strong> The current Android main manifest does not request ACCESS_BACKGROUND_LOCATION. Manage permissions in system app settings. Recording and companion sharing are independent: end both active features to stop all continuous location collection.</p>
+    </section>
+    <section id="privacy-en-sharing">
+      <h2>3. Track and companion visibility</h2>
+      <p><strong>Local and cloud records have different visibility. Ordinary cloud tracks are currently created in a state eligible for browsing, search or recommendation to other signed-in users. Requiring sign-in does not make a track private.</strong> Automatic summary creation, later raw file upload and disclosure must be clearly explained in their respective flows with legally required consent. Publication confirmation and privacy controls: {轨迹公开确认及隐私控制入口}.</p>
+      <p>Public information may include nicknames, avatars, achievements, following and follower relationships and public tracks. Phone numbers and tokens are not public profile content. Reviewers may inspect route submissions; approved submissions may appear in recommendations or route displays. Withdrawing a submission does not delete the underlying track.</p>
+      <p><strong>Companion room members can receive your location and session status. Forwarding invitations, codes or QR images may expand access.</strong> Hosts and members may retain screenshots or records. Leaving stops future sharing, but does not retract information already seen or saved. Retention of server session records, snapshots and events is addressed below.</p>
+      <p>Recipients you choose through system sharing or export receive the selected files. Avoid exposing homes, children's activity locations or other people's sensitive information.</p>
+    </section>
+    <section id="privacy-en-providers">
+      <h2>4. Third-party services</h2>
+      <p>These are the main services reflected in the current code. Map selection depends on region, language, device availability and your settings. Processing must remain within the relevant service and authorization. We retain our legal responsibilities for integrated providers. Complete the legal entities, contacts and version-specific inventories before publication.</p>
+      <h3>AMap map, location and search SDKs</h3>
+      <p>Provider and contact: {高德服务主体全称及联系方式}. Maps, positioning, place search and address lookup may involve location, device identifiers and information, IP, network / Wi-Fi / cell information and diagnostics. Verify enabled-module fields: {高德实际收集字段清单}. Called for relevant map or location features. <a href="https://lbs.amap.com/pages/privacy/">AMap privacy policy</a>.</p>
+      <h3>Google Maps, Google Play services Location and Places</h3>
+      <p>Google entity and contact: {Google服务主体及联系方式}. These provide Google maps, positioning and place queries, involving locations or queries, device and app information, IP, SDK identifiers and diagnostics. Module-specific inventory: {Google各模块实际收集字段清单}. Used when the relevant provider is available and selected. <a href="https://policies.google.com/privacy">Google Privacy Policy</a>; <a href="https://developers.google.com/maps/documentation/android-sdk/play-data-disclosure">Maps SDK data disclosure</a>.</p>
+      <h3>WeChat OpenSDK and sign-in</h3>
+      <p>Tencent entity and contact: {微信服务主体及联系方式}. Where enabled and chosen, WeChat authorization uses authorization codes, account identifiers, authorized profile data and potentially required SDK device or app information. Inventory: {微信SDK实际收集字段清单}. Policy: {微信OpenSDK隐私政策链接}. Checking whether WeChat is installed to support sign-in is not a scan of all installed apps.</p>
+      <h3>Google ML Kit barcode scanning</h3>
+      <p>Google entity and contact: {ML Kit服务主体联系方式}. Scanning companion QR codes processes camera or selected image inputs and recognition results. Diagnostic and usage fields: {ML Kit实际收集字段清单}. <a href="https://developers.google.com/ml-kit/terms">ML Kit terms and privacy information</a>.</p>
+      <h3>Alibaba Cloud OSS, hosting and companion communication</h3>
+      <p>Providers and contacts: {阿里云签约主体及联系方式}, {服务器托管服务商及联系方式}, {同行MQTT服务运营主体及联系方式}. These store uploaded tracks and images, host business services and transmit companion messages. Data includes the relevant files, account or session identifiers, IP, connection records and companion locations or messages. Deployment and processing arrangements: {云及通信服务部署与委托信息}. Policies: {阿里云及托管通信服务隐私政策链接}. Using an open-source communication library does not by itself send your information to its author.</p>
+      <p>The SMS delivery provider remains unconfirmed. Before enabling delivery, complete {短信服务商全称及联系方式}, {短信服务数据类型与用途} and {短信服务隐私政策链接}.</p>
+    </section>
+    <section id="privacy-en-transfer">
+      <h2>5. Processing, transfers and disclosure</h2>
+      <p>Cloud, hosting and communication processors must be subject to appropriate instructions, retention and security obligations and oversight. Provision to independent controllers, public disclosure and sensitive information processing require the notices and separate consents required by law. Sign-in or sharing does not authorize unrelated processing.</p>
+      <p>Selling personal tracks or location data is not a purpose of this service. Legal duties, valid legal procedures and emergency protection of life, health or property are handled only within applicable legal limits. A merger, transfer or closure involving personal information requires appropriate notice of the recipient and arrangements for subsequent handling.</p>
+    </section>
+    <section id="privacy-en-storage">
+      <h2>6. Storage and retention</h2>
+      <p>Local tracks, settings, caches and pending events reside on your device. System backup inclusion depends on device and backup settings. Uninstalling, clearing app data, deleting local records and deleting cloud information are different actions. Uninstalling does not close your account or erase server records.</p>
+      <p>Database country or region: {业务数据库国家或地区}. File storage: {对象存储国家或地区}. Logs and analytics: {日志统计存储国家或地区}. Google and other services may involve processing outside mainland China. Recipient, purpose, categories, storage and rights details: {跨境处理详情}. Required cross-border procedures and separate consent must be completed before applicable transfers.</p>
+      <ul>
+        <li>Accounts, profiles and cloud tracks: the shortest period needed for their purpose; schedule and post-closure cleanup: {账号及轨迹保存期限与清理周期}.</li>
+        <li>Companion snapshots, membership and events: {同行数据保存期限与清理周期}.</li>
+        <li>Feedback, images, submissions and reviews: {反馈投稿保存期限与清理周期}.</li>
+        <li>Analytics, diagnostics and security logs: {统计诊断日志保存期限与清理周期}, subject to applicable mandatory retention.</li>
+        <li>Backups and caches: {备份缓存保留及覆盖周期}. Information no longer needed must be erased or anonymized; where immediate deletion is not possible, handling must be restricted to necessary storage and security.</li>
+      </ul>
+      <p><strong>Cloud track deletion currently uses soft deletion. Hiding a track from lists does not immediately erase database records, raw files, screenshots or backups.</strong> Full cleanup process and timing: {云端轨迹及关联资源清理流程}. You may request deletion through the contact channels below.</p>
+    </section>
+    <section id="privacy-en-security">
+      <h2>7. Security</h2>
+      <p>Protection should cover transmission, storage, access, logs, backups and operations. Verified production safeguards: {已核实的安全保护措施}. Refer to the completed final disclosure for the actual measures.</p>
+      <p>For actual or suspected loss, alteration or disclosure, we will take remedial action, report and notify as required by law, including the affected information, cause, possible impact, response, steps you may take and contact details.</p>
+    </section>
+    <section id="privacy-en-rights">
+      <h2>8. Your rights</h2>
+      <ul>
+        <li><strong>Access, correction and copies:</strong> use available profile, track and companion history screens, or request further copies and exports.</li>
+        <li><strong>Deletion:</strong> delete your tracks and request personal information cleanup. Distinguish local records, cloud soft deletion and associated files. Contact recipients separately about copies you shared.</li>
+        <li><strong>Withdrawal and restriction:</strong> revoke system permissions, stop recording, leave companion sessions or contact us to withdraw authorization. This does not invalidate prior lawful processing; dependent features will stop accordingly.</li>
+        <li><strong>Account closure:</strong> no verified working self-service closure entry is currently available. Request channel: {账号注销申请渠道}. Reasonable identity verification and the scope of account, track, relationship, companion and file cleanup must be explained. Signing out is not account closure.</li>
+        <li><strong>Explanation, objection and complaints:</strong> request explanations, object to recommendations or other automated processing and seek applicable regulatory or judicial remedies. Eligible portability requests will be handled under applicable law.</li>
+      </ul>
+      <p>Contact us through About → Contact / Feedback when signed in, or {隐私联系邮箱}. Signed-out users can use the published email. We will verify only what is needed and investigate and handle requests within <strong>15 working days</strong>, or explain any lawful refusal. Execution schedule: {注销删除执行周期}; this field cannot extend legal or promised deadlines.</p>
+    </section>
+    <section id="privacy-en-children">
+      <h2>9. Children</h2>
+      <p>Minors should use the service with guardian guidance and avoid exposing schools, homes and routines. Processing information of children under fourteen requires guardian consent and dedicated rules. Rules and verification: {儿童个人信息规则与监护人同意流程}. Such processing should not be enabled before that process is available.</p>
+      <p>Guardians can contact {隐私联系邮箱} to request investigation, restriction or deletion of improperly handled children's information.</p>
+    </section>
+    <section id="privacy-en-web">
+      <h2>10. Web pages and local storage</h2>
+      <p>Local databases and preferences store records, sign-in state, language and theme choices. These policy and agreement pages embed no third-party advertising or analytics scripts and set no advertising tracking cookies. The server may still log IP, request time and browser request information. External pages have their own cookie and storage rules.</p>
+    </section>
+    <section id="privacy-en-updates">
+      <h2>11. Updates</h2>
+      <p>We will identify versions and dates and notify you of important changes appropriately. Changes to consent-based purposes, methods or information categories require renewed consent; separate-consent matters still require separate action. Updating a page or continued app use does not consent to new sensitive processing or disclosure.</p>
+    </section>
+    <section id="privacy-en-contact">
+      <h2>12. Contact</h2>
+      <p>Operator and controller: {运营主体全称或个人开发者姓名}<br>Address: {运营主体联系地址}<br>Privacy and rights email: {隐私联系邮箱}<br>Other channels: {其他对外联系渠道}</p>
+      <p>Signed-in users may also submit feedback from About → Contact / Feedback. Do not send passwords, verification codes or full sign-in tokens.</p>
+      <p class="document-links"><a data-legal-link href="terms-of-service.html">Read the Terms of Service</a><a href="#privacy-en-collection">Back to information handling</a></p>
+    </section>
+    <p class="footer">Time Trail · Draft Privacy Policy</p>
+  </main>
+</body>
+</html>

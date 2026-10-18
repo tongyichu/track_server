@@ -1,4 +1,42 @@
-# 工作交接：存量标题回填与本机 Go 环境
+# 工作交接：协议 H5 页面（2026-10-13）
+
+用户要求为 android-track 关于我们页的隐私政策、用户服务协议提供 track_server HTML 页面，沿用成长等级规则页风格、支持日间和暗夜；用户明确“不清楚的地方就先用 {xxxx} 这种占位”。
+
+已完成：
+
+- 增加公开的 `/api/v1/legal/privacy-policy.html`、`/api/v1/legal/terms-of-service.html`，通过 `legal_handler.go` 与 `go:embed` 返回自包含 HTML。
+- 中文 / 英文正文、章节目录、协议互链；`lang=english` 切英文，`is_dark=true/false` 指定主题，省略时跟随系统。互链保留参数。
+- 内容按当前轨迹录制、云端摘要、公开轨迹、同行、第三方地图 / 登录 / 条码 / 存储和自建统计整理；运营主体等未知事实保留占位，页面明确为草稿。真实授权、注销、清理、安全及跨境流程的待落实项见 `docs/api/legal.md`，页面不代表这些功能已经实现或合规认证。
+- android-track 的 `AboutActivity.kt` 两个按钮接入现有 WebView，复用 API 主机和实际 App 主题。未修改 Android AGENTS 文件。
+- 服务端 AGENTS 只为本次新路由补充地址及 H5 维护说明。用户询问“你咋把 agents 里的内容删了”：已解释整行替换在 diff 中表现为删除/新增；撤回了顺手扩充的其他接口说明，原有规则内容保留。
+
+已验证：
+
+- `GOCACHE=/private/tmp/track-legal-go-cache go test ./...` 全量通过；新增公开路由测试覆盖无认证 HTML 返回及查询参数。
+- `GOCACHE=/private/tmp/track-legal-go-cache go build ./...` 通过。首次受限构建有缓存写入警告，授权后重跑无错误。
+- `GRADLE_USER_HOME=$PWD/.gradle-home ./gradlew :app:assembleDebug --console=plain` 通过；安装至小米 `3e7cd913` 成功，启动后前台为 `MainActivity`。
+- 隔离 Chrome 验证两页 × 两种语言 × 两种主题 × 320/390/1024 宽度共 24 组：无横向溢出、缺失锚点或外部资源请求，互链保留语言 / 主题，系统主题实时切换通过。人工查看手机宽度日间 / 夜间截图。临时证据在 `/private/tmp/track-legal-qa/`。
+- 两个仓库 `git diff --check` 通过。
+- `verify_agents.py` 已运行，仍报告既有 AGENTS 超长、缺少优先级声明及八个既有 Go 文件超长问题；全局 `~/.codex/AGENTS.md` 为空，入口规则未落盘。未扩大本次修复范围；推荐修复命令为 `python /Users/foxcoder/.codex/skills/agents-md-generator/scripts/manage_docs.py sync-global-codex-agents . --write`。
+
+未提交或推送，未部署服务端。因此安装包已指向新地址，但线上服务器需更新后才能展示这些页面；未声称已完成真机到线上新页面的端到端验证。
+
+## 2026-10-14：阿里云镜像构建与推送尝试
+
+用户明确要求执行 `docker buildx build --platform linux/amd64 -t crpi-p78v4agazv8zn80d.cn-beijing.personal.cr.aliyuncs.com/track_server/track_server_go:latest -f deploy/Dockerfile . --push`。Linux amd64 镜像构建成功；首次推送返回 `insufficient_scope: authorization failed`，用户重新登录后已完成推送，过程如下。未重启线上服务。
+
+- 本地镜像索引摘要：`sha256:3851c8778a92511d6ebc21117c32c51d0abb88f20d4450278ca2003c9114a6a7`；本地 latest 标签已指向该镜像。
+- 使用该镜像启动无外网、内存仓储、禁用定时任务和统计的临时容器。`/api/v1/ping` 正常；两个协议 URL 均返回 HTTP 200、`text/html; charset=utf-8`，HTML SHA-256 与本地源码完全一致。
+- 临时容器 `track-legal-image-check-20261014` 已停止并自动移除。
+- 用户在本机重新登录并回复“已登陆”后，普通 `docker push` 上传镜像层成功，但 registry 拒绝附加证明清单：`unknown manifest class for application/vnd.oci.empty.v1+json`。
+- 随后执行 `docker push --platform linux/amd64 crpi-p78v4agazv8zn80d.cn-beijing.personal.cr.aliyuncs.com/track_server/track_server_go:latest` 成功，将此前已验证的同一平台镜像推至远端，未包含镜像索引中的附加证明。
+- 远端 latest 摘要：`sha256:96533346bb70446572c5c3b2994a7e9ff9b5e56384cd9da94659df88554dc987`。`docker buildx imagetools inspect` 独立读取确认摘要一致，远端配置确认 `os=linux`、`architecture=amd64`。该摘要是单平台 manifest；与本地多平台格式索引摘要不同属预期。
+- 本次仅上传镜像，服务器仍需另行拉取并重建容器，线上更新尚未执行。
+- 本轮没有修改 AGENTS.md 或业务源码。页面仍保留草稿提示及占位信息。
+
+---
+
+# 历史工作交接：存量标题回填与本机 Go 环境
 
 日期：2026-10-09。
 

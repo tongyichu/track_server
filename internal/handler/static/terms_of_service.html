@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="zh-CN" data-lang="zh" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>用户服务协议</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f8fa;
+      --panel: #ffffff;
+      --text: #1f2933;
+      --muted: #667085;
+      --line: #e5e7eb;
+      --soft: #e8f0ff;
+      --soft-line: #c7d8ff;
+      --subtle: #f9fafb;
+      --accent: #1d4ed8;
+      --good: #0f8a5f;
+      --radius: 8px;
+    }
+
+    html[data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #0f172a;
+      --panel: #111827;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --line: #263244;
+      --soft: #172554;
+      --soft-line: #1d4ed8;
+      --subtle: #1f2937;
+      --accent: #93c5fd;
+      --good: #6ee7b7;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Arial, sans-serif;
+      font-size: 15px;
+      line-height: 1.65;
+    }
+
+    .page {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 20px 16px 32px;
+    }
+
+    [data-lang-panel] { display: none; }
+    html[data-lang="zh"] [data-lang-panel="zh"] { display: block; }
+    html[data-lang="en"] [data-lang-panel="en"] { display: block; }
+
+    header { padding: 8px 0 14px; }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 25px;
+      line-height: 1.25;
+      font-weight: 750;
+      letter-spacing: 0;
+    }
+
+    .lead {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin: 12px 0;
+    }
+
+    h2 {
+      margin: 0 0 10px;
+      font-size: 17px;
+      line-height: 1.35;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      margin: 14px 0 8px;
+      font-size: 15px;
+      line-height: 1.35;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+
+    p { margin: 8px 0; }
+    ul { margin: 8px 0; padding-left: 22px; }
+    li { margin: 4px 0; }
+
+    .note {
+      background: var(--soft);
+      border: 1px solid var(--soft-line);
+      color: var(--accent);
+      border-radius: var(--radius);
+      padding: 10px 12px;
+      margin: 10px 0 0;
+      font-size: 14px;
+    }
+
+    .formula {
+      background: var(--subtle);
+      border: 1px dashed var(--line);
+      border-radius: var(--radius);
+      padding: 10px 12px;
+      overflow-wrap: anywhere;
+      font-weight: 650;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+      font-size: 13px;
+    }
+
+    th, td {
+      border-bottom: 1px solid var(--line);
+      padding: 9px 8px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      color: var(--text);
+      background: var(--subtle);
+      font-weight: 700;
+    }
+
+    tr:last-child td { border-bottom: 0; }
+
+    .positive {
+      color: var(--good);
+      font-weight: 650;
+    }
+
+    .footer {
+      color: var(--muted);
+      font-size: 12px;
+      text-align: center;
+      padding: 10px 0 0;
+    }
+
+    html { scroll-padding-top: 16px; }
+    body { overflow-wrap: anywhere; }
+    a { color: var(--accent); text-underline-offset: 3px; }
+    a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+    nav ul { margin-bottom: 0; }
+    .metadata { color: var(--muted); font-size: 13px; }
+    .table-scroll { overflow-x: auto; }
+    .table-scroll table { min-width: 480px; }
+    .placeholder { font-weight: 650; }
+    .document-links { display: flex; gap: 16px; flex-wrap: wrap; }
+    @media (max-width: 360px) {
+      .page { padding-left: 12px; padding-right: 12px; }
+      section { padding: 14px; }
+    }
+  </style>
+  <script>
+    (function () {
+      var params = new URLSearchParams(window.location.search);
+      var isEnglish = params.get("lang") === "english";
+      var darkSetting = params.get("is_dark");
+      var systemDark = window.matchMedia("(prefers-color-scheme: dark)");
+      function applyTheme() {
+        var isDark = darkSetting === "true" || (darkSetting !== "false" && systemDark.matches);
+        document.documentElement.dataset.theme = isDark ? "dark" : "light";
+      }
+      document.documentElement.dataset.lang = isEnglish ? "en" : "zh";
+      document.documentElement.lang = isEnglish ? "en" : "zh-CN";
+      document.title = isEnglish ? "Terms of Service" : "用户服务协议";
+      applyTheme();
+      if (systemDark.addEventListener) systemDark.addEventListener("change", applyTheme);
+      document.addEventListener("DOMContentLoaded", function () {
+        document.querySelectorAll("a[data-legal-link]").forEach(function (link) {
+          var url = new URL(link.getAttribute("href"), window.location.href);
+          if (isEnglish) url.searchParams.set("lang", "english");
+          if (darkSetting === "true" || darkSetting === "false") url.searchParams.set("is_dark", darkSetting);
+          link.href = url.toString();
+        });
+      });
+    })();
+  </script>
+</head>
+<body>
+  <main class="page" data-lang-panel="zh">
+    <header>
+      <h1>用户服务协议</h1>
+      <p class="lead">欢迎使用时光轨迹（Time Trail）。本协议约定轨迹记录、路线发现、同行及相关服务的使用规则。</p>
+      <p class="metadata">版本：{协议版本号} · 更新日期：{更新日期} · 生效日期：{生效日期}</p>
+      <p class="note"><strong>草稿提示：</strong>本页含有 {xxxx} 形式的待补充信息，尚未作为正式生效文本发布。正式启用前须补齐主体、联系方式及业务规则，并完成相应的告知和确认流程。</p>
+    </header>
+    <section>
+      <h2>重要提示</h2>
+      <p>本协议由您与 {运营主体全称或个人开发者姓名}（以下简称“我们”）订立。联系地址：{运营主体联系地址}；联系邮箱：{服务联系邮箱}。请重点阅读涉及轨迹公开、同行共享、安全风险、责任和争议解决的条款，我们应就与您有重大利害关系的格式条款提供显著提示并按要求说明。</p>
+      <p><strong>轨迹、地图、导航提示、风险提醒和同行位置仅提供辅助参考，不能替代现场判断、专业指导或紧急救援。</strong>服务协议的接受不替代隐私政策中需要单独取得的个人信息处理同意。</p>
+      <nav aria-label="服务协议目录"><ul>
+        <li><a href="#terms-scope">1. 协议范围与确认</a></li>
+        <li><a href="#terms-account">2. 账号与使用资格</a></li>
+        <li><a href="#terms-services">3. 服务内容</a></li>
+        <li><a href="#terms-tracks">4. 轨迹保存、上传与投稿</a></li>
+        <li><a href="#terms-companions">5. 同行服务</a></li>
+        <li><a href="#terms-safety">6. 户外与出行安全</a></li>
+        <li><a href="#terms-conduct">7. 使用与内容规范</a></li>
+        <li><a href="#terms-ip">8. 知识产权与内容授权</a></li>
+        <li><a href="#terms-data">9. 隐私与数据管理</a></li>
+        <li><a href="#terms-changes">10. 服务变更与终止</a></li>
+        <li><a href="#terms-liability">11. 责任与争议解决</a></li>
+        <li><a href="#terms-contact">12. 联系与通知</a></li>
+      </ul></nav>
+    </section>
+    <section id="terms-scope">
+      <h2>1. 协议范围与确认</h2>
+      <p>本协议适用于 App 及其配套的账号、云端轨迹、地图路线、同行和成就等服务。依法公示并经所需确认的专项规则可补充约定具体功能；不得借专项规则不合理减轻我们的责任或限制您的合法权利。</p>
+      <p>我们应在您注册或使用相关服务前提供本协议，并通过清楚的确认操作建立协议关系，具体确认入口为 {协议确认入口}。您可以查阅和保存协议，并要求解释重要条款。未同意需要订立协议的服务条款时，可不启用对应服务。</p>
+      <p>本协议按面向中国大陆用户的服务拟定。第三方地图、登录或您主动打开的外部服务，另有其适用条款；我们对自身提供的服务及依法应承担的责任仍负责。</p>
+    </section>
+    <section id="terms-account">
+      <h2>2. 账号与使用资格</h2>
+      <p>请使用您合法持有的手机号或获得授权的第三方账号登录，并提供真实、合法且必要的资料。您应妥善保管设备、验证码和登录凭证，发现账号被盗或异常时及时联系我们；我们将按实际情况协助核查。</p>
+      <p>不得冒用他人身份、买卖或出租账号，不得利用多个账号绕过限制、伪造轨迹或刷取成就。账号异常造成的责任按各方过错及法律规定判断，不因发生在您的账号下就当然由您承担全部责任。</p>
+      <p>未成年人应在监护人指导下使用。涉及不满十四周岁用户的信息处理，应先完成监护人同意及儿童专门规则流程。服务年龄要求及儿童服务安排为 {服务年龄要求与儿童服务安排}。</p>
+    </section>
+    <section id="terms-services">
+      <h2>3. 服务内容</h2>
+      <p>时光轨迹用于徒步、跑步、爬山、骑行、自驾等活动的轨迹记录、地图展示、文件导入导出、云端同步、路线搜索与推荐、收藏、关注、同行共享、投稿及成长成就。具体以当前版本实际开放的功能为准。</p>
+      <p>距离、配速、海拔、爬升和卡路里等为设备采集或算法估算，受定位精度、网络、地形、系统权限及电量管理影响。路线补偿、定位过滤和导入文件也可能造成差异，请勿将数据视为测绘、医疗或其他专业结论。</p>
+      <p>成长等级、XP 和勋章按等级规则计算，可能因有效轨迹变化、删除或异常数据处理而调整；不构成可交易资产、收益或兑换承诺。当前本协议不设定付费或自动续费服务；如未来推出，应另行明示价格、期限、续费、取消与退款规则，并履行所需确认。</p>
+    </section>
+    <section id="terms-tracks">
+      <h2>4. 轨迹保存、上传与投稿</h2>
+      <p>本地保存与云端成功上传是两个结果。完成本地保存后，App 当前会尝试创建云端轨迹摘要；网络或服务故障可能导致同步失败。请检查上传状态，并为重要记录保留合理备份。</p>
+      <p><strong>当前普通云端轨迹可被其他登录用户浏览、搜索或推荐；不应将普通上传视为仅自己保存。</strong>原始轨迹、起终点、时间、截图和打点内容可能暴露行踪。相关公开应在明确告知并依法取得所需的单独同意后进行；公开确认及隐私设置入口为 {轨迹公开确认及隐私控制入口}。</p>
+      <p>请仅上传您有权提供的文件、照片、文字和地点信息，并尊重同行者及画面中其他人的隐私。路线投稿可能经审核后进入推荐或路线展示；审核通过不代表对路线实时安全、合法通行或内容准确性的担保。</p>
+      <p>撤回投稿会取消相应投稿资格，不自动删除原轨迹。删除云端轨迹当前为软删除，完整数据及文件清理按隐私政策和实际删除流程办理。其他用户已经合法取得的副本不一定能被远程撤回。</p>
+    </section>
+    <section id="terms-companions">
+      <h2>5. 同行服务</h2>
+      <p>创建或加入同行后，房间成员可获知您的身份资料、在线状态、位置及会话相关消息。请仅向可信的人提供邀请链接、口令或二维码，并确认参与者知晓共享范围。不得利用同行跟踪、骚扰或监视未同意参与的人。</p>
+      <p>房主可依功能管理成员或结束会话。位置、弹幕和状态更新可能因信号、锁屏、后台限制、权限或服务故障而延迟、中断或不完整，离线成员显示的位置可能已过期。</p>
+      <p><strong>退出同行停止后续位置共享，不自动停止独立的轨迹录制，也不清除他人已保存的信息。同行功能不保证成员持续在线，不构成安全看护或紧急救援服务。</strong>请事先约定集合地点和备用联系方式，出现险情及时联系当地救援。</p>
+    </section>
+    <section id="terms-safety">
+      <h2>6. 户外与出行安全</h2>
+      <p>活动前请结合天气、路况、开放状态、体能、装备和当地规定判断路线。历史轨迹、用户投稿或地图显示可通行，不代表现场仍然可达或允许进入。请勿擅入封闭、危险、军事或其他限制区域。</p>
+      <p>驾驶、骑行和行走时请专注环境，操作设备前应确保安全，遵守交通规则。山地、水域、极端天气和无信号地区应采取必要的专业安全措施。卡路里、运动强度及风险提醒不能替代医疗建议或专业风险评估。</p>
+      <p>这些提示用于说明服务的适用边界，不免除我们依法应承担的产品、服务及信息安全责任。</p>
+    </section>
+    <section id="terms-conduct">
+      <h2>7. 使用与内容规范</h2>
+      <ul>
+        <li>遵守法律法规，不发布违法、侵权、侮辱、骚扰、欺诈、恶意广告或泄露他人隐私的内容。</li>
+        <li>不伪造位置、运动成果、路线资料、关注或收藏行为以误导其他用户或干扰服务。</li>
+        <li>不非法抓取、批量导出他人轨迹、破解接口、窃取凭证或干扰服务器、地图及同行通信。</li>
+        <li>不在缺乏合法依据或授权时录制、公开或传播他人的位置、肖像、联系方式和同行记录。</li>
+      </ul>
+      <p>对违反规则的行为，我们可按事实、影响及必要程度采取提醒、限制相关操作、内容下架或账号处置，并依法履行通知义务、提供申诉渠道：{账号及内容申诉渠道}。存在争议时，您可提交必要证据申请复核。</p>
+    </section>
+    <section id="terms-ip">
+      <h2>8. 知识产权与内容授权</h2>
+      <p>App 软件、界面及我们依法享有权利的内容受法律保护；地图、开源组件和第三方资料的权利归其各自权利人。使用 Google Maps / Places 时，也需遵守 <a href="https://policies.google.com/terms">Google 服务条款</a>及相应地图服务适用规则。</p>
+      <p>您对原创轨迹说明、图片和其他内容享有的权利不因上传而转移。为完成您选择的存储、传输、展示、分享、投稿审核及路线推荐服务，您授予我们在实现这些目的所必需范围内的非独占使用许可；许可不包括无关商业宣传、出售您的轨迹或无限制对外转授权。</p>
+      <p>许可期限与相应服务及合法留存需求相联系；删除、撤回或注销后的处理按相应规则办理。知识产权许可不替代涉及个人信息处理所需的告知和同意。您可通过 {侵权投诉邮箱} 提交权属证明及具体侵权线索。</p>
+    </section>
+    <section id="terms-data">
+      <h2>9. 隐私与数据管理</h2>
+      <p>个人信息处理见 <a data-legal-link href="privacy-policy.html">隐私政策</a>。我们应就敏感位置、公开共享、第三方接收及跨境等事项履行依法所需的告知和授权程序，不以您接受本协议代替单独同意。</p>
+      <p>您可依法申请查阅、更正、复制、删除信息、撤回同意或注销账号。当前注销申请入口为 {账号注销申请渠道}，需核验身份及说明数据清理范围；退出登录、卸载 App 与注销账号互不等同。</p>
+    </section>
+    <section id="terms-changes">
+      <h2>10. 服务变更与终止</h2>
+      <p>升级、维护、第三方能力变化或不可抗力可能影响服务。对可预见且影响重要功能的调整，我们将作适当通知并合理安排用户数据处理；不以本条取得随意终止服务或删除用户记录的权利。</p>
+      <p>协议重要变更将标明生效日期并显著提示；需要您确认的内容应另行确认。您可停止使用相应服务并依法办理信息导出或注销。服务整体停止时，应按适用要求通知并提供合理的数据处理安排。</p>
+    </section>
+    <section id="terms-liability">
+      <h2>11. 责任与争议解决</h2>
+      <p>各方应依法律规定和各自过错承担责任。因您违法使用或侵害他人权利造成损失的，依法承担相应责任；因我们的违约、过错或违反法定义务造成损失的，我们依法承担责任。</p>
+      <p><strong>本协议不排除或限制因我们造成的人身损害，以及因故意或重大过失造成财产损失的责任，也不限制消费者依法享有的权利。</strong>不可抗力及第三方故障的影响，应结合实际因果关系和法定条件判断，并履行必要的通知、减损和协助义务。</p>
+      <p>本协议的订立、履行和争议解决适用中华人民共和国大陆地区法律，但法律另有强制性规定的，从其规定。发生争议可先协商；协商不成，任何一方均可向依法有管辖权的人民法院提起诉讼。不得以本协议剥夺您依法享有的管辖和救济权利。</p>
+    </section>
+    <section id="terms-contact">
+      <h2>12. 联系与通知</h2>
+      <p>运营主体：{运营主体全称或个人开发者姓名}<br>联系地址：{运营主体联系地址}<br>服务邮箱：{服务联系邮箱}<br>隐私邮箱：{隐私联系邮箱}<br>投诉与申诉渠道：{账号及内容申诉渠道}</p>
+      <p>登录后可通过“关于我们 → 联系我们 / 意见反馈”提交问题；未登录用户可使用正式公布的邮箱。重要服务通知可通过 App 内提示或您提供的有效联系方式送达。个人信息权利请求按隐私政策的处理时限办理。</p>
+      <p class="document-links"><a data-legal-link href="privacy-policy.html">阅读隐私政策</a><a href="#terms-scope">返回协议范围</a></p>
+    </section>
+    <p class="footer">时光轨迹 · 用户服务协议草稿</p>
+  </main>
+  <main class="page" data-lang-panel="en">
+    <header>
+      <h1>Terms of Service</h1>
+      <p class="lead">Welcome to Time Trail. These terms cover track recording, route discovery, companion sessions and related services.</p>
+      <p class="metadata">Version: {协议版本号} · Updated: {更新日期} · Effective: {生效日期}</p>
+      <p class="note"><strong>Draft:</strong> fields in {xxxx} format need completion. This is not a published, effective agreement. Complete the operator, contacts, business rules and required notice and confirmation flows before activation.</p>
+    </header>
+    <section>
+      <h2>Important information</h2>
+      <p>These terms are between you and {运营主体全称或个人开发者姓名} (“we”). Address: {运营主体联系地址}. Service email: {服务联系邮箱}. Pay particular attention to track disclosure, companion sharing, safety, liability and disputes. Material standard terms must be prominently presented and explained where required.</p>
+      <p><strong>Tracks, maps, navigation, risk alerts and companion locations are references and cannot replace on-site judgment, professional guidance or emergency rescue.</strong> Accepting these terms does not replace separate consent required for personal information handling.</p>
+      <nav aria-label="Terms of service contents"><ul>
+        <li><a href="#terms-en-scope">1. Scope and acceptance</a></li>
+        <li><a href="#terms-en-account">2. Accounts and eligibility</a></li>
+        <li><a href="#terms-en-services">3. Services</a></li>
+        <li><a href="#terms-en-tracks">4. Records, uploads and submissions</a></li>
+        <li><a href="#terms-en-companions">5. Companion sessions</a></li>
+        <li><a href="#terms-en-safety">6. Outdoor and travel safety</a></li>
+        <li><a href="#terms-en-conduct">7. Conduct and content</a></li>
+        <li><a href="#terms-en-ip">8. Intellectual property and licenses</a></li>
+        <li><a href="#terms-en-data">9. Privacy and data management</a></li>
+        <li><a href="#terms-en-changes">10. Changes and termination</a></li>
+        <li><a href="#terms-en-liability">11. Liability and disputes</a></li>
+        <li><a href="#terms-en-contact">12. Contact and notices</a></li>
+      </ul></nav>
+    </section>
+    <section id="terms-en-scope">
+      <h2>1. Scope and acceptance</h2>
+      <p>These terms apply to the app and supporting account, cloud track, map, route, companion and achievement services. Properly disclosed and accepted feature rules may supplement them, without unfairly reducing our obligations or your lawful rights.</p>
+      <p>Before registration or relevant service use, we must make these terms available and obtain clear confirmation through {协议确认入口}. You may read, save and request explanations of important terms. You may decline to activate services whose necessary terms you do not accept.</p>
+      <p>These terms are drafted for service to users in mainland China. Third-party maps, sign-in and external services you choose have their own applicable terms; we remain responsible for our services and duties imposed by law.</p>
+    </section>
+    <section id="terms-en-account">
+      <h2>2. Accounts and eligibility</h2>
+      <p>Use a phone number or third-party account you lawfully control, and provide accurate, lawful and necessary details. Protect your device, verification codes and credentials. Contact us promptly about account theft or irregularities; we will assist with an appropriate investigation.</p>
+      <p>Do not impersonate others, sell or rent accounts, evade restrictions through multiple accounts, fabricate tracks or manipulate achievements. Responsibility for account misuse depends on fault and applicable law; an action occurring under your account does not automatically make you liable for all resulting harm.</p>
+      <p>Minors should use the service with guardian guidance. Information processing for children under fourteen requires guardian consent and dedicated rules first. Eligibility and children's service arrangements: {服务年龄要求与儿童服务安排}.</p>
+    </section>
+    <section id="terms-en-services">
+      <h2>3. Services</h2>
+      <p>Time Trail supports hiking, running, climbing, cycling and driving activities through recording, maps, file import and export, cloud sync, route search and recommendations, collections, following, companion sessions, submissions and achievements. Availability depends on the current version.</p>
+      <p>Distance, pace, elevation, ascent and calories are sensor readings or estimates affected by positioning, networks, terrain, permissions and battery management. Compensation, filtering and imported files can introduce differences. These are not surveying, medical or other professional findings.</p>
+      <p>Levels, XP and badges follow the level rules and may change after track deletion or invalid-data handling. They are not tradable assets or promises of returns or redemption. These terms establish no paid or auto-renewing service. Any future paid offering must separately disclose prices, periods, renewal, cancellation and refunds and obtain required confirmation.</p>
+    </section>
+    <section id="terms-en-tracks">
+      <h2>4. Records, uploads and submissions</h2>
+      <p>Local saving and successful cloud upload are different outcomes. After saving locally, the app currently attempts to create a server summary. Sync may fail because of network or service problems. Check upload status and keep reasonable backups of important records.</p>
+      <p><strong>Ordinary cloud tracks currently may be browsed, searched or recommended to other signed-in users. An ordinary upload should not be treated as private storage.</strong> Raw tracks, endpoints, times, screenshots and waypoints can reveal movements. Disclosure requires clear notice and legally required separate consent. Confirmation and privacy controls: {轨迹公开确认及隐私控制入口}.</p>
+      <p>Upload only files, images, descriptions and locations you have the right to provide, respecting companions and other people depicted. Approved submissions may enter route discovery or recommendations. Review approval is not a guarantee of current safety, lawful access or accuracy.</p>
+      <p>Withdrawing a submission does not automatically delete its track. Current cloud deletion is soft deletion; complete data and file cleanup follows the privacy policy and actual deletion process. Copies lawfully obtained by others may not be remotely retractable.</p>
+    </section>
+    <section id="terms-en-companions">
+      <h2>5. Companion sessions</h2>
+      <p>Creating or joining a room lets members receive your profile, status, location and session messages. Share invitations, codes and QR images only with trusted people, and ensure participants understand the visibility. Do not use the feature to track, harass or monitor people who have not agreed to participate.</p>
+      <p>Hosts may manage members or end sessions as the feature permits. Location, text and status updates can be delayed, interrupted or incomplete because of signal, locking, background restrictions, permissions or faults. An offline member's displayed location may be outdated.</p>
+      <p><strong>Leaving stops future companion location sharing, but does not stop independent recording or erase copies others saved. Companion features do not guarantee continuous availability and are not a safeguarding or rescue service.</strong> Agree on meeting points and backup contact methods; seek local emergency assistance when necessary.</p>
+    </section>
+    <section id="terms-en-safety">
+      <h2>6. Outdoor and travel safety</h2>
+      <p>Assess weather, conditions, access restrictions, fitness, equipment and local rules before an activity. A historical track, submission or map does not establish current accessibility or permission. Respect closed, dangerous, military and other restricted areas.</p>
+      <p>Stay aware while driving, cycling or walking; operate your device only when safe and comply with traffic rules. Take suitable professional precautions for mountains, water, extreme weather and areas without signal. Calories, exercise estimates and alerts do not replace medical advice or professional risk assessment.</p>
+      <p>These statements explain the service's limits and do not waive our statutory product, service or information security responsibilities.</p>
+    </section>
+    <section id="terms-en-conduct">
+      <h2>7. Conduct and content</h2>
+      <ul>
+        <li>Comply with law. Do not post unlawful, infringing, abusive, harassing, deceptive, spam or privacy-invasive content.</li>
+        <li>Do not fabricate locations, activity results, route details, follows or collections to mislead users or disrupt the service.</li>
+        <li>Do not unlawfully scrape or export others' tracks, compromise APIs or credentials or disrupt servers, maps or communication.</li>
+        <li>Do not record or distribute another person's location, likeness, contact details or companion records without a lawful basis or authorization.</li>
+      </ul>
+      <p>Depending on the facts, impact and necessity, violations may result in warnings, restrictions, removal or account action, with legally required notices and a review channel: {账号及内容申诉渠道}. You may provide relevant evidence to challenge a decision.</p>
+    </section>
+    <section id="terms-en-ip">
+      <h2>8. Intellectual property and licenses</h2>
+      <p>The software, interface and content we lawfully own are protected by law. Third-party maps, open-source components and materials belong to their respective rightsholders. Google Maps / Places use is also subject to the <a href="https://policies.google.com/terms">Google Terms of Service</a> and applicable map service rules.</p>
+      <p>Uploading does not transfer ownership of rights you hold in original descriptions, images or other content. You grant a non-exclusive license limited to the storage, transmission, display, sharing, review and route recommendation services you choose. It does not include unrelated commercial promotion, selling your tracks or unrestricted sublicensing.</p>
+      <p>The license lasts as needed for the corresponding service and lawful retention. Deletion, withdrawal and closure follow the relevant rules. A content license does not replace personal information notices and consent. Send ownership evidence and specific infringement details to {侵权投诉邮箱}.</p>
+    </section>
+    <section id="terms-en-data">
+      <h2>9. Privacy and data management</h2>
+      <p>See the <a data-legal-link href="privacy-policy.html">Privacy Policy</a> for personal information handling. Sensitive location, disclosure, third-party recipients and cross-border processing require the applicable notices and authorizations; accepting these terms does not replace separate consent.</p>
+      <p>You may exercise applicable access, correction, copy, deletion, withdrawal and account closure rights. Closure requests: {账号注销申请渠道}, with reasonable verification and explanation of cleanup. Signing out, uninstalling and closing an account are different actions.</p>
+    </section>
+    <section id="terms-en-changes">
+      <h2>10. Changes and termination</h2>
+      <p>Updates, maintenance, third-party changes and force majeure may affect availability. We will give appropriate notice of foreseeable important changes and reasonably arrange data handling. This does not authorize arbitrary termination or destruction of your records.</p>
+      <p>Material term changes will identify their effective date and be prominently notified. Obtain further confirmation where required. You may stop the relevant service and exercise export or closure rights. Ending the overall service requires applicable notices and reasonable data arrangements.</p>
+    </section>
+    <section id="terms-en-liability">
+      <h2>11. Liability and disputes</h2>
+      <p>Responsibility follows applicable law and each party's fault. You are responsible as provided by law for unlawful use or infringement, and we are responsible for losses caused by our breach, fault or violation of legal duties.</p>
+      <p><strong>These terms do not exclude liability for personal injury caused by us or property loss caused by our intent or gross negligence, and do not limit statutory consumer rights.</strong> Force majeure and third-party failures are assessed by actual causation and legal conditions, including applicable duties to notify, mitigate and assist.</p>
+      <p>Mainland Chinese law governs these terms, subject to mandatory provisions that apply otherwise. Parties may first seek an amicable resolution, then bring a claim before a court with lawful jurisdiction. These terms do not remove your statutory jurisdiction or remedy rights.</p>
+    </section>
+    <section id="terms-en-contact">
+      <h2>12. Contact and notices</h2>
+      <p>Operator: {运营主体全称或个人开发者姓名}<br>Address: {运营主体联系地址}<br>Service email: {服务联系邮箱}<br>Privacy email: {隐私联系邮箱}<br>Complaints and review: {账号及内容申诉渠道}</p>
+      <p>Signed-in users may submit feedback through About → Contact / Feedback. Signed-out users may use the published email. Important notices may be delivered in the app or through valid contact details you provide. Privacy requests follow the policy's response deadlines.</p>
+      <p class="document-links"><a data-legal-link href="privacy-policy.html">Read the Privacy Policy</a><a href="#terms-en-scope">Back to scope</a></p>
+    </section>
+    <p class="footer">Time Trail · Draft Terms of Service</p>
+  </main>
+</body>
+</html>

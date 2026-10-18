@@ -58,10 +58,12 @@ docker buildx create --use --name multiarch-builder
 
 ### 2. 构建并直接推送（一步完成）
 ```bash
-# 格式：docker buildx build --platform <目标平台> -t <完整镜像名> -f <Dockerfile> . --push
+# 格式：docker buildx build --platform <目标平台> --provenance=false --sbom=false -t <完整镜像名> -f <Dockerfile> . --push
 
-docker buildx build --platform linux/amd64 -t crpi-p78v4agazv8zn80d.cn-beijing.personal.cr.aliyuncs.com/track_server/track_server_go:latest -f deploy/Dockerfile . --push
+docker buildx build --platform linux/amd64 --provenance=false --sbom=false -t crpi-p78v4agazv8zn80d.cn-beijing.personal.cr.aliyuncs.com/track_server/track_server_go:latest -f deploy/Dockerfile . --push
 ```
+
+这里显式关闭 provenance 和 SBOM 构建证明元数据，以兼容当前阿里云个人版仓库。若推送时报 `unknown manifest class for application/vnd.oci.empty.v1+json`，可使用上面的命令重新构建并推送；该错误表明仓库拒绝了相应的 manifest 格式。参数说明见 [Docker 构建证明文档](https://docs.docker.com/build/metadata/attestations/)。
 
 ---
 

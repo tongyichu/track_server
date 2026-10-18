@@ -20,6 +20,7 @@
 | App 升级检查 | [upgrade.md](upgrade.md) |
 | 意见反馈提交、历史列表、图片读取、运维处理 | [feedback.md](feedback.md) |
 | 成就摘要、奖励、等级规则 H5、运维刷新 | [achievement.md](achievement.md) |
+| 隐私政策、用户服务协议 H5 与草稿维护 | [legal.md](legal.md) |
 | 同行控制面、会话、成员、事件、附近房间 | [companion.md](companion.md) |
 | EMQX 回调、MQTT 数据面写回等内部接口 | [companion-internal.md](companion-internal.md) |
 | 客户端埋点批量上报 | [analytics.md](analytics.md) |

@@ -40,7 +40,7 @@
 - **轨迹 ID 编码不可变**：`"NO." + 8 位 base36` 是全链路外部 ID（见 `internal/repository/interfaces.go:14`）。不得修改 `trackIDPrefix` / `trackIDLength` / `trackIDBase`，否则旧 ID 将无法解析。
 - **OSS 文件哈希桶数**：`config.OSSFileBucketSize = 2000` 参与用户轨迹文件的目录 hash，**不可修改**（见 `internal/config/config.go:17`）。
 - **静态文件路由不能直接用 `Static`**：必须用 `StaticFS + PathRewrite`，否则静态资源会 404（原因见 `internal/handler/router.go:57-91`）。
-- **鉴权分组**：所有业务接口都在 `api := h.Group("/api/v1")` 下的 `auth` 子组中；公开接口只有 `/ping`、`/captcha`、`/sms/send`、`/login/*`、`/upgrade/check`、`/achievement/level-rules.html`、`/track-map/areas/:area_id/introduction.html`、安装包静态下载。`/internal/*` 与 `/ops/*` 是内部/运维接口，不走业务 JWT，必须使用内部 token 鉴权。新增业务接口默认加到 `auth` 组，除非有明确登录豁免需求。
+- **鉴权分组**：所有业务接口都在 `api := h.Group("/api/v1")` 下的 `auth` 子组中；公开接口只有 `/ping`、`/captcha`、`/sms/send`、`/login/*`、`/upgrade/check`、`/achievement/level-rules.html`、`/legal/privacy-policy.html`、`/legal/terms-of-service.html`、`/track-map/areas/:area_id/introduction.html`、安装包静态下载。`/internal/*` 与 `/ops/*` 是内部/运维接口，不走业务 JWT，必须使用内部 token 鉴权。新增业务接口默认加到 `auth` 组，除非有明确登录豁免需求。
 - **Repository 降级链约束**：MySQL / Mongo / in-memory 三种实现都必须实现 `internal/repository/interfaces.go` 里的 interface 全集；新增接口方法时，三份实现都要补齐，否则启动会编译失败或运行时 panic。
 - **反馈图片私有落盘**：意见反馈图片由服务端直接接收，保存到 `<LogDir>/feedback/images/`，必须通过 `/feedback/:feedback_id/images/:image_id` 或 `/ops/feedback/:feedback_id/images/:image_id` 走鉴权 handler 读取；不要放进 `/api/v1/static/*` 公开静态目录。
 - **生成文件不手改**：`internal/config/china_city_raw.json`、`internal/config/china_province_raw.json` 为外部数据，不要逐行手工编辑。
@@ -90,6 +90,8 @@ track_server/
 | 轨迹投稿功能与协议 | `track_submission.md`、`docs/api/track-submission.md`；路由权威仍为 `internal/handler/router.go` |
 
 ### 稳定默认值
+
+- 个人资料的 `background_url` 用于主页顶部，数据库保存原始 OSS 地址，响应经独立 `profile_backgrounds` 缓存并使用源地址摘要区分版本；`gender` 只允许空串、`male`、`female`，详情仅本人可读。改字段时同步 MySQL 建表及幂等列迁移、Mongo/内存仓储、用户详情/更新协议与缓存注入，参见 `docs/api/user.md`。
 
 - 默认运动类型由 `internal/config/config.go:DefaultTrackTypeConfigs` 维护，当前 code 为 `hiking`、`running`、`climbing`、`riding`、`driving`，展示名为 `徒步`、`跑步`、`爬山`、`骑行`、`自驾`；`GET /api/v1/track/types`、轨迹入库 `track_type`、运动类型图标元信息和成就系统类型口径应保持一致。`track_geo_indexes.track_type` 与 `track_route_groups.track_type` 只允许保存这五个英文 code，历史别名或未知类型需在地图索引阶段归一/兜底。
 - 推荐列表 `GET /api/v1/track/recommend/list` 的可选 `city_code` 使用精确匹配；空值保持全城市推荐。城市条件必须下沉到 Repository 查询并参与游标分页，不能在 Service 取回一页后再过滤；MySQL 推荐查询索引为 `idx_track_recommend_city`。
@@ -232,6 +234,8 @@ HTTP Request
 **资源缓存与静态发布包**：客户端经 OSS 直传（头像 / 轨迹截图 / 无地图背景轨迹截图 / 同行轨迹截图 / 原始轨迹文件），列表/详情/同行历史/附近房间接口返回时由 `AssetCacheService` 按需从 OSS 拉回本地 `<LogDir>/static/<category>/`，对外走 `GET /api/v1/static/<category>/<file>`（需登录）；无地图背景轨迹截图使用 `<track_id>_no_map_bg` 作为缓存 key，`/track/my/list` 等轨迹列表返回 `track_no_map_bg_screenshot_url`。管理后台上传的 App 发布包直接写入 `<LogDir>/static/release/<platform>/`，对外走公开的 `GET /api/v1/static/release/<platform>/<file>`，供升级下载使用。
 
 **内置 H5 页面**：客户端等级规则页使用公开路由 `GET /api/v1/achievement/level-rules.html`，HTML 文件内置在 `internal/handler/static/achievement_level_rules.html` 并通过 `go:embed` 打包；页面支持 `lang=english` 切英文、`is_dark=true` 切夜间模式。修改等级 XP 规则、等级阈值、语言或主题参数时，同步更新该页面、`track_achievement_client.md` 和 `docs/api/achievement.md`。
+
+隐私政策与用户服务协议使用公开路由 `GET /api/v1/legal/privacy-policy.html` 和 `GET /api/v1/legal/terms-of-service.html`，由 `legal_handler.go` 嵌入 `static/privacy_policy.html`、`static/terms_of_service.html`。支持 `lang=english`、`is_dark=true/false`，未指定主题时跟随系统。草稿中的 `{xxxx}` 须按运营事实补齐；数据采集、公开、SDK、保存或删除行为变化时同步核对中英文正文及真实授权流程。接口与内容维护见 `docs/api/legal.md`。
 
 地图景区/区县介绍页使用公开路由 `GET /api/v1/track-map/areas/:area_id/introduction.html`，统一模板位于 `internal/handler/static/map_area_introduction.html`；生成区县基线位于 `internal/maparea/districts.json`，人工景区/区县覆盖位于 `catalog.json`，页面支持 `lang=english` 与 `is_dark=true`。新增或调整区域时必须使用 GCJ-02 坐标、保持 `area.id` 稳定，并同步核对 `docs/api/track-map.md` 与 `track_map.md`。
 

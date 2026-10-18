@@ -17,7 +17,7 @@
 | 更新轨迹信息 | PUT | `/track/:track_id/update` | 是 | [track.md](track.md#11-更新轨迹信息) |
 | 删除轨迹 | DELETE | `/track/:track_id` | 是 | [track.md](track.md#12-删除轨迹) |
 | 用户已收藏轨迹列表 | GET | `/track/collected/list` | 是 | [collect-navigation.md](collect-navigation.md#13-用户已收藏轨迹列表) |
-| 更新个人信息 | PUT | `/user/profile/update` | 是 | [user.md](user.md#14-更新个人信息) |
+| 更新个人信息（含背景图、性别） | PUT | `/user/profile/update` | 是 | [user.md](user.md#14-更新个人信息) |
 | 关注用户 | POST | `/user/:user_id/follow` | 是 | [user.md](user.md#42-关注用户) |
 | 取消关注用户 | DELETE | `/user/:user_id/follow` | 是 | [user.md](user.md#43-取消关注用户) |
 | 查询关注状态 | GET | `/user/:user_id/follow/status` | 是 | [user.md](user.md#44-查询关注状态) |
@@ -25,6 +25,8 @@
 | 粉丝列表 | GET | `/user/:user_id/follower/list` | 是 | [user.md](user.md#46-粉丝列表) |
 | 批量上报埋点事件 | POST | `/analytics/events` | 条件（登录用户事件） | [analytics.md](analytics.md#47-批量上报埋点事件) |
 | App 升级检查 | GET | `/upgrade/check` | 否 | [upgrade.md](upgrade.md#15-app-升级检查) |
+| 隐私政策 H5 | GET | `/legal/privacy-policy.html` | 否 | [legal.md](legal.md) |
+| 用户服务协议 H5 | GET | `/legal/terms-of-service.html` | 否 | [legal.md](legal.md) |
 | 获取运动类型 | GET | `/track/types` | 是 | [track.md](track.md#16-获取运动类型) |
 | 获取轨迹投稿选项 | GET | `/track/submission/options` | 是 | [track-submission.md](track-submission.md#1-投稿选项) |
 | 创建或重新投稿 | POST | `/track/:track_id/submission` | 是 | [track-submission.md](track-submission.md#2-创建或重新投稿) |
@@ -71,3 +73,5 @@
 | 运维反馈详情 | GET | `/ops/feedback/:feedback_id` | 运维内部 | [feedback.md](feedback.md#39-运维反馈详情) |
 | 运维更新反馈状态 | PUT | `/ops/feedback/:feedback_id/status` | 运维内部 | [feedback.md](feedback.md#40-运维更新反馈状态) |
 | 运维读取反馈图片 | GET | `/ops/feedback/:feedback_id/images/:image_id` | 运维内部 | [feedback.md](feedback.md#41-运维读取反馈图片) |
+
+个人信息字段扩展：`GET /user/:user_id/detail` 与 `PUT /user/profile/update` 支持背景图、性别，详见 [用户接口](user.md)。路由和鉴权分组保持不变。

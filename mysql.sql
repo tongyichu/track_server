@@ -3,6 +3,8 @@ CREATE TABLE `users` (
                           `nickname` varchar(255) NOT NULL DEFAULT '' COMMENT '用户昵称',
                           `avatar_url` varchar(255) COMMENT '用户头像URI',
                           `signature` text,
+ `background_url` varchar(2048) DEFAULT NULL COMMENT '个人主页背景图OSS地址',
+ `gender` varchar(16) NOT NULL DEFAULT '' COMMENT '空值未设置，male/female',
                           `phone` varchar(32) NOT NULL DEFAULT '' COMMENT '用户手机号',
                           `client_language` varchar(64) NOT NULL DEFAULT '' COMMENT '客户端语言',
                           `token_version` bigint NOT NULL DEFAULT '1' COMMENT '登录令牌版本号',

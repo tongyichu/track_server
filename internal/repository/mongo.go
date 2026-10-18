@@ -497,9 +497,23 @@ func (r *MongoUserRepository) FindByNickname(context.Context, string) (*models.U
 	return nil, errors.New("MongoUserRepository.FindByNickname not implemented")
 }
 
-// Update is not implemented in this demo and returns an error.
-func (r *MongoUserRepository) Update(context.Context, *models.User) error {
-	return errors.New("MongoUserRepository.Update not implemented")
+func (r *MongoUserRepository) Update(ctx context.Context, user *models.User) error {
+	if user.TokenVersion <= 0 {
+		user.TokenVersion = 1
+	}
+	user.UpdatedAt = time.Now()
+	result, err := r.collection.UpdateOne(ctx, bson.M{"_id": user.ID}, bson.M{"$set": bson.M{
+		"nickname": user.Nickname, "avatar_url": user.AvatarURL, "signature": user.Signature,
+		"background_url": user.BackgroundURL, "gender": user.Gender, "phone": user.Phone,
+		"client_language": user.ClientLanguage, "token_version": user.TokenVersion, "updated_at": user.UpdatedAt,
+	}})
+	if err != nil {
+		return err
+	}
+	if result.MatchedCount == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // ListAll is not implemented in this demo and returns an error.

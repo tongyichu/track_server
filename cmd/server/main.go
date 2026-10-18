@@ -285,6 +285,17 @@ func main() {
 		log.Printf("avatar cache enabled: %s", avatarCacheDir)
 	}
 
+	backgroundCache, err := service.NewAssetCacheService(
+		filepath.Join(staticRoot, "profile_backgrounds"), "/api/v1/static/profile_backgrounds",
+		[]string{".jpg", ".jpeg", ".png", ".webp"}, ".jpg",
+	)
+	if err != nil {
+		log.Printf("profile background cache disabled: %v", err)
+		backgroundCache = nil
+	} else {
+		userSvc.SetBackgroundCache(backgroundCache)
+	}
+
 	rawTrackCacheDir := filepath.Join(staticRoot, "raw_tracks")
 	// 原始轨迹文件后缀未作强约束（客户端可能用 .dat/.json/.gpx/.kmz 等），这里允许常见几种，
 	// 未识别时按 .dat 落盘；文件名仍以 track_id 为主键保证唯一。
@@ -373,6 +384,9 @@ func main() {
 	// 把 OSS 下载能力注入资源缓存服务。OSS 对象带权限控制，无法直接 http.Get，
 	// 因此必须通过 STS 临时凭证 + OSS SDK 的方式下载。
 	if ossTokenSvc != nil {
+		if backgroundCache != nil {
+			backgroundCache.SetDownloader(ossTokenSvc)
+		}
 		if avatarCache != nil {
 			avatarCache.SetDownloader(ossTokenSvc)
 		}
