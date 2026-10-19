@@ -886,3 +886,7 @@ Authorization: Bearer <token>
 - `401 Unauthorized`
   - 缺少/无效/过期的 Token
 ---
+
+## 点赞与收藏
+
+轨迹详情及列表摘要新增 `liked` 与 `like_count`，点赞和收藏互相独立。点赞、取消点赞、状态和获赞明细见 [track-likes.md](track-likes.md)。

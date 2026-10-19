@@ -26,6 +26,8 @@ type TrackPoint struct {
 // Track aggregates persisted fields of track_records.
 // Points is transient field kept for existing service logic.
 type Track struct {
+	Liked                     bool                     `json:"liked" bson:"-"`
+	LikeCount                 int64                    `json:"like_count" bson:"-"`
 	ID                        string                   `json:"id" bson:"_id,omitempty"`                                              // ID 是轨迹记录唯一标识，由 generateTrackID 生成。
 	UserID                    int64                    `json:"user_id" bson:"user_id"`                                               // UserID 是轨迹所属用户 ID。
 	SessionID                 string                   `json:"session_id" bson:"session_id"`                                         // SessionID 是关联的同行会话 ID，可为空。
@@ -64,6 +66,8 @@ type Track struct {
 // - 若用户信息不存在/查询失败（not found），nickname/avatar_url 将返回空字符串；
 // - collect_count 为该轨迹被收藏的总数；collected 为“当前鉴权用户”是否收藏。
 type TrackSummary struct {
+	Liked                     bool                          `json:"liked" bson:"-"`
+	LikeCount                 int64                         `json:"like_count" bson:"-"`
 	ID                        string                        `json:"id"`                             // ID 是轨迹记录唯一标识。
 	UserID                    int64                         `json:"user_id"`                        // UserID 是轨迹所属用户 ID。
 	SessionID                 string                        `json:"session_id"`                     // SessionID 是关联的同行会话 ID，可为空。
@@ -98,6 +102,8 @@ type TrackSummary struct {
 // CollectedTrackSummary is used by "user collected tracks list".
 // It is consistent with TrackSummary but intentionally omits the `collected` field.
 type CollectedTrackSummary struct {
+	Liked                     bool      `json:"liked" bson:"-"`
+	LikeCount                 int64     `json:"like_count" bson:"-"`
 	ID                        string    `json:"id"`
 	UserID                    int64     `json:"user_id"`
 	SessionID                 string    `json:"session_id"`
@@ -156,6 +162,8 @@ type CollectedTrackSummaryPage struct {
 // - 不返回 nickname/user_avatar_url/collected（这些字段对“我的轨迹”列表不需要）。
 // - 仍保留 collect_count/navigate_count 等统计字段，便于客户端展示。
 type MyTrackSummary struct {
+	Liked                     bool                    `json:"liked" bson:"-"`
+	LikeCount                 int64                   `json:"like_count" bson:"-"`
 	ID                        string                  `json:"id"`                             // ID 是轨迹记录唯一标识。
 	UserID                    int64                   `json:"user_id"`                        // UserID 是轨迹所属用户 ID。
 	SessionID                 string                  `json:"session_id"`                     // SessionID 是关联的同行会话 ID，可为空。

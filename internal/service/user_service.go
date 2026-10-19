@@ -32,6 +32,7 @@ var (
 
 // UserService provides business logic related to user profile and settings.
 type UserService struct {
+	likes           repository.TrackLikeRepository
 	users           repository.UserRepository
 	tracks          repository.TrackRepository
 	navigations     repository.NavigationRepository
@@ -102,16 +103,17 @@ type UserStats struct {
 
 // UserProfileDetail is the safe profile payload returned by user detail APIs.
 type UserProfileDetail struct {
-	ID             int64     `json:"id"`
-	Nickname       string    `json:"nickname"`
-	AvatarURL      string    `json:"avatar_url"`
-	Signature      string    `json:"signature"`
-	BackgroundURL  string    `json:"background_url"`
-	Gender         *string   `json:"gender,omitempty"`
-	Phone          string    `json:"phone,omitempty"`
-	ClientLanguage string    `json:"client_language,omitempty"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	ReceivedLikeCount int64     `json:"received_like_count"`
+	ID                int64     `json:"id"`
+	Nickname          string    `json:"nickname"`
+	AvatarURL         string    `json:"avatar_url"`
+	Signature         string    `json:"signature"`
+	BackgroundURL     string    `json:"background_url"`
+	Gender            *string   `json:"gender,omitempty"`
+	Phone             string    `json:"phone,omitempty"`
+	ClientLanguage    string    `json:"client_language,omitempty"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
 
 	TotalDistance  float64 `json:"total_distance"`
 	TrackCount     int64   `json:"track_count"`
@@ -349,6 +351,14 @@ func (s *UserService) GetUserProfileDetail(ctx context.Context, viewerUserID int
 			}
 		}
 	}
+	if s.likes != nil {
+		count, err := s.likes.CountReceived(ctx, targetUserID)
+		if err != nil {
+			return nil, err
+		}
+		detail.ReceivedLikeCount = count
+	}
+
 	if s.achievements != nil {
 		achievement, err := s.achievements.GetUserProfileAchievement(ctx, targetUserID)
 		if err != nil {

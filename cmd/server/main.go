@@ -46,6 +46,7 @@ func main() {
 	var trackRepo repository.TrackRepository
 	var userRepo repository.UserRepository
 	var collectRepo repository.CollectRepository
+	var likeRepo repository.TrackLikeRepository
 	var followRepo repository.FollowRepository
 	var loginLogRepo repository.LoginLogRepository
 	var navigationRepo repository.NavigationRepository
@@ -116,6 +117,7 @@ func main() {
 				trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo, companionRepo = tr, ur, cr, lr, nr, ar, cor
 				trackMapRepo = repository.NewMySQLTrackMapRepository(db)
 				followRepo = repository.NewMySQLFollowRepository(db)
+				likeRepo = repository.NewMySQLTrackLikeRepository(db)
 				achievementRepo = repository.NewMySQLAchievementRepository(db)
 				accountRestrictionRepo = repository.NewMySQLAccountRestrictionRepository(db)
 				feedbackRepo = repository.NewMySQLFeedbackRepository(db)
@@ -142,6 +144,7 @@ func main() {
 		} else {
 			db := client.Database(cfg.MongoDBName)
 			trackRepo = repository.NewMongoTrackRepository(db.Collection("tracks"))
+			likeRepo = repository.NewMongoTrackLikeRepository(db.Collection("track_likes"))
 			userRepo = repository.NewMongoUserRepository(db.Collection("users"))
 			collectRepo = repository.NewMongoCollectRepository(db.Collection("track_collects"))
 			followRepo = repository.NewMongoFollowRepository(db.Collection("user_follows"))
@@ -172,6 +175,9 @@ func main() {
 			)
 			log.Println("mongo repositories initialized")
 		}
+	}
+	if likeRepo == nil {
+		likeRepo = repository.NewInMemoryTrackLikeRepository(trackRepo)
 	}
 	if trackSubmissionRepo == nil {
 		trackSubmissionRepo = repository.NewInMemoryTrackSubmissionRepository()
@@ -205,6 +211,9 @@ func main() {
 	userSvc.SetFollowRepository(followRepo)
 	userSvc.SetAchievementService(achievementSvc)
 	userSvc.SetAccountRestrictionService(accountRestrictionSvc)
+	trackSvc.SetTrackLikeRepository(likeRepo)
+	userSvc.SetTrackLikeRepository(likeRepo)
+	likeSvc := service.NewTrackLikeService(likeRepo, trackRepo, userSvc, trackSvc)
 	loginSvc := service.NewLoginService(userRepo, loginLogRepo, cfg.WechatAppID, cfg.WechatAppSecret, cfg.JWTSecret)
 	appReleaseSvc := service.NewAppReleaseService(appReleaseRepo)
 	feedbackSvc := service.NewFeedbackService(feedbackRepo, filepath.Join(cfg.LogDir, "feedback", "images"))
@@ -449,6 +458,7 @@ func main() {
 
 	handler.RegisterRoutes(h, handler.Deps{
 		TrackService:               trackSvc,
+		TrackLikeService:           likeSvc,
 		TrackMapService:            trackMapSvc,
 		TrackSubmissionService:     trackSubmissionSvc,
 		RecommendationService:      recommendationSvc,

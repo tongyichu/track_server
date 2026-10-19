@@ -8,6 +8,12 @@
 | 推荐轨迹列表（个性化 Feed Session，支持 `city_code` 筛选） | GET | `/track/recommend/list` | 是 | [track.md](track.md#2-推荐轨迹列表) |
 | 轨迹详情 | GET | `/track/:track_id/detail` | 是 | [track.md](track.md#3-轨迹详情) |
 | 获取 OSS STS 临时凭证 | GET | `/oss/sts-token` | 是 | [oss.md](oss.md#4-获取-oss-sts-临时凭证直传上传) |
+| 点赞轨迹 | POST | `/track/:track_id/like` | 是 | [track-likes.md](track-likes.md) |
+| 取消点赞 | DELETE | `/track/:track_id/like` | 是 | [track-likes.md](track-likes.md) |
+| 轨迹点赞状态 | GET | `/track/:track_id/like/status` | 是 | [track-likes.md](track-likes.md) |
+| 用户聚合获赞轨迹 | GET | `/user/:user_id/likes/received/tracks` | 是 | [track-likes.md](track-likes.md) |
+| 轨迹获赞人列表 | GET | `/user/:user_id/likes/received/tracks/:track_id/users` | 是 | [track-likes.md](track-likes.md) |
+| 用户获赞记录 | GET | `/user/:user_id/likes/received/list` | 是 | [track-likes.md](track-likes.md) |
 | 收藏轨迹 | POST | `/track_collect` | 是 | [collect-navigation.md](collect-navigation.md#5-收藏轨迹) |
 | 取消收藏轨迹 | DELETE | `/track_collect` | 是 | [collect-navigation.md](collect-navigation.md#6-取消收藏轨迹) |
 | 轨迹搜索列表（支持 `city_code` / `track_type` 筛选） | GET | `/track/search/list` | 是 | [track.md](track.md#7-轨迹搜索列表) |

@@ -13,9 +13,10 @@
 - 发起同行：`POST /api/v1/companion/session/create`
 - 关注用户：`POST /api/v1/user/:user_id/follow`
 - 收藏轨迹：`POST /api/v1/track_collect`
+- 点赞轨迹：`POST /api/v1/track/:track_id/like`
 - 修改个人信息：`PUT /api/v1/user/profile/update`、`PUT /api/v1/user/profile/phone`、`PUT /api/v1/user/profile/client_language`
 
-取消收藏、取消关注、退出登录、浏览和查询类接口不受账号限制影响。
+取消点赞、取消收藏、取消关注、退出登录、浏览和查询类接口不受账号限制影响。
 
 客户端可通过 `GET /api/v1/user/:user_id/detail` 查看自己的当前账号限制状态：当 `user_id` 等于当前登录用户且存在生效限制时，响应 `data.account_restriction` 返回限制记录；查看他人或未被限制时不返回该字段。
 
@@ -45,6 +46,7 @@
 | 上传内容 / 获取上传 STS | `账号已被限制，禁止上传内容` |
 | 发起同行 | `账号已被限制，禁止发起同行` |
 | 关注用户 | `账号已被限制，禁止关注用户` |
+| 点赞轨迹 | `账号已被限制，禁止点赞` |
 | 收藏轨迹 | `账号已被限制，禁止收藏轨迹` |
 | 修改个人信息 | `账号已被限制，禁止修改个人信息` |
 

@@ -91,6 +91,8 @@ track_server/
 
 ### 稳定默认值
 
+- 轨迹点赞独立于收藏，`track_likes` 以用户与轨迹唯一关系保证 POST/DELETE 幂等。获赞数和明细只统计正常公开、已结束、raw_track_url 非空的轨迹，获赞首页必须由仓储按轨迹聚合后再分页，每项最多 3 位最近点赞人，完整名单单独分页；保留原逐条接口兼容旧端，禁止客户端逐条分页后再合并。有效关系长期保留，不另存获赞消息副本；允许自赞并计入轨迹点赞数，但个人页获赞数和获赞列表排除自赞，受限账号不能新增点赞但可取消。修改时同步三种仓储、用户详情计数、详情/列表的浏览者状态及 `docs/api/track-likes.md`。
+
 - 客态个人主页的 `GET /user/:user_id/tracks` 和 `GET /user/:user_id/collections` 使用路径用户作为列表所属用户、JWT 用户作为浏览者；`collected` 必须按浏览者计算。已传轨迹在仓储分页前过滤私密、删除、进行中和原始轨迹地址为空的记录；收藏列表跳过失效及不可公开查看的记录后继续补页。`total_count` 只统计接口可见记录，不复用包含私密轨迹的用户详情统计。主态继续使用原有本人列表接口。三种仓储实现与协议入口见 `internal/repository/profile_tracks.go`、`internal/service/profile_tracks.go`、`docs/api/user.md`。
 
 - 个人资料的 `background_url` 用于主页顶部，数据库保存原始 OSS 地址，响应经独立 `profile_backgrounds` 缓存并使用源地址摘要区分版本；`gender` 只允许空串、`male`、`female`，详情仅本人可读。改字段时同步 MySQL 建表及幂等列迁移、Mongo/内存仓储、用户详情/更新协议与缓存注入，参见 `docs/api/user.md`。
@@ -229,7 +231,7 @@ HTTP Request
   → repository.<Xxx>Repository（数据持久化）
 ```
 
-**账号限制流程**：管理中心/运维通过 `/api/v1/ops/users/:user_id/restrictions*` 写入或解除 `user_account_restrictions`；当前生效条件为 `status=active AND (expires_at IS NULL OR expires_at > now)`。业务 JWT 通过后，`AccountRestrictionMiddleware` 只拦截上传内容（含上传用 OSS STS、轨迹创建/上传/更新）、发起同行、关注、收藏、修改个人信息；取消收藏、取消关注、退出登录和查询类接口放行。限制错误返回 `403`，`message` 使用“账号已被限制，禁止...”动作文案。新增会产生内容、关系或用户资料变更的业务接口时，需要评估是否加入 `internal/middleware/account_restriction.go` 的受限路由表，并同步更新 `docs/api/account-restriction.md` 与 `docs/api/route-index.md`。
+**账号限制流程**：管理中心/运维通过 `/api/v1/ops/users/:user_id/restrictions*` 写入或解除 `user_account_restrictions`；当前生效条件为 `status=active AND (expires_at IS NULL OR expires_at > now)`。业务 JWT 通过后，`AccountRestrictionMiddleware` 只拦截上传内容（含上传用 OSS STS、轨迹创建/上传/更新）、发起同行、关注、收藏、点赞、修改个人信息；取消点赞、取消收藏、取消关注、退出登录和查询类接口放行。限制错误返回 `403`，`message` 使用“账号已被限制，禁止...”动作文案。新增会产生内容、关系或用户资料变更的业务接口时，需要评估是否加入 `internal/middleware/account_restriction.go` 的受限路由表，并同步更新 `docs/api/account-restriction.md` 与 `docs/api/route-index.md`。
 
 **意见反馈流程**：`POST /api/v1/feedback` 使用 `multipart/form-data` 提交文字与最多 3 张图片；`FeedbackService` 会先检查同一用户未处理反馈数量，`pending` + `processing` 最多 5 条，超限返回 429 且不会写入图片。通过校验后再检查图片真实类型和大小，并私有落盘到 `<LogDir>/feedback/images/<user_id>/<yyyyMMdd>/`，数据库 `user_feedbacks.images_json` 只保存相对路径和元信息。用户历史列表/详情只返回本人的反馈，图片读取必须经业务 JWT 校验归属；`/ops/feedback/*` 使用 `X-Internal-Token` 供运营查看和更新状态，更新为 `resolved` 时 `reply` 必填且会下发给提交用户。调整反馈字段、图片限制、状态枚举、未处理上限、运营回复规则或访问路径时，同步更新 `docs/api/feedback.md` 与 `docs/api/route-index.md`。
 

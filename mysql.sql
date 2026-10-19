@@ -504,3 +504,14 @@ CREATE TABLE `analytics_sync_summaries` (
                                             KEY `idx_analytics_sync_started` (`started_at`),
                                             KEY `idx_analytics_sync_status_started` (`status`, `started_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='埋点文件同步摘要表';
+
+
+CREATE TABLE IF NOT EXISTS track_likes (
+    user_id BIGINT NOT NULL,
+    track_id VARCHAR(64) NOT NULL,
+    created_at DATETIME(6) NOT NULL,
+    PRIMARY KEY (user_id, track_id),
+    KEY idx_track_likes_track (track_id),
+    KEY idx_track_likes_track_time (track_id, created_at, user_id),
+    KEY idx_track_likes_time (created_at, track_id, user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='轨迹点赞关系';

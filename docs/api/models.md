@@ -8,6 +8,8 @@
 |------|------|------|
 | `id` | string | 轨迹 ID |
 | `user_id` | int64 | 用户 ID |
+| `liked` | bool | 当前浏览者是否点赞（非持久化轨迹字段） |
+| `like_count` | int64 | 轨迹点赞数；详情与摘要均返回 |
 | `session_id` | string | 关联的同行会话 ID；非同行轨迹为空字符串 |
 | `city_code` | string | 城市 Code（用于标识轨迹所属城市；城市/省份映射关系维护在配置文件中） |
 | `locate_addr` | string | 轨迹的具体位置信息 |
@@ -40,3 +42,5 @@
 ### 用户背景图与性别
 
 `User` 新增 `background_url`（字符串，空串表示默认主页背景）、`gender`（字符串，空串未设置、`male`、`female`）。用户详情的 `background_url` 为公开主页展示字段，`gender` 仅在本人详情返回；更新个人信息的请求/响应与兼容规则见 [user.md](user.md#14-更新个人信息)。
+
+点赞状态、获赞记录和用户 `received_like_count` 的可见性与分页规则见 [track-likes.md](track-likes.md)。

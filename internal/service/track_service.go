@@ -22,6 +22,7 @@ import (
 
 // TrackService provides business logic around track lifecycle and statistics.
 type TrackService struct {
+	likes           repository.TrackLikeRepository
 	tracks          repository.TrackRepository
 	collects        repository.CollectRepository
 	navigations     repository.NavigationRepository
@@ -897,7 +898,7 @@ func (s *TrackService) ListMyTracks(ctx context.Context, userID int64, input Lis
 			cancel()
 		}
 	}
-	if err := s.fillMyTrackSummaryExtras(ctx, summaries); err != nil {
+	if err := s.fillMyTrackSummaryExtras(ctx, userID, summaries); err != nil {
 		return nil, err
 	}
 	if s.submissions != nil {
@@ -1207,14 +1208,15 @@ func (s *TrackService) ListCollectedTracks(ctx context.Context, userID int64, in
 			cancel()
 		}
 	}
-	// Reuse TrackSummary filling logic but skip per-item `collected` check.
-	if err := s.fillTrackSummaryExtras(ctx, 0, summaries); err != nil {
+	// Keep viewer-relative like state while the collection payload still omits collected.
+	if err := s.fillTrackSummaryExtras(ctx, userID, summaries); err != nil {
 		return nil, err
 	}
 
 	items := make([]*models.CollectedTrackSummary, 0, len(summaries))
 	for _, s := range summaries {
 		items = append(items, &models.CollectedTrackSummary{
+			Liked: s.Liked, LikeCount: s.LikeCount,
 			ID:                        s.ID,
 			UserID:                    s.UserID,
 			SessionID:                 s.SessionID,
@@ -1593,15 +1595,20 @@ func toMySummaries(tracks []*models.Track) []*models.MyTrackSummary {
 	return res
 }
 
-// fillMyTrackSummaryExtras fills only counters needed by MyTrackSummary.
+// fillMyTrackSummaryExtras fills viewer-relative like state and counters for MyTrackSummary.
 // It intentionally does NOT fill nickname/avatar/collected.
-func (s *TrackService) fillMyTrackSummaryExtras(ctx context.Context, summaries []*models.MyTrackSummary) error {
+func (s *TrackService) fillMyTrackSummaryExtras(ctx context.Context, userID int64, summaries []*models.MyTrackSummary) error {
 	if len(summaries) == 0 {
 		return nil
 	}
 	trackIDs := make([]string, 0, len(summaries))
 	for _, summary := range summaries {
 		trackIDs = append(trackIDs, summary.ID)
+	}
+
+	likeStats, err := s.trackLikeStats(ctx, userID, trackIDs)
+	if err != nil {
+		return err
 	}
 
 	counts := map[string]int64{}
@@ -1623,6 +1630,8 @@ func (s *TrackService) fillMyTrackSummaryExtras(ctx context.Context, summaries [
 	}
 
 	for _, summary := range summaries {
+		summary.Liked = likeStats[summary.ID].Liked
+		summary.LikeCount = likeStats[summary.ID].LikeCount
 		if s.collects != nil {
 			summary.CollectCount = counts[summary.ID]
 		}
@@ -1672,6 +1681,11 @@ func (s *TrackService) fillTrackSummaryExtras(ctx context.Context, userID int64,
 	// 这么做的好处是：
 	// - 写回逻辑只需要一轮 for；
 	// - 数据源（counts/users）都以 map 形式存在，查找是 O(1)。
+	likeStats, err := s.trackLikeStats(ctx, userID, trackIDs)
+	if err != nil {
+		return err
+	}
+
 	counts := map[string]int64{}
 	if s.collects != nil {
 		m, err := s.collects.CountByTrackIDs(ctx, trackIDs)
@@ -1729,6 +1743,8 @@ func (s *TrackService) fillTrackSummaryExtras(ctx context.Context, userID int64,
 
 	// 3) 最后一轮遍历：把准备好的扩展字段写回到每个 summary。
 	for _, summary := range summaries {
+		summary.Liked = likeStats[summary.ID].Liked
+		summary.LikeCount = likeStats[summary.ID].LikeCount
 		// 导航使用次数
 		if s.navigations != nil {
 			summary.NavigateCount = navCounts[summary.ID]

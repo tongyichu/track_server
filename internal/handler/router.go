@@ -13,6 +13,7 @@ import (
 
 // Deps groups all handler dependencies.
 type Deps struct {
+	TrackLikeService           *service.TrackLikeService
 	TrackService               *service.TrackService
 	TrackMapService            *service.TrackMapService
 	TrackSubmissionService     *service.TrackSubmissionService
@@ -46,6 +47,7 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 	// 注意：静态资源下载必须走 auth group，保证鉴权逻辑与其他接口一致。
 
 	trackHandler := NewTrackHandler(deps.TrackService, deps.RecommendationService)
+	likeHandler := NewTrackLikeHandler(deps.TrackLikeService)
 	trackSubmissionHandler := NewTrackSubmissionHandler(deps.TrackSubmissionService)
 	trackMapHandler := NewTrackMapHandler(deps.TrackMapService)
 	mapAreaHandler := NewMapAreaHandler(maparea.DefaultCatalog())
@@ -223,6 +225,12 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 
 	// user profile
 	auth.GET("/user/:user_id/detail", userHandler.GetUserDetail)
+	auth.POST("/track/:track_id/like", likeHandler.Like)
+	auth.DELETE("/track/:track_id/like", likeHandler.Unlike)
+	auth.GET("/track/:track_id/like/status", likeHandler.Status)
+	auth.GET("/user/:user_id/likes/received/list", likeHandler.Received)
+	auth.GET("/user/:user_id/likes/received/tracks", likeHandler.ReceivedTracks)
+	auth.GET("/user/:user_id/likes/received/tracks/:track_id/users", likeHandler.ReceivedTrackLikers)
 	auth.GET("/user/:user_id/tracks", trackHandler.ListProfileTracks)
 	auth.GET("/user/:user_id/collections", trackHandler.ListProfileCollections)
 	auth.POST("/user/:user_id/follow", userHandler.FollowUser)

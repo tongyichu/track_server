@@ -24,6 +24,7 @@ func NewMySQLRepositories(ctx context.Context, db *sql.DB) (TrackRepository, Use
 
 func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 	stmts := []string{
+		trackLikesSchema,
 		`CREATE TABLE IF NOT EXISTS users (
 			id BIGINT PRIMARY KEY,
 			nickname VARCHAR(255) NOT NULL DEFAULT '',
@@ -517,6 +518,9 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 	if err := ensureMySQLTrackCityCodeColumn(ctx, db); err != nil {
+		return err
+	}
+	if err := ensureMySQLTrackLikeIndex(ctx, db); err != nil {
 		return err
 	}
 	if err := ensureMySQLTrackRecommendCityIndex(ctx, db); err != nil {

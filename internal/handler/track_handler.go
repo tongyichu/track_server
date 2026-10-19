@@ -380,6 +380,13 @@ func (h *TrackHandler) GetTrackDetail(ctx context.Context, c *app.RequestContext
 		c.JSON(status, utils.H{"error": err.Error()})
 		return
 	}
+	meta := middleware.GetRequestMeta(c)
+	if meta != nil {
+		if err := h.trackSvc.FillTrackLikeState(ctx, meta.AuthUserID, track); err != nil {
+			c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+			return
+		}
+	}
 	c.JSON(http.StatusOK, successResponse(track))
 }
 

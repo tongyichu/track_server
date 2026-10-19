@@ -51,6 +51,7 @@ Authorization: Bearer <token>
     "track_used_count": 3,
     "following_count": 8,
     "follower_count": 12,
+    "received_like_count": 6,
     "is_following": false,
     "is_self": true,
     "account_restriction": {
@@ -110,6 +111,7 @@ Authorization: Bearer <token>
 | `data.track_used_count` | int64 | 轨迹被使用总次数：该用户轨迹在 `track_navigations` 中产生的使用记录数总和（同口径过滤）。 |
 | `data.following_count` | int64 | 该用户关注的人数。 |
 | `data.follower_count` | int64 | 该用户的粉丝数。 |
+| `data.received_like_count` | int64 | 其他用户对该用户公开、已结束且已上传轨迹的现存点赞总数（不含自赞）；明细见 [track-likes.md](track-likes.md)。 |
 | `data.is_following` | bool | 当前登录用户是否关注该用户；查看自己时固定为 `false`。 |
 | `data.is_self` | bool | 当前登录用户是否正在查看自己的主页。 |
 | `data.account_restriction` | object | 当前登录用户查看自己且账号存在生效限制时返回；查看他人或未被限制时不返回。结构同 [account-restriction.md](account-restriction.md#账号限制错误) 中的限制记录。 |
@@ -406,3 +408,7 @@ MySQL 启动时幂等补充 `users.background_url VARCHAR(2048) NULL`、`users.g
 - `limit` 默认 20、最大 50；`cursor` 原样透传，两个接口的游标不能混用。仅 `has_more=true` 时提供 `next_cursor`。
 - 缺少或无效 Token 返回 401；非法 `user_id`、`limit` 或 `cursor` 返回 400；目标用户不存在返回 404；已存在用户没有记录时返回 200 和空列表。
 - 无数据库 schema 变更；MySQL、Mongo 和内存仓储均支持。先部署服务端，再发布客态主页客户端。
+
+### 个人主页获赞
+
+用户详情 `received_like_count` 为真实获赞数；点击后使用 `GET /user/:user_id/likes/received/tracks` 查询按轨迹聚合的获赞卡片，点击人数使用 `GET /user/:user_id/likes/received/tracks/:track_id/users` 分页查看点赞人，支持主客态。完整协议见 [track-likes.md](track-likes.md)。
