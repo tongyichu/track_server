@@ -54,6 +54,9 @@ type TrackRepository interface {
 	// - 列表默认按 start_time 倒序；
 	// - 是否包含进行中的轨迹由具体实现决定（推荐只返回已结束轨迹）。
 	ListByUserID(ctx context.Context, userID int64, cursor *models.TrackListCursor, limit int) ([]*models.Track, error)
+	// Public profile lists exclude private, deleted, running and unuploaded tracks before pagination.
+	ListPublicByUserID(ctx context.Context, userID int64, cursor *models.TrackListCursor, limit int) ([]*models.Track, error)
+	CountPublicByUserID(ctx context.Context, userID int64) (int64, error)
 	// ListRecommend 返回公开、已完成的推荐轨迹；cityCode 非空时仅返回对应城市的轨迹。
 	ListRecommend(ctx context.Context, userID int64, cityCode string, cursor *models.TrackListCursor, limit int) ([]*models.Track, error)
 	// Search 返回标题匹配的公开轨迹；cityCode、trackType 非空时分别按城市和运动类型精确筛选。

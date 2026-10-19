@@ -13,6 +13,8 @@
 | 轨迹搜索列表（支持 `city_code` / `track_type` 筛选） | GET | `/track/search/list` | 是 | [track.md](track.md#7-轨迹搜索列表) |
 | 导航使用上报 | POST | `/track/:track_id/navigation/report` | 是 | [collect-navigation.md](collect-navigation.md#8-导航使用上报) |
 | 我的轨迹列表 | GET | `/track/my/list` | 是 | [track.md](track.md#9-我的轨迹列表) |
+| 用户主页已传轨迹 | GET | `/user/:user_id/tracks` | 是 | [user.md](user.md#个人主页轨迹列表) |
+| 用户主页收藏轨迹 | GET | `/user/:user_id/collections` | 是 | [user.md](user.md#个人主页轨迹列表) |
 | 获取用户详情 | GET | `/user/:user_id/detail` | 是 | [user.md](user.md#10-获取用户详情) |
 | 更新轨迹信息 | PUT | `/track/:track_id/update` | 是 | [track.md](track.md#11-更新轨迹信息) |
 | 删除轨迹 | DELETE | `/track/:track_id` | 是 | [track.md](track.md#12-删除轨迹) |

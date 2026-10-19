@@ -91,6 +91,8 @@ track_server/
 
 ### 稳定默认值
 
+- 客态个人主页的 `GET /user/:user_id/tracks` 和 `GET /user/:user_id/collections` 使用路径用户作为列表所属用户、JWT 用户作为浏览者；`collected` 必须按浏览者计算。已传轨迹在仓储分页前过滤私密、删除、进行中和原始轨迹地址为空的记录；收藏列表跳过失效及不可公开查看的记录后继续补页。`total_count` 只统计接口可见记录，不复用包含私密轨迹的用户详情统计。主态继续使用原有本人列表接口。三种仓储实现与协议入口见 `internal/repository/profile_tracks.go`、`internal/service/profile_tracks.go`、`docs/api/user.md`。
+
 - 个人资料的 `background_url` 用于主页顶部，数据库保存原始 OSS 地址，响应经独立 `profile_backgrounds` 缓存并使用源地址摘要区分版本；`gender` 只允许空串、`male`、`female`，详情仅本人可读。改字段时同步 MySQL 建表及幂等列迁移、Mongo/内存仓储、用户详情/更新协议与缓存注入，参见 `docs/api/user.md`。
 
 - 默认运动类型由 `internal/config/config.go:DefaultTrackTypeConfigs` 维护，当前 code 为 `hiking`、`running`、`climbing`、`riding`、`driving`，展示名为 `徒步`、`跑步`、`爬山`、`骑行`、`自驾`；`GET /api/v1/track/types`、轨迹入库 `track_type`、运动类型图标元信息和成就系统类型口径应保持一致。`track_geo_indexes.track_type` 与 `track_route_groups.track_type` 只允许保存这五个英文 code，历史别名或未知类型需在地图索引阶段归一/兜底。

@@ -369,3 +369,40 @@ Content-Type: application/json
 ### 存量数据兼容
 
 MySQL 启动时幂等补充 `users.background_url VARCHAR(2048) NULL`、`users.gender VARCHAR(16) NOT NULL DEFAULT ''`；旧记录均显示默认背景和未设置性别。Mongo 文档缺少新字段时按空值读取；内存仓储保持相同语义。先部署服务端（包含迁移与静态图片缓存），再发布调用新字段的客户端。
+
+
+## 个人主页轨迹列表
+
+以下接口用于查看指定用户的主页，均需有效业务 JWT；`user_id` 是主页所属用户，当前浏览者仍以 Token 为准。不能用这两个接口代替主态的 `/track/my/list` 和 `/track/collected/list`。
+
+### 已传轨迹
+
+`GET /api/v1/user/:user_id/tracks?limit=20&cursor=<next_cursor>`
+
+只返回该用户 `status=normal`、`is_running=false` 且原始轨迹地址非空的已上传轨迹，排除私密与删除记录。按 `start_time DESC, id DESC` 排序，过滤条件在仓储分页前生效；即使本人访问该公开接口，也不返回私密轨迹。
+
+### 收藏的轨迹
+
+`GET /api/v1/user/:user_id/collections?limit=20&cursor=<next_cursor>`
+
+返回该用户收藏中仍可公开查看的轨迹，排除不存在、已删除、私密和进行中的轨迹。按收藏时间倒序，使用收藏时间和轨迹 ID 组成的游标。遇到失效收藏会继续查找后续可见记录，避免空页造成错误的列表结束。
+
+### 共同响应与错误
+
+```json
+{
+  "code": 0,
+  "data": {
+    "items": [],
+    "total_count": 0,
+    "has_more": false
+  }
+}
+```
+
+- `items` 使用 `TrackSummary`，含作者资料、资源 URL、收藏/使用总数以及 `collected`；空列表固定为 `[]`。
+- `collected` 表示**当前浏览者**是否收藏，不表示主页所属用户的收藏状态。收藏列表中该字段也可能为 `false`。
+- `total_count` 仅统计本接口可见记录，与当前列表口径一致，不直接使用用户详情中可能包含私密轨迹的 `track_count`。
+- `limit` 默认 20、最大 50；`cursor` 原样透传，两个接口的游标不能混用。仅 `has_more=true` 时提供 `next_cursor`。
+- 缺少或无效 Token 返回 401；非法 `user_id`、`limit` 或 `cursor` 返回 400；目标用户不存在返回 404；已存在用户没有记录时返回 200 和空列表。
+- 无数据库 schema 变更；MySQL、Mongo 和内存仓储均支持。先部署服务端，再发布客态主页客户端。
