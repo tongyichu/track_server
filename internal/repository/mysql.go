@@ -23,6 +23,17 @@ func NewMySQLRepositories(ctx context.Context, db *sql.DB) (TrackRepository, Use
 }
 
 func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
+	for _, statement := range strings.Split(commentSchema, ";") {
+		if strings.TrimSpace(statement) == "" {
+			continue
+		}
+		if _, err := db.ExecContext(ctx, statement); err != nil {
+			return err
+		}
+	}
+	if err := ensureMySQLCommentLikerIndex(ctx, db); err != nil {
+		return err
+	}
 	stmts := []string{
 		trackLikesSchema,
 		`CREATE TABLE IF NOT EXISTS users (

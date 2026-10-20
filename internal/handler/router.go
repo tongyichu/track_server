@@ -13,6 +13,7 @@ import (
 
 // Deps groups all handler dependencies.
 type Deps struct {
+	CommentService             *service.CommentService
 	TrackLikeService           *service.TrackLikeService
 	TrackService               *service.TrackService
 	TrackMapService            *service.TrackMapService
@@ -48,6 +49,7 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 
 	trackHandler := NewTrackHandler(deps.TrackService, deps.RecommendationService)
 	likeHandler := NewTrackLikeHandler(deps.TrackLikeService)
+	commentHandler := NewCommentHandler(deps.CommentService)
 	trackSubmissionHandler := NewTrackSubmissionHandler(deps.TrackSubmissionService)
 	trackMapHandler := NewTrackMapHandler(deps.TrackMapService)
 	mapAreaHandler := NewMapAreaHandler(maparea.DefaultCatalog())
@@ -228,9 +230,16 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 	auth.POST("/track/:track_id/like", likeHandler.Like)
 	auth.DELETE("/track/:track_id/like", likeHandler.Unlike)
 	auth.GET("/track/:track_id/like/status", likeHandler.Status)
-	auth.GET("/user/:user_id/likes/received/list", likeHandler.Received)
-	auth.GET("/user/:user_id/likes/received/tracks", likeHandler.ReceivedTracks)
-	auth.GET("/user/:user_id/likes/received/tracks/:track_id/users", likeHandler.ReceivedTrackLikers)
+	auth.GET("/track/:track_id/comments", commentHandler.List)
+	auth.POST("/track/:track_id/comments", commentHandler.Create)
+	auth.GET("/track/:track_id/comments/:comment_id/replies", commentHandler.List)
+	auth.GET("/track/:track_id/comments/:comment_id/likes", commentHandler.Likers)
+	auth.GET("/track/:track_id/comments/:comment_id", commentHandler.Detail)
+	auth.DELETE("/track/:track_id/comments/:comment_id", commentHandler.Delete)
+	auth.PUT("/track/:track_id/comments/:comment_id/reaction", commentHandler.React)
+	auth.POST("/track/:track_id/comments/images/prepare", commentHandler.PrepareImage)
+	auth.GET("/track/:track_id/comments/:comment_id/images/:image_id", commentHandler.Image)
+
 	auth.GET("/user/:user_id/tracks", trackHandler.ListProfileTracks)
 	auth.GET("/user/:user_id/collections", trackHandler.ListProfileCollections)
 	auth.POST("/user/:user_id/follow", userHandler.FollowUser)

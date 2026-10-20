@@ -91,3 +91,7 @@
 `DELETE /api/v1/ops/users/:user_id/restrictions/current?operator=admin`
 
 运维内部接口，使用 `X-Internal-Token` 鉴权。只解除当前未过期的 active 限制，返回 `revoked_count`。
+
+## 评论与回复
+
+新增评论、回复、评论图片预约和评论赞踩（reaction 非 0）也执行账号限制检查；限制文案为“账号已被限制，禁止评论或评价评论”。查询、删除本人评论和取消评论评价仍允许。实现位于 CommentService，因同一评价接口也承担允许的取消操作，不以整条 PUT 路由统一拦截。

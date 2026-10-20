@@ -43,6 +43,12 @@ services:
   mongo:
     image: mongo:7.0
     container_name: hertz-track-mongo
+    command: ["mongod", "--replSet", "track-rs", "--bind_ip_all"]
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval 'try { rs.status().ok } catch (e) { rs.initiate({_id: \"track-rs\", members: [{_id: 0, host: \"mongo:27017\"}]}).ok }' | tail -1 | grep 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
     volumes:
       - mongo_data:/data/db
     environment:

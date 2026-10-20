@@ -104,24 +104,3 @@ func (r *MongoTrackLikeRepository) CountReceived(ctx context.Context, ownerID in
 	}
 	return 0, cur.Err()
 }
-func (r *MongoTrackLikeRepository) ListReceived(ctx context.Context, ownerID int64, c *models.TrackLikeCursor, limit int) ([]*models.TrackLike, error) {
-	pipeline := receivedLikesPipeline(ownerID)
-	if c != nil {
-		pipeline = append(pipeline, bson.D{{Key: "$match", Value: bson.M{"$or": bson.A{
-			bson.M{"created_at": bson.M{"$lt": c.CreatedAt}},
-			bson.M{"created_at": c.CreatedAt, "track_id": bson.M{"$lt": c.TrackID}},
-			bson.M{"created_at": c.CreatedAt, "track_id": c.TrackID, "user_id": bson.M{"$lt": c.UserID}},
-		}}}})
-	}
-	pipeline = append(pipeline, bson.D{{Key: "$sort", Value: bson.D{{Key: "created_at", Value: -1}, {Key: "track_id", Value: -1}, {Key: "user_id", Value: -1}}}}, bson.D{{Key: "$limit", Value: int64(limit)}}, bson.D{{Key: "$project", Value: bson.M{"track": 0}}})
-	cur, err := r.collection.Aggregate(ctx, pipeline)
-	if err != nil {
-		return nil, err
-	}
-	defer cur.Close(ctx)
-	result := make([]*models.TrackLike, 0)
-	if err := cur.All(ctx, &result); err != nil {
-		return nil, err
-	}
-	return result, nil
-}

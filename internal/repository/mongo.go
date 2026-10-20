@@ -570,7 +570,7 @@ func (r *MongoAccountRestrictionRepository) RevokeActiveAccountRestrictions(cont
 	return 0, errors.New("MongoAccountRestrictionRepository.RevokeActiveAccountRestrictions not implemented")
 }
 
-// MongoCollectRepository is a stub of CollectRepository backed by MongoDB.
+// MongoCollectRepository implements CollectRepository backed by MongoDB.
 type MongoCollectRepository struct {
 	collection *mongo.Collection
 }
@@ -578,12 +578,14 @@ type MongoCollectRepository struct {
 // NewMongoCollectRepository constructs a Mongo-backed CollectRepository.
 func NewMongoCollectRepository(collection *mongo.Collection) *MongoCollectRepository {
 	if collection != nil {
-		_, _ = collection.Indexes().CreateOne(context.Background(), mongo.IndexModel{Keys: bson.D{{Key: "user_id", Value: 1}, {Key: "track_id", Value: 1}}, Options: options.Index().SetName("uk_collect_user_track").SetUnique(true)})
+		_, _ = collection.Indexes().CreateMany(context.Background(), []mongo.IndexModel{
+			{Keys: bson.D{{Key: "user_id", Value: 1}, {Key: "track_id", Value: 1}}, Options: options.Index().SetName("uk_collect_user_track").SetUnique(true)},
+			{Keys: bson.D{{Key: "track_id", Value: 1}}, Options: options.Index().SetName("idx_collects_track")},
+		})
 	}
 	return &MongoCollectRepository{collection: collection}
 }
 
-// IsCollected is not implemented in this demo and returns an error.
 func (r *MongoCollectRepository) IsCollected(ctx context.Context, userID int64, trackID string) (bool, error) {
 	err := r.collection.FindOne(ctx, bson.M{"user_id": userID, "track_id": trackID}).Err()
 	if errors.Is(err, mongo.ErrNoDocuments) {
@@ -642,8 +644,9 @@ func (r *MongoCollectRepository) ListByUserID(ctx context.Context, userID int64,
 	return items, rows.Err()
 }
 
-func (r *MongoCollectRepository) RemoveByTrackID(context.Context, string) error {
-	return errors.New("MongoCollectRepository.RemoveByTrackID not implemented")
+func (r *MongoCollectRepository) RemoveByTrackID(ctx context.Context, trackID string) error {
+	_, err := r.collection.DeleteMany(ctx, bson.M{"track_id": trackID})
+	return err
 }
 
 func (r *MongoCollectRepository) CountByTrackIDs(ctx context.Context, trackIDs []string) (map[string]int64, error) {
@@ -674,14 +677,18 @@ func (r *MongoCollectRepository) CountByTrackIDs(ctx context.Context, trackIDs [
 	return result, rows.Err()
 }
 
-// AddCollect is not implemented in this demo and returns an error.
-func (r *MongoCollectRepository) AddCollect(context.Context, int64, string) error {
-	return errors.New("MongoCollectRepository.AddCollect not implemented")
+func (r *MongoCollectRepository) AddCollect(ctx context.Context, userID int64, trackID string) error {
+	_, err := r.collection.UpdateOne(ctx, bson.M{"user_id": userID, "track_id": trackID},
+		bson.M{"$setOnInsert": models.TrackCollect{UserID: userID, TrackID: trackID, CreatedAt: time.Now()}}, options.Update().SetUpsert(true))
+	if mongo.IsDuplicateKeyError(err) {
+		return nil
+	}
+	return err
 }
 
-// RemoveCollect is not implemented in this demo and returns an error.
-func (r *MongoCollectRepository) RemoveCollect(context.Context, int64, string) error {
-	return errors.New("MongoCollectRepository.RemoveCollect not implemented")
+func (r *MongoCollectRepository) RemoveCollect(ctx context.Context, userID int64, trackID string) error {
+	_, err := r.collection.DeleteOne(ctx, bson.M{"user_id": userID, "track_id": trackID})
+	return err
 }
 
 // MongoFollowRepository is a stub of FollowRepository backed by MongoDB.

@@ -386,6 +386,10 @@ func (h *TrackHandler) GetTrackDetail(ctx context.Context, c *app.RequestContext
 			c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
 			return
 		}
+		if err := h.trackSvc.FillTrackCollectedState(ctx, meta.AuthUserID, track); err != nil {
+			c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+			return
+		}
 	}
 	c.JSON(http.StatusOK, successResponse(track))
 }
@@ -494,7 +498,12 @@ func (h *TrackHandler) CollectTrack(ctx context.Context, c *app.RequestContext) 
 		c.JSON(status, utils.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, successResponse(StatusResult{Status: "ok"}))
+	state, err := h.trackSvc.CollectionStatus(ctx, userID, trackID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, successResponse(state))
 }
 
 // UncollectTrack handles DELETE /api/track_collect
@@ -514,5 +523,10 @@ func (h *TrackHandler) UncollectTrack(ctx context.Context, c *app.RequestContext
 		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, successResponse(StatusResult{Status: "ok"}))
+	state, err := h.trackSvc.CollectionStatus(ctx, userID, trackID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, successResponse(state))
 }

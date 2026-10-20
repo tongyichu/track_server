@@ -14,7 +14,8 @@
 | 轨迹投稿、审核状态、优质投稿展示 | [track-submission.md](track-submission.md) |
 | 首页地图模式、路线发现、地图聚合 | [track-map.md](track-map.md) |
 | 收藏、取消收藏、收藏列表、导航上报 | [collect-navigation.md](collect-navigation.md) |
-| 点赞、取消点赞、获赞数和获赞记录 | [track-likes.md](track-likes.md) |
+| 轨迹评论、回复、赞踩、点赞人、引用与评论图片 | [track-comments.md](track-comments.md) |
+| 点赞、取消点赞、轨迹点赞数和个人获赞数 | [track-likes.md](track-likes.md) |
 | OSS 直传临时凭证 | [oss.md](oss.md) |
 | 用户详情、个人信息更新、关注/粉丝关系 | [user.md](user.md) |
 | 账号限制拦截与运维管理 | [account-restriction.md](account-restriction.md) |

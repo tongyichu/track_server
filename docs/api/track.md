@@ -327,6 +327,8 @@ Authorization: Bearer <token>
 
 返回 `StandardResponse`，`data` 为 `Track`：
 
+详情直接返回 `collect_count`（当前收藏用户总数）与 `collected`（当前 JWT 用户是否收藏），与列表的收藏总数口径一致，无收藏返回 0。客户端复用轨迹信息展示数量与星星状态，不需要额外请求收藏计数。收藏/取消收藏响应也返回操作后的状态和总数，见 [collect-navigation.md](collect-navigation.md)。
+
 ```json
 {
   "code": 0,
@@ -337,6 +339,8 @@ Authorization: Bearer <token>
     "track_type": "hiking",
     "coordinate_system": "WGS84",
     "title": "详情轨迹",
+    "collected": true,
+    "collect_count": 12,
     "start_time": "2026-04-20T12:00:00Z",
     "end_time": "2026-04-20T12:10:00Z",
     "distance": 1200.5,
@@ -889,4 +893,6 @@ Authorization: Bearer <token>
 
 ## 点赞与收藏
 
-轨迹详情及列表摘要新增 `liked` 与 `like_count`，点赞和收藏互相独立。点赞、取消点赞、状态和获赞明细见 [track-likes.md](track-likes.md)。
+轨迹详情及列表摘要下发 `liked` 与 `like_count`，点赞和收藏互相独立。点赞、取消点赞和获赞统计见 [track-likes.md](track-likes.md)。
+
+轨迹详情、创建/更新响应及列表摘要直接下发 `comment_count` 与 `can_comment`；前者为未删除主评论与回复总数，后者沿用点赞的轨迹可见范围。不可评论时返回 false/0。客户端首屏复用轨迹信息，点击入口后才加载评论列表，不额外调用评论状态接口。发布/删除响应带回更新后的总数。协议见 [track-comments.md](track-comments.md)。

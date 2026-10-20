@@ -67,3 +67,7 @@ curl -X GET "http://<host>:<port>/api/v1/oss/sts-token" \
 
 ---
 
+
+## 评论图片
+
+评论图片先通过独立预约接口获取图片 ID、精确对象 key 和现有格式的 STS 凭证，再直传 JPEG。发布仅传预约 ID，不接受任意图片 URL。读取走评论鉴权接口与私有缓存。协议见 [track-comments.md](track-comments.md)。

@@ -66,27 +66,15 @@ func (r *MySQLTrackLikeRepository) CountReceived(ctx context.Context, ownerID in
 	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*)`+receivedLikeWhere, ownerID).Scan(&count)
 	return count, err
 }
-func (r *MySQLTrackLikeRepository) ListReceived(ctx context.Context, ownerID int64, c *models.TrackLikeCursor, limit int) ([]*models.TrackLike, error) {
-	query := `SELECT l.user_id,l.track_id,l.created_at` + receivedLikeWhere
-	args := []interface{}{ownerID}
-	if c != nil {
-		query += ` AND (l.created_at<? OR (l.created_at=? AND (l.track_id<? OR (l.track_id=? AND l.user_id<?))))`
-		args = append(args, c.CreatedAt, c.CreatedAt, c.TrackID, c.TrackID, c.UserID)
+
+func ensureMySQLTrackLikeIndex(ctx context.Context, db *sql.DB) error {
+	var count int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='track_likes' AND INDEX_NAME='idx_track_likes_track_time'`).Scan(&count); err != nil {
+		return err
 	}
-	query += ` ORDER BY l.created_at DESC,l.track_id DESC,l.user_id DESC LIMIT ?`
-	args = append(args, limit)
-	rows, err := r.db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
+	if count > 0 {
+		return nil
 	}
-	defer rows.Close()
-	result := make([]*models.TrackLike, 0)
-	for rows.Next() {
-		var l models.TrackLike
-		if err := rows.Scan(&l.UserID, &l.TrackID, &l.CreatedAt); err != nil {
-			return nil, err
-		}
-		result = append(result, &l)
-	}
-	return result, rows.Err()
+	_, err := db.ExecContext(ctx, `ALTER TABLE track_likes ADD INDEX idx_track_likes_track_time(track_id,created_at,user_id)`)
+	return err
 }

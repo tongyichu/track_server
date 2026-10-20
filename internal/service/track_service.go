@@ -22,6 +22,7 @@ import (
 
 // TrackService provides business logic around track lifecycle and statistics.
 type TrackService struct {
+	comments        repository.CommentRepository
 	likes           repository.TrackLikeRepository
 	tracks          repository.TrackRepository
 	collects        repository.CollectRepository
@@ -581,6 +582,12 @@ func (s *TrackService) CreateTrack(ctx context.Context, userID int64, input Crea
 		}
 		track.EarnedRewards = rewards
 	}
+	if err := s.fillTrackCommentState(ctx, track); err != nil {
+		return nil, err
+	}
+	if err := s.fillTrackCollectSummary(ctx, userID, track); err != nil {
+		return nil, err
+	}
 	return track, nil
 }
 
@@ -622,6 +629,12 @@ func (s *TrackService) GetTrackDetail(ctx context.Context, trackID string) (*mod
 	}
 	// Recompute summary metrics from points if available.
 	updateTrackMetrics(track)
+	if err := s.fillTrackCommentState(ctx, track); err != nil {
+		return nil, err
+	}
+	if err := s.fillTrackCollectSummary(ctx, 0, track); err != nil {
+		return nil, err
+	}
 	s.decorateTrackAssets(ctx, track)
 	if s.submissions != nil {
 		if sub, subErr := s.submissions.PublicForTrack(ctx, track.ID); subErr == nil {
@@ -1216,6 +1229,7 @@ func (s *TrackService) ListCollectedTracks(ctx context.Context, userID int64, in
 	items := make([]*models.CollectedTrackSummary, 0, len(summaries))
 	for _, s := range summaries {
 		items = append(items, &models.CollectedTrackSummary{
+			CommentCount: s.CommentCount, CanComment: s.CanComment,
 			Liked: s.Liked, LikeCount: s.LikeCount,
 			ID:                        s.ID,
 			UserID:                    s.UserID,
@@ -1426,6 +1440,12 @@ func (s *TrackService) UpdateTrackInfo(ctx context.Context, userID int64, trackI
 		s.rawTrackCache.PrefetchAsync(userID, track.ID, src)
 		track.RawTrackURL = s.rawTrackCache.GuessLocalURL(track.ID, src)
 	}
+	if err := s.fillTrackCommentState(ctx, track); err != nil {
+		return nil, err
+	}
+	if err := s.fillTrackCollectSummary(ctx, userID, track); err != nil {
+		return nil, err
+	}
 	return track, nil
 }
 
@@ -1551,6 +1571,7 @@ func toSummaries(tracks []*models.Track) []*models.TrackSummary {
 		// - 若 city_code 为空/未配置，则 city_name 返回空字符串；
 		// - 映射解析失败会被内部吞掉并兜底为空（不影响列表其它字段返回）。
 		res = append(res, &models.TrackSummary{
+			CanComment:     likeEligible(t),
 			ID:             t.ID,
 			UserID:         t.UserID,
 			SessionID:      t.SessionID,
@@ -1575,6 +1596,7 @@ func toMySummaries(tracks []*models.Track) []*models.MyTrackSummary {
 	res := make([]*models.MyTrackSummary, 0, len(tracks))
 	for _, t := range tracks {
 		res = append(res, &models.MyTrackSummary{
+			CanComment:     likeEligible(t),
 			ID:             t.ID,
 			UserID:         t.UserID,
 			SessionID:      t.SessionID,
@@ -1610,6 +1632,10 @@ func (s *TrackService) fillMyTrackSummaryExtras(ctx context.Context, userID int6
 	if err != nil {
 		return err
 	}
+	commentCounts, err := s.trackCommentCounts(ctx, trackIDs)
+	if err != nil {
+		return err
+	}
 
 	counts := map[string]int64{}
 	if s.collects != nil {
@@ -1632,6 +1658,9 @@ func (s *TrackService) fillMyTrackSummaryExtras(ctx context.Context, userID int6
 	for _, summary := range summaries {
 		summary.Liked = likeStats[summary.ID].Liked
 		summary.LikeCount = likeStats[summary.ID].LikeCount
+		if summary.CanComment {
+			summary.CommentCount = commentCounts[summary.ID]
+		}
 		if s.collects != nil {
 			summary.CollectCount = counts[summary.ID]
 		}
@@ -1682,6 +1711,10 @@ func (s *TrackService) fillTrackSummaryExtras(ctx context.Context, userID int64,
 	// - 写回逻辑只需要一轮 for；
 	// - 数据源（counts/users）都以 map 形式存在，查找是 O(1)。
 	likeStats, err := s.trackLikeStats(ctx, userID, trackIDs)
+	if err != nil {
+		return err
+	}
+	commentCounts, err := s.trackCommentCounts(ctx, trackIDs)
 	if err != nil {
 		return err
 	}
@@ -1745,6 +1778,9 @@ func (s *TrackService) fillTrackSummaryExtras(ctx context.Context, userID int64,
 	for _, summary := range summaries {
 		summary.Liked = likeStats[summary.ID].Liked
 		summary.LikeCount = likeStats[summary.ID].LikeCount
+		if summary.CanComment {
+			summary.CommentCount = commentCounts[summary.ID]
+		}
 		// 导航使用次数
 		if s.navigations != nil {
 			summary.NavigateCount = navCounts[summary.ID]

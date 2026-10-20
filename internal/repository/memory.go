@@ -858,6 +858,9 @@ func (r *InMemoryCollectRepository) AddCollect(_ context.Context, userID int64, 
 	if _, ok := r.collects[userID]; !ok {
 		r.collects[userID] = make(map[string]*models.TrackCollect)
 	}
+	if r.collects[userID][trackID] != nil {
+		return nil
+	}
 	r.collects[userID][trackID] = &models.TrackCollect{
 		UserID:    userID,
 		TrackID:   trackID,

@@ -28,6 +28,7 @@ const testInternalToken = "test_internal_token"
 // testEnv bundles server and in-memory dependencies for HTTP tests.
 type testEnv struct {
 	likeRepo           repository.TrackLikeRepository
+	commentSvc         *service.CommentService
 	h                  *server.Hertz
 	trackRepo          repository.TrackRepository
 	userRepo           repository.UserRepository
@@ -68,7 +69,11 @@ func newTestEnv() *testEnv {
 	userSvc.SetNavigationRepository(navigationRepo)
 	userSvc.SetFollowRepository(followRepo)
 	userSvc.SetTrackLikeRepository(likeRepo)
-	likeSvc := service.NewTrackLikeService(likeRepo, trackRepo, userSvc, trackSvc)
+	likeSvc := service.NewTrackLikeService(likeRepo, trackRepo)
+	commentRepo := repository.NewMemoryCommentRepository()
+	trackSvc.SetTrackCommentRepository(commentRepo)
+	commentSvc := service.NewCommentService(commentRepo, trackRepo, userSvc)
+	commentSvc.SetRestrictions(restrictionSvc)
 	userSvc.SetAchievementService(achievementSvc)
 	userSvc.SetAccountRestrictionService(restrictionSvc)
 	loginSvc := service.NewLoginService(userRepo, loginLogRepo, "", "", testJWTSecret)
@@ -110,6 +115,7 @@ func newTestEnv() *testEnv {
 	h := server.Default()
 	handler.RegisterRoutes(h, handler.Deps{
 		TrackService:               trackSvc,
+		CommentService:             commentSvc,
 		TrackLikeService:           likeSvc,
 		UserService:                userSvc,
 		LoginService:               loginSvc,
@@ -125,7 +131,7 @@ func newTestEnv() *testEnv {
 	})
 
 	return &testEnv{
-		likeRepo: likeRepo, h: h, trackRepo: trackRepo, userRepo: userRepo, collectRepo: collectRepo, followRepo: followRepo, loginLogRepo: loginLogRepo, navigationRepo: navigationRepo, companionRepo: companionRepo, feedbackRepo: feedbackRepo, achievementRepo: achievementRepo, restrictionRepo: restrictionRepo, loginSvc: loginSvc, tokenBlacklist: tokenBlacklist, internalToken: testInternalToken, staticRoot: staticRoot, avatarCacheDir: avatarCacheDir, screenshotCacheDir: screenshotCacheDir}
+		commentSvc: commentSvc, likeRepo: likeRepo, h: h, trackRepo: trackRepo, userRepo: userRepo, collectRepo: collectRepo, followRepo: followRepo, loginLogRepo: loginLogRepo, navigationRepo: navigationRepo, companionRepo: companionRepo, feedbackRepo: feedbackRepo, achievementRepo: achievementRepo, restrictionRepo: restrictionRepo, loginSvc: loginSvc, tokenBlacklist: tokenBlacklist, internalToken: testInternalToken, staticRoot: staticRoot, avatarCacheDir: avatarCacheDir, screenshotCacheDir: screenshotCacheDir}
 }
 
 func (e *testEnv) close() {

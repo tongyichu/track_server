@@ -515,3 +515,21 @@ CREATE TABLE IF NOT EXISTS track_likes (
     KEY idx_track_likes_track_time (track_id, created_at, user_id),
     KEY idx_track_likes_time (created_at, track_id, user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='轨迹点赞关系';
+
+
+CREATE TABLE IF NOT EXISTS track_comments (
+ id VARCHAR(64) NOT NULL PRIMARY KEY, track_id VARCHAR(64) NOT NULL, root_id VARCHAR(64) NOT NULL DEFAULT '', reply_to_id VARCHAR(64) NOT NULL DEFAULT '', user_id BIGINT NOT NULL,
+ client_id VARCHAR(64) NOT NULL, request_hash VARCHAR(64) NOT NULL, content TEXT NOT NULL, media_json TEXT NOT NULL,
+ deleted TINYINT NOT NULL DEFAULT 0, reply_count BIGINT NOT NULL DEFAULT 0, like_count BIGINT NOT NULL DEFAULT 0, dislike_count BIGINT NOT NULL DEFAULT 0,
+ created_at DATETIME(6) NOT NULL, updated_at DATETIME(6) NOT NULL,
+ UNIQUE KEY uk_comment_client(user_id,client_id),
+ KEY idx_comment_page(track_id,root_id,created_at,id),
+ KEY idx_comment_author(root_id,user_id,deleted,created_at,id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE IF NOT EXISTS track_comment_stats (track_id VARCHAR(64) NOT NULL PRIMARY KEY,total_count BIGINT NOT NULL DEFAULT 0) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE IF NOT EXISTS track_comment_reactions (comment_id VARCHAR(64) NOT NULL,user_id BIGINT NOT NULL,reaction TINYINT NOT NULL,PRIMARY KEY(comment_id,user_id), KEY idx_comment_likers(comment_id,reaction,user_id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE IF NOT EXISTS track_comment_images (
+ id VARCHAR(64) NOT NULL PRIMARY KEY, track_id VARCHAR(64) NOT NULL,user_id BIGINT NOT NULL,comment_id VARCHAR(64) NOT NULL DEFAULT '',object_key VARCHAR(1024) NOT NULL,oss_url VARCHAR(2048) NOT NULL,
+ width INT NOT NULL,height INT NOT NULL,byte_size BIGINT NOT NULL,created_at DATETIME(6) NOT NULL,
+ KEY idx_comment_image_owner(user_id,created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

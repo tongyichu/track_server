@@ -111,7 +111,7 @@ Authorization: Bearer <token>
 | `data.track_used_count` | int64 | 轨迹被使用总次数：该用户轨迹在 `track_navigations` 中产生的使用记录数总和（同口径过滤）。 |
 | `data.following_count` | int64 | 该用户关注的人数。 |
 | `data.follower_count` | int64 | 该用户的粉丝数。 |
-| `data.received_like_count` | int64 | 其他用户对该用户公开、已结束且已上传轨迹的现存点赞总数（不含自赞）；明细见 [track-likes.md](track-likes.md)。 |
+| `data.received_like_count` | int64 | 其他用户对该用户公开、已结束且已上传轨迹的现存点赞总数（不含自赞）；统计规则见 [track-likes.md](track-likes.md)。 |
 | `data.is_following` | bool | 当前登录用户是否关注该用户；查看自己时固定为 `false`。 |
 | `data.is_self` | bool | 当前登录用户是否正在查看自己的主页。 |
 | `data.account_restriction` | object | 当前登录用户查看自己且账号存在生效限制时返回；查看他人或未被限制时不返回。结构同 [account-restriction.md](account-restriction.md#账号限制错误) 中的限制记录。 |
@@ -411,4 +411,4 @@ MySQL 启动时幂等补充 `users.background_url VARCHAR(2048) NULL`、`users.g
 
 ### 个人主页获赞
 
-用户详情 `received_like_count` 为真实获赞数；点击后使用 `GET /user/:user_id/likes/received/tracks` 查询按轨迹聚合的获赞卡片，点击人数使用 `GET /user/:user_id/likes/received/tracks/:track_id/users` 分页查看点赞人，支持主客态。完整协议见 [track-likes.md](track-likes.md)。
+用户详情继续返回 `received_like_count`，主态和客态个人主页仅展示获赞总数，不提供点击入口。获赞列表和点赞人名单查询接口已移除。统计规则见 [track-likes.md](track-likes.md)。

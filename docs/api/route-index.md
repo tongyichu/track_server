@@ -6,16 +6,20 @@
 | --- | --- | --- | --- | --- |
 | 创建轨迹 | POST | `/track/create` | 是 | [track.md](track.md#1-创建轨迹) |
 | 推荐轨迹列表（个性化 Feed Session，支持 `city_code` 筛选） | GET | `/track/recommend/list` | 是 | [track.md](track.md#2-推荐轨迹列表) |
-| 轨迹详情 | GET | `/track/:track_id/detail` | 是 | [track.md](track.md#3-轨迹详情) |
+| 轨迹详情（含收藏数与本人收藏状态） | GET | `/track/:track_id/detail` | 是 | [track.md](track.md#3-轨迹详情) |
 | 获取 OSS STS 临时凭证 | GET | `/oss/sts-token` | 是 | [oss.md](oss.md#4-获取-oss-sts-临时凭证直传上传) |
+| 轨迹评论列表 / 发表 | GET / POST | `/track/:track_id/comments` | 是 | [track-comments.md](track-comments.md) |
+| 单条评论 / 删除 | GET / DELETE | `/track/:track_id/comments/:comment_id` | 是 | [track-comments.md](track-comments.md) |
+| 评论回复列表 | GET | `/track/:track_id/comments/:comment_id/replies` | 是 | [track-comments.md](track-comments.md) |
+| 评论点赞人列表 | GET | `/track/:track_id/comments/:comment_id/likes` | 是 | [track-comments.md](track-comments.md) |
+| 评论赞踩状态 | PUT | `/track/:track_id/comments/:comment_id/reaction` | 是 | [track-comments.md](track-comments.md) |
+| 评论图片预约 | POST | `/track/:track_id/comments/images/prepare` | 是 | [track-comments.md](track-comments.md) |
+| 评论图片读取 | GET | `/track/:track_id/comments/:comment_id/images/:image_id` | 是 | [track-comments.md](track-comments.md) |
 | 点赞轨迹 | POST | `/track/:track_id/like` | 是 | [track-likes.md](track-likes.md) |
 | 取消点赞 | DELETE | `/track/:track_id/like` | 是 | [track-likes.md](track-likes.md) |
 | 轨迹点赞状态 | GET | `/track/:track_id/like/status` | 是 | [track-likes.md](track-likes.md) |
-| 用户聚合获赞轨迹 | GET | `/user/:user_id/likes/received/tracks` | 是 | [track-likes.md](track-likes.md) |
-| 轨迹获赞人列表 | GET | `/user/:user_id/likes/received/tracks/:track_id/users` | 是 | [track-likes.md](track-likes.md) |
-| 用户获赞记录 | GET | `/user/:user_id/likes/received/list` | 是 | [track-likes.md](track-likes.md) |
-| 收藏轨迹 | POST | `/track_collect` | 是 | [collect-navigation.md](collect-navigation.md#5-收藏轨迹) |
-| 取消收藏轨迹 | DELETE | `/track_collect` | 是 | [collect-navigation.md](collect-navigation.md#6-取消收藏轨迹) |
+| 收藏轨迹（返回收藏状态及总数） | POST | `/track_collect` | 是 | [collect-navigation.md](collect-navigation.md#5-收藏轨迹) |
+| 取消收藏轨迹（返回收藏状态及总数） | DELETE | `/track_collect` | 是 | [collect-navigation.md](collect-navigation.md#6-取消收藏轨迹) |
 | 轨迹搜索列表（支持 `city_code` / `track_type` 筛选） | GET | `/track/search/list` | 是 | [track.md](track.md#7-轨迹搜索列表) |
 | 导航使用上报 | POST | `/track/:track_id/navigation/report` | 是 | [collect-navigation.md](collect-navigation.md#8-导航使用上报) |
 | 我的轨迹列表 | GET | `/track/my/list` | 是 | [track.md](track.md#9-我的轨迹列表) |

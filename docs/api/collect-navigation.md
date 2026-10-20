@@ -6,6 +6,8 @@
 
 将指定轨迹加入当前用户的收藏列表。
 
+`collect_count` 统计当前仍有效的用户与轨迹收藏关系，同一用户最多计一次，包含作者自藏；取消后减去该关系。重复收藏幂等，不累加次数。详情与列表直接下发同口径的总数，不新增计数接口。
+
 - 返回统一响应格式 `StandardResponse`。
 - 用户身份仅通过 `Authorization` 中的 JWT 解析，不需要也不应传递 `user_id`。
 - 当前实现通过 Query 参数接收 `track_id`。
@@ -33,7 +35,9 @@ Authorization: Bearer <token>
 {
   "code": 0,
   "data": {
-    "status": "ok"
+    "status": "ok",
+    "collected": true,
+    "collect_count": 12
   }
 }
 ```
@@ -50,6 +54,8 @@ Authorization: Bearer <token>
 ## 6. 取消收藏轨迹
 
 将指定轨迹从当前用户的收藏列表中移除。
+
+重复取消幂等。响应的 `collected` 与 `collect_count` 来自操作后读取的现存关系，客户端直接采用响应，不自行累减计数；无收藏返回 0。
 
 - 返回统一响应格式 `StandardResponse`。
 - 用户身份仅通过 `Authorization` 中的 JWT 解析，不需要也不应传递 `user_id`。
@@ -78,7 +84,9 @@ Authorization: Bearer <token>
 {
   "code": 0,
   "data": {
-    "status": "ok"
+    "status": "ok",
+    "collected": false,
+    "collect_count": 11
   }
 }
 ```

@@ -138,3 +138,118 @@ assembleDebug、assembleDebugAndroidTest、CountFormatterTest 三项 JVM 测试�
 ### 2026-10-20：用户授权同步提交推送
 
 用户明确要求 server 和客户端代码均同步提交推送。两个仓库均为 main，git fetch origin 后 HEAD 与 origin/main 没有分叉，无需合并。提交范围包含本轮完整点赞/聚合获赞、数量格式与先前未提交的小幅界面调整，排除 APK、缓存、日志和敏感配置。提交前服务端 go build ./... 通过；沿用刚完成的 go test ./...、客户端 Debug/测试包构建、5 项相关 JVM 单测和 12 项设备回归结果。仍未部署服务端，线上新接口需要单独更新服务。
+
+
+## 2026-10-20：移除获赞列表，保留获赞总数
+
+用户明确要求：“获赞列表页和获赞列表的相关接口下掉吧……获赞数还是得留着的。”本节覆盖上文有关保留获赞列表/旧列表兼容入口的历史描述。
+
+- android-track 移除获赞页、点赞人名单页及其 Manifest、布局、字符串和 Retrofit/repository/模型；个人主页获赞数保留且不可点击，关注/粉丝仅保留两个标签。
+- track_server 移除三个 GET 查询路由（逐条记录、按轨迹聚合、轨迹点赞人），删除 handler/service、三仓储列表查询和游标模型。保留点赞、取消点赞、状态查询、轨迹点赞数和用户详情 received_like_count。点赞关系、表结构和已有索引保留；MySQL 幂等索引初始化函数仅移动到 track_likes_mysql.go。
+- 内存仓储 CountReceived 改为独立计数，无需依赖已删除列表方法或排序；仍排除自赞、私密、删除、进行中、未上传和他人轨迹。
+- 同步 docs/api/README.md、models.md、route-index.md、track-likes.md、user.md、中英文隐私说明及服务端 AGENTS.md 中的点赞约定。
+- 已验证 go build ./... 与 go test ./... 全量通过；Android ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest :app:testDebugUnitTest 通过；两个仓库 git diff --check 通过。
+- 模拟器 emulator-5554：TrackLikesTest 与 GuestProfileTest 合计 9 个 instrumentation 测试通过，包含获赞数不可点击、两标签及重建、点赞/取消/数量显示等。服务端测试覆盖移除的三个路由返回 404、自赞不计个人获赞、幂等和可见性计数。
+- 真机小米 3e7cd913 已安装 Debug 与测试包，启动 LoginActivity 后确认前台为 MainActivity。首次真机自动化停在既有详情用例，主动停止该次 instrumentation 并在模拟器完成回归，不把真机中止结果算作通过。
+- 已运行 check_freshness.py 和 verify_agents.py；仍有既有 root AGENTS 超过 16KB、优先级/元数据缺失和 Go 源码超长等治理问题。全局入口规则未落盘（~/.codex/AGENTS.md 为空），推荐修复命令：python /Users/foxcoder/.codex/skills/agents-md-generator/scripts/manage_docs.py sync-global-codex-agents . --write。本次未扩展治理重构。
+
+未提交、推送或部署服务端；接口下线在部署新版后生效，旧客户端访问原列表路径将收到 404。
+
+## 2026-10-20：轨迹评论、回复与图片
+
+用户授权客户端与服务端完整实现评论，UI 尽量复刻其小米截图，颜色沿用 App 主题。最终口径：普通 emoji、最多三张图片且允许纯图；先不做主动 @、话题、评论分享、编辑和通知；回复列表平铺，回复某条回复只引用直接目标。作者最新回复须直接展示在主评论列表。沿用点赞的轨迹可见范围。
+
+- Android 新增独立 `:comments` Library；详情页底部接入评论入口及总数。评论/回复同尺寸浮层、回复页从左进入、返回保留主列表位置；键盘上方另开发布窗口，提供引用、草稿、图片选择/移除/预览、普通 emoji、1000 Unicode code point 限制及失败重试。宿主提供语义色、MingCute 图标、通用 AppModalDialog、用户主页、图片查看与 OSS 上传。日间蓝色、夜间主题强调色均复用现有颜色。
+- 服务端新增 `CommentService`、鉴权 handler、MySQL/Mongo/内存三种仓储与四张表/collection，接口见 `docs/api/track-comments.md`。主评论/回复分别倒序游标分页；仅当前页附最新未删除作者回复，批量装饰用户/引用/评价，头像不逐条同步下载。总数、楼层回复数、互斥赞踩随事务维护；按用户和 client_comment_id 幂等，冲突内容返回 409。
+- 仅本人删除；仍有回复的已删主评论保留占位，最后一条回复删除后隐藏；删除引用目标后不下发原文/图片。账号限制覆盖发布、图片预约和非零赞踩，允许读、删本人及取消赞踩。私密/删除/进行中/未上传轨迹隐藏评论，恢复公开后恢复可见。
+- 图片先预约后直传精确 OSS key，发布验证归属、实际 JPEG 尺寸和大小，最多三张、5MB/张。图片走评论鉴权地址，私有缓存位于 LogDir/comments/images；不挂通用 static、不下发原始 OSS 地址。需要现有 STS 和 OSS_INTERNAL_ENDPOINT；未配置时文本功能可用、图片预约 503。
+- MySQL 发布/删除锁定轨迹统计行，赞踩仅锁对应评论；Read Committed + 有界死锁重试，避免并发首次创建统计行的死锁。Mongo 使用事务，发布/删除经统计文档建立冲突边界、赞踩按评论冲突重试；部署须为副本集，compose 已补单节点副本集配置。未部署或修改生产数据库。
+- 验证：go test ./...、go build ./... 通过；评论 handler/repository 的 go test -race 通过；临时真实 MySQL 8.4、MongoDB 7 副本集及内存同一契约测试全通过，覆盖分页、同时间游标、并发重试、计数、赞踩、占位与图片绑定回滚。测试容器已停止并移除。
+- Android Debug/测试 APK 构建、app 全量 JVM 测试、comments 三项单测通过；新增协议测试验证 URL 解析及发布字段。独立 emulator-5556 上三个 UI 用例在浅色与深色各通过一次，覆盖作者预览、引用回复、emoji 发布、赞踩切换/取消、分页和纯图选择/移除/发布。先前 emulator-5554 受其他应用自动化抢前台影响的失败不计为功能通过证据。
+- 浅色/深色的主列表、回复页及发布窗口截图位于 android-track/build/outputs/comments-qa/，均为测试造数。已安装 Debug 到小米 3e7cd913，启动 LoginActivity 后确认前台 MainActivity。未向线上写入测试评论；真实 OSS 上传未做线上联调。
+- 模块 README、API 分册、路由索引、数据模型、中英文隐私说明及两端 AGENTS 已同步。git diff --check 通过。check_freshness/verify_agents 已运行；既有 AGENTS 元数据缺失、文件超长、全局入口未落盘和旧源码超长仍存在，未扩展无关治理重构，修复入口见上一节。
+
+尚未提交、推送或部署。手机上的新版客户端需服务端部署后才能使用线上评论；Mongo 独立实例需先启用副本集。保留本轮之前获赞列表移除、获赞数保留及海拔地址修复的未提交改动。
+
+### 2026-10-20 跟进：评论元信息合并、空态、首次回复与单图
+
+用户指出评论数应随轨迹信息下发，并连续提供小米参考：空评论列表的气泡插画/首评入口，零回复时先进入回复列表再自动打开输入窗口，以及图片只允许一张。本节覆盖上文“独立评论状态接口”和“最多三张图片”的旧实现。
+
+- 已移除 GET /track/:track_id/comments/status、handler/service 方法与客户端 Retrofit/Gateway 调用。Track、TrackSummary、MyTrackSummary、CollectedTrackSummary 直接下发 comment_count 和 can_comment；创建/更新响应同步。详情在资源 URL 缓存处理前计算可用性，避免缓存失败误隐藏评论；列表按当前页轨迹 ID 从统计表批量读取，不逐条计数。MySQL、Mongo、内存均新增 Totals 实现。
+- 客户端从列表透传评论元信息，在轨迹详情加载回调中同步；仅有本地缓存时复用现有轨迹详情接口补齐。发布/单条/赞踩响应中的 comment_count 为整条轨迹的有效评论+回复总数，删除返回 status/comment_count。发布与删除直接更新入口/弹窗数量，不额外查询计数。旧服务缺少字段时按既有轨迹信息兜底入口可用性，评论功能本身仍须部署后端才能使用。
+- 空评论列表标题显示“评论”，使用主题色气泡插画、“暂无评论，点击抢首评”和固定底部“鸟过留鸣，人过留评”输入；点击空态直接打开发布。加载失败保持重试提示，不展示“暂无评论”。修复通用底部弹窗在空列表时收缩的问题，指定高度时按窗口可用高度完整测量。
+- 主评论零回复时点击回复，先进入该条评论回复页，再自动打开发布窗口与软键盘；关闭发布后停留回复页并保留草稿。标题零回复显示“回复”；有内容时显示数量。首次显示输入窗口显式申请焦点及 IME，等待窗口焦点后弹出，避免需再点一次输入框。已删主评论仍有回复时保留查看回复入口。
+- 评论图片改为客户端/服务端每条最多一张，允许纯图；系统单选，灰色输入区内显示缩略图，支持预览、移除、重选替换。服务端对 image_ids 长度大于 1 返回 400。API 文档、模型说明、路由索引、模块 README 与两端 AGENTS 已同步。
+- 验证：go test ./...、go build ./... 通过，新增详情/推荐/搜索/我的轨迹/收藏/个人轨迹评论元信息、发布/删除总数、私密轨迹、资源缓存失败及多图拒绝回归。批量计数契约在临时真实 MySQL 8.4、Mongo 7 副本集及内存均通过，测试容器已停止并移除。Android Debug、测试 APK、app JVM 全量和 comments 单测通过；六项 UI 回归在浅色/深色各通过，覆盖评论数入口、错误重试与空态、纯图移除/替换/发布、作者预览与引用/赞踩、分页、首次回复与草稿。最后调整空态插画位置后，空态用例又在两种主题各补测通过；断言文字实际可见、列表高度完整、IME 自动可见。
+- 浅色/深色最终截图为 android-track/build/outputs/comments-qa/{light,dark}-{empty,first-reply,single-image}.png，均为造数回归；已逐张检查。参考原图保存于 /private/tmp/track-comments-{empty,first-reply,single-image}-reference.png。Debug 已安装到小米 3e7cd913 并启动，前台 TrackDetailActivity；真实详情截图确认点赞右侧已显示评论入口（/private/tmp/track-comments-entry-final.png）。没有向线上写入测试评论或测试图片，真实 OSS 上传仍未线上联调。
+- git diff --check 通过。AGENTS freshness/verify 已运行，仍有既有 root 超长、元数据/优先级、旧源码超长及全局入口未落盘问题；未扩展治理重构。代码仍未提交、推送或部署，新后端接口和真实计数须部署后生效。
+
+### 2026-10-20 跟进：评论浮层、长按操作与时间展示
+
+- 按小米截图调整 Android 评论界面：列表/操作菜单底部滑入并向下退出，关闭图标、回复按钮、赞踩图标缩小；保留赞踩点击区域。独立发布窗口外框直角，输入区保留小圆角，移除字数标识但仍限制 1000 Unicode code point。通过 CommentSheetKind 区分列表/发布/操作菜单，由通用 AppModalDialog 承载，未修改普通居中弹窗。
+- 本人的未删除评论与回复在正文、引用、图片及行空白处支持长按，底部显示“删除、回复、复制、取消”；移除行内删除文字。复制仅复制正文，纯图复制项禁用；回复复用原有两层/引用逻辑，删除保留宿主确认。菜单随父评论窗口关闭，防止悬空。
+- 用户明确时间只是示例，由实现决定完整规则：不足 1 分钟“刚刚”、不足 1 小时“几分钟前”、不足 24 小时“几小时前”、不足 7 天“几天前”；更早 MM-dd，跨年 yyyy-MM-dd，本地时区，英文单复数。时间由客户端派生，每分钟只更新可见行，不新增服务端请求、不重建列表；异常时间隐藏，轻微未来时间按“刚刚”兜底。
+- 验证：Debug/测试 APK 构建、app 229 项与 comments 6 项 JVM 单测通过，时间回归含全部分界、跨年、本地时区及未来/非法时间。专用 emulator-5556 上七项 UI 用例在日间和夜间各全通过，新增长按取消/复制/回复/删除及无行内删除、无字数标识；首次新增用例匹配到隐藏回复页的同文节点，改为仅匹配可见节点后全量通过。运行时窗口属性确认使用新的底部位移动画。
+- 最终截图 /private/tmp/track-comments-qa/{light,dark}-{main,composer,actions}.png 均为测试造数，已逐张检查。Debug 已安装到小米 3e7cd913，am start -W 确认前台 TrackDetailActivity。模块 README 已更新；本轮没有服务端代码/协议变化，未重复运行 Go 测试。没有线上测试写入、提交、推送或部署，服务端上线要求延续上一节。
+
+### 2026-10-20 跟进：浮层单轴入场、右侧回复页与评论点赞人
+
+本节覆盖此前“回复页从左侧进入”的旧实现。用户要求评论浮层从底部丝滑弹出、回复与点赞人页从右向左进入；回复页主评论 0 赞显示“暂无人赞过”，正数可打开参考截图中的头像昵称名单，不做游客行。
+
+- AppModalDialog 先调用 Dialog.create 完成 AlertController 内容创建，再在窗口 attach 前固定宽高、底部居中、遮罩和导航栏。AlertController 会重置宽高，既不能在 create 前设置后任其覆盖，也不能等到 onShow 才拉成全宽；此前先升起再横移就是显示后尺寸重排。入场只用 280ms 纵向窗口动画。
+- 独立 CommentPaneAnimator 管理同一浮层内的水平翻页：前页保留到入场完成，回复页及 CommentLikersPane 从右侧进入，返回向右退出；取消旧动画使用代次校验，防止迟到回调隐藏当前页。前一页及滚动状态保留。
+- 主评论无赞占位不响应点击，有赞显示人数与箭头；名单只在点击后请求，分页按用户 ID 合并，失败明确显示重试且不会因滚动回调无限自动请求。支持点击用户访问主页，赞踩切换后人数入口跟随响应更新。
+- 新 GET /track/:track_id/comments/:comment_id/likes，标准分页 items 为 id/nickname/avatar_url，total_count 复用 like_count，取 limit+1 判断 has_more。只列当前 reaction=1，含自赞，取消/点踩移除；按 user_id 倒序稳定分页，不表达点赞时间先后，游标绑定轨迹/评论。已删评论（含有回复的占位）、不可见轨迹返回 404，登录与受限账号读取规则沿用评论。没有恢复已下掉的轨迹点赞人或个人获赞列表接口。
+- MySQL/Mongo/内存均实现查询。MySQL 启动为旧表幂等补 idx_comment_likers(comment_id,reaction,user_id)，基线 mysql.sql 同步；Mongo 同字段索引、降序 user_id，仅读索引字段并排除 _id。无新增业务表或名单副本；头像昵称按当前页批量装饰，复用异步头像缓存。
+- API 分册、路由索引、入口 README、模块 README 与中英隐私说明已同步。go test ./...、go build ./...、评论点赞人/仓储契约 race 检查通过；临时真实 MySQL 8.4、Mongo 7 副本集和内存契约通过，覆盖稳定分页、正负评价过滤、自赞、取消/切换及旧表缺索引补齐与重复执行。临时容器已停止并清理。客户端 Debug/测试包构建、app 229 项与 comments 6 项单测通过。
+- 九项 TrackCommentsTest 在日间/夜间各通过；专用 AVD 原有 window_animation_scale 为 0，恢复为 1 后再次完整运行日间九项也全部通过。测试显式匹配 Dialog，并在创建时同步登记动画等待时间、跟随异步 onShow 更新，避免点击移动中的窗口；不改产品交互来迎合测试。断言验证回复/点赞人页的初始 translationX 位于右边界之外，结束为 0；同时覆盖名单失败不自动重试、手动重试、25 人分页、用户点击、无赞占位与赞/取消、返回保留评论状态以及既有发布图片流程。
+- /private/tmp/track-comments-qa/{light,dark}-{likers,no-likes}.png 为造数回归最终截图，均已检查；正常动画倍率的连续帧确认浮层保持全宽从底部进入。小米 3e7cd913 已安装最终 Debug，前台 TrackDetailActivity；真机已存在评论数据，本次未发送测试评论、图片或点赞。未提交、推送或部署服务端，新点赞人接口需随这次 track-server 更新上线。两仓库 git diff --check 通过。专用模拟器与临时数据库均已清理关闭；保留其他任务和此前的未提交修改。
+
+
+### 2026-10-20 跟进：紧凑评论、全文展开与用户手动验证约定
+
+- 用户要求停止在专门编写/执行测试上投入时间，由其本人验证。android-track 与 track_server 根 AGENTS 均增加“默认验证方式”：默认不专门新增或运行自动化测试、不启动模拟器或测试数据库；保留必要编译、自查，Android 沿用已授权安装/启动。仅用户明确要求时执行指定测试范围。同步移除 Android 原“优先补/跑测试”、服务端全量测试及 admin scope 的默认要求；已有测试保留。
+- Android 赞踩统一：点赞为 track_like_active 的红色实心心形，点踩用官方 MingCute 实心裂心并着次要灰色，同时替换对应线性素材。回复按钮使用独立 day/night 背景与正文前景色。
+- 评论/回复头像改为 28dp、正文 14sp、昵称 11sp，标题 15sp/header 52dp，行间距与操作图标收紧。按参考图比例调整，尚待用户在真机判断对齐效果。
+- 新 CommentContentView 在正文超过六行时保留前五行，在第六行约半行处追加省略号及高亮“全文”，按 Unicode 字素边界截断；点击全部展开且无收起。展开 ID 由主/回复页共享，滚动、分页、赞踩与来回导航保留，实际重新刷新该列表后重置。模块 README 同步。
+- 在用户改约定前曾新增一项全文 instrumentation 用例，测试 APK 编译遇到多余括号；现已修正语法，但按新约定不再构建或运行测试 APK，不声明新增用例通过。前一阶段的历史测试结果见上文，不能作为这次最终界面的验收证据。
+- 本次最终仅运行 ./gradlew :app:assembleDebug（通过），Debug 已安装小米 3e7cd913，启动 LoginActivity 后返回 MainActivity。未自动操作评论业务、未在线上造数。专用 emulator-5556 已关闭，未动其他模拟器。两仓库 git diff --check 通过；无服务端业务代码变化，未重复构建或测试 Go。
+- AGENTS verify/freshness 已运行；仍报告既有根文件超 16KB、旧源文件超长、server 缺优先级与 freshness 元数据等。全局入口规则未落盘（~/.codex/AGENTS.md 为空），修复入口仍为 python /Users/foxcoder/.codex/skills/agents-md-generator/scripts/manage_docs.py sync-global-codex-agents . --write；本次仅更新用户要求的验证偏好，未扩展治理重构。
+
+四项新界面效果由用户手动验证，当前未做最终日夜间截图/自动化验收；未提交、推送或部署。
+
+
+### 2026-10-20 跟进：登录页夜间按钮、移除光晕与协议入口
+
+- 用户补充要求顶部及底部光晕全部去掉；activity_login.xml 已移除两个装饰 ImageView。
+- 手机号登录按钮原 track_surface_deep 几乎融入夜间底色，现复用 bg_login_button_primary 与 track_primary_text：夜间浅黄绿底、深橄榄文字/图标，日间浅蓝底、主题蓝文字/图标，沿用现有语义色，无新增硬编码颜色。
+- 登录协议通过中英文资源 annotation 标记两条链接，ClickableSpan 使用 track_highlight_text、无下划线；仅对应协议名可点击。新增 web/LegalPage.kt，将关于页既有协议 URL、语言和日夜参数封装为共用入口，登录页与关于页均打开既有 WebViewActivity，未改变登录态或协议正文。
+- ./gradlew :app:assembleDebug 通过，git diff --check 通过；Debug 已安装小米 3e7cd913。遵循用户手动验证约定，未新增或运行测试，未启动模拟器或测试容器。界面与协议点击效果待用户验收。
+- 本次无服务端业务代码/协议变化、无新的长期业务或开发规则，故未扩写 AGENTS。未提交、推送或部署；保留此前全部未提交改动。
+
+
+### 2026-10-20 跟进：底部星星收藏与详情收藏数
+
+- 用户要求收藏放到评论旁边、空心/实心星星状态，并由轨迹信息下发收藏次数。Android 已移除右上角收藏入口，底部顺序为点赞、评论、收藏；MingCute 官方 star regular/filled 素材转为 vector，收藏使用主题强调色，未收藏次要色。数量为 0/未知隐藏，使用 CountFormatter，点击区禁用覆盖请求中状态。
+- 三个社交按钮及导航宽度收紧为 44dp、高度维持 52dp、间隔 8dp；上传/投稿文字单行自适应，给新增收藏留出空间。收藏数先用列表首屏值，再由已有详情回调补齐；自己的列表未下发 collected 时复用轨迹详情元信息刷新。无新增计数接口，CommentsController 的详情补齐回调同步提供收藏元信息。收藏成功后的权威状态不被迟到的初始详情覆盖，重建保存状态/数量；收藏事件继续分发到首页、搜索和个人列表。
+- Track 新增临时 collected/collect_count，详情、创建/更新响应填充；列表沿用已有批量 CountByTrackIDs，不逐条新增查询。track_collect_summary.go 复用收藏仓储统计现存用户/轨迹唯一关系，包含作者自藏。详情 collected 取当前 JWT 浏览者。POST/DELETE track_collect 保留 status 并增加操作后读取的 collected/collect_count，客户端优先采用响应；旧服务器未带字段时保留原有本地加减兼容。
+- MySQL 继续复用已有用户/轨迹唯一关系和 idx_collects_track，无新表或计数列。Mongo 补齐原有 AddCollect、RemoveCollect、RemoveByTrackID stub：setOnInsert upsert 保留首次收藏时间、唯一冲突按幂等成功处理；取消与轨迹删除清理关系，新增 track_id 索引支持现有聚合。内存重复收藏不再刷新时间，口径与 MySQL/Mongo 对齐。
+- API 详情/模型/收藏分册与路由索引、两端 AGENTS 稳定约定已同步。go build ./... 与最终 ./gradlew :app:assembleDebug 均通过，两仓库 git diff --check 通过；最新 Debug 已安装小米 3e7cd913 并执行基本启动检查。遵循用户约定，未新增/运行测试、未启动模拟器或数据库容器，界面、收藏切换与数量由用户手动验收。
+- AGENTS verify 已运行，仍有既有根文件超长、server 优先级/路径提示、旧源码超长及全局入口为空等；没有扩展治理重构。未提交、推送或部署服务端，详情收藏新字段与操作后权威计数需部署本次服务端版本才能线上生效。保留此前登录页、评论、获赞列表下线、海拔等全部未提交改动。
+
+
+### 2026-10-20 跟进：Me 背景图固定比例与裁剪页沉浸栏
+
+- 用户要求编辑资料选择 Me 背景图时固定展示宽高比，并修复裁剪页未沉浸状态栏。ProfileBackgroundActivity 开启 fixAspectRatio，使用当前窗口宽度与 120dp 身份区 + 64dp 统计区 + 16dp 重叠区 + 状态栏高度作为比例；三个区域尺寸提取到 dimens，ProfileFragment 的布局和 inset 更新共用，避免日后裁剪比例与实际背景区域失配。仍支持固定比例选取范围和多指缩放，JPEG 最长边限制继续 2048。
+- 新 TrackImageCropActivity 继承现有 CanHub CropImageActivity，保留原裁剪视图、旋转/翻转菜单、状态恢复和结果返回；仅以应用 Toolbar 承载顶部操作，NoActionBar 主题去掉独立系统 ActionBar。TrackImageCropContract 委托原契约构造参数/解析结果后切换到新 Activity，背景与头像入口统一接入，头像仍固定 1:1。Manifest 移除未使用的原库 Activity，防止进入旧裁剪窗口。
+- 状态栏/导航栏透明、关闭系统对比度遮罩；容器背景贯穿系统栏，按 systemBars/displayCutout 为按钮和内容补边距，系统图标明暗由裁剪页背景亮度决定。背景裁剪显式使用既有黑色 viewer/白色 foreground 语义色，头像沿用日夜主题。app/AGENTS 已记录共用入口与固定比例约束。
+- ./gradlew :app:assembleDebug 通过，git diff --check 通过；Debug 已安装小米 3e7cd913，执行基本启动检查。遵循用户约定，未新增/运行测试、未启动模拟器，裁剪操作、比例和沉浸效果待用户手动验收。AGENTS 验证仍报既有根文件/旧源码超长等，无关治理未扩展。无服务端业务变化、未提交推送或部署。
+- 上一小轮详情页导航文案已改为中文“跟随轨迹”/英文“Follow track”，单独编译安装通过，包含在当前包内。
+
+
+### 2026-10-20：用户授权两端同步提交推送
+
+- 用户明确要求“客户端和server的代码都同步/提交/推送”。已分别 fetch origin，两仓库 main 与 origin/main 均为 0 ahead / 0 behind，无需合并，按当前 main 提交推送。
+- 提交本轮完整评论/回复/单图/赞踩及点赞人查询、获赞列表移除与总数保留、收藏计数与底部星星，以及 Android 海拔地址、登录协议/主题、固定比例背景裁剪与沉浸状态栏、导航文案和手动验证约定。保留已写的测试代码；遵循用户新约定，本次不再新增或执行测试。
+- 最近最终 Android :app:assembleDebug 与服务端 go build ./... 已通过，Android 已安装小米；本次仅提交前检查改动及 git diff --check。客户端 .gitignore 的 build 规则改为覆盖全部模块，排除 comments/build 等生成目录；APK、缓存、本地签名和敏感配置均不纳入提交。
+- 使用中文提交信息记录完整功能、协议/数据结构及验证范围；未部署服务端。新评论接口、收藏数及下线获赞列表需由部署新版服务端生效。提交/推送最终结果以本次对话输出的 commit 和远端一致性检查为准。

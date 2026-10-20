@@ -10,6 +10,12 @@
 - 用 `AGENTS.md` 定位相关文件、约束、流程与验证步骤；实现细节以代码为准。
 - 若 `AGENTS.md` 与代码不一致，以代码为准，并在回复中明确指出不一致点。
 
+### 默认验证方式
+- 用户约定（2026-10-20）：默认由用户手动验证功能；Agent 不专门新增测试用例、不主动运行单元测试、集成测试、race 检查、接口自动化或全量回归，也不为验证启动测试数据库、容器或额外搭建测试环境。
+- 代码改动只做必要的编译/构建检查及改动自查，Go 默认使用 `go build ./...`；纯文档或规则变更无需构建业务代码。
+- 只有用户明确要求编写或运行测试时，才执行对应范围；此约定覆盖本文件及 scoped AGENTS 中旧的默认测试要求，不得因技能建议自行扩大范围。已有测试保留，仅在本次改动造成编译/接口失配时做必要修正。
+- 交付时简短说明编译结果，并注明功能待用户验证；未执行的测试不得声称通过。
+
 ### 维护规则
 仅当代码变更导致以下信息失准时，才更新最近的相关 `AGENTS.md`：
 - 目录总览 / 模块职责
@@ -91,7 +97,11 @@ track_server/
 
 ### 稳定默认值
 
-- 轨迹点赞独立于收藏，`track_likes` 以用户与轨迹唯一关系保证 POST/DELETE 幂等。获赞数和明细只统计正常公开、已结束、raw_track_url 非空的轨迹，获赞首页必须由仓储按轨迹聚合后再分页，每项最多 3 位最近点赞人，完整名单单独分页；保留原逐条接口兼容旧端，禁止客户端逐条分页后再合并。有效关系长期保留，不另存获赞消息副本；允许自赞并计入轨迹点赞数，但个人页获赞数和获赞列表排除自赞，受限账号不能新增点赞但可取消。修改时同步三种仓储、用户详情计数、详情/列表的浏览者状态及 `docs/api/track-likes.md`。
+- 收藏数 `collect_count` 为当前用户与轨迹唯一收藏关系的总数，包含作者自藏；沿用 `CollectRepository.CountByTrackIDs`，列表批量统计、详情/创建/更新直接下发。详情的 `collected` 按 JWT 浏览者计算；POST/DELETE `/track_collect` 保留 status 并返回操作后的 collected/collect_count，重复操作幂等，不新增计数接口或独立计数表。入口见 `internal/service/track_collect_summary.go` 与 `docs/api/collect-navigation.md`；Mongo 使用用户/轨迹唯一索引和 track_id 统计索引。
+
+- 评论入口为 `CommentService` / `CommentRepository`，协议见 `docs/api/track-comments.md`。沿用点赞的轨迹可见范围；主评论和回复按创建时间、ID 倒序游标分页，回复以 root_id 平铺、reply_to_id 引用直接目标。轨迹详情/列表直接下发 comment_count/can_comment，列表按当前页批量读取计数；发布/删除响应带回总数，不另设评论状态接口。评论页只附最新作者回复摘要；总数、回复数、赞踩数随事务维护，发布以 user_id + client_comment_id 幂等。删除主评论保留有回复的占位，删除引用目标不得下发其原文。评论图片先预约 ID 再 OSS 直传并校验归属，私有缓存不挂通用 static。MySQL/Mongo/内存三实现保持一致，Mongo 评论写入要求副本集。账号限制在 CommentService 中覆盖发布、图片预约和非零评价，允许本人删除与取消评价。
+
+- 轨迹点赞独立于收藏，`track_likes` 以用户与轨迹唯一关系保证 POST/DELETE 幂等。个人获赞总数只统计其他用户对正常公开、已结束、raw_track_url 非空轨迹的现存点赞，排除作者自赞。个人主页仅展示获赞数；获赞逐条列表、聚合轨迹列表和点赞人名单接口已移除，不保留旧列表兼容入口。有效点赞关系长期保留，用于轨迹点赞状态、轨迹点赞数和个人获赞总数；允许自赞并计入轨迹点赞数，受限账号不能新增点赞但可取消。修改时同步三种仓储、用户详情计数、详情/列表的浏览者状态及 `docs/api/track-likes.md`。
 
 - 客态个人主页的 `GET /user/:user_id/tracks` 和 `GET /user/:user_id/collections` 使用路径用户作为列表所属用户、JWT 用户作为浏览者；`collected` 必须按浏览者计算。已传轨迹在仓储分页前过滤私密、删除、进行中和原始轨迹地址为空的记录；收藏列表跳过失效及不可公开查看的记录后继续补页。`total_count` 只统计接口可见记录，不复用包含私密轨迹的用户详情统计。主态继续使用原有本人列表接口。三种仓储实现与协议入口见 `internal/repository/profile_tracks.go`、`internal/service/profile_tracks.go`、`docs/api/user.md`。
 
@@ -111,7 +121,7 @@ track_server/
 - 导航强反馈只认 `track_navigations` 业务记录：客户端在用户已成功开始导航并主动结束后，先持久化本地会话“已尝试上报”标记，再最多调用一次非幂等的 `POST /api/v1/track/:track_id/navigation/report`；点击、取消、初始化失败、开始前退出、崩溃或强杀不计强反馈，响应不确定不得自动重试。只有明确收到 200 才生成 `track_navigation_report_success`；该成功埋点可以按埋点批量接口规则重试。调整此口径时同步更新 `docs/api/collect-navigation.md`、`track_analytics.md` 与 `track_recommendation.md`。
 - 推荐第一版归因协议要求推荐响应提供响应级 `request_id` / `strategy` 和 item 级 `recommend_rank` / `candidate_source` / `recommend_reason`；客户端通过 `track_recommend_impression` 上报真实卡片曝光，并在点击、详情、收藏、取消收藏、导航和分享链路中透传同一推荐上下文。曝光必须同时满足 App 前台、推荐页实际可见、卡片至少 50% 可见并连续 500 ms，页面重建继续使用 Feed 级去重；空结果页成功展示也上报 `track_recommend_view`。第一版默认排除本人轨迹，已收藏/导航轨迹只降频不硬排除，Feed Session TTL 为 60 分钟且最多固化 200 条；Session 内内容失效时向后扫描补页并保留原始排名跳号，不得返回 `items=[]`、`has_more=true`。Session 过期后客户端保留筛选条件静默刷新第一页且只自动重试一次，新 Feed 使用新 `request_id`，但历史队列事件和旧详情页后续转化保持原上下文；Session 仓储暂时不可用返回 `recommend_session_unavailable`，不得刷新或切换 Legacy。离线任务由现有进程内 Scheduler 承担。推荐功能只对支持新协议的首发客户端开放：服务端可提前部署但必须保持 `RECOMMENDATION_ENABLED=false`，待两端联调验收通过后再整体启用；不增加客户端能力头或版本分流，旧内部测试包不在兼容范围内。字段、错误码、曝光与归因验收规则以 `track_recommendation.md` 和 `track_analytics.md` 为准。
 - 推荐派生数据使用 `recommend_feed_sessions`、`recommend_user_profiles`、`recommend_item_stats_daily`；MySQL/Mongo/in-memory 都必须实现 `RecommendationRepository`。强行为画像和物料统计由 `recommendation_profile`（默认 05:00）与 `recommendation_item_stats`（默认 05:30）离线任务重建，`recommendation_session_cleanup` 默认每 20 分钟清理过期 Session。在线推荐只依赖本进程仓储，不新增外部服务；画像/统计缺失或过期时首屏固化 Legacy Session，已有 Session 读取失败时返回稳定错误，不能换序。
-- 推荐多样性重排对 RouteGroup、作者和运动类型只做软约束：优先不同 RouteGroup，但候选不足时必须允许同组轨迹补位，不得永久丢弃候选或因此缩短 Feed；修改重排逻辑时需覆盖“全部同组”和“候选被页内约束延后后其 RouteGroup 已被选中”的回归测试。
+- 推荐多样性重排对 RouteGroup、作者和运动类型只做软约束：优先不同 RouteGroup，但候选不足时必须允许同组轨迹补位，不得永久丢弃候选或因此缩短 Feed；修改重排逻辑时需检查“全部同组”和“候选被页内约束延后后其 RouteGroup 已被选中”两种情况，自动化测试遵循“默认验证方式”。
 - 推荐运行参数统一在 `internal/config/config.go` 读取：`RECOMMENDATION_ENABLED` 默认 `false`；计算超时默认 250 ms；Session TTL 默认 60 分钟；派生数据最大年龄默认 48 小时；候选上限默认 300、最终 Feed 上限固定钳制为 200。`SCHEDULER_ENABLED=true` 时推荐离线任务会独立于接口总开关运行，允许上线前预热画像和物料统计；待首批任务成功且两端联调通过后再开启总开关。
 
 ### 关键流程
@@ -243,9 +253,11 @@ HTTP Request
 
 地图景区/区县介绍页使用公开路由 `GET /api/v1/track-map/areas/:area_id/introduction.html`，统一模板位于 `internal/handler/static/map_area_introduction.html`；生成区县基线位于 `internal/maparea/districts.json`，人工景区/区县覆盖位于 `catalog.json`，页面支持 `lang=english` 与 `is_dark=true`。新增或调整区域时必须使用 GCJ-02 坐标、保持 `area.id` 稳定，并同步核对 `docs/api/track-map.md` 与 `track_map.md`。
 
+- 评论图片每条最多一张，发布参数 image_ids 数组长度不能超过 1；客户端系统单选、输入区内预览和移除，服务端独立校验数量。
+
 ### 提交前最小检查
 - 构建可通过：`go build ./...`
-- 全量测试：`make test`（等价 `go test ./...`）
+- 仅用户明确要求测试时执行：`make test`（等价 `go test ./...`），或按要求缩小到相关包。
 - 新增/修改路由：核对 `internal/handler/router.go` 是否挂载在正确的 `auth` 分组。
 - 新增 Repository 方法：`mysql.go` / `mongo.go` / `memory.go` 三实现必须同步。
 - 改动与协议相关（字段增删、登录流程、错误码、同行控制面、同行关键事件、成就系统、意见反馈、埋点采集）：同步更新 `docs/api/` 对应分册与 `docs/api/route-index.md`、`login.md`、`track_companion.md`、`track_achievement_client.md` 或 `track_analytics.md`。

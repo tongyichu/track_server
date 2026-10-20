@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"net/url"
 	"testing"
 	"time"
 
@@ -99,71 +98,6 @@ func TestTrackLikesIdempotencyViewerStateAndCounts(t *testing.T) {
 	}
 }
 
-func TestReceivedLikesAreRecordsWithStablePaginationAndVisibleTracks(t *testing.T) {
-	e := newTestEnv()
-	seedLikes(t, e)
-	ctx := context.Background()
-	for _, record := range []struct {
-		user  int64
-		track string
-	}{{1001, "NO.00000001"}, {1001, "NO.00000002"}, {1003, "NO.00000001"}, {1003, "NO.00000003"}} {
-		likeRequest(t, e, record.user, http.MethodPost, "/api/v1/track/"+record.track+"/like")
-	}
-	track, _ := e.trackRepo.FindByID(ctx, "NO.00000003")
-	track.Status = models.TrackStatusPrivate
-	if err := e.trackRepo.Update(ctx, track); err != nil {
-		t.Fatal(err)
-	}
-	cursor := ""
-	seen := map[string]bool{}
-	sameUserRecords := 0
-	for page := 0; page < 4; page++ {
-		resp := e.perform(http.MethodGet, "/api/v1/user/1002/likes/received/list?limit=1&cursor="+url.QueryEscape(cursor), nil, authHeader(e.generateTestToken(1001))).Result()
-		if resp.StatusCode() != 200 {
-			t.Fatalf("status=%d body=%s", resp.StatusCode(), resp.Body())
-		}
-		var result handler.StandardResponse[service.ReceivedLikePage]
-		decodeJSON(t, resp.Body(), &result)
-		if result.Data.TotalCount != 3 || len(result.Data.Items) != 1 {
-			t.Fatalf("unexpected received likes page: %+v", result.Data)
-		}
-		item := result.Data.Items[0]
-		key := fmt.Sprintf("%d:%s", item.User.ID, item.Track.ID)
-		if seen[key] {
-			t.Fatal("duplicate record across pages")
-		}
-		seen[key] = true
-		if item.User.ID == 1001 {
-			sameUserRecords++
-		}
-		if item.Track.ID == "NO.00000003" || item.User.AvatarURL == "" || item.LikedAt.IsZero() {
-			t.Fatal("invalid record or private track leaked")
-		}
-		if !item.Track.Liked {
-			t.Fatal("nested track state must use viewer, not liker")
-		}
-		if !result.Data.HasMore {
-			break
-		}
-		cursor = result.Data.NextCursor
-		if cursor == "" {
-			t.Fatal("next cursor missing")
-		}
-	}
-	if len(seen) != 3 || sameUserRecords != 2 {
-		t.Fatalf("likes were incorrectly grouped by user: %v", seen)
-	}
-	track, _ = e.trackRepo.FindByID(ctx, "NO.00000002")
-	track.Status = models.TrackStatusDeleted
-	if err := e.trackRepo.Update(ctx, track); err != nil {
-		t.Fatal(err)
-	}
-	count, err := e.likeRepo.CountReceived(ctx, 1002)
-	if err != nil || count != 2 {
-		t.Fatalf("deleted route counted: %d %v", count, err)
-	}
-}
-
 func TestLikesRejectInvalidTargetsAndUnauthorizedWrites(t *testing.T) {
 	e := newTestEnv()
 	seedLikes(t, e)
@@ -195,16 +129,6 @@ func TestLikesRejectInvalidTargetsAndUnauthorizedWrites(t *testing.T) {
 		if err := e.trackRepo.Update(ctx, track); err != nil {
 			t.Fatal(err)
 		}
-	}
-	for _, path := range []string{"/api/v1/user/0/likes/received/list", "/api/v1/user/1002/likes/received/list?cursor=invalid", "/api/v1/user/1002/likes/received/list?limit=-1"} {
-		resp := e.perform(http.MethodGet, path, nil, authHeader(e.generateTestToken(1001))).Result()
-		if resp.StatusCode() != 400 {
-			t.Fatalf("%s status=%d", path, resp.StatusCode())
-		}
-	}
-	resp := e.perform(http.MethodGet, "/api/v1/user/9999/likes/received/list", nil, authHeader(e.generateTestToken(1001))).Result()
-	if resp.StatusCode() != 404 {
-		t.Fatal("missing user should return 404")
 	}
 	s := likeRequest(t, e, 1001, http.MethodDelete, "/api/v1/track/unknown/like")
 	if s.Liked || s.LikeCount != 0 {
@@ -254,20 +178,6 @@ func TestSelfLikeCountsForTrackButNotReceivedLikes(t *testing.T) {
 			if profile.Data.ReceivedLikeCount != want {
 				t.Fatalf("self-like counted in profile: %d want %d", profile.Data.ReceivedLikeCount, want)
 			}
-			resp = e.perform(http.MethodGet, "/api/v1/user/1002/likes/received/list?limit=1", nil, authHeader(e.generateTestToken(viewer))).Result()
-			if resp.StatusCode() != 200 {
-				t.Fatalf("received list status=%d", resp.StatusCode())
-			}
-			var page handler.StandardResponse[service.ReceivedLikePage]
-			decodeJSON(t, resp.Body(), &page)
-			if page.Data.TotalCount != want || int64(len(page.Data.Items)) != want || page.Data.HasMore {
-				t.Fatalf("invalid received page: %+v", page.Data)
-			}
-			for _, record := range page.Data.Items {
-				if record.User.ID == 1002 {
-					t.Fatal("self-like leaked into received records")
-				}
-			}
 		}
 	}
 	checkReceived(0)
@@ -290,7 +200,7 @@ func TestSelfLikeCountsForTrackButNotReceivedLikes(t *testing.T) {
 	if !status.Liked || status.LikeCount != 2 {
 		t.Fatalf("self and other likes should both count for track: %+v", status)
 	}
-	// This later self-like must be excluded before limit/has_more are calculated.
+	// Self-likes on other tracks must also stay out of the profile total.
 	likeRequest(t, e, 1002, http.MethodPost, "/api/v1/track/NO.00000002/like")
 	checkReceived(1)
 	for i := 0; i < 2; i++ {
@@ -302,4 +212,20 @@ func TestSelfLikeCountsForTrackButNotReceivedLikes(t *testing.T) {
 	checkReceived(1)
 	likeRequest(t, e, 1001, http.MethodDelete, path)
 	checkReceived(0)
+}
+
+func TestReceivedLikeListRoutesRemoved(t *testing.T) {
+	e := newTestEnv()
+	defer e.close()
+	seedLikes(t, e)
+	for _, path := range []string{
+		"/api/v1/user/1002/likes/received/list",
+		"/api/v1/user/1002/likes/received/tracks",
+		"/api/v1/user/1002/likes/received/tracks/NO.00000001/users",
+	} {
+		resp := e.perform(http.MethodGet, path, nil, authHeader(e.generateTestToken(1001))).Result()
+		if resp.StatusCode() != http.StatusNotFound {
+			t.Fatalf("removed route %s returned %d", path, resp.StatusCode())
+		}
+	}
 }

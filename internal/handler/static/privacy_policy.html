@@ -233,7 +233,8 @@
       <p>轨迹点及相关记录保存在设备本地。当前完成保存后，App 会尝试向服务端创建轨迹摘要，包括标题、运动类型、城市或起点地址、起止时间及运动统计；网络失败可能导致云端与本地暂不一致。</p>
       <p>当您使用上传、同步或投稿功能时，服务端还会处理所上传的原始轨迹文件、地图截图、打点内容、路线说明及您选取的图片，用于云端展示、路线发现、投稿审核、成就计算等对应服务。导入文件可能包含其他人的位置或图片，请确保有权使用。</p>
       <h3>1.4 同行、关注与路线发现</h3>
-      <p>创建或加入同行房间时，我们处理房间 ID、成员账号、角色、加入或离开时间、在线状态、实时位置、速度、方向及会话内文字弹幕和关键事件，以展示成员状态、连接通信并形成同行记录。关注、粉丝、收藏、点赞和路线使用记录用于维护关系、收藏列表、获赞记录及路线服务。</p>
+      <p>创建或加入同行房间时，我们处理房间 ID、成员账号、角色、加入或离开时间、在线状态、实时位置、速度、方向及会话内文字弹幕和关键事件，以展示成员状态、连接通信并形成同行记录。关注、粉丝、收藏、点赞和路线使用记录用于维护关系、收藏列表、点赞状态、获赞数量及路线服务。</p>
+      <p>发表轨迹评论或回复时，我们保存您提交的文字、emoji、所选图片、所回复内容的关联、账号标识和发布时间，用于展示评论、作者回复和单条引用；评论的点赞或点踩记录用于展示互动状态及数量，点赞记录还用于展示当前点赞用户的头像与昵称。您可以删除自己发表的评论或回复。</p>
       <p>路线推荐可能使用所选城市、运动类型、浏览、收藏及使用行为调整候选和排序。当前个性化推荐的关闭或非个性化入口为 {非个性化推荐入口}；正式开放个性化服务前须提供可用的选择方式。</p>
       <h3>1.5 反馈、诊断与使用统计</h3>
       <p>提交意见反馈时，我们处理您填写的内容、联系方式（如填写）及主动选取的图片。诊断信息可能涉及设备型号、系统与 App 版本、网络状态、错误信息和相关操作记录；上传前请避免包含验证码、令牌或不必要的位置细节。</p>
@@ -248,7 +249,7 @@
           <tr><td>位置前台服务</td><td>您主动开启录制或同行后，在切换 App、锁屏时持续运行</td><td>结束录制、退出同行或系统停止服务后，相应连续采集停止</td></tr>
           <tr><td>身体活动识别</td><td>步数统计、运动状态辅助判断</td><td>步数和部分辅助判断受限</td></tr>
           <tr><td>相机</td><td>扫描同行二维码</td><td>不能使用相机扫码，可使用已提供的其他加入方式</td></tr>
-          <tr><td>系统图片 / 文件选择器</td><td>选择头像、反馈或投稿图片、识别二维码、导入导出轨迹</td><td>对应文件操作不可用；仅访问您选取或授权的内容</td></tr>
+          <tr><td>系统图片 / 文件选择器</td><td>选择头像、反馈、评论或投稿图片、识别二维码、导入导出轨迹</td><td>对应文件操作不可用；仅访问您选取或授权的内容</td></tr>
           <tr><td>通知</td><td>录制、同行与下载状态提示</td><td>部分状态提示不可见，实际服务运行以系统规则为准</td></tr>
           <tr><td>网络及 Wi-Fi 状态</td><td>联网、同步、定位辅助与断线重连</td><td>网络不可用时云端功能受限</td></tr>
           <tr><td>保持唤醒 / 电池优化设置</td><td>减少录制和同行在后台中断</td><td>可能出现记录或位置更新间断</td></tr>
@@ -260,7 +261,8 @@
     <section id="privacy-sharing">
       <h2>3. 轨迹与同行的可见范围</h2>
       <p><strong>本地记录与云端记录的可见范围不同。当前普通云端轨迹按可被其他登录用户浏览、搜索或推荐的状态创建，不能把“登录后才能访问”理解为“仅自己可见”。</strong>完成录制后的自动摘要创建、后续原始文件上传和对外展示，应分别在对应流程清楚告知并取得依法所需的同意。正式公开流程及隐私控制入口：{轨迹公开确认及隐私控制入口}。</p>
-      <p>公开资料可能包括昵称、头像、公开成就、关注和粉丝关系、公开轨迹内容及其点赞人、点赞时间和获赞数量；手机号和登录凭证不属于公开主页内容。路线投稿可能被审核人员查看，并在获批后用于推荐或路线展示。撤回投稿不等于删除原轨迹。</p>
+      <p>公开资料可能包括昵称、头像、公开成就、关注和粉丝关系、公开轨迹内容及其点赞数量和个人获赞数量；手机号和登录凭证不属于公开主页内容。路线投稿可能被审核人员查看，并在获批后用于推荐或路线展示。撤回投稿不等于删除原轨迹。</p>
+      <p>公开轨迹的评论、回复、图片、评论互动数量及当前点赞用户的头像与昵称可由能访问该轨迹的登录用户查看；回复他人时会展示被回复内容的单条引用。删除后不再展示该条文字和图片，但仍有回复的主评论保留删除占位，被引用内容显示“原回复已删除”。轨迹转为不可公开访问时，其评论和评论图片也不可浏览。</p>
       <p><strong>参与同行会使房间内其他成员获得您的位置及同行状态；房间邀请链接、口令或二维码的转发可能扩大加入范围。</strong>房主及成员可能保存截图或行程记录。退出房间停止后续位置共享，但不会自动撤销其他成员已经看到或保存的内容；服务端既有会话、位置快照和事件的清理规则见保存期限。</p>
       <p>使用系统分享、导出或发送截图时，您选择的接收方可取得文件内容。请避免将住所、未成年人活动地点或他人的敏感信息分享到不可信的渠道。</p>
     </section>
@@ -373,7 +375,8 @@
       <p>Track points and records are stored on your device. After a completed local save, the app currently attempts to create a server summary containing the title, activity type, city or starting address, start and end times and activity statistics. Network failures may leave local and cloud records out of sync.</p>
       <p>When you use uploads, sync or route submissions, the server also handles the raw files, map screenshots, waypoints, descriptions and selected images you upload for the corresponding display, route discovery, review and achievement features. Ensure you have permission to import information about others.</p>
       <h3>1.4 Companion sessions, relationships and discovery</h3>
-      <p>Companion sessions use room and account IDs, membership roles, joining and leaving times, online status, live locations, speed, heading, text messages and key events for communication, member display and session records. Following, follower, collection, like and route-use records support relationships, received-like records and route services.</p>
+      <p>Companion sessions use room and account IDs, membership roles, joining and leaving times, online status, live locations, speed, heading, text messages and key events for communication, member display and session records. Following, follower, collection, like and route-use records support relationships, like status, received-like counts and route services.</p>
+      <p>Track comments and replies use the text, emoji and selected images you submit, reply relationships, account identifiers and posting times to display discussions, author replies and direct quotations. Comment like and dislike records support interaction states and counts; active likes also display the liking users’ avatars and nicknames. You can delete your own comments and replies.</p>
       <p>Recommendations may use selected cities, activity types, browsing, collection and usage behavior to select and rank routes. The control for non-personalized recommendations is {非个性化推荐入口}; a working choice must be provided before personalized services are formally offered.</p>
       <h3>1.5 Feedback, diagnostics and usage analytics</h3>
       <p>Feedback includes your text, optional contact details and selected images. Diagnostics may contain device, OS and app versions, network status, errors and related actions. Avoid uploading verification codes, tokens or unnecessary location details.</p>
@@ -388,7 +391,7 @@
           <tr><td>Location foreground service</td><td>Continue your active recording or companion service while backgrounded or locked</td><td>Ending the feature or stopping its service ends the corresponding continuous collection</td></tr>
           <tr><td>Activity recognition</td><td>Steps and movement assistance</td><td>Step statistics and some assistance limited</td></tr>
           <tr><td>Camera</td><td>Scan companion QR codes</td><td>Camera scanning unavailable; use other available join methods</td></tr>
-          <tr><td>System photo / file picker</td><td>Avatars, feedback, submissions, QR images, track import and export</td><td>Related file operations unavailable; only selected or authorized content accessed</td></tr>
+          <tr><td>System photo / file picker</td><td>Avatars, feedback, comments, submissions, QR images, track import and export</td><td>Related file operations unavailable; only selected or authorized content accessed</td></tr>
           <tr><td>Notifications</td><td>Recording, companion and download status</td><td>Some status messages hidden; service behavior follows system rules</td></tr>
           <tr><td>Network / Wi-Fi state</td><td>Connectivity, sync, positioning assistance and reconnecting</td><td>Cloud features limited without a network</td></tr>
           <tr><td>Wake lock / battery settings</td><td>Reduce background recording and sharing interruptions</td><td>Updates or recordings may be interrupted</td></tr>
@@ -400,7 +403,8 @@
     <section id="privacy-en-sharing">
       <h2>3. Track and companion visibility</h2>
       <p><strong>Local and cloud records have different visibility. Ordinary cloud tracks are currently created in a state eligible for browsing, search or recommendation to other signed-in users. Requiring sign-in does not make a track private.</strong> Automatic summary creation, later raw file upload and disclosure must be clearly explained in their respective flows with legally required consent. Publication confirmation and privacy controls: {轨迹公开确认及隐私控制入口}.</p>
-      <p>Public information may include nicknames, avatars, achievements, following and follower relationships, public tracks, and their likers, like times and received-like counts. Phone numbers and tokens are not public profile content. Reviewers may inspect route submissions; approved submissions may appear in recommendations or route displays. Withdrawing a submission does not delete the underlying track.</p>
+      <p>Public information may include nicknames, avatars, achievements, following and follower relationships, public tracks, track like counts and profile received-like counts. Phone numbers and tokens are not public profile content. Reviewers may inspect route submissions; approved submissions may appear in recommendations or route displays. Withdrawing a submission does not delete the underlying track.</p>
+      <p>Comments, replies, images, comment interaction counts, and active liking users’ avatars and nicknames on public tracks are visible to signed-in users who can access the track. Replying to another reply displays a direct quotation. Deletion hides that entry's text and images; a root comment with remaining replies keeps a deletion placeholder, and quotations show that the original reply was deleted. Comments and their images become unavailable when the track is no longer publicly accessible.</p>
       <p><strong>Companion room members can receive your location and session status. Forwarding invitations, codes or QR images may expand access.</strong> Hosts and members may retain screenshots or records. Leaving stops future sharing, but does not retract information already seen or saved. Retention of server session records, snapshots and events is addressed below.</p>
       <p>Recipients you choose through system sharing or export receive the selected files. Avoid exposing homes, children's activity locations or other people's sensitive information.</p>
     </section>

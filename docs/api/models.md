@@ -10,6 +10,10 @@
 | `user_id` | int64 | 用户 ID |
 | `liked` | bool | 当前浏览者是否点赞（非持久化轨迹字段） |
 | `like_count` | int64 | 轨迹点赞数；详情与摘要均返回 |
+| `collect_count` | int64 | 当前收藏该轨迹的用户总数，包含作者自藏；详情、创建/更新响应及列表摘要均返回，未收藏为 0 |
+| `collected` | bool | 当前 JWT 浏览者是否已收藏；详情与公开列表返回，本人的轨迹/收藏列表摘要沿用原字段省略规则 |
+| `comment_count` | int64 | 未删除主评论与回复总数；详情与摘要均返回 |
+| `can_comment` | bool | 是否开放评论；不可评论时数量返回 0 |
 | `session_id` | string | 关联的同行会话 ID；非同行轨迹为空字符串 |
 | `city_code` | string | 城市 Code（用于标识轨迹所属城市；城市/省份映射关系维护在配置文件中） |
 | `locate_addr` | string | 轨迹的具体位置信息 |
@@ -43,4 +47,8 @@
 
 `User` 新增 `background_url`（字符串，空串表示默认主页背景）、`gender`（字符串，空串未设置、`male`、`female`）。用户详情的 `background_url` 为公开主页展示字段，`gender` 仅在本人详情返回；更新个人信息的请求/响应与兼容规则见 [user.md](user.md#14-更新个人信息)。
 
-点赞状态、获赞记录和用户 `received_like_count` 的可见性与分页规则见 [track-likes.md](track-likes.md)。
+点赞状态、轨迹点赞数和用户 `received_like_count` 的统计规则见 [track-likes.md](track-likes.md)。
+
+## 评论
+
+轨迹评论、回复、作者回复摘要、引用、图片及当前用户赞踩字段见 [track-comments.md](track-comments.md)。Track、TrackSummary、MyTrackSummary 和 CollectedTrackSummary 直接下发 comment_count/can_comment；不存在独立的评论状态接口。

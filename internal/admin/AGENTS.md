@@ -228,7 +228,7 @@ GET /admin/api/users
 ## 提交前最小检查
 
 - 构建：`go build ./...`
-- 测试：`go test ./internal/admin ./internal/service`，提交前再执行 `go test ./...`
+- 测试遵循根 AGENTS 的“默认验证方式”：默认不新增或运行，由用户手动验证；仅在用户明确要求时执行 `go test ./internal/admin ./internal/service` 或其指定范围，不自动扩大为全量测试。
 - 路由变更：核对 `routes.go` 与 `static/*.js` 中前端 fetch 的 URL 是否一致。
 - 静态资源新增：确认文件位于 `internal/admin/static/` 下（`go:embed static` 才能打包）。
 - 接口契约变更：同步更新仓库根目录 `track_api.md`（如涉及客户端能感知的接口）。
