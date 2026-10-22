@@ -21,6 +21,8 @@ type restrictedRoute struct {
 }
 
 var accountRestrictedRoutes = []restrictedRoute{
+	{method: http.MethodPost, prefix: "/api/v1/track/preview-backfill/", suffix: "/prepare", message: service.AccountRestrictionMessageUpload},
+	{method: http.MethodPost, prefix: "/api/v1/track/preview-backfill/", suffix: "/complete", message: service.AccountRestrictionMessageUpload},
 	{method: http.MethodPost, prefix: "/api/v1/track/", suffix: "/like", message: "账号已被限制，禁止点赞"},
 	{method: http.MethodGet, path: "/api/v1/oss/sts-token", message: service.AccountRestrictionMessageUpload},
 	{method: http.MethodPost, path: "/api/v1/track/create", message: service.AccountRestrictionMessageUpload},

@@ -32,6 +32,31 @@
 
 命中缓存直接读取；未命中时使用轨迹归属用户的 OSS 下载凭证拉取所需的单张图片，同一资源并发请求合并。缓存 key 包含轨迹 ID、variant 和源 URL 摘要，避免日夜图或更新前后的图串用；返回 `Cache-Control: private, max-age=86400`。失效版本、未知 variant、缺图、删除或不可见返回 404，资源暂不可用返回 503。成功响应为图片二进制。
 
+### 历史轨迹预览补齐（DevMode）
+
+本组接口供 Android DevMode 手动批处理全站历史轨迹使用。沿用业务 JWT，不增加管理员、轨迹作者或二次权限验证；prepare 和 complete 沿用账号限制中的上传规则。不会创建或重新发布轨迹，只补写 `preview_images`。
+
+1. `GET /api/v1/track/preview-backfill/list?cursor=<cursor>&limit=20`
+   - 查询已结束、未删除、有 `raw_track_url` 且四图不完整的轨迹，按 `start_time DESC, id DESC` 游标分页。`limit` 默认 20、最大 50；筛选在仓储分页前完成。
+   - `data.items` 每项为 `track_id`、`title`、`track_type`、`coordinate_system`、`source_version`；响应还包含 `next_cursor`、`has_more`、全站当前 `pending_count` 及缺图但无原始轨迹的 `without_raw_count`。列表不下载 GPS 或四图。
+   - `source_version` 为原始轨迹源地址、坐标系及运动类型的 SHA-256，不因点赞或其他无关字段变化而变化。
+2. `GET /api/v1/track/preview-backfill/:track_id/data`
+   - 从原始轨迹缓存读取，复用 JSON / GeoJSON / KML / KMZ 解析器返回完整 GPS，不做路线简化或地图绘制。
+   - 响应 `data = {"state":"pending","task":<最新任务元信息>,"points":[{"latitude":39.9,"longitude":116.4}]}`；坐标保留源坐标系，Android 复用现有转换后绘制。可选 `source_version` 查询参数不匹配时返回 409；省略时获取最新源。
+   - 已有完整四图时 `state=already_complete`、`points=[]`。已删除、进行中或无原始文件返回 404；不可解析或无 GPS 返回 400，资源下载暂不可用返回 503。
+3. `POST /api/v1/track/preview-backfill/:track_id/prepare`
+   - JSON 请求体为 `{"source_version":"<data 返回的版本>","upload_id":"<客户端持久化的32位小写十六进制随机ID>"}`。
+   - 返回 `data = {"state":"pending","upload_urls":{"square_day":"<签名PUT地址>","square_night":"...","landscape_day":"...","landscape_night":"..."}}`。使用 `Content-Type: image/jpeg` 直接 PUT，不携带业务 JWT；签名一般有效 15 分钟，不超过 STS 剩余有效期。失效后用同一 upload_id 重新请求，已经成功上传的对象可复用。
+   - 地址限定在轨迹归属作者的 `previews/<owner>/backfill/<track_id>/<source_version>/<upload_id>/` 四个对象；不下发作者的 OSS STS 凭证。不同批次使用独立 upload_id。
+   - 轨迹已齐图时仅返回 `{"state":"already_complete"}`，不签发上传地址。
+4. `POST /api/v1/track/preview-backfill/:track_id/complete`
+   - 使用与 prepare 相同的请求体；客户端不指定图片 URL。
+   - 服务端经 OSS 内网逐张核对文件存在、JPEG、每张不超过 5 MiB，且 `square_*` 必须为 1024×1024、`landscape_*` 为 1024×768，然后条件更新四图及 `updated_at`，不更新其他轨迹字段。
+   - 返回 `data = {"state":"completed","preview_images":<带版本的四图读取地址>}`。已完成重试或被其他流程抢先补齐时返回 `state=already_complete`，不覆盖现有完整四图。
+   - 源地址、坐标系、运动类型或原有四图在校验期间发生变化时不覆盖，返回 409、`error_code=preview_source_changed`。客户端重新读取最新任务后重试。缺图或图片不合规格返回 400。
+
+无新任务表，完成状态以数据库四图为准。客户端按账号保存分页游标、尚未处理的当页队列、成功/跳过计数及失败记录；串行执行、后台/锁屏暂停、回到前台手动恢复。文件及逐图上传进度保存在单独缓存目录，失败项可单独重试。单批次固定语言、地图 provider、样式及尺寸；设置变化时暂停并提示恢复设置或重新扫描。
+
 ## 1. 创建轨迹
 
 创建一个新的轨迹记录；支持在请求体中直接传入轨迹摘要字段。未传的字段会使用默认值。

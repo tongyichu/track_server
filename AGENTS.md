@@ -256,6 +256,8 @@ HTTP Request
 
 **内置 H5 页面**：客户端等级规则页使用公开路由 `GET /api/v1/achievement/level-rules.html`，HTML 文件内置在 `internal/handler/static/achievement_level_rules.html` 并通过 `go:embed` 打包；页面支持 `lang=english` 切英文、`is_dark=true` 切夜间模式。修改等级 XP 规则、等级阈值、语言或主题参数时，同步更新该页面、`track_achievement_client.md` 和 `docs/api/achievement.md`。
 
+**历史轨迹预览补齐**：DevMode 客户端经业务 JWT 调用 `/track/preview-backfill/list`、`/:track_id/data`、`/:track_id/prepare`、`/:track_id/complete`；按用户决定不增加管理员或作者权限校验，作用域为全站已结束、未删除、有原始轨迹且四图不完整的记录。入口为 `internal/service/track_preview_backfill*.go`，复用原始轨迹解析器返回完整 GPS，绘图仍由 Android 完成。prepare 仅签发对应作者目录、独立 upload_id 下四个对象的 PUT URL；complete 经 OSS 内网核对 JPEG 与固定尺寸，再调用 `TrackRepository.FillMissingPreviewImages` 条件写入四图，防止覆盖期间新上传的完整图片或不同源数据。三种仓储实现位于 `internal/repository/track_preview_backfill.go`；无新表，完成状态以持久化四图为准。账号限制沿用上传规则，接口文档见 `docs/api/track.md`。
+
 隐私政策与用户服务协议使用公开路由 `GET /api/v1/legal/privacy-policy.html` 和 `GET /api/v1/legal/terms-of-service.html`，由 `legal_handler.go` 嵌入 `static/privacy_policy.html`、`static/terms_of_service.html`。支持 `lang=english`、`is_dark=true/false`，未指定主题时跟随系统。草稿中的 `{xxxx}` 须按运营事实补齐；数据采集、公开、SDK、保存或删除行为变化时同步核对中英文正文及真实授权流程。接口与内容维护见 `docs/api/legal.md`。
 
 地图景区/区县介绍页使用公开路由 `GET /api/v1/track-map/areas/:area_id/introduction.html`，统一模板位于 `internal/handler/static/map_area_introduction.html`；生成区县基线位于 `internal/maparea/districts.json`，人工景区/区县覆盖位于 `catalog.json`，页面支持 `lang=english` 与 `is_dark=true`。新增或调整区域时必须使用 GCJ-02 坐标、保持 `area.id` 稳定，并同步核对 `docs/api/track-map.md` 与 `track_map.md`。

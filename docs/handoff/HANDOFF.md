@@ -1,5 +1,20 @@
 # 工作交接：协议 H5 页面（2026-10-13）
 
+## 2026-10-22：DevMode 历史轨迹四图补齐
+
+- 用户决定由 Android DevMode 手动生成全站历史轨迹四图，沿用业务 JWT，不增加管理员、作者或二次验证。`/track/preview-backfill/list|:track_id/data|:track_id/prepare|:track_id/complete` 均在 auth 组；prepare/complete 沿用上传账号限制。
+- `internal/service/track_preview_backfill.go` 编排筛选、完整 GPS 和幂等补齐；`track_preview_backfill_oss.go` 为对应作者目录的独立 upload_id 四个对象签发 PUT URL，并经 OSS 内网核对 JPEG、大小、1024×1024/1024×768。客户端生成图，不使用服务器绘图。
+- TrackRepository 新增待补分页、待补/无原始文件计数、条件写四图，三实现位于 `internal/repository/track_preview_backfill.go`。CAS 比较源地址、坐标系、运动类型和旧四图，只更新 preview_images/updated_at；已有完整四图直接跳过。无新表或字段，分页以 start_time/id 倒序，完成状态直接以四图为准。
+- 协议见 docs/api/track.md，路由和限制索引已同步。Android 有账号隔离的持久化队列、失败记录与逐图上传断点；后台暂停后手动继续。
+- 本轮未提交/推送/部署，也未执行线上批处理；需部署服务端后由手机 DevMode 手动启动。默认只做构建与自查，不新增或运行自动化测试。
+- 最终 `go build ./...` 通过，两仓 `git diff --check` 通过；Android assembleDebug 通过并安装、启动小米。AGENTS 验证仍有原有的 root 超长/缺优先级说明、既有 Go 源码超 1000 行及全局入口为空等问题，freshness 缺时间元数据；未扩大本轮范围，未运行自动化测试或生产数据写入。
+
+### 随后的 Server 部署请求
+
+- 用户要求单独部署 Server，按发布技能同步、提交并推送本仓库，然后构建 linux/amd64 镜像更新生产；不提交或发布客户端，也不自动执行补图任务。
+- 发布前 `git fetch origin` 确认 main 与 origin/main 同步；本次发布包括上述完整历史预览补齐接口、三仓储实现、专用签名上传、条件提交及文档。自查修正省略 source_version 查询时的原始 GPS 缓存键，始终使用实际源版本，避免取回旧文件。
+- 必要的 `go build ./...` 与 `git diff --check` 通过；沿用用户本次新登录的 SSH master（进程启动于 2026-10-22 15:22:18），不读取或保存密码。镜像推送、线上容器与内外 ping 的最终结果以本次部署回执为准。
+
 用户要求为 android-track 关于我们页的隐私政策、用户服务协议提供 track_server HTML 页面，沿用成长等级规则页风格、支持日间和暗夜；用户明确“不清楚的地方就先用 {xxxx} 这种占位”。
 
 已完成：

@@ -190,6 +190,10 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 	auth.GET("/oss/sts-token/read", ossHandler.GetSTSReadToken)
 
 	// track related
+	auth.GET("/track/preview-backfill/list", trackHandler.ListPreviewBackfill)
+	auth.GET("/track/preview-backfill/:track_id/data", trackHandler.PreviewBackfillData)
+	auth.POST("/track/preview-backfill/:track_id/prepare", trackHandler.PreparePreviewBackfill)
+	auth.POST("/track/preview-backfill/:track_id/complete", trackHandler.CompletePreviewBackfill)
 	auth.GET("/track/types", trackHandler.ListTrackTypes)
 	auth.GET("/track/types/icons/:icon_file", TrackTypeIcon)
 	auth.HEAD("/track/types/icons/:icon_file", TrackTypeIcon)

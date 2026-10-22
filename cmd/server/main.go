@@ -421,6 +421,7 @@ func main() {
 	// 把 OSS 下载能力注入资源缓存服务。OSS 对象带权限控制，无法直接 http.Get，
 	// 因此必须通过 STS 临时凭证 + OSS SDK 的方式下载。
 	if ossTokenSvc != nil {
+		trackSvc.SetPreviewBackfillStore(ossTokenSvc)
 		if backgroundCache != nil {
 			backgroundCache.SetDownloader(ossTokenSvc)
 		}

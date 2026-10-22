@@ -32,6 +32,7 @@ type TrackService struct {
 	achievements    *AchievementService
 	screenshotCache *AssetCacheService
 	previewCache    *AssetCacheService
+	previewBackfill *OSSTokenService
 	avatarCache     *AssetCacheService
 	rawTrackCache   *AssetCacheService
 	trackTypes      []string

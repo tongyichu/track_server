@@ -8,6 +8,10 @@
 | 推荐轨迹列表（个性化 Feed Session，支持 `city_code` 筛选） | GET | `/track/recommend/list` | 是 | [track.md](track.md#2-推荐轨迹列表) |
 | 轨迹详情（含收藏数与本人收藏状态） | GET | `/track/:track_id/detail` | 是 | [track.md](track.md#3-轨迹详情) |
 | 静态轨迹预览图片 | GET | `/track/:track_id/previews/:variant?v=<source_version>` | 是 | [track.md](track.md#静态轨迹预览图) |
+| 历史预览待补列表 | GET | `/track/preview-backfill/list` | 是 | [track.md](track.md#历史轨迹预览补齐devmode) |
+| 历史预览原始 GPS | GET | `/track/preview-backfill/:track_id/data` | 是 | [track.md](track.md#历史轨迹预览补齐devmode) |
+| 历史预览四图上传地址 | POST | `/track/preview-backfill/:track_id/prepare` | 是 | [track.md](track.md#历史轨迹预览补齐devmode) |
+| 历史预览四图提交 | POST | `/track/preview-backfill/:track_id/complete` | 是 | [track.md](track.md#历史轨迹预览补齐devmode) |
 | 获取 OSS STS 临时凭证 | GET | `/oss/sts-token` | 是 | [oss.md](oss.md#4-获取-oss-sts-临时凭证直传上传) |
 | 轨迹评论列表 / 发表 | GET / POST | `/track/:track_id/comments` | 是 | [track-comments.md](track-comments.md) |
 | 单条评论 / 删除 | GET / DELETE | `/track/:track_id/comments/:comment_id` | 是 | [track-comments.md](track-comments.md) |

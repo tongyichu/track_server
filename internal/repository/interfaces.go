@@ -71,6 +71,10 @@ type TrackRepository interface {
 	ListAll(ctx context.Context, cursor *models.TrackListCursor, limit int) ([]*models.Track, error)
 	// CountAll 返回全量未删除轨迹数量。仅供管理后台使用。
 	CountAll(ctx context.Context) (int64, error)
+	ListPreviewBackfill(ctx context.Context, cursor *models.TrackListCursor, limit int) ([]*models.Track, error)
+	PreviewBackfillCounts(ctx context.Context) (pending, withoutRaw int64, err error)
+	// FillMissingPreviewImages updates only the preview group if the source and previous previews still match.
+	FillMissingPreviewImages(ctx context.Context, expected *models.Track, images models.TrackPreviewImages) (bool, error)
 }
 
 // TrackCaloriesBackfiller is implemented by repositories that can repair

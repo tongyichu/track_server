@@ -8,6 +8,10 @@ type TrackPreviewImages struct {
 	LandscapeNightURL string `json:"landscape_night_url,omitempty" bson:"landscape_night_url,omitempty"`
 }
 
+func (p TrackPreviewImages) Complete() bool {
+	return p.SquareDayURL != "" && p.SquareNightURL != "" && p.LandscapeDayURL != "" && p.LandscapeNightURL != ""
+}
+
 func (p TrackPreviewImages) Variant(variant string) string {
 	switch variant {
 	case "square_day":
