@@ -469,8 +469,9 @@ type TrackUserStats struct {
 
 // TrackTypeOption 是运动类型选项。
 type TrackTypeOption struct {
-	Type           string             `json:"type"`             // Type 是运动类型英文标识，例如 hiking/running。
-	Name           string             `json:"name"`             // Name 是运动类型名称。
+	Type           string             `json:"type"` // Type 是运动类型英文标识，例如 hiking/running。
+	Name           string             `json:"name"` // Name 是运动类型名称。
+	NameEN         string             `json:"name_en"`
 	ThemeColor     string             `json:"theme_color"`      // ThemeColor 是运动类型日间主题色，保留旧字段及色值。
 	ThemeColorDark string             `json:"theme_color_dark"` // ThemeColorDark 是运动类型夜间主题色。
 	IconURL        string             `json:"icon_url"`         // IconURL 是运动类型图标静态资源链接。

@@ -1,5 +1,17 @@
 # 工作交接：协议 H5 页面（2026-10-13）
 
+## 2026-10-22：运动类型英文展示名
+
+- /track/types 增加 name_en，DefaultTrackTypeConfigs 的 NameEN 为 Hiking/Running/Climbing/Cycling/Driving；保留原 name、type、图标、颜色与统计，不做按请求语言覆盖 name，避免账号缓存跨语言污染。
+- Android 使用当前 App 语言选择双语字段，旧缓存缺英文字段时用本地英文资源兜底；未知自定义类型 name_en 为空，原配置名保留。不增加数据库表、列或环境配置项。
+- 协议、通用模型说明、路由索引与 AGENTS 已同步；本轮为代码修复，尚未提交推送或部署，不执行自动化测试。
+- 验证：go build ./... 与两仓 git diff --check 通过；Android assembleDebug 通过并安装启动小米。未运行自动化测试；AGENTS 检查仍报告既有超长与元信息问题，未扩大本轮修复范围。
+
+### 英文名称的 Server 部署请求
+
+- 用户要求部署 Server，并已完成本次交互式 SSH 登录；仅同步提交推送本仓库的 name_en 字段、内置英文名称及协议文档，不发布或提交客户端。
+- 部署前 git fetch origin、go build ./... 与差异自查通过；从已推送快照构建 linux/amd64 镜像后更新生产，核对镜像、MySQL、容器与内外 ping；本次镜像/容器/提交及最终结果以部署回执为准。
+
 ## 2026-10-22：DevMode 清空历史四图
 
 - POST /api/v1/track/preview-backfill/clear 使用现有业务 JWT，无新增管理员或作者验证；请求显式 all=true 或 track_id 二选一。空作用域/冲突返回 400，单条不存在或已删除 404；返回 affected_count（重置轨迹数，包含原本无图记录）。沿用上传账号限制。

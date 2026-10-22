@@ -861,6 +861,8 @@ Authorization: Bearer <token>
 ### 说明
 
 - 默认返回五个内置运动类型，`type` 分别为 `hiking`、`running`、`climbing`、`riding`、`driving`，`name` 分别为 `徒步`、`跑步`、`爬山`、`骑行`、`自驾`。
+- 同时返回 `name_en`：上述五种分别为 `Hiking`、`Running`、`Climbing`、`Cycling`、`Driving`。`name` 保留原有中文/配置展示名以兼容旧客户端；接口始终返回双语字段，不随语言请求头改写内容，客户端按当前 App 语言选择。类型 code、存储值和统计口径不受显示语言影响。
+- 客户端可继续按账号缓存同一份双语元数据，切换语言时重新选择显示字段，无需清空缓存。旧缓存/旧服务端没有 `name_en` 时，内置类型使用客户端英文资源兜底；未知自定义类型 `name_en` 为空，沿用原配置名称，不猜测翻译。
 - 服务端可通过环境变量 `TRACK_TYPES` 配置运动类型展示名，支持使用英文逗号、分号、中文逗号、顿号或竖线分隔，例如：`TRACK_TYPES=徒步,跑步,爬山,骑行,自驾,滑雪`。
 - 服务端会自动过滤空项和重复项；若未配置或配置为空，则使用默认列表。
 - 内置运动类型的 `icon_url` 返回 MingCute 原版线性 SVG，统一为透明背景、24×24 viewBox；徒步使用 `hiking`、跑步使用 `run`、爬山使用 `mountain_2`、骑行使用 `bike`、自驾使用 `car`。图形随服务端二进制内置，不依赖磁盘文件；文件名带版本，更新图形时更换 URL，避免客户端沿用旧图片缓存。客户端应直接使用下发地址，并按场景使用日夜主题色染色。
@@ -899,6 +901,7 @@ Authorization: Bearer <token>
     {
       "type": "hiking",
       "name": "徒步",
+      "name_en": "Hiking",
       "theme_color": "#00875A",
       "theme_color_dark": "#62D9A2",
       "icon_url": "/api/v1/track/types/icons/mingcute-hiking-line-v1.svg",
@@ -921,6 +924,7 @@ Authorization: Bearer <token>
     {
       "type": "running",
       "name": "跑步",
+      "name_en": "Running",
       "theme_color": "#F26A4B",
       "theme_color_dark": "#FF947A",
       "icon_url": "/api/v1/track/types/icons/mingcute-run-line-v1.svg",
@@ -948,7 +952,8 @@ Authorization: Bearer <token>
 |------|------|------|
 | `data` | `TrackTypeOption[]` | 可选运动类型列表。 |
 | `data[].type` | string | 运动类型英文标识，例如 `hiking` / `running`。 |
-| `data[].name` | string | 运动类型名称。 |
+| `data[].name` | string | 运动类型中文/配置名称，保留兼容。 |
+| `data[].name_en` | string | 运动类型英文名称，英文 UI 优先使用；未知自定义类型为空字符串。 |
 | `data[].theme_color` | string | 运动类型日间主题色，`#RRGGBB`；保持字段兼容，未配置时为空字符串。 |
 | `data[].theme_color_dark` | string | 运动类型夜间主题色，`#RRGGBB`；缺失、为空或非法时夜间回退到 `theme_color`。 |
 | `data[].icon_url` | string | 运动类型 SVG 链接；内置 MingCute 图标位于 `/api/v1/track/types/icons/`，自定义类型沿用原静态资源路径。客户端不得硬编码图标路径。 |

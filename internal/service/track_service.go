@@ -284,11 +284,13 @@ func (s *TrackService) ListTrackTypeOptions() []models.TrackTypeOption {
 	for _, trackType := range types {
 		meta, ok := config.TrackTypeConfigByName(trackType)
 		typeCode := trackType
+		nameEN := ""
 		themeColor := ""
 		themeColorDark := ""
 		iconAnimURL := ""
 		if ok {
 			typeCode = meta.Type
+			nameEN = meta.NameEN
 			themeColor = meta.ThemeColor
 			themeColorDark = meta.ThemeColorDark
 			if meta.IconAnimFile != "" {
@@ -298,6 +300,7 @@ func (s *TrackService) ListTrackTypeOptions() []models.TrackTypeOption {
 		items = append(items, models.TrackTypeOption{
 			Type:           typeCode,
 			Name:           trackType,
+			NameEN:         nameEN,
 			ThemeColor:     themeColor,
 			ThemeColorDark: themeColorDark,
 			IconURL:        trackTypeIconURL(trackType),

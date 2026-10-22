@@ -46,7 +46,7 @@
 | 运维发布 Android App | POST | `/ops/releases/android` | 运维内部 | [upgrade.md](upgrade.md#16-运维发布-android-app) |
 | 隐私政策 H5 | GET | `/legal/privacy-policy.html` | 否 | [legal.md](legal.md) |
 | 用户服务协议 H5 | GET | `/legal/terms-of-service.html` | 否 | [legal.md](legal.md) |
-| 获取运动类型（含日间/夜间主题色） | GET | `/track/types` | 是 | [track.md](track.md#16-获取运动类型) |
+| 获取运动类型（含中英文名称及日间/夜间主题色） | GET | `/track/types` | 是 | [track.md](track.md#16-获取运动类型) |
 | 获取内置 MingCute 运动图标 | GET / HEAD | `/track/types/icons/:icon_file` | 是 | [track.md](track.md#16-获取运动类型) |
 | 获取轨迹投稿选项 | GET | `/track/submission/options` | 是 | [track-submission.md](track-submission.md#1-投稿选项) |
 | 创建或重新投稿 | POST | `/track/:track_id/submission` | 是 | [track-submission.md](track-submission.md#2-创建或重新投稿) |
