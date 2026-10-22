@@ -1022,10 +1022,10 @@ func (r *MySQLTrackMapRepository) CountRouteGroupsByArea(ctx context.Context, fi
 		SELECT area_id,
 		       CASE WHEN area_id = '' THEN FLOOR(center_lat * 10) / 10 ELSE 0 END AS lat_cell,
 		       CASE WHEN area_id = '' THEN FLOOR(center_lng * 10) / 10 ELSE 0 END AS lng_cell,
-		       track_type, COUNT(*) AS route_count,
+		       COUNT(*) AS route_count,
 		       AVG(center_lat), AVG(center_lng), MIN(min_lat), MIN(min_lng), MAX(max_lat), MAX(max_lng)
 		FROM track_route_groups`+where+`
-		GROUP BY area_id, lat_cell, lng_cell, track_type
+		GROUP BY area_id, lat_cell, lng_cell
 		ORDER BY route_count DESC
 		LIMIT ?`, args...)
 	if err != nil {
@@ -1035,8 +1035,8 @@ func (r *MySQLTrackMapRepository) CountRouteGroupsByArea(ctx context.Context, fi
 	items := make([]*models.TrackMapClusterItem, 0, limit)
 	for rows.Next() {
 		var latCell, lngCell float64
-		item := &models.TrackMapClusterItem{Type: "area_cluster"}
-		if err := rows.Scan(&item.AreaID, &latCell, &lngCell, &item.TrackType, &item.RouteCount, &item.Center.Latitude, &item.Center.Longitude, &item.BBox.MinLatitude, &item.BBox.MinLongitude, &item.BBox.MaxLatitude, &item.BBox.MaxLongitude); err != nil {
+		item := &models.TrackMapClusterItem{Type: "area_cluster", TrackType: filter.TrackType}
+		if err := rows.Scan(&item.AreaID, &latCell, &lngCell, &item.RouteCount, &item.Center.Latitude, &item.Center.Longitude, &item.BBox.MinLatitude, &item.BBox.MinLongitude, &item.BBox.MaxLatitude, &item.BBox.MaxLongitude); err != nil {
 			return nil, err
 		}
 		if item.AreaID != "" {

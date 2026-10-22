@@ -19,15 +19,17 @@
 ### 请求
 
 ```http
-GET /api/v1/track-map/view?bbox=114.1000,22.2500,114.3500,22.4500&zoom=12&track_type=hiking
+GET /api/v1/track-map/view?bbox=114.1000,22.2500,114.3500,22.4500&zoom=12&track_type=all
 Authorization: Bearer <token>
 ```
 
 首次进入附近模式也可以传：
 
 ```http
-GET /api/v1/track-map/view?latitude=22.3000&longitude=114.1700&radius_m=10000&track_type=hiking
+GET /api/v1/track-map/view?latitude=22.3000&longitude=114.1700&radius_m=10000&track_type=all
 ```
+
+新版 Android 进入地图页默认选择“全部”，显式传 `track_type=all`；视野与路线组列表接口均支持该值。不传或传空值仍默认 `hiking`，保持旧客户端兼容。
 
 | 参数 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
@@ -37,7 +39,7 @@ GET /api/v1/track-map/view?latitude=22.3000&longitude=114.1700&radius_m=10000&tr
 | `longitude` | number | 附近模式必填 | 用户当前位置经度 |
 | `radius_m` | int | 否 | 附近半径，默认 `10000`，最大 `50000` |
 | `city_code` | string | 否 | 城市 Code |
-| `track_type` | string | 否 | 运动类型 code；默认 `hiking`。兼容传中文名，如 `徒步` |
+| `track_type` | string | 否 | 运动类型 code；`all` 表示不过滤运动类型，不传或空值默认 `hiking`。兼容传中文名，如 `徒步` |
 | `limit` | int | 否 | 默认 `100`，最大 `200` |
 
 ### 响应：route
@@ -142,6 +144,7 @@ GET /api/v1/track-map/view?latitude=22.3000&longitude=114.1700&radius_m=10000&tr
 说明：
 
 - `route_count` 是 RouteGroup 数量，不是用户数，也不是具体轨迹数。
+- `track_type=all` 时路线组仍返回各自真实的 `track_type`；城市、区域气泡按现有城市/区域范围汇总多种类型，气泡的 `track_type` 为空。`all` 只是查询条件，不会跨类型合并 RouteGroup，也不写入轨迹或地图索引。
 - `area_cluster` 命中内置区域目录时会额外返回 `name`、`area_type`、`area`、`city_code`、`city_name`；`area_type` 当前为 `scenic_spot`（景区）或 `district`（区县）。
 - `area.id` 是稳定区域 ID，不等同于随网格变化的 `cluster_id`；存在介绍内容时 `area.introduction_url` 指向公开 H5 页面。
 - `area_id` 由 `track_route_group` 离线任务计算并写入 RouteGroup：使用 GCJ-02 `bounds` 预筛、Polygon/MultiPolygon 点包含最终判断，未提供 geometry 的人工区域按 `bounds` 兜底。接口不会实时执行空间匹配，只根据已存 `area_id` 查询名称和介绍信息；相同 `area_id` 的 RouteGroup 聚合成一个区域气泡，空 `area_id` 继续按原网格聚合。
@@ -157,7 +160,7 @@ GET /api/v1/track-map/view?latitude=22.3000&longitude=114.1700&radius_m=10000&tr
 **需要认证**
 
 ```http
-GET /api/v1/track-map/groups?bbox=114.1000,22.2500,114.3500,22.4500&track_type=hiking
+GET /api/v1/track-map/groups?bbox=114.1000,22.2500,114.3500,22.4500&track_type=all
 Authorization: Bearer <token>
 ```
 

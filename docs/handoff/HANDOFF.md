@@ -1,5 +1,26 @@
 # 工作交接：协议 H5 页面（2026-10-13）
 
+## 2026-10-22：准备部署地图全部类型查询
+
+- 用户明确要求“部署 server”，按 android-track-release 技能同时授权本仓库同步、提交、推送；仅处理 Server，不提交客户端或发布 App。已 fetch origin，main 与 origin/main 一致，无新远端代码；本次范围为地图查询 all、MySQL 区域聚合修正及 API/规则/交接文档（含此前 WebP 兼容说明），无数据表变更或新配置。
+- 复用本轮同一源码已通过的 go build ./...，不重复运行业务自动化测试。先提交推送再构建 linux/amd64 latest 镜像，镜像推送成功后新建可见 SSH 密码终端，生产执行更新脚本、校对镜像摘要和配置 ID、精确清理已停止同名容器并启动，检查 MySQL/无降级/重启数及内外 ping。
+- 部署脚本、构建元信息、健康结果与最终回执位于 /private/tmp/track-server-map-all-deploy-mjuqgc7_；本节为构建前准备记录，部署是否成功以最终回执和用户回复为准。SSH 密码由用户在当次终端自行输入，不沿用历史凭证或控制连接。
+
+## 2026-10-22：地图查询支持全部运动类型
+
+- 用户要求地图模式新增“全部类型”并默认选中。新增 /track-map/view、/track-map/groups 的显式 track_type=all 语义，在 TrackMapService.buildFilter 转为 TrackMapQueryFilter.TrackType 空串；参数匹配忽略大小写及首尾空白，未传/空值继续默认 hiking，不改变其他业务的 normalizeTrackTypeCode 或运动类型定义。
+- 三种仓储原先都支持空类型不过滤。MySQL CountRouteGroupsByArea 原来另按 track_type 分组，现只按 area_id/网格汇总，返回类型取查询 filter.TrackType，防止全部查询生成相同 cluster_id 的多个气泡；单类型结果保持原语义，与 Mongo/内存的聚合方式一致。不改表、索引、路由、DTO 或离线 RouteGroup 严格按运动类型隔离的规则，具体路线组仍返回真实类型。
+- Android 已为筛选列表前置本地“全部”，默认 raw=null 并在请求中显式传 all；元数据刷新不会把全部变回徒步。同步 docs/api/track-map.md、route-index.md、track_map.md 与两端 AGENTS 的查询约定。
+- go build ./...、Android assembleDebug（2s）与两仓 git diff --check 通过，Android Debug 已安装小米并启动，前台 MainActivity。Go 初次被沙箱阻止访问系统构建缓存，经工具审批沙箱外构建通过。未新增或运行自动化业务测试、未操作生产数据、未提交推送/部署；需要部署本轮 Server 后再手动验证“全部”及单类型切换、城市/区域气泡和旧空参徒步语义。
+- AGENTS/freshness 静态检查保留既有超长/precedence/全局空入口及时间元信息告警，报告 /private/tmp/track-map-all-{android,server}-{agents,freshness}.log；本轮未扩展无关治理。
+
+## 2026-10-22：正常上传支持 WebP 的客户端调整
+
+- 用户最终要求正常上传预览的原始长宽各缩至 1/4，并采用 WebP85。Android 已统一详情/批量入口，直接由 Bitmap 编码 WebP，上传后缀/MIME、缓存身份与重试清单对应格式/质量；旧 JPEG 继续可读，历史补图仍沿用固定尺寸 JPEG 校验，Me 本地缓存保持既有尺寸/格式。
+- 核对 cmd/server/main.go 的 previewCache 已允许 .webp，AssetCacheService 按源 URL 保留扩展名，TrackPreview 的 c.File 直接读取缓存文件，无写死 JPEG 响应；普通创建/更新只接收四图 URL，不套用历史补图 JPEG/1024px 校验。本轮 Server 仅更新 AGENTS 与 docs/api/track.md，不修改接口、仓储或 Go 业务代码，不需要重新部署。
+- 现有四图样本 363,170 字节，经桌面工具四分之一缩放及 WebP85 编码后合计 22,698 字节（约少93.8%），仅作预估，Android 实际编码与清晰度由用户验证；样本结果在 /private/tmp/track-preview-compression-4enm25id/quarter-webp-results.json。
+- Android assembleDebug（7s）、两仓 git diff --check 通过，新 Debug 已安装并启动小米；未新增或运行业务自动化测试、未触发真实上传/生产数据修改、未提交推送或发布部署。Server 为纯文档改动，无需重复 go build；规则静态检查仍为此前已记录的超长/元信息等问题。
+
 ## 2026-10-22：联合发布本人列表收藏状态
 
 - 用户要求联合发布，并确认已在本次交互中登录生产机。发布范围为 MyTrackSummary/CollectedTrackSummary 明确下发当前 JWT 用户的 collected、已上传列表复用现有批量关系查询，以及对应 API/规则/既有断言修正；四图接口本来已下发，不新增字段或数据表。

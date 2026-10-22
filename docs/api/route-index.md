@@ -53,8 +53,8 @@
 | 修改待审核投稿 | PUT | `/track/:track_id/submission` | 是 | [track-submission.md](track-submission.md#3-修改待审核投稿) |
 | 查询轨迹投稿 | GET | `/track/:track_id/submission` | 是 | [track-submission.md](track-submission.md#4-查询投稿) |
 | 撤回轨迹投稿 | POST | `/track/:track_id/submission/withdraw` | 是 | [track-submission.md](track-submission.md#5-撤回投稿) |
-| 查询地图视野数据（含离线区域语义） | GET | `/track-map/view` | 是 | [track-map.md](track-map.md#48-查询地图视野数据) |
-| 查询地图路线组列表 | GET | `/track-map/groups` | 是 | [track-map.md](track-map.md#49-查询地图路线组列表) |
+| 查询地图视野数据（含离线区域语义，支持 `track_type=all`） | GET | `/track-map/view` | 是 | [track-map.md](track-map.md#48-查询地图视野数据) |
+| 查询地图路线组列表（支持 `track_type=all`） | GET | `/track-map/groups` | 是 | [track-map.md](track-map.md#49-查询地图路线组列表) |
 | 查询路线组详情 | GET | `/track-map/groups/:group_id/detail` | 是 | [track-map.md](track-map.md#50-查询路线组详情) |
 | 查询路线组下的具体轨迹列表 | GET | `/track-map/groups/:group_id/tracks` | 是 | [track-map.md](track-map.md#51-查询路线组下的具体轨迹列表) |
 | 查看地图区域介绍页 | GET | `/track-map/areas/:area_id/introduction.html` | 否 | [track-map.md](track-map.md#52-查看地图区域介绍页) |

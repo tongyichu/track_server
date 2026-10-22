@@ -357,7 +357,9 @@ func (s *TrackMapService) buildFilter(input TrackMapViewInput) (models.TrackMapQ
 		limit = maxTrackMapLimit
 	}
 	trackType := normalizeTrackTypeCode(input.TrackType)
-	if trackType == "" {
+	if strings.EqualFold(strings.TrimSpace(input.TrackType), "all") {
+		trackType = ""
+	} else if trackType == "" {
 		trackType = "hiking"
 	}
 	filter := models.TrackMapQueryFilter{

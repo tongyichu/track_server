@@ -30,7 +30,7 @@
 - 客户端只需要在首页提供列表/地图模式切换，不需要新增一个可见的“路线发现”按钮。
 - 支持当前位置附近 10 公里查询。
 - 支持指定城市查询。
-- 首页地图模式必须按运动类型分类，默认分类 code 为 `hiking`（展示名 `徒步`）。
+- 首页地图模式支持按运动类型分类，新版客户端默认“全部”（查询条件 `track_type=all`），可切换单一类型。
 - 点击路线组后展示相关轨迹列表。
 - RouteGroup 列表先不展示 `user_count` 和 `track_count`，避免冷启动阶段暴露人气不足。
 
@@ -93,13 +93,13 @@ RouteGroup 必须归属于明确的运动类型。同一地理路线在不同运
 
 首页地图模式的一级过滤维度是运动类型。
 
-默认运动类型：
+新版客户端默认查询条件：
 
 ```text
-hiking
+all
 ```
 
-客户端进入首页地图模式时，如果用户没有主动选择运动类型，应默认请求 `track_type=hiking`。服务端在客户端未传 `track_type` 时也应按 `hiking` 处理，避免一次返回多种运动类型导致地图语义混乱。
+客户端进入首页地图模式时默认选择“全部”，显式请求 `track_type=all`，查询全部运动类型；服务端在未传或传空 `track_type` 时仍按 `hiking` 处理，保持旧客户端兼容。“全部”仅取消查询过滤，不属于持久化运动类型，也不改变离线 RouteGroup 严格按运动类型隔离的规则。城市/区域气泡在“全部”下汇总各类型路线组，气泡 `track_type` 为空，具体路线组仍返回真实类型。
 
 客户端展示要求：
 
@@ -136,7 +136,7 @@ hiking
 
 1. 用户在首页点击地图模式切换按钮。
 2. 客户端请求定位权限。
-3. 如果拿到定位，默认以 `hiking` 分类查询当前位置附近 10 公里路线。
+3. 如果拿到定位，默认以 `track_type=all` 查询当前位置附近 10 公里的全部类型路线。
 4. 如果没有定位权限，默认进入城市选择或使用上次城市。
 5. 地图展示当前运动类型下的路线组 marker / 聚合区域。
 6. 底部半屏列表展示当前视野内路线。
@@ -277,7 +277,7 @@ track_type=hiking
 | `longitude` | number | 首次附近模式必填 | 用户当前位置经度 |
 | `radius_m` | int | 否 | 半径，默认 10000 |
 | `city_code` | string | 否 | 城市 Code，可用于城市筛选或兜底 |
-| `track_type` | string | 否 | 运动类型 code，不传时默认 `hiking`；地图索引与路线组只保存 `hiking` / `running` / `climbing` / `riding` / `driving`，兼容中文名如 `徒步` |
+| `track_type` | string | 否 | 运动类型 code，`all` 表示全部；不传或空值仍默认 `hiking`。地图索引与路线组只保存 `hiking` / `running` / `climbing` / `riding` / `driving`，兼容中文名如 `徒步` |
 | `limit` | int | 否 | 默认 100 |
 
 服务端返回的 `view_level` 决定客户端展示方式：
@@ -429,7 +429,7 @@ city_code=810000
 | `longitude` | number | 附近模式必填 | 用户当前位置经度 |
 | `radius_m` | int | 否 | 半径，默认 10000，建议最大 50000 |
 | `city_code` | string | 城市模式必填 | 城市 Code |
-| `track_type` | string | 否 | 运动类型 code，例如 `hiking` / `running`；不传时默认 `hiking`，兼容中文名 |
+| `track_type` | string | 否 | 运动类型 code，例如 `hiking` / `running`；`all` 表示全部，不传或空值仍默认 `hiking`，兼容中文名 |
 | `bbox` | string | 否 | 当前地图视野，格式 `minLng,minLat,maxLng,maxLat` |
 | `zoom` | number | 否 | 地图缩放级别 |
 | `limit` | int | 否 | 默认 50，最大 100 |
