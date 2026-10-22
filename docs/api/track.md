@@ -560,6 +560,7 @@ curl -X GET "http://<host>:<port>/api/v1/track/search/list?keyword=西湖&city_c
 - 首次请求不传 `cursor`；继续翻页时透传上一次返回的 `next_cursor`。
 - 返回结果**不包含** `nickname`、`user_avatar_url` 字段。
 - 返回结果**包含** `collected`（当前 JWT 用户是否收藏）、`collect_count`、`navigate_count`；`collected=false` 也明确返回，轨迹属于自己不代表已收藏。
+- 每个 item 明确返回精品标识 `is_featured`，仅当前投稿状态为 `approved` 时为 true；与 `submission` 共用当前页批量状态查询，不新增逐条请求。
 - 返回结果中的 `locate_addr` 为轨迹的具体位置信息。
 - 返回结果中的 `avg_speed_kmh` 为平均速度（km/h）。
 - `raw_track_url` / `track_screenshot_url` / `track_no_map_bg_screenshot_url` 为服务端本地可下载链接（不是 OSS 地址）。
@@ -639,6 +640,7 @@ Authorization: Bearer <token>
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `data.items` | `MyTrackSummary[]` | 当前页我的轨迹列表。 |
+| `data.items[].is_featured` | bool | 投稿当前是否已审核通过，true/false 均明确返回。 |
 | `data.items[].collected` | bool | 当前 JWT 用户是否已收藏该轨迹，始终返回，不由轨迹作者身份推断。 |
 | `data.total_count` | int64 | 我的轨迹总数（按本接口口径）。 |
 | `data.next_cursor` | string | 下一页游标；当 `has_more=false` 时为空或不返回。 |

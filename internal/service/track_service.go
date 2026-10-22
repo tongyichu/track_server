@@ -1260,8 +1260,22 @@ func (s *TrackService) ListCollectedTracks(ctx context.Context, userID int64, in
 	}
 
 	items := make([]*models.CollectedTrackSummary, 0, len(summaries))
+	if s.submissions != nil && len(summaries) > 0 {
+		trackIDs := make([]string, 0, len(summaries))
+		for _, summary := range summaries {
+			trackIDs = append(trackIDs, summary.ID)
+		}
+		approved, err := s.submissions.ApprovedTrackIDs(ctx, trackIDs)
+		if err != nil {
+			return nil, err
+		}
+		for _, summary := range summaries {
+			summary.IsFeatured = approved[summary.ID]
+		}
+	}
 	for _, s := range summaries {
 		items = append(items, &models.CollectedTrackSummary{
+			IsFeatured:   s.IsFeatured,
 			CommentCount: s.CommentCount, CanComment: s.CanComment,
 			Liked: s.Liked, LikeCount: s.LikeCount,
 			ID:                        s.ID,

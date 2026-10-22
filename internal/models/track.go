@@ -110,6 +110,7 @@ type TrackSummary struct {
 // CollectedTrackSummary is used by "user collected tracks list".
 // It includes the current viewer's collected state, like TrackSummary.
 type CollectedTrackSummary struct {
+	IsFeatured                bool               `json:"is_featured"`
 	PreviewImages             TrackPreviewImages `json:"preview_images"`
 	CommentCount              int64              `json:"comment_count" bson:"-"`
 	CanComment                bool               `json:"can_comment" bson:"-"`
@@ -174,6 +175,7 @@ type CollectedTrackSummaryPage struct {
 // - 不返回 nickname/user_avatar_url。
 // - 返回当前浏览者的 collected 和 collect_count/navigate_count 等统计字段。
 type MyTrackSummary struct {
+	IsFeatured                bool                    `json:"is_featured"`
 	PreviewImages             TrackPreviewImages      `json:"preview_images"`
 	CommentCount              int64                   `json:"comment_count" bson:"-"`
 	CanComment                bool                    `json:"can_comment" bson:"-"`

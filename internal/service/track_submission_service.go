@@ -440,6 +440,7 @@ func (s *TrackSubmissionService) DecorateMySummaries(ctx context.Context, summar
 			continue
 		}
 		if sub := byTrack[item.ID]; sub != nil {
+			item.IsFeatured = sub.Status == models.TrackSubmissionStatusApproved
 			item.Submission = &models.TrackSubmissionSummary{Status: sub.Status, Revision: sub.Revision, ReviewReason: sub.ReviewReason}
 		}
 	}

@@ -60,7 +60,7 @@
 | `withdrawn` | 用户撤回 |
 | `invalidated` | 轨迹删除或关键内容变化导致审核失效 |
 
-`GET /api/v1/track/my/list` 的 item 通过 `submission` 返回本人投稿状态摘要。审核通过的推荐/搜索 TrackSummary 返回 `is_featured=true`、`featured_description` 和 `featured_cover_url`，并使用投稿标题作为 `title`。
+`GET /api/v1/track/my/list` 的 item 通过 `submission` 返回本人投稿状态摘要。我的轨迹、收藏列表 `/track/collected/list` 和推荐/搜索摘要均明确返回 `is_featured`，仅当前投稿状态为 `approved` 时为 true，其余为 false；按当前页批量读取投稿状态，不逐条补查详情。审核通过的推荐/搜索 TrackSummary 还返回 `featured_description` 和 `featured_cover_url`，并使用投稿标题作为 `title`。
 
 ## 7. 管理后台审核
 

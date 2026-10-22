@@ -23,7 +23,7 @@
 | `source_tag` | string | 轨迹来源/运营标签；允许值为空字符串或 `manual_seed`（人工录入冷启动轨迹）；普通列表摘要不返回该字段 |
 | `coordinate_system` | string | 坐标系，例如 `WGS84` / `GCJ02` / `BD09` |
 | `title` | string | 轨迹标题 |
-| `is_featured` | boolean | 推荐/搜索摘要中表示轨迹投稿当前已审核通过 |
+| `is_featured` | boolean | 推荐、搜索、我的轨迹及收藏列表摘要中的精品标识；仅投稿当前已审核通过时为 true，false 也明确返回 |
 | `featured_description` | string | 审核通过的投稿简介；非优质投稿省略 |
 | `featured_cover_url` | string | 投稿首图的本地静态缓存地址；无投稿图时回退轨迹截图 |
 | `start_time` | string | 开始时间（RFC3339/ISO8601，服务端序列化时间格式） |

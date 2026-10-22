@@ -196,6 +196,7 @@ Authorization: Bearer <token>
 - 列表按“收藏时间”倒序返回（收藏记录的 `created_at`）。
 - 与推荐/搜索列表口径保持一致：仅返回 `status=1` 且 `is_running=false` 的轨迹。
 - 返回结构与推荐轨迹列表保持一致，每个 item 明确返回 `collected`，表示当前 JWT 用户的收藏状态；客户端直接透传该字段到详情，不再依赖字段缺省值或列表来源推断。旧版本曾省略该字段。
+- 每个 item 明确返回 `is_featured`：仅轨迹投稿当前已审核通过时为 true，其余为 false；当前页批量读取投稿状态，不逐条请求详情或下载投稿图片。
 - `cursor` 为服务端生成的分页游标，客户端应原样透传，不要解析。
 - 响应中的 `total_count` 表示“收藏列表”总数（按本接口口径：仅统计 `status=1` 且 `is_running=false` 的轨迹）。
 
@@ -226,6 +227,7 @@ Authorization: Bearer <token>
     "items": [
       {
         "id": "NO.00000001",
+        "is_featured": false,
         "user_id": 1001,
         "city_code": "330100",
         "locate_addr": "杭州市西湖区",

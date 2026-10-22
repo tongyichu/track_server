@@ -1,5 +1,17 @@
 # 工作交接：协议 H5 页面（2026-10-13）
 
+## 2026-10-22：联合发布精品标签
+
+- 用户要求联合发布，授权两端同步、提交、推送及 Server 部署/App 发布。两仓 fetch origin 后 main 与 origin/main 一致；Server 仅包含本人已上传/收藏列表 is_featured 的 DTO、批量状态装饰和对应 API/规则/交接，无数据表或配置变更，复用同源码已通过的 go build ./...，差异检查通过，不新增或运行业务自动化测试。
+- 先提交推送 Server，再构建推送 linux/amd64 latest 镜像，生产健康通过后发布 Android。用户已表示服务端本次已登录；仅验证并使用本轮新 SSH master，不复用历史认证。部署及 App 最终回执保存在 /private/tmp/track-featured-joint-release-95z8q7xc；本节为部署前记录，实际成功以回执和最终回复为准。
+
+## 2026-10-22：本人已上传与收藏列表精品标识
+
+- 用户要求 Android Me 和搜索 Item 的精品标签。搜索/客态主页复用 TrackSummary 原已返回 is_featured；本轮为 MyTrackSummary 和 CollectedTrackSummary 补齐同名 bool，无 omitempty，false 也明确返回，仅当前投稿 approved 时为 true。
+- DecorateMySummaries 在既有 ListByTrackIDs 结果中填入标识，无新增查询；ListCollectedTracks 对当前页复用 TrackSubmissionService.ApprovedTrackIDs 批量取状态并拷贝到收藏 DTO，无逐条查询详情或投稿媒体缓存。不修改仓储接口、三种数据库实现、表/索引、标题或封面规则。API 通用模型、投稿/本人/收藏文档、路由索引和 AGENTS 已同步。
+- go build ./... 与两仓 git diff --check 通过；Android assembleDebug（7s）通过，新 Debug 安装小米并启动，前台 MainActivity。未新增或运行自动化测试，用户手动验证分页、审核通过/未通过的标签及日夜配色；未提交推送或部署，本轮收藏字段上线需另行部署，当前生产仍是 0b9014d。
+- AGENTS/freshness 检查保留既有文件超长、Server 根 precedence、全局入口为空及时间元信息告警，报告 /private/tmp/track-featured-{android,server}-{agents,freshness}.log；未扩展无关治理或修改全局规则。
+
 ## 2026-10-22：准备部署地图全部类型查询
 
 - 用户明确要求“部署 server”，按 android-track-release 技能同时授权本仓库同步、提交、推送；仅处理 Server，不提交客户端或发布 App。已 fetch origin，main 与 origin/main 一致，无新远端代码；本次范围为地图查询 all、MySQL 区域聚合修正及 API/规则/交接文档（含此前 WebP 兼容说明），无数据表变更或新配置。
