@@ -10,7 +10,7 @@
 
 - 获取上传用 OSS STS：`GET /api/v1/oss/sts-token`
 - 创建或上传/更新轨迹：`POST /api/v1/track/create`、`POST /api/v1/track/:track_id/upload_cloud`、`PUT /api/v1/track/:track_id/update`
-- 历史预览补图上传准备与提交：`POST /api/v1/track/preview-backfill/:track_id/prepare`、`POST /api/v1/track/preview-backfill/:track_id/complete`；列表与 GPS 查询不拦截。
+- 历史预览补图上传准备、提交及清空：`POST /api/v1/track/preview-backfill/:track_id/prepare`、`POST /api/v1/track/preview-backfill/:track_id/complete`、`POST /api/v1/track/preview-backfill/clear`；列表与 GPS 查询不拦截。
 - 发起同行：`POST /api/v1/companion/session/create`
 - 关注用户：`POST /api/v1/user/:user_id/follow`
 - 收藏轨迹：`POST /api/v1/track_collect`

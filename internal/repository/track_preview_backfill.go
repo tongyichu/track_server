@@ -81,6 +81,8 @@ func (r *MySQLTrackRepository) FillMissingPreviewImages(ctx context.Context, exp
 	query := `UPDATE track_records SET preview_images = ?, updated_at = ? WHERE ` + previewBaseSQL +
 		` AND id = ? AND raw_track_url = ? AND COALESCE(coordinate_system, '') = ? AND COALESCE(track_type, '') = ?`
 	args := []interface{}{encodeTrackPreviewImages(images), time.Now(), expected.ID, expected.RawTrackURL, expected.CoordinateSystem, expected.TrackType}
+	query += ` AND ` + previewFieldSQL("reset_version") + ` = ?`
+	args = append(args, expected.PreviewImages.ResetVersion)
 	for _, field := range previewURLFields {
 		query += ` AND ` + previewFieldSQL(field) + ` = ?`
 		args = append(args, expected.PreviewImages.Variant(strings.TrimSuffix(field, "_url")))
@@ -131,6 +133,11 @@ func (r *MongoTrackRepository) FillMissingPreviewImages(ctx context.Context, exp
 	}
 	filter := bson.M{"_id": expected.ID, "status": bson.M{"$ne": models.TrackStatusDeleted}, "is_running": false,
 		"raw_track_url": expected.RawTrackURL, "coordinate_system": expected.CoordinateSystem, "track_type": expected.TrackType}
+	if expected.PreviewImages.ResetVersion == "" {
+		filter["preview_images.reset_version"] = bson.M{"$in": bson.A{"", nil}}
+	} else {
+		filter["preview_images.reset_version"] = expected.PreviewImages.ResetVersion
+	}
 	for _, field := range previewURLFields {
 		value := expected.PreviewImages.Variant(strings.TrimSuffix(field, "_url"))
 		if value == "" {
@@ -202,4 +209,48 @@ func (r *InMemoryTrackRepository) FillMissingPreviewImages(_ context.Context, ex
 	t.PreviewImages = images
 	t.UpdatedAt = time.Now()
 	return true, nil
+}
+
+func (r *MySQLTrackRepository) ClearPreviewImages(ctx context.Context, id, resetVersion string) (int64, error) {
+	query := `UPDATE track_records SET preview_images = ?, updated_at = ? WHERE deleted_at IS NULL AND status <> 0`
+	args := []interface{}{encodeTrackPreviewImages(models.TrackPreviewImages{ResetVersion: resetVersion}), time.Now()}
+	if id != "" {
+		query += ` AND id = ?`
+		args = append(args, id)
+	}
+	res, err := r.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
+func (r *MongoTrackRepository) ClearPreviewImages(ctx context.Context, id, resetVersion string) (int64, error) {
+	filter := bson.M{"status": bson.M{"$ne": models.TrackStatusDeleted}}
+	if id != "" {
+		filter["_id"] = id
+	}
+	res, err := r.collection.UpdateMany(ctx, filter, bson.M{"$set": bson.M{
+		"preview_images": models.TrackPreviewImages{ResetVersion: resetVersion}, "updated_at": time.Now(),
+	}})
+	if err != nil {
+		return 0, err
+	}
+	return res.ModifiedCount, nil
+}
+
+func (r *InMemoryTrackRepository) ClearPreviewImages(_ context.Context, id, resetVersion string) (int64, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var affected int64
+	now := time.Now()
+	for _, t := range r.tracks {
+		if t.Status == models.TrackStatusDeleted || (id != "" && t.ID != id) {
+			continue
+		}
+		t.PreviewImages = models.TrackPreviewImages{ResetVersion: resetVersion}
+		t.UpdatedAt = now
+		affected++
+	}
+	return affected, nil
 }

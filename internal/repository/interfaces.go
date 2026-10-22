@@ -75,6 +75,8 @@ type TrackRepository interface {
 	PreviewBackfillCounts(ctx context.Context) (pending, withoutRaw int64, err error)
 	// FillMissingPreviewImages updates only the preview group if the source and previous previews still match.
 	FillMissingPreviewImages(ctx context.Context, expected *models.Track, images models.TrackPreviewImages) (bool, error)
+	// ClearPreviewImages clears one track, or all non-deleted tracks when id is empty, and invalidates older tasks.
+	ClearPreviewImages(ctx context.Context, id, resetVersion string) (int64, error)
 }
 
 // TrackCaloriesBackfiller is implemented by repositories that can repair

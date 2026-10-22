@@ -34,7 +34,7 @@
 | `raw_track_url` | string | 原始轨迹文件可下载链接（服务端本地缓存 URL，例如 `/api/v1/static/raw_tracks/<track_id>.dat`） |
 | `track_screenshot_url` | string | 轨迹截图可下载链接（服务端本地缓存 URL，例如 `/api/v1/static/screenshots/<track_id>.jpg`） |
 | `track_no_map_bg_screenshot_url` | string | 无地图背景的轨迹路线截图可下载链接（服务端本地缓存 URL，例如 `/api/v1/static/screenshots/<track_id>_no_map_bg.jpg`） |
-| `preview_images` | object | 静态轨迹预览图：`square_day_url` / `square_night_url`（1:1）、`landscape_day_url` / `landscape_night_url`（4:3）；详情及所有轨迹摘要返回鉴权图片地址，无图为空对象；完整协议见 [track.md](track.md#静态轨迹预览图) |
+| `preview_images` | object | 静态轨迹预览图：`square_day_url` / `square_night_url`（1:1）、`landscape_day_url` / `landscape_night_url`（4:3）；详情及所有轨迹摘要返回鉴权图片地址，无图或 DevMode 清空后为空对象；存储内部清空版本不下发；完整协议见 [track.md](track.md#静态轨迹预览图) |
 | `is_running` | bool | 是否进行中 |
 | `status` | int | 轨迹状态：`0` 删除，`1` 正常，`2` 私密 |
 | `created_at` | string | 创建时间 |

@@ -1,5 +1,18 @@
 # 工作交接：协议 H5 页面（2026-10-13）
 
+## 2026-10-22：DevMode 清空历史四图
+
+- POST /api/v1/track/preview-backfill/clear 使用现有业务 JWT，无新增管理员或作者验证；请求显式 all=true 或 track_id 二选一。空作用域/冲突返回 400，单条不存在或已删除 404；返回 affected_count（重置轨迹数，包含原本无图记录）。沿用上传账号限制。
+- 清空所有未删除记录或指定记录的四图地址；仅改 preview_images/updated_at，保留轨迹与 GPS/旧截图/OSS 文件/服务端图片缓存。无图返回空对象，已结束且有原始 GPS 的记录重新进入待补列表。
+- TrackRepository.ClearPreviewImages 补齐 MySQL/Mongo/内存三实现；随机清空版本放在现有 JSON/BSON 内，不对业务 JSON 暴露，不增表/列。source_version 和 FillMissingPreviewImages 的 CAS 比较包含清空版本，阻止清空前任务重新提交旧图；成功补图保留版本以支持幂等重试。
+- Android DevMode 确认后调用，成功重置本机进度与专用缓存、重新查询数量并清除列表预览地址；详情位置标签上方可复制真实 track_id。不会自动补图。
+- go build ./... 通过；默认不新增或运行自动化测试，不执行线上清空/补图。本轮尚未提交推送或部署，新清空接口需要后续部署。API、路由索引、账号限制及 AGENTS 已同步；治理检查保留既有超长/元信息告警。
+
+### 清空接口的 Server 部署请求
+
+- 用户要求部署 Server，发布范围为上述清空接口、内部清空版本、三仓储 CAS 与协议文档；不提交客户端，不执行清空或补图操作。
+- 部署前 git fetch origin 确认 main 与 origin/main 一致，go build ./... 与 git diff --check 通过；按发布技能提交推送此快照后构建 linux/amd64 镜像，使用用户本次新登录的 SSH master 更新生产，最终镜像、容器与健康检查结果以部署回执为准。
+
 ## 2026-10-22：DevMode 历史轨迹四图补齐
 
 - 用户决定由 Android DevMode 手动生成全站历史轨迹四图，沿用业务 JWT，不增加管理员、作者或二次验证。`/track/preview-backfill/list|:track_id/data|:track_id/prepare|:track_id/complete` 均在 auth 组；prepare/complete 沿用上传账号限制。

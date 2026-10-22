@@ -37,6 +37,21 @@ func (h *TrackHandler) ListPreviewBackfill(ctx context.Context, c *app.RequestCo
 	c.JSON(http.StatusOK, successResponse(page))
 }
 
+func (h *TrackHandler) ClearPreviewBackfill(ctx context.Context, c *app.RequestContext) {
+	var input service.PreviewBackfillClearInput
+	if err := c.BindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid payload"})
+		return
+	}
+	data, err := h.trackSvc.ClearPreviewBackfill(ctx, input)
+	if err != nil {
+		previewBackfillError(c, err)
+		return
+	}
+	c.Header("Cache-Control", "no-store")
+	c.JSON(http.StatusOK, successResponse(data))
+}
+
 func (h *TrackHandler) PreviewBackfillData(ctx context.Context, c *app.RequestContext) {
 	data, err := h.trackSvc.PreviewBackfillData(ctx, c.Param("track_id"), c.Query("source_version"))
 	if err != nil {

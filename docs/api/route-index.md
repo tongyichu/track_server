@@ -12,6 +12,7 @@
 | 历史预览原始 GPS | GET | `/track/preview-backfill/:track_id/data` | 是 | [track.md](track.md#历史轨迹预览补齐devmode) |
 | 历史预览四图上传地址 | POST | `/track/preview-backfill/:track_id/prepare` | 是 | [track.md](track.md#历史轨迹预览补齐devmode) |
 | 历史预览四图提交 | POST | `/track/preview-backfill/:track_id/complete` | 是 | [track.md](track.md#历史轨迹预览补齐devmode) |
+| 清空历史预览图（全站或按轨迹 ID） | POST | `/track/preview-backfill/clear` | 是 | [track.md](track.md#历史轨迹预览补齐devmode) |
 | 获取 OSS STS 临时凭证 | GET | `/oss/sts-token` | 是 | [oss.md](oss.md#4-获取-oss-sts-临时凭证直传上传) |
 | 轨迹评论列表 / 发表 | GET / POST | `/track/:track_id/comments` | 是 | [track-comments.md](track-comments.md) |
 | 单条评论 / 删除 | GET / DELETE | `/track/:track_id/comments/:comment_id` | 是 | [track-comments.md](track-comments.md) |

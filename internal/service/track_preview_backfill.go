@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"errors"
 	"fmt"
@@ -60,7 +61,11 @@ type PreviewBackfillResult struct {
 func (s *TrackService) SetPreviewBackfillStore(store *OSSTokenService) { s.previewBackfill = store }
 
 func previewSourceVersion(t *models.Track) string {
-	return fmt.Sprintf("%x", sha256.Sum256([]byte(t.RawTrackURL+"\x00"+t.CoordinateSystem+"\x00"+t.TrackType)))
+	source := t.RawTrackURL + "\x00" + t.CoordinateSystem + "\x00" + t.TrackType
+	if t.PreviewImages.ResetVersion != "" {
+		source += "\x00" + t.PreviewImages.ResetVersion
+	}
+	return fmt.Sprintf("%x", sha256.Sum256([]byte(source)))
 }
 
 func previewBackfillTask(t *models.Track) PreviewBackfillTask {
@@ -193,6 +198,7 @@ func (s *TrackService) CompletePreviewBackfill(ctx context.Context, id string, i
 	if err != nil {
 		return nil, err
 	}
+	images.ResetVersion = t.PreviewImages.ResetVersion
 	updated, err := s.tracks.FillMissingPreviewImages(ctx, t, images)
 	if err != nil {
 		return nil, err
@@ -208,4 +214,34 @@ func (s *TrackService) CompletePreviewBackfill(ctx context.Context, id string, i
 		return nil, ErrPreviewSourceChanged
 	}
 	return &PreviewBackfillResult{State: "completed", PreviewImages: trackPreviewURLs(id, images)}, nil
+}
+
+type PreviewBackfillClearInput struct {
+	All     bool   `json:"all"`
+	TrackID string `json:"track_id"`
+}
+
+type PreviewBackfillClearResult struct {
+	AffectedCount int64  `json:"affected_count"`
+	All           bool   `json:"all"`
+	TrackID       string `json:"track_id,omitempty"`
+}
+
+func (s *TrackService) ClearPreviewBackfill(ctx context.Context, input PreviewBackfillClearInput) (*PreviewBackfillClearResult, error) {
+	id := strings.TrimSpace(input.TrackID)
+	if input.All == (id != "") || len(id) > 64 {
+		return nil, invalidArg("specify either all=true or a track_id")
+	}
+	var generation [16]byte
+	if _, err := rand.Read(generation[:]); err != nil {
+		return nil, err
+	}
+	affected, err := s.tracks.ClearPreviewImages(ctx, id, fmt.Sprintf("%x", generation))
+	if err != nil {
+		return nil, err
+	}
+	if id != "" && affected == 0 {
+		return nil, repository.ErrNotFound
+	}
+	return &PreviewBackfillClearResult{AffectedCount: affected, All: input.All, TrackID: id}, nil
 }

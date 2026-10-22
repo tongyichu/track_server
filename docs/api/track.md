@@ -34,12 +34,12 @@
 
 ### 历史轨迹预览补齐（DevMode）
 
-本组接口供 Android DevMode 手动批处理全站历史轨迹使用。沿用业务 JWT，不增加管理员、轨迹作者或二次权限验证；prepare 和 complete 沿用账号限制中的上传规则。不会创建或重新发布轨迹，只补写 `preview_images`。
+本组接口供 Android DevMode 手动批处理全站历史轨迹使用。沿用业务 JWT，不增加管理员、轨迹作者或二次权限验证；prepare、complete 和 clear 沿用账号限制中的上传规则。不会创建或重新发布轨迹，仅维护 `preview_images`。
 
 1. `GET /api/v1/track/preview-backfill/list?cursor=<cursor>&limit=20`
    - 查询已结束、未删除、有 `raw_track_url` 且四图不完整的轨迹，按 `start_time DESC, id DESC` 游标分页。`limit` 默认 20、最大 50；筛选在仓储分页前完成。
    - `data.items` 每项为 `track_id`、`title`、`track_type`、`coordinate_system`、`source_version`；响应还包含 `next_cursor`、`has_more`、全站当前 `pending_count` 及缺图但无原始轨迹的 `without_raw_count`。列表不下载 GPS 或四图。
-   - `source_version` 为原始轨迹源地址、坐标系及运动类型的 SHA-256，不因点赞或其他无关字段变化而变化。
+   - `source_version` 为原始轨迹源地址、坐标系、运动类型及最近清空版本的 SHA-256，不因点赞或其他无关字段变化而变化；每次清空都会改变版本。
 2. `GET /api/v1/track/preview-backfill/:track_id/data`
    - 从原始轨迹缓存读取，复用 JSON / GeoJSON / KML / KMZ 解析器返回完整 GPS，不做路线简化或地图绘制。
    - 响应 `data = {"state":"pending","task":<最新任务元信息>,"points":[{"latitude":39.9,"longitude":116.4}]}`；坐标保留源坐标系，Android 复用现有转换后绘制。可选 `source_version` 查询参数不匹配时返回 409；省略时获取最新源。
@@ -53,7 +53,13 @@
    - 使用与 prepare 相同的请求体；客户端不指定图片 URL。
    - 服务端经 OSS 内网逐张核对文件存在、JPEG、每张不超过 5 MiB，且 `square_*` 必须为 1024×1024、`landscape_*` 为 1024×768，然后条件更新四图及 `updated_at`，不更新其他轨迹字段。
    - 返回 `data = {"state":"completed","preview_images":<带版本的四图读取地址>}`。已完成重试或被其他流程抢先补齐时返回 `state=already_complete`，不覆盖现有完整四图。
-   - 源地址、坐标系、运动类型或原有四图在校验期间发生变化时不覆盖，返回 409、`error_code=preview_source_changed`。客户端重新读取最新任务后重试。缺图或图片不合规格返回 400。
+   - 源地址、坐标系、运动类型、清空版本或原有四图在校验期间发生变化时不覆盖，返回 409、`error_code=preview_source_changed`。客户端重新读取最新任务后重试。缺图或图片不合规格返回 400。
+5. `POST /api/v1/track/preview-backfill/clear`
+   - 清空单条：`{"track_id":"NO.00000001"}`；清空全部：`{"all":true}`。两种作用域互斥，空请求、空 ID 或同时指定两者返回 400，绝不隐式清空全部。轨迹 ID 保留原始外部 ID，最长 64 字符。
+   - 作用域为所有未删除轨迹（包括暂未上传原始 GPS 或进行中的轨迹），只清空四张预览图地址并更新 `updated_at`；不删除轨迹、原始 GPS、旧截图、OSS 对象或服务端图片缓存文件。单条不存在或已删除返回 404；全站没有轨迹时成功并返回 0。
+   - 成功响应 `data = {"affected_count":123,"all":true}` 或 `{"affected_count":1,"all":false,"track_id":"NO.00000001"}`。数量表示重置的轨迹数，包含原本无图的记录。随后列表/详情的 `preview_images` 为空对象，旧版本图片新请求返回 404；已有设备本地图片缓存不会被远程擦除。
+   - 为每次清空生成持久化内部版本，旧补图任务无法在清空后提交；客户端必须重新读取 GPS 任务并生成四图。内部版本放在既有 `preview_images` JSON/BSON 中，不下发给普通列表/详情，也不接受客户端写入，无新列或新表。
+   - Android 清空成功后重置本账号补图游标、队列、计数及失败记录，清理专用补图缓存并重新统计待补数；刷新当前列表中的预览地址。不会自动开始补图。已结束且有原始 GPS 的轨迹重新进入待补列表，缺原始 GPS 的轨迹计入缺源数量。
 
 无新任务表，完成状态以数据库四图为准。客户端按账号保存分页游标、尚未处理的当页队列、成功/跳过计数及失败记录；串行执行、后台/锁屏暂停、回到前台手动恢复。文件及逐图上传进度保存在单独缓存目录，失败项可单独重试。单批次固定语言、地图 provider、样式及尺寸；设置变化时暂停并提示恢复设置或重新扫描。
 

@@ -22,8 +22,13 @@ func ensureMySQLTrackPreviewImagesColumn(ctx context.Context, db *sql.DB) error 
 	return err
 }
 
+type storedTrackPreviewImages struct {
+	models.TrackPreviewImages
+	ResetVersion string `json:"reset_version,omitempty"`
+}
+
 func encodeTrackPreviewImages(images models.TrackPreviewImages) string {
-	data, _ := json.Marshal(images)
+	data, _ := json.Marshal(storedTrackPreviewImages{TrackPreviewImages: images, ResetVersion: images.ResetVersion})
 	return string(data)
 }
 
@@ -31,8 +36,11 @@ func decodeTrackPreviewImages(data sql.NullString, images *models.TrackPreviewIm
 	if !data.Valid || data.String == "" || data.String == "null" {
 		return nil
 	}
-	if err := json.Unmarshal([]byte(data.String), images); err != nil {
+	var stored storedTrackPreviewImages
+	if err := json.Unmarshal([]byte(data.String), &stored); err != nil {
 		return fmt.Errorf("decode track preview images: %w", err)
 	}
+	*images = stored.TrackPreviewImages
+	images.ResetVersion = stored.ResetVersion
 	return nil
 }
