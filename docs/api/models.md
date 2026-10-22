@@ -46,9 +46,11 @@
 
 ---
 
-### 用户背景图与性别
+### 用户背景图、性别、生日与星座
 
-`User` 新增 `background_url`（字符串，空串表示默认主页背景）、`gender`（字符串，空串未设置、`male`、`female`）。用户详情的 `background_url` 为公开主页展示字段，`gender` 仅在本人详情返回；更新个人信息的请求/响应与兼容规则见 [user.md](user.md#14-更新个人信息)。
+`User` 包含 `background_url`（字符串，空串表示默认主页背景）、`gender`（字符串，空串未设置、`male`、`female`）和 `birthday`（`YYYY-MM-DD` 字符串，空串表示未设置）。用户详情的 `background_url` 为公开主页展示字段，`gender`、`birthday` 仅在本人详情返回；本人登录与资料更新响应也下发生日。更新个人信息的请求/响应与兼容规则见 [user.md](user.md#14-更新个人信息)。
+
+本人详情、登录 `user` 和资料更新响应额外包含只读 `zodiac_sign`（英文 code；无有效生日时为空串），由服务端依据生日月日实时派生，不属于数据库 `User` 字段。客户端只本地化名称、不独立计算，客态详情省略该字段；固定区间见 [星座派生规则](user.md#星座派生规则)。
 
 点赞状态、轨迹点赞数和用户 `received_like_count` 的统计规则见 [track-likes.md](track-likes.md)。
 

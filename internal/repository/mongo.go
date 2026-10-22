@@ -555,6 +555,7 @@ func (r *MongoUserRepository) Update(ctx context.Context, user *models.User) err
 	result, err := r.collection.UpdateOne(ctx, bson.M{"_id": user.ID}, bson.M{"$set": bson.M{
 		"nickname": user.Nickname, "avatar_url": user.AvatarURL, "signature": user.Signature,
 		"background_url": user.BackgroundURL, "gender": user.Gender, "phone": user.Phone,
+		"birthday":        user.Birthday,
 		"client_language": user.ClientLanguage, "token_version": user.TokenVersion, "updated_at": user.UpdatedAt,
 	}})
 	if err != nil {

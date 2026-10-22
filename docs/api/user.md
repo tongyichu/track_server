@@ -4,7 +4,7 @@
 
 ## 10. 获取用户详情
 
-获取指定用户的公开主页信息，并返回用户轨迹、关注/粉丝和成就相关统计。当前登录用户查看自己时会额外返回手机号和客户端语言；查看他人时不返回这些私有字段。成就信息为公开主页信息，查看自己和查看他人都会返回。
+获取指定用户的公开主页信息，并返回用户轨迹、关注/粉丝和成就相关统计。当前登录用户查看自己时会额外返回手机号、客户端语言、性别、生日和星座；查看他人时不返回这些私有字段。成就信息为公开主页信息，查看自己和查看他人都会返回。
 
 **需要认证**
 
@@ -41,6 +41,8 @@ Authorization: Bearer <token>
     "signature": "",
     "background_url": "",
     "gender": "",
+    "birthday": "",
+    "zodiac_sign": "",
     "phone": "13800000000",
     "client_language": "zh-CN",
     "created_at": "2026-04-20T12:00:00Z",
@@ -102,6 +104,8 @@ Authorization: Bearer <token>
 | `data.signature` | string | 个性签名。 |
 | `data.background_url` | string | 个人主页顶部背景图；空串使用默认背景，启用缓存时为 `/api/v1/static/profile_backgrounds/<user_id>_<source_hash>.jpg`。 |
 | `data.gender` | string | 仅本人详情返回；空串未设置，`male` 男，`female` 女。 |
+| `data.birthday` | string | 仅本人详情返回；`YYYY-MM-DD` 日期字符串，空串表示未设置。查看他人时省略，不自动填入默认生日。 |
+| `data.zodiac_sign` | string | 仅本人详情返回；根据生日计算的只读英文 code，未设置/无效生日为空串，查看他人时省略。客户端按 code 本地化显示，空串/缺失/未知值隐藏；规则见下方“星座派生规则”。 |
 | `data.phone` | string | 手机号（可能为空）；仅查看自己时返回。 |
 | `data.client_language` | string | 客户端语言；仅查看自己时返回。 |
 | `data.created_at` | string | 创建时间。 |
@@ -289,7 +293,7 @@ Authorization: Bearer <token>
 
 ## 14. 更新个人信息
 
-支持一次更新一个或多个字段。省略或 `null` 的字段保持不变，显式空串可清空签名、背景图或性别；旧客户端继续使用原有字段。背景图应用于个人主页顶部。
+支持一次更新一个或多个字段。省略或 `null` 的字段保持不变，显式空串可清空签名、背景图、性别或生日；旧客户端继续使用原有字段。背景图应用于个人主页顶部。
 
 **需要认证**
 
@@ -297,6 +301,8 @@ Authorization: Bearer <token>
 
 - 用户身份以 `Authorization` 解析出的 `user_id` 为准；接口不接收 `user_id` 参数。
 - 只允许更新自己的个人信息。
+- 生日为可选私有资料，只在本人详情、本人登录和本人资料更新响应中下发，不在他人主页、关注/粉丝列表中公开。日期不含时间和时区，不转换为时间戳。
+- `zodiac_sign` 由服务端根据生日派生，不接受单独设置，不存数据库；修改生日立即重算，清除生日同时返回空串。客户端只提交 `birthday`，不提交星座。
 - 背景图沿用 OSS 上传和已鉴权静态资源下载；数据库保存原始 OSS 地址，客户端响应使用独立缓存分类 `profile_backgrounds`，缓存键包含地址摘要以避免旧图缓存。背景图缓存配置启用时，更新前先完成下载，失败返回 502 且保留旧值。
 - 更新头像成功后，响应中的 `avatar_url` 会被服务端替换为本地静态资源下载链接（例如 `/api/v1/static/avatars/<user_id>.png`）。
 
@@ -316,7 +322,8 @@ Content-Type: application/json
   "name": "Alice",
   "signature": "hello world",
   "background_url": "https://example.com/background.jpg",
-  "gender": "female"
+  "gender": "female",
+  "birthday": "2000-01-01"
 }
 ```
 
@@ -327,6 +334,7 @@ Content-Type: application/json
 | `signature` | string | 否 | 个性签名（允许传空串用于清空） |
 | `background_url` | string | 否 | 客户端经现有 OSS STS 上传后的 HTTP(S) 原始地址，最多 2048 字节；空串恢复默认背景。不能提交本机文件地址。 |
 | `gender` | string | 否 | 空串未设置、`male` 男、`female` 女；其他值返回 400。 |
+| `birthday` | string | 否 | 严格 `YYYY-MM-DD`，范围为 `1900-01-01` 至服务端本地当天（含）；非法日期、未来日期或格式不匹配返回 400。空串清除，省略/`null` 保持原值。 |
 
 ### 响应
 
@@ -344,6 +352,8 @@ Content-Type: application/json
     "signature": "hello world",
     "background_url": "/api/v1/static/profile_backgrounds/1001_<source_hash>.jpg",
     "gender": "female",
+    "birthday": "2000-01-01",
+    "zodiac_sign": "capricorn",
     "phone": "",
     "client_language": "",
     "created_at": "2026-04-20T12:00:00Z",
@@ -357,6 +367,7 @@ Content-Type: application/json
 - `400 Bad Request`
   - 请求体不是合法 JSON（返回 `{"error":"invalid payload"}`）
   - `gender` 非法或 `background_url` 不是 HTTP(S) 地址、超过 2048 字节
+  - `birthday` 格式、实际日期或日期范围非法（返回 `{"error":"birthday must be empty or a valid YYYY-MM-DD date between 1900-01-01 and today"}`）；无效请求不修改原资料
   - 未传任何可更新字段（返回 `{"error":"no fields to update"}`）
   - `avatar_url` 或 `name` 传了空字符串（返回 `{"error":"avatar_url is required"}` / `{"error":"name is required"}`）
 - `401 Unauthorized`
@@ -370,7 +381,30 @@ Content-Type: application/json
 
 ### 存量数据兼容
 
-MySQL 启动时幂等补充 `users.background_url VARCHAR(2048) NULL`、`users.gender VARCHAR(16) NOT NULL DEFAULT ''`；旧记录均显示默认背景和未设置性别。Mongo 文档缺少新字段时按空值读取；内存仓储保持相同语义。先部署服务端（包含迁移与静态图片缓存），再发布调用新字段的客户端。
+MySQL 启动时幂等补充 `users.background_url VARCHAR(2048) NULL`、`users.gender VARCHAR(16) NOT NULL DEFAULT ''`、`users.birthday VARCHAR(10) NOT NULL DEFAULT ''`；旧记录均显示默认背景、未设置性别和未设置生日。Mongo 文档缺少新字段时按空值读取；内存仓储保持相同语义。先部署服务端（包含迁移与静态图片缓存），再发布调用新字段的客户端。
+
+客户端在个人信息的性别下方展示生日。未设置显示“未设置”，首次打开选择器定位到 `2000-01-01`，但仅确认后提交；已有值时回显，取消不保存，清除提交 `{"birthday":""}`。旧服务端可能忽略新字段，客户端必须检查更新响应回显的生日与提交值一致，不能只按 HTTP 200 判断保存成功。
+
+### 星座派生规则
+
+`zodiac_sign` 在本人详情、登录 `user` 和 `PUT /user/profile/update` 响应中返回。服务端唯一计算入口为 `internal/service/user_zodiac.go`，只依据已保存生日的公历月日，采用以下固定区间（起止日期均包含）；不是依赖出生年份、时间或地点的精确星盘。有效闰年 `02-29` 归双鱼座。空值、格式错误、非真实日期或超出生日允许范围时返回空串，不兜底成某个星座。
+
+| code | 中文 | 公历日期区间 |
+| --- | --- | --- |
+| `aries` | 白羊座 | 03-21 ～ 04-19 |
+| `taurus` | 金牛座 | 04-20 ～ 05-20 |
+| `gemini` | 双子座 | 05-21 ～ 06-20 |
+| `cancer` | 巨蟹座 | 06-21 ～ 07-22 |
+| `leo` | 狮子座 | 07-23 ～ 08-22 |
+| `virgo` | 处女座 | 08-23 ～ 09-22 |
+| `libra` | 天秤座 | 09-23 ～ 10-22 |
+| `scorpio` | 天蝎座 | 10-23 ～ 11-21 |
+| `sagittarius` | 射手座 | 11-22 ～ 12-21 |
+| `capricorn` | 摩羯座 | 12-22 ～ 次年 01-19 |
+| `aquarius` | 水瓶座 | 01-20 ～ 02-18 |
+| `pisces` | 双鱼座 | 02-19 ～ 03-20 |
+
+区间参考 [Zodiac Sign Dates](https://astrologist.com/learn/zodiac-signs/zodiac-signs-dates)，以上表格为本产品固定协议，不随外部页面更新而变更。客户端不复制计算表，只翻译 code；本地缓存随生日一同更新，未确认的日期选择不会提前改变标签。星座目前同生日仅本人可见，公开星座须单独确定隐私策略。
 
 
 ## 个人主页轨迹列表

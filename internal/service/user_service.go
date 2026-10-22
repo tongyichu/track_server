@@ -25,6 +25,7 @@ var (
 	ErrAvatarURLRequired     = errors.New("avatar_url is required")
 	ErrNameRequired          = errors.New("name is required")
 	ErrInvalidGender         = errors.New("gender must be empty, male or female")
+	ErrInvalidBirthday       = errors.New("birthday must be empty or a valid YYYY-MM-DD date between 1900-01-01 and today")
 	ErrInvalidBackgroundURL  = errors.New("background_url must be an HTTP(S) URL of at most 2048 bytes or empty")
 	ErrBackgroundUnavailable = errors.New("background image could not be cached")
 	ErrCannotFollowSelf      = errors.New("cannot follow yourself")
@@ -54,6 +55,7 @@ type UserProfilePatch struct {
 	Signature     *string
 	BackgroundURL *string
 	Gender        *string
+	Birthday      *string
 }
 
 // NewUserService constructs a new UserService.
@@ -110,6 +112,8 @@ type UserProfileDetail struct {
 	Signature         string    `json:"signature"`
 	BackgroundURL     string    `json:"background_url"`
 	Gender            *string   `json:"gender,omitempty"`
+	Birthday          *string   `json:"birthday,omitempty"`
+	ZodiacSign        *string   `json:"zodiac_sign,omitempty"`
 	Phone             string    `json:"phone,omitempty"`
 	ClientLanguage    string    `json:"client_language,omitempty"`
 	CreatedAt         time.Time `json:"created_at"`
@@ -320,6 +324,9 @@ func (s *UserService) GetUserProfileDetail(ctx context.Context, viewerUserID int
 	}
 	if isSelf {
 		detail.Gender = &user.Gender
+		detail.Birthday = &user.Birthday
+		zodiacSign := zodiacSignFromBirthday(user.Birthday)
+		detail.ZodiacSign = &zodiacSign
 		detail.Phone = user.Phone
 		detail.ClientLanguage = user.ClientLanguage
 		if s.restrictions != nil {
@@ -577,7 +584,7 @@ func (s *UserService) UpdateProfile(ctx context.Context, userID int64, patch Use
 	if userID <= 0 {
 		return nil, errors.New("userID is required")
 	}
-	if patch.AvatarURL == nil && patch.Name == nil && patch.Signature == nil && patch.BackgroundURL == nil && patch.Gender == nil {
+	if patch.AvatarURL == nil && patch.Name == nil && patch.Signature == nil && patch.BackgroundURL == nil && patch.Gender == nil && patch.Birthday == nil {
 		return nil, ErrNoFieldsToUpdate
 	}
 	if patch.AvatarURL != nil && *patch.AvatarURL == "" {
@@ -589,6 +596,12 @@ func (s *UserService) UpdateProfile(ctx context.Context, userID int64, patch Use
 
 	if patch.Gender != nil && *patch.Gender != "" && *patch.Gender != "male" && *patch.Gender != "female" {
 		return nil, ErrInvalidGender
+	}
+	if patch.Birthday != nil && *patch.Birthday != "" {
+		birthday, err := time.Parse(time.DateOnly, *patch.Birthday)
+		if err != nil || birthday.Format(time.DateOnly) != *patch.Birthday || *patch.Birthday < "1900-01-01" || *patch.Birthday > time.Now().Format(time.DateOnly) {
+			return nil, ErrInvalidBirthday
+		}
 	}
 	if patch.BackgroundURL != nil && *patch.BackgroundURL != "" {
 		source := *patch.BackgroundURL
@@ -625,6 +638,9 @@ func (s *UserService) UpdateProfile(ctx context.Context, userID int64, patch Use
 	}
 	if patch.Gender != nil {
 		user.Gender = *patch.Gender
+	}
+	if patch.Birthday != nil {
+		user.Birthday = *patch.Birthday
 	}
 	if err := s.users.Update(ctx, user); err != nil {
 		return nil, err

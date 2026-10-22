@@ -21,6 +21,7 @@ type User struct {
 	Signature      string    `json:"signature" bson:"signature"`
 	BackgroundURL  string    `json:"background_url" bson:"background_url"`
 	Gender         string    `json:"gender" bson:"gender"`
+	Birthday       string    `json:"birthday" bson:"birthday"`
 	Phone          string    `json:"phone" bson:"phone"`
 	ClientLanguage string    `json:"client_language" bson:"client_language"`
 	TokenVersion   int64     `json:"-" bson:"token_version"`

@@ -57,7 +57,7 @@ type WechatSessionResponse struct {
 
 type LoginResult struct {
 	UserID           int64                        `json:"user_id"`
-	User             *models.User                 `json:"user"`
+	User             *UserProfileResponse         `json:"user"`
 	Token            string                       `json:"token"`
 	AchievementLevel *models.AchievementLevelInfo `json:"achievement_level,omitempty"`
 }
@@ -278,7 +278,7 @@ func (s *LoginService) LoginBySMS(ctx context.Context, phone, code, ip, deviceID
 	// 登录接口返回头像时，统一做兜底：若为空则返回默认头像。
 	user.AvatarURL = fallbackAvatarURL(user.ID, user.AvatarURL)
 
-	return &LoginResult{UserID: user.ID, User: user, Token: token}, nil
+	return &LoginResult{UserID: user.ID, User: NewUserProfileResponse(user), Token: token}, nil
 }
 
 func (s *LoginService) generateUniqueDefaultNickname(ctx context.Context) (string, error) {
@@ -355,7 +355,7 @@ func (s *LoginService) LoginByWechat(ctx context.Context, code, ip, deviceID, pl
 		return nil, fmt.Errorf("failed to generate token: %w", err)
 	}
 
-	return &LoginResult{UserID: user.ID, User: user, Token: token}, nil
+	return &LoginResult{UserID: user.ID, User: NewUserProfileResponse(user), Token: token}, nil
 }
 
 func (s *LoginService) LoginByApple(ctx context.Context, appleUserID, identityToken, ip, deviceID, platform string) (*LoginResult, error) {
@@ -384,7 +384,7 @@ func (s *LoginService) LoginByApple(ctx context.Context, appleUserID, identityTo
 		return nil, fmt.Errorf("failed to generate token: %w", err)
 	}
 
-	return &LoginResult{UserID: user.ID, User: user, Token: token}, nil
+	return &LoginResult{UserID: user.ID, User: NewUserProfileResponse(user), Token: token}, nil
 }
 
 func (s *LoginService) Logout(ctx context.Context, userID int64, ip, deviceID, platform string) error {

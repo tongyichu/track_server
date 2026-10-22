@@ -174,6 +174,7 @@ func (h *UserHandler) UpdateProfile(ctx context.Context, c *app.RequestContext) 
 		Signature     *string `json:"signature"`
 		BackgroundURL *string `json:"background_url"`
 		Gender        *string `json:"gender"`
+		Birthday      *string `json:"birthday"`
 	}
 	data, err := c.Body()
 	if err != nil || json.Unmarshal(data, &body) != nil {
@@ -187,6 +188,7 @@ func (h *UserHandler) UpdateProfile(ctx context.Context, c *app.RequestContext) 
 		Signature:     body.Signature,
 		BackgroundURL: body.BackgroundURL,
 		Gender:        body.Gender,
+		Birthday:      body.Birthday,
 	})
 	if err != nil {
 		if errors.Is(err, service.ErrBackgroundUnavailable) {
@@ -194,7 +196,7 @@ func (h *UserHandler) UpdateProfile(ctx context.Context, c *app.RequestContext) 
 			return
 		}
 		// Keep consistent with existing handler error style.
-		if errors.Is(err, service.ErrNoFieldsToUpdate) || errors.Is(err, service.ErrAvatarURLRequired) || errors.Is(err, service.ErrNameRequired) || errors.Is(err, service.ErrInvalidGender) || errors.Is(err, service.ErrInvalidBackgroundURL) {
+		if errors.Is(err, service.ErrNoFieldsToUpdate) || errors.Is(err, service.ErrAvatarURLRequired) || errors.Is(err, service.ErrNameRequired) || errors.Is(err, service.ErrInvalidGender) || errors.Is(err, service.ErrInvalidBirthday) || errors.Is(err, service.ErrInvalidBackgroundURL) {
 			c.JSON(http.StatusBadRequest, utils.H{"error": err.Error()})
 			return
 		}
@@ -202,7 +204,7 @@ func (h *UserHandler) UpdateProfile(ctx context.Context, c *app.RequestContext) 
 		return
 	}
 	// StandardResponse
-	c.JSON(http.StatusOK, successResponse(user))
+	c.JSON(http.StatusOK, successResponse(service.NewUserProfileResponse(user)))
 }
 
 // UpdatePhone handles PUT /api/user/profile/phone

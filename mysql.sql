@@ -5,6 +5,7 @@ CREATE TABLE `users` (
                           `signature` text,
  `background_url` varchar(2048) DEFAULT NULL COMMENT '个人主页背景图OSS地址',
  `gender` varchar(16) NOT NULL DEFAULT '' COMMENT '空值未设置，male/female',
+ `birthday` varchar(10) NOT NULL DEFAULT '' COMMENT '生日YYYY-MM-DD，空值未设置，仅本人可读',
                           `phone` varchar(32) NOT NULL DEFAULT '' COMMENT '用户手机号',
                           `client_language` varchar(64) NOT NULL DEFAULT '' COMMENT '客户端语言',
                           `token_version` bigint NOT NULL DEFAULT '1' COMMENT '登录令牌版本号',

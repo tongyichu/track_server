@@ -358,6 +358,8 @@ Content-Type: application/json
       "nickname": "",
       "avatar_url": "",
       "signature": "",
+      "birthday": "",
+      "zodiac_sign": "",
       "phone": "",
       "client_language": "",
       "created_at": "2026-04-19T10:30:00.000000Z",
@@ -463,6 +465,8 @@ Content-Type: application/json
       "nickname": "",
       "avatar_url": "",
       "signature": "",
+      "birthday": "",
+      "zodiac_sign": "",
       "phone": "",
       "client_language": "",
       "created_at": "2026-04-19T10:30:00.000000Z",
@@ -626,6 +630,8 @@ Authorization: Bearer <token>
 | `nickname` | string | 用户昵称，新注册用户为空字符串 |
 | `avatar_url` | string | 头像 URL，新注册用户为空字符串 |
 | `signature` | string | 个性签名，新注册用户为空字符串 |
+| `birthday` | string | 本人生日，格式 `YYYY-MM-DD`；新注册或未设置时为空字符串。短信、微信、Apple 登录均随 `user` 返回；客户端字段可空以兼容旧服务端。编辑规则见 [个人信息接口](docs/api/user.md#14-更新个人信息)。 |
+| `zodiac_sign` | string | 根据已保存生日派生的只读星座 code；无有效生日为空串，不持久化、不接受客户端设置。短信、微信、Apple 登录均随 `user` 返回；缺失/未知值隐藏标签。固定区间见 [星座派生规则](docs/api/user.md#星座派生规则)。 |
 | `phone` | string | 手机号码，短信登录用户会自动填充 |
 | `client_language` | string | 客户端语言偏好 |
 | `created_at` | string | 注册时间，ISO 8601 格式 |

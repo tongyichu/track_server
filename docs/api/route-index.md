@@ -35,7 +35,7 @@
 | 更新轨迹信息 | PUT | `/track/:track_id/update` | 是 | [track.md](track.md#11-更新轨迹信息) |
 | 删除轨迹 | DELETE | `/track/:track_id` | 是 | [track.md](track.md#12-删除轨迹) |
 | 用户已收藏轨迹列表（含精品标识、当前用户收藏状态及总数） | GET | `/track/collected/list` | 是 | [collect-navigation.md](collect-navigation.md#13-用户已收藏轨迹列表) |
-| 更新个人信息（含背景图、性别） | PUT | `/user/profile/update` | 是 | [user.md](user.md#14-更新个人信息) |
+| 更新个人信息（含背景图、性别、生日） | PUT | `/user/profile/update` | 是 | [user.md](user.md#14-更新个人信息) |
 | 关注用户 | POST | `/user/:user_id/follow` | 是 | [user.md](user.md#42-关注用户) |
 | 取消关注用户 | DELETE | `/user/:user_id/follow` | 是 | [user.md](user.md#43-取消关注用户) |
 | 查询关注状态 | GET | `/user/:user_id/follow/status` | 是 | [user.md](user.md#44-查询关注状态) |
@@ -94,4 +94,4 @@
 | 运维更新反馈状态 | PUT | `/ops/feedback/:feedback_id/status` | 运维内部 | [feedback.md](feedback.md#40-运维更新反馈状态) |
 | 运维读取反馈图片 | GET | `/ops/feedback/:feedback_id/images/:image_id` | 运维内部 | [feedback.md](feedback.md#41-运维读取反馈图片) |
 
-个人信息字段扩展：`GET /user/:user_id/detail` 与 `PUT /user/profile/update` 支持背景图、性别，详见 [用户接口](user.md)。路由和鉴权分组保持不变。
+个人信息字段扩展：`GET /user/:user_id/detail` 与 `PUT /user/profile/update` 支持背景图、性别、生日；性别、生日和服务端派生的 `zodiac_sign` 仅本人详情返回。登录 `user` 与资料更新响应也带星座，无新路由或星座存储字段，详见 [用户接口](user.md)。路由和鉴权分组保持不变。
