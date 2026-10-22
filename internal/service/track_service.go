@@ -31,6 +31,7 @@ type TrackService struct {
 	companions      repository.CompanionRepository
 	achievements    *AchievementService
 	screenshotCache *AssetCacheService
+	previewCache    *AssetCacheService
 	avatarCache     *AssetCacheService
 	rawTrackCache   *AssetCacheService
 	trackTypes      []string
@@ -44,7 +45,7 @@ const (
 	maxTrackLocateAddrLen  = 255
 	maxTrackSourceTagLen   = 64
 	trackSourceTagManual   = "manual_seed"
-	trackTypeIconURLPrefix = "/api/v1/static/track_type_icon/"
+	trackTypeIconURLPrefix = "/api/v1/track/types/icons/"
 	trackTypeAnimURLPrefix = "/api/v1/static/track_type_icon_anim/"
 )
 
@@ -109,25 +110,26 @@ func invalidArg(msg string) error { return &InvalidArgumentError{Msg: msg} }
 
 // CreateTrackInput describes optional fields accepted by track creation.
 type CreateTrackInput struct {
-	Title                     *string    `json:"title"`
-	SessionID                 *string    `json:"session_id"`
-	CityCode                  *string    `json:"city_code"`
-	LocateAddr                *string    `json:"locate_addr"`
-	TrackType                 *string    `json:"track_type"`
-	SourceTag                 *string    `json:"source_tag"`
-	CoordinateSystem          *string    `json:"coordinate_system"`
-	StartTime                 *time.Time `json:"start_time"`
-	EndTime                   *time.Time `json:"end_time"`
-	Distance                  *float64   `json:"distance"`
-	Duration                  *uint32    `json:"duration"`
-	CaloriesBurned            *float64   `json:"calories_burned"`
-	ElevationGain             *int       `json:"elevation_gain"`
-	RawTrackURL               *string    `json:"raw_track_url"`
-	TrackScreenshotURL        *string    `json:"track_screenshot_url"`
-	TrackNoMapBgScreenshotURL *string    `json:"track_no_map_bg_screenshot_url"`
-	LegacyScreenshotURL       *string    `json:"screenshot_url,omitempty"`
-	IsRunning                 *bool      `json:"is_running"`
-	AvgSpeedKmh               *float64   `json:"avg_speed_kmh"`
+	PreviewImages             *models.TrackPreviewImages `json:"preview_images"`
+	Title                     *string                    `json:"title"`
+	SessionID                 *string                    `json:"session_id"`
+	CityCode                  *string                    `json:"city_code"`
+	LocateAddr                *string                    `json:"locate_addr"`
+	TrackType                 *string                    `json:"track_type"`
+	SourceTag                 *string                    `json:"source_tag"`
+	CoordinateSystem          *string                    `json:"coordinate_system"`
+	StartTime                 *time.Time                 `json:"start_time"`
+	EndTime                   *time.Time                 `json:"end_time"`
+	Distance                  *float64                   `json:"distance"`
+	Duration                  *uint32                    `json:"duration"`
+	CaloriesBurned            *float64                   `json:"calories_burned"`
+	ElevationGain             *int                       `json:"elevation_gain"`
+	RawTrackURL               *string                    `json:"raw_track_url"`
+	TrackScreenshotURL        *string                    `json:"track_screenshot_url"`
+	TrackNoMapBgScreenshotURL *string                    `json:"track_no_map_bg_screenshot_url"`
+	LegacyScreenshotURL       *string                    `json:"screenshot_url,omitempty"`
+	IsRunning                 *bool                      `json:"is_running"`
+	AvgSpeedKmh               *float64                   `json:"avg_speed_kmh"`
 }
 
 func (in *CreateTrackInput) normalize() {
@@ -149,6 +151,9 @@ func (in *CreateTrackInput) normalize() {
 }
 
 func (in CreateTrackInput) validate() error {
+	if err := validateTrackPreviewImages(in.PreviewImages); err != nil {
+		return err
+	}
 	if in.SessionID != nil {
 		if *in.SessionID == "" {
 			return invalidArg("session_id is required")
@@ -196,21 +201,22 @@ func validateTrackSourceTag(sourceTag string) error {
 // TrackInfoPatch describes which track summary fields should be updated.
 // Nil means the field is not provided and should remain unchanged.
 type TrackInfoPatch struct {
-	SessionID                 *string  `json:"session_id"`
-	CityCode                  *string  `json:"city_code"`
-	LocateAddr                *string  `json:"locate_addr"`
-	TrackType                 *string  `json:"track_type"`
-	SourceTag                 *string  `json:"source_tag"`
-	CoordinateSystem          *string  `json:"coordinate_system"`
-	Distance                  *float64 `json:"distance"`
-	Duration                  *uint32  `json:"duration"`
-	CaloriesBurned            *float64 `json:"calories_burned"`
-	ElevationGain             *int     `json:"elevation_gain"`
-	RawTrackURL               *string  `json:"raw_track_url"`
-	TrackScreenshotURL        *string  `json:"track_screenshot_url"`
-	TrackNoMapBgScreenshotURL *string  `json:"track_no_map_bg_screenshot_url"`
-	LegacyScreenshotURL       *string  `json:"screenshot_url,omitempty"`
-	AvgSpeedKmh               *float64 `json:"avg_speed_kmh"`
+	PreviewImages             *models.TrackPreviewImages `json:"preview_images"`
+	SessionID                 *string                    `json:"session_id"`
+	CityCode                  *string                    `json:"city_code"`
+	LocateAddr                *string                    `json:"locate_addr"`
+	TrackType                 *string                    `json:"track_type"`
+	SourceTag                 *string                    `json:"source_tag"`
+	CoordinateSystem          *string                    `json:"coordinate_system"`
+	Distance                  *float64                   `json:"distance"`
+	Duration                  *uint32                    `json:"duration"`
+	CaloriesBurned            *float64                   `json:"calories_burned"`
+	ElevationGain             *int                       `json:"elevation_gain"`
+	RawTrackURL               *string                    `json:"raw_track_url"`
+	TrackScreenshotURL        *string                    `json:"track_screenshot_url"`
+	TrackNoMapBgScreenshotURL *string                    `json:"track_no_map_bg_screenshot_url"`
+	LegacyScreenshotURL       *string                    `json:"screenshot_url,omitempty"`
+	AvgSpeedKmh               *float64                   `json:"avg_speed_kmh"`
 }
 
 func (p *TrackInfoPatch) normalize() {
@@ -235,7 +241,7 @@ func (p *TrackInfoPatch) normalize() {
 }
 
 func (p TrackInfoPatch) empty() bool {
-	return p.SessionID == nil &&
+	return p.PreviewImages == nil && p.SessionID == nil &&
 		p.CityCode == nil &&
 		p.LocateAddr == nil &&
 		p.TrackType == nil &&
@@ -410,7 +416,7 @@ func trackTypeIconURL(trackType string) string {
 	if file, ok := config.TrackTypeIconFile(trackType); ok {
 		return trackTypeIconURLPrefix + file
 	}
-	return trackTypeIconURLPrefix + url.PathEscape(trackType) + ".svg"
+	return "/api/v1/static/track_type_icon/" + url.PathEscape(trackType) + ".svg"
 }
 
 // GetUserTrackStats returns per-user track statistics.
@@ -519,6 +525,9 @@ func (s *TrackService) CreateTrack(ctx context.Context, userID int64, input Crea
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
+	if input.PreviewImages != nil {
+		track.PreviewImages = *input.PreviewImages
+	}
 	if input.Title != nil {
 		track.Title = *input.Title
 	}
@@ -606,6 +615,7 @@ func (s *TrackService) CreateTrack(ctx context.Context, userID int64, input Crea
 	if err := s.fillTrackCollectSummary(ctx, userID, track); err != nil {
 		return nil, err
 	}
+	track.PreviewImages = trackPreviewURLs(track.ID, track.PreviewImages)
 	return track, nil
 }
 
@@ -662,6 +672,7 @@ func (s *TrackService) GetTrackDetail(ctx context.Context, trackID string) (*mod
 			}
 		}
 	}
+	track.PreviewImages = trackPreviewURLs(track.ID, track.PreviewImages)
 	return track, nil
 }
 
@@ -703,6 +714,7 @@ func (s *TrackService) GetRunningTrack(ctx context.Context, userID int64) (*mode
 		return nil, err
 	}
 	s.decorateTrackAssets(ctx, track)
+	track.PreviewImages = trackPreviewURLs(track.ID, track.PreviewImages)
 	return track, nil
 }
 
@@ -1269,6 +1281,7 @@ func (s *TrackService) ListCollectedTracks(ctx context.Context, userID int64, in
 			CollectCount:              s.CollectCount,
 			NavigateCount:             s.NavigateCount,
 			TrackScreenshotURL:        s.TrackScreenshotURL,
+			PreviewImages:             s.PreviewImages,
 			TrackNoMapBgScreenshotURL: s.TrackNoMapBgScreenshotURL,
 			RawTrackURL:               s.RawTrackURL,
 		})
@@ -1314,6 +1327,9 @@ func (s *TrackService) MarkUploadedToCloud(ctx context.Context, trackID string) 
 
 // UpdateTrackInfo updates a track with partially provided fields.
 func (s *TrackService) UpdateTrackInfo(ctx context.Context, userID int64, trackID string, patch TrackInfoPatch) (*models.Track, error) {
+	if err := validateTrackPreviewImages(patch.PreviewImages); err != nil {
+		return nil, err
+	}
 	if userID <= 0 {
 		return nil, invalidArg("userID is required")
 	}
@@ -1410,6 +1426,10 @@ func (s *TrackService) UpdateTrackInfo(ctx context.Context, userID int64, trackI
 		track.AvgSpeedKmh = *patch.AvgSpeedKmh
 		updated = true
 	}
+	if patch.PreviewImages != nil && track.PreviewImages != *patch.PreviewImages {
+		track.PreviewImages = *patch.PreviewImages
+		updated = true
+	}
 	if patch.RawTrackURL != nil && track.RawTrackURL == "" {
 		track.RawTrackURL = *patch.RawTrackURL
 		updated = true
@@ -1475,6 +1495,7 @@ func (s *TrackService) UpdateTrackInfo(ctx context.Context, userID int64, trackI
 	if err := s.fillTrackCollectSummary(ctx, userID, track); err != nil {
 		return nil, err
 	}
+	track.PreviewImages = trackPreviewURLs(track.ID, track.PreviewImages)
 	return track, nil
 }
 
@@ -1601,6 +1622,7 @@ func toSummaries(tracks []*models.Track) []*models.TrackSummary {
 		// - 映射解析失败会被内部吞掉并兜底为空（不影响列表其它字段返回）。
 		res = append(res, &models.TrackSummary{
 			CanComment:     likeEligible(t),
+			PreviewImages:  trackPreviewURLs(t.ID, t.PreviewImages),
 			ID:             t.ID,
 			UserID:         t.UserID,
 			SessionID:      t.SessionID,
@@ -1626,6 +1648,7 @@ func toMySummaries(tracks []*models.Track) []*models.MyTrackSummary {
 	for _, t := range tracks {
 		res = append(res, &models.MyTrackSummary{
 			CanComment:     likeEligible(t),
+			PreviewImages:  trackPreviewURLs(t.ID, t.PreviewImages),
 			ID:             t.ID,
 			UserID:         t.UserID,
 			SessionID:      t.SessionID,

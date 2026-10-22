@@ -26,6 +26,7 @@ type TrackPoint struct {
 // Track aggregates persisted fields of track_records.
 // Points is transient field kept for existing service logic.
 type Track struct {
+	PreviewImages             TrackPreviewImages       `json:"preview_images" bson:"preview_images"`
 	Collected                 bool                     `json:"collected" bson:"-"`
 	CollectCount              int64                    `json:"collect_count" bson:"-"`
 	CommentCount              int64                    `json:"comment_count" bson:"-"`
@@ -70,6 +71,7 @@ type Track struct {
 // - 若用户信息不存在/查询失败（not found），nickname/avatar_url 将返回空字符串；
 // - collect_count 为该轨迹被收藏的总数；collected 为“当前鉴权用户”是否收藏。
 type TrackSummary struct {
+	PreviewImages             TrackPreviewImages            `json:"preview_images"`
 	CommentCount              int64                         `json:"comment_count" bson:"-"`
 	CanComment                bool                          `json:"can_comment" bson:"-"`
 	Liked                     bool                          `json:"liked" bson:"-"`
@@ -108,32 +110,33 @@ type TrackSummary struct {
 // CollectedTrackSummary is used by "user collected tracks list".
 // It is consistent with TrackSummary but intentionally omits the `collected` field.
 type CollectedTrackSummary struct {
-	CommentCount              int64     `json:"comment_count" bson:"-"`
-	CanComment                bool      `json:"can_comment" bson:"-"`
-	Liked                     bool      `json:"liked" bson:"-"`
-	LikeCount                 int64     `json:"like_count" bson:"-"`
-	ID                        string    `json:"id"`
-	UserID                    int64     `json:"user_id"`
-	SessionID                 string    `json:"session_id"`
-	CityCode                  string    `json:"city_code"`
-	LocateAddr                string    `json:"locate_addr"`
-	TrackType                 string    `json:"track_type"`
-	StartTime                 time.Time `json:"start_time"`
-	EndTime                   time.Time `json:"end_time"`
-	CityName                  string    `json:"city_name"`
-	Nickname                  string    `json:"nickname"`
-	UserAvatarURL             string    `json:"user_avatar_url"`
-	Title                     string    `json:"title"`
-	Distance                  float64   `json:"distance"`
-	Duration                  uint32    `json:"duration"`
-	AvgSpeedKmh               float64   `json:"avg_speed_kmh"`
-	CaloriesBurned            float64   `json:"calories_burned"`
-	ElevationGain             int       `json:"elevation_gain"`
-	CollectCount              int64     `json:"collect_count"`
-	NavigateCount             int64     `json:"navigate_count"`
-	TrackScreenshotURL        string    `json:"track_screenshot_url"`
-	TrackNoMapBgScreenshotURL string    `json:"track_no_map_bg_screenshot_url"`
-	RawTrackURL               string    `json:"raw_track_url"`
+	PreviewImages             TrackPreviewImages `json:"preview_images"`
+	CommentCount              int64              `json:"comment_count" bson:"-"`
+	CanComment                bool               `json:"can_comment" bson:"-"`
+	Liked                     bool               `json:"liked" bson:"-"`
+	LikeCount                 int64              `json:"like_count" bson:"-"`
+	ID                        string             `json:"id"`
+	UserID                    int64              `json:"user_id"`
+	SessionID                 string             `json:"session_id"`
+	CityCode                  string             `json:"city_code"`
+	LocateAddr                string             `json:"locate_addr"`
+	TrackType                 string             `json:"track_type"`
+	StartTime                 time.Time          `json:"start_time"`
+	EndTime                   time.Time          `json:"end_time"`
+	CityName                  string             `json:"city_name"`
+	Nickname                  string             `json:"nickname"`
+	UserAvatarURL             string             `json:"user_avatar_url"`
+	Title                     string             `json:"title"`
+	Distance                  float64            `json:"distance"`
+	Duration                  uint32             `json:"duration"`
+	AvgSpeedKmh               float64            `json:"avg_speed_kmh"`
+	CaloriesBurned            float64            `json:"calories_burned"`
+	ElevationGain             int                `json:"elevation_gain"`
+	CollectCount              int64              `json:"collect_count"`
+	NavigateCount             int64              `json:"navigate_count"`
+	TrackScreenshotURL        string             `json:"track_screenshot_url"`
+	TrackNoMapBgScreenshotURL string             `json:"track_no_map_bg_screenshot_url"`
+	RawTrackURL               string             `json:"raw_track_url"`
 }
 
 // TrackListCursor 表示按时间倒序翻页时使用的游标锚点。
@@ -170,6 +173,7 @@ type CollectedTrackSummaryPage struct {
 // - 不返回 nickname/user_avatar_url/collected（这些字段对“我的轨迹”列表不需要）。
 // - 仍保留 collect_count/navigate_count 等统计字段，便于客户端展示。
 type MyTrackSummary struct {
+	PreviewImages             TrackPreviewImages      `json:"preview_images"`
 	CommentCount              int64                   `json:"comment_count" bson:"-"`
 	CanComment                bool                    `json:"can_comment" bson:"-"`
 	Liked                     bool                    `json:"liked" bson:"-"`

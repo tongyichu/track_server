@@ -34,11 +34,11 @@ type TrackTypeConfig struct {
 
 // DefaultTrackTypeConfigs keeps built-in track type names and icons in one place.
 var DefaultTrackTypeConfigs = []TrackTypeConfig{
-	{Type: "hiking", Name: "徒步", ThemeColor: "#345631", ThemeColorDark: "#8BCB83", IconFile: "hiking.svg", IconAnimFile: ""},
-	{Type: "running", Name: "跑步", ThemeColor: "#F26A4B", ThemeColorDark: "#FF947A", IconFile: "running.svg", IconAnimFile: ""},
-	{Type: "climbing", Name: "爬山", ThemeColor: "#6C4CE1", ThemeColorDark: "#AA92F5", IconFile: "climbing.svg", IconAnimFile: ""},
-	{Type: "riding", Name: "骑行", ThemeColor: "#2F80ED", ThemeColorDark: "#78B4FF", IconFile: "riding.svg", IconAnimFile: ""},
-	{Type: "driving", Name: "自驾", ThemeColor: "#F5A623", ThemeColorDark: "#FFD083", IconFile: "driving.svg", IconAnimFile: ""},
+	{Type: "hiking", Name: "徒步", ThemeColor: "#00875A", ThemeColorDark: "#62D9A2", IconFile: "mingcute-hiking-line-v1.svg", IconAnimFile: ""},
+	{Type: "running", Name: "跑步", ThemeColor: "#F26A4B", ThemeColorDark: "#FF947A", IconFile: "mingcute-run-line-v1.svg", IconAnimFile: ""},
+	{Type: "climbing", Name: "爬山", ThemeColor: "#6C4CE1", ThemeColorDark: "#AA92F5", IconFile: "mingcute-mountain-2-line-v1.svg", IconAnimFile: ""},
+	{Type: "riding", Name: "骑行", ThemeColor: "#2F80ED", ThemeColorDark: "#78B4FF", IconFile: "mingcute-bike-line-v1.svg", IconAnimFile: ""},
+	{Type: "driving", Name: "自驾", ThemeColor: "#F5A623", ThemeColorDark: "#FFD083", IconFile: "mingcute-car-line-v1.svg", IconAnimFile: ""},
 }
 
 // Config holds server configuration loaded from environment variables.

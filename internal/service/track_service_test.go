@@ -116,7 +116,7 @@ func TestTrackServiceListTrackTypes(t *testing.T) {
 	if len(options) != 3 {
 		t.Fatalf("expected 3 track type options, got %#v", options)
 	}
-	if options[0].Type != "hiking" || options[0].Name != "徒步" || options[0].ThemeColor != "#345631" || options[0].IconURL != "/api/v1/static/track_type_icon/hiking.svg" || options[0].IconAnimURL != "" {
+	if options[0].Type != "hiking" || options[0].Name != "徒步" || options[0].ThemeColor != "#00875A" || options[0].IconURL != "/api/v1/track/types/icons/mingcute-hiking-line-v1.svg" || options[0].IconAnimURL != "" {
 		t.Fatalf("unexpected first track type option: %#v", options[0])
 	}
 	if options[2].Type != "滑雪" || options[2].Name != "滑雪" || options[2].ThemeColor != "" || options[2].IconURL != "/api/v1/static/track_type_icon/%E6%BB%91%E9%9B%AA.svg" || options[2].IconAnimURL != "" {

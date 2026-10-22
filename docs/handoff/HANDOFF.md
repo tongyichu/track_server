@@ -253,3 +253,13 @@ assembleDebug、assembleDebugAndroidTest、CountFormatterTest 三项 JVM 测试�
 - 提交本轮完整评论/回复/单图/赞踩及点赞人查询、获赞列表移除与总数保留、收藏计数与底部星星，以及 Android 海拔地址、登录协议/主题、固定比例背景裁剪与沉浸状态栏、导航文案和手动验证约定。保留已写的测试代码；遵循用户新约定，本次不再新增或执行测试。
 - 最近最终 Android :app:assembleDebug 与服务端 go build ./... 已通过，Android 已安装小米；本次仅提交前检查改动及 git diff --check。客户端 .gitignore 的 build 规则改为覆盖全部模块，排除 comments/build 等生成目录；APK、缓存、本地签名和敏感配置均不纳入提交。
 - 使用中文提交信息记录完整功能、协议/数据结构及验证范围；未部署服务端。新评论接口、收藏数及下线获赞列表需由部署新版服务端生效。提交/推送最终结果以本次对话输出的 commit 和远端一致性检查为准。
+
+
+### 2026-10-22：静态轨迹预览与共享卡片联合发布准备
+
+- 用户确认共享首页 Item 的复用页面跟随改版，并明确要求上传四图、列表/详情下发地址；随后要求“联合发布”。两端 main 已 fetch，均与 origin/main 一致。
+- 新增 preview_images 四图值对象及 MySQL JSON 启动迁移，Mongo 更新同步；创建可选、更新整组替换，所有摘要与详情返回带源版本的鉴权图片 URL。
+- 图片读取按轨迹可见范围检查，复用 AssetCacheService 和归属用户 OSS 凭证按需下载，缓存位于 LogDir/track_previews，未挂 static。列表不下载四图、不绘制地图。
+- 新增入口：internal/models/track_preview.go、internal/service/track_preview.go、internal/handler/track_preview_handler.go、internal/repository/track_preview.go；同步 mysql.sql、main.go、相关协议和 AGENTS。此前 MingCute 线性图标及运动日夜色也纳入本次部署提交。
+- go build ./... 已通过，git diff --check 通过；遵循用户约定未新增或运行自动化测试，未启动测试数据库。现有 AGENTS 校验仍报告旧的长文件、元信息和路径告警，未扩大整改范围。
+- 发布遵循 Android 仓库 .agents/skills/android-track-release：先提交推送服务端，再构建推送镜像，用户当次 SSH 登录，部署健康后才发布 App。实际部署、App 版本及远端提交结果以本次会话最终输出为准。

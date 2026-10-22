@@ -16,6 +16,10 @@
 - 只有用户明确要求编写或运行测试时，才执行对应范围；此约定覆盖本文件及 scoped AGENTS 中旧的默认测试要求，不得因技能建议自行扩大范围。已有测试保留，仅在本次改动造成编译/接口失配时做必要修正。
 - 交付时简短说明编译结果，并注明功能待用户验证；未执行的测试不得声称通过。
 
+### 发布与部署
+- 用户约定（2026-10-22）：发布 App 或部署 Server 时，同时同步、提交、推送实际发布的对应仓库，无需为常规 Git 步骤再次确认；仅部署 Server 时只处理本仓库。入口见同级 Android 仓库的 [android-track-release](../android-track/.agents/skills/android-track-release/SKILL.md)，服务端先完成 Git 推送，再构建镜像和更新生产。
+- 仅修改发布技能不触发发版、部署或 Git 写操作；敏感配置、签名、构建产物和缓存不入库。Git 与生产更新分别核对结果，不能把“代码已推送”报告为“部署成功”。
+
 ### 维护规则
 仅当代码变更导致以下信息失准时，才更新最近的相关 `AGENTS.md`：
 - 目录总览 / 模块职责
@@ -107,7 +111,8 @@ track_server/
 
 - 个人资料的 `background_url` 用于主页顶部，数据库保存原始 OSS 地址，响应经独立 `profile_backgrounds` 缓存并使用源地址摘要区分版本；`gender` 只允许空串、`male`、`female`，详情仅本人可读。改字段时同步 MySQL 建表及幂等列迁移、Mongo/内存仓储、用户详情/更新协议与缓存注入，参见 `docs/api/user.md`。
 
-- 默认运动类型由 `internal/config/config.go:DefaultTrackTypeConfigs` 维护，当前 code 为 `hiking`、`running`、`climbing`、`riding`、`driving`，展示名为 `徒步`、`跑步`、`爬山`、`骑行`、`自驾`；`GET /api/v1/track/types`、轨迹入库 `track_type`、运动类型图标元信息和成就系统类型口径应保持一致。颜色元信息同样由该配置维护：`theme_color` 是保留原值的日间色，`theme_color_dark` 是独立夜间色；客户端按主题直接选色，夜间字段缺失、为空或非法时回退日间色。未知自定义类型两个颜色字段均为空串；颜色不存入轨迹或数据库，协议见 `docs/api/track.md`。`track_geo_indexes.track_type` 与 `track_route_groups.track_type` 只允许保存这五个英文 code，历史别名或未知类型需在地图索引阶段归一/兜底。
+- 默认运动类型由 `internal/config/config.go:DefaultTrackTypeConfigs` 维护，当前 code 为 `hiking`、`running`、`climbing`、`riding`、`driving`，展示名为 `徒步`、`跑步`、`爬山`、`骑行`、`自驾`；`GET /api/v1/track/types`、轨迹入库 `track_type`、运动类型图标元信息和成就系统类型口径应保持一致。颜色元信息同样由该配置维护：`theme_color` 是日间色，`theme_color_dark` 是独立夜间色；客户端按主题直接选色，夜间字段缺失、为空或非法时回退日间色。未知自定义类型两个颜色字段均为空串；颜色不存入轨迹或数据库，协议见 `docs/api/track.md`。`track_geo_indexes.track_type` 与 `track_route_groups.track_type` 只允许保存这五个英文 code，历史别名或未知类型需在地图索引阶段归一/兜底。
+- 内置运动图标使用 MingCute 线性 SVG，源文件与许可证位于 `internal/handler/static/track_type_icon/`，由 `internal/handler/track_type_icon_handler.go` 的 go:embed 随二进制打包。登录后通过 GET/HEAD /api/v1/track/types/icons/:icon_file 读取，不依赖磁盘 static 缓存；徒步/跑步/爬山/骑行/自驾分别使用 hiking/run/mountain_2/bike/car。修改图形时必须提升文件名版本并同步 DefaultTrackTypeConfigs.IconFile，防止客户端命中旧缓存；自定义类型仍走原静态目录。
 - 推荐列表 `GET /api/v1/track/recommend/list` 的可选 `city_code` 使用精确匹配；空值保持全城市推荐。城市条件必须下沉到 Repository 查询并参与游标分页，不能在 Service 取回一页后再过滤；MySQL 推荐查询索引为 `idx_track_recommend_city`。
 - 搜索列表 `GET /api/v1/track/search/list` 的可选 `city_code`、`track_type` 使用存储值精确匹配；空值不过滤对应字段，两个条件可组合。筛选条件必须下沉到 Repository 查询并参与游标分页，不能在 Service 取回一页后再过滤；MySQL / Mongo 搜索查询索引分别为 `idx_track_search_city`、`idx_track_search_type`，运动类型筛选不对历史中文值做转换。
 - 轨迹 `locate_addr` 最大长度为 255 字符，对应 `track_records.locate_addr VARCHAR(255)`；修改该字段长度时同步更新 `mysql.sql`、`internal/repository/mysql.go` 与 `docs/api/track.md`。
@@ -246,6 +251,8 @@ HTTP Request
 **意见反馈流程**：`POST /api/v1/feedback` 使用 `multipart/form-data` 提交文字与最多 3 张图片；`FeedbackService` 会先检查同一用户未处理反馈数量，`pending` + `processing` 最多 5 条，超限返回 429 且不会写入图片。通过校验后再检查图片真实类型和大小，并私有落盘到 `<LogDir>/feedback/images/<user_id>/<yyyyMMdd>/`，数据库 `user_feedbacks.images_json` 只保存相对路径和元信息。用户历史列表/详情只返回本人的反馈，图片读取必须经业务 JWT 校验归属；`/ops/feedback/*` 使用 `X-Internal-Token` 供运营查看和更新状态，更新为 `resolved` 时 `reply` 必填且会下发给提交用户。调整反馈字段、图片限制、状态枚举、未处理上限、运营回复规则或访问路径时，同步更新 `docs/api/feedback.md` 与 `docs/api/route-index.md`。
 
 **资源缓存与静态发布包**：客户端经 OSS 直传（头像 / 轨迹截图 / 无地图背景轨迹截图 / 同行轨迹截图 / 原始轨迹文件），列表/详情/同行历史/附近房间接口返回时由 `AssetCacheService` 按需从 OSS 拉回本地 `<LogDir>/static/<category>/`，对外走 `GET /api/v1/static/<category>/<file>`（需登录）；无地图背景轨迹截图使用 `<track_id>_no_map_bg` 作为缓存 key，`/track/my/list` 等轨迹列表返回 `track_no_map_bg_screenshot_url`。管理后台上传的 App 发布包直接写入 `<LogDir>/static/release/<platform>/`，对外走公开的 `GET /api/v1/static/release/<platform>/<file>`，供升级下载使用。
+
+**静态轨迹预览图**：`Track.PreviewImages` / `preview_images` 保存客户端上传的 1:1、4:3 日夜四张图片，MySQL 使用可空 JSON 列，Mongo 和内存使用值对象；创建/更新字段可选，提供时须四图完整，更新整组替换。Track 及所有摘要统一返回带源版本的 `/api/v1/track/:track_id/previews/:variant?v=...`，列表只构造 URL，不同步拉取四图。入口见 `internal/service/track_preview.go` 与 `internal/handler/track_preview_handler.go`；图片复用 AssetCacheService 按需下载，使用轨迹归属用户的 OSS 凭证，缓存位于 `<LogDir>/track_previews/`，不挂通用 static；每次读取校验轨迹可见范围和源版本。协议与路由变更同步 `docs/api/track.md`、`models.md`、`route-index.md`。
 
 **内置 H5 页面**：客户端等级规则页使用公开路由 `GET /api/v1/achievement/level-rules.html`，HTML 文件内置在 `internal/handler/static/achievement_level_rules.html` 并通过 `go:embed` 打包；页面支持 `lang=english` 切英文、`is_dark=true` 切夜间模式。修改等级 XP 规则、等级阈值、语言或主题参数时，同步更新该页面、`track_achievement_client.md` 和 `docs/api/achievement.md`。
 

@@ -340,11 +340,11 @@ func TestListTrackTypes(t *testing.T) {
 		themeColor string
 		iconURL    string
 	}{
-		{typeCode: "hiking", name: "徒步", themeColor: "#345631", iconURL: "/api/v1/static/track_type_icon/hiking.svg"},
-		{typeCode: "running", name: "跑步", themeColor: "#F26A4B", iconURL: "/api/v1/static/track_type_icon/running.svg"},
-		{typeCode: "climbing", name: "爬山", themeColor: "#6C4CE1", iconURL: "/api/v1/static/track_type_icon/climbing.svg"},
-		{typeCode: "riding", name: "骑行", themeColor: "#2F80ED", iconURL: "/api/v1/static/track_type_icon/riding.svg"},
-		{typeCode: "driving", name: "自驾", themeColor: "#F5A623", iconURL: "/api/v1/static/track_type_icon/driving.svg"},
+		{typeCode: "hiking", name: "徒步", themeColor: "#00875A", iconURL: "/api/v1/track/types/icons/mingcute-hiking-line-v1.svg"},
+		{typeCode: "running", name: "跑步", themeColor: "#F26A4B", iconURL: "/api/v1/track/types/icons/mingcute-run-line-v1.svg"},
+		{typeCode: "climbing", name: "爬山", themeColor: "#6C4CE1", iconURL: "/api/v1/track/types/icons/mingcute-mountain-2-line-v1.svg"},
+		{typeCode: "riding", name: "骑行", themeColor: "#2F80ED", iconURL: "/api/v1/track/types/icons/mingcute-bike-line-v1.svg"},
+		{typeCode: "driving", name: "自驾", themeColor: "#F5A623", iconURL: "/api/v1/track/types/icons/mingcute-car-line-v1.svg"},
 	}
 	if len(result.Data) != len(expected) {
 		t.Fatalf("expected %d track types, got %#v", len(expected), result.Data)

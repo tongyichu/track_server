@@ -294,6 +294,17 @@ func main() {
 		log.Printf("screenshot cache enabled: %s", screenshotCacheDir)
 	}
 
+	// Preview reads check track visibility; keep files outside the generic static mount.
+	previewCache, err := service.NewAssetCacheService(
+		filepath.Join(cfg.LogDir, "track_previews"), "/api/v1/track-previews",
+		[]string{".jpg", ".jpeg", ".png", ".webp"}, ".jpg",
+	)
+	if err != nil {
+		log.Printf("track preview cache disabled: %v", err)
+		previewCache = nil
+	}
+	trackSvc.SetPreviewCache(previewCache)
+
 	avatarCacheDir := filepath.Join(staticRoot, "avatars")
 	avatarCache, err := service.NewAssetCacheService(
 		avatarCacheDir,
@@ -416,6 +427,9 @@ func main() {
 		if avatarCache != nil {
 			avatarCache.SetDownloader(ossTokenSvc)
 		}
+		if previewCache != nil {
+			previewCache.SetDownloader(ossTokenSvc)
+		}
 		if screenshotCache != nil {
 			screenshotCache.SetDownloader(ossTokenSvc)
 		}
@@ -426,7 +440,7 @@ func main() {
 			submissionImageCache.SetDownloader(ossTokenSvc)
 		}
 	} else {
-		if avatarCache != nil || screenshotCache != nil || rawTrackCache != nil || submissionImageCache != nil {
+		if avatarCache != nil || screenshotCache != nil || rawTrackCache != nil || submissionImageCache != nil || previewCache != nil {
 			log.Printf("asset cache has no OSS downloader; only serves already-cached files")
 		}
 	}

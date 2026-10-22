@@ -7,6 +7,7 @@
 | 创建轨迹 | POST | `/track/create` | 是 | [track.md](track.md#1-创建轨迹) |
 | 推荐轨迹列表（个性化 Feed Session，支持 `city_code` 筛选） | GET | `/track/recommend/list` | 是 | [track.md](track.md#2-推荐轨迹列表) |
 | 轨迹详情（含收藏数与本人收藏状态） | GET | `/track/:track_id/detail` | 是 | [track.md](track.md#3-轨迹详情) |
+| 静态轨迹预览图片 | GET | `/track/:track_id/previews/:variant?v=<source_version>` | 是 | [track.md](track.md#静态轨迹预览图) |
 | 获取 OSS STS 临时凭证 | GET | `/oss/sts-token` | 是 | [oss.md](oss.md#4-获取-oss-sts-临时凭证直传上传) |
 | 轨迹评论列表 / 发表 | GET / POST | `/track/:track_id/comments` | 是 | [track-comments.md](track-comments.md) |
 | 单条评论 / 删除 | GET / DELETE | `/track/:track_id/comments/:comment_id` | 是 | [track-comments.md](track-comments.md) |
@@ -41,6 +42,7 @@
 | 隐私政策 H5 | GET | `/legal/privacy-policy.html` | 否 | [legal.md](legal.md) |
 | 用户服务协议 H5 | GET | `/legal/terms-of-service.html` | 否 | [legal.md](legal.md) |
 | 获取运动类型（含日间/夜间主题色） | GET | `/track/types` | 是 | [track.md](track.md#16-获取运动类型) |
+| 获取内置 MingCute 运动图标 | GET / HEAD | `/track/types/icons/:icon_file` | 是 | [track.md](track.md#16-获取运动类型) |
 | 获取轨迹投稿选项 | GET | `/track/submission/options` | 是 | [track-submission.md](track-submission.md#1-投稿选项) |
 | 创建或重新投稿 | POST | `/track/:track_id/submission` | 是 | [track-submission.md](track-submission.md#2-创建或重新投稿) |
 | 修改待审核投稿 | PUT | `/track/:track_id/submission` | 是 | [track-submission.md](track-submission.md#3-修改待审核投稿) |

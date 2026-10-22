@@ -191,6 +191,8 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 
 	// track related
 	auth.GET("/track/types", trackHandler.ListTrackTypes)
+	auth.GET("/track/types/icons/:icon_file", TrackTypeIcon)
+	auth.HEAD("/track/types/icons/:icon_file", TrackTypeIcon)
 	if deps.TrackSubmissionService != nil {
 		auth.GET("/track/submission/options", trackSubmissionHandler.Options)
 		auth.POST("/track/:track_id/submission", trackSubmissionHandler.Submit)
@@ -209,6 +211,7 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 	auth.GET("/track/running", trackHandler.GetRunningTrack)
 	auth.GET("/track/:track_id/map", trackHandler.GetTrackMap)
 	auth.POST("/track/:track_id/navigation/report", trackHandler.ReportTrackNavigation)
+	auth.GET("/track/:track_id/previews/:variant", trackHandler.TrackPreview)
 	auth.GET("/track/:track_id/detail", trackHandler.GetTrackDetail)
 	auth.GET("/track/:track_id/summary", trackHandler.GetTrackDetail)
 	if deps.TrackMapService != nil {

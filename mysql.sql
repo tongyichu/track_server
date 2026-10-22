@@ -50,6 +50,7 @@ CREATE TABLE `track_records` (
                                  `raw_track_url` varchar(255) COMMENT '指向对象存储中原始轨迹点文件(JSON/GeoJSON)的URL',
                                  `track_screenshot_url` varchar(255) COMMENT '轨迹截图文件在对象存储中的地址',
                                  `track_no_map_bg_screenshot_url` varchar(255) COMMENT '没有地图背景的轨迹路线截图URI',
+                                 `preview_images` JSON NULL COMMENT '四种尺寸与主题的静态轨迹预览',
                                  `is_running` tinyint NOT NULL DEFAULT '1' COMMENT '表示轨迹是否仍处于进行中: 0-未运行, 1-运行中',
                                  `status` tinyint NOT NULL DEFAULT '1' COMMENT '状态: 0-删除, 1-正常, 2-私密',
                                  `avg_speed_kmh` double NOT NULL DEFAULT '1' COMMENT '平均速度，单位 km/h',

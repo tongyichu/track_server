@@ -4,6 +4,34 @@
 
 轨迹投稿、审核状态和优质投稿展示字段见 [track-submission.md](track-submission.md)。审核通过的推荐/搜索摘要会返回 `is_featured`、`featured_description`、`featured_cover_url`，并用投稿标题覆盖响应中的 `title`；`track_records.title` 不会被修改。
 
+
+## 静态轨迹预览图
+
+客户端在实际上传轨迹前，使用真实 GPS 数据和现有地图预览组件依次生成四张 JPEG，直传 OSS 后随创建或更新请求传入 `preview_images`。录制结束时仅创建远程空记录的流程无需提供图片。DevMode 开关仅控制是否显示上传确认预览，不控制正式上传所需的四图生成。
+
+```json
+{
+  "preview_images": {
+    "square_day_url": "https://<bucket>.oss-<region>.aliyuncs.com/.../square_day.jpg",
+    "square_night_url": "https://<bucket>.oss-<region>.aliyuncs.com/.../square_night.jpg",
+    "landscape_day_url": "https://<bucket>.oss-<region>.aliyuncs.com/.../landscape_day.jpg",
+    "landscape_night_url": "https://<bucket>.oss-<region>.aliyuncs.com/.../landscape_night.jpg"
+  }
+}
+```
+
+- `square_*` 为 1:1，`landscape_*` 为 4:3；`day` / `night` 对应日间 / 夜间。
+- 字段整体可选，旧客户端继续正常工作；提供时四个 HTTP(S) URL 均必填，每个最多 2048 字符。更新时整组替换，不受旧截图字段“仅原值为空时补写”的限制；省略或 null 保持原值，不支持传空对象删除。
+- Track、TrackSummary、MyTrackSummary、CollectedTrackSummary 均返回 `preview_images`。存量无图轨迹返回空对象，不做请求时补图。首页及复用卡片按当前主题使用对应的 `landscape_*`，缺图时显示占位图，不在列表创建地图或重新生成。
+- 响应中的地址形如 `/api/v1/track/NO.00000001/previews/landscape_day?v=<source_version>`，客户端必须保留版本参数并携带业务 JWT。列表和详情仅构造地址，不同步拉取四张 OSS 图片。
+- 图片来源与文字随上传时的地图 provider / 语言固定；查看者切换语言不会重新生成底图。
+
+### 获取预览图片
+
+`GET /api/v1/track/:track_id/previews/:variant?v=<source_version>`，需要认证。`variant` 为上述四种 key（不带 `_url`）。作者可访问未删除的本人轨迹；其他用户仅可访问正常、已结束且已上传原始轨迹的记录。
+
+命中缓存直接读取；未命中时使用轨迹归属用户的 OSS 下载凭证拉取所需的单张图片，同一资源并发请求合并。缓存 key 包含轨迹 ID、variant 和源 URL 摘要，避免日夜图或更新前后的图串用；返回 `Cache-Control: private, max-age=86400`。失效版本、未知 variant、缺图、删除或不可见返回 404，资源暂不可用返回 503。成功响应为图片二进制。
+
 ## 1. 创建轨迹
 
 创建一个新的轨迹记录；支持在请求体中直接传入轨迹摘要字段。未传的字段会使用默认值。
@@ -61,6 +89,7 @@ Authorization: Bearer <token>
 | `raw_track_url` | string | 否 | 原始轨迹文件 OSS 地址（建议传 OSS HTTP URL，可带签名参数；轨迹地图索引支持 JSON/GeoJSON/KML/KMZ） |
 | `track_screenshot_url` | string | 否 | 轨迹截图 OSS 地址（建议传 OSS HTTP URL，可带签名参数） |
 | `track_no_map_bg_screenshot_url` | string | 否 | 无地图背景的轨迹路线截图 OSS 地址（建议传 OSS HTTP URL，可带签名参数） |
+| `preview_images` | object | 否 | 四张轨迹预览图片 OSS 地址，见上方静态轨迹预览协议 |
 | `is_running` | bool | 否 | 是否进行中，默认 `true`；当为 `true` 或未传时，当前用户不能已处于 active 同行中 |
 | `avg_speed_kmh` | number | 否 | 平均速度（km/h），必须 `>= 0` |
 
@@ -694,6 +723,7 @@ Authorization: Bearer <token>
 | `raw_track_url` | string | 否 | 原始轨迹文件 OSS 地址（仅当原值为空时才会写入） |
 | `track_screenshot_url` | string | 否 | 轨迹截图 OSS 地址（仅当原值为空时才会写入） |
 | `track_no_map_bg_screenshot_url` | string | 否 | 无地图背景的轨迹路线截图 OSS 地址（仅当原值为空时才会写入） |
+| `preview_images` | object | 否 | 可整体替换的四图对象；省略保持原值，见静态轨迹预览协议 |
 | `distance` | number | 否 | 距离（米），必须 `>= 0`（仅当原值为 `0` 时才会写入） |
 | `duration` | int | 否 | 时长（秒），必须 `>= 0`（仅当原值为 `0` 时才会写入） |
 | `calories_burned` | number | 否 | 热量消耗（千卡），必须 `>= 0`（仅当原值为 `0` 时才会写入）；仍为 `0` 时服务端会按运动类型、65kg 默认体重和时长兜底计算 |
@@ -802,16 +832,17 @@ Authorization: Bearer <token>
 - 默认返回五个内置运动类型，`type` 分别为 `hiking`、`running`、`climbing`、`riding`、`driving`，`name` 分别为 `徒步`、`跑步`、`爬山`、`骑行`、`自驾`。
 - 服务端可通过环境变量 `TRACK_TYPES` 配置运动类型展示名，支持使用英文逗号、分号、中文逗号、顿号或竖线分隔，例如：`TRACK_TYPES=徒步,跑步,爬山,骑行,自驾,滑雪`。
 - 服务端会自动过滤空项和重复项；若未配置或配置为空，则使用默认列表。
-- 每个运动类型会返回一个图标链接 `icon_url`，图标文件来自服务端静态目录 `/api/v1/static/track_type_icon/`；默认对应关系为：`徒步 -> hiking.svg`、`跑步 -> running.svg`、`爬山 -> climbing.svg`、`骑行 -> riding.svg`、`自驾 -> driving.svg`。
+- 内置运动类型的 `icon_url` 返回 MingCute 原版线性 SVG，统一为透明背景、24×24 viewBox；徒步使用 `hiking`、跑步使用 `run`、爬山使用 `mountain_2`、骑行使用 `bike`、自驾使用 `car`。图形随服务端二进制内置，不依赖磁盘文件；文件名带版本，更新图形时更换 URL，避免客户端沿用旧图片缓存。客户端应直接使用下发地址，并按场景使用日夜主题色染色。
+- 内置图标资源通过 `GET /api/v1/track/types/icons/:icon_file` 获取，支持 `HEAD`，需要相同的登录 Token。成功响应为 `image/svg+xml`，缓存策略为 `private, max-age=31536000, immutable`，不存在的文件返回 `404`。自定义运动类型仍沿用 `/api/v1/static/track_type_icon/<名称>.svg`。
 - 每个运动类型会额外返回：`type`（英文标识）、`theme_color`（日间主题色）、`theme_color_dark`（夜间主题色）、`icon_anim_url`（Lottie 动画文件链接；当前默认空字符串，后续可通过配置补充）。
-- 日夜颜色均由服务端配置下发，客户端按当前主题直接取对应字段，不再对有效色值自动调整饱和度或亮度。`theme_color` 保留原字段与原色值；旧服务端或本地缓存缺少 `theme_color_dark`、或该字段为空/非法时，夜间回退到 `theme_color`。未配置元信息的自定义类型两个颜色字段均为空字符串，由客户端使用本地样式兜底。
+- 日夜颜色均由服务端配置下发，客户端按当前主题直接取对应字段，不再对有效色值自动调整饱和度或亮度。`theme_color` 继续作为日间色字段；旧服务端或本地缓存缺少 `theme_color_dark`、或该字段为空/非法时，夜间回退到 `theme_color`。未配置元信息的自定义类型两个颜色字段均为空字符串，由客户端使用本地样式兜底。
 - 统计数据按 `Authorization` Token 解析出的当前用户统计 `track_records`：排除删除与进行中轨迹，仅统计 `正常/私密` 轨迹。
 - 统计维度按运动类型拆分，并返回最近一个月（`month`）与最近一年（`year`）的总里程、轨迹次数、总耗时、总热量。
 - 内置颜色在 `internal/config/config.go` 的 `DefaultTrackTypeConfigs` 中统一维护：
 
 | 类型 | 日间 `theme_color` | 夜间 `theme_color_dark` |
 |------|-------------------|------------------------|
-| 徒步 `hiking` | `#345631` | `#8BCB83` |
+| 徒步 `hiking` | `#00875A` | `#62D9A2` |
 | 跑步 `running` | `#F26A4B` | `#FF947A` |
 | 爬山 `climbing` | `#6C4CE1` | `#AA92F5` |
 | 骑行 `riding` | `#2F80ED` | `#78B4FF` |
@@ -837,9 +868,9 @@ Authorization: Bearer <token>
     {
       "type": "hiking",
       "name": "徒步",
-      "theme_color": "#345631",
-      "theme_color_dark": "#8BCB83",
-      "icon_url": "/api/v1/static/track_type_icon/hiking.svg",
+      "theme_color": "#00875A",
+      "theme_color_dark": "#62D9A2",
+      "icon_url": "/api/v1/track/types/icons/mingcute-hiking-line-v1.svg",
       "icon_anim_url": "",
       "milestone": {
         "month": {
@@ -861,7 +892,7 @@ Authorization: Bearer <token>
       "name": "跑步",
       "theme_color": "#F26A4B",
       "theme_color_dark": "#FF947A",
-      "icon_url": "/api/v1/static/track_type_icon/running.svg",
+      "icon_url": "/api/v1/track/types/icons/mingcute-run-line-v1.svg",
       "icon_anim_url": "",
       "milestone": {
         "month": {
@@ -887,9 +918,9 @@ Authorization: Bearer <token>
 | `data` | `TrackTypeOption[]` | 可选运动类型列表。 |
 | `data[].type` | string | 运动类型英文标识，例如 `hiking` / `running`。 |
 | `data[].name` | string | 运动类型名称。 |
-| `data[].theme_color` | string | 运动类型日间主题色，`#RRGGBB`；保留旧字段与原色值，未配置时为空字符串。 |
+| `data[].theme_color` | string | 运动类型日间主题色，`#RRGGBB`；保持字段兼容，未配置时为空字符串。 |
 | `data[].theme_color_dark` | string | 运动类型夜间主题色，`#RRGGBB`；缺失、为空或非法时夜间回退到 `theme_color`。 |
-| `data[].icon_url` | string | 运动类型图标静态资源链接，路径位于 `/api/v1/static/track_type_icon/` 下。 |
+| `data[].icon_url` | string | 运动类型 SVG 链接；内置 MingCute 图标位于 `/api/v1/track/types/icons/`，自定义类型沿用原静态资源路径。客户端不得硬编码图标路径。 |
 | `data[].icon_anim_url` | string | 运动类型 Lottie 动画文件链接；当前默认空字符串。 |
 | `data[].milestone.month.distance` | number | 当前用户该运动类型最近一个月总里程，单位米。 |
 | `data[].milestone.month.track_count` | int64 | 当前用户该运动类型最近一个月轨迹次数。 |

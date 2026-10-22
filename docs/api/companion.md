@@ -923,7 +923,7 @@ Authorization: Bearer <token>
 - 默认返回五个内置运动类型，`type` 分别为 `hiking`、`running`、`climbing`、`riding`、`driving`，`name` 分别为 `徒步`、`跑步`、`爬山`、`骑行`、`自驾`。
 - 服务端可通过环境变量 `TRACK_TYPES` 配置运动类型展示名，支持使用英文逗号、分号、中文逗号、顿号或竖线分隔，例如：`TRACK_TYPES=徒步,跑步,爬山,骑行,自驾,滑雪`。
 - 服务端会自动过滤空项和重复项；若未配置或配置为空，则使用默认列表。
-- 每个运动类型会返回一个图标链接 `icon_url`，图标文件来自服务端静态目录 `/api/v1/static/track_type_icon/`；默认对应关系为：`徒步 -> hiking.svg`、`跑步 -> running.svg`、`爬山 -> climbing.svg`、`骑行 -> riding.svg`、`自驾 -> driving.svg`。
+- 内置运动类型的 `icon_url` 为随服务端内置的 MingCute 线性 SVG：徒步 `hiking`、跑步 `run`、爬山 `mountain_2`、骑行 `bike`、自驾 `car`。资源位于 `/api/v1/track/types/icons/`，需登录，文件名带版本以更新客户端缓存；自定义类型仍沿用原静态资源路径。客户端直接使用下发地址；完整协议见 [获取运动类型](track.md#16-获取运动类型)。
 - 每个运动类型会额外返回：`type`（英文标识）、`theme_color`（日间主题色）、`theme_color_dark`（夜间主题色）、`icon_anim_url`（Lottie 动画文件链接；当前默认空字符串，后续可通过配置补充）。日夜颜色按主题直接使用，夜间颜色缺失、为空或非法时回退到 `theme_color`；完整字段与内置色值见 [获取运动类型](track.md#16-获取运动类型)。
 - 统计数据按 `Authorization` Token 解析出的当前用户统计 `track_records`：排除删除与进行中轨迹，仅统计 `正常/私密` 轨迹。
 - 统计维度按运动类型拆分，并返回最近一个月（`month`）与最近一年（`year`）的总里程、轨迹次数、总耗时、总热量。
