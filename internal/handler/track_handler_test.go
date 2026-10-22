@@ -1024,7 +1024,7 @@ func TestTrackSummaryList_RewritesOSSAvatarToStaticURL(t *testing.T) {
 	}
 }
 
-func TestCollectedTracksList_OmitsCollectedField(t *testing.T) {
+func TestCollectedTracksList_IncludesCollectedField(t *testing.T) {
 	e := newTestEnv()
 	ctx := context.Background()
 	token := e.generateTestToken(1001)
@@ -1061,8 +1061,8 @@ func TestCollectedTracksList_OmitsCollectedField(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected item object, got %+v", items[0])
 	}
-	if _, exists := item0["collected"]; exists {
-		t.Fatalf("expected collected field omitted, got %+v", item0)
+	if collected, ok := item0["collected"].(bool); !ok || !collected {
+		t.Fatalf("expected collected=true, got %+v", item0["collected"])
 	}
 	if item0["id"] != "trk-collected-1" {
 		t.Fatalf("expected id trk-collected-1, got %v", item0["id"])

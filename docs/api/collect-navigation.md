@@ -195,7 +195,7 @@ Authorization: Bearer <token>
 
 - 列表按“收藏时间”倒序返回（收藏记录的 `created_at`）。
 - 与推荐/搜索列表口径保持一致：仅返回 `status=1` 且 `is_running=false` 的轨迹。
-- 返回结构与 [推荐轨迹列表](#2-推荐轨迹列表) 保持一致，但每个 item **不返回** `collected` 字段（因为该列表内的轨迹天然已收藏）。
+- 返回结构与推荐轨迹列表保持一致，每个 item 明确返回 `collected`，表示当前 JWT 用户的收藏状态；客户端直接透传该字段到详情，不再依赖字段缺省值或列表来源推断。旧版本曾省略该字段。
 - `cursor` 为服务端生成的分页游标，客户端应原样透传，不要解析。
 - 响应中的 `total_count` 表示“收藏列表”总数（按本接口口径：仅统计 `status=1` 且 `is_running=false` 的轨迹）。
 
@@ -241,6 +241,7 @@ Authorization: Bearer <token>
         "avg_speed_kmh": 12.34,
         "calories_burned": 96.5,
         "elevation_gain": 80,
+        "collected": true,
         "collect_count": 10,
         "navigate_count": 2,
         "track_screenshot_url": "/api/v1/static/screenshots/NO.00000001.jpg",
@@ -259,7 +260,8 @@ Authorization: Bearer <token>
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `data.items` | `CollectedTrackSummary[]` | 当前页收藏的轨迹列表（字段与 `TrackSummary` 基本一致，但不返回 `collected`）。 |
+| `data.items` | `CollectedTrackSummary[]` | 当前页收藏的轨迹列表，包含 `collected`。 |
+| `data.items[].collected` | bool | 当前 JWT 用户是否已收藏该轨迹，true/false 均明确返回。 |
 | `data.total_count` | int64 | 收藏列表总数（按本接口口径）。 |
 | `data.next_cursor` | string | 下一页游标；当 `has_more=false` 时为空或不返回。 |
 | `data.has_more` | bool | 是否还有下一页数据。 |

@@ -22,7 +22,7 @@
 
 - `square_*` 为 1:1，`landscape_*` 为 4:3；`day` / `night` 对应日间 / 夜间。
 - 字段整体可选，旧客户端继续正常工作；提供时四个 HTTP(S) URL 均必填，每个最多 2048 字符。更新时整组替换，不受旧截图字段“仅原值为空时补写”的限制；省略或 null 保持原值，不支持传空对象删除。
-- Track、TrackSummary、MyTrackSummary、CollectedTrackSummary 均返回 `preview_images`。存量无图轨迹返回空对象，不做请求时补图。首页及复用卡片按当前主题使用对应的 `landscape_*`，缺图时显示占位图，不在列表创建地图或重新生成。
+- Track、TrackSummary、MyTrackSummary、CollectedTrackSummary 均返回 `preview_images`，包含已上传、收藏、搜索和客态主页列表。存量无图轨迹返回空对象，不做请求时补图。首页及地图关联卡片按当前主题使用对应的 `landscape_*`，Me 页和搜索结果的方形卡片使用 `square_*`；客户端直接使用现有地址，不为远端列表逐条请求详情或生成图片。未上传的本地轨迹由 Android 自行按需生成、缓存 1:1 日夜图，不自动上传。
 - 响应中的地址形如 `/api/v1/track/NO.00000001/previews/landscape_day?v=<source_version>`，客户端必须保留版本参数并携带业务 JWT。列表和详情仅构造地址，不同步拉取四张 OSS 图片。
 - 图片来源与文字随上传时的地图 provider / 语言固定；查看者切换语言不会重新生成底图。
 
@@ -558,8 +558,8 @@ curl -X GET "http://<host>:<port>/api/v1/track/search/list?keyword=西湖&city_c
 - 返回轨迹状态为 `正常` 和 `私密` 的记录，不返回已删除记录。
 - 接口已支持基于 `cursor` 的瀑布流分页，排序规则为 `start_time DESC, id DESC`。
 - 首次请求不传 `cursor`；继续翻页时透传上一次返回的 `next_cursor`。
-- 返回结果**不包含** `nickname`、`user_avatar_url`、`collected` 字段。
-- 返回结果**包含** `collect_count`、`navigate_count` 统计字段，便于客户端直接展示。
+- 返回结果**不包含** `nickname`、`user_avatar_url` 字段。
+- 返回结果**包含** `collected`（当前 JWT 用户是否收藏）、`collect_count`、`navigate_count`；`collected=false` 也明确返回，轨迹属于自己不代表已收藏。
 - 返回结果中的 `locate_addr` 为轨迹的具体位置信息。
 - 返回结果中的 `avg_speed_kmh` 为平均速度（km/h）。
 - `raw_track_url` / `track_screenshot_url` / `track_no_map_bg_screenshot_url` 为服务端本地可下载链接（不是 OSS 地址）。
@@ -619,6 +619,7 @@ Authorization: Bearer <token>
         "avg_speed_kmh": 12.3,
         "calories_burned": 96.5,
         "elevation_gain": 80,
+        "collected": true,
         "collect_count": 12,
         "navigate_count": 3,
         "track_screenshot_url": "/api/v1/static/screenshots/trk1.jpg",
@@ -638,6 +639,7 @@ Authorization: Bearer <token>
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `data.items` | `MyTrackSummary[]` | 当前页我的轨迹列表。 |
+| `data.items[].collected` | bool | 当前 JWT 用户是否已收藏该轨迹，始终返回，不由轨迹作者身份推断。 |
 | `data.total_count` | int64 | 我的轨迹总数（按本接口口径）。 |
 | `data.next_cursor` | string | 下一页游标；当 `has_more=false` 时为空或不返回。 |
 | `data.has_more` | bool | 是否还有下一页数据。 |

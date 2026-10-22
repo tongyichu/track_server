@@ -28,13 +28,13 @@
 | 取消收藏轨迹（返回收藏状态及总数） | DELETE | `/track_collect` | 是 | [collect-navigation.md](collect-navigation.md#6-取消收藏轨迹) |
 | 轨迹搜索列表（支持 `city_code` / `track_type` 筛选） | GET | `/track/search/list` | 是 | [track.md](track.md#7-轨迹搜索列表) |
 | 导航使用上报 | POST | `/track/:track_id/navigation/report` | 是 | [collect-navigation.md](collect-navigation.md#8-导航使用上报) |
-| 我的轨迹列表 | GET | `/track/my/list` | 是 | [track.md](track.md#9-我的轨迹列表) |
+| 我的轨迹列表（含当前用户收藏状态及总数） | GET | `/track/my/list` | 是 | [track.md](track.md#9-我的轨迹列表) |
 | 用户主页已传轨迹 | GET | `/user/:user_id/tracks` | 是 | [user.md](user.md#个人主页轨迹列表) |
 | 用户主页收藏轨迹 | GET | `/user/:user_id/collections` | 是 | [user.md](user.md#个人主页轨迹列表) |
 | 获取用户详情 | GET | `/user/:user_id/detail` | 是 | [user.md](user.md#10-获取用户详情) |
 | 更新轨迹信息 | PUT | `/track/:track_id/update` | 是 | [track.md](track.md#11-更新轨迹信息) |
 | 删除轨迹 | DELETE | `/track/:track_id` | 是 | [track.md](track.md#12-删除轨迹) |
-| 用户已收藏轨迹列表 | GET | `/track/collected/list` | 是 | [collect-navigation.md](collect-navigation.md#13-用户已收藏轨迹列表) |
+| 用户已收藏轨迹列表（含当前用户收藏状态及总数） | GET | `/track/collected/list` | 是 | [collect-navigation.md](collect-navigation.md#13-用户已收藏轨迹列表) |
 | 更新个人信息（含背景图、性别） | PUT | `/user/profile/update` | 是 | [user.md](user.md#14-更新个人信息) |
 | 关注用户 | POST | `/user/:user_id/follow` | 是 | [user.md](user.md#42-关注用户) |
 | 取消关注用户 | DELETE | `/user/:user_id/follow` | 是 | [user.md](user.md#43-取消关注用户) |

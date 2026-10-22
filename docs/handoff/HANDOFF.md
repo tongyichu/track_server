@@ -1,5 +1,25 @@
 # 工作交接：协议 H5 页面（2026-10-13）
 
+## 2026-10-22：联合发布本人列表收藏状态
+
+- 用户要求联合发布，并确认已在本次交互中登录生产机。发布范围为 MyTrackSummary/CollectedTrackSummary 明确下发当前 JWT 用户的 collected、已上传列表复用现有批量关系查询，以及对应 API/规则/既有断言修正；四图接口本来已下发，不新增字段或数据表。
+- 两仓 git fetch origin 后均与 main 上游一致；go build ./... 与差异自查通过，未运行自动化测试。先同步提交推送本仓库，随后从该快照构建推送 linux/amd64 镜像；生产健康通过后才继续 App 1.0.4 (5)。不执行补图、清空或其他生产数据变更。
+- 已核对用户本次新启动的 SSH master 进程（2026-10-22 18:58:09），只复用这次已认证连接，不读取或保存密码。镜像摘要、容器状态、MySQL 与内外 ping 的最终结果以本轮部署回执及最终回复为准。
+
+## 2026-10-22：Me/搜索的方形轨迹预览使用
+
+- 用户要求 Me 页已上传、本地、收藏及搜索结果 Item 使用 1:1 日夜预览，若接口未下发则补齐。核对 MyTrackSummary、CollectedTrackSummary、TrackSummary 已携带完整 preview_images 并经 trackPreviewURLs 组装鉴权方形/横图地址，本轮无需修改 Server 业务代码、新接口或表；docs/api/track.md 补充 Me/搜索消费 square_*、首页/地图关联消费 landscape_* 的说明。
+- 用户明确本地未上传轨迹按需生成并缓存两张 1:1 日夜图、不自动上传。Android 复用原生成器与 Bundle，按可见项串行渲染并在滚动/离开时取消；远端列表直接加载已有 URL，不逐条请求详情或生成地图。缺图保留原缩略图/占位，主题切换重选图，不将整张地图按运动颜色染色。
+- 最终 Android assembleDebug（3s）及两仓 git diff --check 通过，已安装小米，启动结果 MainActivity，随后前台为同 App 的 SearchActivity；本轮 Server 只改文档，无需重复 Go 构建。未新增/运行自动化测试，用户手动验证效果；前一轮收藏状态 Server 代码仍待部署，本轮未提交推送或发布。
+
+## 2026-10-22：本人轨迹列表明确下发收藏状态
+
+- 用户追问 Me 页三个列表是否都缺收藏状态，并要求修改 track-server。核对：已上传走 /track/my/list，收藏走 /track/collected/list，旧协议均省略 collected；本地列表来自 Android Room，不是 Server 接口，已上传本地轨迹进入详情时复用已有详情请求补齐元信息，未上传轨迹隐藏收藏入口。客态主页两个接口原本已按 JWT 浏览者返回状态。
+- MyTrackSummary 与 CollectedTrackSummary 新增 json:"collected"（无 omitempty），true/false 都明确下发。fillMyTrackSummaryExtras 复用既有 CollectRepository.ListCollectedByTrackIDs 按当前页一次批量读取，不按作者身份推断、不逐条调用 IsCollected；MySQL/Mongo/内存三实现无需新增接口或表。收藏列表在现有 fillTrackSummaryExtras 的批量查询后，将 Collected 带回专用响应模型，不增加查询。
+- API 通用模型、track、collect-navigation、route-index 与两端 AGENTS/客户端字段注释已对齐。Android 撤去上一轮按收藏列表来源强制 collected=true 的临时推断，直接透传服务端值；保留个人列表收藏事件对嵌套 TrackInfo 状态/数量的同步修复。现有收藏列表 handler 用例仅将“字段省略”断言改为新协议的 collected=true，未新增测试或运行测试。
+- 验证：go build ./...、Android ./gradlew :app:assembleDebug --console=plain（3s）及两仓 git diff --check 通过；Debug 已安装并启动小米 3e7cd913，Status: ok / MainActivity，前台检查通过。未提交、推送或部署，新状态下发须部署本轮 Server 后由用户手动验证首屏/翻页及收藏后再次进入详情。
+- AGENTS 静态检查仍有既有根文件/业务文件超长、Server 根优先级声明及路径误报、缺少 freshness 元信息、全局 /Users/foxcoder/.codex/AGENTS.md 为空等问题；未扩大治理范围或修改全局文件。日志在 /private/tmp/track-server-collected-agents.log、track-server-collected-freshness.log 与 android-track-collected-agents.log、android-track-collected-freshness.log；这些检查不算通过。
+
 ## 2026-10-22：运动类型英文展示名
 
 - /track/types 增加 name_en，DefaultTrackTypeConfigs 的 NameEN 为 Hiking/Running/Climbing/Cycling/Driving；保留原 name、type、图标、颜色与统计，不做按请求语言覆盖 name，避免账号缓存跨语言污染。

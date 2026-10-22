@@ -108,7 +108,7 @@ type TrackSummary struct {
 }
 
 // CollectedTrackSummary is used by "user collected tracks list".
-// It is consistent with TrackSummary but intentionally omits the `collected` field.
+// It includes the current viewer's collected state, like TrackSummary.
 type CollectedTrackSummary struct {
 	PreviewImages             TrackPreviewImages `json:"preview_images"`
 	CommentCount              int64              `json:"comment_count" bson:"-"`
@@ -132,6 +132,7 @@ type CollectedTrackSummary struct {
 	AvgSpeedKmh               float64            `json:"avg_speed_kmh"`
 	CaloriesBurned            float64            `json:"calories_burned"`
 	ElevationGain             int                `json:"elevation_gain"`
+	Collected                 bool               `json:"collected"`
 	CollectCount              int64              `json:"collect_count"`
 	NavigateCount             int64              `json:"navigate_count"`
 	TrackScreenshotURL        string             `json:"track_screenshot_url"`
@@ -170,8 +171,8 @@ type CollectedTrackSummaryPage struct {
 // MyTrackSummary 是“我的轨迹”列表接口使用的返回模型。
 //
 // 与 TrackSummary 相比：
-// - 不返回 nickname/user_avatar_url/collected（这些字段对“我的轨迹”列表不需要）。
-// - 仍保留 collect_count/navigate_count 等统计字段，便于客户端展示。
+// - 不返回 nickname/user_avatar_url。
+// - 返回当前浏览者的 collected 和 collect_count/navigate_count 等统计字段。
 type MyTrackSummary struct {
 	PreviewImages             TrackPreviewImages      `json:"preview_images"`
 	CommentCount              int64                   `json:"comment_count" bson:"-"`
@@ -193,6 +194,7 @@ type MyTrackSummary struct {
 	AvgSpeedKmh               float64                 `json:"avg_speed_kmh"`                  // AvgSpeedKmh 是平均速度，单位 km/h。
 	CaloriesBurned            float64                 `json:"calories_burned"`                // CaloriesBurned 是热量消耗，单位千卡。
 	ElevationGain             int                     `json:"elevation_gain"`                 // ElevationGain 是累计爬升，单位米。
+	Collected                 bool                    `json:"collected"`                      // Collected 是当前鉴权用户是否已收藏该轨迹。
 	CollectCount              int64                   `json:"collect_count"`                  // CollectCount 是轨迹被收藏的总数。
 	NavigateCount             int64                   `json:"navigate_count"`                 // NavigateCount 是该轨迹被其他用户用于导航的次数。
 	TrackScreenshotURL        string                  `json:"track_screenshot_url"`           // TrackScreenshotURL 是服务器本地缓存的轨迹截图可下载 URL。

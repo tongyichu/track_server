@@ -908,7 +908,7 @@ func (s *TrackService) BuildTrackSummaries(ctx context.Context, userID int64, tr
 }
 
 // ListMyTracks returns tracks that belong to the given user.
-// It is used by the "我的轨迹" list API and intentionally omits user brief and collected fields.
+// It is used by the "我的轨迹" list API and intentionally omits user brief fields.
 func (s *TrackService) ListMyTracks(ctx context.Context, userID int64, input ListMyTracksInput) (*models.MyTrackSummaryPage, error) {
 	if userID <= 0 {
 		return nil, invalidArg("userID is required")
@@ -1171,7 +1171,7 @@ func (s *TrackService) listTracksWithNonEmptyRawTrackURL(
 //
 // 返回结构约定：
 // - 外层分页结构与 ListRecommend 保持一致（items/next_cursor/has_more）。
-// - items 字段与 TrackSummary 基本一致，但**不返回** `collected` 字段：因为该列表内的轨迹天然已收藏。
+// - items 字段与 TrackSummary 基本一致，包含当前鉴权用户的 `collected` 状态。
 //
 // 排序/翻页约定：
 // - 按收藏记录的 created_at 倒序（created_at desc, track_id desc）翻页。
@@ -1255,7 +1255,6 @@ func (s *TrackService) ListCollectedTracks(ctx context.Context, userID int64, in
 			cancel()
 		}
 	}
-	// Keep viewer-relative like state while the collection payload still omits collected.
 	if err := s.fillTrackSummaryExtras(ctx, userID, summaries); err != nil {
 		return nil, err
 	}
@@ -1282,6 +1281,7 @@ func (s *TrackService) ListCollectedTracks(ctx context.Context, userID int64, in
 			AvgSpeedKmh:               s.AvgSpeedKmh,
 			CaloriesBurned:            s.CaloriesBurned,
 			ElevationGain:             s.ElevationGain,
+			Collected:                 s.Collected,
 			CollectCount:              s.CollectCount,
 			NavigateCount:             s.NavigateCount,
 			TrackScreenshotURL:        s.TrackScreenshotURL,
@@ -1673,8 +1673,7 @@ func toMySummaries(tracks []*models.Track) []*models.MyTrackSummary {
 	return res
 }
 
-// fillMyTrackSummaryExtras fills viewer-relative like state and counters for MyTrackSummary.
-// It intentionally does NOT fill nickname/avatar/collected.
+// fillMyTrackSummaryExtras fills viewer-relative like/collection state and counters without user briefs.
 func (s *TrackService) fillMyTrackSummaryExtras(ctx context.Context, userID int64, summaries []*models.MyTrackSummary) error {
 	if len(summaries) == 0 {
 		return nil
@@ -1691,6 +1690,14 @@ func (s *TrackService) fillMyTrackSummaryExtras(ctx context.Context, userID int6
 	commentCounts, err := s.trackCommentCounts(ctx, trackIDs)
 	if err != nil {
 		return err
+	}
+
+	collectedByTrack := map[string]bool{}
+	if s.collects != nil && userID > 0 {
+		collectedByTrack, err = s.collects.ListCollectedByTrackIDs(ctx, userID, trackIDs)
+		if err != nil {
+			return err
+		}
 	}
 
 	counts := map[string]int64{}
@@ -1712,6 +1719,7 @@ func (s *TrackService) fillMyTrackSummaryExtras(ctx context.Context, userID int6
 	}
 
 	for _, summary := range summaries {
+		summary.Collected = collectedByTrack[summary.ID]
 		summary.Liked = likeStats[summary.ID].Liked
 		summary.LikeCount = likeStats[summary.ID].LikeCount
 		if summary.CanComment {
@@ -1739,8 +1747,8 @@ func (s *TrackService) fillMyTrackSummaryExtras(ctx context.Context, userID int6
 //
 // 性能与一致性说明：
 // - collect_count 通过 CountByTrackIDs 批量聚合，避免逐条 COUNT；
-// - 用户信息按 user_id 去重后查询（仍是逐个 FindByID；若需要进一步减少 SQL 次数，可在 UserRepository 增加 FindByIDs 批量接口）；
-// - collected 目前仍是按轨迹逐条 IsCollected（典型 N 次查询），后续可通过 CollectRepository 增加批量接口优化；
+// - 用户信息按 user_id 去重后通过 FindByIDs 批量查询；
+// - collected 通过 ListCollectedByTrackIDs 按浏览者和当前页轨迹批量查询；
 // - 该函数只负责“组装返回”，不保证强一致（例如用户刚改昵称/头像、刚收藏/取消收藏时可能存在短暂延迟）。
 func (s *TrackService) fillTrackSummaryExtras(ctx context.Context, userID int64, summaries []*models.TrackSummary) error {
 	if len(summaries) == 0 {
