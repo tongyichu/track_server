@@ -11,6 +11,7 @@ services:
       - TZ=${TZ:-Asia/Shanghai}
       - LOG_DIR=${LOG_DIR:-/var/log/track_server}
       - JWT_SECRET=${JWT_SECRET:-track_server_default_jwt_secret}
+      - OPS_INTERNAL_TOKEN=${OPS_INTERNAL_TOKEN:-}
       - TLS_CERT_FILE=${TLS_CERT_FILE:-}
       - TLS_KEY_FILE=${TLS_KEY_FILE:-}
       - USE_IN_MEMORY_STORE=${USE_IN_MEMORY_STORE:-}

@@ -163,6 +163,25 @@ func (r *InMemoryTrackRepository) Update(_ context.Context, t *models.Track) err
 	return nil
 }
 
+func (r *InMemoryTrackRepository) BackfillMissingCalories(_ context.Context) (int64, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	var updated int64
+	for _, track := range r.tracks {
+		if track.CaloriesBurned > 0 || track.Duration == 0 {
+			continue
+		}
+		calories := models.CalculateTrackCalories(track.TrackType, track.Duration)
+		if calories <= 0 {
+			continue
+		}
+		track.CaloriesBurned = calories
+		updated++
+	}
+	return updated, nil
+}
+
 // FindByID finds a track by id.
 func (r *InMemoryTrackRepository) FindByID(_ context.Context, id string) (*models.Track, error) {
 	r.mu.RLock()

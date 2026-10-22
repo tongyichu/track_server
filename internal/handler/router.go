@@ -58,6 +58,7 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 	loginHandler := NewLoginHandler(deps.LoginService, deps.TokenBlacklist, deps.AchievementService)
 	ossHandler := NewOSSHandler(deps.OSSTokenService)
 	appReleaseHandler := NewAppReleaseHandler(deps.AppReleaseService)
+	appReleaseOpsHandler := NewAppReleaseOpsHandler(deps.AppReleaseService, deps.StaticRoot, deps.OpsInternalToken)
 	companionHandler := NewCompanionHandler(deps.CompanionService, deps.CompanionMQTTInternalToken)
 	achievementHandler := NewAchievementHandler(deps.AchievementService)
 	opsHandler := NewOpsHandler(deps.UserService, deps.AchievementService, deps.AccountRestrictionService, deps.OpsInternalToken)
@@ -92,6 +93,7 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 	ops.GET("/feedback/:feedback_id", feedbackHandler.GetOps)
 	ops.PUT("/feedback/:feedback_id/status", feedbackHandler.UpdateOpsStatus)
 	ops.GET("/feedback/:feedback_id/images/:image_id", feedbackHandler.GetOpsImage)
+	ops.POST("/releases/android", appReleaseOpsHandler.PublishAndroid)
 
 	// public: upgrade check (客户端启动/切前台时调用，无需登录)
 	api.GET("/upgrade/check", appReleaseHandler.CheckUpgrade)

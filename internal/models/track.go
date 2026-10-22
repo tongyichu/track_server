@@ -465,12 +465,13 @@ type TrackUserStats struct {
 
 // TrackTypeOption 是运动类型选项。
 type TrackTypeOption struct {
-	Type        string             `json:"type"`          // Type 是运动类型英文标识，例如 hiking/running。
-	Name        string             `json:"name"`          // Name 是运动类型名称。
-	ThemeColor  string             `json:"theme_color"`   // ThemeColor 是运动类型主题色。
-	IconURL     string             `json:"icon_url"`      // IconURL 是运动类型图标静态资源链接。
-	IconAnimURL string             `json:"icon_anim_url"` // IconAnimURL 是运动类型 Lottie 动画资源链接。
-	Milestone   TrackTypeMilestone `json:"milestone"`     // Milestone 是当前用户在该运动类型下的里程碑统计。
+	Type           string             `json:"type"`             // Type 是运动类型英文标识，例如 hiking/running。
+	Name           string             `json:"name"`             // Name 是运动类型名称。
+	ThemeColor     string             `json:"theme_color"`      // ThemeColor 是运动类型日间主题色，保留旧字段及色值。
+	ThemeColorDark string             `json:"theme_color_dark"` // ThemeColorDark 是运动类型夜间主题色。
+	IconURL        string             `json:"icon_url"`         // IconURL 是运动类型图标静态资源链接。
+	IconAnimURL    string             `json:"icon_anim_url"`    // IconAnimURL 是运动类型 Lottie 动画资源链接。
+	Milestone      TrackTypeMilestone `json:"milestone"`        // Milestone 是当前用户在该运动类型下的里程碑统计。
 }
 
 // TrackTypeMilestoneStats 是按时间窗口聚合的运动统计数据。

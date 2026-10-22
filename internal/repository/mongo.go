@@ -149,6 +149,55 @@ func (r *MongoTrackRepository) Update(ctx context.Context, t *models.Track) erro
 	return nil
 }
 
+func (r *MongoTrackRepository) BackfillMissingCalories(ctx context.Context) (int64, error) {
+	if r.collection == nil {
+		return 0, nil
+	}
+	cursor, err := r.collection.Find(ctx, bson.M{
+		"duration": bson.M{"$gt": 0},
+		"$or": bson.A{
+			bson.M{"calories_burned": bson.M{"$exists": false}},
+			bson.M{"calories_burned": bson.M{"$lte": 0}},
+		},
+	})
+	if err != nil {
+		return 0, err
+	}
+	defer cursor.Close(ctx)
+
+	writes := make([]mongo.WriteModel, 0)
+	for cursor.Next(ctx) {
+		var track models.Track
+		if err := cursor.Decode(&track); err != nil {
+			return 0, err
+		}
+		calories := models.CalculateTrackCalories(track.TrackType, track.Duration)
+		if calories <= 0 {
+			continue
+		}
+		writes = append(writes, mongo.NewUpdateOneModel().
+			SetFilter(bson.M{
+				"_id": track.ID,
+				"$or": bson.A{
+					bson.M{"calories_burned": bson.M{"$exists": false}},
+					bson.M{"calories_burned": bson.M{"$lte": 0}},
+				},
+			}).
+			SetUpdate(bson.M{"$set": bson.M{"calories_burned": calories}}))
+	}
+	if err := cursor.Err(); err != nil {
+		return 0, err
+	}
+	if len(writes) == 0 {
+		return 0, nil
+	}
+	result, err := r.collection.BulkWrite(ctx, writes)
+	if err != nil {
+		return 0, err
+	}
+	return result.ModifiedCount, nil
+}
+
 // FindByID finds a track by id.
 func (r *MongoTrackRepository) FindByID(ctx context.Context, id string) (*models.Track, error) {
 	var track models.Track

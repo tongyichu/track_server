@@ -37,9 +37,10 @@
 | 粉丝列表 | GET | `/user/:user_id/follower/list` | 是 | [user.md](user.md#46-粉丝列表) |
 | 批量上报埋点事件 | POST | `/analytics/events` | 条件（登录用户事件） | [analytics.md](analytics.md#47-批量上报埋点事件) |
 | App 升级检查 | GET | `/upgrade/check` | 否 | [upgrade.md](upgrade.md#15-app-升级检查) |
+| 运维发布 Android App | POST | `/ops/releases/android` | 运维内部 | [upgrade.md](upgrade.md#16-运维发布-android-app) |
 | 隐私政策 H5 | GET | `/legal/privacy-policy.html` | 否 | [legal.md](legal.md) |
 | 用户服务协议 H5 | GET | `/legal/terms-of-service.html` | 否 | [legal.md](legal.md) |
-| 获取运动类型 | GET | `/track/types` | 是 | [track.md](track.md#16-获取运动类型) |
+| 获取运动类型（含日间/夜间主题色） | GET | `/track/types` | 是 | [track.md](track.md#16-获取运动类型) |
 | 获取轨迹投稿选项 | GET | `/track/submission/options` | 是 | [track-submission.md](track-submission.md#1-投稿选项) |
 | 创建或重新投稿 | POST | `/track/:track_id/submission` | 是 | [track-submission.md](track-submission.md#2-创建或重新投稿) |
 | 修改待审核投稿 | PUT | `/track/:track_id/submission` | 是 | [track-submission.md](track-submission.md#3-修改待审核投稿) |

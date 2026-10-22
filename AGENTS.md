@@ -107,7 +107,7 @@ track_server/
 
 - 个人资料的 `background_url` 用于主页顶部，数据库保存原始 OSS 地址，响应经独立 `profile_backgrounds` 缓存并使用源地址摘要区分版本；`gender` 只允许空串、`male`、`female`，详情仅本人可读。改字段时同步 MySQL 建表及幂等列迁移、Mongo/内存仓储、用户详情/更新协议与缓存注入，参见 `docs/api/user.md`。
 
-- 默认运动类型由 `internal/config/config.go:DefaultTrackTypeConfigs` 维护，当前 code 为 `hiking`、`running`、`climbing`、`riding`、`driving`，展示名为 `徒步`、`跑步`、`爬山`、`骑行`、`自驾`；`GET /api/v1/track/types`、轨迹入库 `track_type`、运动类型图标元信息和成就系统类型口径应保持一致。`track_geo_indexes.track_type` 与 `track_route_groups.track_type` 只允许保存这五个英文 code，历史别名或未知类型需在地图索引阶段归一/兜底。
+- 默认运动类型由 `internal/config/config.go:DefaultTrackTypeConfigs` 维护，当前 code 为 `hiking`、`running`、`climbing`、`riding`、`driving`，展示名为 `徒步`、`跑步`、`爬山`、`骑行`、`自驾`；`GET /api/v1/track/types`、轨迹入库 `track_type`、运动类型图标元信息和成就系统类型口径应保持一致。颜色元信息同样由该配置维护：`theme_color` 是保留原值的日间色，`theme_color_dark` 是独立夜间色；客户端按主题直接选色，夜间字段缺失、为空或非法时回退日间色。未知自定义类型两个颜色字段均为空串；颜色不存入轨迹或数据库，协议见 `docs/api/track.md`。`track_geo_indexes.track_type` 与 `track_route_groups.track_type` 只允许保存这五个英文 code，历史别名或未知类型需在地图索引阶段归一/兜底。
 - 推荐列表 `GET /api/v1/track/recommend/list` 的可选 `city_code` 使用精确匹配；空值保持全城市推荐。城市条件必须下沉到 Repository 查询并参与游标分页，不能在 Service 取回一页后再过滤；MySQL 推荐查询索引为 `idx_track_recommend_city`。
 - 搜索列表 `GET /api/v1/track/search/list` 的可选 `city_code`、`track_type` 使用存储值精确匹配；空值不过滤对应字段，两个条件可组合。筛选条件必须下沉到 Repository 查询并参与游标分页，不能在 Service 取回一页后再过滤；MySQL / Mongo 搜索查询索引分别为 `idx_track_search_city`、`idx_track_search_type`，运动类型筛选不对历史中文值做转换。
 - 轨迹 `locate_addr` 最大长度为 255 字符，对应 `track_records.locate_addr VARCHAR(255)`；修改该字段长度时同步更新 `mysql.sql`、`internal/repository/mysql.go` 与 `docs/api/track.md`。

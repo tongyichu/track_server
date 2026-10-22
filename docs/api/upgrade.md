@@ -136,3 +136,71 @@ X-Platform: android
 
 ---
 
+## 16. 运维发布 Android App
+
+> 供可信发布脚本一次性上传 APK 并写入 `published` 发布记录。客户端随后调用升级检查接口即可发现该版本。
+
+### 请求
+
+`POST /api/v1/ops/releases/android`
+
+请求使用 `multipart/form-data`，不使用业务 JWT。服务端必须配置 `OPS_INTERNAL_TOKEN`，调用方通过 `X-Internal-Token` 传入相同 token。
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `file` | file | 是 | Release APK，最大 500 MiB，文件名必须以 `.apk` 结尾 |
+| `version_name` | string | 是 | 版本名，如 `1.0.1`，最长 32 字符 |
+| `version_code` | int64 | 是 | 大于 0 的单调递增版本号 |
+| `min_supported_version_code` | int64 | 否 | 最低支持版本号，默认 `0`，不得大于 `version_code` |
+| `release_notes` | string | 否 | 用户可见的版本说明 |
+| `force_update` | bool | 否 | 是否强制升级，默认 `false` |
+
+请求示例：
+
+```bash
+curl --fail-with-body \
+  -H "X-Internal-Token: <ops-internal-token>" \
+  -F "file=@app-release.apk;type=application/vnd.android.package-archive" \
+  -F "version_name=1.0.1" \
+  -F "version_code=2" \
+  -F "release_notes=修复已知问题" \
+  http://server.example.com/api/v1/ops/releases/android
+```
+
+### 成功响应
+
+服务端把 APK 写入 `<LogDir>/static/release/android/`，计算文件大小与 MD5，并以 `android-track-release` 记录操作人。返回的 `data` 为完整 `AppRelease`：
+
+```json
+{
+  "code": 0,
+  "data": {
+    "id": 12,
+    "platform": "android",
+    "version_name": "1.0.1",
+    "version_code": 2,
+    "min_supported_version_code": 0,
+    "package_url": "/api/v1/static/release/android/1792584000000-track-1.0.1-2.apk",
+    "package_size": 95420416,
+    "package_md5": "a1b2c3d4e5f60718293a4b5c6d7e8f90",
+    "release_notes": "修复已知问题",
+    "force_update": false,
+    "status": "published",
+    "operator_user_id": 0,
+    "operator_name": "android-track-release"
+  }
+}
+```
+
+发布记录写入失败时，服务端会删除本次上传的文件，不留下未发布安装包。
+
+### 错误响应
+
+- `400 Bad Request`：字段格式无效、版本号不合法、文件为空或不是 APK。
+- `401 Unauthorized`：缺少 `X-Internal-Token`。
+- `403 Forbidden`：token 不匹配。
+- `413 Request Entity Too Large`：APK 超过 500 MiB。
+- `503 Service Unavailable`：未配置内部鉴权或发布包存储目录。
+- `500 Internal Server Error`：文件落盘或发布记录写入失败。
+
+---

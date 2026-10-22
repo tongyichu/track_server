@@ -1432,6 +1432,44 @@ func (r *MySQLTrackRepository) Update(ctx context.Context, t *models.Track) erro
 	return nil
 }
 
+func (r *MySQLTrackRepository) BackfillMissingCalories(ctx context.Context) (int64, error) {
+	result, err := r.db.ExecContext(ctx, `
+		UPDATE track_records
+		SET calories_burned = FLOOR(
+			duration * 65.0 / 3600.0 *
+			CASE LOWER(TRIM(track_type))
+				WHEN 'hiking' THEN 6.0
+				WHEN 'hike' THEN 6.0
+				WHEN '徒步' THEN 6.0
+				WHEN 'walking' THEN 3.5
+				WHEN 'walk' THEN 3.5
+				WHEN '散步' THEN 3.5
+				WHEN 'climbing' THEN 8.0
+				WHEN 'climb' THEN 8.0
+				WHEN 'mountain' THEN 8.0
+				WHEN 'mountaineering' THEN 8.0
+				WHEN '爬山' THEN 8.0
+				WHEN 'riding' THEN 6.8
+				WHEN 'ride' THEN 6.8
+				WHEN 'cycling' THEN 6.8
+				WHEN 'cycle' THEN 6.8
+				WHEN 'bike' THEN 6.8
+				WHEN 'biking' THEN 6.8
+				WHEN '骑行' THEN 6.8
+				WHEN '骑车' THEN 6.8
+				WHEN 'driving' THEN 1.5
+				WHEN 'drive' THEN 1.5
+				WHEN '自驾' THEN 1.5
+				ELSE 9.8
+			END
+		)
+		WHERE duration > 0 AND COALESCE(calories_burned, 0) <= 0`)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 // SoftDeleteAndCleanupCollectsTx 在一个 MySQL 事务中完成“删除轨迹 + 清理收藏记录”。
 //
 // 为什么要用事务：

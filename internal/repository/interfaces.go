@@ -73,6 +73,12 @@ type TrackRepository interface {
 	CountAll(ctx context.Context) (int64, error)
 }
 
+// TrackCaloriesBackfiller is implemented by repositories that can repair
+// historical tracks whose calories were not persisted by older clients.
+type TrackCaloriesBackfiller interface {
+	BackfillMissingCalories(ctx context.Context) (int64, error)
+}
+
 // TrackSubmissionRepository defines the audited lifecycle of user track submissions.
 // Implementations must keep the current submission, its images and the appended event
 // consistent within one storage transaction/atomic operation.

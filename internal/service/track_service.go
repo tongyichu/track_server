@@ -204,6 +204,7 @@ type TrackInfoPatch struct {
 	CoordinateSystem          *string  `json:"coordinate_system"`
 	Distance                  *float64 `json:"distance"`
 	Duration                  *uint32  `json:"duration"`
+	CaloriesBurned            *float64 `json:"calories_burned"`
 	ElevationGain             *int     `json:"elevation_gain"`
 	RawTrackURL               *string  `json:"raw_track_url"`
 	TrackScreenshotURL        *string  `json:"track_screenshot_url"`
@@ -242,6 +243,7 @@ func (p TrackInfoPatch) empty() bool {
 		p.CoordinateSystem == nil &&
 		p.Distance == nil &&
 		p.Duration == nil &&
+		p.CaloriesBurned == nil &&
 		p.ElevationGain == nil &&
 		p.RawTrackURL == nil &&
 		p.TrackScreenshotURL == nil &&
@@ -276,20 +278,23 @@ func (s *TrackService) ListTrackTypeOptions() []models.TrackTypeOption {
 		meta, ok := config.TrackTypeConfigByName(trackType)
 		typeCode := trackType
 		themeColor := ""
+		themeColorDark := ""
 		iconAnimURL := ""
 		if ok {
 			typeCode = meta.Type
 			themeColor = meta.ThemeColor
+			themeColorDark = meta.ThemeColorDark
 			if meta.IconAnimFile != "" {
 				iconAnimURL = trackTypeAnimURLPrefix + meta.IconAnimFile
 			}
 		}
 		items = append(items, models.TrackTypeOption{
-			Type:        typeCode,
-			Name:        trackType,
-			ThemeColor:  themeColor,
-			IconURL:     trackTypeIconURL(trackType),
-			IconAnimURL: iconAnimURL,
+			Type:           typeCode,
+			Name:           trackType,
+			ThemeColor:     themeColor,
+			ThemeColorDark: themeColorDark,
+			IconURL:        trackTypeIconURL(trackType),
+			IconAnimURL:    iconAnimURL,
 		})
 	}
 	return items
@@ -324,6 +329,18 @@ func normalizeTrackTypeCode(trackType string) string {
 		}
 	}
 	return t
+}
+
+func ensureTrackCalories(track *models.Track) bool {
+	if track == nil || track.CaloriesBurned > 0 {
+		return false
+	}
+	calories := models.CalculateTrackCalories(track.TrackType, track.Duration)
+	if calories <= 0 {
+		return false
+	}
+	track.CaloriesBurned = calories
+	return true
 }
 
 // ListTrackTypeOptionsWithStats returns configured track types plus current user's month/year stats.
@@ -550,6 +567,7 @@ func (s *TrackService) CreateTrack(ctx context.Context, userID int64, input Crea
 	if input.AvgSpeedKmh != nil {
 		track.AvgSpeedKmh = *input.AvgSpeedKmh
 	}
+	ensureTrackCalories(track)
 	// 到这里 track.ID 已经是最终可落库的业务 ID，格式固定为 `NO.` + 8 位 base36 编码。
 	// Create 只负责持久化，不再承担“冲突重试生成 ID”的职责，唯一性保证前移到 NextTrackID。
 	if err := s.tracks.Create(ctx, track); err != nil {
@@ -1281,6 +1299,7 @@ func (s *TrackService) MarkUploadedToCloud(ctx context.Context, trackID string) 
 	if track.EndTime.Before(track.StartTime) {
 		track.EndTime = time.Now()
 	}
+	ensureTrackCalories(track)
 	if err := s.tracks.Update(ctx, track); err != nil {
 		return err
 	}
@@ -1321,6 +1340,9 @@ func (s *TrackService) UpdateTrackInfo(ctx context.Context, userID int64, trackI
 	}
 	if patch.AvgSpeedKmh != nil && *patch.AvgSpeedKmh < 0 {
 		return nil, invalidArg("avg_speed_kmh must be >= 0")
+	}
+	if patch.CaloriesBurned != nil && *patch.CaloriesBurned < 0 {
+		return nil, invalidArg("calories_burned must be >= 0")
 	}
 	if patch.SessionID != nil {
 		if *patch.SessionID == "" {
@@ -1376,6 +1398,10 @@ func (s *TrackService) UpdateTrackInfo(ctx context.Context, userID int64, trackI
 		track.Duration = *patch.Duration
 		updated = true
 	}
+	if patch.CaloriesBurned != nil && track.CaloriesBurned == 0 {
+		track.CaloriesBurned = *patch.CaloriesBurned
+		updated = true
+	}
 	if patch.ElevationGain != nil && track.ElevationGain == 0 {
 		track.ElevationGain = *patch.ElevationGain
 		updated = true
@@ -1398,6 +1424,9 @@ func (s *TrackService) UpdateTrackInfo(ctx context.Context, userID int64, trackI
 		track.TrackNoMapBgScreenshotURL = *patch.TrackNoMapBgScreenshotURL
 		updated = true
 		updatedNoMapBgScreenshot = true
+	}
+	if ensureTrackCalories(track) {
+		updated = true
 	}
 
 	if updated {

@@ -56,7 +56,7 @@ Authorization: Bearer <token>
 | `end_time` | string | 否 | 结束时间，RFC3339/ISO8601 格式，必须 `>= start_time` |
 | `distance` | number | 否 | 距离（米），必须 `>= 0` |
 | `duration` | int | 否 | 时长（秒），必须 `>= 0` |
-| `calories_burned` | number | 否 | 热量消耗（千卡），必须 `>= 0` |
+| `calories_burned` | number | 否 | 热量消耗（千卡），必须 `>= 0`；未传或为 `0` 且 `duration > 0` 时，服务端按运动类型 MET、默认体重 65kg 和时长兜底计算 |
 | `elevation_gain` | int | 否 | 累计爬升（米），必须 `>= 0` |
 | `raw_track_url` | string | 否 | 原始轨迹文件 OSS 地址（建议传 OSS HTTP URL，可带签名参数；轨迹地图索引支持 JSON/GeoJSON/KML/KMZ） |
 | `track_screenshot_url` | string | 否 | 轨迹截图 OSS 地址（建议传 OSS HTTP URL，可带签名参数） |
@@ -677,6 +677,7 @@ Authorization: Bearer <token>
   "track_no_map_bg_screenshot_url": "https://<bucket>.oss-<region>.aliyuncs.com/prod/track/.../xxx_no_map_bg.jpg",
   "distance": 1200.5,
   "duration": 1800,
+  "calories_burned": 318,
   "elevation_gain": 80,
   "avg_speed_kmh": 12.3
 }
@@ -695,6 +696,7 @@ Authorization: Bearer <token>
 | `track_no_map_bg_screenshot_url` | string | 否 | 无地图背景的轨迹路线截图 OSS 地址（仅当原值为空时才会写入） |
 | `distance` | number | 否 | 距离（米），必须 `>= 0`（仅当原值为 `0` 时才会写入） |
 | `duration` | int | 否 | 时长（秒），必须 `>= 0`（仅当原值为 `0` 时才会写入） |
+| `calories_burned` | number | 否 | 热量消耗（千卡），必须 `>= 0`（仅当原值为 `0` 时才会写入）；仍为 `0` 时服务端会按运动类型、65kg 默认体重和时长兜底计算 |
 | `elevation_gain` | int | 否 | 累计爬升（米），必须 `>= 0`（仅当原值为 `0` 时才会写入） |
 | `avg_speed_kmh` | number | 否 | 平均速度（km/h），必须 `>= 0`（仅当原值为 `0` 时才会写入） |
 
@@ -725,7 +727,7 @@ curl -X PUT "http://<host>:<port>/api/v1/track/trk1/update" \
   - 请求体未包含任何字段（返回 `{"error":"no fields to update"}`）
   - `session_id` 为空或超过最大长度（返回 `{"error":"session_id is required"}` / `{"error":"session_id is too long"}`）
   - `locate_addr` 超过最大长度（返回 `{"error":"locate_addr is too long"}`）
-  - `distance` / `elevation_gain` / `avg_speed_kmh` 为负数
+  - `distance` / `calories_burned` / `elevation_gain` / `avg_speed_kmh` 为负数
 - `401 Unauthorized`
   - 缺少/无效/过期的 Token
 - `403 Forbidden`
@@ -801,9 +803,19 @@ Authorization: Bearer <token>
 - 服务端可通过环境变量 `TRACK_TYPES` 配置运动类型展示名，支持使用英文逗号、分号、中文逗号、顿号或竖线分隔，例如：`TRACK_TYPES=徒步,跑步,爬山,骑行,自驾,滑雪`。
 - 服务端会自动过滤空项和重复项；若未配置或配置为空，则使用默认列表。
 - 每个运动类型会返回一个图标链接 `icon_url`，图标文件来自服务端静态目录 `/api/v1/static/track_type_icon/`；默认对应关系为：`徒步 -> hiking.svg`、`跑步 -> running.svg`、`爬山 -> climbing.svg`、`骑行 -> riding.svg`、`自驾 -> driving.svg`。
-- 每个运动类型会额外返回：`type`（英文标识）、`theme_color`（主题色）、`icon_anim_url`（Lottie 动画文件链接；当前默认空字符串，后续可通过配置补充）。
+- 每个运动类型会额外返回：`type`（英文标识）、`theme_color`（日间主题色）、`theme_color_dark`（夜间主题色）、`icon_anim_url`（Lottie 动画文件链接；当前默认空字符串，后续可通过配置补充）。
+- 日夜颜色均由服务端配置下发，客户端按当前主题直接取对应字段，不再对有效色值自动调整饱和度或亮度。`theme_color` 保留原字段与原色值；旧服务端或本地缓存缺少 `theme_color_dark`、或该字段为空/非法时，夜间回退到 `theme_color`。未配置元信息的自定义类型两个颜色字段均为空字符串，由客户端使用本地样式兜底。
 - 统计数据按 `Authorization` Token 解析出的当前用户统计 `track_records`：排除删除与进行中轨迹，仅统计 `正常/私密` 轨迹。
 - 统计维度按运动类型拆分，并返回最近一个月（`month`）与最近一年（`year`）的总里程、轨迹次数、总耗时、总热量。
+- 内置颜色在 `internal/config/config.go` 的 `DefaultTrackTypeConfigs` 中统一维护：
+
+| 类型 | 日间 `theme_color` | 夜间 `theme_color_dark` |
+|------|-------------------|------------------------|
+| 徒步 `hiking` | `#345631` | `#8BCB83` |
+| 跑步 `running` | `#F26A4B` | `#FF947A` |
+| 爬山 `climbing` | `#6C4CE1` | `#AA92F5` |
+| 骑行 `riding` | `#2F80ED` | `#78B4FF` |
+| 自驾 `driving` | `#F5A623` | `#FFD083` |
 
 ### 请求
 
@@ -826,6 +838,7 @@ Authorization: Bearer <token>
       "type": "hiking",
       "name": "徒步",
       "theme_color": "#345631",
+      "theme_color_dark": "#8BCB83",
       "icon_url": "/api/v1/static/track_type_icon/hiking.svg",
       "icon_anim_url": "",
       "milestone": {
@@ -847,6 +860,7 @@ Authorization: Bearer <token>
       "type": "running",
       "name": "跑步",
       "theme_color": "#F26A4B",
+      "theme_color_dark": "#FF947A",
       "icon_url": "/api/v1/static/track_type_icon/running.svg",
       "icon_anim_url": "",
       "milestone": {
@@ -873,7 +887,8 @@ Authorization: Bearer <token>
 | `data` | `TrackTypeOption[]` | 可选运动类型列表。 |
 | `data[].type` | string | 运动类型英文标识，例如 `hiking` / `running`。 |
 | `data[].name` | string | 运动类型名称。 |
-| `data[].theme_color` | string | 运动类型主题色。 |
+| `data[].theme_color` | string | 运动类型日间主题色，`#RRGGBB`；保留旧字段与原色值，未配置时为空字符串。 |
+| `data[].theme_color_dark` | string | 运动类型夜间主题色，`#RRGGBB`；缺失、为空或非法时夜间回退到 `theme_color`。 |
 | `data[].icon_url` | string | 运动类型图标静态资源链接，路径位于 `/api/v1/static/track_type_icon/` 下。 |
 | `data[].icon_anim_url` | string | 运动类型 Lottie 动画文件链接；当前默认空字符串。 |
 | `data[].milestone.month.distance` | number | 当前用户该运动类型最近一个月总里程，单位米。 |

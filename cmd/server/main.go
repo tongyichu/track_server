@@ -25,7 +25,7 @@ import (
 	"github.com/tongyichu/track_server/internal/service"
 )
 
-const maxRequestBodySize = 100 * 1024 * 1024 // 100 MiB，需覆盖管理后台安装包 multipart 上传
+const maxRequestBodySize = 512 * 1024 * 1024 // 512 MiB，容纳最大 500 MiB 安装包及 multipart 元数据
 
 // main is the entrypoint of the Hertz HTTP server.
 func main() {
@@ -190,6 +190,14 @@ func main() {
 	}
 	if recommendationRepo == nil {
 		recommendationRepo = repository.NewInMemoryRecommendationRepository()
+	}
+	if backfiller, ok := trackRepo.(repository.TrackCaloriesBackfiller); ok {
+		updated, err := backfiller.BackfillMissingCalories(ctx)
+		if err != nil {
+			log.Printf("failed to backfill track calories: %v", err)
+		} else if updated > 0 {
+			log.Printf("backfilled calories for %d historical tracks", updated)
+		}
 	}
 
 	trackSvc := service.NewTrackService(trackRepo, collectRepo)
