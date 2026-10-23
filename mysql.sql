@@ -42,6 +42,7 @@ CREATE TABLE `track_records` (
                                 `source_tag` varchar(64) NOT NULL DEFAULT '' COMMENT '轨迹来源/运营标签',
                                 `coordinate_system` varchar(32) NOT NULL DEFAULT '' COMMENT '坐标系',
                                  `title` varchar(128) NOT NULL DEFAULT '' COMMENT '轨迹名称',
+                                 `route_description` text COMMENT '客户端根据轨迹点生成的默认路线说明',
                                  `start_time` datetime NOT NULL COMMENT '开始时间',
                                  `end_time` datetime COMMENT '结束时间',
                                  `distance` decimal(10,2) DEFAULT '0.00' COMMENT '总距离(米)',

@@ -63,6 +63,16 @@
 
 无新任务表，完成状态以数据库四图为准。客户端按账号保存分页游标、尚未处理的当页队列、成功/跳过计数及失败记录；串行执行、后台/锁屏暂停、回到前台手动恢复。文件及逐图上传进度保存在单独缓存目录，失败项可单独重试。单批次固定语言、地图 provider、样式及尺寸；设置变化时暂停并提示恢复设置或重新扫描。
 
+### 历史路线说明补齐（DevMode）
+
+复用 Android DevMode 的历史数据补齐页。沿用业务 JWT，不增加管理员或轨迹作者校验；提交接口沿用账号上传限制。客户端复用正式上传的路线说明生成规则；服务端只负责筛选空说明记录、提供 GPS 并条件写入，不在服务端复制生成规则。
+
+1. `GET /api/v1/track/description-backfill/list?cursor=<cursor>&limit=20`：查询未删除、已结束、说明为空的轨迹并游标分页，返回任务元信息、`source_version`、`pending_count` 及缺原始 GPS 数量。没有原始轨迹的记录计入缺源数量但不进入任务列表。
+2. `GET /api/v1/track/description-backfill/:track_id/data?source_version=<version>`：读取完整原始 GPS 点。轨迹已被补齐时返回 `state=already_complete`；记录不可用返回 404，版本变化返回 409。
+3. `POST /api/v1/track/description-backfill/:track_id/complete`，请求 `{"source_version":"<version>","description":"<客户端生成的说明>"}`。服务端限制 1 至 1000 个字符，仅当说明仍为空且轨迹源数据未变化时写入。已有说明返回 `state=already_complete`，版本变化返回 409 `description_source_changed`，不会覆盖已存在的说明。
+
+完成状态以轨迹 `description` 是否为空为准。客户端逐条处理，可暂停、重试失败项或重新扫描；重新扫描会跳过已经补齐的记录。
+
 ## 1. 创建轨迹
 
 创建一个新的轨迹记录；支持在请求体中直接传入轨迹摘要字段。未传的字段会使用默认值。
@@ -82,6 +92,7 @@ Authorization: Bearer <token>
 ```json
 {
   "title": "傍晚夜跑",
+  "description": "从起点附近出发，沿本次记录路线完成约 1.2 公里。",
   "session_id": "sess_xxx",
   "city_code": "330100",
   "locate_addr": "杭州市西湖区",
@@ -105,6 +116,7 @@ Authorization: Bearer <token>
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | `title` | string | 否 | 轨迹标题，默认 `新的轨迹` |
+| `description` | string | 否 | 默认路线说明，最多 `1000` 字符；详情接口返回。客户端可在轨迹上传完成时补充，已有非空说明不会被覆盖 |
 | `session_id` | string | 否 | 关联的同行会话 ID；参加同行结束后上传个人轨迹时传同一个 `session_id`，用于把本次同行内多人轨迹串联起来 |
 | `city_code` | string | 否 | 城市 Code（标识轨迹所属城市） |
 | `locate_addr` | string | 否 | 轨迹的具体位置信息，最大长度 `255` 字符 |
@@ -387,6 +399,8 @@ Authorization: Bearer <token>
 
 返回 `StandardResponse`，`data` 为 `Track`：
 
+`description` 是上传时保存的默认路线说明；投稿编辑后的说明仍单独保存在投稿记录中。
+
 详情直接返回 `collect_count`（当前收藏用户总数）与 `collected`（当前 JWT 用户是否收藏），与列表的收藏总数口径一致，无收藏返回 0。客户端复用轨迹信息展示数量与星星状态，不需要额外请求收藏计数。收藏/取消收藏响应也返回操作后的状态和总数，见 [collect-navigation.md](collect-navigation.md)。
 
 ```json
@@ -399,6 +413,7 @@ Authorization: Bearer <token>
     "track_type": "hiking",
     "coordinate_system": "WGS84",
     "title": "详情轨迹",
+    "description": "从起点附近出发，沿本次记录路线完成约 1.2 公里。",
     "collected": true,
     "collect_count": 12,
     "start_time": "2026-04-20T12:00:00Z",
@@ -730,6 +745,7 @@ Authorization: Bearer <token>
 
 ```json
 {
+  "description": "从起点附近出发，沿本次记录路线完成约 1.2 公里。",
   "session_id": "sess_xxx",
   "city_code": "330100",
   "locate_addr": "杭州市西湖区",
@@ -750,6 +766,7 @@ Authorization: Bearer <token>
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | `session_id` | string | 否 | 关联的同行会话 ID，仅当原值为空时才会写入；用于把同一次同行结束后各成员上传的个人轨迹串联起来 |
+| `description` | string | 否 | 默认路线说明，最多 `1000` 字符；仅当原值为空时才会写入，投稿编辑后的说明单独保存在投稿记录中 |
 | `city_code` | string | 否 | 城市 Code（仅当原值为空时才会写入） |
 | `locate_addr` | string | 否 | 轨迹的具体位置信息，最大长度 `255` 字符（仅当原值为空时才会写入） |
 | `track_type` | string | 否 | 轨迹类型，仅当原值为空时才会写入；使用 `/track/types` 返回的英文 `type`，服务端兼容历史中文名输入但会归一为英文 code |

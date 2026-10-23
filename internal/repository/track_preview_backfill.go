@@ -74,6 +74,60 @@ func (r *MySQLTrackRepository) PreviewBackfillCounts(ctx context.Context) (pendi
 	return
 }
 
+func (r *MySQLTrackRepository) ListDescriptionBackfill(ctx context.Context, cursor *models.TrackListCursor, limit int) ([]*models.Track, error) {
+	query := `SELECT id FROM track_records WHERE ` + previewBaseSQL + ` AND TRIM(COALESCE(description, '')) = '' AND COALESCE(raw_track_url, '') <> ''`
+	args := []interface{}{}
+	if cursor != nil {
+		query += ` AND (start_time < ? OR (start_time = ? AND id < ?))`
+		args = append(args, cursor.StartTime, cursor.StartTime, cursor.ID)
+	}
+	query += ` ORDER BY start_time DESC, id DESC LIMIT ?`
+	args = append(args, limit)
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]string, 0, limit)
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return nil, err
+	}
+	tracks, err := r.FindByIDs(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]*models.Track, 0, len(ids))
+	for _, id := range ids {
+		if t := tracks[id]; t != nil {
+			result = append(result, t)
+		}
+	}
+	return result, nil
+}
+
+func (r *MySQLTrackRepository) DescriptionBackfillCounts(ctx context.Context) (pending, withoutRaw int64, err error) {
+	err = r.db.QueryRowContext(ctx, `SELECT COALESCE(SUM(COALESCE(raw_track_url, '') <> ''), 0), COALESCE(SUM(COALESCE(raw_track_url, '') = ''), 0) FROM track_records WHERE `+previewBaseSQL+` AND TRIM(COALESCE(description, '')) = ''`).Scan(&pending, &withoutRaw)
+	return
+}
+
+func (r *MySQLTrackRepository) FillMissingDescription(ctx context.Context, expected *models.Track, description string) (bool, error) {
+	res, err := r.db.ExecContext(ctx, `UPDATE track_records SET description = ?, updated_at = ? WHERE `+previewBaseSQL+` AND id = ? AND TRIM(COALESCE(description, '')) = '' AND raw_track_url = ? AND COALESCE(coordinate_system, '') = ? AND COALESCE(track_type, '') = ? AND COALESCE(title, '') = ? AND COALESCE(locate_addr, '') = ? AND start_time = ? AND end_time = ? AND distance = ? AND duration = ?`, description, time.Now(), expected.ID, expected.RawTrackURL, expected.CoordinateSystem, expected.TrackType, expected.Title, expected.LocateAddr, expected.StartTime, expected.EndTime, expected.Distance, expected.Duration)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
+}
+
 func (r *MySQLTrackRepository) FillMissingPreviewImages(ctx context.Context, expected *models.Track, images models.TrackPreviewImages) (bool, error) {
 	if expected.PreviewImages.Complete() {
 		return false, nil
@@ -103,6 +157,10 @@ func previewMissingMongo() bson.M {
 	return bson.M{"status": bson.M{"$ne": models.TrackStatusDeleted}, "is_running": false, "$or": or}
 }
 
+func missingDescriptionMongo() bson.M {
+	return bson.M{"$or": bson.A{bson.M{"description": bson.M{"$in": bson.A{"", nil}}}, bson.M{"description": bson.M{"$regex": `^\s*$`}}}}
+}
+
 func (r *MongoTrackRepository) ListPreviewBackfill(ctx context.Context, cursor *models.TrackListCursor, limit int) ([]*models.Track, error) {
 	filter := previewMissingMongo()
 	filter["raw_track_url"] = bson.M{"$nin": bson.A{"", nil}}
@@ -125,6 +183,41 @@ func (r *MongoTrackRepository) PreviewBackfillCounts(ctx context.Context) (pendi
 	filter["raw_track_url"] = bson.M{"$in": bson.A{"", nil}}
 	withoutRaw, err = r.collection.CountDocuments(ctx, filter)
 	return
+}
+
+func (r *MongoTrackRepository) ListDescriptionBackfill(ctx context.Context, cursor *models.TrackListCursor, limit int) ([]*models.Track, error) {
+	filter := bson.M{"status": bson.M{"$ne": models.TrackStatusDeleted}, "is_running": false, "raw_track_url": bson.M{"$nin": bson.A{"", nil}}}
+	filter["$and"] = bson.A{missingDescriptionMongo()}
+	if cursor != nil {
+		filter["$and"] = append(filter["$and"].(bson.A), bson.M{"$or": bson.A{bson.M{"start_time": bson.M{"$lt": cursor.StartTime}}, bson.M{"start_time": cursor.StartTime, "_id": bson.M{"$lt": cursor.ID}}}})
+	}
+	return r.listTracks(ctx, filter, options.Find().SetSort(bson.D{{Key: "start_time", Value: -1}, {Key: "_id", Value: -1}}).SetLimit(int64(limit)))
+}
+
+func (r *MongoTrackRepository) DescriptionBackfillCounts(ctx context.Context) (pending, withoutRaw int64, err error) {
+	filter := bson.M{"status": bson.M{"$ne": models.TrackStatusDeleted}, "is_running": false}
+	filter["$and"] = bson.A{missingDescriptionMongo()}
+	withRaw := bson.M{}
+	for k, v := range filter {
+		withRaw[k] = v
+	}
+	withRaw["raw_track_url"] = bson.M{"$nin": bson.A{"", nil}}
+	pending, err = r.collection.CountDocuments(ctx, withRaw)
+	if err != nil {
+		return
+	}
+	filter["raw_track_url"] = bson.M{"$in": bson.A{"", nil}}
+	withoutRaw, err = r.collection.CountDocuments(ctx, filter)
+	return
+}
+
+func (r *MongoTrackRepository) FillMissingDescription(ctx context.Context, expected *models.Track, description string) (bool, error) {
+	filter := bson.M{"_id": expected.ID, "status": bson.M{"$ne": models.TrackStatusDeleted}, "is_running": false, "raw_track_url": expected.RawTrackURL, "coordinate_system": expected.CoordinateSystem, "track_type": expected.TrackType, "title": expected.Title, "locate_addr": expected.LocateAddr, "start_time": expected.StartTime, "end_time": expected.EndTime, "distance": expected.Distance, "duration": expected.Duration, "$and": bson.A{missingDescriptionMongo()}}
+	res, err := r.collection.UpdateOne(ctx, filter, bson.M{"$set": bson.M{"description": description, "updated_at": time.Now()}})
+	if err != nil {
+		return false, err
+	}
+	return res.ModifiedCount > 0, nil
 }
 
 func (r *MongoTrackRepository) FillMissingPreviewImages(ctx context.Context, expected *models.Track, images models.TrackPreviewImages) (bool, error) {
@@ -196,6 +289,59 @@ func (r *InMemoryTrackRepository) PreviewBackfillCounts(_ context.Context) (pend
 		}
 	}
 	return
+}
+
+func (r *InMemoryTrackRepository) ListDescriptionBackfill(ctx context.Context, cursor *models.TrackListCursor, limit int) ([]*models.Track, error) {
+	pageCursor := cursor
+	result := make([]*models.Track, 0, limit)
+	for len(result) < limit {
+		page, err := r.ListAll(ctx, pageCursor, limit)
+		if err != nil {
+			return nil, err
+		}
+		for _, t := range page {
+			if t.Status != models.TrackStatusDeleted && !t.IsRunning && strings.TrimSpace(t.Description) == "" && t.RawTrackURL != "" {
+				result = append(result, t)
+				if len(result) == limit {
+					return result, nil
+				}
+			}
+		}
+		if len(page) < limit {
+			break
+		}
+		last := page[len(page)-1]
+		pageCursor = &models.TrackListCursor{StartTime: last.StartTime, ID: last.ID}
+	}
+	return result, nil
+}
+
+func (r *InMemoryTrackRepository) DescriptionBackfillCounts(_ context.Context) (pending, withoutRaw int64, err error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, t := range r.tracks {
+		if t.Status == models.TrackStatusDeleted || t.IsRunning || strings.TrimSpace(t.Description) != "" {
+			continue
+		}
+		if t.RawTrackURL == "" {
+			withoutRaw++
+		} else {
+			pending++
+		}
+	}
+	return
+}
+
+func (r *InMemoryTrackRepository) FillMissingDescription(_ context.Context, expected *models.Track, description string) (bool, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	t := r.tracks[expected.ID]
+	if t == nil || t.Status == models.TrackStatusDeleted || t.IsRunning || strings.TrimSpace(t.Description) != "" || t.RawTrackURL != expected.RawTrackURL || t.CoordinateSystem != expected.CoordinateSystem || t.TrackType != expected.TrackType || t.Title != expected.Title || t.LocateAddr != expected.LocateAddr || !t.StartTime.Equal(expected.StartTime) || !t.EndTime.Equal(expected.EndTime) || t.Distance != expected.Distance || t.Duration != expected.Duration {
+		return false, nil
+	}
+	t.Description = description
+	t.UpdatedAt = time.Now()
+	return true, nil
 }
 
 func (r *InMemoryTrackRepository) FillMissingPreviewImages(_ context.Context, expected *models.Track, images models.TrackPreviewImages) (bool, error) {

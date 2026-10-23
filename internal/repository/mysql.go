@@ -75,6 +75,7 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 			source_tag VARCHAR(64) NOT NULL DEFAULT '' COMMENT '轨迹来源/运营标签',
 			coordinate_system VARCHAR(32) NOT NULL DEFAULT '' COMMENT '坐标系',
 			title VARCHAR(128) NOT NULL DEFAULT '',
+			route_description TEXT NULL COMMENT '客户端根据轨迹点生成的默认路线说明',
 			start_time DATETIME NOT NULL,
 			end_time DATETIME,
 			distance DECIMAL(10,2) DEFAULT 0.00,
@@ -570,6 +571,9 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 	if err := ensureMySQLTrackCoordinateSystemColumn(ctx, db); err != nil {
+		return err
+	}
+	if err := ensureMySQLTrackDescriptionColumn(ctx, db); err != nil {
 		return err
 	}
 	if err := ensureMySQLTrackRouteGroupAreaID(ctx, db); err != nil {
@@ -1240,6 +1244,26 @@ func ensureMySQLTrackCoordinateSystemColumn(ctx context.Context, db *sql.DB) err
 	return nil
 }
 
+func ensureMySQLTrackDescriptionColumn(ctx context.Context, db *sql.DB) error {
+	var count int
+	err := db.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM information_schema.COLUMNS
+		WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'track_records' AND COLUMN_NAME = 'route_description'`,
+	).Scan(&count)
+	if err != nil {
+		return fmt.Errorf("check track_records.route_description column: %w", err)
+	}
+	if count > 0 {
+		return nil
+	}
+	_, err = db.ExecContext(ctx, `ALTER TABLE track_records ADD COLUMN route_description TEXT NULL COMMENT '客户端根据轨迹点生成的默认路线说明' AFTER title`)
+	if err != nil {
+		return fmt.Errorf("add track_records.route_description column: %w", err)
+	}
+	return nil
+}
+
 func ensureMySQLTrackRouteGroupAreaID(ctx context.Context, db *sql.DB) error {
 	var columnCount int
 	if err := db.QueryRowContext(ctx, `
@@ -1396,11 +1420,11 @@ func (r *MySQLTrackRepository) Create(ctx context.Context, t *models.Track) erro
 
 	_, err := r.db.ExecContext(ctx,
 		`INSERT INTO track_records (
-			id, user_id, session_id, city_code, locate_addr, track_type, source_tag, coordinate_system, title, start_time, end_time,
+			id, user_id, session_id, city_code, locate_addr, track_type, source_tag, coordinate_system, title, route_description, start_time, end_time,
 			distance, duration, calories_burned, elevation_gain, raw_track_url, track_screenshot_url, track_no_map_bg_screenshot_url, preview_images, is_running, status, avg_speed_kmh,
 			created_at, updated_at, deleted_at
-		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-		t.ID, t.UserID, t.SessionID, t.CityCode, t.LocateAddr, t.TrackType, t.SourceTag, t.CoordinateSystem, t.Title, t.StartTime, nullableTimeValue(t.EndTime),
+		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		t.ID, t.UserID, t.SessionID, t.CityCode, t.LocateAddr, t.TrackType, t.SourceTag, t.CoordinateSystem, t.Title, nullableStringValue(t.Description), t.StartTime, nullableTimeValue(t.EndTime),
 		t.Distance, t.Duration, t.CaloriesBurned, t.ElevationGain, nullableStringValue(t.RawTrackURL), nullableStringValue(t.TrackScreenshotURL), nullableStringValue(t.TrackNoMapBgScreenshotURL), encodeTrackPreviewImages(t.PreviewImages), t.IsRunning, t.Status, t.AvgSpeedKmh,
 		t.CreatedAt, t.UpdatedAt, nullableTimeValue(t.DeletedAt),
 	)
@@ -1419,10 +1443,10 @@ func (r *MySQLTrackRepository) Update(ctx context.Context, t *models.Track) erro
 
 	res, err := r.db.ExecContext(ctx,
 		`UPDATE track_records SET
-			user_id=?, session_id=?, city_code=?, locate_addr=?, track_type=?, source_tag=?, coordinate_system=?, title=?, start_time=?, end_time=?,
+			user_id=?, session_id=?, city_code=?, locate_addr=?, track_type=?, source_tag=?, coordinate_system=?, title=?, route_description=?, start_time=?, end_time=?,
 			distance=?, duration=?, calories_burned=?, elevation_gain=?, raw_track_url=?, track_screenshot_url=?, track_no_map_bg_screenshot_url=?, preview_images=?, is_running=?, status=?, avg_speed_kmh=?, updated_at=?, deleted_at=?
 		WHERE id=?`,
-		t.UserID, t.SessionID, t.CityCode, t.LocateAddr, t.TrackType, t.SourceTag, t.CoordinateSystem, t.Title, t.StartTime, nullableTimeValue(t.EndTime),
+		t.UserID, t.SessionID, t.CityCode, t.LocateAddr, t.TrackType, t.SourceTag, t.CoordinateSystem, t.Title, nullableStringValue(t.Description), t.StartTime, nullableTimeValue(t.EndTime),
 		t.Distance, t.Duration, t.CaloriesBurned, t.ElevationGain, nullableStringValue(t.RawTrackURL), nullableStringValue(t.TrackScreenshotURL), nullableStringValue(t.TrackNoMapBgScreenshotURL), encodeTrackPreviewImages(t.PreviewImages), t.IsRunning, t.Status, t.AvgSpeedKmh, t.UpdatedAt,
 		nullableTimeValue(t.DeletedAt),
 		t.ID,
@@ -1656,27 +1680,28 @@ func mysqlCleanupRouteGroupsAfterTrackDeleteTx(ctx context.Context, tx *sql.Tx, 
 
 func (r *MySQLTrackRepository) FindByID(ctx context.Context, id string) (*models.Track, error) {
 	row := r.db.QueryRowContext(ctx,
-		`SELECT id, user_id, session_id, city_code, locate_addr, track_type, source_tag, coordinate_system, title, start_time, end_time,
+		`SELECT id, user_id, session_id, city_code, locate_addr, track_type, source_tag, coordinate_system, title, route_description, start_time, end_time,
 			distance, duration, calories_burned, elevation_gain, raw_track_url, track_screenshot_url, track_no_map_bg_screenshot_url, preview_images, is_running, status, avg_speed_kmh,
 			created_at, updated_at, deleted_at
 		FROM track_records WHERE id=?`, id)
 
 	var (
-		t               models.Track
-		endTime         sql.NullTime
-		deletedAt       sql.NullTime
-		distance        sql.NullFloat64
-		duration        sql.NullInt64
-		caloriesBurned  sql.NullFloat64
-		elevationGain   sql.NullInt64
-		rawTrackURL     sql.NullString
-		trackScreenshot sql.NullString
-		noMapBgShot     sql.NullString
-		previewJSON     sql.NullString
-		coordinateSys   sql.NullString
+		t                models.Track
+		endTime          sql.NullTime
+		deletedAt        sql.NullTime
+		distance         sql.NullFloat64
+		duration         sql.NullInt64
+		caloriesBurned   sql.NullFloat64
+		elevationGain    sql.NullInt64
+		rawTrackURL      sql.NullString
+		trackScreenshot  sql.NullString
+		noMapBgShot      sql.NullString
+		previewJSON      sql.NullString
+		coordinateSys    sql.NullString
+		routeDescription sql.NullString
 	)
 	if err := row.Scan(
-		&t.ID, &t.UserID, &t.SessionID, &t.CityCode, &t.LocateAddr, &t.TrackType, &t.SourceTag, &coordinateSys, &t.Title, &t.StartTime, &endTime,
+		&t.ID, &t.UserID, &t.SessionID, &t.CityCode, &t.LocateAddr, &t.TrackType, &t.SourceTag, &coordinateSys, &t.Title, &routeDescription, &t.StartTime, &endTime,
 		&distance, &duration, &caloriesBurned, &elevationGain, &rawTrackURL, &trackScreenshot, &noMapBgShot, &previewJSON, &t.IsRunning, &t.Status, &t.AvgSpeedKmh,
 		&t.CreatedAt, &t.UpdatedAt, &deletedAt,
 	); err != nil {
@@ -1715,6 +1740,9 @@ func (r *MySQLTrackRepository) FindByID(ctx context.Context, id string) (*models
 	if coordinateSys.Valid {
 		t.CoordinateSystem = coordinateSys.String
 	}
+	if routeDescription.Valid {
+		t.Description = routeDescription.String
+	}
 	if err := decodeTrackPreviewImages(previewJSON, &t.PreviewImages); err != nil {
 		return nil, err
 	}
@@ -1728,7 +1756,7 @@ func (r *MySQLTrackRepository) FindByIDs(ctx context.Context, ids []string) (map
 		return result, nil
 	}
 	placeholders := strings.TrimRight(strings.Repeat("?,", len(ids)), ",")
-	query := fmt.Sprintf(`SELECT id, user_id, session_id, city_code, locate_addr, track_type, source_tag, coordinate_system, title, start_time, end_time,
+	query := fmt.Sprintf(`SELECT id, user_id, session_id, city_code, locate_addr, track_type, source_tag, coordinate_system, title, route_description, start_time, end_time,
 		distance, duration, calories_burned, elevation_gain, raw_track_url, track_screenshot_url, track_no_map_bg_screenshot_url, preview_images, is_running, status, avg_speed_kmh,
 		created_at, updated_at, deleted_at FROM track_records WHERE id IN (%s)`, placeholders)
 	args := make([]any, 0, len(ids))
@@ -1757,8 +1785,8 @@ func scanMySQLTrack(scanner mysqlRowScanner) (*models.Track, error) {
 	var endTime, deletedAt sql.NullTime
 	var distance, caloriesBurned sql.NullFloat64
 	var duration, elevationGain sql.NullInt64
-	var rawTrackURL, trackScreenshot, noMapBgShot, coordinateSys, previewJSON sql.NullString
-	if err := scanner.Scan(&t.ID, &t.UserID, &t.SessionID, &t.CityCode, &t.LocateAddr, &t.TrackType, &t.SourceTag, &coordinateSys, &t.Title, &t.StartTime, &endTime, &distance, &duration, &caloriesBurned, &elevationGain, &rawTrackURL, &trackScreenshot, &noMapBgShot, &previewJSON, &t.IsRunning, &t.Status, &t.AvgSpeedKmh, &t.CreatedAt, &t.UpdatedAt, &deletedAt); err != nil {
+	var rawTrackURL, trackScreenshot, noMapBgShot, coordinateSys, previewJSON, routeDescription sql.NullString
+	if err := scanner.Scan(&t.ID, &t.UserID, &t.SessionID, &t.CityCode, &t.LocateAddr, &t.TrackType, &t.SourceTag, &coordinateSys, &t.Title, &routeDescription, &t.StartTime, &endTime, &distance, &duration, &caloriesBurned, &elevationGain, &rawTrackURL, &trackScreenshot, &noMapBgShot, &previewJSON, &t.IsRunning, &t.Status, &t.AvgSpeedKmh, &t.CreatedAt, &t.UpdatedAt, &deletedAt); err != nil {
 		return nil, err
 	}
 	if endTime.Valid {
@@ -1790,6 +1818,9 @@ func scanMySQLTrack(scanner mysqlRowScanner) (*models.Track, error) {
 	}
 	if coordinateSys.Valid {
 		t.CoordinateSystem = coordinateSys.String
+	}
+	if routeDescription.Valid {
+		t.Description = routeDescription.String
 	}
 	if err := decodeTrackPreviewImages(previewJSON, &t.PreviewImages); err != nil {
 		return nil, err

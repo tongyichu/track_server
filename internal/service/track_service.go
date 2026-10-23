@@ -44,6 +44,7 @@ const (
 	defaultTrackPageSize   = 20
 	maxTrackPageSize       = 50
 	maxTrackLocateAddrLen  = 255
+	maxTrackDescriptionLen = 1000
 	maxTrackSourceTagLen   = 64
 	trackSourceTagManual   = "manual_seed"
 	trackTypeIconURLPrefix = "/api/v1/track/types/icons/"
@@ -113,6 +114,7 @@ func invalidArg(msg string) error { return &InvalidArgumentError{Msg: msg} }
 type CreateTrackInput struct {
 	PreviewImages             *models.TrackPreviewImages `json:"preview_images"`
 	Title                     *string                    `json:"title"`
+	Description               *string                    `json:"description"`
 	SessionID                 *string                    `json:"session_id"`
 	CityCode                  *string                    `json:"city_code"`
 	LocateAddr                *string                    `json:"locate_addr"`
@@ -134,6 +136,10 @@ type CreateTrackInput struct {
 }
 
 func (in *CreateTrackInput) normalize() {
+	if in.Description != nil {
+		v := strings.TrimSpace(*in.Description)
+		in.Description = &v
+	}
 	if in.TrackScreenshotURL == nil && in.LegacyScreenshotURL != nil {
 		in.TrackScreenshotURL = in.LegacyScreenshotURL
 	}
@@ -152,6 +158,9 @@ func (in *CreateTrackInput) normalize() {
 }
 
 func (in CreateTrackInput) validate() error {
+	if in.Description != nil && utf8.RuneCountInString(*in.Description) > maxTrackDescriptionLen {
+		return invalidArg("description is too long")
+	}
 	if err := validateTrackPreviewImages(in.PreviewImages); err != nil {
 		return err
 	}
@@ -202,6 +211,7 @@ func validateTrackSourceTag(sourceTag string) error {
 // TrackInfoPatch describes which track summary fields should be updated.
 // Nil means the field is not provided and should remain unchanged.
 type TrackInfoPatch struct {
+	Description               *string                    `json:"description"`
 	PreviewImages             *models.TrackPreviewImages `json:"preview_images"`
 	SessionID                 *string                    `json:"session_id"`
 	CityCode                  *string                    `json:"city_code"`
@@ -224,6 +234,10 @@ func (p *TrackInfoPatch) normalize() {
 	if p == nil {
 		return
 	}
+	if p.Description != nil {
+		v := strings.TrimSpace(*p.Description)
+		p.Description = &v
+	}
 	if p.TrackScreenshotURL == nil && p.LegacyScreenshotURL != nil {
 		p.TrackScreenshotURL = p.LegacyScreenshotURL
 	}
@@ -242,7 +256,7 @@ func (p *TrackInfoPatch) normalize() {
 }
 
 func (p TrackInfoPatch) empty() bool {
-	return p.PreviewImages == nil && p.SessionID == nil &&
+	return p.Description == nil && p.PreviewImages == nil && p.SessionID == nil &&
 		p.CityCode == nil &&
 		p.LocateAddr == nil &&
 		p.TrackType == nil &&
@@ -517,23 +531,27 @@ func (s *TrackService) CreateTrack(ctx context.Context, userID int64, input Crea
 		}
 	}
 	track := &models.Track{
-		ID:        trackID,
-		UserID:    userID,
-		SessionID: "",
-		CityCode:  "",
-		TrackType: "",
-		Title:     "新的轨迹",
-		StartTime: startTime,
-		IsRunning: isRunning,
-		Status:    models.TrackStatusNormal,
-		CreatedAt: now,
-		UpdatedAt: now,
+		ID:          trackID,
+		UserID:      userID,
+		SessionID:   "",
+		CityCode:    "",
+		TrackType:   "",
+		Title:       "新的轨迹",
+		Description: "",
+		StartTime:   startTime,
+		IsRunning:   isRunning,
+		Status:      models.TrackStatusNormal,
+		CreatedAt:   now,
+		UpdatedAt:   now,
 	}
 	if input.PreviewImages != nil {
 		track.PreviewImages = *input.PreviewImages
 	}
 	if input.Title != nil {
 		track.Title = *input.Title
+	}
+	if input.Description != nil {
+		track.Description = *input.Description
 	}
 	if input.SessionID != nil {
 		track.SessionID = *input.SessionID
@@ -1358,6 +1376,9 @@ func (s *TrackService) UpdateTrackInfo(ctx context.Context, userID int64, trackI
 	if patch.empty() {
 		return nil, invalidArg("no fields to update")
 	}
+	if patch.Description != nil && utf8.RuneCountInString(*patch.Description) > maxTrackDescriptionLen {
+		return nil, invalidArg("description is too long")
+	}
 	if patch.Distance != nil && *patch.Distance < 0 {
 		return nil, invalidArg("distance must be >= 0")
 	}
@@ -1398,6 +1419,10 @@ func (s *TrackService) UpdateTrackInfo(ctx context.Context, userID int64, trackI
 	updatedRaw := false
 	updatedScreenshot := false
 	updatedNoMapBgScreenshot := false
+	if patch.Description != nil && track.Description == "" && *patch.Description != "" {
+		track.Description = *patch.Description
+		updated = true
+	}
 
 	// 只允许“补全”空字段：若数据库已有值，则忽略该字段更新。
 	if patch.SessionID != nil && track.SessionID == "" {

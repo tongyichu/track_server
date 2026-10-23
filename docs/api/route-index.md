@@ -4,11 +4,13 @@
 
 | 接口 | 方法 | 路径 | 需要认证 | 文档 |
 | --- | --- | --- | --- | --- |
-| 创建轨迹 | POST | `/track/create` | 是 | [track.md](track.md#1-创建轨迹) |
+| 创建轨迹（含可选默认路线说明） | POST | `/track/create` | 是 | [track.md](track.md#1-创建轨迹) |
 | 推荐轨迹列表（个性化 Feed Session，支持 `city_code` 筛选） | GET | `/track/recommend/list` | 是 | [track.md](track.md#2-推荐轨迹列表) |
-| 轨迹详情（含收藏数与本人收藏状态） | GET | `/track/:track_id/detail` | 是 | [track.md](track.md#3-轨迹详情) |
+| 轨迹详情（含默认路线说明、收藏数与本人收藏状态） | GET | `/track/:track_id/detail` | 是 | [track.md](track.md#3-轨迹详情) |
 | 静态轨迹预览图片 | GET | `/track/:track_id/previews/:variant?v=<source_version>` | 是 | [track.md](track.md#静态轨迹预览图) |
 | 历史预览待补列表 | GET | `/track/preview-backfill/list` | 是 | [track.md](track.md#历史轨迹预览补齐devmode) |
+| 历史路线说明待补列表 / GPS | GET | `/track/description-backfill/list`, `/track/description-backfill/:track_id/data` | 是 | [track.md](track.md#历史路线说明补齐devmode) |
+| 历史路线说明补齐 | POST | `/track/description-backfill/:track_id/complete` | 是 | [track.md](track.md#历史路线说明补齐devmode) |
 | 历史预览原始 GPS | GET | `/track/preview-backfill/:track_id/data` | 是 | [track.md](track.md#历史轨迹预览补齐devmode) |
 | 历史预览四图上传地址 | POST | `/track/preview-backfill/:track_id/prepare` | 是 | [track.md](track.md#历史轨迹预览补齐devmode) |
 | 历史预览四图提交 | POST | `/track/preview-backfill/:track_id/complete` | 是 | [track.md](track.md#历史轨迹预览补齐devmode) |
@@ -32,7 +34,7 @@
 | 用户主页已传轨迹 | GET | `/user/:user_id/tracks` | 是 | [user.md](user.md#个人主页轨迹列表) |
 | 用户主页收藏轨迹 | GET | `/user/:user_id/collections` | 是 | [user.md](user.md#个人主页轨迹列表) |
 | 获取用户详情 | GET | `/user/:user_id/detail` | 是 | [user.md](user.md#10-获取用户详情) |
-| 更新轨迹信息 | PUT | `/track/:track_id/update` | 是 | [track.md](track.md#11-更新轨迹信息) |
+| 更新轨迹信息（可补充默认路线说明） | PUT | `/track/:track_id/update` | 是 | [track.md](track.md#11-更新轨迹信息) |
 | 删除轨迹 | DELETE | `/track/:track_id` | 是 | [track.md](track.md#12-删除轨迹) |
 | 用户已收藏轨迹列表（含精品标识、当前用户收藏状态及总数） | GET | `/track/collected/list` | 是 | [collect-navigation.md](collect-navigation.md#13-用户已收藏轨迹列表) |
 | 更新个人信息（含背景图、性别、生日） | PUT | `/user/profile/update` | 是 | [user.md](user.md#14-更新个人信息) |

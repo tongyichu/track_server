@@ -73,6 +73,9 @@ type TrackRepository interface {
 	CountAll(ctx context.Context) (int64, error)
 	ListPreviewBackfill(ctx context.Context, cursor *models.TrackListCursor, limit int) ([]*models.Track, error)
 	PreviewBackfillCounts(ctx context.Context) (pending, withoutRaw int64, err error)
+	ListDescriptionBackfill(ctx context.Context, cursor *models.TrackListCursor, limit int) ([]*models.Track, error)
+	DescriptionBackfillCounts(ctx context.Context) (pending, withoutRaw int64, err error)
+	FillMissingDescription(ctx context.Context, expected *models.Track, description string) (bool, error)
 	// FillMissingPreviewImages updates only the preview group if the source and previous previews still match.
 	FillMissingPreviewImages(ctx context.Context, expected *models.Track, images models.TrackPreviewImages) (bool, error)
 	// ClearPreviewImages clears one track, or all non-deleted tracks when id is empty, and invalidates older tasks.
