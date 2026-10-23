@@ -43,6 +43,8 @@ type Track struct {
 	CoordinateSystem          string                   `json:"coordinate_system" bson:"coordinate_system"`                           // CoordinateSystem 是轨迹坐标系，例如 WGS84/GCJ02/BD09。
 	Title                     string                   `json:"title" bson:"title"`                                                   // Title 是轨迹名称。
 	Description               string                   `json:"description,omitempty" bson:"description,omitempty"`                   // Description 是客户端根据轨迹点生成的默认路线说明。
+	DescriptionSource         string                   `json:"description_source" bson:"description_source"`
+	DescriptionRuleVersion    int                      `json:"description_rule_version" bson:"description_rule_version"`
 	StartTime                 time.Time                `json:"start_time" bson:"start_time"`                                         // StartTime 是运动开始时间。
 	EndTime                   time.Time                `json:"end_time" bson:"end_time"`                                             // EndTime 是运动结束时间。
 	Distance                  float64                  `json:"distance" bson:"distance"`                                             // Distance 是总距离，单位米。

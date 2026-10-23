@@ -209,6 +209,7 @@ func (r *MongoTrackRepository) FindByID(ctx context.Context, id string) (*models
 		}
 		return nil, err
 	}
+	normalizeTrackDescriptionMetadata(&track)
 	return &track, nil
 }
 
@@ -228,6 +229,7 @@ func (r *MongoTrackRepository) FindByIDs(ctx context.Context, ids []string) (map
 		if err := cursor.Decode(track); err != nil {
 			return nil, err
 		}
+		normalizeTrackDescriptionMetadata(track)
 		result[track.ID] = track
 	}
 	return result, cursor.Err()
@@ -436,12 +438,19 @@ func (r *MongoTrackRepository) listTracks(ctx context.Context, filter interface{
 		if err := cur.Decode(&track); err != nil {
 			return nil, err
 		}
+		normalizeTrackDescriptionMetadata(&track)
 		res = append(res, &track)
 	}
 	if err := cur.Err(); err != nil {
 		return nil, err
 	}
 	return res, nil
+}
+
+func normalizeTrackDescriptionMetadata(track *models.Track) {
+	if track.DescriptionSource == "" {
+		track.DescriptionSource = "auto"
+	}
 }
 
 func (r *MongoTrackWaypointRepository) Create(ctx context.Context, waypoint *models.TrackWaypoint) error {

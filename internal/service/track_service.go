@@ -41,14 +41,16 @@ type TrackService struct {
 }
 
 const (
-	defaultTrackPageSize   = 20
-	maxTrackPageSize       = 50
-	maxTrackLocateAddrLen  = 255
-	maxTrackDescriptionLen = 1000
-	maxTrackSourceTagLen   = 64
-	trackSourceTagManual   = "manual_seed"
-	trackTypeIconURLPrefix = "/api/v1/track/types/icons/"
-	trackTypeAnimURLPrefix = "/api/v1/static/track_type_icon_anim/"
+	defaultTrackPageSize                   = 20
+	maxTrackPageSize                       = 50
+	maxTrackLocateAddrLen                  = 255
+	maxTrackDescriptionLen                 = 1000
+	CurrentAutoTrackDescriptionRuleVersion = 1
+	CurrentAutoDescriptionRuleVersion      = CurrentAutoTrackDescriptionRuleVersion
+	maxTrackSourceTagLen                   = 64
+	trackSourceTagManual                   = "manual_seed"
+	trackTypeIconURLPrefix                 = "/api/v1/track/types/icons/"
+	trackTypeAnimURLPrefix                 = "/api/v1/static/track_type_icon_anim/"
 )
 
 var allowedTrackSourceTags = map[string]struct{}{
@@ -110,11 +112,14 @@ func (e *InvalidArgumentError) Error() string { return e.Msg }
 
 func invalidArg(msg string) error { return &InvalidArgumentError{Msg: msg} }
 
+func descriptionSourceIsAuto(source string) bool { return source == "" || source == "auto" }
+
 // CreateTrackInput describes optional fields accepted by track creation.
 type CreateTrackInput struct {
 	PreviewImages             *models.TrackPreviewImages `json:"preview_images"`
 	Title                     *string                    `json:"title"`
 	Description               *string                    `json:"description"`
+	DescriptionRuleVersion    *int                       `json:"description_rule_version"`
 	SessionID                 *string                    `json:"session_id"`
 	CityCode                  *string                    `json:"city_code"`
 	LocateAddr                *string                    `json:"locate_addr"`
@@ -160,6 +165,9 @@ func (in *CreateTrackInput) normalize() {
 func (in CreateTrackInput) validate() error {
 	if in.Description != nil && utf8.RuneCountInString(*in.Description) > maxTrackDescriptionLen {
 		return invalidArg("description is too long")
+	}
+	if in.DescriptionRuleVersion != nil && (*in.DescriptionRuleVersion < 0 || *in.DescriptionRuleVersion > CurrentAutoDescriptionRuleVersion) {
+		return invalidArg("invalid description_rule_version")
 	}
 	if err := validateTrackPreviewImages(in.PreviewImages); err != nil {
 		return err
@@ -212,6 +220,7 @@ func validateTrackSourceTag(sourceTag string) error {
 // Nil means the field is not provided and should remain unchanged.
 type TrackInfoPatch struct {
 	Description               *string                    `json:"description"`
+	DescriptionRuleVersion    *int                       `json:"description_rule_version"`
 	PreviewImages             *models.TrackPreviewImages `json:"preview_images"`
 	SessionID                 *string                    `json:"session_id"`
 	CityCode                  *string                    `json:"city_code"`
@@ -552,6 +561,12 @@ func (s *TrackService) CreateTrack(ctx context.Context, userID int64, input Crea
 	}
 	if input.Description != nil {
 		track.Description = *input.Description
+		if track.Description != "" {
+			track.DescriptionSource = "auto"
+			if input.DescriptionRuleVersion != nil {
+				track.DescriptionRuleVersion = *input.DescriptionRuleVersion
+			}
+		}
 	}
 	if input.SessionID != nil {
 		track.SessionID = *input.SessionID
@@ -1379,6 +1394,9 @@ func (s *TrackService) UpdateTrackInfo(ctx context.Context, userID int64, trackI
 	if patch.Description != nil && utf8.RuneCountInString(*patch.Description) > maxTrackDescriptionLen {
 		return nil, invalidArg("description is too long")
 	}
+	if patch.DescriptionRuleVersion != nil && (*patch.DescriptionRuleVersion < 0 || *patch.DescriptionRuleVersion > CurrentAutoTrackDescriptionRuleVersion) {
+		return nil, invalidArg("invalid description_rule_version")
+	}
 	if patch.Distance != nil && *patch.Distance < 0 {
 		return nil, invalidArg("distance must be >= 0")
 	}
@@ -1419,9 +1437,18 @@ func (s *TrackService) UpdateTrackInfo(ctx context.Context, userID int64, trackI
 	updatedRaw := false
 	updatedScreenshot := false
 	updatedNoMapBgScreenshot := false
-	if patch.Description != nil && track.Description == "" && *patch.Description != "" {
-		track.Description = *patch.Description
-		updated = true
+	if patch.Description != nil && *patch.Description != "" && descriptionSourceIsAuto(track.DescriptionSource) {
+		targetVersion := CurrentAutoTrackDescriptionRuleVersion
+		if patch.DescriptionRuleVersion != nil {
+			targetVersion = *patch.DescriptionRuleVersion
+		}
+		currentVersion := track.DescriptionRuleVersion
+		if strings.TrimSpace(track.Description) == "" || (targetVersion > currentVersion && targetVersion > 0) {
+			track.Description = *patch.Description
+			track.DescriptionSource = "auto"
+			track.DescriptionRuleVersion = targetVersion
+			updated = true
+		}
 	}
 
 	// 只允许“补全”空字段：若数据库已有值，则忽略该字段更新。

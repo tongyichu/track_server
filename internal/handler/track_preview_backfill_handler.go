@@ -42,7 +42,11 @@ func (h *TrackHandler) ListPreviewBackfill(ctx context.Context, c *app.RequestCo
 
 func (h *TrackHandler) ListDescriptionBackfill(ctx context.Context, c *app.RequestContext) {
 	limit, _ := strconv.Atoi(c.Query("limit"))
-	page, err := h.trackSvc.ListDescriptionBackfill(ctx, c.Query("cursor"), limit)
+	ruleVersion, _ := strconv.Atoi(c.Query("rule_version"))
+	if ruleVersion == 0 {
+		ruleVersion = service.CurrentAutoDescriptionRuleVersion
+	}
+	page, err := h.trackSvc.ListDescriptionBackfill(ctx, c.Query("cursor"), limit, ruleVersion)
 	if err != nil {
 		previewBackfillError(c, err)
 		return

@@ -67,11 +67,11 @@
 
 复用 Android DevMode 的历史数据补齐页。沿用业务 JWT，不增加管理员或轨迹作者校验；提交接口沿用账号上传限制。客户端复用正式上传的路线说明生成规则；服务端只负责筛选空说明记录、提供 GPS 并条件写入，不在服务端复制生成规则。
 
-1. `GET /api/v1/track/description-backfill/list?cursor=<cursor>&limit=20`：查询未删除、已结束、说明为空的轨迹并游标分页，返回任务元信息、`source_version`、`pending_count` 及缺原始 GPS 数量。没有原始轨迹的记录计入缺源数量但不进入任务列表。
+1. `GET /api/v1/track/description-backfill/list?cursor=<cursor>&limit=20&rule_version=1`：查询未删除、已结束且自动说明为空或规则版本落后的轨迹并游标分页，返回任务元信息、当前说明及来源/规则版本、`source_version`、`pending_count` 及缺原始 GPS 数量。旧记录缺少来源字段时默认按 `auto` 处理；`manual` 不进入批处理。没有原始轨迹的符合项计入缺源数量但不进入任务列表。
 2. `GET /api/v1/track/description-backfill/:track_id/data?source_version=<version>`：读取完整原始 GPS 点。轨迹已被补齐时返回 `state=already_complete`；记录不可用返回 404，版本变化返回 409。
-3. `POST /api/v1/track/description-backfill/:track_id/complete`，请求 `{"source_version":"<version>","description":"<客户端生成的说明>"}`。服务端限制 1 至 1000 个字符，仅当说明仍为空且轨迹源数据未变化时写入。已有说明返回 `state=already_complete`，版本变化返回 409 `description_source_changed`，不会覆盖已存在的说明。
+3. `POST /api/v1/track/description-backfill/:track_id/complete`，请求 `{"source_version":"<version>","description":"<客户端生成的说明>","description_rule_version":1}`。服务端限制 1 至 1000 个字符，仅自动来源且说明为空或规则版本落后时更新，并以说明、来源、规则版本及轨迹源数据做条件比较；人工说明不会被覆盖。已有最新说明返回 `state=already_complete`，版本变化返回 409 `description_source_changed`。
 
-完成状态以轨迹 `description` 是否为空为准。客户端逐条处理，可暂停、重试失败项或重新扫描；重新扫描会跳过已经补齐的记录。
+`track_records.description_source` 标记 `auto`/`manual`，`description_rule_version` 标记自动生成规则版本。MySQL 存量通过默认值视为 `auto/v0`，Mongo 缺失元数据也按 `auto/v0` 解释；当前客户端规则版本为 1。后续升级生成规则时只需提升当前版本，批处理可重新生成所有自动说明；人工说明始终排除。投稿编辑内容仍独立存于投稿记录。
 
 ## 1. 创建轨迹
 

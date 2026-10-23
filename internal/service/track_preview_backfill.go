@@ -19,16 +19,19 @@ var ErrDescriptionSourceChanged = errors.New("track description source changed; 
 var previewUploadIDPattern = regexp.MustCompile(`^[a-f0-9]{32}$`)
 
 type PreviewBackfillTask struct {
-	TrackID          string  `json:"track_id"`
-	Title            string  `json:"title"`
-	TrackType        string  `json:"track_type"`
-	CoordinateSystem string  `json:"coordinate_system"`
-	SourceVersion    string  `json:"source_version"`
-	LocateAddr       string  `json:"locate_addr"`
-	StartTime        string  `json:"start_time"`
-	EndTime          string  `json:"end_time"`
-	Distance         float64 `json:"distance"`
-	Duration         uint32  `json:"duration"`
+	TrackID                string  `json:"track_id"`
+	Title                  string  `json:"title"`
+	TrackType              string  `json:"track_type"`
+	CoordinateSystem       string  `json:"coordinate_system"`
+	SourceVersion          string  `json:"source_version"`
+	LocateAddr             string  `json:"locate_addr"`
+	StartTime              string  `json:"start_time"`
+	EndTime                string  `json:"end_time"`
+	Distance               float64 `json:"distance"`
+	Duration               uint32  `json:"duration"`
+	Description            string  `json:"description,omitempty"`
+	DescriptionSource      string  `json:"description_source,omitempty"`
+	DescriptionRuleVersion int     `json:"description_rule_version,omitempty"`
 }
 
 type PreviewBackfillPage struct {
@@ -83,10 +86,21 @@ func previewBackfillTask(t *models.Track) PreviewBackfillTask {
 
 func descriptionBackfillTask(t *models.Track) PreviewBackfillTask {
 	task := previewBackfillTask(t)
-	source := fmt.Sprintf("%s\x00%s\x00%s\x00%s\x00%s\x00%.3f\x00%d", previewSourceVersion(t), t.Title,
-		t.LocateAddr, t.StartTime.Format(time.RFC3339Nano), t.EndTime.Format(time.RFC3339Nano), t.Distance, t.Duration)
+	source := fmt.Sprintf("%s\x00%s\x00%s\x00%s\x00%s\x00%s\x00%s\x00%d\x00%.3f\x00%d", previewSourceVersion(t), t.Title,
+		t.LocateAddr, t.StartTime.Format(time.RFC3339Nano), t.EndTime.Format(time.RFC3339Nano), t.Description,
+		descriptionSourceValue(t.DescriptionSource), t.DescriptionRuleVersion, t.Distance, t.Duration)
 	task.SourceVersion = fmt.Sprintf("%x", sha256.Sum256([]byte(source)))
+	task.Description = t.Description
+	task.DescriptionSource = descriptionSourceValue(t.DescriptionSource)
+	task.DescriptionRuleVersion = t.DescriptionRuleVersion
 	return task
+}
+
+func descriptionSourceValue(source string) string {
+	if source == "" {
+		return "auto"
+	}
+	return source
 }
 
 // DevMode uses ordinary business JWTs; cross-user access here is intentional and limited to backfilling previews.
@@ -94,11 +108,18 @@ func (s *TrackService) ListPreviewBackfill(ctx context.Context, rawCursor string
 	return s.listPreviewBackfill(ctx, rawCursor, limit, false)
 }
 
-func (s *TrackService) ListDescriptionBackfill(ctx context.Context, rawCursor string, limit int) (*PreviewBackfillPage, error) {
-	return s.listPreviewBackfill(ctx, rawCursor, limit, true)
+func (s *TrackService) ListDescriptionBackfill(ctx context.Context, rawCursor string, limit, ruleVersion int) (*PreviewBackfillPage, error) {
+	if ruleVersion <= 0 || ruleVersion > CurrentAutoDescriptionRuleVersion {
+		return nil, invalidArg("invalid description rule_version")
+	}
+	return s.listPreviewBackfillWithRule(ctx, rawCursor, limit, true, ruleVersion)
 }
 
 func (s *TrackService) listPreviewBackfill(ctx context.Context, rawCursor string, limit int, descriptions bool) (*PreviewBackfillPage, error) {
+	return s.listPreviewBackfillWithRule(ctx, rawCursor, limit, descriptions, CurrentAutoDescriptionRuleVersion)
+}
+
+func (s *TrackService) listPreviewBackfillWithRule(ctx context.Context, rawCursor string, limit int, descriptions bool, ruleVersion int) (*PreviewBackfillPage, error) {
 	cursor, err := decodeTrackListCursor(rawCursor)
 	if err != nil {
 		return nil, err
@@ -111,7 +132,7 @@ func (s *TrackService) listPreviewBackfill(ctx context.Context, rawCursor string
 	}
 	var tracks []*models.Track
 	if descriptions {
-		tracks, err = s.tracks.ListDescriptionBackfill(ctx, cursor, limit+1)
+		tracks, err = s.tracks.ListDescriptionBackfill(ctx, cursor, limit+1, ruleVersion)
 	} else {
 		tracks, err = s.tracks.ListPreviewBackfill(ctx, cursor, limit+1)
 	}
@@ -120,7 +141,7 @@ func (s *TrackService) listPreviewBackfill(ctx context.Context, rawCursor string
 	}
 	var pending, withoutRaw int64
 	if descriptions {
-		pending, withoutRaw, err = s.tracks.DescriptionBackfillCounts(ctx)
+		pending, withoutRaw, err = s.tracks.DescriptionBackfillCounts(ctx, ruleVersion)
 	} else {
 		pending, withoutRaw, err = s.tracks.PreviewBackfillCounts(ctx)
 	}
@@ -157,7 +178,7 @@ func (s *TrackService) DescriptionBackfillData(ctx context.Context, id, version 
 	if version != descriptionBackfillTask(t).SourceVersion {
 		return nil, ErrDescriptionSourceChanged
 	}
-	if strings.TrimSpace(t.Description) != "" {
+	if !repositoryDescriptionBackfillEligible(t) {
 		return &PreviewBackfillData{State: "already_complete", Task: descriptionBackfillTask(t)}, nil
 	}
 	data, err := s.previewBackfillDataForTrack(ctx, t)
@@ -218,6 +239,7 @@ func (s *TrackService) previewBackfillDataForTrack(ctx context.Context, t *model
 type DescriptionBackfillInput struct {
 	SourceVersion string `json:"source_version"`
 	Description   string `json:"description"`
+	RuleVersion   int    `json:"description_rule_version"`
 }
 type DescriptionBackfillResult struct {
 	State       string `json:"state"`
@@ -229,6 +251,9 @@ func (s *TrackService) CompleteDescriptionBackfill(ctx context.Context, id strin
 		return nil, invalidArg("source_version is required")
 	}
 	description := strings.TrimSpace(input.Description)
+	if input.RuleVersion != CurrentAutoDescriptionRuleVersion {
+		return nil, invalidArg("unsupported description_rule_version")
+	}
 	if description == "" || len([]rune(description)) > 1000 {
 		return nil, invalidArg("description must contain 1 to 1000 characters")
 	}
@@ -239,10 +264,10 @@ func (s *TrackService) CompleteDescriptionBackfill(ctx context.Context, id strin
 	if input.SourceVersion != descriptionBackfillTask(t).SourceVersion {
 		return nil, ErrDescriptionSourceChanged
 	}
-	if strings.TrimSpace(t.Description) != "" {
+	if !repositoryDescriptionBackfillEligible(t) {
 		return &DescriptionBackfillResult{State: "already_complete", Description: t.Description}, nil
 	}
-	updated, err := s.tracks.FillMissingDescription(ctx, t, description)
+	updated, err := s.tracks.FillAutoDescription(ctx, t, description, input.RuleVersion)
 	if err != nil {
 		return nil, err
 	}
@@ -251,12 +276,17 @@ func (s *TrackService) CompleteDescriptionBackfill(ctx context.Context, id strin
 		if e != nil {
 			return nil, e
 		}
-		if latest.Status != models.TrackStatusDeleted && strings.TrimSpace(latest.Description) != "" {
+		if latest.Status != models.TrackStatusDeleted && !repositoryDescriptionBackfillEligible(latest) {
 			return &DescriptionBackfillResult{State: "already_complete", Description: latest.Description}, nil
 		}
 		return nil, ErrDescriptionSourceChanged
 	}
 	return &DescriptionBackfillResult{State: "completed", Description: description}, nil
+}
+
+func repositoryDescriptionBackfillEligible(t *models.Track) bool {
+	return t != nil && (t.DescriptionSource == "" || t.DescriptionSource == "auto") &&
+		(strings.TrimSpace(t.Description) == "" || t.DescriptionRuleVersion < CurrentAutoDescriptionRuleVersion)
 }
 
 func (s *TrackService) PreparePreviewBackfill(ctx context.Context, id string, input PreviewBackfillInput) (*PreviewBackfillUpload, error) {
