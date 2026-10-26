@@ -267,6 +267,64 @@ func (r *MemoryTrackPlaceRepository) ReservePlaceAPICall(_ context.Context, prov
 // Bounded keyset scans also backfill old indexes without downloading raw GPS again.
 type TrackPlaceIndexReader interface {
 	ListPlaceGeoIndexes(context.Context, string, int) ([]*models.TrackGeoIndex, error)
+	FindPlaceGeoIndexes(context.Context, []string) (map[string]*models.TrackGeoIndex, error)
+}
+
+func (r *MySQLTrackMapRepository) FindPlaceGeoIndexes(ctx context.Context, ids []string) (map[string]*models.TrackGeoIndex, error) {
+	out := map[string]*models.TrackGeoIndex{}
+	ids = uniqueNonEmptyStrings(ids)
+	if len(ids) == 0 {
+		return out, nil
+	}
+	args := make([]interface{}, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	rows, err := r.db.QueryContext(ctx, trackGeoIndexSelectSQL()+` WHERE track_id IN (`+strings.TrimRight(strings.Repeat("?,", len(ids)), ",")+`)`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		index, err := scanTrackGeoIndex(rows)
+		if err != nil {
+			return nil, err
+		}
+		out[index.TrackID] = index
+	}
+	return out, rows.Err()
+}
+
+func (r *MongoTrackMapRepository) FindPlaceGeoIndexes(ctx context.Context, ids []string) (map[string]*models.TrackGeoIndex, error) {
+	out := map[string]*models.TrackGeoIndex{}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	cur, err := r.index.Find(ctx, bson.M{"track_id": bson.M{"$in": ids}})
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+	for cur.Next(ctx) {
+		var index models.TrackGeoIndex
+		if err := cur.Decode(&index); err != nil {
+			return nil, err
+		}
+		out[index.TrackID] = &index
+	}
+	return out, cur.Err()
+}
+
+func (r *InMemoryTrackMapRepository) FindPlaceGeoIndexes(_ context.Context, ids []string) (map[string]*models.TrackGeoIndex, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := map[string]*models.TrackGeoIndex{}
+	for _, id := range ids {
+		if index := r.indexes[id]; index != nil {
+			out[id] = cloneTrackGeoIndex(index)
+		}
+	}
+	return out, nil
 }
 
 func (r *MySQLTrackMapRepository) ListPlaceGeoIndexes(ctx context.Context, after string, limit int) ([]*models.TrackGeoIndex, error) {

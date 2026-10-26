@@ -6,7 +6,7 @@
 | --- | --- | --- | --- | --- |
 | 创建轨迹（含可选默认路线说明） | POST | `/track/create` | 是 | [track.md](track.md#1-创建轨迹) |
 | 推荐轨迹列表（个性化 Feed Session，支持 `city_code` 筛选） | GET | `/track/recommend/list` | 是 | [track.md](track.md#2-推荐轨迹列表) |
-| 轨迹详情（含默认路线说明、收藏数与本人收藏状态） | GET | `/track/:track_id/detail` | 是 | [track.md](track.md#3-轨迹详情) |
+| 轨迹详情（含默认路线说明、收藏状态及可选主景区） | GET | `/track/:track_id/detail` | 是 | [track.md](track.md#3-轨迹详情)、[主景区标签](track.md#主景区标签) |
 | 静态轨迹预览图片 | GET | `/track/:track_id/previews/:variant?v=<source_version>` | 是 | [track.md](track.md#静态轨迹预览图) |
 | 历史预览待补列表 | GET | `/track/preview-backfill/list` | 是 | [track.md](track.md#历史轨迹预览补齐devmode) |
 | 历史路线说明待补列表 / GPS | GET | `/track/description-backfill/list`, `/track/description-backfill/:track_id/data` | 是 | [track.md](track.md#历史路线说明补齐devmode) |

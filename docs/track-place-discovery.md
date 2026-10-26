@@ -41,6 +41,8 @@
 
 `GET /track-map/groups/:group_id/detail` 可选增加 `nearby_places`（最多3条），只读取有效本地结果，不产生外部请求；本阶段不增加景点介绍正文或客户端附近景点展示页。
 
+普通轨迹详情及全部轨迹摘要同时通过 `TrackService` 只读装饰 `primary_scenic_spot={id,name}`，供详情顶部最后一个标签使用；不会从多个 nearby 候选中临时挑选。`TrackPlaceService.PrimaryScenicSpots` 按页批量读取 match、当前空间索引和共享地点，校验源摘要及规则版本，MySQL/Mongo/内存的 `TrackPlaceIndexReader.FindPlaceGeoIndexes` 均提供批量能力。可选资料失败不阻塞轨迹主体，不新增 HTTP 路由、轨迹表列或外部地图请求。协议见 `docs/api/track.md`。
+
 ## 配置
 
 | 变量 | 默认 | 说明 |

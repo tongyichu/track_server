@@ -488,6 +488,7 @@ func main() {
 		}, trackPlaceRepo, trackMapRepo, trackRepo, trackMapIndexSvc)
 		trackRouteGroupSvc.SetPlaceService(trackPlaceSvc)
 		trackMapSvc.SetPlaceService(trackPlaceSvc)
+		trackSvc.SetPlaceService(trackPlaceSvc)
 		trackSvc.SetTrackMapIndexService(trackMapIndexSvc)
 		log.Printf("track map services enabled")
 	} else {

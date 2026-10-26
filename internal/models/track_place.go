@@ -2,6 +2,11 @@ package models
 
 import "time"
 
+type TrackPrimaryScenicSpot struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
 // TrackPlace is shared by all tracks referencing the same provider identity.
 // No polygon is inferred from a POI's center, area or display viewport.
 type TrackPlace struct {

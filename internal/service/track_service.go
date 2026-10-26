@@ -38,6 +38,7 @@ type TrackService struct {
 	trackTypes      []string
 	trackMapIndex   *TrackMapIndexService
 	submissions     *TrackSubmissionService
+	places          *TrackPlaceService
 }
 
 const (
@@ -652,6 +653,7 @@ func (s *TrackService) CreateTrack(ctx context.Context, userID int64, input Crea
 	if err := s.fillTrackCollectSummary(ctx, userID, track); err != nil {
 		return nil, err
 	}
+	s.fillTrackPrimaryScenicSpot(ctx, track)
 	track.PreviewImages = trackPreviewURLs(track.ID, track.PreviewImages)
 	return track, nil
 }
@@ -709,6 +711,7 @@ func (s *TrackService) GetTrackDetail(ctx context.Context, trackID string) (*mod
 			}
 		}
 	}
+	s.fillTrackPrimaryScenicSpot(ctx, track)
 	track.PreviewImages = trackPreviewURLs(track.ID, track.PreviewImages)
 	return track, nil
 }
@@ -751,6 +754,7 @@ func (s *TrackService) GetRunningTrack(ctx context.Context, userID int64) (*mode
 		return nil, err
 	}
 	s.decorateTrackAssets(ctx, track)
+	s.fillTrackPrimaryScenicSpot(ctx, track)
 	track.PreviewImages = trackPreviewURLs(track.ID, track.PreviewImages)
 	return track, nil
 }
@@ -1308,8 +1312,9 @@ func (s *TrackService) ListCollectedTracks(ctx context.Context, userID int64, in
 	}
 	for _, s := range summaries {
 		items = append(items, &models.CollectedTrackSummary{
-			IsFeatured:   s.IsFeatured,
-			CommentCount: s.CommentCount, CanComment: s.CanComment,
+			PrimaryScenicSpot: s.PrimaryScenicSpot,
+			IsFeatured:        s.IsFeatured,
+			CommentCount:      s.CommentCount, CanComment: s.CanComment,
 			Liked: s.Liked, LikeCount: s.LikeCount,
 			ID:                        s.ID,
 			UserID:                    s.UserID,
@@ -1565,6 +1570,7 @@ func (s *TrackService) UpdateTrackInfo(ctx context.Context, userID int64, trackI
 	if err := s.fillTrackCollectSummary(ctx, userID, track); err != nil {
 		return nil, err
 	}
+	s.fillTrackPrimaryScenicSpot(ctx, track)
 	track.PreviewImages = trackPreviewURLs(track.ID, track.PreviewImages)
 	return track, nil
 }
@@ -1784,8 +1790,10 @@ func (s *TrackService) fillMyTrackSummaryExtras(ctx context.Context, userID int6
 		navCounts = m
 	}
 
+	primaryScenicSpots := s.primaryScenicSpots(ctx, trackIDs)
 	for _, summary := range summaries {
 		summary.Collected = collectedByTrack[summary.ID]
+		summary.PrimaryScenicSpot = primaryScenicSpots[summary.ID]
 		summary.Liked = likeStats[summary.ID].Liked
 		summary.LikeCount = likeStats[summary.ID].LikeCount
 		if summary.CanComment {
@@ -1904,8 +1912,10 @@ func (s *TrackService) fillTrackSummaryExtras(ctx context.Context, userID int64,
 		}
 	}
 
+	primaryScenicSpots := s.primaryScenicSpots(ctx, trackIDs)
 	// 3) 最后一轮遍历：把准备好的扩展字段写回到每个 summary。
 	for _, summary := range summaries {
+		summary.PrimaryScenicSpot = primaryScenicSpots[summary.ID]
 		summary.Liked = likeStats[summary.ID].Liked
 		summary.LikeCount = likeStats[summary.ID].LikeCount
 		if summary.CanComment {
