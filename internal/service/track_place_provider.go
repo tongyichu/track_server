@@ -10,7 +10,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
@@ -21,8 +20,9 @@ var errPlaceBudget = errors.New("place_daily_budget_exhausted")
 var errPlaceBusy = errors.New("place_lookup_busy")
 
 type placeEvidence struct {
-	Place  models.TrackPlace `json:"place"`
-	Inside bool              `json:"inside"`
+	Place       models.TrackPlace `json:"place"`
+	Inside      bool              `json:"inside"`
+	SearchCount int               `json:"search_count,omitempty"`
 }
 type amapPlaceText string
 
@@ -47,6 +47,7 @@ type amapPlace struct {
 	Location amapPlaceText `json:"location"`
 	Distance amapPlaceText `json:"distance"`
 	Adcode   amapPlaceText `json:"adcode"`
+	Parent   amapPlaceText `json:"parent"`
 }
 
 func placeID(provider, id string) string {
@@ -59,12 +60,24 @@ func (s *TrackPlaceService) providerLookup(ctx context.Context, provider string,
 	if provider == "google" {
 		p = mapGCJ02ToWGS84(p)
 	}
-	key := fmt.Sprintf("request:%d:%s:%.6f:%.6f", trackPlaceRuleVersion, provider, p.Latitude, p.Longitude)
+	key := fmt.Sprintf("request:%d:%s:%.6f:%.6f", trackPlaceEvidenceVersion, provider, p.Latitude, p.Longitude)
+	return s.cachedPlaceLookup(ctx, provider, key, func() ([]placeEvidence, error) {
+		if provider == "amap" {
+			return s.amapLookup(ctx, p)
+		}
+		return s.googleLookup(ctx, p)
+	})
+}
+
+func (s *TrackPlaceService) cachedPlaceLookup(ctx context.Context, provider, key string, lookup func() ([]placeEvidence, error)) ([]placeEvidence, error) {
 	var cached []placeEvidence
 	if ok, err := s.loadFresh(ctx, key, &cached); err != nil {
 		return nil, err
 	} else if ok {
 		return cached, nil
+	}
+	if s.runCalls >= 10 {
+		return nil, errPlaceBusy
 	}
 	owner := s.owner()
 	now := time.Now()
@@ -75,6 +88,13 @@ func (s *TrackPlaceService) providerLookup(ctx context.Context, provider string,
 	if !leased {
 		return nil, errPlaceBusy
 	}
+	defer func() {
+		releaseCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		if record, e := s.store.GetPlaceRecord(releaseCtx, key); e == nil && record.LeaseOwner == owner {
+			_, _ = s.store.SavePlaceRecord(releaseCtx, record, owner)
+		}
+	}()
 	// A second worker may have completed between the first cache read and lease.
 	if ok, err := s.loadFresh(ctx, key, &cached); err != nil {
 		return nil, err
@@ -83,9 +103,6 @@ func (s *TrackPlaceService) providerLookup(ctx context.Context, provider string,
 			_, _ = s.store.SavePlaceRecord(ctx, record, owner)
 		}
 		return cached, nil
-	}
-	if s.runCalls >= 10 {
-		return nil, errPlaceBusy
 	}
 	var paused string
 	if pause, e := s.loadFresh(ctx, "pause:"+provider, &paused); e != nil {
@@ -115,21 +132,17 @@ func (s *TrackPlaceService) providerLookup(ctx context.Context, provider string,
 	}
 	s.lastCall = time.Now()
 	s.runCalls++
-	var values []placeEvidence
-	if provider == "amap" {
-		values, err = s.amapLookup(ctx, p)
-	} else {
-		values, err = s.googleLookup(ctx, p)
-	}
+	values, err := lookup()
 	if err != nil {
 		code := err.Error()
-		if strings.HasPrefix(code, "amap_error_") || code == "place_provider_permission_denied" || code == "place_provider_rate_limited" {
+		if strings.HasPrefix(code, "amap_error_100") || code == "place_provider_permission_denied" || code == "place_provider_rate_limited" {
 			_ = s.save(ctx, "pause:"+provider, code, now.Add(time.Hour), "")
 		}
 		return nil, err
 	}
 	ttl := s.providerTTL(provider)
-	if len(values) == 0 && ttl > 24*time.Hour {
+	empty := len(values) == 0 || (len(values) == 1 && values[0].Place.ID == "" && values[0].SearchCount == 0)
+	if empty && ttl > 24*time.Hour {
 		ttl = 24 * time.Hour
 	}
 	if err := s.save(ctx, key, values, now.Add(ttl), owner); err != nil {
@@ -178,25 +191,12 @@ func (s *TrackPlaceService) amapLookup(ctx context.Context, p models.TrackPoint)
 	out := []placeEvidence{}
 	seen := map[string]bool{}
 	add := func(a amapPlace, inside bool) {
-		id, name := string(a.ID), strings.TrimSpace(string(a.Name))
-		category := string(a.TypeCode)
-		if category == "" {
-			category = string(a.Type)
-		}
-		if id == "" || len(id) > 128 || name == "" || len([]rune(name)) > 128 || seen[id] || !amapScenicType(category) {
+		p, ok := parseAMapTrackPlace(a, time.Now().Add(s.providerTTL("amap")))
+		if !ok || seen[p.ProviderID] {
 			return
 		}
-		parts := strings.Split(string(a.Location), ",")
-		if len(parts) != 2 {
-			return
-		}
-		lng, e1 := strconv.ParseFloat(parts[0], 64)
-		lat, e2 := strconv.ParseFloat(parts[1], 64)
-		if e1 != nil || e2 != nil || !validMapLatLng(lat, lng) {
-			return
-		}
-		seen[id] = true
-		out = append(out, placeEvidence{Place: models.TrackPlace{ID: placeID("amap", id), Provider: "amap", ProviderID: id, Name: name, Category: category, DistrictCode: string(a.Adcode), Latitude: lat, Longitude: lng, CoordinateSystem: "GCJ02", ExpiresAt: time.Now().Add(s.providerTTL("amap"))}, Inside: inside})
+		seen[p.ProviderID] = true
+		out = append(out, placeEvidence{Place: p, Inside: inside})
 	}
 	for _, a := range result.Regeocode.AOIs {
 		add(a, string(a.Distance) == "0")

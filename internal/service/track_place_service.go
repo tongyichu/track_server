@@ -17,7 +17,8 @@ import (
 	"github.com/tongyichu/track_server/internal/repository"
 )
 
-const trackPlaceRuleVersion = 1
+const trackPlaceRuleVersion = 2
+const trackPlaceEvidenceVersion = 1
 
 var placeQuotaZone = time.FixedZone("Asia/Shanghai", 8*60*60)
 
@@ -189,8 +190,23 @@ func (s *TrackPlaceService) process(ctx context.Context, index *models.TrackGeoI
 	if !isTrackMapIndexEligible(track) {
 		return nil
 	}
+	key := "match:" + index.TrackID
+	var previous models.TrackPlaceMatch
+	previousRecord, err := s.store.GetPlaceRecord(ctx, key)
+	if err != nil && !errors.Is(err, repository.ErrNotFound) {
+		return err
+	}
+	if previousRecord != nil {
+		_ = json.Unmarshal([]byte(previousRecord.Data), &previous)
+	}
 	// Repair old mixed-CRS indexes with the full raw GPS, not their bounding boxes.
-	if index.CoordinateSystem != "GCJ02" && s.indexer != nil {
+	// During the v1 migration, also inspect native GCJ02 exports once: the old
+	// Android exporter wrote WGS84 despite declaring the session's source CRS.
+	// Include WGS84 so an index write that failed after a successful metadata
+	// correction is retried before the v1 evidence can be reused.
+	nativeCoordinate := track.CoordinateSystem == "GCJ02" || track.CoordinateSystem == "WGS84"
+	inspectNativeExport := track.SourceTag == "" && nativeCoordinate && previous.RuleVersion == 1 && (previous.Status == "matched" || previous.Status == "unmatched")
+	if s.indexer != nil && (index.CoordinateSystem != "GCJ02" || inspectNativeExport) {
 		if err := s.indexer.processJob(ctx, index.TrackID); err != nil {
 			out.Failed++
 			return nil
@@ -198,6 +214,16 @@ func (s *TrackPlaceService) process(ctx context.Context, index *models.TrackGeoI
 		index, err = s.maps.FindTrackGeoIndex(ctx, index.TrackID)
 		if err != nil {
 			return err
+		}
+		track, err = s.tracks.FindByID(ctx, index.TrackID)
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if !isTrackMapIndexEligible(track) {
+			return nil
 		}
 	}
 	samples, err := trackPlaceSamples(index, 5)
@@ -229,16 +255,7 @@ func (s *TrackPlaceService) process(ctx context.Context, index *models.TrackGeoI
 		out.Unconfigured++
 		return nil
 	}
-	key := "match:" + index.TrackID
 	source := trackPlaceSourceVersion(index)
-	var previous models.TrackPlaceMatch
-	previousRecord, err := s.store.GetPlaceRecord(ctx, key)
-	if err != nil && !errors.Is(err, repository.ErrNotFound) {
-		return err
-	}
-	if previousRecord != nil {
-		_ = json.Unmarshal([]byte(previousRecord.Data), &previous)
-	}
 	if trackPlaceRecordFresh(previousRecord) && previous.SourceVersion == source && previous.RuleVersion == trackPlaceRuleVersion {
 		if previous.Status == "matched" || previous.Status == "unmatched" {
 			out.Reused++
@@ -261,38 +278,63 @@ func (s *TrackPlaceService) process(ctx context.Context, index *models.TrackGeoI
 		return nil
 	}
 	match := models.TrackPlaceMatch{TrackID: index.TrackID, SourceVersion: source, RuleVersion: trackPlaceRuleVersion, Provider: provider, Status: "unmatched", Relations: []models.TrackPlaceRelation{}, Attempts: previous.Attempts + 1, UpdatedAt: now}
-	type votes struct {
-		place                            models.TrackPlace
-		hits, inside, run, longest, last int
-	}
-	candidates := map[string]*votes{}
+	reuseEvidence := previous.SourceVersion == source && previous.Provider == provider && (previous.EvidenceComplete || (previous.RuleVersion == 1 && (previous.Status == "matched" || previous.Status == "unmatched")))
 	var lookupErr error
-	for n, p := range samples {
-		values, e := s.providerLookup(ctx, provider, p)
-		if e != nil {
-			lookupErr = e
-			break
+	if reuseEvidence {
+		match.Relations = append(match.Relations, previous.Relations...)
+	} else {
+		type votes struct {
+			place        models.TrackPlace
+			hits, inside int
 		}
-		for _, v := range values {
-			item := candidates[v.Place.ID]
-			if item == nil {
-				item = &votes{place: v.Place, last: -2}
-				candidates[v.Place.ID] = item
+		candidates := map[string]*votes{}
+		for _, p := range samples {
+			values, e := s.providerLookup(ctx, provider, p)
+			if e != nil {
+				lookupErr = e
+				break
 			}
-			item.hits++
-			if v.Inside {
-				item.inside++
-				if item.last == n-1 {
-					item.run++
-				} else {
-					item.run = 1
+			for _, v := range values {
+				item := candidates[v.Place.ID]
+				if item == nil {
+					item = &votes{place: v.Place}
+					candidates[v.Place.ID] = item
 				}
-				item.last = n
-				if item.run > item.longest {
-					item.longest = item.run
+				item.hits++
+				if v.Inside {
+					item.inside++
 				}
 			}
 		}
+		if lookupErr == nil {
+			ids := make([]string, 0, len(candidates))
+			for id := range candidates {
+				ids = append(ids, id)
+			}
+			sort.Strings(ids)
+			for _, id := range ids {
+				v := candidates[id]
+				kind, count := "nearby", v.hits
+				if v.inside > 0 {
+					kind, count = "sampled_inside", v.inside
+				}
+				match.Relations = append(match.Relations, models.TrackPlaceRelation{PlaceID: id, Kind: kind, MatchedSamples: count, SampleCount: len(samples), Confidence: float64(count) / float64(len(samples))})
+				if provider == "amap" {
+					v.place.ExpiresAt = time.Time{}
+				}
+				if err := s.save(ctx, "place:"+id, &v.place, v.place.ExpiresAt, ""); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	if lookupErr == nil {
+		match.EvidenceComplete = true
+		var preserved *models.TrackPlaceMatch
+		if reuseEvidence {
+			preserved = &previous
+		}
+		lookupErr = s.decideTrackPlace(ctx, track, index, &match, preserved)
 	}
 	expires := now.Add(s.providerTTL(provider))
 	if lookupErr != nil {
@@ -319,40 +361,10 @@ func (s *TrackPlaceService) process(ctx context.Context, index *models.TrackGeoI
 			expires = now.Add(delay)
 		}
 	} else {
-		best := ""
-		bestInside, bestRun := 0, 0
-		ids := make([]string, 0, len(candidates))
-		for id := range candidates {
-			ids = append(ids, id)
-		}
-		sort.Strings(ids)
-		for _, id := range ids {
-			v := candidates[id]
-			if provider == "amap" {
-				v.place.ExpiresAt = time.Time{}
-			}
-			kind := "nearby"
-			count := v.hits
-			if v.inside > 0 {
-				kind = "sampled_inside"
-				count = v.inside
-			}
-			relation := models.TrackPlaceRelation{PlaceID: id, Kind: kind, MatchedSamples: count, SampleCount: len(samples), Confidence: float64(count) / float64(len(samples))}
-			match.Relations = append(match.Relations, relation)
-			if err := s.save(ctx, "place:"+id, &v.place, v.place.ExpiresAt, ""); err != nil {
-				return err
-			}
-			if v.inside >= 3 && v.longest >= 2 && (v.inside > bestInside || v.inside == bestInside && v.longest > bestRun) {
-				best = id
-				bestInside = v.inside
-				bestRun = v.longest
-			}
-		}
-		match.PrimaryPlaceID = best
 		if provider == "amap" {
 			expires = time.Time{}
 		}
-		if best != "" {
+		if match.PrimaryPlaceID != "" {
 			match.Status = "matched"
 			out.Matched++
 		} else {

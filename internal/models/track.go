@@ -41,7 +41,7 @@ type Track struct {
 	LocateAddr                string                   `json:"locate_addr" bson:"locate_addr"`                     // LocateAddr 是轨迹的具体位置信息。
 	TrackType                 string                   `json:"track_type" bson:"track_type"`                       // TrackType 是轨迹类型，例如徒步、跑步、骑车、自驾。
 	SourceTag                 string                   `json:"source_tag" bson:"source_tag"`                       // SourceTag 是轨迹来源/运营标签，例如人工录入的冷启动轨迹。
-	CoordinateSystem          string                   `json:"coordinate_system" bson:"coordinate_system"`         // CoordinateSystem 是轨迹坐标系，例如 WGS84/GCJ02/BD09。
+	CoordinateSystem          string                   `json:"coordinate_system" bson:"coordinate_system"`         // CoordinateSystem 描述上传原始文件的坐标系，例如 WGS84/GCJ02/BD09。
 	Title                     string                   `json:"title" bson:"title"`                                 // Title 是轨迹名称。
 	Description               string                   `json:"description,omitempty" bson:"description,omitempty"` // Description 是客户端根据轨迹点生成的默认路线说明。
 	DescriptionSource         string                   `json:"description_source" bson:"description_source"`

@@ -140,7 +140,7 @@ Authorization: Bearer <token>
 | `locate_addr` | string | 否 | 轨迹的具体位置信息，最大长度 `255` 字符 |
 | `track_type` | string | 否 | 轨迹类型，使用 `/track/types` 返回的英文 `type`：`hiking` / `running` / `climbing` / `riding` / `driving`；服务端兼容历史中文名输入，但入库会归一为英文 code |
 | `source_tag` | string | 否 | 轨迹来源/运营标签；允许值为空字符串或 `manual_seed`（人工录入冷启动轨迹），未传为空字符串 |
-| `coordinate_system` | string | 否 | 坐标系，例如 `WGS84` / `GCJ02` / `BD09` |
+| `coordinate_system` | string | 否 | 上传原始文件坐标系，例如 `WGS84` / `GCJ02` / `BD09`；Android 导出的 KML/KMZ 为 WGS84 |
 | `start_time` | string | 否 | 开始时间，RFC3339/ISO8601 格式 |
 | `end_time` | string | 否 | 结束时间，RFC3339/ISO8601 格式，必须 `>= start_time` |
 | `distance` | number | 否 | 距离（米），必须 `>= 0` |
@@ -789,7 +789,7 @@ Authorization: Bearer <token>
 | `locate_addr` | string | 否 | 轨迹的具体位置信息，最大长度 `255` 字符（仅当原值为空时才会写入） |
 | `track_type` | string | 否 | 轨迹类型，仅当原值为空时才会写入；使用 `/track/types` 返回的英文 `type`，服务端兼容历史中文名输入但会归一为英文 code |
 | `source_tag` | string | 否 | 轨迹来源/运营标签；允许值为空字符串或 `manual_seed`（人工录入冷启动轨迹），仅当原值为空时才会写入；普通列表摘要不返回该字段 |
-| `coordinate_system` | string | 否 | 坐标系，例如 `WGS84` / `GCJ02` / `BD09`（仅当原值为空时才会写入） |
+| `coordinate_system` | string | 否 | 上传原始文件坐标系，例如 `WGS84` / `GCJ02` / `BD09`；原值为空或首次附加 raw_track_url 时可写入，此后不能随意覆盖 |
 | `raw_track_url` | string | 否 | 原始轨迹文件 OSS 地址（仅当原值为空时才会写入） |
 | `track_screenshot_url` | string | 否 | 轨迹截图 OSS 地址（仅当原值为空时才会写入） |
 | `track_no_map_bg_screenshot_url` | string | 否 | 无地图背景的轨迹路线截图 OSS 地址（仅当原值为空时才会写入） |

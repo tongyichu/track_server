@@ -69,7 +69,7 @@ func trackPlaceSourceVersion(index *models.TrackGeoIndex) string {
 		CRS, Type                          string
 		Points                             []models.TrackPoint
 		StartLat, StartLng, EndLat, EndLng float64
-	}{trackPlaceRuleVersion, index.CoordinateSystem, index.TrackType, index.SimplifiedPolyline, index.StartLat, index.StartLng, index.EndLat, index.EndLng})
+	}{trackPlaceEvidenceVersion, index.CoordinateSystem, index.TrackType, index.SimplifiedPolyline, index.StartLat, index.StartLng, index.EndLat, index.EndLng})
 	return fmt.Sprintf("%x", sha256.Sum256(data))
 }
 

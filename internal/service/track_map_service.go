@@ -554,6 +554,6 @@ func (s *TrackMapService) decoratePlaceClusters(ctx context.Context, items []*mo
 		item.AreaType = "scenic_spot"
 		item.Area = &models.TrackMapAreaReference{ID: place.ID}
 		item.PlaceProvider = place.Provider
-		item.PlaceMatchMethod = "sampled_aoi"
+		item.PlaceMatchMethod = "track_relation"
 	}
 }

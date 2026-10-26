@@ -125,9 +125,23 @@ func (s *TrackMapIndexService) processJob(ctx context.Context, trackID string) e
 	if err != nil {
 		return fmt.Errorf("cache raw track through internal OSS endpoint: %w", err)
 	}
-	points, err := parseTrackPointsFile(localPath)
+	points, rawCoordinate, err := parseTrackPointsFileWithCoordinate(localPath, track)
 	if err != nil {
 		return err
+	}
+	if rawCoordinate != "" && rawCoordinate != track.CoordinateSystem {
+		writer, ok := s.tracks.(repository.TrackRawCoordinateWriter)
+		if !ok {
+			return errors.New("raw coordinate repair repository unavailable")
+		}
+		updated, err := writer.RepairRawCoordinateSystem(ctx, track.ID, track.RawTrackURL, track.CoordinateSystem, track.SourceTag, rawCoordinate)
+		if err != nil {
+			return err
+		}
+		if !updated {
+			return errors.New("track changed during raw coordinate repair")
+		}
+		track.CoordinateSystem = rawCoordinate
 	}
 	index, err := buildTrackGeoIndex(track, points)
 	if err != nil {
@@ -155,29 +169,41 @@ func retryDelay(attempts int) time.Duration {
 }
 
 func parseTrackPointsFile(path string) ([]models.TrackPoint, error) {
+	points, _, err := parseTrackPointsFileWithCoordinate(path, nil)
+	return points, err
+}
+
+func parseTrackPointsFileWithCoordinate(path string, track *models.Track) ([]models.TrackPoint, string, error) {
 	fi, err := os.Stat(path)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	if fi.Size() <= 0 {
-		return nil, errors.New("raw track file is empty")
+		return nil, "", errors.New("raw track file is empty")
 	}
 	if fi.Size() > maxRawTrackIndexFileBytes {
-		return nil, fmt.Errorf("raw track file too large: %d bytes", fi.Size())
+		return nil, "", fmt.Errorf("raw track file too large: %d bytes", fi.Size())
 	}
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	defer f.Close()
 	data, err := io.ReadAll(io.LimitReader(f, maxRawTrackIndexFileBytes+1))
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	if len(data) > maxRawTrackIndexFileBytes {
-		return nil, fmt.Errorf("raw track file exceeds %d bytes", maxRawTrackIndexFileBytes)
+		return nil, "", fmt.Errorf("raw track file exceeds %d bytes", maxRawTrackIndexFileBytes)
 	}
-	return parseRawTrackPoints(data, path)
+	if strings.EqualFold(filepath.Ext(path), ".kmz") || isZipData(data) {
+		return parseKMZPointsWithCoordinate(data, track)
+	}
+	points, err := parseRawTrackPoints(data, path)
+	if err != nil || track == nil {
+		return points, "", err
+	}
+	return points, exportedKMLCoordinateSystem(data, track), nil
 }
 
 func parseRawTrackPoints(data []byte, path string) ([]models.TrackPoint, error) {
@@ -228,9 +254,14 @@ func isZipData(data []byte) bool {
 }
 
 func parseKMZPoints(data []byte) ([]models.TrackPoint, error) {
+	points, _, err := parseKMZPointsWithCoordinate(data, nil)
+	return points, err
+}
+
+func parseKMZPointsWithCoordinate(data []byte, track *models.Track) ([]models.TrackPoint, string, error) {
 	reader, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	var lastErr error
 	for _, file := range reader.File {
@@ -253,18 +284,18 @@ func parseKMZPoints(data []byte) ([]models.TrackPoint, error) {
 			continue
 		}
 		if len(kmlData) > maxRawTrackIndexFileBytes {
-			return nil, fmt.Errorf("kml file in kmz exceeds %d bytes", maxRawTrackIndexFileBytes)
+			return nil, "", fmt.Errorf("kml file in kmz exceeds %d bytes", maxRawTrackIndexFileBytes)
 		}
 		points, err := parseKMLPoints(kmlData)
 		if err == nil && len(points) > 0 {
-			return points, nil
+			return points, exportedKMLCoordinateSystem(kmlData, track), nil
 		}
 		lastErr = err
 	}
 	if lastErr != nil {
-		return nil, lastErr
+		return nil, "", lastErr
 	}
-	return nil, errors.New("kmz contains no parseable kml track")
+	return nil, "", errors.New("kmz contains no parseable kml track")
 }
 
 func parseKMLPoints(data []byte) ([]models.TrackPoint, error) {

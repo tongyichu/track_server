@@ -1477,7 +1477,8 @@ func (s *TrackService) UpdateTrackInfo(ctx context.Context, userID int64, trackI
 		track.SourceTag = *patch.SourceTag
 		updated = true
 	}
-	if patch.CoordinateSystem != nil && track.CoordinateSystem == "" {
+	if patch.CoordinateSystem != nil && (track.CoordinateSystem == "" || (track.RawTrackURL == "" && patch.RawTrackURL != nil && *patch.RawTrackURL != "")) {
+		// The first raw upload may use a different CRS from the recording session.
 		track.CoordinateSystem = *patch.CoordinateSystem
 		updated = true
 	}
