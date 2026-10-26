@@ -33,16 +33,16 @@ type Track struct {
 	CanComment                bool                     `json:"can_comment" bson:"-"`
 	Liked                     bool                     `json:"liked" bson:"-"`
 	LikeCount                 int64                    `json:"like_count" bson:"-"`
-	ID                        string                   `json:"id" bson:"_id,omitempty"`                                              // ID 是轨迹记录唯一标识，由 generateTrackID 生成。
-	UserID                    int64                    `json:"user_id" bson:"user_id"`                                               // UserID 是轨迹所属用户 ID。
-	SessionID                 string                   `json:"session_id" bson:"session_id"`                                         // SessionID 是关联的同行会话 ID，可为空。
-	CityCode                  string                   `json:"city_code" bson:"city_code"`                                           // CityCode 是轨迹所属的城市 Code（城市/省份映射由配置文件维护）。
-	LocateAddr                string                   `json:"locate_addr" bson:"locate_addr"`                                       // LocateAddr 是轨迹的具体位置信息。
-	TrackType                 string                   `json:"track_type" bson:"track_type"`                                         // TrackType 是轨迹类型，例如徒步、跑步、骑车、自驾。
-	SourceTag                 string                   `json:"source_tag" bson:"source_tag"`                                         // SourceTag 是轨迹来源/运营标签，例如人工录入的冷启动轨迹。
-	CoordinateSystem          string                   `json:"coordinate_system" bson:"coordinate_system"`                           // CoordinateSystem 是轨迹坐标系，例如 WGS84/GCJ02/BD09。
-	Title                     string                   `json:"title" bson:"title"`                                                   // Title 是轨迹名称。
-	Description               string                   `json:"description,omitempty" bson:"description,omitempty"`                   // Description 是客户端根据轨迹点生成的默认路线说明。
+	ID                        string                   `json:"id" bson:"_id,omitempty"`                            // ID 是轨迹记录唯一标识，由 generateTrackID 生成。
+	UserID                    int64                    `json:"user_id" bson:"user_id"`                             // UserID 是轨迹所属用户 ID。
+	SessionID                 string                   `json:"session_id" bson:"session_id"`                       // SessionID 是关联的同行会话 ID，可为空。
+	CityCode                  string                   `json:"city_code" bson:"city_code"`                         // CityCode 是轨迹所属的城市 Code（城市/省份映射由配置文件维护）。
+	LocateAddr                string                   `json:"locate_addr" bson:"locate_addr"`                     // LocateAddr 是轨迹的具体位置信息。
+	TrackType                 string                   `json:"track_type" bson:"track_type"`                       // TrackType 是轨迹类型，例如徒步、跑步、骑车、自驾。
+	SourceTag                 string                   `json:"source_tag" bson:"source_tag"`                       // SourceTag 是轨迹来源/运营标签，例如人工录入的冷启动轨迹。
+	CoordinateSystem          string                   `json:"coordinate_system" bson:"coordinate_system"`         // CoordinateSystem 是轨迹坐标系，例如 WGS84/GCJ02/BD09。
+	Title                     string                   `json:"title" bson:"title"`                                 // Title 是轨迹名称。
+	Description               string                   `json:"description,omitempty" bson:"description,omitempty"` // Description 是客户端根据轨迹点生成的默认路线说明。
 	DescriptionSource         string                   `json:"description_source" bson:"description_source"`
 	DescriptionRuleVersion    int                      `json:"description_rule_version" bson:"description_rule_version"`
 	StartTime                 time.Time                `json:"start_time" bson:"start_time"`                                         // StartTime 是运动开始时间。
@@ -430,6 +430,7 @@ type TrackMapRouteGroupItem struct {
 	RawTrackID       string              `json:"-"`
 	SourceGeoIndex   *TrackGeoIndex      `json:"-"`
 	Track            *Track              `json:"-"`
+	NearbyPlaces     []*TrackPlace       `json:"nearby_places,omitempty"`
 }
 
 // TrackMapAreaReference identifies an area and its optional public introduction page.
@@ -440,18 +441,20 @@ type TrackMapAreaReference struct {
 
 // TrackMapClusterItem is the area/city aggregate item returned to map clients.
 type TrackMapClusterItem struct {
-	Type       string                 `json:"type"`
-	ClusterID  string                 `json:"cluster_id,omitempty"`
-	AreaID     string                 `json:"-"`
-	Name       string                 `json:"name,omitempty"`
-	AreaType   string                 `json:"area_type,omitempty"`
-	Area       *TrackMapAreaReference `json:"area,omitempty"`
-	CityCode   string                 `json:"city_code,omitempty"`
-	CityName   string                 `json:"city_name,omitempty"`
-	TrackType  string                 `json:"track_type"`
-	Center     TrackMapPoint          `json:"center"`
-	BBox       TrackMapBBox           `json:"bbox"`
-	RouteCount int64                  `json:"route_count"`
+	PlaceProvider    string                 `json:"place_provider,omitempty"`
+	PlaceMatchMethod string                 `json:"place_match_method,omitempty"`
+	Type             string                 `json:"type"`
+	ClusterID        string                 `json:"cluster_id,omitempty"`
+	AreaID           string                 `json:"-"`
+	Name             string                 `json:"name,omitempty"`
+	AreaType         string                 `json:"area_type,omitempty"`
+	Area             *TrackMapAreaReference `json:"area,omitempty"`
+	CityCode         string                 `json:"city_code,omitempty"`
+	CityName         string                 `json:"city_name,omitempty"`
+	TrackType        string                 `json:"track_type"`
+	Center           TrackMapPoint          `json:"center"`
+	BBox             TrackMapBBox           `json:"bbox"`
+	RouteCount       int64                  `json:"route_count"`
 }
 
 // TrackMapViewResponse is the main map viewport response.

@@ -34,6 +34,7 @@ type TrackMapService struct {
 	tracks   repository.TrackRepository
 	trackSvc *TrackService
 	areas    *maparea.Catalog
+	places   *TrackPlaceService
 }
 
 type TrackMapViewInput struct {
@@ -55,6 +56,8 @@ func NewTrackMapService(maps repository.TrackMapRepository, tracks repository.Tr
 	return &TrackMapService{maps: maps, tracks: tracks, trackSvc: trackSvc, areas: maparea.DefaultCatalog()}
 }
 
+func (s *TrackMapService) SetPlaceService(places *TrackPlaceService) { s.places = places }
+
 func (s *TrackMapService) View(ctx context.Context, input TrackMapViewInput) (*models.TrackMapViewResponse, error) {
 	filter, viewLevel, err := s.buildFilter(input)
 	if err != nil {
@@ -74,6 +77,7 @@ func (s *TrackMapService) View(ctx context.Context, input TrackMapViewInput) (*m
 			return nil, err
 		}
 		s.decorateAreaClusters(items)
+		s.decoratePlaceClusters(ctx, items)
 		return &models.TrackMapViewResponse{ViewLevel: trackMapViewArea, CoordinateSystem: "GCJ02", Items: items}, nil
 	default:
 		items, err := s.ListGroups(ctx, input)
@@ -137,7 +141,11 @@ func (s *TrackMapService) GetGroupDetail(ctx context.Context, groupID string) (*
 	if introduction != nil && introduction.Status != models.TrackRouteIntroductionStatusPublished {
 		introduction = nil
 	}
-	return s.routeGroupItem(ctx, group, introduction)
+	item, err := s.routeGroupItem(ctx, group, introduction)
+	if err == nil && s.places.Enabled() {
+		item.NearbyPlaces, _ = s.places.NearbyPlaces(ctx, group.RepresentativeTrackID)
+	}
+	return item, err
 }
 
 func (s *TrackMapService) ListGroupTracks(ctx context.Context, userID int64, groupID string, input TrackMapGroupTracksInput) (*models.TrackSummaryPage, error) {
@@ -518,4 +526,34 @@ func mapAreaIntroductionURL(areaID, version string) string {
 		return path
 	}
 	return path + "?v=" + url.QueryEscape(version)
+}
+
+func (s *TrackMapService) decoratePlaceClusters(ctx context.Context, items []*models.TrackMapClusterItem) {
+	if !s.places.Enabled() {
+		return
+	}
+	ids := []string{}
+	for _, item := range items {
+		if item != nil && strings.HasPrefix(item.AreaID, "place-") {
+			ids = append(ids, item.AreaID)
+		}
+	}
+	places, err := s.places.GetPlaces(ctx, ids)
+	if err != nil {
+		return
+	}
+	for _, item := range items {
+		if item == nil {
+			continue
+		}
+		place := places[item.AreaID]
+		if place == nil {
+			continue
+		}
+		item.Name = place.Name
+		item.AreaType = "scenic_spot"
+		item.Area = &models.TrackMapAreaReference{ID: place.ID}
+		item.PlaceProvider = place.Provider
+		item.PlaceMatchMethod = "sampled_aoi"
+	}
 }

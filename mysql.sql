@@ -32,6 +32,24 @@ CREATE TABLE `user_account_restrictions` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户账号限制记录表';
 
 
+-- Provider content, scene associations and resumable enrichment task state.
+CREATE TABLE `track_place_records` (
+    `record_key` varchar(191) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    `data_json` longtext NOT NULL,
+    `expires_at` datetime DEFAULT NULL,
+    `lease_until` datetime DEFAULT NULL,
+    `lease_owner` varchar(64) NOT NULL DEFAULT '',
+    PRIMARY KEY (`record_key`),
+    KEY `idx_track_place_expiry` (`expires_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE `track_place_api_usage` (
+    `provider` varchar(16) NOT NULL,
+    `usage_day` date NOT NULL,
+    `used` int unsigned NOT NULL DEFAULT 0,
+    PRIMARY KEY (`provider`, `usage_day`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE `track_records` (
                                  `id` VARCHAR(64) NOT NULL,
                                  `user_id` bigint unsigned NOT NULL COMMENT '用户ID',

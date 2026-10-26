@@ -29,6 +29,7 @@ type TrackRouteGroupService struct {
 	areas       *maparea.Catalog
 	tracks      repository.TrackRepository
 	submissions *TrackSubmissionService
+	places      *TrackPlaceService
 }
 
 type TrackRouteGroupRunResult struct {
@@ -74,6 +75,8 @@ func NewTrackRouteGroupService(repo repository.TrackMapRepository) *TrackRouteGr
 	return &TrackRouteGroupService{repo: repo, areas: maparea.DefaultCatalog()}
 }
 
+func (s *TrackRouteGroupService) SetPlaceService(places *TrackPlaceService) { s.places = places }
+
 func (s *TrackRouteGroupService) SetTrackRepository(tracks repository.TrackRepository) {
 	if s != nil {
 		s.tracks = tracks
@@ -108,7 +111,7 @@ func (s *TrackRouteGroupService) ListRouteGroupSummaries(ctx context.Context, fi
 		}
 		items = append(items, &AdminRouteGroupSummary{
 			TrackRouteGroup: group,
-			Area:            s.adminRouteGroupArea(group.AreaID),
+			Area:            s.adminRouteGroupArea(ctx, group.AreaID),
 		})
 	}
 	return items, nil
@@ -144,16 +147,23 @@ func (s *TrackRouteGroupService) GetRouteGroupDetail(ctx context.Context, groupI
 		}
 		views = append(views, view)
 	}
-	return &AdminRouteGroupDetail{Group: group, Area: s.adminRouteGroupArea(group.AreaID), Members: views}, nil
+	return &AdminRouteGroupDetail{Group: group, Area: s.adminRouteGroupArea(ctx, group.AreaID), Members: views}, nil
 }
 
-func (s *TrackRouteGroupService) adminRouteGroupArea(areaID string) *AdminRouteGroupArea {
+func (s *TrackRouteGroupService) adminRouteGroupArea(ctx context.Context, areaID string) *AdminRouteGroupArea {
 	areaID = strings.TrimSpace(areaID)
 	if s == nil || s.areas == nil || areaID == "" {
 		return nil
 	}
 	area := s.areas.Find(areaID)
 	if area == nil {
+		if s.places.Enabled() && strings.HasPrefix(areaID, "place-") {
+			if items, err := s.places.GetPlaces(ctx, []string{areaID}); err == nil {
+				if place := items[areaID]; place != nil {
+					return &AdminRouteGroupArea{ID: place.ID, Name: place.Name, Type: maparea.TypeScenicSpot}
+				}
+			}
+		}
 		return nil
 	}
 	result := &AdminRouteGroupArea{
@@ -620,6 +630,11 @@ func (s *TrackRouteGroupService) RunOnce(ctx context.Context) (*TrackRouteGroupR
 		return result, err
 	}
 	groups, members = flattenRouteGroupClusters(clusters)
+	if s.places != nil {
+		if err := s.places.ApplyGroupAreas(ctx, groups, indexes); err != nil {
+			return result, err
+		}
+	}
 	if err := s.repo.ReplaceRouteGroups(ctx, groups, members); err != nil {
 		return result, err
 	}
@@ -694,6 +709,9 @@ func (s *TrackRouteGroupService) assignRouteGroupArea(group *models.TrackRouteGr
 		return
 	}
 	area := s.areas.Resolve(group.CenterLat, group.CenterLng)
+	if s.places.Enabled() {
+		area = s.areas.ResolveDistrict(group.CenterLat, group.CenterLng)
+	}
 	if area != nil {
 		group.AreaID = area.ID
 	}

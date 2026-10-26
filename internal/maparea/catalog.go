@@ -272,6 +272,25 @@ func (c *Catalog) Resolve(latitude, longitude float64) *Definition {
 	return nil
 }
 
+// ResolveDistrict keeps administrative fallback separate from scenic POIs.
+// New automatic discovery must not inherit the old hand-drawn scenic rectangle.
+func (c *Catalog) ResolveDistrict(latitude, longitude float64) *Definition {
+	if c == nil {
+		return nil
+	}
+	for i := range c.areas {
+		a := c.areas[i]
+		if a.Type != TypeDistrict || !a.Bounds.contains(latitude, longitude) {
+			continue
+		}
+		if a.Geometry != nil && !a.Geometry.contains(latitude, longitude) {
+			continue
+		}
+		return &a
+	}
+	return nil
+}
+
 // Find returns an area by its stable catalog ID.
 func (c *Catalog) Find(id string) *Definition {
 	if c == nil {

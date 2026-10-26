@@ -1,0 +1,506 @@
+package service
+
+import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"net/http"
+	"sort"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/tongyichu/track_server/internal/maparea"
+	"github.com/tongyichu/track_server/internal/models"
+	"github.com/tongyichu/track_server/internal/repository"
+)
+
+const trackPlaceRuleVersion = 1
+
+var placeQuotaZone = time.FixedZone("Asia/Shanghai", 8*60*60)
+
+type TrackPlaceConfig struct {
+	Enabled                            bool
+	AMapKey, GoogleKey                 string
+	AMapDailyBudget, GoogleDailyBudget int
+	CacheTTL, GoogleCacheTTL           time.Duration
+}
+type TrackPlaceService struct {
+	cfg      TrackPlaceConfig
+	store    repository.TrackPlaceRepository
+	maps     repository.TrackMapRepository
+	tracks   repository.TrackRepository
+	reader   repository.TrackPlaceIndexReader
+	indexer  *TrackMapIndexService
+	client   *http.Client
+	mu       sync.Mutex
+	lastCall time.Time
+	runCalls int
+}
+type TrackPlaceRunResult struct{ Scanned, Matched, Unmatched, Deferred, Failed, Unconfigured int }
+
+func NewTrackPlaceService(cfg TrackPlaceConfig, store repository.TrackPlaceRepository, maps repository.TrackMapRepository, tracks repository.TrackRepository, indexer *TrackMapIndexService) *TrackPlaceService {
+	if cfg.CacheTTL <= 0 {
+		cfg.CacheTTL = 7 * 24 * time.Hour
+	}
+	if cfg.CacheTTL > 30*24*time.Hour {
+		cfg.CacheTTL = 30 * 24 * time.Hour
+	}
+	if cfg.GoogleCacheTTL > 30*24*time.Hour {
+		cfg.GoogleCacheTTL = 30 * 24 * time.Hour
+	}
+	reader, _ := maps.(repository.TrackPlaceIndexReader)
+	return &TrackPlaceService{cfg: cfg, store: store, maps: maps, tracks: tracks, reader: reader, indexer: indexer, client: &http.Client{Timeout: 6 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
+}
+func (s *TrackPlaceService) Enabled() bool {
+	return s != nil && s.cfg.Enabled && s.reader != nil && s.store != nil
+}
+func (s *TrackPlaceService) owner() string {
+	var data [16]byte
+	if _, err := rand.Read(data[:]); err != nil {
+		panic(err)
+	}
+	return hex.EncodeToString(data[:])
+}
+func (s *TrackPlaceService) providerTTL(provider string) time.Duration {
+	if provider == "google" {
+		return s.cfg.GoogleCacheTTL
+	}
+	return s.cfg.CacheTTL
+}
+func (s *TrackPlaceService) loadFresh(ctx context.Context, key string, value interface{}) (bool, error) {
+	r, err := s.store.GetPlaceRecord(ctx, key)
+	if errors.Is(err, repository.ErrNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if r == nil || r.Data == "{}" || !r.ExpiresAt.After(time.Now()) {
+		return false, nil
+	}
+	if err := json.Unmarshal([]byte(r.Data), value); err != nil {
+		return false, nil
+	}
+	return true, nil
+}
+func (s *TrackPlaceService) save(ctx context.Context, key string, value interface{}, expires time.Time, owner string) error {
+	data, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	ok, err := s.store.SavePlaceRecord(ctx, &models.TrackPlaceRecord{Key: key, Data: string(data), ExpiresAt: expires}, owner)
+	if err == nil && !ok {
+		return errPlaceBusy
+	}
+	return err
+}
+
+// RunOnce scans bounded pages; its persistent cursor automatically includes
+// historical tracks. Provider errors never stop uploads or viewport requests.
+func (s *TrackPlaceService) RunOnce(ctx context.Context) (*TrackPlaceRunResult, error) {
+	out := &TrackPlaceRunResult{}
+	if !s.Enabled() {
+		return out, nil
+	}
+	if !s.mu.TryLock() {
+		return out, nil
+	}
+	defer s.mu.Unlock()
+	if err := s.store.DeleteExpiredPlaceContent(ctx, time.Now()); err != nil {
+		return out, err
+	}
+	s.runCalls = 0
+	owner := s.owner()
+	now := time.Now()
+	leased, err := s.store.LeasePlaceRecord(ctx, "scan_lock", owner, now, now.Add(2*time.Minute))
+	if err != nil {
+		return out, err
+	}
+	if !leased {
+		return out, nil
+	}
+	defer func() {
+		releaseCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		_ = s.save(releaseCtx, "scan_lock", true, time.Time{}, owner)
+	}()
+	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
+	defer cancel()
+	var cursor string
+	record, err := s.store.GetPlaceRecord(ctx, "scan_cursor")
+	if err == nil {
+		_ = json.Unmarshal([]byte(record.Data), &cursor)
+	} else if !errors.Is(err, repository.ErrNotFound) {
+		return out, err
+	}
+	indexes, err := s.reader.ListPlaceGeoIndexes(ctx, cursor, 50)
+	if err != nil {
+		return out, err
+	}
+	if len(indexes) == 0 {
+		return out, s.save(ctx, "scan_cursor", "", time.Time{}, "")
+	}
+	for _, index := range indexes {
+		if ctx.Err() != nil {
+			return out, ctx.Err()
+		}
+		out.Scanned++
+		if err := s.process(ctx, index, out); err != nil {
+			return out, err
+		}
+		if err := s.save(ctx, "scan_cursor", index.TrackID, time.Time{}, ""); err != nil {
+			return out, err
+		}
+	}
+	return out, nil
+}
+func (s *TrackPlaceService) process(ctx context.Context, index *models.TrackGeoIndex, out *TrackPlaceRunResult) error {
+	track, err := s.tracks.FindByID(ctx, index.TrackID)
+	if errors.Is(err, repository.ErrNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !isTrackMapIndexEligible(track) {
+		return nil
+	}
+	// Repair old mixed-CRS indexes with the full raw GPS, not their bounding boxes.
+	if index.CoordinateSystem != "GCJ02" && s.indexer != nil {
+		if err := s.indexer.processJob(ctx, index.TrackID); err != nil {
+			out.Failed++
+			return nil
+		}
+		index, err = s.maps.FindTrackGeoIndex(ctx, index.TrackID)
+		if err != nil {
+			return err
+		}
+	}
+	samples, err := trackPlaceSamples(index, 5)
+	if err != nil {
+		out.Failed++
+		return nil
+	}
+	if len(samples) < 3 {
+		return nil
+	}
+	provider := "amap"
+	domestic := 0
+	for _, p := range samples {
+		if maparea.IsMainland(p.Latitude, p.Longitude) {
+			domestic++
+		}
+	}
+	if domestic != len(samples) {
+		provider = "google"
+	}
+	if domestic > 0 && domestic < len(samples) {
+		out.Unconfigured++
+		return nil
+	} // cross-border routes keep fallback.
+	// Google content is not persisted unless an allowed cache lifetime has been
+	// explicitly configured; a standard key alone grants no permanent database.
+	if provider == "amap" && s.cfg.AMapKey == "" || provider == "google" && (s.cfg.GoogleKey == "" || s.cfg.GoogleCacheTTL <= 0) {
+		out.Unconfigured++
+		return nil
+	}
+	key := "match:" + index.TrackID
+	source := trackPlaceSourceVersion(index)
+	var previous models.TrackPlaceMatch
+	previousRecord, err := s.store.GetPlaceRecord(ctx, key)
+	if err != nil && !errors.Is(err, repository.ErrNotFound) {
+		return err
+	}
+	if previousRecord != nil {
+		_ = json.Unmarshal([]byte(previousRecord.Data), &previous)
+	}
+	if previousRecord != nil && previousRecord.ExpiresAt.After(time.Now()) && previous.SourceVersion == source && previous.RuleVersion == trackPlaceRuleVersion {
+		return s.refreshGroup(ctx, index, &previous)
+	}
+	if previous.SourceVersion != source {
+		previous = models.TrackPlaceMatch{}
+	}
+	owner := s.owner()
+	now := time.Now()
+	ok, err := s.store.LeasePlaceRecord(ctx, key, owner, now, now.Add(2*time.Minute))
+	if err != nil {
+		return err
+	}
+	if !ok {
+		out.Deferred++
+		return nil
+	}
+	match := models.TrackPlaceMatch{TrackID: index.TrackID, SourceVersion: source, RuleVersion: trackPlaceRuleVersion, Provider: provider, Status: "unmatched", Relations: []models.TrackPlaceRelation{}, Attempts: previous.Attempts + 1, UpdatedAt: now}
+	type votes struct {
+		place                            models.TrackPlace
+		hits, inside, run, longest, last int
+	}
+	candidates := map[string]*votes{}
+	var lookupErr error
+	for n, p := range samples {
+		values, e := s.providerLookup(ctx, provider, p)
+		if e != nil {
+			lookupErr = e
+			break
+		}
+		for _, v := range values {
+			item := candidates[v.Place.ID]
+			if item == nil {
+				item = &votes{place: v.Place, last: -2}
+				candidates[v.Place.ID] = item
+			}
+			item.hits++
+			if v.Inside {
+				item.inside++
+				if item.last == n-1 {
+					item.run++
+				} else {
+					item.run = 1
+				}
+				item.last = n
+				if item.run > item.longest {
+					item.longest = item.run
+				}
+			}
+		}
+	}
+	expires := now.Add(s.providerTTL(provider))
+	if lookupErr != nil {
+		match.Status = "error"
+		match.ErrorCode = lookupErr.Error()
+		out.Failed++
+		if errors.Is(lookupErr, errPlaceBudget) {
+			match.Status = "quota_deferred"
+			out.Deferred++
+			out.Failed--
+			expires = nextPlaceQuotaDay(now)
+		} else if errors.Is(lookupErr, errPlaceBusy) {
+			out.Deferred++
+			out.Failed--
+			expires = now.Add(2 * time.Minute)
+		} else {
+			delay := retryDelay(match.Attempts)
+			if delay < time.Minute {
+				delay = time.Minute
+			}
+			if delay > 6*time.Hour {
+				delay = 6 * time.Hour
+			}
+			expires = now.Add(delay)
+		}
+	} else {
+		best := ""
+		bestInside, bestRun := 0, 0
+		ids := make([]string, 0, len(candidates))
+		for id := range candidates {
+			ids = append(ids, id)
+		}
+		sort.Strings(ids)
+		for _, id := range ids {
+			v := candidates[id]
+			kind := "nearby"
+			count := v.hits
+			if v.inside > 0 {
+				kind = "sampled_inside"
+				count = v.inside
+			}
+			relation := models.TrackPlaceRelation{PlaceID: id, Kind: kind, MatchedSamples: count, SampleCount: len(samples), Confidence: float64(count) / float64(len(samples))}
+			match.Relations = append(match.Relations, relation)
+			if err := s.save(ctx, "place:"+id, &v.place, v.place.ExpiresAt, ""); err != nil {
+				return err
+			}
+			if v.inside >= 3 && v.longest >= 2 && (v.inside > bestInside || v.inside == bestInside && v.longest > bestRun) {
+				best = id
+				bestInside = v.inside
+				bestRun = v.longest
+			}
+		}
+		match.PrimaryPlaceID = best
+		if best != "" {
+			match.Status = "matched"
+			out.Matched++
+		} else {
+			out.Unmatched++
+			if len(match.Relations) == 0 && expires.Sub(now) > 24*time.Hour {
+				expires = now.Add(24 * time.Hour)
+			}
+		}
+	}
+	// A changed/deleted track must never receive the result of an older task.
+	latest, err := s.maps.FindTrackGeoIndex(ctx, index.TrackID)
+	if errors.Is(err, repository.ErrNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	current, err := s.tracks.FindByID(ctx, index.TrackID)
+	if errors.Is(err, repository.ErrNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !isTrackMapIndexEligible(current) || current.RawTrackURL != track.RawTrackURL || current.CoordinateSystem != track.CoordinateSystem || current.TrackType != track.TrackType || trackPlaceSourceVersion(latest) != source {
+		return nil
+	}
+	if err := s.save(ctx, key, &match, expires, owner); err != nil {
+		return err
+	}
+	return s.refreshGroup(ctx, index, &match)
+}
+func nextPlaceQuotaDay(now time.Time) time.Time {
+	local := now.In(placeQuotaZone)
+	return time.Date(local.Year(), local.Month(), local.Day()+1, 0, 0, 0, 0, placeQuotaZone)
+}
+
+func (s *TrackPlaceService) GetPlaces(ctx context.Context, ids []string) (map[string]*models.TrackPlace, error) {
+	out := map[string]*models.TrackPlace{}
+	for start := 0; start < len(ids); start += 200 {
+		end := start + 200
+		if end > len(ids) {
+			end = len(ids)
+		}
+		keys := []string{}
+		for _, id := range ids[start:end] {
+			keys = append(keys, "place:"+id)
+		}
+		records, err := s.store.GetPlaceRecords(ctx, keys)
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range records {
+			if !r.ExpiresAt.After(time.Now()) {
+				continue
+			}
+			var place models.TrackPlace
+			if json.Unmarshal([]byte(r.Data), &place) == nil && place.ID != "" {
+				out[place.ID] = &place
+			}
+		}
+	}
+	return out, nil
+}
+
+// Only DB reads here. Route-group rebuilds never call external providers.
+func (s *TrackPlaceService) ApplyGroupAreas(ctx context.Context, groups []*models.TrackRouteGroup, indexes []*models.TrackGeoIndex) error {
+	if !s.Enabled() {
+		return nil
+	}
+	byID := map[string]*models.TrackGeoIndex{}
+	for _, i := range indexes {
+		byID[i.TrackID] = i
+	}
+	for start := 0; start < len(groups); start += 200 {
+		end := start + 200
+		if end > len(groups) {
+			end = len(groups)
+		}
+		keys := []string{}
+		matches := map[string]*models.TrackPlaceMatch{}
+		placeIDs := []string{}
+		for _, g := range groups[start:end] {
+			keys = append(keys, "match:"+g.RepresentativeTrackID)
+		}
+		records, err := s.store.GetPlaceRecords(ctx, keys)
+		if err != nil {
+			return err
+		}
+		for _, g := range groups[start:end] {
+			r := records["match:"+g.RepresentativeTrackID]
+			index := byID[g.RepresentativeTrackID]
+			if r == nil || index == nil || !r.ExpiresAt.After(time.Now()) {
+				continue
+			}
+			var match models.TrackPlaceMatch
+			if json.Unmarshal([]byte(r.Data), &match) != nil || match.SourceVersion != trackPlaceSourceVersion(index) || match.Status != "matched" {
+				continue
+			}
+			matches[g.GroupID] = &match
+			placeIDs = append(placeIDs, match.PrimaryPlaceID)
+		}
+		places, err := s.GetPlaces(ctx, placeIDs)
+		if err != nil {
+			return err
+		}
+		for _, g := range groups[start:end] {
+			if m := matches[g.GroupID]; m != nil && places[m.PrimaryPlaceID] != nil {
+				g.AreaID = m.PrimaryPlaceID
+			}
+		}
+	}
+	return nil
+}
+func (s *TrackPlaceService) refreshGroup(ctx context.Context, index *models.TrackGeoIndex, match *models.TrackPlaceMatch) error {
+	writer, ok := s.maps.(repository.TrackPlaceGroupWriter)
+	if !ok {
+		return nil
+	}
+	g, err := s.maps.FindRouteGroupByTrackID(ctx, index.TrackID)
+	if errors.Is(err, repository.ErrNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if g.RepresentativeTrackID != index.TrackID {
+		return nil
+	}
+	areaID := ""
+	if district := maparea.DefaultCatalog().ResolveDistrict(g.CenterLat, g.CenterLng); district != nil {
+		areaID = district.ID
+	}
+	if match.Status == "matched" && match.PrimaryPlaceID != "" {
+		places, err := s.GetPlaces(ctx, []string{match.PrimaryPlaceID})
+		if err != nil {
+			return err
+		}
+		if places[match.PrimaryPlaceID] != nil {
+			areaID = match.PrimaryPlaceID
+		}
+	}
+	if g.AreaID == areaID {
+		return nil
+	}
+	return writer.UpdateRouteGroupPlaceArea(ctx, g.GroupID, index.TrackID, areaID)
+}
+
+func (s *TrackPlaceService) NearbyPlaces(ctx context.Context, trackID string) ([]*models.TrackPlace, error) {
+	var match models.TrackPlaceMatch
+	fresh, err := s.loadFresh(ctx, "match:"+trackID, &match)
+	if err != nil || !fresh {
+		return nil, err
+	}
+	index, err := s.maps.FindTrackGeoIndex(ctx, trackID)
+	if errors.Is(err, repository.ErrNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if match.SourceVersion != trackPlaceSourceVersion(index) {
+		return nil, nil
+	}
+	ids := []string{}
+	for _, r := range match.Relations {
+		ids = append(ids, r.PlaceID)
+	}
+	places, err := s.GetPlaces(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	out := []*models.TrackPlace{}
+	for _, r := range match.Relations {
+		if p := places[r.PlaceID]; p != nil {
+			out = append(out, p)
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool { return strings.Compare(out[i].Name, out[j].Name) < 0 })
+	if len(out) > 3 {
+		out = out[:3]
+	}
+	return out, nil
+}

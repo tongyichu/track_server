@@ -35,6 +35,8 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 	stmts := []string{
+		trackPlaceRecordSchema,
+		trackPlaceUsageSchema,
 		trackLikesSchema,
 		`CREATE TABLE IF NOT EXISTS users (
 			id BIGINT PRIMARY KEY,

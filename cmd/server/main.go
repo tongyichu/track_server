@@ -58,6 +58,7 @@ func main() {
 	var feedbackRepo repository.FeedbackRepository
 	var analyticsRepo repository.AnalyticsRepository
 	var trackMapRepo repository.TrackMapRepository
+	var trackPlaceRepo repository.TrackPlaceRepository
 	var trackSubmissionRepo repository.TrackSubmissionRepository
 	var recommendationRepo repository.RecommendationRepository
 
@@ -117,6 +118,7 @@ func main() {
 				}()
 				trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo, companionRepo = tr, ur, cr, lr, nr, ar, cor
 				trackMapRepo = repository.NewMySQLTrackMapRepository(db)
+				trackPlaceRepo = repository.NewMySQLTrackPlaceRepository(db)
 				followRepo = repository.NewMySQLFollowRepository(db)
 				likeRepo = repository.NewMySQLTrackLikeRepository(db)
 				commentRepo = repository.NewMySQLCommentRepository(db)
@@ -145,6 +147,13 @@ func main() {
 			analyticsRepo = repository.NewInMemoryAnalyticsRepository()
 		} else {
 			db := client.Database(cfg.MongoDBName)
+			mongoPlaceRepo := repository.NewMongoTrackPlaceRepository(db)
+			indexCtx, indexCancel := context.WithTimeout(ctx, 5*time.Second)
+			if err := mongoPlaceRepo.EnsureIndexes(indexCtx); err != nil {
+				log.Printf("track place mongo indexes unavailable")
+			}
+			indexCancel()
+			trackPlaceRepo = mongoPlaceRepo
 			trackRepo = repository.NewMongoTrackRepository(db.Collection("tracks"))
 			likeRepo = repository.NewMongoTrackLikeRepository(db.Collection("track_likes"))
 			commentRepo = repository.NewMongoCommentRepository(db)
@@ -457,12 +466,28 @@ func main() {
 	var trackMapIndexSvc *service.TrackMapIndexService
 	var trackMapSvc *service.TrackMapService
 	var trackRouteGroupSvc *service.TrackRouteGroupService
+	var trackPlaceSvc *service.TrackPlaceService
 	if trackMapRepo != nil && rawTrackCache != nil {
 		trackMapIndexSvc = service.NewTrackMapIndexService(trackMapRepo, trackRepo, rawTrackCache)
 		trackRouteGroupSvc = service.NewTrackRouteGroupService(trackMapRepo)
 		trackRouteGroupSvc.SetTrackRepository(trackRepo)
 		trackRouteGroupSvc.SetTrackSubmissionService(trackSubmissionSvc)
 		trackMapSvc = service.NewTrackMapService(trackMapRepo, trackRepo, trackSvc)
+		if trackPlaceRepo == nil {
+			trackPlaceRepo = repository.NewMemoryTrackPlaceRepository()
+		}
+		_, memoryFallback := trackRepo.(*repository.InMemoryTrackRepository)
+		amapKey := cfg.AMapRESTKey
+		if amapKey == "" {
+			amapKey = cfg.AMapWebKey
+		}
+		trackPlaceSvc = service.NewTrackPlaceService(service.TrackPlaceConfig{
+			Enabled: cfg.TrackPlaceEnabled && !memoryFallback, AMapKey: amapKey, GoogleKey: cfg.GooglePlacesKey,
+			AMapDailyBudget: cfg.TrackPlaceAMapDailyBudget, GoogleDailyBudget: cfg.TrackPlaceGoogleDailyBudget,
+			CacheTTL: time.Duration(cfg.TrackPlaceCacheHours) * time.Hour, GoogleCacheTTL: time.Duration(cfg.TrackPlaceGoogleCacheHours) * time.Hour,
+		}, trackPlaceRepo, trackMapRepo, trackRepo, trackMapIndexSvc)
+		trackRouteGroupSvc.SetPlaceService(trackPlaceSvc)
+		trackMapSvc.SetPlaceService(trackPlaceSvc)
 		trackSvc.SetTrackMapIndexService(trackMapIndexSvc)
 		log.Printf("track map services enabled")
 	} else {
@@ -545,6 +570,9 @@ func main() {
 		}
 		if trackRouteGroupSvc != nil {
 			schedulerJobs = append(schedulerJobs, jobs.NewTrackRouteGroup(trackRouteGroupSvc, cfg.TrackRouteGroupCron))
+		}
+		if trackPlaceSvc.Enabled() {
+			schedulerJobs = append(schedulerJobs, jobs.NewTrackPlace(trackPlaceSvc, cfg.TrackPlaceCron))
 		}
 		if analyticsSvc != nil && cfg.AnalyticsEnabled {
 			schedulerJobs = append(schedulerJobs, jobs.NewAnalyticsSync(analyticsSvc, cfg.AnalyticsSyncCron))

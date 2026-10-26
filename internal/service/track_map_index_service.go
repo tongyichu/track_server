@@ -405,6 +405,15 @@ func buildTrackGeoIndex(track *models.Track, points []models.TrackPoint) (*model
 	if len(points) < 2 {
 		return nil, errors.New("not enough valid track points")
 	}
+	canonical := make([]models.TrackPoint, len(points))
+	for i, p := range points {
+		v, err := mapPointToGCJ02(p, track.CoordinateSystem)
+		if err != nil {
+			return nil, err
+		}
+		canonical[i] = v
+	}
+	points = canonical
 	minLat, maxLat := points[0].Latitude, points[0].Latitude
 	minLng, maxLng := points[0].Longitude, points[0].Longitude
 	var sumLat, sumLng float64
@@ -437,7 +446,7 @@ func buildTrackGeoIndex(track *models.Track, points []models.TrackPoint) (*model
 		UserID:                 track.UserID,
 		CityCode:               track.CityCode,
 		TrackType:              defaultTrackMapType(track.TrackType),
-		CoordinateSystem:       track.CoordinateSystem,
+		CoordinateSystem:       "GCJ02",
 		StartLat:               first.Latitude,
 		StartLng:               first.Longitude,
 		EndLat:                 last.Latitude,

@@ -9,6 +9,10 @@
 
 ## 当前覆盖
 
+自动景区识别入口为 `internal/service/track_place_service.go`，完整流程和配置见 [自动景区识别](../../docs/track-place-discovery.md)。开启 `TRACK_PLACE_ENABLED` 后，`catalog.json` 中旧手工景区矩形仅保留介绍兼容，不再决定路线组的自动归属；这里的目录继续作为行政区兜底及人工文案覆盖。
+
+`mainland.json` 由 DataV.GeoAtlas `areas_v3/bound/100000_full.json` 中大陆31个省级行政区域生成，保留 Polygon/MultiPolygon及内洞，仅用来选择地图服务和坐标转换；不能当作景区边界。更新时筛选整数 adcode、排除710000/810000/820000，合并各要素为MultiPolygon并保留来源信息。`mainland.go` 为每个面预计算外包框后再做点包含判断。
+
 区县基线当前覆盖 36 个重点城市、194 个核心区县：北京、天津、石家庄、太原、沈阳、大连、长春、哈尔滨、上海、南京、无锡、苏州、杭州、宁波、合肥、福州、厦门、南昌、济南、青岛、郑州、武汉、长沙、广州、深圳、珠海、佛山、南宁、海口、重庆、成都、贵阳、昆明、西安、兰州、乌鲁木齐。
 
 行政区边界基线来自 DataV.GeoAtlas `areas_v3` 与官方文档保留的 `areas/bound` 区县 GeoJSON，`districts.json` 保存 GCJ-02 `Polygon` / `MultiPolygon` 及其预计算边界框，并逐条记录实际来源；上线使用前应由数据负责人确认数据授权、版本与目标地图 SDK 坐标口径。
