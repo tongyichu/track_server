@@ -39,7 +39,28 @@ type TrackPlaceService struct {
 	lastCall time.Time
 	runCalls int
 }
-type TrackPlaceRunResult struct{ Scanned, Matched, Unmatched, Deferred, Failed, Unconfigured int }
+type TrackPlaceRunResult struct{ Scanned, Matched, Unmatched, Reused, Skipped, Deferred, Failed, Unconfigured int }
+
+// AMap enrichment is a one-time business result. Keep successful positive and
+// negative results independently of the short-lived request cache. Recognize
+// records produced before this policy so upgrading never re-queries them.
+func trackPlaceRecordFresh(r *models.TrackPlaceRecord) bool {
+	if r == nil || r.Data == "{}" {
+		return false
+	}
+	if r.ExpiresAt.IsZero() || r.ExpiresAt.After(time.Now()) {
+		return true
+	}
+	if strings.HasPrefix(r.Key, "place:place-amap-") {
+		var place models.TrackPlace
+		return json.Unmarshal([]byte(r.Data), &place) == nil && place.Provider == "amap"
+	}
+	if strings.HasPrefix(r.Key, "match:") {
+		var match models.TrackPlaceMatch
+		return json.Unmarshal([]byte(r.Data), &match) == nil && match.Provider == "amap" && (match.Status == "matched" || match.Status == "unmatched")
+	}
+	return false
+}
 
 func NewTrackPlaceService(cfg TrackPlaceConfig, store repository.TrackPlaceRepository, maps repository.TrackMapRepository, tracks repository.TrackRepository, indexer *TrackMapIndexService) *TrackPlaceService {
 	if cfg.CacheTTL <= 0 {
@@ -78,7 +99,7 @@ func (s *TrackPlaceService) loadFresh(ctx context.Context, key string, value int
 	if err != nil {
 		return false, err
 	}
-	if r == nil || r.Data == "{}" || !r.ExpiresAt.After(time.Now()) {
+	if !trackPlaceRecordFresh(r) {
 		return false, nil
 	}
 	if err := json.Unmarshal([]byte(r.Data), value); err != nil {
@@ -185,6 +206,7 @@ func (s *TrackPlaceService) process(ctx context.Context, index *models.TrackGeoI
 		return nil
 	}
 	if len(samples) < 3 {
+		out.Skipped++
 		return nil
 	}
 	provider := "amap"
@@ -217,7 +239,12 @@ func (s *TrackPlaceService) process(ctx context.Context, index *models.TrackGeoI
 	if previousRecord != nil {
 		_ = json.Unmarshal([]byte(previousRecord.Data), &previous)
 	}
-	if previousRecord != nil && previousRecord.ExpiresAt.After(time.Now()) && previous.SourceVersion == source && previous.RuleVersion == trackPlaceRuleVersion {
+	if trackPlaceRecordFresh(previousRecord) && previous.SourceVersion == source && previous.RuleVersion == trackPlaceRuleVersion {
+		if previous.Status == "matched" || previous.Status == "unmatched" {
+			out.Reused++
+		} else {
+			out.Deferred++
+		}
 		return s.refreshGroup(ctx, index, &previous)
 	}
 	if previous.SourceVersion != source {
@@ -301,6 +328,9 @@ func (s *TrackPlaceService) process(ctx context.Context, index *models.TrackGeoI
 		sort.Strings(ids)
 		for _, id := range ids {
 			v := candidates[id]
+			if provider == "amap" {
+				v.place.ExpiresAt = time.Time{}
+			}
 			kind := "nearby"
 			count := v.hits
 			if v.inside > 0 {
@@ -319,6 +349,9 @@ func (s *TrackPlaceService) process(ctx context.Context, index *models.TrackGeoI
 			}
 		}
 		match.PrimaryPlaceID = best
+		if provider == "amap" {
+			expires = time.Time{}
+		}
 		if best != "" {
 			match.Status = "matched"
 			out.Matched++
@@ -373,11 +406,14 @@ func (s *TrackPlaceService) GetPlaces(ctx context.Context, ids []string) (map[st
 			return nil, err
 		}
 		for _, r := range records {
-			if !r.ExpiresAt.After(time.Now()) {
+			if !trackPlaceRecordFresh(r) {
 				continue
 			}
 			var place models.TrackPlace
 			if json.Unmarshal([]byte(r.Data), &place) == nil && place.ID != "" {
+				if place.Provider == "amap" {
+					place.ExpiresAt = time.Time{}
+				}
 				out[place.ID] = &place
 			}
 		}
@@ -412,7 +448,7 @@ func (s *TrackPlaceService) ApplyGroupAreas(ctx context.Context, groups []*model
 		for _, g := range groups[start:end] {
 			r := records["match:"+g.RepresentativeTrackID]
 			index := byID[g.RepresentativeTrackID]
-			if r == nil || index == nil || !r.ExpiresAt.After(time.Now()) {
+			if !trackPlaceRecordFresh(r) || index == nil {
 				continue
 			}
 			var match models.TrackPlaceMatch
