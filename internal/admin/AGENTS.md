@@ -89,7 +89,9 @@ internal/admin/
 | POST | `/admin/api/users/:user_id/restrictions` | 鉴权 | 创建账号限制；`expires_at` 为空表示永久，操作人取 admin session 用户名 |
 | DELETE | `/admin/api/users/:user_id/restrictions/current` | 鉴权 | 解除当前账号限制 |
 | GET | `/admin/api/tracks` | 鉴权 | 轨迹列表，支持 cursor 翻页 |
-| PUT | `/admin/api/tracks/:track_id` | 鉴权 | 更新轨迹 `title` / `city_code`；若已有地图索引，同步修正 `track_geo_indexes.city_code` |
+| GET | `/admin/api/cities` | 鉴权 | 返回内置城市/省份 Code 与名称，供轨迹城市选择器使用 |
+| GET | `/admin/api/tracks/:track_id` | 鉴权 | 返回轨迹详情用于后台编辑 |
+| PUT | `/admin/api/tracks/:track_id` | 鉴权 | 更新轨迹业务字段（不改 ID、轨迹点与创建/更新时间）；城市/类型更新已有地图索引，状态/进行状态/原始文件变化时清理并按可索引条件重新排队 |
 | DELETE | `/admin/api/tracks/:track_id` | 鉴权 | 删除轨迹：标记 `status=0`，并清理收藏、地图索引任务、geo index、路线组成员 |
 | GET | `/admin/api/feedbacks` | 鉴权 | 意见反馈列表，支持 `status` / `app_version` / `phone` / `cursor` / `limit` |
 | GET | `/admin/api/feedbacks/:feedback_id` | 鉴权 | 意见反馈详情 |
@@ -214,12 +216,12 @@ GET /admin/api/users
 ```
 [admin UI] /admin/tracks.html
   → GET /admin/api/tracks 拉取轨迹列表
-       → handler 使用 screenshotCache.EnsureCached 把 OSS track_screenshot_url 落到 <LogDir>/static/screenshots/
-       → /api/v1/static/screenshots/... 改写为 /admin/api/static/screenshots/...
+       → 展示 preview_images.landscape_day_url（日间横版 4:3），并经后台静态代理访问
+  → GET /admin/api/dashboard?period=month 展示本月轨迹类型与城市统计表
+  → GET /admin/api/cities 将城市 Code 显示为名称并提供编辑选择器
   → 管理员点击编辑
-  → PUT /admin/api/tracks/:track_id {title, city_code}
-       → 只更新 track_records.title / city_code
-       → 若 city_code 变化且已有 track_geo_indexes，同步更新 track_geo_indexes.city_code
+  → GET /admin/api/tracks/:track_id 获取完整可编辑业务详情
+  → PUT /admin/api/tracks/:track_id 更新所选业务字段与预览图；ID、轨迹点和创建/更新时间不由表单修改
   → 管理员点击删除并在浏览器确认弹窗二次确认
   → DELETE /admin/api/tracks/:track_id
        → track_records.status=0，is_running=0，记录/保留 deleted_at

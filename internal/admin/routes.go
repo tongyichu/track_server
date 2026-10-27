@@ -77,7 +77,9 @@ func (m *Module) Close() {
 // - POST /admin/api/users/:user_id/restrictions 创建账号限制（鉴权）
 // - DELETE /admin/api/users/:user_id/restrictions/current 解除当前账号限制（鉴权）
 // - GET  /admin/api/tracks                 轨迹列表（鉴权，cursor 翻页）
-// - PUT  /admin/api/tracks/:track_id       更新轨迹标题与城市 Code（鉴权）
+// - GET  /admin/api/cities                 城市 Code 与名称选项（鉴权）
+// - GET  /admin/api/tracks/:track_id       轨迹详情（鉴权）
+// - PUT  /admin/api/tracks/:track_id       更新轨迹业务字段（鉴权）
 // - DELETE /admin/api/tracks/:track_id     删除轨迹（鉴权，软删除并清理关联索引/收藏）
 // - GET  /admin/api/companions             同行会话列表（鉴权，cursor 翻页）
 // - GET  /admin/api/companions/:session_id  同行会话详情：会话/成员/位置/弹幕（鉴权）
@@ -136,6 +138,8 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	api.POST("/users/:user_id/restrictions", m.Handler.CreateAccountRestriction)
 	api.DELETE("/users/:user_id/restrictions/current", m.Handler.RevokeCurrentAccountRestriction)
 	api.GET("/tracks", m.Handler.ListTracks)
+	api.GET("/cities", m.Handler.ListAdminCities)
+	api.GET("/tracks/:track_id", m.Handler.GetTrack)
 	api.PUT("/tracks/:track_id", m.Handler.UpdateTrack)
 	api.DELETE("/tracks/:track_id", m.Handler.DeleteTrack)
 	api.GET("/track-submissions", m.Handler.ListTrackSubmissions)

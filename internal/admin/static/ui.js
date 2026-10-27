@@ -40,7 +40,7 @@
     const root = document.createElement('div');
     root.className = 'modal modal-blur fade';
     root.tabIndex = -1;
-    root.innerHTML = '<div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h5 class="modal-title"></h5><button type="button" class="btn-close" aria-label="关闭"></button></div><div class="modal-body"></div><div class="modal-footer"></div></div></div>';
+    root.innerHTML = '<div class="modal-dialog modal-dialog-centered' + (options.wide ? ' modal-dialog-scrollable modal-xl' : '') + '"><div class="modal-content"><div class="modal-header"><h5 class="modal-title"></h5><button type="button" class="btn-close" aria-label="关闭"></button></div><div class="modal-body"></div><div class="modal-footer"></div></div></div>';
     root.querySelector('.modal-title').textContent = options.title || '提示';
     document.body.appendChild(root);
     return root;
@@ -89,15 +89,25 @@
         const group = document.createElement('label');
         group.className = 'form-label';
         group.textContent = field.label || field.name;
-        const input = document.createElement(field.type === 'textarea' ? 'textarea' : 'input');
+        const input = document.createElement(field.type === 'textarea' ? 'textarea' : (field.type === 'select' ? 'select' : 'input'));
         input.className = 'form-control';
         input.name = field.name;
-        if (field.type && field.type !== 'textarea') input.type = field.type;
+        if (field.full) group.classList.add('full');
+        if (field.type && field.type !== 'textarea' && field.type !== 'select') input.type = field.type;
+        if (field.type === 'select') {
+          (field.options || []).forEach(function (option) {
+            const item = document.createElement('option');
+            item.value = String(option.value);
+            item.textContent = String(option.label);
+            input.appendChild(item);
+          });
+        }
         if (field.value != null) input.value = field.value;
         if (field.placeholder) input.placeholder = field.placeholder;
         if (field.required) input.required = true;
         if (field.maxLength) input.maxLength = field.maxLength;
         if (field.min != null) input.min = String(field.min);
+        if (field.step != null) input.step = String(field.step);
         group.appendChild(input);
         form.appendChild(group);
       });

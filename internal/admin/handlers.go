@@ -57,8 +57,160 @@ type trackMapCleanupRepository interface {
 }
 
 type updateTrackBody struct {
-	Title    *string `json:"title"`
-	CityCode *string `json:"city_code"`
+	UserID                    *int64                     `json:"user_id"`
+	SessionID                 *string                    `json:"session_id"`
+	CityCode                  *string                    `json:"city_code"`
+	LocateAddr                *string                    `json:"locate_addr"`
+	TrackType                 *string                    `json:"track_type"`
+	SourceTag                 *string                    `json:"source_tag"`
+	CoordinateSystem          *string                    `json:"coordinate_system"`
+	Title                     *string                    `json:"title"`
+	Description               *string                    `json:"description"`
+	DescriptionSource         *string                    `json:"description_source"`
+	DescriptionRuleVersion    *int                       `json:"description_rule_version"`
+	StartTime                 *string                    `json:"start_time"`
+	EndTime                   *string                    `json:"end_time"`
+	Distance                  *float64                   `json:"distance"`
+	Duration                  *uint32                    `json:"duration"`
+	CaloriesBurned            *float64                   `json:"calories_burned"`
+	ElevationGain             *int                       `json:"elevation_gain"`
+	RawTrackURL               *string                    `json:"raw_track_url"`
+	TrackScreenshotURL        *string                    `json:"track_screenshot_url"`
+	TrackNoMapBgScreenshotURL *string                    `json:"track_no_map_bg_screenshot_url"`
+	IsRunning                 *bool                      `json:"is_running"`
+	Status                    *models.TrackStatus        `json:"status"`
+	AvgSpeedKmh               *float64                   `json:"avg_speed_kmh"`
+	PreviewImages             *models.TrackPreviewImages `json:"preview_images"`
+}
+
+func applyAdminTrackUpdate(track *models.Track, body updateTrackBody) error {
+	if body.UserID != nil {
+		if *body.UserID < 0 {
+			return errors.New("user_id must be non-negative")
+		}
+		track.UserID = *body.UserID
+	}
+	setString := func(dst *string, src *string, max int, field string) error {
+		if src == nil {
+			return nil
+		}
+		value := strings.TrimSpace(*src)
+		if max > 0 && utf8.RuneCountInString(value) > max {
+			return fmt.Errorf("%s exceeds %d characters", field, max)
+		}
+		*dst = value
+		return nil
+	}
+	for _, field := range []struct {
+		dst  *string
+		src  *string
+		max  int
+		name string
+	}{
+		{&track.SessionID, body.SessionID, 64, "session_id"}, {&track.CityCode, body.CityCode, 16, "city_code"},
+		{&track.LocateAddr, body.LocateAddr, 255, "locate_addr"}, {&track.TrackType, body.TrackType, 32, "track_type"},
+		{&track.SourceTag, body.SourceTag, 64, "source_tag"}, {&track.CoordinateSystem, body.CoordinateSystem, 32, "coordinate_system"},
+		{&track.Title, body.Title, 128, "title"}, {&track.Description, body.Description, 4000, "description"},
+		{&track.DescriptionSource, body.DescriptionSource, 16, "description_source"}, {&track.RawTrackURL, body.RawTrackURL, 255, "raw_track_url"},
+		{&track.TrackScreenshotURL, body.TrackScreenshotURL, 255, "track_screenshot_url"}, {&track.TrackNoMapBgScreenshotURL, body.TrackNoMapBgScreenshotURL, 255, "track_no_map_bg_screenshot_url"},
+	} {
+		if err := setString(field.dst, field.src, field.max, field.name); err != nil {
+			return err
+		}
+	}
+	if body.CityCode != nil && track.CityCode != "" && config.CityNameByCode(track.CityCode) == "" {
+		return errors.New("city_code is not in the city list")
+	}
+	if body.DescriptionRuleVersion != nil {
+		if *body.DescriptionRuleVersion < 0 {
+			return errors.New("description_rule_version must be non-negative")
+		}
+		track.DescriptionRuleVersion = *body.DescriptionRuleVersion
+	}
+	if body.StartTime != nil {
+		value, err := parseAdminTrackTime(*body.StartTime, false)
+		if err != nil {
+			return err
+		}
+		track.StartTime = value
+	}
+	if body.EndTime != nil {
+		value, err := parseAdminTrackTime(*body.EndTime, true)
+		if err != nil {
+			return err
+		}
+		track.EndTime = value
+	}
+	if body.StartTime != nil && track.StartTime.IsZero() {
+		return errors.New("start_time is required")
+	}
+	if body.Distance != nil {
+		if *body.Distance < 0 {
+			return errors.New("distance must be non-negative")
+		}
+		track.Distance = *body.Distance
+	}
+	if body.Duration != nil {
+		track.Duration = *body.Duration
+	}
+	if body.CaloriesBurned != nil {
+		if *body.CaloriesBurned < 0 {
+			return errors.New("calories_burned must be non-negative")
+		}
+		track.CaloriesBurned = *body.CaloriesBurned
+	}
+	if body.ElevationGain != nil {
+		track.ElevationGain = *body.ElevationGain
+	}
+	if body.IsRunning != nil {
+		track.IsRunning = *body.IsRunning
+	}
+	if body.Status != nil {
+		if *body.Status < models.TrackStatusNormal || *body.Status > models.TrackStatusPrivate {
+			return errors.New("status must be 1 or 2; use delete action to remove a track")
+		}
+		track.Status = *body.Status
+	}
+	if body.AvgSpeedKmh != nil {
+		if *body.AvgSpeedKmh < 0 {
+			return errors.New("avg_speed_kmh must be non-negative")
+		}
+		track.AvgSpeedKmh = *body.AvgSpeedKmh
+	}
+	if body.PreviewImages != nil {
+		for _, item := range []struct {
+			value string
+			name  string
+		}{
+			{body.PreviewImages.SquareDayURL, "square_day_url"}, {body.PreviewImages.SquareNightURL, "square_night_url"},
+			{body.PreviewImages.LandscapeDayURL, "landscape_day_url"}, {body.PreviewImages.LandscapeNightURL, "landscape_night_url"},
+		} {
+			if utf8.RuneCountInString(item.value) > 2048 {
+				return fmt.Errorf("preview_images.%s exceeds 2048 characters", item.name)
+			}
+		}
+		track.PreviewImages.SquareDayURL = strings.TrimSpace(body.PreviewImages.SquareDayURL)
+		track.PreviewImages.SquareNightURL = strings.TrimSpace(body.PreviewImages.SquareNightURL)
+		track.PreviewImages.LandscapeDayURL = strings.TrimSpace(body.PreviewImages.LandscapeDayURL)
+		track.PreviewImages.LandscapeNightURL = strings.TrimSpace(body.PreviewImages.LandscapeNightURL)
+	}
+	return nil
+}
+
+func parseAdminTrackTime(raw string, allowEmpty bool) (time.Time, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" && allowEmpty {
+		return time.Time{}, nil
+	}
+	if value, err := time.Parse(time.RFC3339Nano, raw); err == nil {
+		return value, nil
+	}
+	for _, layout := range []string{"2006-01-02T15:04:05", "2006-01-02T15:04"} {
+		if value, err := time.ParseInLocation(layout, raw, time.Local); err == nil {
+			return value, nil
+		}
+	}
+	return time.Time{}, errors.New("time must use YYYY-MM-DD HH:mm format")
 }
 
 // NewHandler 构造管理后台 Handler。
@@ -302,7 +454,7 @@ func decorateDashboardStatistics(statistics *models.AdminDashboardStatistics) {
 		} else {
 			item.Label = config.CityNameByCode(item.Key)
 			if item.Label == "" {
-				item.Label = item.Key
+				item.Label = "未知城市"
 			}
 		}
 	}
@@ -907,9 +1059,34 @@ func (h *Handler) ListTracks(ctx context.Context, c *app.RequestContext) {
 	c.JSON(http.StatusOK, utils.H{"code": 0, "data": resp})
 }
 
+// ListAdminCities returns the built-in city names used by the track editor.
+func (h *Handler) ListAdminCities(ctx context.Context, c *app.RequestContext) {
+	_ = ctx
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": config.CityOptions()})
+}
+
+// GetTrack returns the persisted track fields without rewriting asset URLs.
+func (h *Handler) GetTrack(ctx context.Context, c *app.RequestContext) {
+	if h == nil || h.trackRepo == nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "track repository not configured"})
+		return
+	}
+	trackID := strings.TrimSpace(c.Param("track_id"))
+	if trackID == "" {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "track_id is required"})
+		return
+	}
+	track, err := h.trackRepo.FindByID(ctx, trackID)
+	if err != nil {
+		handleAdminRepoError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": track})
+}
+
 // UpdateTrack 处理 PUT /admin/api/tracks/:track_id
 //
-// 管理后台只允许修正运营展示字段：title 与 city_code。
+// 管理后台允许修正轨迹业务字段与预览图；ID、轨迹点和创建/更新时间保持系统管理。
 func (h *Handler) UpdateTrack(ctx context.Context, c *app.RequestContext) {
 	if h == nil || h.trackRepo == nil {
 		c.JSON(http.StatusInternalServerError, utils.H{"error": "track repository not configured"})
@@ -926,8 +1103,8 @@ func (h *Handler) UpdateTrack(ctx context.Context, c *app.RequestContext) {
 		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid payload"})
 		return
 	}
-	if body.Title == nil && body.CityCode == nil {
-		c.JSON(http.StatusBadRequest, utils.H{"error": "title or city_code is required"})
+	if body == (updateTrackBody{}) {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "at least one track field is required"})
 		return
 	}
 	track, err := h.trackRepo.FindByID(ctx, trackID)
@@ -935,30 +1112,35 @@ func (h *Handler) UpdateTrack(ctx context.Context, c *app.RequestContext) {
 		handleAdminRepoError(c, err)
 		return
 	}
-	oldCityCode := track.CityCode
-	if body.Title != nil {
-		title := strings.TrimSpace(*body.Title)
-		if utf8.RuneCountInString(title) > 128 {
-			c.JSON(http.StatusBadRequest, utils.H{"error": "title exceeds 128 characters"})
-			return
-		}
-		track.Title = title
-	}
-	if body.CityCode != nil {
-		cityCode := strings.TrimSpace(*body.CityCode)
-		if utf8.RuneCountInString(cityCode) > 16 {
-			c.JSON(http.StatusBadRequest, utils.H{"error": "city_code exceeds 16 characters"})
-			return
-		}
-		track.CityCode = cityCode
+	oldCityCode, oldType := track.CityCode, track.TrackType
+	oldStatus, oldRunning, oldRawURL := track.Status, track.IsRunning, track.RawTrackURL
+	if err := applyAdminTrackUpdate(track, body); err != nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": err.Error()})
+		return
 	}
 	if err := h.trackRepo.Update(ctx, track); err != nil {
 		handleAdminRepoError(c, err)
 		return
 	}
-	if h.trackMapRepo != nil && body.CityCode != nil && oldCityCode != track.CityCode {
+	mapEligibilityChanged := oldStatus != track.Status || oldRunning != track.IsRunning || oldRawURL != track.RawTrackURL
+	if h.trackMapRepo != nil && mapEligibilityChanged {
+		if cleaner, ok := h.trackMapRepo.(trackMapCleanupRepository); ok {
+			if err := cleaner.CleanupDeletedTrack(ctx, track.ID); err != nil {
+				c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+				return
+			}
+		}
+		if track.Status == models.TrackStatusNormal && !track.IsRunning && strings.TrimSpace(track.RawTrackURL) != "" {
+			if err := h.trackMapRepo.EnqueueIndexJob(ctx, track.ID, time.Now()); err != nil {
+				c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+				return
+			}
+		}
+	}
+	if h.trackMapRepo != nil && (oldCityCode != track.CityCode || oldType != track.TrackType) {
 		if index, err := h.trackMapRepo.FindTrackGeoIndex(ctx, track.ID); err == nil && index != nil {
 			index.CityCode = track.CityCode
+			index.TrackType = track.TrackType
 			if err := h.trackMapRepo.UpsertTrackGeoIndex(ctx, index); err != nil {
 				c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
 				return
@@ -1252,10 +1434,12 @@ func (h *Handler) decorateAdminTrackAssetURLs(ctx context.Context, items []*mode
 		if h != nil && h.screenshotCache != nil {
 			item.TrackScreenshotURL = h.ensureAdminScreenshotCached(ctx, item.UserID, item.ID, item.TrackScreenshotURL)
 			item.TrackNoMapBgScreenshotURL = h.ensureAdminScreenshotCached(ctx, item.UserID, item.ID+"_no_map_bg", item.TrackNoMapBgScreenshotURL)
+			item.PreviewImages.LandscapeDayURL = h.ensureAdminScreenshotCached(ctx, item.UserID, item.ID+"_landscape_day", item.PreviewImages.LandscapeDayURL)
 		}
 		item.TrackScreenshotURL = rewriteAdminStaticURL(item.TrackScreenshotURL)
 		item.TrackNoMapBgScreenshotURL = rewriteAdminStaticURL(item.TrackNoMapBgScreenshotURL)
 		item.RawTrackURL = rewriteAdminStaticURL(item.RawTrackURL)
+		item.PreviewImages.LandscapeDayURL = rewriteAdminStaticURL(item.PreviewImages.LandscapeDayURL)
 	}
 }
 

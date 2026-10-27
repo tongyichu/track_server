@@ -97,6 +97,19 @@ table.data .danger { color: #d93026; background: #fff; border: 1px solid #d93026
 .thumbs img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .track-shot { display: block; width: 72px; height: 54px; border: 1px solid #e5e6eb; border-radius: 4px; overflow: hidden; background: #f7f8fa; }
 .track-shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.track-stat-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.track-stat-grid .panel { min-width: 0; }
+.track-stat-grid table.data { margin-top: 0; }
+.track-stat-grid tbody { display: block; max-height: 230px; overflow-y: auto; }
+.track-stat-grid thead, .track-stat-grid tr { display: table; width: 100%; table-layout: fixed; }
+.admin-dialog-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.admin-dialog-form .form-label.full { grid-column: 1 / -1; }
+.admin-dialog-form textarea.form-control { min-height: 88px; }
+@media (max-width: 767px) {
+  .track-stat-grid { grid-template-columns: 1fr; gap: 12px; }
+  .admin-dialog-form { grid-template-columns: 1fr; }
+  .admin-dialog-form .form-label.full { grid-column: auto; }
+}
 .compact-grid { grid-template-columns: 220px 1fr; margin-top: 12px; }
 
 @media (max-width: 720px) {

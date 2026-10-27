@@ -28,6 +28,16 @@
   </header>
 
   <main class="container wide">
+    <div class="track-stat-grid">
+      <section class="panel">
+        <h2>本月轨迹类型</h2>
+        <div class="table-responsive"><table class="data"><thead><tr><th>类型</th><th>轨迹数</th></tr></thead><tbody id="typeStats"><tr><td colspan="2" class="hint">加载中</td></tr></tbody></table></div>
+      </section>
+      <section class="panel">
+        <h2>本月城市分布</h2>
+        <div class="table-responsive"><table class="data"><thead><tr><th>城市</th><th>轨迹数</th></tr></thead><tbody id="cityStats"><tr><td colspan="2" class="hint">加载中</td></tr></tbody></table></div>
+      </section>
+    </div>
     <section class="panel">
       <h2>轨迹列表 <span class="hint" id="totalHint"></span></h2>
       <div class="row">
@@ -39,9 +49,9 @@
       <table class="data">
         <thead>
           <tr>
-            <th>截图</th><th>ID</th><th>用户ID</th><th>标题</th><th>类型</th>
+            <th>日间预览</th><th>ID</th><th>用户ID</th><th>标题</th><th>类型</th>
             <th>城市</th><th>距离(m)</th><th>时长(s)</th>
-            <th>状态</th><th>开始时间</th><th>结束时间</th><th>操作</th>
+            <th>状态</th><th>开始时间</th><th>操作</th>
           </tr>
         </thead>
         <tbody id="trackList"></tbody>
