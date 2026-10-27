@@ -141,6 +141,14 @@ func (r *MongoTrackSubmissionRepository) List(ctx context.Context, filter models
 	return items, cur.Err()
 }
 
+func (r *MongoTrackSubmissionRepository) CountAdminSubmissionsBetween(ctx context.Context, start, end time.Time) (int64, error) {
+	return r.collection.CountDocuments(ctx, bson.M{"submitted_at": bson.M{"$gte": start, "$lt": end}})
+}
+
+func (r *MongoTrackSubmissionRepository) CountAdminSubmissionsByStatus(ctx context.Context, status models.TrackSubmissionStatus) (int64, error) {
+	return r.collection.CountDocuments(ctx, bson.M{"status": status})
+}
+
 func mongoEvent(event *models.TrackSubmissionEvent) interface{} {
 	if event == nil {
 		return bson.M{}

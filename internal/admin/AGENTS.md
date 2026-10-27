@@ -15,6 +15,7 @@
 - 查看埋点 OSS 同步摘要（任务状态、文件列表、OSS key、字节数、耗时与错误）。
 - 在用户管理页查看、创建和解除账号限制；账号限制会由业务侧中间件拦截上传、发起同行、关注、收藏、修改资料等动作。
 - 查看和人工运营路线发现 RouteGroup（展示离线 `area_id` 对应的区域名称、类型与介绍页，支持改名、合并、移除成员、指定代表轨迹，以及编辑、发布和下线双语路线介绍）。
+- 通过响应式工作台查看业务库即时统计（日/周/月新增用户、已完成上传轨迹、上传用户、投稿与待审核数）；该口径不依赖 T+1 埋点同步。
 - 审核用户轨迹投稿，查看结构化路线资料和经本地缓存改写的投稿图片，按 revision 通过或驳回。
 - 查看、修正和删除用户轨迹；列表展示 `track_screenshot_url` 缩略图，OSS 截图需先经共享截图缓存落盘再通过后台静态代理访问；修正仅允许改 `title` / `city_code`，删除为软删除，并同步清理收藏关系与首页地图索引/路线组成员。
 
@@ -53,6 +54,7 @@ internal/admin/
 | 鉴权与 cookie | `auth.go`（`sessionCookieName = "admin_session"`） |
 | 业务依赖注入 | `routes.go` 的 `NewModule(accounts, releaseSvc, stsSvc, staticRoot, userRepo, trackRepo, collectRepo, trackMapRepo, ..., restrictionSvc, routeGroupSvc)`；`cmd/server/main.go` 创建后通过 `Handler.SetScreenshotCache(screenshotCache)` 和 `Handler.SetTrackSubmissionService(trackSubmissionSvc)` 注入缓存与投稿服务 |
 | 前端入口 | `static/login.html`、`static/index.html` |
+| 响应式外壳与工作台 | `static/shell.js`、`static/style.css`、`static/dashboard.html`、`static/dashboard.js`；图表库固定为内置 `static/vendor/echarts.min.js`，不要改成运行时 CDN |
 | 安装包上传 | `handlers.go` 中 `UploadPackage`、`static/app.js` 中 `/admin/api/releases/upload-package` |
 | 用户与账号限制 | `handlers.go` 中 `ListUsers` / `CreateAccountRestriction` / `GetCurrentAccountRestriction` / `RevokeCurrentAccountRestriction`，`static/users.html`、`static/users.js` |
 | 意见反馈管理 | `handlers.go` 中 `ListFeedbacks` / `GetFeedback` / `UpdateFeedbackStatus` / `GetFeedbackImage`，`static/feedbacks.html`、`static/feedbacks.js` |
@@ -67,6 +69,8 @@ internal/admin/
 | GET | `/admin/`、`/admin` | 公开 | 302 跳转 `/admin/login.html` |
 | GET | `/admin/login.html` | 公开 | 登录页 |
 | GET | `/admin/index.html` | 公开 | 管理首页（页面内会拉 `/admin/api/me` 校验） |
+| GET | `/admin/dashboard.html` | 公开 | 响应式运营工作台（页面内会拉 `/admin/api/me` 校验） |
+| GET | `/admin/more.html` | 公开 | 移动端低频功能入口（页面内会拉 `/admin/api/me` 校验） |
 | GET | `/admin/route_groups.html` | 公开 | 聚合路线运营页（页面内会拉 `/admin/api/me` 校验） |
 | GET | `/admin/track_submissions.html` | 公开 | 轨迹投稿审核页（页面内会拉 `/admin/api/me` 校验） |
 | GET | `/admin/static/*filepath` | 公开 | 内置静态资源 |
@@ -74,6 +78,7 @@ internal/admin/
 | POST | `/admin/api/logout` | 公开 | 删除 session + 清 cookie |
 | GET | `/admin/api/me` | 公开 | 返回当前会话；未登录返回 401 |
 | GET | `/admin/api/releases` | 鉴权 | 列出发布记录，支持 `platform` / `status` 过滤 |
+| GET | `/admin/api/dashboard` | 鉴权 | 业务库即时统计；`period=day|week|month`，返回同进度上周期对比与日趋势 |
 | POST | `/admin/api/releases` | 鉴权 | 发布/覆盖一个版本（按 `(platform, version_code)` 幂等） |
 | DELETE | `/admin/api/releases/:id` | 鉴权 | 删除一条发布记录 |
 | POST | `/admin/api/releases/upload-package` | 鉴权 | multipart 上传安装包到 `<LogDir>/static/release/<platform>/` |
@@ -221,7 +226,7 @@ GET /admin/api/users
 - **加一个管理后台 API**：在 `handlers.go` 写 handler → `routes.go` 的 `api := g.Group("/api", m.Auth.AuthMiddleware())` 下挂载。需要操作者信息时用 `h.auth.SessionFromRequest(c)`。
 - **展示业务静态资源**：后台页面不要直接使用 `/api/v1/static/*`，应由 handler 改写为 `/admin/api/static/*`，通过 admin session 鉴权后读取 `staticRoot`。
 - **加一个公开页面/资源**：把文件放进 `static/`，在 `routes.go` 用 `serveEmbedded(...)` 或走 `/admin/static/*filepath`。**不要新增第二个 `go:embed`**。
-- **加一个侧边/顶部入口**：同步更新所有后台页面的 `<nav>`，避免新增页面成为孤岛。
+- **加一个侧边/顶部入口**：统一修改 `static/shell.js` 的导航配置；页面只需在自身脚本前加载 `shell.js`，不要再复制一份导航。
 - **改 cookie 策略**：只在 `auth.go` 改；保持 `HttpOnly=true`，跨站调用前提下才考虑 `SameSite=None + Secure`。
 - **调整 session TTL**：改 `routes.go` 中 `NewSessionStore(12 * time.Hour)`，不要在 cookie 与 store 两边写不一致的过期时间。
 

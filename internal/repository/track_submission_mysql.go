@@ -240,6 +240,24 @@ func (r *MySQLTrackSubmissionRepository) List(ctx context.Context, filter models
 	return items, nil
 }
 
+func (r *MySQLTrackSubmissionRepository) CountAdminSubmissionsBetween(ctx context.Context, start, end time.Time) (int64, error) {
+	row := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM track_submissions WHERE submitted_at >= ? AND submitted_at < ?`, start, end)
+	var count int64
+	if err := row.Scan(&count); err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+func (r *MySQLTrackSubmissionRepository) CountAdminSubmissionsByStatus(ctx context.Context, status models.TrackSubmissionStatus) (int64, error) {
+	row := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM track_submissions WHERE status = ?`, status)
+	var count int64
+	if err := row.Scan(&count); err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
 func (r *MySQLTrackSubmissionRepository) Review(ctx context.Context, submissionID string, expectedRevision int64, status models.TrackSubmissionStatus, reviewer, reason string, now time.Time, event *models.TrackSubmissionEvent) error {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {

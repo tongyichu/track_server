@@ -157,6 +157,30 @@ func (r *InMemoryTrackSubmissionRepository) List(_ context.Context, filter model
 	return items, nil
 }
 
+func (r *InMemoryTrackSubmissionRepository) CountAdminSubmissionsBetween(_ context.Context, start, end time.Time) (int64, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var count int64
+	for _, sub := range r.byID {
+		if sub != nil && !sub.SubmittedAt.Before(start) && sub.SubmittedAt.Before(end) {
+			count++
+		}
+	}
+	return count, nil
+}
+
+func (r *InMemoryTrackSubmissionRepository) CountAdminSubmissionsByStatus(_ context.Context, status models.TrackSubmissionStatus) (int64, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var count int64
+	for _, sub := range r.byID {
+		if sub != nil && sub.Status == status {
+			count++
+		}
+	}
+	return count, nil
+}
+
 func (r *InMemoryTrackSubmissionRepository) Review(_ context.Context, submissionID string, expectedRevision int64, status models.TrackSubmissionStatus, reviewer, reason string, now time.Time, event *models.TrackSubmissionEvent) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()

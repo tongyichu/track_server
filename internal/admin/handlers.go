@@ -109,6 +109,144 @@ func (h *Handler) SetTrackSubmissionService(svc *service.TrackSubmissionService)
 	}
 }
 
+type adminMetricComparison struct {
+	Current  int64 `json:"current"`
+	Previous int64 `json:"previous"`
+}
+
+func dashboardPeriodBounds(now time.Time, period string) (currentStart, previousStart, previousEnd, trendStart time.Time, normalized string) {
+	location := now.Location()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, location)
+	switch period {
+	case "week":
+		daysFromMonday := (int(today.Weekday()) + 6) % 7
+		currentStart = today.AddDate(0, 0, -daysFromMonday)
+		previousStart = currentStart.AddDate(0, 0, -7)
+		trendStart = currentStart.AddDate(0, 0, -21)
+		normalized = "week"
+	case "month":
+		currentStart = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, location)
+		previousStart = currentStart.AddDate(0, -1, 0)
+		trendStart = today.AddDate(0, 0, -29)
+		normalized = "month"
+	default:
+		currentStart = today
+		previousStart = today.AddDate(0, 0, -1)
+		trendStart = today.AddDate(0, 0, -6)
+		normalized = "day"
+	}
+	previousEnd = previousStart.Add(now.Sub(currentStart))
+	if previousEnd.After(currentStart) {
+		previousEnd = currentStart
+	}
+	return
+}
+
+func mergeAdminDailyCounts(start, end time.Time, users, uploads []models.AdminDailyCount) []utils.H {
+	userCounts := make(map[string]int64, len(users))
+	uploadCounts := make(map[string]int64, len(uploads))
+	for _, item := range users {
+		userCounts[item.Date] = item.Count
+	}
+	for _, item := range uploads {
+		uploadCounts[item.Date] = item.Count
+	}
+	items := make([]utils.H, 0)
+	for day := start; day.Before(end); day = day.AddDate(0, 0, 1) {
+		date := day.Format("2006-01-02")
+		items = append(items, utils.H{"date": date, "new_users": userCounts[date], "uploaded_tracks": uploadCounts[date]})
+	}
+	return items
+}
+
+// GetDashboard returns real-time business-database aggregates. It is read-only
+// and intentionally independent from the T+1 analytics synchronization flow.
+func (h *Handler) GetDashboard(ctx context.Context, c *app.RequestContext) {
+	if h == nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "dashboard statistics not configured"})
+		return
+	}
+	userStats, usersOK := h.userRepo.(repository.AdminUserStatisticsRepository)
+	trackStats, tracksOK := h.trackRepo.(repository.AdminTrackStatisticsRepository)
+	if !usersOK || !tracksOK || h.trackSubmissionSvc == nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "dashboard statistics not configured"})
+		return
+	}
+
+	now := time.Now()
+	start, previousStart, previousEnd, trendStart, period := dashboardPeriodBounds(now, strings.TrimSpace(string(c.Query("period"))))
+	newUsers, err := userStats.CountAdminUsersBetween(ctx, start, now)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	previousUsers, err := userStats.CountAdminUsersBetween(ctx, previousStart, previousEnd)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	uploadedTracks, err := trackStats.CountAdminUploadsBetween(ctx, start, now)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	previousTracks, err := trackStats.CountAdminUploadsBetween(ctx, previousStart, previousEnd)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	uploadUsers, err := trackStats.CountAdminUploadUsersBetween(ctx, start, now)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	previousUploadUsers, err := trackStats.CountAdminUploadUsersBetween(ctx, previousStart, previousEnd)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	submissions, err := h.trackSubmissionSvc.CountAdminSubmissionsBetween(ctx, start, now)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	previousSubmissions, err := h.trackSubmissionSvc.CountAdminSubmissionsBetween(ctx, previousStart, previousEnd)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	pendingSubmissions, err := h.trackSubmissionSvc.CountAdminSubmissionsByStatus(ctx, models.TrackSubmissionStatusPending)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	dailyUsers, err := userStats.ListAdminDailyUserCounts(ctx, trendStart, now)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	dailyTracks, err := trackStats.ListAdminDailyUploadCounts(ctx, trendStart, now)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	trendEnd := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 0, 1)
+
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{
+		"period": period,
+		"range":  utils.H{"start": start, "end": now, "previous_start": previousStart, "previous_end": previousEnd},
+		"metrics": utils.H{
+			"new_users":           adminMetricComparison{Current: newUsers, Previous: previousUsers},
+			"uploaded_tracks":     adminMetricComparison{Current: uploadedTracks, Previous: previousTracks},
+			"upload_users":        adminMetricComparison{Current: uploadUsers, Previous: previousUploadUsers},
+			"submissions":         adminMetricComparison{Current: submissions, Previous: previousSubmissions},
+			"pending_submissions": pendingSubmissions,
+		},
+		"trend":      mergeAdminDailyCounts(trendStart, trendEnd, dailyUsers, dailyTracks),
+		"updated_at": now,
+	}})
+}
+
 // ----- 轨迹投稿审核 -----
 
 func (h *Handler) ListTrackSubmissions(ctx context.Context, c *app.RequestContext) {

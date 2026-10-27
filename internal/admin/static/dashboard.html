@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>工作台 - Track</title>
+  <link rel="stylesheet" href="/admin/static/style.css" />
+</head>
+<body>
+  <header class="topbar"></header>
+  <main class="container wide dashboard-page">
+    <div class="page-heading">
+      <div><h1>运营工作台</h1><p>业务库即时数据，不依赖次日埋点同步</p></div>
+      <div class="period-tabs" role="group" aria-label="统计周期">
+        <button data-period="day" class="active">日</button>
+        <button data-period="week">周</button>
+        <button data-period="month">月</button>
+      </div>
+    </div>
+
+    <div id="dashboardError" class="notice error hidden"></div>
+    <section class="metric-grid" aria-live="polite">
+      <article class="metric-card"><span>新增用户</span><strong id="newUsers">--</strong><small id="newUsersDelta">正在加载</small></article>
+      <article class="metric-card"><span>新增用户轨迹</span><strong id="uploadedTracks">--</strong><small id="uploadedTracksDelta">正在加载</small></article>
+      <article class="metric-card"><span>上传轨迹用户</span><strong id="uploadUsers">--</strong><small id="uploadUsersDelta">正在加载</small></article>
+      <article class="metric-card"><span>新增投稿</span><strong id="submissions">--</strong><small id="submissionsDelta">正在加载</small></article>
+    </section>
+
+    <section class="dashboard-grid">
+      <article class="panel chart-panel">
+        <div class="panel-heading"><div><h2>新增趋势</h2><span class="hint" id="rangeHint"></span></div><button id="refreshDashboard" class="quiet-button">刷新</button></div>
+        <div id="trendChart" class="trend-chart" role="img" aria-label="新增用户和新增用户轨迹趋势图"></div>
+      </article>
+      <aside class="panel action-panel">
+        <h2>待办事项</h2>
+        <a class="todo-card" href="/admin/track_submissions.html?status=pending">
+          <span><b>待审核投稿</b><small>进入投稿审核队列</small></span><strong id="pendingSubmissions">--</strong>
+        </a>
+        <h2 class="subhead">常用操作</h2>
+        <div class="quick-links">
+          <a href="/admin/tracks.html">调整轨迹信息</a>
+          <a href="/admin/users.html">查看用户</a>
+          <a href="/admin/feedbacks.html">处理反馈</a>
+          <a href="/admin/index.html">发布 App</a>
+        </div>
+      </aside>
+    </section>
+    <p class="dashboard-updated" id="updatedAt"></p>
+  </main>
+  <script src="/admin/static/shell.js"></script>
+  <script src="/admin/static/vendor/echarts.min.js"></script>
+  <script src="/admin/static/dashboard.js"></script>
+</body>
+</html>

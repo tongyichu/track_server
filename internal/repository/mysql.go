@@ -2139,6 +2139,48 @@ func (r *MySQLTrackRepository) CountAll(ctx context.Context) (int64, error) {
 	return count, nil
 }
 
+func (r *MySQLTrackRepository) CountAdminUploadsBetween(ctx context.Context, start, end time.Time) (int64, error) {
+	row := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM track_records
+		WHERE created_at >= ? AND created_at < ? AND deleted_at IS NULL AND status <> ?
+		AND is_running = 0 AND raw_track_url IS NOT NULL AND raw_track_url <> ''`, start, end, models.TrackStatusDeleted)
+	var count int64
+	if err := row.Scan(&count); err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+func (r *MySQLTrackRepository) CountAdminUploadUsersBetween(ctx context.Context, start, end time.Time) (int64, error) {
+	row := r.db.QueryRowContext(ctx, `SELECT COUNT(DISTINCT user_id) FROM track_records
+		WHERE created_at >= ? AND created_at < ? AND deleted_at IS NULL AND status <> ?
+		AND is_running = 0 AND raw_track_url IS NOT NULL AND raw_track_url <> ''`, start, end, models.TrackStatusDeleted)
+	var count int64
+	if err := row.Scan(&count); err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+func (r *MySQLTrackRepository) ListAdminDailyUploadCounts(ctx context.Context, start, end time.Time) ([]models.AdminDailyCount, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT DATE_FORMAT(created_at, '%Y-%m-%d'), COUNT(*) FROM track_records
+		WHERE created_at >= ? AND created_at < ? AND deleted_at IS NULL AND status <> ?
+		AND is_running = 0 AND raw_track_url IS NOT NULL AND raw_track_url <> ''
+		GROUP BY DATE_FORMAT(created_at, '%Y-%m-%d') ORDER BY 1`, start, end, models.TrackStatusDeleted)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := make([]models.AdminDailyCount, 0)
+	for rows.Next() {
+		var item models.AdminDailyCount
+		if err := rows.Scan(&item.Date, &item.Count); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
 func (r *MySQLTrackWaypointRepository) Create(ctx context.Context, waypoint *models.TrackWaypoint) error {
 	if waypoint.TrackID == "" {
 		return errors.New("track waypoint track_id is required")
@@ -2474,6 +2516,33 @@ func (r *MySQLUserRepository) CountAll(ctx context.Context) (int64, error) {
 		return 0, err
 	}
 	return count, nil
+}
+
+func (r *MySQLUserRepository) CountAdminUsersBetween(ctx context.Context, start, end time.Time) (int64, error) {
+	row := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE created_at >= ? AND created_at < ?`, start, end)
+	var count int64
+	if err := row.Scan(&count); err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+func (r *MySQLUserRepository) ListAdminDailyUserCounts(ctx context.Context, start, end time.Time) ([]models.AdminDailyCount, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT DATE_FORMAT(created_at, '%Y-%m-%d'), COUNT(*) FROM users
+		WHERE created_at >= ? AND created_at < ? GROUP BY DATE_FORMAT(created_at, '%Y-%m-%d') ORDER BY 1`, start, end)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := make([]models.AdminDailyCount, 0)
+	for rows.Next() {
+		var item models.AdminDailyCount
+		if err := rows.Scan(&item.Date, &item.Count); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
 }
 
 type MySQLAccountRestrictionRepository struct{ db *sql.DB }

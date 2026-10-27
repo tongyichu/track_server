@@ -69,6 +69,22 @@ func NewTrackSubmissionService(repo repository.TrackSubmissionRepository, tracks
 
 func (s *TrackSubmissionService) SetImageCache(cache *AssetCacheService) { s.imageCache = cache }
 
+func (s *TrackSubmissionService) CountAdminSubmissionsBetween(ctx context.Context, start, end time.Time) (int64, error) {
+	stats, ok := s.repo.(repository.AdminTrackSubmissionStatisticsRepository)
+	if !ok {
+		return 0, errors.New("track submission statistics not supported")
+	}
+	return stats.CountAdminSubmissionsBetween(ctx, start, end)
+}
+
+func (s *TrackSubmissionService) CountAdminSubmissionsByStatus(ctx context.Context, status models.TrackSubmissionStatus) (int64, error) {
+	stats, ok := s.repo.(repository.AdminTrackSubmissionStatisticsRepository)
+	if !ok {
+		return 0, errors.New("track submission statistics not supported")
+	}
+	return stats.CountAdminSubmissionsByStatus(ctx, status)
+}
+
 func submissionID(prefix string) (string, error) {
 	buf := make([]byte, 12)
 	if _, err := rand.Read(buf); err != nil {

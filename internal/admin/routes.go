@@ -63,6 +63,7 @@ func (m *Module) Close() {
 // - GET /admin/                       重定向到 /admin/login.html
 // - GET /admin/login.html             登录页（公开）
 // - GET /admin/index.html             管理首页（公开静态文件，前端会拉 /admin/api/me）
+// - GET /admin/dashboard.html         即时运营工作台（公开静态文件，数据 API 鉴权）
 // - GET /admin/static/*               其它静态资源（公开）
 // - POST /admin/api/login             登录
 // - POST /admin/api/logout            退出
@@ -102,6 +103,8 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	// 静态资源：直接从 embed.FS 读出来返回
 	g.GET("/login.html", serveEmbedded("static/login.html", "text/html; charset=utf-8"))
 	g.GET("/index.html", serveEmbedded("static/index.html", "text/html; charset=utf-8"))
+	g.GET("/dashboard.html", serveEmbedded("static/dashboard.html", "text/html; charset=utf-8"))
+	g.GET("/more.html", serveEmbedded("static/more.html", "text/html; charset=utf-8"))
 	g.GET("/users.html", serveEmbedded("static/users.html", "text/html; charset=utf-8"))
 	g.GET("/tracks.html", serveEmbedded("static/tracks.html", "text/html; charset=utf-8"))
 	g.GET("/route_groups.html", serveEmbedded("static/route_groups.html", "text/html; charset=utf-8"))
@@ -124,6 +127,7 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	api.DELETE("/releases/:id", m.Handler.DeleteRelease)
 	api.GET("/releases/upload-token", m.Handler.GetReleaseUploadCredential)
 	api.POST("/releases/upload-package", m.Handler.UploadPackage)
+	api.GET("/dashboard", m.Handler.GetDashboard)
 
 	// 用户 / 轨迹 / 同行 列表（仅查询，提供基础翻页）
 	api.GET("/static/*filepath", m.Handler.GetStaticAsset)

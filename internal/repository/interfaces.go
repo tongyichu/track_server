@@ -82,6 +82,15 @@ type TrackRepository interface {
 	ClearPreviewImages(ctx context.Context, id, resetVersion string) (int64, error)
 }
 
+// AdminTrackStatisticsRepository is an additive, management-only capability.
+// TrackRepository deliberately does not embed it so business repositories and
+// call sites keep their existing contract.
+type AdminTrackStatisticsRepository interface {
+	CountAdminUploadsBetween(ctx context.Context, start, end time.Time) (int64, error)
+	CountAdminUploadUsersBetween(ctx context.Context, start, end time.Time) (int64, error)
+	ListAdminDailyUploadCounts(ctx context.Context, start, end time.Time) ([]models.AdminDailyCount, error)
+}
+
 // TrackCaloriesBackfiller is implemented by repositories that can repair
 // historical tracks whose calories were not persisted by older clients.
 type TrackCaloriesBackfiller interface {
@@ -102,6 +111,13 @@ type TrackSubmissionRepository interface {
 	Withdraw(ctx context.Context, trackID string, userID int64, now time.Time, event *models.TrackSubmissionEvent) error
 	Invalidate(ctx context.Context, trackID, reason string, now time.Time, event *models.TrackSubmissionEvent) error
 	ListEvents(ctx context.Context, submissionID string) ([]*models.TrackSubmissionEvent, error)
+}
+
+// AdminTrackSubmissionStatisticsRepository exposes read-only submission counts
+// without changing the submission lifecycle contract.
+type AdminTrackSubmissionStatisticsRepository interface {
+	CountAdminSubmissionsBetween(ctx context.Context, start, end time.Time) (int64, error)
+	CountAdminSubmissionsByStatus(ctx context.Context, status models.TrackSubmissionStatus) (int64, error)
 }
 
 // encodeTrackID 将全局递增序列编码成业务侧使用的轨迹 ID。
@@ -191,6 +207,13 @@ type UserRepository interface {
 	ListAll(ctx context.Context, cursor *models.UserListCursor, limit int) ([]*models.User, error)
 	// CountAll 返回全量用户数量。仅供管理后台使用。
 	CountAll(ctx context.Context) (int64, error)
+}
+
+// AdminUserStatisticsRepository exposes read-only user aggregates for the
+// management dashboard without widening UserRepository.
+type AdminUserStatisticsRepository interface {
+	CountAdminUsersBetween(ctx context.Context, start, end time.Time) (int64, error)
+	ListAdminDailyUserCounts(ctx context.Context, start, end time.Time) ([]models.AdminDailyCount, error)
 }
 
 // AccountRestrictionRepository defines persistence operations for management-center account restrictions.

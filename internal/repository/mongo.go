@@ -425,6 +425,52 @@ func (r *MongoTrackRepository) CountAll(ctx context.Context) (int64, error) {
 	return r.collection.CountDocuments(ctx, bson.M{"status": bson.M{"$ne": models.TrackStatusDeleted}})
 }
 
+func adminMongoTrackUploadFilter(start, end time.Time) bson.M {
+	return bson.M{
+		"created_at":    bson.M{"$gte": start, "$lt": end},
+		"status":        bson.M{"$ne": models.TrackStatusDeleted},
+		"is_running":    false,
+		"raw_track_url": bson.M{"$exists": true, "$nin": bson.A{"", nil}},
+	}
+}
+
+func (r *MongoTrackRepository) CountAdminUploadsBetween(ctx context.Context, start, end time.Time) (int64, error) {
+	return r.collection.CountDocuments(ctx, adminMongoTrackUploadFilter(start, end))
+}
+
+func (r *MongoTrackRepository) CountAdminUploadUsersBetween(ctx context.Context, start, end time.Time) (int64, error) {
+	values, err := r.collection.Distinct(ctx, "user_id", adminMongoTrackUploadFilter(start, end))
+	if err != nil {
+		return 0, err
+	}
+	return int64(len(values)), nil
+}
+
+func (r *MongoTrackRepository) ListAdminDailyUploadCounts(ctx context.Context, start, end time.Time) ([]models.AdminDailyCount, error) {
+	timezone := time.Now().Format("-07:00")
+	cur, err := r.collection.Aggregate(ctx, mongo.Pipeline{
+		{{Key: "$match", Value: adminMongoTrackUploadFilter(start, end)}},
+		{{Key: "$group", Value: bson.M{"_id": bson.M{"$dateToString": bson.M{"date": "$created_at", "format": "%Y-%m-%d", "timezone": timezone}}, "count": bson.M{"$sum": 1}}}},
+		{{Key: "$sort", Value: bson.D{{Key: "_id", Value: 1}}}},
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+	items := make([]models.AdminDailyCount, 0)
+	for cur.Next(ctx) {
+		var row struct {
+			Date  string `bson:"_id"`
+			Count int64  `bson:"count"`
+		}
+		if err := cur.Decode(&row); err != nil {
+			return nil, err
+		}
+		items = append(items, models.AdminDailyCount{Date: row.Date, Count: row.Count})
+	}
+	return items, cur.Err()
+}
+
 func (r *MongoTrackRepository) listTracks(ctx context.Context, filter interface{}, opts ...*options.FindOptions) ([]*models.Track, error) {
 	cur, err := r.collection.Find(ctx, filter, opts...)
 	if err != nil {
@@ -604,6 +650,35 @@ func (r *MongoUserRepository) ListAll(ctx context.Context, cursor *models.UserLi
 // CountAll is not implemented in this demo and returns an error.
 func (r *MongoUserRepository) CountAll(context.Context) (int64, error) {
 	return 0, errors.New("MongoUserRepository.CountAll not implemented")
+}
+
+func (r *MongoUserRepository) CountAdminUsersBetween(ctx context.Context, start, end time.Time) (int64, error) {
+	return r.collection.CountDocuments(ctx, bson.M{"created_at": bson.M{"$gte": start, "$lt": end}})
+}
+
+func (r *MongoUserRepository) ListAdminDailyUserCounts(ctx context.Context, start, end time.Time) ([]models.AdminDailyCount, error) {
+	timezone := time.Now().Format("-07:00")
+	cur, err := r.collection.Aggregate(ctx, mongo.Pipeline{
+		{{Key: "$match", Value: bson.M{"created_at": bson.M{"$gte": start, "$lt": end}}}},
+		{{Key: "$group", Value: bson.M{"_id": bson.M{"$dateToString": bson.M{"date": "$created_at", "format": "%Y-%m-%d", "timezone": timezone}}, "count": bson.M{"$sum": 1}}}},
+		{{Key: "$sort", Value: bson.D{{Key: "_id", Value: 1}}}},
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+	items := make([]models.AdminDailyCount, 0)
+	for cur.Next(ctx) {
+		var row struct {
+			Date  string `bson:"_id"`
+			Count int64  `bson:"count"`
+		}
+		if err := cur.Decode(&row); err != nil {
+			return nil, err
+		}
+		items = append(items, models.AdminDailyCount{Date: row.Date, Count: row.Count})
+	}
+	return items, cur.Err()
 }
 
 type MongoAccountRestrictionRepository struct {

@@ -457,6 +457,47 @@ func (r *InMemoryTrackRepository) CountAll(_ context.Context) (int64, error) {
 	return count, nil
 }
 
+func isAdminUploadedTrack(t *models.Track, start, end time.Time) bool {
+	return t != nil && !t.CreatedAt.Before(start) && t.CreatedAt.Before(end) &&
+		t.Status != models.TrackStatusDeleted && !t.IsRunning && strings.TrimSpace(t.RawTrackURL) != ""
+}
+
+func (r *InMemoryTrackRepository) CountAdminUploadsBetween(_ context.Context, start, end time.Time) (int64, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var count int64
+	for _, track := range r.tracks {
+		if isAdminUploadedTrack(track, start, end) {
+			count++
+		}
+	}
+	return count, nil
+}
+
+func (r *InMemoryTrackRepository) CountAdminUploadUsersBetween(_ context.Context, start, end time.Time) (int64, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	users := make(map[int64]struct{})
+	for _, track := range r.tracks {
+		if isAdminUploadedTrack(track, start, end) {
+			users[track.UserID] = struct{}{}
+		}
+	}
+	return int64(len(users)), nil
+}
+
+func (r *InMemoryTrackRepository) ListAdminDailyUploadCounts(_ context.Context, start, end time.Time) ([]models.AdminDailyCount, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	counts := make(map[string]int64)
+	for _, track := range r.tracks {
+		if isAdminUploadedTrack(track, start, end) {
+			counts[track.CreatedAt.In(time.Local).Format("2006-01-02")]++
+		}
+	}
+	return sortedAdminDailyCounts(counts), nil
+}
+
 // Create stores a new waypoint.
 func (r *InMemoryTrackWaypointRepository) Create(_ context.Context, waypoint *models.TrackWaypoint) error {
 	r.mu.Lock()
@@ -647,6 +688,43 @@ func (r *InMemoryUserRepository) CountAll(_ context.Context) (int64, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return int64(len(r.users)), nil
+}
+
+func (r *InMemoryUserRepository) CountAdminUsersBetween(_ context.Context, start, end time.Time) (int64, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var count int64
+	for _, user := range r.users {
+		if user != nil && !user.CreatedAt.Before(start) && user.CreatedAt.Before(end) {
+			count++
+		}
+	}
+	return count, nil
+}
+
+func (r *InMemoryUserRepository) ListAdminDailyUserCounts(_ context.Context, start, end time.Time) ([]models.AdminDailyCount, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	counts := make(map[string]int64)
+	for _, user := range r.users {
+		if user != nil && !user.CreatedAt.Before(start) && user.CreatedAt.Before(end) {
+			counts[user.CreatedAt.In(time.Local).Format("2006-01-02")]++
+		}
+	}
+	return sortedAdminDailyCounts(counts), nil
+}
+
+func sortedAdminDailyCounts(counts map[string]int64) []models.AdminDailyCount {
+	dates := make([]string, 0, len(counts))
+	for date := range counts {
+		dates = append(dates, date)
+	}
+	sort.Strings(dates)
+	items := make([]models.AdminDailyCount, 0, len(dates))
+	for _, date := range dates {
+		items = append(items, models.AdminDailyCount{Date: date, Count: counts[date]})
+	}
+	return items
 }
 
 func (r *InMemoryAccountRestrictionRepository) CreateAccountRestriction(_ context.Context, restriction *models.AccountRestriction) error {
