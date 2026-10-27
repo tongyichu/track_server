@@ -391,7 +391,7 @@ track_type=hiking
 - `route_count` 表示符合当前 `track_type` 的 RouteGroup 数量。
 - `route_count` 不表示用户数，也不表示具体 Track 数量。
 - RouteGroup 的 `area_id` 由 `track_route_group` 离线任务计算：先按 `bounds` 预筛，再用 Polygon/MultiPolygon 判断 RouteGroup medoid 中心，无 geometry 的人工区域按 `bounds` 兜底。接口只根据已存 `area_id` 查询内置 GCJ-02 区域目录，并返回可选的 `name`、`area_type`、`area`、`city_code`、`city_name`；相同 `area_id` 的 RouteGroup 聚合为一个气泡，空 `area_id` 继续按原网格聚合。
-- 生成区县基线当前覆盖 36 个重点城市的 194 个核心区县。`catalog.json` 中的人工景区/区县条目可按稳定 ID 覆盖基线，同 ID 人工区县未提供 geometry 时继承生成区县 geometry；景区优先于区县，同优先级选择范围更小的区域，未命中时保持原数量气泡响应。
+- 生成边界覆盖 DataV 全国索引的 2,875 个末级行政区域、34 个省级区域：2,840 个区县、34 个无下辖区县的城市/直辖单位及台湾省级兜底。`admin_level` 记录源层级，客户端仍沿用 `area_type=district`；城市选择表缺失的直属单位以自身名称补齐气泡 `city_name`。快照日期不等于源区划的生效日期，覆盖清单和来源摘要见 `internal/maparea/districts.manifest.json`，通过 `cmd/update-map-districts` 批量维护。`catalog.json` 中的人工景区/区县条目可按稳定 ID 覆盖基线，同 ID 人工区县未提供 geometry 时继承生成区县 geometry；景区优先于行政区，同优先级选择范围更小的区域，未命中时保持原数量气泡响应。发布后需由 `track_route_group` 重聚合更新存量 `area_id`。
 - `area.id` 是稳定区域 ID；有介绍内容时，公开的 `area.introduction_url` 可由客户端 WebView 打开，支持 `lang=english` 和 `is_dark=true`。
 - RouteGroup 的运营介绍独立存储在 `track_route_introductions`，已发布时在路线视野、列表和详情对象中返回公开 `introduction_url`。介绍以代表轨迹作为稳定锚点，离线全量重聚合后按锚点所在成员关系自动更新 `current_group_id`，避免内容随 `track_route_groups` 重建丢失。
 - 客户端点击 `city_cluster` 或 `area_cluster` 后，只需要放大地图并重新请求 `/track-map/view`。

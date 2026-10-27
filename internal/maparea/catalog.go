@@ -59,6 +59,7 @@ type Definition struct {
 // copy is expanded from a stable template while parsing the catalog.
 type DistrictDefinition struct {
 	ID              string    `json:"id"`
+	AdminLevel      string    `json:"admin_level,omitempty"`
 	CityCode        string    `json:"city_code"`
 	CityNameEnglish string    `json:"city_name_en"`
 	Name            string    `json:"name"`
@@ -125,7 +126,7 @@ func ParseCatalog(raw []byte) (*Catalog, error) {
 	return ParseCatalogFiles(raw, nil)
 }
 
-// ParseCatalogFiles merges manually curated areas with generated core districts.
+// ParseCatalogFiles merges manually curated areas with generated administrative areas.
 func ParseCatalogFiles(raw, districtsRaw []byte) (*Catalog, error) {
 	var file catalogFile
 	if err := json.Unmarshal(raw, &file); err != nil {

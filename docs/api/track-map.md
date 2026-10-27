@@ -150,7 +150,7 @@ GET /api/v1/track-map/view?latitude=22.3000&longitude=114.1700&radius_m=10000&tr
 - `area.id` 是稳定区域 ID，不等同于随网格变化的 `cluster_id`；存在介绍内容时 `area.introduction_url` 指向公开 H5 页面。
 - 路线组详情可选返回 `nearby_places`（最多3条），字段包括内部 `id`、`provider`、`provider_id`、`name`、`category`、`parent_id`、`latitude`、`longitude`、`coordinate_system`、`expires_at`。它只读取有效本地识别结果；附近地点不代表轨迹进入该地点，Google邻近结果不会被当成景区边界或归属依据。
 - `area_id` 由 `track_route_group` 离线任务计算并写入 RouteGroup：使用 GCJ-02 `bounds` 预筛、Polygon/MultiPolygon 点包含最终判断，未提供 geometry 的人工区域按 `bounds` 兜底。接口不会实时执行空间匹配，只根据已存 `area_id` 查询名称和介绍信息；相同 `area_id` 的 RouteGroup 聚合成一个区域气泡，空 `area_id` 继续按原网格聚合。
-- 开启自动识别时，采样或环绕规则判定的主要景区优先，其余使用代表中心点匹配区县；区县基线覆盖36城194区县，未命中时继续网格聚合。关闭自动识别时沿用旧目录的优先级匹配。完整清单见 `internal/maparea/README.md`。
+- 开启自动识别时，采样或环绕规则判定的主要景区优先，其余使用路线组中心点匹配行政区。内置边界覆盖 DataV 全国索引的 2,875 个末级区域：2,840 个区县、34 个无下辖区县的城市/直辖单位及台湾省级兜底，涉及34个省级区域；快照日期不代表最新法定区划日期。行政区兜底统一沿用 `area_type=district` 和 `district-{adcode}`，未命中时继续网格聚合；无下辖区县的单位以自身代码作为 `city_code`，城市表缺失时使用区域名称补齐 `city_name`。关闭自动识别时沿用旧目录的优先级匹配。完整范围、更新工具与数据来源见 `internal/maparea/README.md`；发布后存量归属随 `track_route_group` 重聚合更新。
 - 点击 `city_cluster` / `area_cluster` 后，客户端放大地图并重新请求本接口。
 - 点击 `route_group` 后，请求路线组详情或路线组轨迹列表。
 - `route_group.introduction_url` 仅在路线介绍已发布时返回，客户端可直接用 WebView 打开。

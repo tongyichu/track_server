@@ -30,15 +30,15 @@ func TestDefaultCatalogResolveDistrict(t *testing.T) {
 }
 
 func TestDefaultCatalogResolveUnknown(t *testing.T) {
-	if area := DefaultCatalog().Resolve(45.0, 90.0); area != nil {
+	if area := DefaultCatalog().Resolve(0, 0); area != nil {
 		t.Fatalf("resolved unexpected area %+v", area)
 	}
 }
 
 func TestDefaultCatalogIncludesMajorCityDistricts(t *testing.T) {
 	catalog := DefaultCatalog()
-	if len(catalog.byID) != 195 {
-		t.Fatalf("catalog has %d areas, want 195", len(catalog.byID))
+	if len(catalog.byID) != 2876 {
+		t.Fatalf("catalog has %d areas, want 2876", len(catalog.byID))
 	}
 	for _, id := range []string{
 		"district-110101",
@@ -68,8 +68,8 @@ func TestEmbeddedDistrictCatalogMetadata(t *testing.T) {
 	if file.CoordinateSystem != "GCJ02" || file.DataVersion == "" || file.Source == "" {
 		t.Fatalf("missing district metadata: %+v", file)
 	}
-	if len(file.Districts) != 194 {
-		t.Fatalf("district count=%d, want 194", len(file.Districts))
+	if len(file.Districts) != 2875 {
+		t.Fatalf("district count=%d, want 2875", len(file.Districts))
 	}
 	cities := make(map[string]struct{})
 	ids := make(map[string]struct{}, len(file.Districts))
@@ -80,7 +80,7 @@ func TestEmbeddedDistrictCatalogMetadata(t *testing.T) {
 		}
 		ids[district.ID] = struct{}{}
 		cities[district.CityCode] = struct{}{}
-		if config.CityNameByCode(district.CityCode) == "" {
+		if config.CityNameByCode(district.CityCode) == "" && district.ID != "district-"+district.CityCode {
 			t.Fatalf("unknown city_code %s for %s", district.CityCode, district.ID)
 		}
 		if district.Source == "" || district.ContentVersion == "" {
@@ -106,8 +106,8 @@ func TestEmbeddedDistrictCatalogMetadata(t *testing.T) {
 		}
 		geometryTypes[district.Geometry.Type]++
 	}
-	if len(cities) != 36 {
-		t.Fatalf("city count=%d, want 36", len(cities))
+	if len(cities) != 370 {
+		t.Fatalf("city count=%d, want 370", len(cities))
 	}
 	if geometryTypes["Polygon"]+geometryTypes["MultiPolygon"] != len(file.Districts) {
 		t.Fatalf("unexpected geometry types: %+v", geometryTypes)

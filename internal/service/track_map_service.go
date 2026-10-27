@@ -512,6 +512,10 @@ func (s *TrackMapService) decorateAreaClusters(items []*models.TrackMapClusterIt
 		item.AreaType = area.Type
 		item.CityCode = area.CityCode
 		item.CityName = config.CityNameByCode(area.CityCode)
+		// Directly administered cities may be absent from the city picker table.
+		if item.CityName == "" && area.ID == "district-"+area.CityCode {
+			item.CityName = area.Name()
+		}
 		ref := &models.TrackMapAreaReference{ID: area.ID}
 		if area.HasIntroduction() {
 			ref.IntroductionURL = mapAreaIntroductionURL(area.ID, area.ContentVersion)
