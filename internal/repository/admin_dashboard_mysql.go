@@ -42,6 +42,71 @@ func (r *mysqlAdminDashboardRepository) GetAdminDashboardStatistics(ctx context.
 	return statistics, nil
 }
 
+func (r *mysqlAdminDashboardRepository) GetAdminCompanionStatistics(ctx context.Context, query models.AdminDashboardQuery) (*models.AdminDashboardCompanionStats, error) {
+	result := &models.AdminDashboardStatistics{}
+	if err := r.loadCompanion(ctx, query, result); err != nil {
+		return nil, err
+	}
+	return &result.Companion, nil
+}
+
+func (r *mysqlAdminDashboardRepository) GetAdminUserDistributionStatistics(ctx context.Context) (*models.AdminUserDistributionStats, error) {
+	var total, male, female int64
+	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*),
+		COALESCE(SUM(gender='male'),0), COALESCE(SUM(gender='female'),0) FROM users`).Scan(&total, &male, &female); err != nil {
+		return nil, fmt.Errorf("admin user distribution totals: %w", err)
+	}
+	genderCounts := map[string]int64{"male": male, "female": female, "unknown": total - male - female}
+
+	birthdayRows, err := r.db.QueryContext(ctx, `SELECT SUBSTRING(birthday,6,5),COUNT(*) FROM users
+		WHERE birthday REGEXP '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+		AND birthday >= '1900-01-01' AND birthday <= CURDATE()
+		AND DATE_FORMAT(STR_TO_DATE(birthday,'%Y-%m-%d'),'%Y-%m-%d')=birthday
+		GROUP BY SUBSTRING(birthday,6,5)`)
+	if err != nil {
+		return nil, fmt.Errorf("admin user zodiac distribution: %w", err)
+	}
+	birthdayCounts := make(map[string]int64)
+	for birthdayRows.Next() {
+		var monthDay string
+		var count int64
+		if err := birthdayRows.Scan(&monthDay, &count); err != nil {
+			_ = birthdayRows.Close()
+			return nil, err
+		}
+		birthdayCounts[monthDay] = count
+	}
+	if err := birthdayRows.Err(); err != nil {
+		_ = birthdayRows.Close()
+		return nil, err
+	}
+	_ = birthdayRows.Close()
+
+	cityRows, err := r.db.QueryContext(ctx, `SELECT COALESCE(NULLIF(TRIM(city_code),''),'unknown'),COUNT(DISTINCT user_id) AS user_count
+		FROM track_records WHERE `+completedTrackSQL+`
+		GROUP BY COALESCE(NULLIF(TRIM(city_code),''),'unknown')
+		ORDER BY user_count DESC, city_code LIMIT 10`)
+	if err != nil {
+		return nil, fmt.Errorf("admin user track city distribution: %w", err)
+	}
+	cityCounts := make(map[string]int64)
+	for cityRows.Next() {
+		var city string
+		var count int64
+		if err := cityRows.Scan(&city, &count); err != nil {
+			_ = cityRows.Close()
+			return nil, err
+		}
+		cityCounts[city] = count
+	}
+	if err := cityRows.Err(); err != nil {
+		_ = cityRows.Close()
+		return nil, err
+	}
+	_ = cityRows.Close()
+	return buildAdminUserDistributionStats(total, genderCounts, birthdayCounts, cityCounts), nil
+}
+
 const completedTrackSQL = `deleted_at IS NULL AND status <> 0 AND is_running = 0 AND raw_track_url IS NOT NULL AND raw_track_url <> ''`
 const completedTrackAliasSQL = `t.deleted_at IS NULL AND t.status <> 0 AND t.is_running = 0 AND t.raw_track_url IS NOT NULL AND t.raw_track_url <> ''`
 

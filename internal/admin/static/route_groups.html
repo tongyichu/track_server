@@ -27,91 +27,106 @@
     </div>
   </header>
 
-  <main class="container wide">
-    <section class="panel">
-      <h2>聚合路线列表 <span class="hint" id="totalHint"></span></h2>
-      <div class="row">
-        <label>运动类型 <input id="trackTypeInput" type="text" value="hiking" placeholder="hiking" /></label>
-        <label>城市 Code <input id="cityCodeInput" type="text" placeholder="810000" /></label>
-        <button id="refreshBtn">查询</button>
-        <span class="hint" id="statusHint"></span>
+  <main class="container wide route-groups-page">
+    <div class="page-heading route-page-heading">
+      <div><h1>聚合路线</h1><p>按运动类型和城市查找路线组，进入管理窗口维护成员与用户端介绍。</p></div>
+      <span class="route-total-pill" id="totalHint"></span>
+    </div>
+    <section class="panel route-groups-list-card">
+      <div class="route-list-heading"><p>按区域和运动类型定位路线，再进入管理查看成员、维护名称或编辑路线介绍。</p></div>
+      <div class="route-groups-toolbar">
+        <label><span>运动类型代码</span><input id="trackTypeInput" type="text" value="hiking" placeholder="例如 hiking" /></label>
+        <label>城市
+          <select id="cityCodeInput"><option value="">全部城市</option></select>
+        </label>
+        <button id="refreshBtn" class="btn btn-primary">查询路线组</button>
+        <span class="hint route-query-status" id="statusHint" role="status" aria-live="polite"></span>
       </div>
-      <table class="data">
-        <thead>
-          <tr>
-            <th>路线组ID</th><th>名称</th><th>类型</th><th>城市</th>
-            <th>Area ID</th><th>区域信息</th><th>成员数</th><th>来源</th>
-            <th>代表轨迹</th><th>更新时间</th><th>操作</th>
-          </tr>
-        </thead>
-        <tbody id="groupList"></tbody>
-      </table>
+      <div class="route-table-wrap">
+        <table class="data route-group-table">
+          <thead><tr><th>路线名称</th><th>关联区域 / 城市</th><th>类型</th><th>成员</th><th>代表轨迹</th><th>最近更新</th><th>操作</th></tr></thead>
+          <tbody id="groupList"></tbody>
+        </table>
+      </div>
     </section>
 
-    <section class="panel" id="detailPanel">
-      <h2>路线组详情 <span class="hint" id="detailHint"></span></h2>
-      <div class="detail-grid">
-        <div><strong>路线组ID</strong><span id="detailGroupID" class="mono"></span></div>
-        <div><strong>名称</strong><span id="detailName"></span></div>
-        <div><strong>运动类型</strong><span id="detailTrackType"></span></div>
-        <div><strong>城市</strong><span id="detailCities"></span></div>
-        <div><strong>Area ID</strong><span id="detailAreaID" class="mono"></span></div>
-        <div><strong>区域信息</strong><span id="detailAreaInfo"></span></div>
-        <div><strong>成员数</strong><span id="detailMemberCount"></span></div>
-        <div><strong>代表轨迹</strong><span id="detailRepresentative" class="mono"></span></div>
-      </div>
-
-      <div class="grid compact-grid">
-        <label>新名称
-          <input id="renameInput" type="text" placeholder="例如：麦理浩径徒步路线" />
-        </label>
-        <div class="actions">
-          <button id="renameBtn">改名</button>
-          <span class="hint">不会向客户端暴露成员数</span>
-        </div>
-        <label>源路线组ID
-          <input id="mergeInput" type="text" placeholder="把这个路线组合并到当前路线组" />
-        </label>
-        <div class="actions">
-          <button id="mergeBtn">合并</button>
-          <span class="hint">源路线组合并后会归档</span>
-        </div>
-      </div>
-
-      <h2 class="subhead">路线介绍 <span class="hint" id="introStatus"></span></h2>
-      <div class="grid compact-grid">
-        <label>中文标题<input id="introZhName" type="text" placeholder="麦理浩径徒步路线" /></label>
-        <label>英文标题<input id="introEnName" type="text" placeholder="MacLehose Trail Hiking Route" /></label>
-        <label>中文摘要<textarea id="introZhSummary" rows="3"></textarea></label>
-        <label>英文摘要<textarea id="introEnSummary" rows="3"></textarea></label>
-        <label>中文路线介绍（每行一段）<textarea id="introZhDescription" rows="5"></textarea></label>
-        <label>英文路线介绍（每行一段）<textarea id="introEnDescription" rows="5"></textarea></label>
-        <label>中文亮点（每行一项）<textarea id="introZhHighlights" rows="4"></textarea></label>
-        <label>英文亮点（每行一项）<textarea id="introEnHighlights" rows="4"></textarea></label>
-        <label>中文提示（每行一项）<textarea id="introZhTips" rows="4"></textarea></label>
-        <label>英文提示（每行一项）<textarea id="introEnTips" rows="4"></textarea></label>
-        <label>难度<input id="introDifficulty" type="text" placeholder="easy / medium / hard" /></label>
-        <label>适宜季节（逗号分隔）<input id="introBestSeasons" type="text" placeholder="autumn,winter" /></label>
-        <label>预计最短时长（分钟）<input id="introDurationMin" type="number" min="0" /></label>
-        <label>预计最长时长（分钟）<input id="introDurationMax" type="number" min="0" /></label>
-      </div>
-      <div class="actions">
-        <button id="introSaveBtn">保存</button><button id="introPublishBtn">发布</button><button id="introUnpublishBtn">下线</button>
-        <a id="introPreviewLink" class="admin-link" target="_blank" rel="noopener" hidden>预览已发布页面</a>
-      </div>
-
-      <h2 class="subhead">成员轨迹</h2>
-      <table class="data">
-        <thead>
-          <tr>
-            <th>轨迹ID</th><th>角色</th><th>方向</th><th>相似度</th>
-            <th>城市</th><th>距离(m)</th><th>点数</th><th>来源</th><th>操作</th>
-          </tr>
-        </thead>
-        <tbody id="memberList"></tbody>
-      </table>
-    </section>
   </main>
+
+  <div class="modal modal-blur fade route-management-modal" id="detailModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-xl" role="document">
+      <div class="modal-content">
+        <div class="modal-header route-modal-header">
+          <div><h2 class="modal-title" id="detailName"></h2><span class="hint" id="detailHint"></span></div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+        </div>
+        <div class="modal-body route-modal-body">
+    <section class="route-workspace" id="detailPanel" hidden>
+      <div class="route-workspace-heading"><div id="detailAreaInfo" class="route-area-summary"></div></div>
+      <div class="route-summary-grid">
+        <div><span>运动类型</span><strong id="detailTrackType"></strong></div>
+        <div><span>覆盖城市</span><strong id="detailCities"></strong></div>
+        <div><span>成员轨迹</span><strong id="detailMemberCount"></strong></div>
+        <div><span>代表轨迹</span><strong id="detailRepresentative" class="mono"></strong></div>
+      </div>
+      <div class="route-detail-meta"><span>路线组 ID：<code id="detailGroupID"></code></span><span>Area ID：<code id="detailAreaID"></code></span><span>来源：<code id="detailSource"></code></span></div>
+      <nav class="route-workspace-tabs" aria-label="路线组工作区">
+        <button type="button" class="active" data-route-tab="members">成员与代表路线</button>
+        <button type="button" data-route-tab="introduction">路线介绍</button>
+        <button type="button" data-route-tab="maintenance">路线组管理</button>
+      </nav>
+
+      <section class="route-tab-panel" data-route-panel="members">
+        <div class="route-panel-heading"><div><h3>成员轨迹</h3><p>选择代表轨迹，或移除不属于该路线的成员。</p></div></div>
+        <div class="route-table-wrap">
+          <table class="data route-member-table"><thead><tr><th>轨迹 ID</th><th>角色</th><th>匹配方向</th><th>相似度</th><th>城市</th><th>距离</th><th>点数</th><th>来源</th><th>操作</th></tr></thead><tbody id="memberList"></tbody></table>
+        </div>
+      </section>
+
+      <section class="route-tab-panel" data-route-panel="introduction" hidden>
+        <div class="route-panel-heading"><div><h3>面向用户的路线介绍</h3><p>维护中英文内容，保存草稿后可预览并发布。</p></div><span class="hint" id="introStatus"></span></div>
+        <div class="route-intro-section"><h4>基本信息</h4><div class="route-intro-grid">
+          <label>难度<input id="introDifficulty" type="text" placeholder="easy / medium / hard" /></label>
+          <label>适宜季节（逗号分隔）<input id="introBestSeasons" type="text" placeholder="autumn,winter" /></label>
+          <label>预计最短时长（分钟）<input id="introDurationMin" type="number" min="0" /></label>
+          <label>预计最长时长（分钟）<input id="introDurationMax" type="number" min="0" /></label>
+        </div></div>
+        <div class="route-intro-language-grid">
+          <div class="route-language-card"><h4>简体中文</h4>
+            <label>标题<input id="introZhName" type="text" placeholder="麦理浩径徒步路线" /></label>
+            <label>摘要<textarea id="introZhSummary" rows="3"></textarea></label>
+            <label>路线介绍（每行一段）<textarea id="introZhDescription" rows="5"></textarea></label>
+            <label>路线亮点（每行一项）<textarea id="introZhHighlights" rows="4"></textarea></label>
+            <label>出行提示（每行一项）<textarea id="introZhTips" rows="4"></textarea></label>
+          </div>
+          <div class="route-language-card"><h4>English</h4>
+            <label>Title<input id="introEnName" type="text" placeholder="MacLehose Trail Hiking Route" /></label>
+            <label>Summary<textarea id="introEnSummary" rows="3"></textarea></label>
+            <label>Description (one paragraph per line)<textarea id="introEnDescription" rows="5"></textarea></label>
+            <label>Highlights (one item per line)<textarea id="introEnHighlights" rows="4"></textarea></label>
+            <label>Tips (one item per line)<textarea id="introEnTips" rows="4"></textarea></label>
+          </div>
+        </div>
+        <div class="actions route-intro-actions"><button id="introSaveBtn" class="btn btn-primary">保存草稿</button><button id="introPublishBtn" class="btn btn-success">发布</button><button id="introUnpublishBtn" class="btn btn-outline-danger">下线</button><a id="introPreviewLink" class="admin-link" target="_blank" rel="noopener" hidden>预览已发布页面</a></div>
+      </section>
+
+      <section class="route-tab-panel" data-route-panel="maintenance" hidden>
+        <div class="route-panel-heading"><div><h3>路线组管理</h3><p>这些操作会影响路线组归属或展示名称，请在确认后执行。</p></div></div>
+        <div class="route-maintenance-grid">
+          <article class="route-maintenance-card"><h4>调整路线名称</h4><p>修改聚合路线在管理端和客户端使用的名称。</p>
+            <label>新名称<input id="renameInput" type="text" placeholder="例如：麦理浩径徒步路线" /></label>
+            <button id="renameBtn" class="btn btn-primary">保存名称</button>
+          </article>
+          <article class="route-maintenance-card route-maintenance-warning"><h4>合并重复路线组</h4><p>将源路线组并入当前路线组，源组会被归档。</p>
+            <label>源路线组 ID<input id="mergeInput" type="text" placeholder="RG.00000000" /></label>
+            <button id="mergeBtn" class="btn btn-outline-danger">合并路线组</button>
+          </article>
+        </div>
+      </section>
+    </section>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <script src="/admin/static/vendor/tabler.min.js"></script>
   <script src="/admin/static/shell.js"></script>

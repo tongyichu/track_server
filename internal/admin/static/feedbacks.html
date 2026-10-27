@@ -27,13 +27,23 @@
   </header>
 
   <main class="container">
-    <div class="feedback-stat-grid">
-      <section class="panel feedback-stat"><span>待处理</span><strong id="statPending">—</strong></section>
-      <section class="panel feedback-stat"><span>处理中</span><strong id="statProcessing">—</strong></section>
-      <section class="panel feedback-stat"><span>已解决</span><strong id="statResolved">—</strong></section>
-      <section class="panel feedback-stat"><span>已忽略</span><strong id="statIgnored">—</strong></section>
-      <section class="panel feedback-stat"><span>待处理超 24 小时</span><strong id="statOver24">—</strong></section>
-      <section class="panel feedback-stat"><span>待处理超 72 小时</span><strong id="statOver72">—</strong></section>
+    <div class="feedback-stat-sections">
+      <section class="feedback-stat-section">
+        <div class="feedback-stat-heading"><h2>处理状态</h2><span>当前反馈总量分布</span></div>
+        <div class="feedback-stat-grid feedback-status-grid">
+          <article class="panel feedback-stat"><span>待处理</span><strong id="statPending">—</strong></article>
+          <article class="panel feedback-stat"><span>处理中</span><strong id="statProcessing">—</strong></article>
+          <article class="panel feedback-stat"><span>已解决</span><strong id="statResolved">—</strong></article>
+          <article class="panel feedback-stat"><span>已忽略</span><strong id="statIgnored">—</strong></article>
+        </div>
+      </section>
+      <section class="feedback-stat-section">
+        <div class="feedback-stat-heading"><h2>待处理时效</h2><span>用于关注积压反馈</span></div>
+        <div class="feedback-stat-grid feedback-aging-grid">
+          <article class="panel feedback-stat feedback-stat-warning"><span>待处理超 24 小时</span><strong id="statOver24">—</strong></article>
+          <article class="panel feedback-stat feedback-stat-danger"><span>待处理超 72 小时</span><strong id="statOver72">—</strong></article>
+        </div>
+      </section>
     </div>
     <section class="panel">
       <h2>意见反馈列表</h2>

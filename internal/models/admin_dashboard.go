@@ -121,6 +121,14 @@ type AdminDashboardCompanionStats struct {
 	AvgParticipants float64                  `json:"avg_participants"`
 }
 
+// AdminUserDistributionStats contains read-only profile and track-city aggregates.
+type AdminUserDistributionStats struct {
+	TotalUsers  int64                            `json:"total_users"`
+	Gender      []AdminDashboardDistributionItem `json:"gender"`
+	Zodiac      []AdminDashboardDistributionItem `json:"zodiac"`
+	TrackCities []AdminDashboardDistributionItem `json:"track_cities"`
+}
+
 type AdminDashboardDaily struct {
 	Date              string `json:"date"`
 	NewUsers          int64  `json:"new_users"`

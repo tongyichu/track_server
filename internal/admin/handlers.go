@@ -1,7 +1,10 @@
 package admin
 
 import (
+	"archive/zip"
 	"context"
+	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,6 +20,8 @@ import (
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/common/utils"
+	"github.com/shogo82148/androidbinary/apk"
+	"howett.net/plist"
 
 	"github.com/tongyichu/track_server/internal/config"
 	"github.com/tongyichu/track_server/internal/models"
@@ -678,6 +683,49 @@ func (h *Handler) DeleteRelease(ctx context.Context, c *app.RequestContext) {
 	c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"status": "ok"}})
 }
 
+// GetAdminUserStatistics returns profile distributions and the cities represented
+// by each user's completed tracks. Users may be counted in multiple cities.
+func (h *Handler) GetAdminUserStatistics(ctx context.Context, c *app.RequestContext) {
+	if h == nil || h.dashboardStatsRepo == nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "user statistics not configured"})
+		return
+	}
+	statistics, err := h.dashboardStatsRepo.GetAdminUserDistributionStatistics(ctx)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	for i := range statistics.TrackCities {
+		if statistics.TrackCities[i].Key != "unknown" {
+			statistics.TrackCities[i].Label = config.CityNameByCode(statistics.TrackCities[i].Key)
+			if statistics.TrackCities[i].Label == "" {
+				statistics.TrackCities[i].Label = statistics.TrackCities[i].Key
+			}
+		} else {
+			statistics.TrackCities[i].Label = "未知城市"
+		}
+	}
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": statistics})
+}
+
+// GetAdminCompanionStatistics returns period-based session operations metrics.
+func (h *Handler) GetAdminCompanionStatistics(ctx context.Context, c *app.RequestContext) {
+	if h == nil || h.dashboardStatsRepo == nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "companion statistics not configured"})
+		return
+	}
+	now := time.Now()
+	start, previousStart, previousEnd, _, period := dashboardPeriodBounds(now, strings.TrimSpace(string(c.Query("period"))))
+	statistics, err := h.dashboardStatsRepo.GetAdminCompanionStatistics(ctx, models.AdminDashboardQuery{
+		Start: start, End: now, PreviousStart: previousStart, PreviousEnd: previousEnd, Now: now,
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"period": period, "stats": statistics, "updated_at": now}})
+}
+
 // ----- 上传凭证 -----
 
 // maxUploadPackageSize 管理后台上传安装包的大小上限：500 MiB。
@@ -724,6 +772,12 @@ func (h *Handler) UploadPackage(ctx context.Context, c *app.RequestContext) {
 		})
 		return
 	}
+	extension := strings.ToLower(filepath.Ext(fileHeader.Filename))
+	if (platform == string(models.AppReleasePlatformAndroid) && extension != ".apk") ||
+		(platform == string(models.AppReleasePlatformIOS) && extension != ".ipa") {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "file extension does not match platform"})
+		return
+	}
 
 	safeName := sanitizeFileName(fileHeader.Filename)
 	if safeName == "" {
@@ -750,7 +804,8 @@ func (h *Handler) UploadPackage(ctx context.Context, c *app.RequestContext) {
 		c.JSON(http.StatusInternalServerError, utils.H{"error": "create file failed: " + err.Error()})
 		return
 	}
-	written, copyErr := io.Copy(dst, src)
+	md5Hash := md5.New()
+	written, copyErr := io.Copy(io.MultiWriter(dst, md5Hash), src)
 	closeErr := dst.Close()
 	if copyErr != nil {
 		_ = os.Remove(dstPath)
@@ -764,11 +819,81 @@ func (h *Handler) UploadPackage(ctx context.Context, c *app.RequestContext) {
 	}
 
 	publicURL := "/api/v1/static/release/" + platform + "/" + finalName
+	metadata, metadataErr := readPackageMetadata(dstPath, platform)
+	if metadataErr != nil {
+		_ = os.Remove(dstPath)
+		c.JSON(http.StatusBadRequest, utils.H{"error": "cannot read app metadata: " + metadataErr.Error()})
+		return
+	}
 	c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{
-		"url":      publicURL,
-		"size":     written,
-		"filename": finalName,
+		"url": publicURL, "size": written, "filename": finalName,
+		"md5": hex.EncodeToString(md5Hash.Sum(nil)), "version_name": metadata.VersionName,
+		"version_code": metadata.VersionCode, "package_name": metadata.PackageName,
 	}})
+}
+
+type packageMetadata struct {
+	VersionName string
+	VersionCode int64
+	PackageName string
+}
+
+func readPackageMetadata(filename, platform string) (packageMetadata, error) {
+	if platform == string(models.AppReleasePlatformAndroid) {
+		bundle, err := apk.OpenFile(filename)
+		if err != nil {
+			return packageMetadata{}, err
+		}
+		defer bundle.Close()
+		manifest := bundle.Manifest()
+		versionName, err := manifest.VersionName.String()
+		if err != nil {
+			return packageMetadata{}, err
+		}
+		packageName, err := manifest.Package.String()
+		if err != nil {
+			return packageMetadata{}, err
+		}
+		versionCode, err := manifest.VersionCode.Int32()
+		if err != nil {
+			return packageMetadata{}, err
+		}
+		return packageMetadata{VersionName: versionName, VersionCode: int64(versionCode), PackageName: packageName}, nil
+	}
+	archive, err := zip.OpenReader(filename)
+	if err != nil {
+		return packageMetadata{}, err
+	}
+	defer archive.Close()
+	for _, file := range archive.File {
+		if !strings.HasPrefix(file.Name, "Payload/") || strings.Count(file.Name, "/") != 3 || !strings.HasSuffix(file.Name, ".app/Info.plist") {
+			continue
+		}
+		reader, err := file.Open()
+		if err != nil {
+			return packageMetadata{}, err
+		}
+		data, readErr := io.ReadAll(io.LimitReader(reader, 8<<20))
+		_ = reader.Close()
+		if readErr != nil {
+			return packageMetadata{}, readErr
+		}
+		var info map[string]interface{}
+		if _, err := plist.Unmarshal(data, &info); err != nil {
+			return packageMetadata{}, err
+		}
+		result := packageMetadata{VersionName: packageString(info["CFBundleShortVersionString"]), PackageName: packageString(info["CFBundleIdentifier"])}
+		result.VersionCode, _ = strconv.ParseInt(packageString(info["CFBundleVersion"]), 10, 64)
+		return result, nil
+	}
+	return packageMetadata{}, errors.New("Payload/*.app/Info.plist not found")
+}
+
+func packageString(value interface{}) string {
+	if value == nil {
+		return ""
+	}
+	return fmt.Sprint(value)
 }
 
 // sanitizeFileName 把上传文件名里可能导致路径穿越/乱码的字符替换成下划线，

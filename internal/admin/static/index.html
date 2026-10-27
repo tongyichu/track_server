@@ -37,11 +37,11 @@
             <option value="ios">iOS</option>
           </select>
         </label>
-        <label>版本名 (version_name)
-          <input type="text" name="version_name" placeholder="1.2.3" required />
+        <label>版本名
+          <input type="text" name="version_name" placeholder="上传后自动读取，也可调整" required />
         </label>
-        <label>版本号 (version_code)
-          <input type="number" name="version_code" min="1" required />
+        <label>版本号
+          <input type="number" name="version_code" min="1" placeholder="上传后自动读取" required />
         </label>
         <label>最低支持版本号 (min_supported_version_code)
           <input type="number" name="min_supported_version_code" min="0" value="0" />
@@ -60,21 +60,14 @@
         <fieldset class="full">
           <legend>安装包</legend>
           <div class="row">
-            <input type="file" id="apkFile" accept=".apk,.ipa" />
+            <input type="file" id="apkFile" accept=".apk,.ipa" required />
             <button type="button" id="uploadBtn">上传到服务器</button>
             <span class="hint" id="uploadHint"></span>
           </div>
-          <label>package_url
-            <input type="text" name="package_url" placeholder="Android: 上传后自动填入；iOS: AppStore 链接" required />
-          </label>
-          <div class="row">
-            <label class="flex1">package_size (字节)
-              <input type="number" name="package_size" min="0" value="0" />
-            </label>
-            <label class="flex1">package_md5
-              <input type="text" name="package_md5" />
-            </label>
-          </div>
+          <div class="hint" id="packageMetadataHint">上传后自动识别版本信息，并生成下载地址、文件大小和 MD5。</div>
+          <input type="hidden" name="package_url" />
+          <input type="hidden" name="package_size" value="0" />
+          <input type="hidden" name="package_md5" />
         </fieldset>
 
         <label class="full">版本说明 (release_notes)

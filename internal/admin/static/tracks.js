@@ -85,7 +85,7 @@
     }
     var resp = await fetch('/admin/api/tracks?' + params.toString());
     if (!resp.ok) {
-      tbody.innerHTML = '<tr><td colspan="11">加载失败: ' + resp.status + '</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="12">加载失败: ' + resp.status + '</td></tr>';
       return;
     }
     var data = ((await resp.json()).data) || {};
@@ -100,10 +100,15 @@
       var screenshotCell = screenshotURL
         ? '<a class="track-shot" href="' + esc(screenshotURL) + '" target="_blank" rel="noopener"><img src="' + esc(screenshotURL) + '" alt="轨迹截图" loading="lazy"></a>'
         : '<span class="hint">无</span>';
+      var hasRawTrackAddress = String(it.raw_track_url || '').trim() !== '';
+      var rawTrackCell = hasRawTrackAddress
+        ? '<span class="badge bg-green-lt text-green" title="数据库已记录原始轨迹地址；未在线检查文件对象">地址已记录</span>'
+        : '<span class="badge bg-secondary-lt" title="数据库没有原始轨迹地址">无地址</span>';
       tr.innerHTML = '<td>' + screenshotCell + '</td>' +
         '<td>' + esc(it.id) + '</td>' +
         '<td>' + it.user_id + '</td>' +
         '<td>' + esc(it.title || '') + '</td>' +
+        '<td>' + rawTrackCell + '</td>' +
         '<td>' + esc(typeNameByCode[it.track_type] || it.track_type || '') + '</td>' +
         '<td title="' + esc(it.city_code || '') + '">' + esc(cityNameByCode[it.city_code] || '未知城市') + '</td>' +
         '<td>' + (it.distance != null ? Number(it.distance).toFixed(1) : '') + '</td>' +

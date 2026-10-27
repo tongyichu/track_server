@@ -28,6 +28,20 @@
 
   <main class="container">
     <section class="panel">
+      <div class="admin-section-heading"><h2>用户概况</h2><span class="hint">资料分布按当前用户档案统计</span></div>
+      <div class="admin-user-summary-grid">
+        <article class="admin-stat-panel admin-user-total"><span>全部用户</span><strong id="userStatsTotal">—</strong><small>当前注册用户</small></article>
+        <article class="admin-stat-panel admin-user-gender"><span>男性</span><strong id="userGenderMale">—</strong><small>性别资料为男性</small></article>
+        <article class="admin-stat-panel admin-user-gender"><span>女性</span><strong id="userGenderFemale">—</strong><small>性别资料为女性</small></article>
+        <article class="admin-stat-panel admin-user-gender"><span>未填写性别</span><strong id="userGenderUnknown">—</strong><small>未填写或资料未知</small></article>
+      </div>
+      <div class="admin-section-heading admin-user-distribution-heading"><h2>用户画像分布</h2><span class="hint">城市按已完成轨迹统计，同一用户可能出现在多个城市</span></div>
+      <div class="admin-user-distribution-grid">
+        <article class="admin-stat-panel"><h3>星座</h3><div id="userZodiacStats" class="admin-distribution-list admin-zodiac-list"></div></article>
+        <article class="admin-stat-panel"><h3>轨迹用户城市 Top 10</h3><div id="userCityStats" class="admin-distribution-list admin-city-list"></div></article>
+      </div>
+    </section>
+    <section class="panel">
       <h2>用户列表 <span class="hint" id="totalHint"></span></h2>
       <div class="row">
         <label>昵称搜索 <input id="titleFilter" type="search" placeholder="输入用户名称关键词" /></label>

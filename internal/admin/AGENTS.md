@@ -19,7 +19,7 @@
 - 审核用户轨迹投稿，查看结构化路线资料和经本地缓存改写的投稿图片，按 revision 通过或驳回。
 - 管理后台内置静态资源响应支持 gzip 与 ETag 重新验证；HTML 使用 no-cache，其他嵌入资源需重新验证后复用浏览器缓存。工作台先展示 API 返回的核心数字，再异步加载 ECharts 绘制图表。
 - 投稿审核页顶部展示当前待审核与超时队列，以及本月通过、驳回、通过率和平均审核时长；复用 `/admin/api/dashboard?period=month` 的只读统计。
-- 查看、修正和删除用户轨迹；列表展示日间横版 4:3 预览图、城市名称并支持标题模糊搜索；编辑可修正轨迹业务字段和预览图，删除为软删除并同步清理关联数据。
+- 查看、修正和删除用户轨迹；列表展示日间横版 4:3 预览图、原始轨迹地址是否已记录、城市名称并支持标题模糊搜索；原始轨迹列只判断 `raw_track_url` 字段，不在线探测 OSS 对象。编辑可修正轨迹业务字段和预览图，删除为软删除并同步清理关联数据。
 - 意见反馈页默认筛选待处理，展示状态统计、反馈用户名称和完整内容；点击查看会在弹窗中加载详情并处理反馈。
 - 用户管理按昵称、同行管理按会话标题、轨迹管理按轨迹标题提供服务端模糊搜索，保留游标分页。
 
@@ -35,7 +35,7 @@
 - **未配置即禁用**：上面两种来源解析出的账号集为空时，`NewModule` 返回的 `Module.Auth` 为 `nil`，`RegisterRoutes` 直接不挂载任何 `/admin/*` 路由——这是"后台未启用"的唯一信号，新增功能不要绕过这个开关。
 - **会话仅内存**：`SessionStore` 使用 `sync.RWMutex` + `map`，进程重启即失效。**不要替换为持久化存储**；管理员重新登录是合理代价。
 - **静态资源经 `go:embed`**：`static/` 目录通过 `//go:embed static` 内置进二进制；新增前端文件后**必须放到** `internal/admin/static/`，否则二进制找不到。`/admin/static/*filepath` 路由只读 `staticFS`，不读磁盘。
-- **安装包本机上传**：管理后台安装包上传走 `POST /admin/api/releases/upload-package`，服务端落盘到 `<LogDir>/static/release/<platform>/`，前端把返回的 `/api/v1/static/release/<platform>/<file>` 填入 `package_url`。不要再把发布包上传链路改回浏览器 OSS 直传。
+- **安装包本机上传**：管理后台安装包上传走 `POST /admin/api/releases/upload-package`，服务端校验 APK/IPA 并读取包内版本名、版本号/Build、应用标识，同时计算大小和 MD5；前端使用返回的下载地址自动填写 `package_url`。不要再把发布包上传链路改回浏览器 OSS 直传。
 - **路径前缀固定 `/admin`**：所有路由都注册在 `h.Group("/admin")` 之下；前端 `fetch` 也写死 `/admin/api/...` 与 `/admin/static/...`。修改前缀需要同时改 `routes.go` 与 `static/*` 中的 URL。
 
 ## 目录与权威文件
@@ -72,17 +72,19 @@ internal/admin/
 |------|------|------|------|
 | GET | `/admin/`、`/admin` | 公开 | 302 跳转 `/admin/login.html` |
 | GET | `/admin/login.html` | 公开 | 登录页 |
-| GET | `/admin/index.html` | 公开 | 管理首页（页面内会拉 `/admin/api/me` 校验） |
-| GET | `/admin/dashboard.html` | 公开 | 响应式运营工作台（页面内会拉 `/admin/api/me` 校验） |
-| GET | `/admin/more.html` | 公开 | 移动端低频功能入口（页面内会拉 `/admin/api/me` 校验） |
-| GET | `/admin/route_groups.html` | 公开 | 聚合路线运营页（页面内会拉 `/admin/api/me` 校验） |
-| GET | `/admin/track_submissions.html` | 公开 | 轨迹投稿审核页（页面内会拉 `/admin/api/me` 校验） |
+| GET | `/admin/index.html` | 会话 | 管理首页，服务端返回 HTML 前校验会话 |
+| GET | `/admin/dashboard.html` | 会话 | 响应式运营工作台，服务端返回 HTML 前校验会话 |
+| GET | `/admin/more.html` | 会话 | 移动端低频功能入口，服务端返回 HTML 前校验会话 |
+| GET | `/admin/route_groups.html` | 会话 | 聚合路线运营页，服务端返回 HTML 前校验会话 |
+| GET | `/admin/track_submissions.html` | 会话 | 轨迹投稿审核页，服务端返回 HTML 前校验会话 |
 | GET | `/admin/static/*filepath` | 公开 | 内置静态资源 |
 | POST | `/admin/api/login` | 公开 | bcrypt 校验，成功后下发 `admin_session` cookie |
 | POST | `/admin/api/logout` | 公开 | 删除 session + 清 cookie |
 | GET | `/admin/api/me` | 公开 | 返回当前会话；未登录返回 401 |
 | GET | `/admin/api/releases` | 鉴权 | 列出发布记录，支持 `platform` / `status` 过滤 |
 | GET | `/admin/api/dashboard` | 鉴权 | 业务库即时统计；`period=day|week|month`，返回同进度上周期对比、用户转化、审核/反馈效率、内容质量、互动、同行与日趋势 |
+| GET | `/admin/api/users/statistics` | 鉴权 | 用户总数、性别/星座分布和已完成轨迹涉及城市的去重用户数（一个用户可计入多个城市） |
+| GET | `/admin/api/companions/statistics` | 鉴权 | 同行会话当前活跃数、所选周期创建/结束/自动结束数、平均参与人数 |
 | POST | `/admin/api/releases` | 鉴权 | 发布/覆盖一个版本（按 `(platform, version_code)` 幂等） |
 | DELETE | `/admin/api/releases/:id` | 鉴权 | 删除一条发布记录 |
 | POST | `/admin/api/releases/upload-package` | 鉴权 | multipart 上传安装包到 `<LogDir>/static/release/<platform>/` |
@@ -232,6 +234,7 @@ GET /admin/api/users
 [admin UI] /admin/tracks.html
   → GET /admin/api/tracks 拉取轨迹列表
        → 展示 preview_images.landscape_day_url（日间横版 4:3），并经后台静态代理访问
+       → 原始轨迹列按 raw_track_url 字段判断地址是否已记录，不触发 OSS 下载/探测
   → GET /admin/api/dashboard?period=month 展示本月轨迹类型与城市统计表
   → GET /admin/api/cities 将城市 Code 显示为名称并提供编辑选择器
   → 管理员点击编辑

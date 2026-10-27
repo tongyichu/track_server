@@ -27,6 +27,13 @@
   </header>
 
   <main class="container">
+    <section class="admin-companion-stats" aria-label="同行会话统计">
+      <article class="admin-stat-panel"><span>当前活跃</span><strong id="companionActive">—</strong><small>此刻状态为 active</small></article>
+      <article class="admin-stat-panel"><span>本月创建</span><strong id="companionCreated">—</strong><small id="companionCreatedCompare">较上期 —</small></article>
+      <article class="admin-stat-panel"><span>本月结束</span><strong id="companionEnded">—</strong><small>按结束时间统计</small></article>
+      <article class="admin-stat-panel"><span>自动结束</span><strong id="companionAutoEnded">—</strong><small>本月结束会话中的自动关闭</small></article>
+      <article class="admin-stat-panel"><span>平均参与人数</span><strong id="companionParticipants">—</strong><small>本月创建会话</small></article>
+    </section>
     <section class="panel">
       <h2>同行会话列表 <span class="hint" id="totalHint"></span></h2>
       <div class="row">

@@ -28,6 +28,44 @@
     return '<span class="badge bg-red-lt text-red">已限制</span><br><span class="hint">' + esc(until) + '</span><br><span class="hint">' + esc(r.reason || '') + '</span>';
   }
 
+  var distributionLabels = {
+    male: '男', female: '女', unknown: '未知', aries: '白羊座', taurus: '金牛座', gemini: '双子座',
+    cancer: '巨蟹座', leo: '狮子座', virgo: '处女座', libra: '天秤座', scorpio: '天蝎座',
+    sagittarius: '射手座', capricorn: '摩羯座', aquarius: '水瓶座', pisces: '双鱼座'
+  };
+  function renderDistribution(id, items, labelField) {
+    var root = document.getElementById(id);
+    if (!root) return;
+    var max = Math.max(1, (items || []).reduce(function (n, item) { return Math.max(n, Number(item.count) || 0); }, 0));
+    root.innerHTML = (items || []).map(function (item) {
+      var label = item[labelField] || distributionLabels[item.key] || item.key || '未知';
+      var count = Number(item.count) || 0;
+      return '<div class="admin-distribution-row"><span>' + esc(label) + '</span><div class="admin-distribution-track"><i style="width:' + Math.round(count * 100 / max) + '%"></i></div><strong>' + count.toLocaleString() + '</strong></div>';
+    }).join('') || '<span class="hint">暂无数据</span>';
+  }
+  async function loadUserStatistics() {
+    try {
+      var response = await fetch('/admin/api/users/statistics');
+      if (!response.ok) throw new Error('统计加载失败');
+      var data = (await response.json()).data || {};
+      document.getElementById('userStatsTotal').textContent = Number(data.total_users || 0).toLocaleString();
+      var genderCounts = Object.create(null);
+      (data.gender || []).forEach(function (item) { genderCounts[item.key] = item.count; });
+      document.getElementById('userGenderMale').textContent = Number(genderCounts.male || 0).toLocaleString();
+      document.getElementById('userGenderFemale').textContent = Number(genderCounts.female || 0).toLocaleString();
+      document.getElementById('userGenderUnknown').textContent = Number(genderCounts.unknown || 0).toLocaleString();
+      renderDistribution('userZodiacStats', data.zodiac, 'label');
+      renderDistribution('userCityStats', data.track_cities, 'label');
+    } catch (_) {
+      ['userZodiacStats', 'userCityStats'].forEach(function (id) {
+        var root = document.getElementById(id); if (root) root.textContent = '统计暂不可用';
+      });
+      ['userStatsTotal', 'userGenderMale', 'userGenderFemale', 'userGenderUnknown'].forEach(function (id) {
+        var root = document.getElementById(id); if (root) root.textContent = '—';
+      });
+    }
+  }
+
   // 翻页：采用 cursor 栈记录每一页的入口 cursor。
   // cursorStack[i] = 第 i 页（从 0 开始）的入口 cursor；首页入口 cursor 为 null。
   var pageSize = 20;
@@ -162,5 +200,6 @@
     totalHint.textContent = '共 ' + totalCount + ' 个用户';
   }
 
+  loadUserStatistics();
   loadPage();
 })();

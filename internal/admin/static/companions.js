@@ -25,6 +25,25 @@
     return esc(String(s).replace('T', ' ').slice(0, 19));
   }
 
+  async function loadCompanionStatistics() {
+    try {
+      var response = await fetch('/admin/api/companions/statistics?period=month');
+      if (!response.ok) throw new Error('统计加载失败');
+      var payload = (await response.json()).data || {};
+      var stats = payload.stats || {};
+      document.getElementById('companionActive').textContent = Number(stats.active || 0).toLocaleString();
+      document.getElementById('companionCreated').textContent = Number((stats.created || {}).current || 0).toLocaleString();
+      document.getElementById('companionCreatedCompare').textContent = '上期 ' + Number((stats.created || {}).previous || 0).toLocaleString();
+      document.getElementById('companionEnded').textContent = Number(stats.ended || 0).toLocaleString();
+      document.getElementById('companionAutoEnded').textContent = Number(stats.auto_ended || 0).toLocaleString();
+      document.getElementById('companionParticipants').textContent = Number(stats.avg_participants || 0).toFixed(1);
+    } catch (_) {
+      ['companionActive', 'companionCreated', 'companionEnded', 'companionAutoEnded', 'companionParticipants'].forEach(function (id) {
+        document.getElementById(id).textContent = '—';
+      });
+    }
+  }
+
   var pageSize = 20;
   var cursorStack = [null];
   var pageIndex = 0;
@@ -104,5 +123,6 @@
     totalHint.textContent = '共 ' + totalCount + ' 个会话';
   }
 
+  loadCompanionStatistics();
   loadPage();
 })();

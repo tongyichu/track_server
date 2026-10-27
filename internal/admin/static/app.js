@@ -28,7 +28,21 @@
   const uploadHint = document.getElementById('uploadHint');
   const pkgURLInput = document.querySelector('input[name=package_url]');
   const pkgSizeInput = document.querySelector('input[name=package_size]');
+  const pkgMD5Input = document.querySelector('input[name=package_md5]');
+  const versionNameInput = document.querySelector('input[name=version_name]');
+  const versionCodeInput = document.querySelector('input[name=version_code]');
+  const metadataHint = document.getElementById('packageMetadataHint');
   const platformSelect = document.querySelector('select[name=platform]');
+
+  function clearPackageMetadata() {
+    pkgURLInput.value = '';
+    pkgSizeInput.value = '0';
+    pkgMD5Input.value = '';
+    uploadHint.textContent = '';
+    metadataHint.textContent = '上传后自动识别版本信息，并生成下载地址、文件大小和 MD5。';
+  }
+  apkFile.addEventListener('change', clearPackageMetadata);
+  platformSelect.addEventListener('change', clearPackageMetadata);
 
   uploadBtn.addEventListener('click', async function () {
     const file = apkFile.files[0];
@@ -56,7 +70,11 @@
       }
       pkgURLInput.value = data.url;
       pkgSizeInput.value = String(data.size || file.size);
-      uploadHint.textContent = '上传成功';
+      pkgMD5Input.value = data.md5 || '';
+      if (data.version_name) versionNameInput.value = data.version_name;
+      if (data.version_code > 0) versionCodeInput.value = String(data.version_code);
+      metadataHint.textContent = [data.package_name, data.version_name ? ('版本 ' + data.version_name) : '', data.version_code > 0 ? ('Build ' + data.version_code) : 'Build 号请手动填写'].filter(Boolean).join(' · ');
+      uploadHint.textContent = '安装包上传并解析成功';
     } catch (e) {
       uploadHint.textContent = e.message || String(e);
     }
@@ -83,6 +101,10 @@
       force_update: fd.get('force_update') === 'on',
       status: fd.get('status') || 'published',
     };
+    if (!pkgURLInput.value) {
+      publishErr.textContent = '请先选择并上传 APK/IPA';
+      return;
+    }
     try {
       const resp = await fetch('/admin/api/releases', {
         method: 'POST',

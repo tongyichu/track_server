@@ -70,8 +70,8 @@ func (m *Module) Close() {
 //
 // - GET /admin/                       重定向到 /admin/login.html
 // - GET /admin/login.html             登录页（公开）
-// - GET /admin/index.html             管理首页（公开静态文件，前端会拉 /admin/api/me）
-// - GET /admin/dashboard.html         即时运营工作台（公开静态文件，数据 API 鉴权）
+// - GET /admin/index.html             管理首页（返回 HTML 前校验会话）
+// - GET /admin/dashboard.html         即时运营工作台（返回 HTML 前校验会话）
 // - GET /admin/static/*               其它静态资源（公开）
 // - POST /admin/api/login             登录
 // - POST /admin/api/logout            退出
@@ -82,6 +82,7 @@ func (m *Module) Close() {
 // - POST /admin/api/releases/upload-package 上传安装包到本机静态目录（鉴权）
 // - GET  /admin/api/releases/upload-token  旧 OSS 直传凭证接口（鉴权，前端不再使用）
 // - GET  /admin/api/users                  用户列表（鉴权，cursor 翻页）
+// - GET  /admin/api/users/statistics       用户资料分布与轨迹城市统计（鉴权）
 // - POST /admin/api/users/:user_id/restrictions 创建账号限制（鉴权）
 // - DELETE /admin/api/users/:user_id/restrictions/current 解除当前账号限制（鉴权）
 // - GET  /admin/api/tracks                 轨迹列表（鉴权，cursor 翻页）
@@ -90,6 +91,7 @@ func (m *Module) Close() {
 // - PUT  /admin/api/tracks/:track_id       更新轨迹业务字段（鉴权）
 // - DELETE /admin/api/tracks/:track_id     删除轨迹（鉴权，软删除并清理关联索引/收藏）
 // - GET  /admin/api/companions             同行会话列表（鉴权，cursor 翻页）
+// - GET  /admin/api/companions/statistics  同行会话运营统计（鉴权）
 // - GET  /admin/api/companions/:session_id  同行会话详情：会话/成员/位置/弹幕（鉴权）
 // - GET  /admin/api/feedbacks              意见反馈列表（鉴权，cursor 翻页）
 // - GET  /admin/api/feedbacks/:feedback_id 意见反馈详情（鉴权）
@@ -112,17 +114,17 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 
 	// 静态资源：直接从 embed.FS 读出来返回
 	g.GET("/login.html", serveEmbedded("static/login.html", "text/html; charset=utf-8"))
-	g.GET("/index.html", serveEmbedded("static/index.html", "text/html; charset=utf-8"))
-	g.GET("/dashboard.html", serveEmbedded("static/dashboard.html", "text/html; charset=utf-8"))
-	g.GET("/more.html", serveEmbedded("static/more.html", "text/html; charset=utf-8"))
-	g.GET("/users.html", serveEmbedded("static/users.html", "text/html; charset=utf-8"))
-	g.GET("/tracks.html", serveEmbedded("static/tracks.html", "text/html; charset=utf-8"))
-	g.GET("/route_groups.html", serveEmbedded("static/route_groups.html", "text/html; charset=utf-8"))
-	g.GET("/track_submissions.html", serveEmbedded("static/track_submissions.html", "text/html; charset=utf-8"))
-	g.GET("/companions.html", serveEmbedded("static/companions.html", "text/html; charset=utf-8"))
-	g.GET("/companion_detail.html", serveEmbedded("static/companion_detail.html", "text/html; charset=utf-8"))
-	g.GET("/feedbacks.html", serveEmbedded("static/feedbacks.html", "text/html; charset=utf-8"))
-	g.GET("/analytics.html", serveEmbedded("static/analytics.html", "text/html; charset=utf-8"))
+	g.GET("/index.html", serveAdminPage(m.Auth, "static/index.html"))
+	g.GET("/dashboard.html", serveAdminPage(m.Auth, "static/dashboard.html"))
+	g.GET("/more.html", serveAdminPage(m.Auth, "static/more.html"))
+	g.GET("/users.html", serveAdminPage(m.Auth, "static/users.html"))
+	g.GET("/tracks.html", serveAdminPage(m.Auth, "static/tracks.html"))
+	g.GET("/route_groups.html", serveAdminPage(m.Auth, "static/route_groups.html"))
+	g.GET("/track_submissions.html", serveAdminPage(m.Auth, "static/track_submissions.html"))
+	g.GET("/companions.html", serveAdminPage(m.Auth, "static/companions.html"))
+	g.GET("/companion_detail.html", serveAdminPage(m.Auth, "static/companion_detail.html"))
+	g.GET("/feedbacks.html", serveAdminPage(m.Auth, "static/feedbacks.html"))
+	g.GET("/analytics.html", serveAdminPage(m.Auth, "static/analytics.html"))
 	g.GET("/static/*filepath", serveEmbeddedDir())
 
 	// 公开 API
@@ -138,6 +140,8 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	api.GET("/releases/upload-token", m.Handler.GetReleaseUploadCredential)
 	api.POST("/releases/upload-package", m.Handler.UploadPackage)
 	api.GET("/dashboard", m.Handler.GetDashboard)
+	api.GET("/users/statistics", m.Handler.GetAdminUserStatistics)
+	api.GET("/companions/statistics", m.Handler.GetAdminCompanionStatistics)
 
 	// 用户 / 轨迹 / 同行 列表（仅查询，提供基础翻页）
 	api.GET("/static/*filepath", m.Handler.GetStaticAsset)
@@ -184,6 +188,17 @@ func serveEmbedded(name, contentType string) app.HandlerFunc {
 			return
 		}
 		serveEmbeddedAsset(c, contentType, data, "no-cache")
+	}
+}
+
+func serveAdminPage(auth *Authenticator, name string) app.HandlerFunc {
+	servePage := serveEmbedded(name, "text/html; charset=utf-8")
+	return func(ctx context.Context, c *app.RequestContext) {
+		if auth == nil || auth.SessionFromRequest(c) == nil {
+			c.Redirect(http.StatusFound, []byte("/admin/login.html"))
+			return
+		}
+		servePage(ctx, c)
 	}
 }
 

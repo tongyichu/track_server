@@ -22,7 +22,7 @@
     return esc((s || '').replace('T', ' ').slice(0, 19));
   }
   function groupCities(g) {
-    return (g.city_codes || []).join(', ');
+    return (g.city_codes || []).map(function (code) { return cityNames[code] || code; }).join(', ');
   }
   function areaTypeName(type) {
     if (type === 'scenic_spot') return '景区';
@@ -30,15 +30,16 @@
     return type || '';
   }
   function areaInfoHTML(area) {
-    if (!area || !area.name) return '<span class="hint">未命中目录</span>';
-    var html = '<span>' + esc(area.name) + '</span>';
+    if (!area || !area.name) return '<div class="route-area-overview"><span class="route-area-label">关联区域</span><strong>未关联区域</strong><span class="hint">未命中区域目录</span></div>';
+    var html = '<div class="route-area-overview"><span class="route-area-label">关联区域</span><div class="route-area-value"><strong>' + esc(area.name) + '</strong>';
     var typeName = areaTypeName(area.type);
-    if (typeName) html += ' <span class="badge">' + esc(typeName) + '</span>';
-    if (area.city_name) html += '<div class="hint">' + esc(area.city_name) + '</div>';
+    if (typeName) html += ' <span class="route-type-badge route-type-other">' + esc(typeName) + '</span>';
+    html += '</div>';
+    if (area.city_name) html += '<span class="route-area-city">' + esc(area.city_name) + '</span>';
     if (area.introduction_url && area.introduction_url.indexOf('/api/v1/track-map/areas/') === 0) {
-      html += '<div><a class="admin-link" href="' + esc(area.introduction_url) + '" target="_blank" rel="noopener">查看介绍页</a></div>';
+      html += '<a class="admin-link" href="' + esc(area.introduction_url) + '" target="_blank" rel="noopener">查看区域介绍</a>';
     }
-    return html;
+    return html + '</div>';
   }
   function apiJSON(url, options) {
     options = options || {};
@@ -58,6 +59,15 @@
   var totalHint = document.getElementById('totalHint');
   var detailHint = document.getElementById('detailHint');
   var statusHint = document.getElementById('statusHint');
+  var cityNames = Object.create(null);
+  var detailModal = new tabler.Modal(document.getElementById('detailModal'));
+
+  document.querySelectorAll('[data-route-tab]').forEach(function (button) {
+    button.addEventListener('click', function () {
+      document.querySelectorAll('[data-route-tab]').forEach(function (item) { item.classList.toggle('active', item === button); });
+      document.querySelectorAll('[data-route-panel]').forEach(function (panel) { panel.hidden = panel.dataset.routePanel !== button.dataset.routeTab; });
+    });
+  });
 
   document.getElementById('refreshBtn').addEventListener('click', loadGroups);
   document.getElementById('renameBtn').addEventListener('click', async function () {
@@ -109,7 +119,7 @@
       renderGroups(data.items || []);
       statusHint.textContent = '';
     } catch (err) {
-      groupList.innerHTML = '<tr><td colspan="11">加载失败: ' + esc(err.message) + '</td></tr>';
+      groupList.innerHTML = '<tr><td colspan="7"><div class="route-table-state route-table-error">加载失败：' + esc(err.message) + '</div></td></tr>';
       statusHint.textContent = '';
     }
   }
@@ -117,20 +127,27 @@
   function renderGroups(items) {
     totalHint.textContent = '共 ' + items.length + ' 条路线组';
     groupList.innerHTML = '';
+    if (!items.length) {
+      groupList.innerHTML = '<tr><td colspan="7"><div class="route-table-state"><strong>没有找到路线组</strong><span>可以调整运动类型或城市条件后重新查询。</span></div></td></tr>';
+      return;
+    }
     items.forEach(function (g) {
       var tr = document.createElement('tr');
+      tr.dataset.groupId = g.group_id;
       if (g.group_id === selectedGroupID) tr.className = 'selected';
-      tr.innerHTML = '<td class="mono">' + esc(g.group_id) + '</td>' +
-        '<td class="clip">' + esc(g.name || '') + '</td>' +
-        '<td>' + esc(g.track_type || '') + '</td>' +
-        '<td>' + esc(groupCities(g)) + '</td>' +
-        '<td class="mono">' + esc(g.area_id || '-') + '</td>' +
-        '<td>' + areaInfoHTML(g.area) + '</td>' +
-        '<td>' + (g.member_count || 0) + '</td>' +
-        '<td>' + esc(g.source || '') + '</td>' +
-        '<td class="mono">' + esc(g.representative_track_id || '') + '</td>' +
-        '<td>' + fmtTime(g.updated_at) + '</td>' +
-        '<td><button data-id="' + esc(g.group_id) + '">查看</button></td>';
+      var areaName = g.area && g.area.name ? g.area.name : '未关联区域';
+      var trackTypeName = ({hiking: '徒步', running: '跑步', climbing: '爬山', riding: '骑行', driving: '自驾'})[g.track_type] || g.track_type || '-';
+      var typeClass = ({hiking: 'hiking', running: 'running', climbing: 'climbing', riding: 'riding', driving: 'driving'})[g.track_type] || 'other';
+      var cityLabel = groupCities(g) || (g.area && g.area.city_name) || '城市未标注';
+      var representativeID = g.representative_track_id || '';
+      tr.innerHTML = '<td class="route-name-cell"><strong title="' + esc(g.name || '') + '">' + esc(g.name || '未命名路线') + '</strong><small title="' + esc(g.group_id) + '">路线组 · ' + esc(g.group_id) + '</small></td>' +
+        '<td class="route-area-cell"><strong title="' + esc(areaName) + '">' + esc(areaName) + '</strong><small title="' + esc(cityLabel) + '">' + esc(cityLabel) + '</small></td>' +
+        '<td><span class="route-type-badge route-type-' + typeClass + '">' + esc(trackTypeName) + '</span></td>' +
+        '<td><span class="route-member-count">' + Number(g.member_count || 0).toLocaleString() + '</span><small class="route-cell-caption">条轨迹</small></td>' +
+        '<td class="route-representative-cell" title="' + esc(representativeID) + '">' + (representativeID ? '<code>' + esc(representativeID) + '</code>' : '<span class="hint">未设置</span>') + '</td>' +
+        '<td class="route-updated-cell">' + (g.updated_at ? fmtTime(g.updated_at) : '<span class="hint">—</span>') + '</td>' +
+        '<td><button class="btn btn-sm btn-outline-primary route-manage-button" data-id="' + esc(g.group_id) + '">管理</button></td>';
+      if (g.group_id === selectedGroupID) tr.className = 'selected';
       tr.querySelector('button').addEventListener('click', function () {
         loadDetail(g.group_id);
       });
@@ -140,6 +157,12 @@
 
   async function loadDetail(groupID) {
     selectedGroupID = groupID;
+    document.getElementById('detailPanel').hidden = false;
+    document.getElementById('detailName').textContent = '路线组管理';
+    detailModal.show();
+    document.querySelectorAll('[data-route-tab]').forEach(function (item) { item.classList.toggle('active', item.dataset.routeTab === 'members'); });
+    document.querySelectorAll('[data-route-panel]').forEach(function (panel) { panel.hidden = panel.dataset.routePanel !== 'members'; });
+    renderGroupsFromSelection();
     detailHint.textContent = '加载中...';
     try {
       var data = await apiJSON('/admin/api/route-groups/' + encodeURIComponent(groupID) + '?limit=100');
@@ -149,6 +172,12 @@
     } catch (err) {
       detailHint.textContent = '加载失败: ' + err.message;
     }
+  }
+
+  function renderGroupsFromSelection() {
+    var selected = selectedGroupID;
+    var rows = groupList.querySelectorAll('tr[data-group-id]');
+    rows.forEach(function (row) { row.classList.toggle('selected', row.dataset.groupId === selected); });
   }
 
   function lines(id) { return document.getElementById(id).value.split('\n').map(function (s) { return s.trim(); }).filter(Boolean); }
@@ -192,11 +221,12 @@
   function renderDetail(data) {
     var g = data.group || {};
     document.getElementById('detailGroupID').textContent = g.group_id || '';
-    document.getElementById('detailName').textContent = g.name || '';
-    document.getElementById('detailTrackType').textContent = g.track_type || '';
-    document.getElementById('detailCities').textContent = groupCities(g);
+    document.getElementById('detailName').textContent = g.name || '未命名路线';
+    document.getElementById('detailTrackType').textContent = ({hiking: '徒步', running: '跑步', climbing: '爬山', riding: '骑行', driving: '自驾'})[g.track_type] || g.track_type || '-';
+    document.getElementById('detailCities').textContent = groupCities(g) || (data.area && data.area.city_name) || '-';
     document.getElementById('detailAreaID').textContent = g.area_id || '-';
     document.getElementById('detailAreaInfo').innerHTML = areaInfoHTML(data.area);
+    document.getElementById('detailSource').textContent = g.source || '-';
     document.getElementById('detailMemberCount').textContent = String(g.member_count || 0);
     document.getElementById('detailRepresentative').textContent = g.representative_track_id || '';
     document.getElementById('renameInput').value = g.name || '';
@@ -213,7 +243,7 @@
         '<td>' + esc(m.role || '') + '</td>' +
         '<td>' + esc(m.match_direction || '') + '</td>' +
         '<td>' + (m.similarity_score != null ? Number(m.similarity_score).toFixed(3) : '') + '</td>' +
-        '<td>' + esc(geo.city_code || '') + '</td>' +
+        '<td>' + esc(cityNames[geo.city_code] || geo.city_code || '') + '</td>' +
         '<td>' + (geo.distance != null ? Number(geo.distance).toFixed(1) : '') + '</td>' +
         '<td>' + (geo.point_count || '') + '</td>' +
         '<td>' + esc(m.source || '') + '</td>' +
@@ -262,5 +292,19 @@
     }
   }
 
-  loadGroups();
+  async function loadCities() {
+    try {
+      var items = await apiJSON('/admin/api/cities');
+      var select = document.getElementById('cityCodeInput');
+      (items || []).forEach(function (city) {
+        cityNames[city.code] = city.name;
+        var option = document.createElement('option');
+        option.value = city.code;
+        option.textContent = city.name;
+        select.appendChild(option);
+      });
+    } catch (_) { /* 城市目录不可用时保留“全部城市”，不阻塞路线组管理。 */ }
+  }
+
+  loadCities().then(loadGroups);
 })();

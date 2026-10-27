@@ -236,6 +236,8 @@ type AdminUserStatisticsRepository interface {
 // contracts so dashboard evolution cannot affect client business flows.
 type AdminDashboardStatisticsRepository interface {
 	GetAdminDashboardStatistics(ctx context.Context, query models.AdminDashboardQuery) (*models.AdminDashboardStatistics, error)
+	GetAdminUserDistributionStatistics(ctx context.Context) (*models.AdminUserDistributionStats, error)
+	GetAdminCompanionStatistics(ctx context.Context, query models.AdminDashboardQuery) (*models.AdminDashboardCompanionStats, error)
 }
 
 // AccountRestrictionRepository defines persistence operations for management-center account restrictions.

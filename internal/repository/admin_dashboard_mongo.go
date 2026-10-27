@@ -34,6 +34,118 @@ func (r *mongoAdminDashboardRepository) GetAdminDashboardStatistics(ctx context.
 	return result, nil
 }
 
+func (r *mongoAdminDashboardRepository) GetAdminCompanionStatistics(ctx context.Context, query models.AdminDashboardQuery) (*models.AdminDashboardCompanionStats, error) {
+	sessions := r.db.Collection("companion_sessions")
+	result := &models.AdminDashboardCompanionStats{}
+	var err error
+	result.Created.Current, err = sessions.CountDocuments(ctx, bson.M{"started_at": mongoTimeRange(query.Start, query.End)})
+	if err != nil {
+		return nil, err
+	}
+	result.Created.Previous, err = sessions.CountDocuments(ctx, bson.M{"started_at": mongoTimeRange(query.PreviousStart, query.PreviousEnd)})
+	if err != nil {
+		return nil, err
+	}
+	result.Active, err = sessions.CountDocuments(ctx, bson.M{"status": models.CompanionSessionStatusActive})
+	if err != nil {
+		return nil, err
+	}
+	endedFilter := bson.M{"status": models.CompanionSessionStatusEnded, "ended_at": mongoTimeRange(query.Start, query.End)}
+	result.Ended, err = sessions.CountDocuments(ctx, endedFilter)
+	if err != nil {
+		return nil, err
+	}
+	endedFilter["end_source"] = models.CompanionSessionEndSourceAutoClose
+	result.AutoEnded, err = sessions.CountDocuments(ctx, endedFilter)
+	if err != nil {
+		return nil, err
+	}
+	result.AvgParticipants, err = mongoAverageField(ctx, sessions, bson.M{"started_at": mongoTimeRange(query.Start, query.End)}, "actual_participant_count")
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (r *mongoAdminDashboardRepository) GetAdminUserDistributionStatistics(ctx context.Context) (*models.AdminUserDistributionStats, error) {
+	users := r.db.Collection("users")
+	total, err := users.CountDocuments(ctx, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+	genderExpr := bson.M{"$cond": bson.A{
+		bson.M{"$in": bson.A{bson.M{"$ifNull": bson.A{"$gender", ""}}, bson.A{"male", "female"}}},
+		bson.M{"$ifNull": bson.A{"$gender", "unknown"}},
+		"unknown",
+	}}
+	genderCounts, err := mongoAdminCountDistribution(ctx, users, mongo.Pipeline{
+		bson.D{{Key: "$group", Value: bson.M{"_id": genderExpr, "count": bson.M{"$sum": 1}}}},
+	})
+	if err != nil {
+		return nil, err
+	}
+	birthdayFilter := bson.M{"birthday": bson.M{
+		"$regex": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+		"$gte":   "1900-01-01",
+		"$lte":   time.Now().Format(time.DateOnly),
+	}}
+	birthdayCounts, err := mongoAdminCountDistribution(ctx, users, mongo.Pipeline{
+		bson.D{{Key: "$match", Value: birthdayFilter}},
+		bson.D{{Key: "$addFields", Value: bson.M{"parsed_birthday": bson.M{"$dateFromString": bson.M{
+			"dateString": "$birthday", "format": "%Y-%m-%d", "onError": nil, "onNull": nil,
+		}}}}},
+		bson.D{{Key: "$match", Value: bson.M{"parsed_birthday": bson.M{"$ne": nil}}}},
+		bson.D{{Key: "$group", Value: bson.M{"_id": bson.M{"$substrBytes": bson.A{"$birthday", 5, 5}}, "count": bson.M{"$sum": 1}}}},
+	})
+	if err != nil {
+		return nil, err
+	}
+	trimmedCity := bson.M{"$trim": bson.M{"input": bson.M{"$ifNull": bson.A{"$city_code", ""}}}}
+	cityExpr := bson.M{"$cond": bson.A{
+		bson.M{"$eq": bson.A{trimmedCity, ""}}, "unknown", trimmedCity,
+	}}
+	trackFilter := bson.M{
+		"status":        bson.M{"$ne": models.TrackStatusDeleted},
+		"is_running":    false,
+		"raw_track_url": bson.M{"$nin": []interface{}{nil, ""}},
+	}
+	cityCounts, err := mongoAdminCountDistribution(ctx, r.db.Collection("tracks"), mongo.Pipeline{
+		bson.D{{Key: "$match", Value: trackFilter}},
+		bson.D{{Key: "$group", Value: bson.M{"_id": bson.M{"city": cityExpr, "user": "$user_id"}}}},
+		bson.D{{Key: "$group", Value: bson.M{"_id": "$_id.city", "count": bson.M{"$sum": 1}}}},
+		bson.D{{Key: "$sort", Value: bson.D{{Key: "count", Value: -1}, {Key: "_id", Value: 1}}}},
+		bson.D{{Key: "$limit", Value: 10}},
+	})
+	if err != nil {
+		return nil, err
+	}
+	return buildAdminUserDistributionStats(total, genderCounts, birthdayCounts, cityCounts), nil
+}
+
+func mongoAdminCountDistribution(ctx context.Context, collection *mongo.Collection, pipeline mongo.Pipeline) (map[string]int64, error) {
+	cursor, err := collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	counts := make(map[string]int64)
+	for cursor.Next(ctx) {
+		var row struct {
+			Key   interface{} `bson:"_id"`
+			Count int64       `bson:"count"`
+		}
+		if err := cursor.Decode(&row); err != nil {
+			return nil, err
+		}
+		key := fmt.Sprint(row.Key)
+		if key == "<nil>" {
+			key = "unknown"
+		}
+		counts[key] = row.Count
+	}
+	return counts, cursor.Err()
+}
+
 func mongoTimeRange(start, end time.Time) bson.M {
 	return bson.M{"$gte": start, "$lt": end}
 }
@@ -217,33 +329,11 @@ func (r *mongoAdminDashboardRepository) loadOperations(ctx context.Context, q mo
 	}
 	result.Metrics.PendingFeedback = result.Feedback.Pending + result.Feedback.Processing
 
-	sessions := r.db.Collection("companion_sessions")
-	result.Companion.Created.Current, err = sessions.CountDocuments(ctx, bson.M{"started_at": mongoTimeRange(q.Start, q.End)})
+	companionStats, err := r.GetAdminCompanionStatistics(ctx, q)
 	if err != nil {
 		return err
 	}
-	result.Companion.Created.Previous, err = sessions.CountDocuments(ctx, bson.M{"started_at": mongoTimeRange(q.PreviousStart, q.PreviousEnd)})
-	if err != nil {
-		return err
-	}
-	result.Companion.Active, err = sessions.CountDocuments(ctx, bson.M{"status": models.CompanionSessionStatusActive})
-	if err != nil {
-		return err
-	}
-	endedFilter := bson.M{"status": models.CompanionSessionStatusEnded, "ended_at": mongoTimeRange(q.Start, q.End)}
-	result.Companion.Ended, err = sessions.CountDocuments(ctx, endedFilter)
-	if err != nil {
-		return err
-	}
-	endedFilter["end_source"] = models.CompanionSessionEndSourceAutoClose
-	result.Companion.AutoEnded, err = sessions.CountDocuments(ctx, endedFilter)
-	if err != nil {
-		return err
-	}
-	result.Companion.AvgParticipants, err = mongoAverageField(ctx, sessions, bson.M{"started_at": mongoTimeRange(q.Start, q.End)}, "actual_participant_count")
-	if err != nil {
-		return err
-	}
+	result.Companion = *companionStats
 	result.Metrics.ActiveCompanions = result.Companion.Active
 	return nil
 }

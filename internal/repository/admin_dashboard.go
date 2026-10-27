@@ -123,6 +123,38 @@ type memoryAdminDashboardRepository struct {
 	deps adminDashboardDependencies
 }
 
+func (r *memoryAdminDashboardRepository) GetAdminCompanionStatistics(_ context.Context, query models.AdminDashboardQuery) (*models.AdminDashboardCompanionStats, error) {
+	companions, ok := r.deps.companions.(*InMemoryCompanionRepository)
+	if !ok {
+		return nil, errAdminStatisticsRepositoriesUnavailable
+	}
+	result := &models.AdminDashboardCompanionStats{}
+	companions.mu.RLock()
+	defer companions.mu.RUnlock()
+	for _, item := range companions.sessions {
+		if item.Status == models.CompanionSessionStatusActive {
+			result.Active++
+		}
+		if dashboardBetween(item.StartedAt, query.Start, query.End) {
+			result.Created.Current++
+			result.AvgParticipants += float64(item.ActualParticipantCount)
+		}
+		if dashboardBetween(item.StartedAt, query.PreviousStart, query.PreviousEnd) {
+			result.Created.Previous++
+		}
+		if item.Status == models.CompanionSessionStatusEnded && dashboardBetween(item.EndedAt, query.Start, query.End) {
+			result.Ended++
+			if item.EndSource == models.CompanionSessionEndSourceAutoClose {
+				result.AutoEnded++
+			}
+		}
+	}
+	if result.Created.Current > 0 {
+		result.AvgParticipants /= float64(result.Created.Current)
+	}
+	return result, nil
+}
+
 func (r *memoryAdminDashboardRepository) GetAdminDashboardStatistics(_ context.Context, query models.AdminDashboardQuery) (*models.AdminDashboardStatistics, error) {
 	statistics := newDashboardStatistics(query)
 	dailyIndex := dashboardDailyIndex(statistics.Trend)
