@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>意见反馈 - Track</title>
+  <title>反馈与纠错 - Track</title>
   <link rel="stylesheet" href="/admin/static/vendor/tabler.min.css" />
   <link rel="stylesheet" href="/admin/static/style.css" />
 </head>
@@ -29,12 +29,12 @@
   <main class="container">
     <div class="feedback-stat-sections">
       <section class="feedback-stat-section">
-        <div class="feedback-stat-heading"><h2>处理状态</h2><span>当前反馈总量分布</span></div>
+        <div class="feedback-stat-heading"><h2>处理状态</h2><span>包含意见反馈与轨迹纠错</span></div>
         <div class="feedback-stat-grid feedback-status-grid">
           <article class="panel feedback-stat"><span>待处理</span><strong id="statPending">—</strong></article>
           <article class="panel feedback-stat"><span>处理中</span><strong id="statProcessing">—</strong></article>
-          <article class="panel feedback-stat"><span>已解决</span><strong id="statResolved">—</strong></article>
-          <article class="panel feedback-stat"><span>已忽略</span><strong id="statIgnored">—</strong></article>
+          <article class="panel feedback-stat"><span>已处理</span><strong id="statResolved">—</strong></article>
+          <article class="panel feedback-stat"><span>已关闭</span><strong id="statIgnored">—</strong></article>
         </div>
       </section>
       <section class="feedback-stat-section">
@@ -46,15 +46,18 @@
       </section>
     </div>
     <section class="panel">
-      <h2>意见反馈列表</h2>
+      <div class="d-flex align-items-center justify-content-between gap-3 mb-3">
+        <h2 class="mb-0">反馈列表</h2>
+        <button type="button" id="correctionConfigBtn" class="btn btn-outline-primary">纠错选项</button>
+      </div>
       <div class="row">
         <label>状态
           <select id="statusFilter">
             <option value="">全部</option>
             <option value="pending" selected>待处理</option>
             <option value="processing">处理中</option>
-            <option value="resolved">已解决</option>
-            <option value="ignored">已忽略</option>
+            <option value="resolved">已处理</option>
+            <option value="ignored">已关闭</option>
           </select>
         </label>
         <label>版本
@@ -71,7 +74,7 @@
       <table class="data">
         <thead>
           <tr>
-            <th>用户名称</th><th>状态</th><th>反馈内容</th>
+            <th>用户名称</th><th>类型</th><th>状态</th><th>反馈内容</th>
             <th>图片</th><th>平台</th><th>版本</th><th>时间</th><th>操作</th>
           </tr>
         </thead>
@@ -79,16 +82,50 @@
       </table>
     </section>
 
-    <div class="modal modal-blur fade" id="detailModal" tabindex="-1" aria-hidden="true">
+    <div class="modal modal-blur fade" id="correctionConfigModal" tabindex="-1" aria-hidden="true" aria-labelledby="correctionConfigTitle">
+      <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg" role="document">
+        <form class="modal-content" id="correctionConfigForm">
+          <div class="modal-header">
+            <h2 class="modal-title" id="correctionConfigTitle">纠错选项</h2>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+          </div>
+          <div class="modal-body">
+            <p class="text-secondary">保存后生效。排序越小越靠前，停用不影响历史记录。</p>
+            <div id="correctionConfigState" class="text-secondary" role="status"></div>
+            <table class="data correction-config-table hidden" id="correctionConfigTable">
+              <thead><tr><th>中文名称</th><th>英文（选填）</th><th>排序</th><th>启用</th><th></th></tr></thead>
+              <tbody id="correctionConfigRows"></tbody>
+            </table>
+            <button type="button" id="correctionConfigAdd" class="btn btn-outline-secondary mt-3" disabled>新增选项</button>
+            <div id="correctionConfigError" class="text-danger mt-3" role="alert"></div>
+            <div id="correctionConfigSuccess" class="text-success mt-3" role="status"></div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" id="correctionConfigReload" class="btn btn-outline-secondary">重新加载</button>
+            <button type="submit" id="correctionConfigSave" class="btn btn-primary" disabled>保存</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="modal modal-blur fade" id="detailModal" tabindex="-1" aria-hidden="true" aria-labelledby="detailTitle">
       <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg" role="document">
         <div class="modal-content">
           <div class="modal-header">
-            <h2 class="modal-title">反馈详情</h2>
+            <h2 class="modal-title" id="detailTitle">反馈详情</h2>
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
           </div>
           <div class="modal-body">
             <div id="emptyDetail" class="hint">请选择一条反馈查看详情</div>
             <div id="detailContent" class="hidden">
+              <div id="detailCorrection" class="feedback-correction-summary hidden">
+                <div class="feedback-correction-context">
+                  <span id="detailCorrectionReason" class="badge bg-blue-lt text-blue"></span>
+                  <strong id="detailTrackTitle"></strong>
+                  <span id="detailTrackID" class="text-secondary mono"></span>
+                </div>
+                <a id="detailTrackLink" class="btn btn-outline-primary" target="_blank" rel="noopener">查看轨迹</a>
+              </div>
               <div class="detail-grid">
                 <div><strong>用户名称</strong><span id="detailUserName"></span></div>
                 <div><strong>状态</strong><span id="detailStatus"></span></div>
@@ -98,25 +135,33 @@
                 <div><strong>创建时间</strong><span id="detailCreated"></span></div>
                 <div><strong>更新时间</strong><span id="detailUpdated"></span></div>
               </div>
-              <div class="detail-block">
-                <strong>反馈内容</strong>
+              <div class="detail-block" id="detailTextBlock">
+                <strong id="detailTextLabel">反馈内容</strong>
                 <p id="detailText"></p>
               </div>
-              <div class="detail-block">
+              <div class="detail-block" id="detailImagesBlock">
                 <strong>图片</strong>
                 <div id="detailImages" class="thumbs"></div>
               </div>
               <form id="statusForm" class="grid compact-grid">
+                <div id="correctionReplies" class="full hidden">
+                  <span class="form-label">快捷回复</span>
+                  <div class="row-actions">
+                    <button type="button" class="btn btn-outline-secondary" data-reply="corrected">已修正</button>
+                    <button type="button" class="btn btn-outline-secondary" data-reply="unverified">暂无法核实</button>
+                    <button type="button" class="btn btn-outline-secondary" data-reply="unchanged">无需修改</button>
+                  </div>
+                </div>
                 <label>处理状态
                   <select name="status" id="statusSelect">
-                    <option value="pending">pending</option>
-                    <option value="processing">processing</option>
-                    <option value="resolved">resolved</option>
-                    <option value="ignored">ignored</option>
+                    <option value="pending">待处理</option>
+                    <option value="processing">处理中</option>
+                    <option value="resolved">已处理</option>
+                    <option value="ignored">已关闭</option>
                   </select>
                 </label>
-                <label class="full">反馈意见
-                  <textarea name="reply" id="replyInput" rows="4" placeholder="resolved 状态必填，用户可见"></textarea>
+                <label class="full">处理回复
+                  <textarea name="reply" id="replyInput" rows="3" maxlength="2000" placeholder="回复会展示给用户"></textarea>
                 </label>
                 <div class="full actions">
                   <button type="submit">保存处理结果</button>
@@ -134,6 +179,8 @@
   <script src="/admin/static/vendor/tabler.min.js"></script>
   <script src="/admin/static/shell.js"></script>
   <script src="/admin/static/ui.js"></script>
+  <script src="/admin/static/feedback_correction.js"></script>
+  <script src="/admin/static/feedback_correction_config.js"></script>
   <script src="/admin/static/feedbacks.js"></script>
 </body>
 </html>

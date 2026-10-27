@@ -473,6 +473,7 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 			feedback_id VARCHAR(32) NOT NULL,
 			user_id BIGINT NOT NULL,
 			content TEXT NOT NULL,
+			correction_json JSON NULL,
 			images_json JSON NULL,
 			contact VARCHAR(128) NOT NULL DEFAULT '',
 			app_version VARCHAR(32) NOT NULL DEFAULT '',
@@ -614,6 +615,9 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 	if err := ensureMySQLUserProfileColumns(ctx, db); err != nil {
+		return err
+	}
+	if err := ensureMySQLFeedbackCorrectionSchema(ctx, db); err != nil {
 		return err
 	}
 	return nil
@@ -3446,6 +3450,14 @@ func (r *MySQLFeedbackRepository) Create(ctx context.Context, feedback *models.F
 	if err != nil {
 		return err
 	}
+	var correctionJSON any
+	if feedback.Correction != nil {
+		data, err := json.Marshal(feedback.Correction)
+		if err != nil {
+			return err
+		}
+		correctionJSON = string(data)
+	}
 	now := time.Now()
 	if feedback.CreatedAt.IsZero() {
 		feedback.CreatedAt = now
@@ -3456,11 +3468,11 @@ func (r *MySQLFeedbackRepository) Create(ctx context.Context, feedback *models.F
 	}
 	res, err := r.db.ExecContext(ctx, `INSERT INTO user_feedbacks (
 		feedback_id, user_id, content, images_json, contact, app_version, platform,
-		device_model, system_version, status, reply, created_at, updated_at
-	) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		device_model, system_version, status, reply, created_at, updated_at, correction_json
+	) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		feedback.FeedbackID, feedback.UserID, feedback.Content, string(imagesJSON), feedback.Contact,
 		feedback.AppVersion, feedback.Platform, feedback.DeviceModel, feedback.SystemVersion,
-		feedback.Status, nullableStringValue(feedback.Reply), feedback.CreatedAt, feedback.UpdatedAt,
+		feedback.Status, nullableStringValue(feedback.Reply), feedback.CreatedAt, feedback.UpdatedAt, correctionJSON,
 	)
 	if err != nil {
 		var mysqlErr *mysql.MySQLError
@@ -3569,7 +3581,7 @@ func appReleaseSelectSQL() string {
 
 func feedbackSelectSQL() string {
 	return `SELECT id, feedback_id, user_id, content, images_json, contact, app_version, platform,
-		device_model, system_version, status, reply, created_at, updated_at
+		device_model, system_version, status, reply, created_at, updated_at, correction_json
 	FROM user_feedbacks`
 }
 
@@ -3579,14 +3591,15 @@ type feedbackRowScanner interface {
 
 func scanFeedback(row feedbackRowScanner) (*models.Feedback, error) {
 	var (
-		item       models.Feedback
-		imagesJSON sql.NullString
-		reply      sql.NullString
+		item           models.Feedback
+		imagesJSON     sql.NullString
+		correctionJSON sql.NullString
+		reply          sql.NullString
 	)
 	if err := row.Scan(
 		&item.ID, &item.FeedbackID, &item.UserID, &item.Content, &imagesJSON, &item.Contact,
 		&item.AppVersion, &item.Platform, &item.DeviceModel, &item.SystemVersion,
-		&item.Status, &reply, &item.CreatedAt, &item.UpdatedAt,
+		&item.Status, &reply, &item.CreatedAt, &item.UpdatedAt, &correctionJSON,
 	); err != nil {
 		return nil, err
 	}
@@ -3599,6 +3612,11 @@ func scanFeedback(row feedbackRowScanner) (*models.Feedback, error) {
 	}
 	if reply.Valid {
 		item.Reply = reply.String
+	}
+	if correctionJSON.Valid {
+		if err := json.Unmarshal([]byte(correctionJSON.String), &item.Correction); err != nil {
+			return nil, err
+		}
 	}
 	return &item, nil
 }

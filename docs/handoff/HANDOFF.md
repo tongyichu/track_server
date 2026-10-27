@@ -1,5 +1,19 @@
 # 工作交接：协议 H5 页面（2026-10-13）
 
+## 2026-10-27：联合发布纠错配置
+
+- 用户明确要求联合发布，服务端本轮范围为动态纠错选项、提交快照、后台配置与纠错处理；Android 同步发布当前工作树的详情/同行/地图 UI、坐标声明及纠错入口。两仓 main fetch 后均与 origin/main 一致，无合并变更；复用同源码已通过的 go build ./...、Android assembleDebug 和语法/差异检查，不新增或运行自动化业务测试。
+- 服务端先提交推送发布快照，再构建推送 linux/amd64 镜像并更新生产；只有生产镜像、MySQL 与内外健康检查通过后才发布 Android。App 预计由 1.0.8（9）递增为 1.0.9（10），具体结果以发布回执为准。
+- 发布记录目录 `/private/tmp/track-correction-joint-release-IBvpkD`；本节为发布前记录，生产状态、最终版本与提交哈希以该目录回执和本轮会话最终回复为准。
+
+## 2026-10-27：可配置的轨迹纠错
+
+- 用户要求纠错选项后台配置、API 下发，客户端不写死。业务新增 JWT `GET /api/v1/feedback/correction-options`，管理后台新增 session 鉴权 GET/PUT `/admin/api/feedback-correction-config`；后台「反馈与纠错 → 纠错选项」可新增、编辑中英文名称、排序和启停，保存使用 version 条件更新，409 保留未保存表单。
+- `service/feedback_correction.go` 管理服务端默认六项、选项校验、稳定 ID 及提交快照。`POST /feedback` 接收 track_id/correction_option_id 和可空说明，校验选项启用及轨迹可访问；名称与真实标题由服务端读取，不信任客户端。停用项返回409；历史记录保存 correction 快照并保留兼容的可读 content，普通反馈行为不变。
+- `repository/feedback_correction.go` 实现 MySQL/Mongo/内存配置读写；MySQL 启动自动补建 feedback_correction_config 和 user_feedbacks.correction_json，mysql.sql 同步。全停用返回空列表，不回退默认；内存降级保存不跨重启。反馈后台优先使用结构化快照，旧六项正文仅作兼容；支持关联轨迹编辑入口与快捷回复，保存反馈不会自动修改轨迹。
+- `go build ./...` 通过；feedback_correction_config.js、feedback_correction.js、feedbacks.js、tracks.js 的 `node --check` 与 `git diff --check` 通过。Android assembleDebug 通过并安装启动三星；按约定未新增/运行自动化测试、数据库测试或业务操作。协议、路由索引与相关 AGENTS 已同步。
+- 本轮尚未部署、提交或推送，线上生效须更新 Server；功能与界面待用户验收。AGENTS/新鲜度检查仍报告原有 root/源码超长、precedence/时间元信息及全局规则缺失，报告 `/private/tmp/track-correction-server-{agents,freshness}.log`，不宣称规则检查通过。
+
 ## 2026-10-26：部署放宽主景区与环线归属规则
 
 - 用户明确要求部署Server，按android-track-release仅同步/提交/推送服务端，然后构建推送生产镜像；不提交或发布Android。main已fetch，与origin/main无分叉，复用同一源码通过的go build ./...及本轮差异自查，不新增或运行自动化测试。

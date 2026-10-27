@@ -351,6 +351,8 @@ type AppReleaseRepository interface {
 
 // FeedbackRepository defines persistence operations for user feedback records.
 type FeedbackRepository interface {
+	GetCorrectionConfig(ctx context.Context) (*models.FeedbackCorrectionConfig, error)
+	SaveCorrectionConfig(ctx context.Context, config *models.FeedbackCorrectionConfig, expectedVersion int64) error
 	Create(ctx context.Context, feedback *models.Feedback) error
 	FindByFeedbackID(ctx context.Context, feedbackID string) (*models.Feedback, error)
 	List(ctx context.Context, filter models.FeedbackListFilter) ([]*models.Feedback, error)

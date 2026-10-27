@@ -242,7 +242,7 @@ func main() {
 	commentSvc.SetRestrictions(accountRestrictionSvc)
 	loginSvc := service.NewLoginService(userRepo, loginLogRepo, cfg.WechatAppID, cfg.WechatAppSecret, cfg.JWTSecret)
 	appReleaseSvc := service.NewAppReleaseService(appReleaseRepo)
-	feedbackSvc := service.NewFeedbackService(feedbackRepo, filepath.Join(cfg.LogDir, "feedback", "images"))
+	feedbackSvc := service.NewFeedbackService(feedbackRepo, filepath.Join(cfg.LogDir, "feedback", "images"), trackRepo)
 	companionSvc := service.NewCompanionService(companionRepo, userRepo)
 	companionSvc.SetTrackRepository(trackRepo)
 	clientBrokerURL := cfg.EMQXClientBrokerURL

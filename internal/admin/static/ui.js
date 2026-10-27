@@ -7,7 +7,7 @@
     '/admin/route_groups.html': ['聚合路线', '维护路线组、代表轨迹和双语介绍'],
     '/admin/companions.html': ['同行管理', '查看同行会话和活动状态'],
     '/admin/companion_detail.html': ['同行详情', '查看成员、实时位置和弹幕历史'],
-    '/admin/feedbacks.html': ['意见反馈', '处理用户反馈并回复处理结果'],
+    '/admin/feedbacks.html': ['反馈与纠错', '核查轨迹问题，回复处理结果'],
     '/admin/analytics.html': ['埋点同步', '查看埋点文件同步状态和明细']
   };
 

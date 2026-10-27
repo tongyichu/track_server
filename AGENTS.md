@@ -275,6 +275,8 @@ HTTP Request
 
 - 评论图片每条最多一张，发布参数 image_ids 数组长度不能超过 1；客户端系统单选、输入区内预览和移除，服务端独立校验数量。
 
+**动态纠错配置**：`internal/service/feedback_correction.go` 提供服务端默认选项、配置校验和提交快照；业务 `GET /feedback/correction-options` 仅下发启用项，后台 `/admin/api/feedback-correction-config` 全量读取/按 version 条件保存。`FeedbackRepository.GetCorrectionConfig/SaveCorrectionConfig` 在 `internal/repository/feedback_correction.go` 实现三种仓储，MySQL 启动补建 `feedback_correction_config` 与 `user_feedbacks.correction_json`。客户端提交稳定 option ID 和 track ID，名称与真实轨迹标题由服务端读取并保存快照；改名/停用不能改写历史反馈，停用项提交返回 409。仅配置不存在时使用服务端默认值，全停用不能恢复默认；客户端不得硬编码业务选项。协议见 `docs/api/feedback.md`，后台入口见 `internal/admin/AGENTS.md`。
+
 ### 提交前最小检查
 - 构建可通过：`go build ./...`
 - 仅用户明确要求测试时执行：`make test`（等价 `go test ./...`），或按要求缩小到相关包。

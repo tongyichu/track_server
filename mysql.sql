@@ -492,6 +492,7 @@ CREATE TABLE `user_feedbacks` (
                                   `feedback_id` VARCHAR(32) NOT NULL COMMENT '反馈业务ID',
                                   `user_id` BIGINT NOT NULL COMMENT '提交用户ID',
                                   `content` TEXT NOT NULL COMMENT '反馈文字内容',
+                                  `correction_json` JSON DEFAULT NULL COMMENT '轨迹纠错提交时的选项与轨迹信息快照',
                                   `images_json` JSON DEFAULT NULL COMMENT '反馈图片元信息，最多3张',
                                   `contact` VARCHAR(128) NOT NULL DEFAULT '' COMMENT '用户补充联系方式',
                                   `app_version` VARCHAR(32) NOT NULL DEFAULT '' COMMENT '客户端版本',
@@ -507,6 +508,12 @@ CREATE TABLE `user_feedbacks` (
                                   KEY `idx_feedback_user_created` (`user_id`, `created_at`, `feedback_id`),
                                   KEY `idx_feedback_status_created` (`status`, `created_at`, `feedback_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户意见反馈表';
+
+CREATE TABLE `feedback_correction_config` (
+    `id` TINYINT NOT NULL PRIMARY KEY,
+    `version` BIGINT NOT NULL,
+    `options_json` JSON NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='后台配置的轨迹纠错选项';
 
 CREATE TABLE `analytics_sync_summaries` (
                                             `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,

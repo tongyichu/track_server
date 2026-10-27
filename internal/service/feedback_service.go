@@ -41,19 +41,23 @@ var (
 )
 
 type FeedbackService struct {
-	repo     repository.FeedbackRepository
-	imageDir string
+	repo             repository.FeedbackRepository
+	imageDir         string
+	correctionTracks repository.TrackRepository
 }
 
 type SubmitFeedbackInput struct {
-	UserID        int64
-	Content       string
-	Images        []*multipart.FileHeader
-	Contact       string
-	AppVersion    string
-	Platform      string
-	DeviceModel   string
-	SystemVersion string
+	TrackID            string
+	CorrectionOptionID string
+	Language           string
+	UserID             int64
+	Content            string
+	Images             []*multipart.FileHeader
+	Contact            string
+	AppVersion         string
+	Platform           string
+	DeviceModel        string
+	SystemVersion      string
 }
 
 type UpdateFeedbackStatusInput struct {
@@ -67,8 +71,12 @@ type FeedbackImageFile struct {
 	MimeType string
 }
 
-func NewFeedbackService(repo repository.FeedbackRepository, imageDir string) *FeedbackService {
-	return &FeedbackService{repo: repo, imageDir: strings.TrimSpace(imageDir)}
+func NewFeedbackService(repo repository.FeedbackRepository, imageDir string, tracks ...repository.TrackRepository) *FeedbackService {
+	service := &FeedbackService{repo: repo, imageDir: strings.TrimSpace(imageDir)}
+	if len(tracks) > 0 {
+		service.correctionTracks = tracks[0]
+	}
+	return service
 }
 
 func (s *FeedbackService) Submit(ctx context.Context, in SubmitFeedbackInput) (*models.Feedback, error) {
@@ -78,12 +86,20 @@ func (s *FeedbackService) Submit(ctx context.Context, in SubmitFeedbackInput) (*
 	if s.imageDir == "" {
 		return nil, errors.New("feedback image dir not configured")
 	}
-	content := strings.TrimSpace(in.Content)
-	if content == "" || utf8.RuneCountInString(content) > 1000 {
-		return nil, invalidArg("content is required and must be <= 1000 characters")
-	}
 	if in.UserID <= 0 {
 		return nil, invalidArg("user_id is required")
+	}
+	content := strings.TrimSpace(in.Content)
+	var correction *models.FeedbackCorrection
+	if in.TrackID != "" || in.CorrectionOptionID != "" {
+		var err error
+		correction, content, err = s.prepareCorrection(ctx, in)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if content == "" || utf8.RuneCountInString(content) > 1000 {
+		return nil, invalidArg("content is required and must be <= 1000 characters")
 	}
 	if len(in.Images) > MaxFeedbackImages {
 		return nil, ErrFeedbackImageTooMany
@@ -115,6 +131,7 @@ func (s *FeedbackService) Submit(ctx context.Context, in SubmitFeedbackInput) (*
 		return nil, err
 	}
 	feedback := &models.Feedback{
+		Correction:    correction,
 		FeedbackID:    feedbackID,
 		UserID:        in.UserID,
 		Content:       content,

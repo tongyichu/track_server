@@ -129,7 +129,11 @@
   tbody.addEventListener('click', async function (ev) {
     var editBtn = ev.target && ev.target.closest ? ev.target.closest('.js-edit-track') : null;
     if (editBtn) {
-      await editTrack(editBtn);
+      try {
+        await editTrack(editBtn.getAttribute('data-track-id'), editBtn);
+      } catch (err) {
+        AdminUI.alert('读取轨迹失败: ' + (err.message || err), 'danger');
+      }
       return;
     }
     var btn = ev.target && ev.target.closest ? ev.target.closest('.js-delete-track') : null;
@@ -167,11 +171,13 @@
     }
   });
 
-  async function editTrack(btn) {
-    var trackID = btn.getAttribute('data-track-id') || '';
+  async function editTrack(trackID, btn) {
     if (!trackID) return;
     var detailResp = await fetch('/admin/api/tracks/' + encodeURIComponent(trackID));
-    if (!detailResp.ok) { AdminUI.alert('读取轨迹详情失败: ' + detailResp.status, 'danger'); return; }
+    if (!detailResp.ok) {
+      AdminUI.alert(detailResp.status === 404 ? '该轨迹已删除或不存在' : '读取轨迹详情失败: ' + detailResp.status, 'danger');
+      return;
+    }
     var track = ((await detailResp.json()).data) || {};
     var cities = cityOptions.slice();
     if (track.city_code && !cityNameByCode[track.city_code]) cities.push({ code: track.city_code, name: '未知城市 (' + track.city_code + ')' });
@@ -238,8 +244,7 @@
         landscape_day_url: values.preview_landscape_day, landscape_night_url: values.preview_landscape_night
       }
     };
-    btn.disabled = true;
-    btn.textContent = '保存中';
+    if (btn) { btn.disabled = true; btn.textContent = '保存中'; }
     try {
       var resp = await fetch('/admin/api/tracks/' + encodeURIComponent(trackID), {
         method: 'PUT',
@@ -253,15 +258,13 @@
           if (body && body.error) msg += ' ' + body.error;
         } catch (_) {}
         AdminUI.alert(msg, 'danger');
-        btn.disabled = false;
-        btn.textContent = '编辑';
+        if (btn) { btn.disabled = false; btn.textContent = '编辑'; }
         return;
       }
       await loadPage();
     } catch (err) {
       AdminUI.alert('保存失败: ' + (err && err.message ? err.message : err), 'danger');
-      btn.disabled = false;
-      btn.textContent = '编辑';
+      if (btn) { btn.disabled = false; btn.textContent = '编辑'; }
     }
   }
 
@@ -307,4 +310,14 @@
   var citiesLoaded = loadCities();
   loadPage();
   loadStats(citiesLoaded);
+  var linkedTrackID = new URLSearchParams(window.location.search).get('track_id');
+  if (linkedTrackID) {
+    if (/^NO\.[0-9A-Z]{8}$/.test(linkedTrackID)) {
+      citiesLoaded.then(function () { return editTrack(linkedTrackID); }).catch(function (err) {
+        AdminUI.alert('读取轨迹失败: ' + (err.message || err), 'danger');
+      });
+    } else {
+      AdminUI.alert('轨迹 ID 无效', 'danger');
+    }
+  }
 })();

@@ -20,21 +20,22 @@ type FeedbackImage struct {
 }
 
 type Feedback struct {
-	ID            int64           `json:"-" bson:"id,omitempty"`
-	FeedbackID    string          `json:"feedback_id" bson:"feedback_id"`
-	UserID        int64           `json:"user_id" bson:"user_id"`
-	UserName      string          `json:"user_name,omitempty" bson:"-"`
-	Content       string          `json:"content" bson:"content"`
-	Images        []FeedbackImage `json:"images" bson:"images"`
-	Contact       string          `json:"contact,omitempty" bson:"contact"`
-	AppVersion    string          `json:"app_version,omitempty" bson:"app_version"`
-	Platform      string          `json:"platform,omitempty" bson:"platform"`
-	DeviceModel   string          `json:"device_model,omitempty" bson:"device_model"`
-	SystemVersion string          `json:"system_version,omitempty" bson:"system_version"`
-	Status        FeedbackStatus  `json:"status" bson:"status"`
-	Reply         string          `json:"reply,omitempty" bson:"reply"`
-	CreatedAt     time.Time       `json:"created_at" bson:"created_at"`
-	UpdatedAt     time.Time       `json:"updated_at" bson:"updated_at"`
+	Correction    *FeedbackCorrection `json:"correction,omitempty" bson:"correction,omitempty"`
+	ID            int64               `json:"-" bson:"id,omitempty"`
+	FeedbackID    string              `json:"feedback_id" bson:"feedback_id"`
+	UserID        int64               `json:"user_id" bson:"user_id"`
+	UserName      string              `json:"user_name,omitempty" bson:"-"`
+	Content       string              `json:"content" bson:"content"`
+	Images        []FeedbackImage     `json:"images" bson:"images"`
+	Contact       string              `json:"contact,omitempty" bson:"contact"`
+	AppVersion    string              `json:"app_version,omitempty" bson:"app_version"`
+	Platform      string              `json:"platform,omitempty" bson:"platform"`
+	DeviceModel   string              `json:"device_model,omitempty" bson:"device_model"`
+	SystemVersion string              `json:"system_version,omitempty" bson:"system_version"`
+	Status        FeedbackStatus      `json:"status" bson:"status"`
+	Reply         string              `json:"reply,omitempty" bson:"reply"`
+	CreatedAt     time.Time           `json:"created_at" bson:"created_at"`
+	UpdatedAt     time.Time           `json:"updated_at" bson:"updated_at"`
 }
 
 type FeedbackListCursor struct {

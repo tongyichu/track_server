@@ -47,14 +47,17 @@ func (h *FeedbackHandler) Submit(ctx context.Context, c *app.RequestContext) {
 		files = form.File["image"]
 	}
 	feedback, err := h.feedbackSvc.Submit(ctx, service.SubmitFeedbackInput{
-		UserID:        meta.AuthUserID,
-		Content:       formValue(form.Value, "content"),
-		Images:        files,
-		Contact:       formValue(form.Value, "contact"),
-		AppVersion:    firstNonEmpty(formValue(form.Value, "app_version"), meta.ClientVersion),
-		Platform:      firstNonEmpty(formValue(form.Value, "platform"), meta.Platform),
-		DeviceModel:   formValue(form.Value, "device_model"),
-		SystemVersion: formValue(form.Value, "system_version"),
+		TrackID:            formValue(form.Value, "track_id"),
+		CorrectionOptionID: formValue(form.Value, "correction_option_id"),
+		Language:           meta.ClientLanguage,
+		UserID:             meta.AuthUserID,
+		Content:            formValue(form.Value, "content"),
+		Images:             files,
+		Contact:            formValue(form.Value, "contact"),
+		AppVersion:         firstNonEmpty(formValue(form.Value, "app_version"), meta.ClientVersion),
+		Platform:           firstNonEmpty(formValue(form.Value, "platform"), meta.Platform),
+		DeviceModel:        formValue(form.Value, "device_model"),
+		SystemVersion:      formValue(form.Value, "system_version"),
 	})
 	if err != nil {
 		h.writeFeedbackError(c, err)
@@ -79,6 +82,19 @@ func (h *FeedbackHandler) ListMine(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 	c.JSON(http.StatusOK, successResponse(page))
+}
+
+func (h *FeedbackHandler) CorrectionOptions(ctx context.Context, c *app.RequestContext) {
+	if _, ok := h.authUserID(c); !ok {
+		return
+	}
+	config, err := h.feedbackSvc.CorrectionConfig(ctx, true)
+	if err != nil {
+		h.writeFeedbackError(c, err)
+		return
+	}
+	c.Header("Cache-Control", "no-store")
+	c.JSON(http.StatusOK, successResponse(config))
 }
 
 func (h *FeedbackHandler) GetMine(ctx context.Context, c *app.RequestContext) {
@@ -208,6 +224,8 @@ func (h *FeedbackHandler) checkInternalToken(c *app.RequestContext) bool {
 func (h *FeedbackHandler) writeFeedbackError(c *app.RequestContext, err error) {
 	var iae *service.InvalidArgumentError
 	switch {
+	case errors.Is(err, service.ErrCorrectionOptionUnavailable):
+		c.JSON(http.StatusConflict, utils.H{"error": err.Error()})
 	case errors.As(err, &iae),
 		errors.Is(err, service.ErrFeedbackImageTooMany),
 		errors.Is(err, service.ErrFeedbackImageType),

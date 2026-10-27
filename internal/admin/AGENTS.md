@@ -20,7 +20,7 @@
 - 管理后台内置静态资源响应支持 gzip 与 ETag 重新验证；HTML 使用 no-cache，其他嵌入资源需重新验证后复用浏览器缓存。工作台先展示 API 返回的核心数字，再异步加载 ECharts 绘制图表。
 - 投稿审核页顶部展示当前待审核与超时队列，以及本月通过、驳回、通过率和平均审核时长；复用 `/admin/api/dashboard?period=month` 的只读统计。
 - 查看、修正和删除用户轨迹；列表展示日间横版 4:3 预览图、原始轨迹地址是否已记录、城市名称并支持标题模糊搜索；原始轨迹列只判断 `raw_track_url` 字段，不在线探测 OSS 对象。编辑可修正轨迹业务字段和预览图，删除为软删除并同步清理关联数据。
-- 意见反馈页默认筛选待处理，展示状态统计、反馈用户名称和完整内容；点击查看会在弹窗中加载详情并处理反馈。
+- 反馈与纠错页默认筛选待处理，展示状态统计、反馈用户名称和完整内容；点击查看会在弹窗中加载详情并处理反馈。`static/feedback_correction.js` 优先读取服务端 `correction` 快照，旧记录兼容完整的六种中英文纠错正文；不识别的内容仍按普通反馈显示，不改写原始正文。页面「纠错选项」可新增、改名、排序、启停，由 API 下发客户端。
 - 用户管理按昵称、同行管理按会话标题、轨迹管理按轨迹标题提供服务端模糊搜索，保留游标分页。
 
 模块对外只暴露 `admin.NewModule(...)` 与 `Module.RegisterRoutes(h)`，不被业务 handler 引用。
@@ -62,6 +62,7 @@ internal/admin/
 | 安装包上传 | `handlers.go` 中 `UploadPackage`、`static/app.js` 中 `/admin/api/releases/upload-package` |
 | 用户与账号限制 | `handlers.go` 中 `ListUsers` / `CreateAccountRestriction` / `GetCurrentAccountRestriction` / `RevokeCurrentAccountRestriction`，`static/users.html`、`static/users.js` |
 | 意见反馈管理 | `handlers.go` 中 `ListFeedbacks` / `GetFeedback` / `UpdateFeedbackStatus` / `GetFeedbackImage`，`static/feedbacks.html`、`static/feedbacks.js` |
+| 纠错配置 | `feedback_correction.go` 中配置读写 handler；`static/feedback_correction_config.js` 编辑配置；校验、快照和默认值统一在 `service/feedback_correction.go` |
 | 埋点同步摘要 | `handlers.go` 中 `ListAnalyticsSyncSummaries`，`static/analytics.html`、`static/analytics.js` |
 | 聚合路线运营 | `handlers.go` 中 `ListRouteGroups` / `GetRouteGroup` / `RenameRouteGroup` / `MergeRouteGroup` / `RemoveRouteGroupMember` / `SetRouteGroupRepresentative`，`static/route_groups.html`、`static/route_groups.js` |
 | 轨迹投稿审核 | `handlers.go` 中 `ListTrackSubmissions` / `GetTrackSubmission` / `ReviewTrackSubmission`，统计复用 `GetDashboard`；页面位于 `static/track_submissions.html`、`static/track_submissions.js` |
@@ -101,6 +102,7 @@ internal/admin/
 | PUT | `/admin/api/tracks/:track_id` | 鉴权 | 更新轨迹业务字段（不改 ID、轨迹点与创建/更新时间）；城市/类型更新已有地图索引，状态/进行状态/原始文件变化时清理并按可索引条件重新排队 |
 | DELETE | `/admin/api/tracks/:track_id` | 鉴权 | 删除轨迹：标记 `status=0`，并清理收藏、地图索引任务、geo index、路线组成员 |
 | GET | `/admin/api/feedbacks` | 鉴权 | 意见反馈列表，补充用户名称，支持 `status` / `app_version` / `phone` / `cursor` / `limit` |
+| GET/PUT | `/admin/api/feedback-correction-config` | 鉴权 | 读取含停用项的完整配置，按 version 条件保存；冲突返回 409 |
 | GET | `/admin/api/feedbacks/:feedback_id` | 鉴权 | 意见反馈详情 |
 | PUT | `/admin/api/feedbacks/:feedback_id/status` | 鉴权 | 更新反馈处理状态与用户可见 `reply`；`resolved` 时 `reply` 必填 |
 | GET | `/admin/api/feedbacks/:feedback_id/images/:image_id` | 鉴权 | 读取反馈图片 |
@@ -191,11 +193,15 @@ GET /admin/api/users
   → GET /admin/api/dashboard?period=month     展示状态分布与超时统计
   → GET /admin/api/feedbacks?status=pending&app_version=&phone=&cursor=  默认拉取待处理列表
   → 批量补充用户昵称，不在页面展示反馈 ID / 用户 ID
-  → GET /admin/api/feedbacks/:feedback_id     查看完整内容与图片并滚动到详情区
+  → GET /admin/api/feedbacks/:feedback_id     在弹窗中查看内容与图片
+  → 轨迹纠错展示问题类型、轨迹名称/ID、可选说明和图片；通过 /admin/tracks.html?track_id=... 新页打开既有轨迹编辑表单
+  → 快捷回复仅预填状态和用户可见回复，管理员核查并保存后才更新反馈；反馈状态更新不会自动修改轨迹或景点/行政区归属
   → PUT /admin/api/feedbacks/:feedback_id/status {status, reply}
        → FeedbackService.UpdateStatus
        → resolved 状态要求 reply 必填，reply 会展示给提交用户
 ```
+
+纠错展示以 `correction` 的提交时快照为准，不根据当前选项名称重建历史记录；旧文字格式仅保留兼容，普通反馈仅提到轨迹 ID 不应被误识别。选项通过后台配置维护稳定 ID，已有项只允许停用而非删除，新增 ID 由服务端生成；并发保存冲突时保留表单，由管理员显式重新加载，不覆盖他人配置。状态统计仍包含全部反馈。轨迹实际修改继续走既有鉴权与保存确认，读取关联轨迹不能自动提交改动。
 
 **查看埋点同步摘要**：
 ```
@@ -269,7 +275,7 @@ GET /admin/api/users
 - 测试遵循根 AGENTS 的“默认验证方式”：默认不新增或运行，由用户手动验证；仅在用户明确要求时执行 `go test ./internal/admin ./internal/service` 或其指定范围，不自动扩大为全量测试。
 - 路由变更：核对 `routes.go` 与 `static/*.js` 中前端 fetch 的 URL 是否一致。
 - 静态资源新增：确认文件位于 `internal/admin/static/` 下（`go:embed static` 才能打包）。
-- 接口契约变更：同步更新仓库根目录 `track_api.md`（如涉及客户端能感知的接口）。
+- 接口契约变更：同步更新 `docs/api/feedback.md` 与 `docs/api/route-index.md`；`track_api.md` 仅保留轻量入口。
 
 ## 常见误解
 

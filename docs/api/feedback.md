@@ -1,5 +1,25 @@
 # 意见反馈接口
 
+## 纠错选项
+
+`GET /api/v1/feedback/correction-options`
+
+需要登录。返回后台启用的纠错选项，按 `sort_order` 升序、同序按 `id` 排序；响应禁止缓存。客户端每次打开纠错页读取，不内置业务选项；失败展示重试，空列表展示暂无可用选项并禁用提交。
+
+```json
+{
+  "code": 0,
+  "data": {
+    "version": 1,
+    "options": [
+      { "id": "scenic", "name": "景点有误", "name_en": "Wrong scenic spot", "enabled": true, "sort_order": 10 }
+    ]
+  }
+}
+```
+
+`id` 是提交时使用的稳定标识，不能根据名称推导。中文展示 `name`，英文展示 `name_en`（为空时回退 `name`）。尚未保存配置时由服务端提供六个初始选项；后台全部停用后返回空列表，不恢复默认项。`version` 用于后台并发保护，客户端无需提交。
+
 ## 34. 提交意见反馈
 
 `POST /api/v1/feedback`
@@ -10,13 +30,32 @@
 
 | 字段 | 必填 | 说明 |
 | --- | --- | --- |
-| `content` | 是 | 反馈文字，1-1000 字 |
+| `content` | 普通反馈必填 | 普通反馈 1-1000 字；纠错时为可选补充说明，最多 500 字 |
+| `track_id` | 纠错必填 | 真实轨迹 ID，如 `NO.00000001`，与 `correction_option_id` 同时传入 |
+| `correction_option_id` | 纠错必填 | 选项接口返回的 `id`；客户端不提交名称或自行拼装纠错正文 |
 | `images` | 否 | 图片文件字段，可重复传 0-3 个；兼容字段名 `image` |
 | `contact` | 否 | 用户补充联系方式 |
 | `app_version` | 否 | 客户端版本；不传时优先取 `X-Client-Version` |
 | `platform` | 否 | `ios` / `android`；不传时优先取 `X-Platform` |
 | `device_model` | 否 | 设备型号 |
 | `system_version` | 否 | 系统版本 |
+
+纠错提交复用本接口、图片与未处理数量限制。服务端校验轨迹存在、已完成且有原始轨迹文件；非本人轨迹须为正常可见状态。不存在/已删除/未上传/仍在录制返回 `404`，无权访问返回 `403`。选项已停用或不存在返回 `409`，客户端重新拉取选项并让用户选择，保留说明及图片，不自动重提。
+
+服务端保存 `correction` 快照，包含真实轨迹标题和提交时的中英文选项名称；后续配置改名/停用不修改历史记录。同时按 `X-Client-Language` 生成可读 `content`，旧版反馈列表与详情仍可展示。提交、历史列表/详情及管理后台返回相同结构；普通反馈及旧纠错记录可无此字段：
+
+```json
+{
+  "correction": {
+    "track_id": "NO.00000001",
+    "track_title": "山间步道",
+    "option_id": "scenic",
+    "option_name": "景点有误",
+    "option_name_en": "Wrong scenic spot",
+    "notes": ""
+  }
+}
+```
 
 图片限制：
 
@@ -126,3 +165,14 @@
 `GET /api/v1/ops/feedback/:feedback_id/images/:image_id`
 
 运维内部接口，使用 `X-Internal-Token` 鉴权，可读取任意反馈图片。
+
+## 后台纠错配置
+
+管理后台「反馈与纠错 → 纠错选项」，通过独立管理员 session 鉴权：
+
+- `GET /admin/api/feedback-correction-config`：返回 `{code:0,data:{version,options}}`，含已停用项。
+- `PUT /admin/api/feedback-correction-config`：提交完整 `{version,options}`，字段结构同选项接口；`version` 必须使用最近读取值。成功返回保存后的完整配置和递增版本；发生并发修改返回 `409`，页面保留未保存内容，由管理员显式重新加载后修改。
+
+每项 `name` 必填且最多 24 个 Unicode 字符，`name_en` 可空且最多 64 字，名称不能换行；`sort_order` 为 0-9999 整数，`enabled` 为布尔值。最多 30 项；新增项省略/留空 `id`，由服务端生成。已有 ID 不可修改或删除，不需要的选项设 `enabled=false`。保存后客户端下次进入纠错页即可看到变更，无需发版。
+
+配置由 `FeedbackRepository` 在 MySQL 的 `feedback_correction_config`、Mongo 同名 collection 或内存降级仓储保存；内存降级下进程重启后配置丢失。MySQL 启动自动补建配置表和 `user_feedbacks.correction_json`，Mongo 的反馈快照为 `correction` 子文档。

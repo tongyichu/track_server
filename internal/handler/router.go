@@ -167,6 +167,7 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 	auth.GET("/login/log", loginHandler.GetLoginLog)
 	auth.POST("/feedback", feedbackHandler.Submit)
 	auth.GET("/feedback/list", feedbackHandler.ListMine)
+	auth.GET("/feedback/correction-options", feedbackHandler.CorrectionOptions)
 	auth.GET("/feedback/:feedback_id", feedbackHandler.GetMine)
 	auth.GET("/feedback/:feedback_id/images/:image_id", feedbackHandler.GetMineImage)
 	auth.POST("/companion/session/create", companionHandler.CreateSession)

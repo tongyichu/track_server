@@ -170,6 +170,8 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	api.GET("/companions", m.Handler.ListCompanions)
 	api.GET("/companions/:session_id", m.Handler.GetCompanionDetail)
 	api.GET("/feedbacks", m.Handler.ListFeedbacks)
+	api.GET("/feedback-correction-config", m.Handler.GetFeedbackCorrectionConfig)
+	api.PUT("/feedback-correction-config", m.Handler.UpdateFeedbackCorrectionConfig)
 	api.GET("/feedbacks/:feedback_id", m.Handler.GetFeedback)
 	api.PUT("/feedbacks/:feedback_id/status", m.Handler.UpdateFeedbackStatus)
 	api.GET("/feedbacks/:feedback_id/images/:image_id", m.Handler.GetFeedbackImage)

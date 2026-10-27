@@ -88,6 +88,7 @@
 | 查询账号限制历史 | GET | `/ops/users/:user_id/restrictions/history` | 运维内部 | [account-restriction.md](account-restriction.md#54-查询账号限制历史) |
 | 解除当前账号限制 | DELETE | `/ops/users/:user_id/restrictions/current` | 运维内部 | [account-restriction.md](account-restriction.md#55-解除当前账号限制) |
 | 提交意见反馈 | POST | `/feedback` | 是 | [feedback.md](feedback.md#34-提交意见反馈) |
+| 获取纠错选项 | GET | `/feedback/correction-options` | 是 | [feedback.md](feedback.md#纠错选项) |
 | 我的反馈列表 | GET | `/feedback/list` | 是 | [feedback.md](feedback.md#35-我的反馈列表) |
 | 我的反馈详情 | GET | `/feedback/:feedback_id` | 是 | [feedback.md](feedback.md#36-我的反馈详情) |
 | 读取我的反馈图片 | GET | `/feedback/:feedback_id/images/:image_id` | 是 | [feedback.md](feedback.md#37-读取我的反馈图片) |

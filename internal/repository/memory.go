@@ -56,9 +56,10 @@ type InMemoryTrackMapRepository struct {
 }
 
 type InMemoryFeedbackRepository struct {
-	mu        sync.RWMutex
-	nextID    int64
-	feedbacks map[string]*models.Feedback
+	correctionConfig *models.FeedbackCorrectionConfig
+	mu               sync.RWMutex
+	nextID           int64
+	feedbacks        map[string]*models.Feedback
 }
 
 type InMemoryAccountRestrictionRepository struct {
@@ -1294,6 +1295,10 @@ func cloneFeedback(in *models.Feedback) *models.Feedback {
 		return nil
 	}
 	clone := *in
+	if in.Correction != nil {
+		correction := *in.Correction
+		clone.Correction = &correction
+	}
 	if len(in.Images) > 0 {
 		clone.Images = append([]models.FeedbackImage(nil), in.Images...)
 	}
