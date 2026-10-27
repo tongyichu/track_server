@@ -1,6 +1,7 @@
 (function () {
   let period = 'day';
   const charts = {};
+  let chartLibraryPromise;
   const colors = ['#206bc4', '#2fb344', '#f59f00', '#ae3ec9', '#d63939', '#17a2b8', '#6f42c1', '#74b816'];
 
   function number(value) {
@@ -44,6 +45,22 @@
   function chartOption(id, option) {
     const instance = chart(id);
     if (instance) instance.setOption(option, true);
+  }
+
+  function loadChartLibrary() {
+    if (window.echarts) return Promise.resolve();
+    if (chartLibraryPromise) return chartLibraryPromise;
+    chartLibraryPromise = new Promise(function (resolve, reject) {
+      const script = document.createElement('script');
+      script.src = '/admin/static/vendor/echarts.min.js';
+      script.onload = resolve;
+      script.onerror = function () {
+        chartLibraryPromise = null;
+        reject(new Error('图表库加载失败'));
+      };
+      document.head.appendChild(script);
+    });
+    return chartLibraryPromise;
   }
 
   function axisTooltip() {
@@ -105,7 +122,7 @@
     return (items || []).map(function (item) { return { name: item.label || item.key || '未知', value: number(item.count) }; });
   }
 
-  function renderReview(review) {
+  function renderReviewMetrics(review) {
     review = review || {};
     setText('reviewPending', formatNumber(review.pending));
     setText('reviewOver24', formatNumber(review.pending_over_24h));
@@ -113,13 +130,17 @@
     setText('approvalRate', (number(review.approval_rate) * 100).toFixed(1) + '%');
     setText('avgReviewHours', formatDurationHours(review.avg_review_hours));
     setText('oldestPending', review.oldest_pending ? new Date(review.oldest_pending).toLocaleString('zh-CN') : '暂无积压');
+  }
+
+  function renderReviewChart(review) {
+    review = review || {};
     chartOption('reviewChart', pieOption([
       { name: '通过', value: number(review.approved) },
       { name: '驳回', value: number(review.rejected) }
     ], ['#2fb344', '#d63939']));
   }
 
-  function renderFeedback(feedback) {
+  function renderFeedbackMetrics(feedback) {
     feedback = feedback || {};
     setText('feedbackPending', formatNumber(feedback.pending));
     setText('feedbackProcessing', formatNumber(feedback.processing));
@@ -127,6 +148,10 @@
     setText('feedbackOver72', formatNumber(feedback.pending_over_72h));
     setText('feedbackResolvedPeriod', formatNumber(feedback.resolved_in_period));
     setText('avgResolutionHours', formatDurationHours(feedback.avg_resolution_hours));
+  }
+
+  function renderFeedbackCharts(feedback) {
+    feedback = feedback || {};
     chartOption('feedbackStatusChart', pieOption([
       { name: '待处理', value: number(feedback.pending) },
       { name: '处理中', value: number(feedback.processing) },
@@ -149,7 +174,7 @@
     };
   }
 
-  function renderContent(content) {
+  function renderContentMetrics(content) {
     content = content || {};
     setText('avgDistance', formatDistance(content.avg_distance_m));
     setText('avgDuration', formatDurationSeconds(content.avg_duration_s));
@@ -158,12 +183,16 @@
     setText('failedMapJobs', formatNumber(content.failed_map_jobs));
     setText('pendingMapJobs', formatNumber(content.pending_map_jobs));
     setText('activeRouteGroups', formatNumber(content.active_route_groups));
+  }
+
+  function renderContentCharts(content) {
+    content = content || {};
     chartOption('trackStatusChart', pieOption(distributionData(content.statuses), ['#2fb344', '#f59f00', '#d63939']));
     chartOption('trackTypeChart', pieOption(distributionData(content.types), colors));
     chartOption('trackCityChart', horizontalBarOption(distributionData(content.cities)));
   }
 
-  function renderEngagement(engagement, trend) {
+  function renderEngagementMetrics(engagement) {
     engagement = engagement || {};
     const current = engagement.current || {};
     const previous = engagement.previous || {};
@@ -176,6 +205,11 @@
         delta.className = number(current[key]) >= number(previous[key]) ? 'positive' : 'negative';
       }
     });
+    renderTopTracks(engagement.top_tracks || []);
+  }
+
+  function renderEngagementChart(engagement, trend) {
+    engagement = engagement || {};
     trend = trend || [];
     chartOption('engagementChart', {
       color: [colors[0], colors[1], colors[3], colors[2]], tooltip: axisTooltip(),
@@ -189,7 +223,6 @@
         { name: '评论', type: 'line', smooth: true, symbol: 'none', data: trend.map(function (item) { return item.comments; }) }
       ]
     });
-    renderTopTracks(engagement.top_tracks || []);
   }
 
   function renderCompanion(companion) {
@@ -267,13 +300,19 @@
       setText('activeCompanions', formatNumber(metrics.active_companions));
       setText('rangeHint', new Date(data.range.start).toLocaleDateString('zh-CN') + ' 至今');
       setText('updatedAt', '数据更新时间：' + new Date(data.updated_at).toLocaleString('zh-CN'));
+      renderReviewMetrics(data.review);
+      renderFeedbackMetrics(data.feedback);
+      renderContentMetrics(data.content);
+      renderEngagementMetrics(data.engagement);
+      renderCompanion(data.companion);
+      await new Promise(function (resolve) { requestAnimationFrame(resolve); });
+      await loadChartLibrary();
       renderTrend(data.trend);
       renderFunnel(data.funnel);
-      renderReview(data.review);
-      renderFeedback(data.feedback);
-      renderContent(data.content);
-      renderEngagement(data.engagement, data.trend);
-      renderCompanion(data.companion);
+      renderReviewChart(data.review);
+      renderFeedbackCharts(data.feedback);
+      renderContentCharts(data.content);
+      renderEngagementChart(data.engagement, data.trend);
     } catch (cause) {
       error.textContent = cause.message || String(cause);
       error.classList.remove('hidden');

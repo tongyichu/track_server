@@ -1,12 +1,18 @@
 package admin
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
 	"io/fs"
 	"net/http"
 	"path"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/cloudwego/hertz/pkg/app"
@@ -22,6 +28,8 @@ import (
 //
 //go:embed static
 var staticFS embed.FS
+
+var embeddedGzipCache sync.Map
 
 // Module 是管理后台对外暴露的注入入口，封装了 auth + handler + session store。
 type Module struct {
@@ -175,7 +183,7 @@ func serveEmbedded(name, contentType string) app.HandlerFunc {
 			c.JSON(http.StatusNotFound, utils.H{"error": "not found"})
 			return
 		}
-		c.Data(http.StatusOK, contentType, data)
+		serveEmbeddedAsset(c, contentType, data, "no-cache")
 	}
 }
 
@@ -200,8 +208,89 @@ func serveEmbeddedDir() app.HandlerFunc {
 			c.JSON(http.StatusNotFound, utils.H{"error": "not found"})
 			return
 		}
-		c.Data(http.StatusOK, contentTypeFor(raw), data)
+		serveEmbeddedAsset(c, contentTypeFor(raw), data, "public, max-age=0, must-revalidate")
 	}
+}
+
+func serveEmbeddedAsset(c *app.RequestContext, contentType string, data []byte, cacheControl string) {
+	hash := sha256.Sum256(data)
+	etag := `W/"` + hex.EncodeToString(hash[:]) + `"`
+	compressible := isCompressibleContentType(contentType)
+	if compressible {
+		c.Response.Header.Set("Vary", "Accept-Encoding")
+	}
+	c.Response.Header.Set("Cache-Control", cacheControl)
+	c.Response.Header.Set("ETag", etag)
+
+	if matchesETag(string(c.Request.Header.Peek("If-None-Match")), etag) {
+		c.Response.SetStatusCode(http.StatusNotModified)
+		return
+	}
+
+	if compressible && acceptsGzip(c.Request.Header.Peek("Accept-Encoding")) {
+		compressed, err := gzipEmbeddedAsset(etag, data)
+		if err == nil && len(compressed) < len(data) {
+			c.Response.Header.Set("Content-Encoding", "gzip")
+			c.Data(http.StatusOK, contentType, compressed)
+			return
+		}
+	}
+	c.Data(http.StatusOK, contentType, data)
+}
+
+func isCompressibleContentType(contentType string) bool {
+	contentType = strings.ToLower(contentType)
+	return strings.HasPrefix(contentType, "text/") ||
+		strings.Contains(contentType, "javascript") ||
+		strings.Contains(contentType, "json") ||
+		strings.Contains(contentType, "svg+xml")
+}
+
+func acceptsGzip(header []byte) bool {
+	for _, encoding := range strings.Split(string(header), ",") {
+		parts := strings.Split(strings.TrimSpace(encoding), ";")
+		if !strings.EqualFold(strings.TrimSpace(parts[0]), "gzip") {
+			continue
+		}
+		for _, parameter := range parts[1:] {
+			keyValue := strings.SplitN(strings.TrimSpace(parameter), "=", 2)
+			if len(keyValue) == 2 && strings.EqualFold(strings.TrimSpace(keyValue[0]), "q") {
+				quality, err := strconv.ParseFloat(strings.TrimSpace(keyValue[1]), 64)
+				if err == nil && quality <= 0 {
+					return false
+				}
+			}
+		}
+		return true
+	}
+	return false
+}
+
+func matchesETag(header, etag string) bool {
+	for _, candidate := range strings.Split(header, ",") {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == "*" || candidate == etag || strings.TrimPrefix(candidate, "W/") == strings.TrimPrefix(etag, "W/") {
+			return true
+		}
+	}
+	return false
+}
+
+func gzipEmbeddedAsset(etag string, data []byte) ([]byte, error) {
+	if cached, ok := embeddedGzipCache.Load(etag); ok {
+		return cached.([]byte), nil
+	}
+	var output bytes.Buffer
+	writer := gzip.NewWriter(&output)
+	if _, err := writer.Write(data); err != nil {
+		return nil, err
+	}
+	if err := writer.Close(); err != nil {
+		return nil, err
+	}
+	compressed := output.Bytes()
+	cached, _ := embeddedGzipCache.LoadOrStore(etag, compressed)
+	return cached.([]byte), nil
 }
 
 func contentTypeFor(name string) string {

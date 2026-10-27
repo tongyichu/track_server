@@ -267,8 +267,10 @@
       var data = ((await resp.json()).data) || [];
       cityOptions = data;
       data.forEach(function (city) { cityNameByCode[city.code] = city.name; });
+      return data;
     } catch (err) {
       AdminUI.alert('城市列表加载失败: ' + (err.message || err), 'danger');
+      return [];
     }
   }
 
@@ -281,13 +283,14 @@
     }).join('');
   }
 
-  async function loadStats() {
+  async function loadStats(citiesLoaded) {
     var typeBody = document.getElementById('typeStats');
     var cityBody = document.getElementById('cityStats');
     try {
       var resp = await fetch('/admin/api/dashboard?period=month');
       if (!resp.ok) throw new Error(String(resp.status));
       var data = ((await resp.json()).data) || {};
+      if (citiesLoaded) await citiesLoaded;
       var content = data.content || {};
       renderDistribution('typeStats', content.types || [], false);
       renderDistribution('cityStats', content.cities || [], true);
@@ -296,5 +299,7 @@
     }
   }
 
-  Promise.all([loadCities()]).then(function () { loadPage(); loadStats(); });
+  var citiesLoaded = loadCities();
+  loadPage();
+  loadStats(citiesLoaded);
 })();
