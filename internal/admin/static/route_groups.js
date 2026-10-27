@@ -63,7 +63,7 @@
   document.getElementById('renameBtn').addEventListener('click', async function () {
     if (!selectedGroupID) return;
     var name = document.getElementById('renameInput').value.trim();
-    if (!name) { alert('请输入新名称'); return; }
+    if (!name) { AdminUI.alert('请输入新名称', 'danger'); return; }
     try {
       await apiJSON('/admin/api/route-groups/' + encodeURIComponent(selectedGroupID) + '/name', {
         method: 'PUT',
@@ -72,14 +72,14 @@
       await loadDetail(selectedGroupID);
       await loadGroups();
     } catch (err) {
-      alert(err.message);
+      AdminUI.alert(err.message, 'danger');
     }
   });
   document.getElementById('mergeBtn').addEventListener('click', async function () {
     if (!selectedGroupID) return;
     var sourceGroupID = document.getElementById('mergeInput').value.trim();
-    if (!sourceGroupID) { alert('请输入源路线组ID'); return; }
-    if (!confirm('确认把 ' + sourceGroupID + ' 合并到 ' + selectedGroupID + '？')) return;
+    if (!sourceGroupID) { AdminUI.alert('请输入源路线组ID', 'danger'); return; }
+    if (!await AdminUI.confirm({ title: '合并路线组', message: '确认把 ' + sourceGroupID + ' 合并到 ' + selectedGroupID + '？', confirmText: '确认合并', danger: true })) return;
     try {
       await apiJSON('/admin/api/route-groups/' + encodeURIComponent(selectedGroupID) + '/merge', {
         method: 'POST',
@@ -89,7 +89,7 @@
       await loadDetail(selectedGroupID);
       await loadGroups();
     } catch (err) {
-      alert(err.message);
+      AdminUI.alert(err.message, 'danger');
     }
   });
   document.getElementById('introSaveBtn').addEventListener('click', saveIntroduction);
@@ -181,12 +181,12 @@
   async function saveIntroduction() {
     if (!selectedGroupID) return;
     try { await apiJSON('/admin/api/route-groups/'+encodeURIComponent(selectedGroupID)+'/introduction',{method:'PUT',body:JSON.stringify(introductionPayload())}); await loadIntroduction(selectedGroupID); }
-    catch(err){ alert(err.message); }
+    catch(err){ AdminUI.alert(err.message, 'danger'); }
   }
   async function setIntroductionPublished(published) {
     if (!selectedGroupID) return;
     try { await apiJSON('/admin/api/route-groups/'+encodeURIComponent(selectedGroupID)+'/introduction/'+(published?'publish':'unpublish'),{method:'POST'}); await loadIntroduction(selectedGroupID); await loadGroups(); }
-    catch(err){ alert(err.message); }
+    catch(err){ AdminUI.alert(err.message, 'danger'); }
   }
 
   function renderDetail(data) {
@@ -244,13 +244,13 @@
       await loadDetail(selectedGroupID);
       await loadGroups();
     } catch (err) {
-      alert(err.message);
+      AdminUI.alert(err.message, 'danger');
     }
   }
 
   async function removeMember(trackID) {
     if (!selectedGroupID || !trackID) return;
-    if (!confirm('确认从当前路线组移除轨迹 ' + trackID + '？')) return;
+    if (!await AdminUI.confirm({ title: '移除成员轨迹', message: '确认从当前路线组移除轨迹 ' + trackID + '？', confirmText: '确认移除', danger: true })) return;
     try {
       await apiJSON('/admin/api/route-groups/' + encodeURIComponent(selectedGroupID) + '/members/' + encodeURIComponent(trackID), {
         method: 'DELETE'
@@ -258,7 +258,7 @@
       await loadDetail(selectedGroupID);
       await loadGroups();
     } catch (err) {
-      alert(err.message);
+      AdminUI.alert(err.message, 'danger');
     }
   }
 

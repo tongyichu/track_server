@@ -123,7 +123,12 @@
     if (!btn) return;
     var trackID = btn.getAttribute('data-track-id') || '';
     if (!trackID) return;
-    if (!window.confirm('确认删除轨迹 ' + trackID + '？删除后会标记为已删除，并清理收藏和地图索引。')) {
+    if (!await AdminUI.confirm({
+      title: '删除轨迹',
+      message: '确认删除轨迹 ' + trackID + '？删除后会标记为已删除，并清理收藏和地图索引。',
+      confirmText: '删除轨迹',
+      danger: true
+    })) {
       return;
     }
     btn.disabled = true;
@@ -136,14 +141,14 @@
           var body = await resp.json();
           if (body && body.error) msg += ' ' + body.error;
         } catch (_) {}
-        window.alert(msg);
+        AdminUI.alert(msg, 'danger');
         btn.disabled = false;
         btn.textContent = '删除';
         return;
       }
       await loadPage();
     } catch (err) {
-      window.alert('删除失败: ' + (err && err.message ? err.message : err));
+      AdminUI.alert('删除失败: ' + (err && err.message ? err.message : err), 'danger');
       btn.disabled = false;
       btn.textContent = '删除';
     }
@@ -154,20 +159,17 @@
     if (!trackID) return;
     var oldTitle = btn.getAttribute('data-title') || '';
     var oldCityCode = btn.getAttribute('data-city-code') || '';
-    var title = window.prompt('轨迹标题', oldTitle);
-    if (title == null) return;
-    var cityCode = window.prompt('城市 Code', oldCityCode);
-    if (cityCode == null) return;
-    title = title.trim();
-    cityCode = cityCode.trim();
-    if (title.length > 128) {
-      window.alert('标题不能超过 128 个字符');
-      return;
-    }
-    if (cityCode.length > 16) {
-      window.alert('城市 Code 不能超过 16 个字符');
-      return;
-    }
+    var values = await AdminUI.form({
+      title: '编辑轨迹 ' + trackID,
+      confirmText: '保存修改',
+      fields: [
+        { name: 'title', label: '轨迹标题', value: oldTitle, maxLength: 128 },
+        { name: 'city_code', label: '城市 Code', value: oldCityCode, maxLength: 16 }
+      ]
+    });
+    if (!values) return;
+    var title = values.title.trim();
+    var cityCode = values.city_code.trim();
     btn.disabled = true;
     btn.textContent = '保存中';
     try {
@@ -182,14 +184,14 @@
           var body = await resp.json();
           if (body && body.error) msg += ' ' + body.error;
         } catch (_) {}
-        window.alert(msg);
+        AdminUI.alert(msg, 'danger');
         btn.disabled = false;
         btn.textContent = '编辑';
         return;
       }
       await loadPage();
     } catch (err) {
-      window.alert('保存失败: ' + (err && err.message ? err.message : err));
+      AdminUI.alert('保存失败: ' + (err && err.message ? err.message : err), 'danger');
       btn.disabled = false;
       btn.textContent = '编辑';
     }

@@ -23,9 +23,9 @@
     return esc((s || '').replace('T', ' ').slice(0, 19));
   }
   function restrictionText(r) {
-    if (!r) return '<span class="hint">未限制</span>';
+    if (!r) return '<span class="badge bg-green-lt text-green">正常</span>';
     var until = r.expires_at ? ('至 ' + fmtTime(r.expires_at)) : '永久';
-    return '<strong>已限制</strong><br><span class="hint">' + esc(until) + '</span><br><span class="hint">' + esc(r.reason || '') + '</span>';
+    return '<span class="badge bg-red-lt text-red">已限制</span><br><span class="hint">' + esc(until) + '</span><br><span class="hint">' + esc(r.reason || '') + '</span>';
   }
 
   // 翻页：采用 cursor 栈记录每一页的入口 cursor。
@@ -49,21 +49,22 @@
     var userID = btn.dataset.userId;
     if (!userID) return;
     if (btn.dataset.action === 'restrict') {
-      var reason = window.prompt('请输入账号限制原因', '违规上传内容');
-      if (reason == null) return;
-      reason = reason.trim();
-      if (!reason) {
-        window.alert('原因不能为空');
-        return;
-      }
-      var daysRaw = window.prompt('限制天数，留空表示永久', '7');
-      if (daysRaw == null) return;
+      var values = await AdminUI.form({
+        title: '限制用户 #' + userID,
+        confirmText: '确认限制',
+        fields: [
+          { name: 'reason', label: '限制原因', value: '违规上传内容', required: true, maxLength: 500 },
+          { name: 'days', label: '限制天数', value: '7', type: 'number', min: 1, placeholder: '留空表示永久' }
+        ]
+      });
+      if (!values) return;
+      var reason = values.reason.trim();
+      var daysRaw = values.days.trim();
       var payload = { reason: reason };
-      daysRaw = daysRaw.trim();
       if (daysRaw) {
         var days = Number(daysRaw);
         if (!isFinite(days) || days <= 0) {
-          window.alert('限制天数必须大于 0');
+          AdminUI.alert('限制天数必须大于 0', 'danger');
           return;
         }
         payload.expires_at = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
@@ -74,19 +75,21 @@
         body: JSON.stringify(payload)
       });
       if (!resp.ok) {
-        window.alert('限制失败: ' + await resp.text());
+        AdminUI.alert('限制失败: ' + await resp.text(), 'danger');
         return;
       }
+      AdminUI.alert('账号限制已生效', 'success');
       loadPage();
       return;
     }
     if (btn.dataset.action === 'revoke') {
-      if (!window.confirm('确定解除该用户当前账号限制？')) return;
+      if (!await AdminUI.confirm({ title: '解除账号限制', message: '确定解除用户 #' + userID + ' 当前的账号限制？', confirmText: '解除限制' })) return;
       var revokeResp = await fetch('/admin/api/users/' + encodeURIComponent(userID) + '/restrictions/current', { method: 'DELETE' });
       if (!revokeResp.ok) {
-        window.alert('解除失败: ' + await revokeResp.text());
+        AdminUI.alert('解除失败: ' + await revokeResp.text(), 'danger');
         return;
       }
+      AdminUI.alert('账号限制已解除', 'success');
       loadPage();
     }
   });

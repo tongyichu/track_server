@@ -134,9 +134,10 @@
     });
     tbody.querySelectorAll('button.danger').forEach(function (b) {
       b.addEventListener('click', async function () {
-        if (!confirm('确认删除版本 #' + b.dataset.id + ' ?')) return;
+        if (!await AdminUI.confirm({ title: '删除发布版本', message: '确认删除版本 #' + b.dataset.id + '？', confirmText: '删除版本', danger: true })) return;
         const r = await fetch('/admin/api/releases/' + b.dataset.id, { method: 'DELETE' });
-        if (!r.ok) { alert('删除失败'); return; }
+        if (!r.ok) { AdminUI.alert('删除失败', 'danger'); return; }
+        AdminUI.alert('发布版本已删除', 'success');
         loadList();
       });
     });
