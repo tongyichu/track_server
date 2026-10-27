@@ -102,6 +102,8 @@ track_server/
 
 ### 稳定默认值
 
+- 管理后台运营工作台的跨域只读统计统一走 `repository.AdminDashboardStatisticsRepository`，由 `NewAdminDashboardStatisticsRepository` 根据当前 MySQL / Mongo / in-memory 仓储族选择实现；不新增统计表，也不改变业务写入流程。周期指标按 `[start,end)` 统计，互动趋势使用收藏/导航/点赞/评论各自 `created_at`，新增用户转化漏斗使用同周期注册 Cohort 并逐级限定为完成轨迹、投稿和审核通过。数据模型见 `internal/models/admin_dashboard.go`，聚合实现见 `internal/repository/admin_dashboard*.go`。
+
 - 精品标识 `is_featured` 仅取投稿当前 `approved` 状态；本人已上传 `/track/my/list` 和收藏 `/track/collected/list` 也明确返回 true/false。复用 `TrackSubmissionService` 的当前页批量查询，禁止逐条补查详情或为标识下载投稿图片；响应 DTO 字段不新增表或索引，协议见 `docs/api/track-submission.md`。
 
 - 收藏数 `collect_count` 为当前用户与轨迹唯一收藏关系的总数，包含作者自藏；沿用 `CollectRepository.CountByTrackIDs`，列表批量统计、详情/创建/更新直接下发。详情及全部轨迹列表摘要（包含 `/track/my/list`、`/track/collected/list`）明确返回按 JWT 浏览者计算的 `collected`，false 不省略；作者身份不代表已收藏。列表通过既有 `CollectRepository.ListCollectedByTrackIDs` 按当前页批量查询，禁止逐条补查；本地 Room 列表不属于 Server 接口。POST/DELETE `/track_collect` 保留 status 并返回操作后的 collected/collect_count，重复操作幂等，不新增计数接口或独立计数表。入口见 `internal/service/track_collect_summary.go` 与 `docs/api/collect-navigation.md`；Mongo 使用用户/轨迹唯一索引和 track_id 统计索引。

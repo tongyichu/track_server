@@ -549,6 +549,10 @@ func main() {
 	// NewModule 创建出的 auth 为 nil，RegisterRoutes 会直接跳过。
 	adminModule := admin.NewModule(cfg.AdminAccounts, appReleaseSvc, ossTokenSvc, staticRoot, userRepo, trackRepo, collectRepo, trackMapRepo, companionRepo, analyticsRepo, userSvc, feedbackSvc, accountRestrictionSvc, trackRouteGroupSvc)
 	if adminModule != nil && adminModule.Handler != nil {
+		adminModule.Handler.SetDashboardStatisticsRepository(repository.NewAdminDashboardStatisticsRepository(
+			userRepo, trackRepo, collectRepo, loginLogRepo, navigationRepo, companionRepo,
+			feedbackRepo, trackMapRepo, trackSubmissionRepo, likeRepo, commentRepo,
+		))
 		adminModule.Handler.SetScreenshotCache(screenshotCache)
 		adminModule.Handler.SetTrackSubmissionService(trackSubmissionSvc)
 	}

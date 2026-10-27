@@ -216,6 +216,13 @@ type AdminUserStatisticsRepository interface {
 	ListAdminDailyUserCounts(ctx context.Context, start, end time.Time) ([]models.AdminDailyCount, error)
 }
 
+// AdminDashboardStatisticsRepository aggregates read-only operational metrics
+// across business repositories. It is intentionally separate from the write
+// contracts so dashboard evolution cannot affect client business flows.
+type AdminDashboardStatisticsRepository interface {
+	GetAdminDashboardStatistics(ctx context.Context, query models.AdminDashboardQuery) (*models.AdminDashboardStatistics, error)
+}
+
 // AccountRestrictionRepository defines persistence operations for management-center account restrictions.
 type AccountRestrictionRepository interface {
 	CreateAccountRestriction(ctx context.Context, restriction *models.AccountRestriction) error

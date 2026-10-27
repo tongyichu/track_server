@@ -15,7 +15,7 @@
 - 查看埋点 OSS 同步摘要（任务状态、文件列表、OSS key、字节数、耗时与错误）。
 - 在用户管理页查看、创建和解除账号限制；账号限制会由业务侧中间件拦截上传、发起同行、关注、收藏、修改资料等动作。
 - 查看和人工运营路线发现 RouteGroup（展示离线 `area_id` 对应的区域名称、类型与介绍页，支持改名、合并、移除成员、指定代表轨迹，以及编辑、发布和下线双语路线介绍）。
-- 通过响应式工作台查看业务库即时统计（日/周/月新增用户、已完成上传轨迹、上传用户、投稿与待审核数）；该口径不依赖 T+1 埋点同步。
+- 通过响应式工作台查看业务库即时统计：日/周/月核心增长、同周期新增用户转化、投稿与反馈处理效率、轨迹内容质量、互动趋势、热门轨迹和同行会话；该口径不依赖 T+1 埋点同步。
 - 审核用户轨迹投稿，查看结构化路线资料和经本地缓存改写的投稿图片，按 revision 通过或驳回。
 - 查看、修正和删除用户轨迹；列表展示 `track_screenshot_url` 缩略图，OSS 截图需先经共享截图缓存落盘再通过后台静态代理访问；修正仅允许改 `title` / `city_code`，删除为软删除，并同步清理收藏关系与首页地图索引/路线组成员。
 
@@ -52,7 +52,7 @@ internal/admin/
 | --- | --- |
 | 路由清单 | `routes.go` 中 `RegisterRoutes` |
 | 鉴权与 cookie | `auth.go`（`sessionCookieName = "admin_session"`） |
-| 业务依赖注入 | `routes.go` 的 `NewModule(accounts, releaseSvc, stsSvc, staticRoot, userRepo, trackRepo, collectRepo, trackMapRepo, ..., restrictionSvc, routeGroupSvc)`；`cmd/server/main.go` 创建后通过 `Handler.SetScreenshotCache(screenshotCache)` 和 `Handler.SetTrackSubmissionService(trackSubmissionSvc)` 注入缓存与投稿服务 |
+| 业务依赖注入 | `routes.go` 的 `NewModule(accounts, releaseSvc, stsSvc, staticRoot, userRepo, trackRepo, collectRepo, trackMapRepo, ..., restrictionSvc, routeGroupSvc)`；`cmd/server/main.go` 创建后通过 `Handler.SetScreenshotCache(screenshotCache)`、`Handler.SetTrackSubmissionService(trackSubmissionSvc)` 和 `Handler.SetDashboardStatisticsRepository(...)` 注入缓存、投稿与跨域只读统计能力 |
 | 前端入口 | `static/login.html`、`static/index.html` |
 | 响应式外壳与工作台 | `static/shell.js`、`static/ui.js`、`static/style.css`、`static/dashboard.html`、`static/dashboard.js`；组件库固定为内置 Tabler 1.7.1，图标为 Tabler Icons 3.49.0，图表为 ECharts 6.1.0，均位于 `static/vendor/`，不要改成运行时 CDN |
 | 安装包上传 | `handlers.go` 中 `UploadPackage`、`static/app.js` 中 `/admin/api/releases/upload-package` |
@@ -78,7 +78,7 @@ internal/admin/
 | POST | `/admin/api/logout` | 公开 | 删除 session + 清 cookie |
 | GET | `/admin/api/me` | 公开 | 返回当前会话；未登录返回 401 |
 | GET | `/admin/api/releases` | 鉴权 | 列出发布记录，支持 `platform` / `status` 过滤 |
-| GET | `/admin/api/dashboard` | 鉴权 | 业务库即时统计；`period=day|week|month`，返回同进度上周期对比与日趋势 |
+| GET | `/admin/api/dashboard` | 鉴权 | 业务库即时统计；`period=day|week|month`，返回同进度上周期对比、用户转化、审核/反馈效率、内容质量、互动、同行与日趋势 |
 | POST | `/admin/api/releases` | 鉴权 | 发布/覆盖一个版本（按 `(platform, version_code)` 幂等） |
 | DELETE | `/admin/api/releases/:id` | 鉴权 | 删除一条发布记录 |
 | POST | `/admin/api/releases/upload-package` | 鉴权 | multipart 上传安装包到 `<LogDir>/static/release/<platform>/` |
@@ -132,6 +132,18 @@ POST /admin/api/login {username,password}
 ```
 请求 → Authenticator.AuthMiddleware → SessionFromRequest(cookie) → 否则 401
 ```
+
+**运营工作台统计**：
+```
+[admin UI] /admin/dashboard.html?period=day|week|month
+  → GET /admin/api/dashboard?period=...
+  → Handler 生成 current / previous / trend 时间窗
+  → AdminDashboardStatisticsRepository 从当前仓储族只读聚合
+       用户与活跃、完成轨迹、投稿审核、反馈、互动、地图索引、路线组、同行
+  → 服务端补充运动类型、城市和状态展示名
+  → ECharts 渲染增长/互动趋势、转化漏斗和内容分布
+```
+新增用户转化漏斗以同周期注册用户为 Cohort，后续阶段逐级限定为同周期完成轨迹、投稿和审核通过；收藏/导航/点赞/评论的周期指标按各自关系或记录的 `created_at` 统计，不使用轨迹当前累计数倒推历史趋势。工作台聚合只读，不得在加载页面时修正业务数据或触发外部服务。
 
 **后台头像读取**：
 ```

@@ -18,6 +18,7 @@ import (
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/common/utils"
 
+	"github.com/tongyichu/track_server/internal/config"
 	"github.com/tongyichu/track_server/internal/models"
 	"github.com/tongyichu/track_server/internal/repository"
 	"github.com/tongyichu/track_server/internal/service"
@@ -39,6 +40,7 @@ type Handler struct {
 	restrictionSvc     *service.AccountRestrictionService
 	routeGroupSvc      *service.TrackRouteGroupService
 	trackSubmissionSvc *service.TrackSubmissionService
+	dashboardStatsRepo repository.AdminDashboardStatisticsRepository
 	screenshotCache    *service.AssetCacheService
 	// staticRoot 是服务端本地静态资源根目录（通常为 <LogDir>/static）。
 	// 管理后台上传的安装包会落到 <staticRoot>/release/<platform>/ 下，
@@ -109,6 +111,15 @@ func (h *Handler) SetTrackSubmissionService(svc *service.TrackSubmissionService)
 	}
 }
 
+// SetDashboardStatisticsRepository injects the cross-domain, read-only
+// operational dashboard aggregator. Keeping it additive avoids widening any
+// business write repository contract.
+func (h *Handler) SetDashboardStatisticsRepository(repo repository.AdminDashboardStatisticsRepository) {
+	if h != nil {
+		h.dashboardStatsRepo = repo
+	}
+}
+
 type adminMetricComparison struct {
 	Current  int64 `json:"current"`
 	Previous int64 `json:"previous"`
@@ -166,15 +177,36 @@ func (h *Handler) GetDashboard(ctx context.Context, c *app.RequestContext) {
 		c.JSON(http.StatusInternalServerError, utils.H{"error": "dashboard statistics not configured"})
 		return
 	}
+	now := time.Now()
+	start, previousStart, previousEnd, trendStart, period := dashboardPeriodBounds(now, strings.TrimSpace(string(c.Query("period"))))
+	trendEnd := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 0, 1)
+	if h.dashboardStatsRepo != nil {
+		statistics, err := h.dashboardStatsRepo.GetAdminDashboardStatistics(ctx, models.AdminDashboardQuery{
+			Start: start, End: now, PreviousStart: previousStart, PreviousEnd: previousEnd,
+			TrendStart: trendStart, TrendEnd: trendEnd, Now: now,
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+			return
+		}
+		decorateDashboardStatistics(statistics)
+		c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{
+			"period":  period,
+			"range":   utils.H{"start": start, "end": now, "previous_start": previousStart, "previous_end": previousEnd},
+			"metrics": statistics.Metrics, "funnel": statistics.Funnel, "review": statistics.Review,
+			"feedback": statistics.Feedback, "content": statistics.Content,
+			"engagement": statistics.Engagement, "companion": statistics.Companion,
+			"trend": statistics.Trend, "updated_at": now,
+		}})
+		return
+	}
+
 	userStats, usersOK := h.userRepo.(repository.AdminUserStatisticsRepository)
 	trackStats, tracksOK := h.trackRepo.(repository.AdminTrackStatisticsRepository)
 	if !usersOK || !tracksOK || h.trackSubmissionSvc == nil {
 		c.JSON(http.StatusInternalServerError, utils.H{"error": "dashboard statistics not configured"})
 		return
 	}
-
-	now := time.Now()
-	start, previousStart, previousEnd, trendStart, period := dashboardPeriodBounds(now, strings.TrimSpace(string(c.Query("period"))))
 	newUsers, err := userStats.CountAdminUsersBetween(ctx, start, now)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
@@ -230,8 +262,6 @@ func (h *Handler) GetDashboard(ctx context.Context, c *app.RequestContext) {
 		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
 		return
 	}
-	trendEnd := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 0, 1)
-
 	c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{
 		"period": period,
 		"range":  utils.H{"start": start, "end": now, "previous_start": previousStart, "previous_end": previousEnd},
@@ -245,6 +275,48 @@ func (h *Handler) GetDashboard(ctx context.Context, c *app.RequestContext) {
 		"trend":      mergeAdminDailyCounts(trendStart, trendEnd, dailyUsers, dailyTracks),
 		"updated_at": now,
 	}})
+}
+
+func decorateDashboardStatistics(statistics *models.AdminDashboardStatistics) {
+	if statistics == nil {
+		return
+	}
+	statusLabels := map[string]string{"0": "已删除", "1": "公开", "2": "私密", "deleted": "已删除", "normal": "公开", "private": "私密", "unknown": "未知"}
+	typeLabels := map[string]string{"hiking": "徒步", "running": "跑步", "climbing": "爬山", "riding": "骑行", "driving": "自驾", "unknown": "未知"}
+	platformLabels := map[string]string{"android": "Android", "ios": "iOS", "unknown": "未知"}
+	for index := range statistics.Content.Statuses {
+		item := &statistics.Content.Statuses[index]
+		item.Label = statusLabels[item.Key]
+	}
+	for index := range statistics.Content.Types {
+		item := &statistics.Content.Types[index]
+		item.Label = typeLabels[item.Key]
+		if item.Label == "" {
+			item.Label = item.Key
+		}
+	}
+	for index := range statistics.Content.Cities {
+		item := &statistics.Content.Cities[index]
+		if item.Key == "unknown" {
+			item.Label = "未知城市"
+		} else {
+			item.Label = config.CityNameByCode(item.Key)
+			if item.Label == "" {
+				item.Label = item.Key
+			}
+		}
+	}
+	for index := range statistics.Feedback.Platforms {
+		item := &statistics.Feedback.Platforms[index]
+		item.Label = platformLabels[strings.ToLower(item.Key)]
+		if item.Label == "" {
+			item.Label = item.Key
+		}
+	}
+	for index := range statistics.Feedback.Versions {
+		item := &statistics.Feedback.Versions[index]
+		item.Label = item.Key
+	}
 }
 
 // ----- 轨迹投稿审核 -----
