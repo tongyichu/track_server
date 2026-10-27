@@ -23,6 +23,7 @@ type Feedback struct {
 	ID            int64           `json:"-" bson:"id,omitempty"`
 	FeedbackID    string          `json:"feedback_id" bson:"feedback_id"`
 	UserID        int64           `json:"user_id" bson:"user_id"`
+	UserName      string          `json:"user_name,omitempty" bson:"-"`
 	Content       string          `json:"content" bson:"content"`
 	Images        []FeedbackImage `json:"images" bson:"images"`
 	Contact       string          `json:"contact,omitempty" bson:"contact"`

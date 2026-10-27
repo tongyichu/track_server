@@ -19,6 +19,15 @@
     <div class="spacer"></div><div class="user"><span id="userName"></span><button id="logoutBtn">退出</button></div>
   </header>
   <main class="container wide">
+    <div class="submission-stat-grid" aria-live="polite">
+      <section class="panel submission-stat-card"><span>当前待审核</span><strong id="submissionPending">—</strong><small>所有待审核投稿</small></section>
+      <section class="panel submission-stat-card submission-stat-warning"><span>待审核超 24 小时</span><strong id="submissionOver24">—</strong><small>需要优先处理</small></section>
+      <section class="panel submission-stat-card submission-stat-danger"><span>待审核超 72 小时</span><strong id="submissionOver72">—</strong><small>长期未处理</small></section>
+      <section class="panel submission-stat-card"><span>本月审核通过</span><strong id="submissionApproved">—</strong><small>按审核完成时间统计</small></section>
+      <section class="panel submission-stat-card"><span>本月审核驳回</span><strong id="submissionRejected">—</strong><small>按审核完成时间统计</small></section>
+      <section class="panel submission-stat-card"><span>本月通过率</span><strong id="submissionApprovalRate">—</strong><small>通过数 / 通过与驳回数</small></section>
+      <section class="panel submission-stat-card"><span>本月平均审核时长</span><strong id="submissionAvgHours">—</strong><small>从提交到审核完成</small></section>
+    </div>
     <section class="panel">
       <h2>轨迹投稿审核</h2>
       <div class="row">

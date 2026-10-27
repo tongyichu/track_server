@@ -830,6 +830,11 @@ func (h *Handler) ListUsers(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 	limit := parseAdminListLimit(string(c.Query("limit")))
+	title := strings.TrimSpace(string(c.Query("title")))
+	if utf8.RuneCountInString(title) > 128 {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "title exceeds 128 characters"})
+		return
+	}
 	var cursor *models.UserListCursor
 	if rawAt := strings.TrimSpace(string(c.Query("cursor_created_at"))); rawAt != "" {
 		t, err := time.Parse(time.RFC3339Nano, rawAt)
@@ -845,7 +850,22 @@ func (h *Handler) ListUsers(ctx context.Context, c *app.RequestContext) {
 		}
 		cursor = &models.UserListCursor{CreatedAt: t, ID: id}
 	}
-	items, err := h.userRepo.ListAll(ctx, cursor, limit)
+	var items []*models.User
+	var total int64
+	var err error
+	if title != "" {
+		search, ok := h.userRepo.(repository.AdminUserTitleSearchRepository)
+		if !ok {
+			c.JSON(http.StatusInternalServerError, utils.H{"error": "user title search not configured"})
+			return
+		}
+		items, total, err = search.ListAdminUsersByTitle(ctx, title, cursor, limit)
+	} else {
+		items, err = h.userRepo.ListAll(ctx, cursor, limit)
+		if err == nil {
+			total, err = h.userRepo.CountAll(ctx)
+		}
+	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
 		return
@@ -881,11 +901,6 @@ func (h *Handler) ListUsers(ctx context.Context, c *app.RequestContext) {
 			}
 		}
 		rows = append(rows, row)
-	}
-	total, err := h.userRepo.CountAll(ctx)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
-		return
 	}
 	resp := utils.H{
 		"items":    rows,
@@ -1019,6 +1034,11 @@ func (h *Handler) ListTracks(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 	limit := parseAdminListLimit(string(c.Query("limit")))
+	title := strings.TrimSpace(string(c.Query("title")))
+	if utf8.RuneCountInString(title) > 128 {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "title exceeds 128 characters"})
+		return
+	}
 	var cursor *models.TrackListCursor
 	if rawAt := strings.TrimSpace(string(c.Query("cursor_start_time"))); rawAt != "" {
 		t, err := time.Parse(time.RFC3339Nano, rawAt)
@@ -1033,17 +1053,27 @@ func (h *Handler) ListTracks(ctx context.Context, c *app.RequestContext) {
 		}
 		cursor = &models.TrackListCursor{StartTime: t, ID: id}
 	}
-	items, err := h.trackRepo.ListAll(ctx, cursor, limit)
+	var items []*models.Track
+	var total int64
+	var err error
+	if title != "" {
+		search, ok := h.trackRepo.(repository.AdminTrackTitleSearchRepository)
+		if !ok {
+			c.JSON(http.StatusInternalServerError, utils.H{"error": "track title search not configured"})
+			return
+		}
+		items, total, err = search.ListAdminTracksByTitle(ctx, title, cursor, limit)
+	} else {
+		items, err = h.trackRepo.ListAll(ctx, cursor, limit)
+		if err == nil {
+			total, err = h.trackRepo.CountAll(ctx)
+		}
+	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
 		return
 	}
 	h.decorateAdminTrackAssetURLs(ctx, items)
-	total, err := h.trackRepo.CountAll(ctx)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
-		return
-	}
 	resp := utils.H{
 		"items":    items,
 		"total":    total,
@@ -1244,6 +1274,11 @@ func (h *Handler) ListCompanions(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 	limit := parseAdminListLimit(string(c.Query("limit")))
+	title := strings.TrimSpace(string(c.Query("title")))
+	if utf8.RuneCountInString(title) > 128 {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "title exceeds 128 characters"})
+		return
+	}
 	var cursor *models.CompanionSessionListCursor
 	if rawAt := strings.TrimSpace(string(c.Query("cursor_started_at"))); rawAt != "" {
 		t, err := time.Parse(time.RFC3339Nano, rawAt)
@@ -1258,12 +1293,22 @@ func (h *Handler) ListCompanions(ctx context.Context, c *app.RequestContext) {
 		}
 		cursor = &models.CompanionSessionListCursor{StartedAt: t, SessionID: sid}
 	}
-	items, err := h.companionRepo.ListAllSessions(ctx, cursor, limit)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
-		return
+	var items []*models.CompanionSession
+	var total int64
+	var err error
+	if title != "" {
+		search, ok := h.companionRepo.(repository.AdminCompanionTitleSearchRepository)
+		if !ok {
+			c.JSON(http.StatusInternalServerError, utils.H{"error": "companion title search not configured"})
+			return
+		}
+		items, total, err = search.ListAdminCompanionsByTitle(ctx, title, cursor, limit)
+	} else {
+		items, err = h.companionRepo.ListAllSessions(ctx, cursor, limit)
+		if err == nil {
+			total, err = h.companionRepo.CountAllSessions(ctx)
+		}
 	}
-	total, err := h.companionRepo.CountAllSessions(ctx)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
 		return
@@ -1503,6 +1548,37 @@ func defaultAdminAvatarSVG(name string) string {
 
 // ----- 意见反馈管理 -----
 
+func (h *Handler) decorateAdminFeedbackUsers(ctx context.Context, items []*models.Feedback) error {
+	if h == nil || h.userRepo == nil || len(items) == 0 {
+		return nil
+	}
+	ids := make([]int64, 0, len(items))
+	seen := make(map[int64]struct{}, len(items))
+	for _, item := range items {
+		if item != nil && item.UserID > 0 {
+			if _, ok := seen[item.UserID]; !ok {
+				seen[item.UserID] = struct{}{}
+				ids = append(ids, item.UserID)
+			}
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	users, err := h.userRepo.FindByIDs(ctx, ids)
+	if err != nil {
+		return err
+	}
+	for _, item := range items {
+		if item != nil {
+			if user := users[item.UserID]; user != nil {
+				item.UserName = user.Nickname
+			}
+		}
+	}
+	return nil
+}
+
 // ListFeedbacks 处理 GET /admin/api/feedbacks
 //
 // query：
@@ -1551,6 +1627,10 @@ func (h *Handler) ListFeedbacks(ctx context.Context, c *app.RequestContext) {
 		writeAdminFeedbackError(c, err)
 		return
 	}
+	if err := h.decorateAdminFeedbackUsers(ctx, page.Items); err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
 	h.rewriteFeedbackImageURLs(page.Items)
 	c.JSON(http.StatusOK, utils.H{"code": 0, "data": page})
 }
@@ -1564,6 +1644,10 @@ func (h *Handler) GetFeedback(ctx context.Context, c *app.RequestContext) {
 	item, err := h.feedbackSvc.GetOps(ctx, c.Param("feedback_id"))
 	if err != nil {
 		writeAdminFeedbackError(c, err)
+		return
+	}
+	if err := h.decorateAdminFeedbackUsers(ctx, []*models.Feedback{item}); err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
 		return
 	}
 	h.rewriteFeedbackImageURLs([]*models.Feedback{item})

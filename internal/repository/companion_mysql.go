@@ -246,6 +246,42 @@ func (r *MySQLCompanionRepository) CountAllSessions(ctx context.Context) (int64,
 	return count, nil
 }
 
+func (r *MySQLCompanionRepository) ListAdminCompanionsByTitle(ctx context.Context, title string, cursor *models.CompanionSessionListCursor, limit int) ([]*models.CompanionSession, int64, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	pattern := "%" + escapeAdminLike(title) + "%"
+	var total int64
+	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM companion_sessions WHERE title LIKE ? ESCAPE '!'`, pattern).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	query := companionSessionSelectSQL() + ` WHERE companion_sessions.title LIKE ? ESCAPE '!'`
+	args := []any{pattern}
+	if cursor != nil && !cursor.StartedAt.IsZero() {
+		query += ` AND (companion_sessions.started_at < ? OR (companion_sessions.started_at = ? AND companion_sessions.session_id < ?))`
+		args = append(args, cursor.StartedAt, cursor.StartedAt, cursor.SessionID)
+	}
+	query += ` ORDER BY companion_sessions.started_at DESC, companion_sessions.session_id DESC LIMIT ?`
+	args = append(args, limit)
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	items := make([]*models.CompanionSession, 0, limit)
+	for rows.Next() {
+		item, err := scanCompanionSession(rows)
+		if err != nil {
+			return nil, 0, err
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	return items, total, nil
+}
+
 func (r *MySQLCompanionRepository) UpsertMember(ctx context.Context, member *models.CompanionSessionMember) error {
 	if member == nil || member.SessionID == "" || member.UserID <= 0 {
 		return errors.New("invalid companion member")

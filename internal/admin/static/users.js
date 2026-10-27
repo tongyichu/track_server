@@ -40,6 +40,8 @@
   var prevBtn = document.getElementById('prevBtn');
   var nextBtn = document.getElementById('nextBtn');
   var refreshBtn = document.getElementById('refreshBtn');
+  var searchBtn = document.getElementById('searchBtn');
+  var titleFilter = document.getElementById('titleFilter');
   var pageHint = document.getElementById('pageHint');
   var totalHint = document.getElementById('totalHint');
 
@@ -99,6 +101,9 @@
     pageIndex = 0;
     loadPage();
   });
+  function resetSearch() { cursorStack = [null]; pageIndex = 0; loadPage(); }
+  searchBtn.addEventListener('click', resetSearch);
+  titleFilter.addEventListener('keydown', function (event) { if (event.key === 'Enter') resetSearch(); });
   prevBtn.addEventListener('click', function () {
     if (pageIndex <= 0) return;
     pageIndex -= 1;
@@ -115,6 +120,7 @@
   async function loadPage() {
     var params = new URLSearchParams();
     params.set('limit', String(pageSize));
+    if (titleFilter.value.trim()) params.set('title', titleFilter.value.trim());
     var cur = cursorStack[pageIndex];
     if (cur) {
       params.set('cursor_created_at', cur.created_at);

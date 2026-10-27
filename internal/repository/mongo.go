@@ -428,6 +428,24 @@ func (r *MongoTrackRepository) CountAll(ctx context.Context) (int64, error) {
 	return r.collection.CountDocuments(ctx, bson.M{"status": bson.M{"$ne": models.TrackStatusDeleted}})
 }
 
+func (r *MongoTrackRepository) ListAdminTracksByTitle(ctx context.Context, title string, cursor *models.TrackListCursor, limit int) ([]*models.Track, int64, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	filter := bson.M{"status": bson.M{"$ne": models.TrackStatusDeleted}, "title": primitive.Regex{Pattern: regexp.QuoteMeta(title), Options: "i"}}
+	var total int64
+	total, err := r.collection.CountDocuments(ctx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+	query := bson.M{"$and": bson.A{filter}}
+	if cursor != nil && !cursor.StartTime.IsZero() {
+		query["$and"] = bson.A{filter, bson.M{"$or": bson.A{bson.M{"start_time": bson.M{"$lt": cursor.StartTime}}, bson.M{"start_time": cursor.StartTime, "_id": bson.M{"$lt": cursor.ID}}}}}
+	}
+	items, err := r.listTracks(ctx, query, options.Find().SetSort(bson.D{{Key: "start_time", Value: -1}, {Key: "_id", Value: -1}}).SetLimit(int64(limit)))
+	return items, total, err
+}
+
 func adminMongoTrackUploadFilter(start, end time.Time) bson.M {
 	return bson.M{
 		"created_at":    bson.M{"$gte": start, "$lt": end},
@@ -648,6 +666,36 @@ func (r *MongoUserRepository) ListAll(ctx context.Context, cursor *models.UserLi
 		items = append(items, item)
 	}
 	return items, rows.Err()
+}
+
+func (r *MongoUserRepository) ListAdminUsersByTitle(ctx context.Context, title string, cursor *models.UserListCursor, limit int) ([]*models.User, int64, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	filter := bson.M{"nickname": primitive.Regex{Pattern: regexp.QuoteMeta(title), Options: "i"}}
+	var total int64
+	total, err := r.collection.CountDocuments(ctx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+	query := bson.M{"$and": bson.A{filter}}
+	if cursor != nil && !cursor.CreatedAt.IsZero() {
+		query["$and"] = bson.A{filter, bson.M{"$or": bson.A{bson.M{"created_at": bson.M{"$lt": cursor.CreatedAt}}, bson.M{"created_at": cursor.CreatedAt, "_id": bson.M{"$lt": cursor.ID}}}}}
+	}
+	rows, err := r.collection.Find(ctx, query, options.Find().SetSort(bson.D{{Key: "created_at", Value: -1}, {Key: "_id", Value: -1}}).SetLimit(int64(limit)))
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close(ctx)
+	items := make([]*models.User, 0, limit)
+	for rows.Next(ctx) {
+		item := &models.User{}
+		if err := rows.Decode(item); err != nil {
+			return nil, 0, err
+		}
+		items = append(items, item)
+	}
+	return items, total, rows.Err()
 }
 
 // CountAll is not implemented in this demo and returns an error.

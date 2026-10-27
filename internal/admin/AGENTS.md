@@ -17,7 +17,10 @@
 - 查看和人工运营路线发现 RouteGroup（展示离线 `area_id` 对应的区域名称、类型与介绍页，支持改名、合并、移除成员、指定代表轨迹，以及编辑、发布和下线双语路线介绍）。
 - 通过响应式工作台查看业务库即时统计：日/周/月核心增长、同周期新增用户转化、投稿与反馈处理效率、轨迹内容质量、互动趋势、热门轨迹和同行会话；该口径不依赖 T+1 埋点同步。
 - 审核用户轨迹投稿，查看结构化路线资料和经本地缓存改写的投稿图片，按 revision 通过或驳回。
-- 查看、修正和删除用户轨迹；列表展示 `track_screenshot_url` 缩略图，OSS 截图需先经共享截图缓存落盘再通过后台静态代理访问；修正仅允许改 `title` / `city_code`，删除为软删除，并同步清理收藏关系与首页地图索引/路线组成员。
+- 投稿审核页顶部展示当前待审核与超时队列，以及本月通过、驳回、通过率和平均审核时长；复用 `/admin/api/dashboard?period=month` 的只读统计。
+- 查看、修正和删除用户轨迹；列表展示日间横版 4:3 预览图、城市名称并支持标题模糊搜索；编辑可修正轨迹业务字段和预览图，删除为软删除并同步清理关联数据。
+- 意见反馈页默认筛选待处理，展示状态统计、反馈用户名称和完整内容；点击查看会加载详情并定位到详情区。
+- 用户管理按昵称、同行管理按会话标题、轨迹管理按轨迹标题提供服务端模糊搜索，保留游标分页。
 
 模块对外只暴露 `admin.NewModule(...)` 与 `Module.RegisterRoutes(h)`，不被业务 handler 引用。
 
@@ -60,7 +63,7 @@ internal/admin/
 | 意见反馈管理 | `handlers.go` 中 `ListFeedbacks` / `GetFeedback` / `UpdateFeedbackStatus` / `GetFeedbackImage`，`static/feedbacks.html`、`static/feedbacks.js` |
 | 埋点同步摘要 | `handlers.go` 中 `ListAnalyticsSyncSummaries`，`static/analytics.html`、`static/analytics.js` |
 | 聚合路线运营 | `handlers.go` 中 `ListRouteGroups` / `GetRouteGroup` / `RenameRouteGroup` / `MergeRouteGroup` / `RemoveRouteGroupMember` / `SetRouteGroupRepresentative`，`static/route_groups.html`、`static/route_groups.js` |
-| 轨迹投稿审核 | `handlers.go` 中 `ListTrackSubmissions` / `GetTrackSubmission` / `ReviewTrackSubmission`，`static/track_submissions.html`、`static/track_submissions.js` |
+| 轨迹投稿审核 | `handlers.go` 中 `ListTrackSubmissions` / `GetTrackSubmission` / `ReviewTrackSubmission`，统计复用 `GetDashboard`；页面位于 `static/track_submissions.html`、`static/track_submissions.js` |
 
 ## 路由清单（与 `routes.go` 对齐）
 
@@ -84,16 +87,17 @@ internal/admin/
 | POST | `/admin/api/releases/upload-package` | 鉴权 | multipart 上传安装包到 `<LogDir>/static/release/<platform>/` |
 | GET | `/admin/api/releases/upload-token` | 鉴权 | 旧 OSS 直传 STS 凭证接口，前端不再使用 |
 | GET | `/admin/api/static/*filepath` | 鉴权 | 后台静态资源代理，从 `<LogDir>/static/` 读取头像等资源；后台页面不要直接访问需业务 JWT 的 `/api/v1/static/*` |
-| GET | `/admin/api/users` | 鉴权 | 用户列表，支持 cursor 翻页 |
+| GET | `/admin/api/users` | 鉴权 | 用户列表，支持 `title` 按昵称模糊搜索及 cursor 翻页 |
 | GET | `/admin/api/users/:user_id/restrictions/current` | 鉴权 | 查询当前账号限制；无生效限制返回 404 |
 | POST | `/admin/api/users/:user_id/restrictions` | 鉴权 | 创建账号限制；`expires_at` 为空表示永久，操作人取 admin session 用户名 |
 | DELETE | `/admin/api/users/:user_id/restrictions/current` | 鉴权 | 解除当前账号限制 |
-| GET | `/admin/api/tracks` | 鉴权 | 轨迹列表，支持 cursor 翻页 |
+| GET | `/admin/api/companions` | 鉴权 | 同行会话列表，支持 `title` 模糊搜索及 cursor 翻页 |
+| GET | `/admin/api/tracks` | 鉴权 | 轨迹列表，支持 `title` 模糊搜索及 cursor 翻页 |
 | GET | `/admin/api/cities` | 鉴权 | 返回内置城市/省份 Code 与名称，供轨迹城市选择器使用 |
 | GET | `/admin/api/tracks/:track_id` | 鉴权 | 返回轨迹详情用于后台编辑 |
 | PUT | `/admin/api/tracks/:track_id` | 鉴权 | 更新轨迹业务字段（不改 ID、轨迹点与创建/更新时间）；城市/类型更新已有地图索引，状态/进行状态/原始文件变化时清理并按可索引条件重新排队 |
 | DELETE | `/admin/api/tracks/:track_id` | 鉴权 | 删除轨迹：标记 `status=0`，并清理收藏、地图索引任务、geo index、路线组成员 |
-| GET | `/admin/api/feedbacks` | 鉴权 | 意见反馈列表，支持 `status` / `app_version` / `phone` / `cursor` / `limit` |
+| GET | `/admin/api/feedbacks` | 鉴权 | 意见反馈列表，补充用户名称，支持 `status` / `app_version` / `phone` / `cursor` / `limit` |
 | GET | `/admin/api/feedbacks/:feedback_id` | 鉴权 | 意见反馈详情 |
 | PUT | `/admin/api/feedbacks/:feedback_id/status` | 鉴权 | 更新反馈处理状态与用户可见 `reply`；`resolved` 时 `reply` 必填 |
 | GET | `/admin/api/feedbacks/:feedback_id/images/:image_id` | 鉴权 | 读取反馈图片 |
@@ -147,6 +151,14 @@ POST /admin/api/login {username,password}
 ```
 新增用户转化漏斗以同周期注册用户为 Cohort，后续阶段逐级限定为同周期完成轨迹、投稿和审核通过；收藏/导航/点赞/评论的周期指标按各自关系或记录的 `created_at` 统计，不使用轨迹当前累计数倒推历史趋势。工作台聚合只读，不得在加载页面时修正业务数据或触发外部服务。
 
+**投稿审核统计**：
+```
+[admin UI] /admin/track_submissions.html
+  → GET /admin/api/dashboard?period=month
+  → 展示当前 pending 与超时数，以及当月通过/驳回/通过率/平均审核时长
+  → 审核成功后重新读取统计和当前列表
+```
+
 **后台头像读取**：
 ```
 GET /admin/api/users
@@ -173,8 +185,10 @@ GET /admin/api/users
 **处理意见反馈**：
 ```
 [admin UI] /admin/feedbacks.html
-  → GET /admin/api/feedbacks?status=&app_version=&phone=&cursor=  拉取反馈列表
-  → GET /admin/api/feedbacks/:feedback_id     查看详情与图片
+  → GET /admin/api/dashboard?period=month     展示状态分布与超时统计
+  → GET /admin/api/feedbacks?status=pending&app_version=&phone=&cursor=  默认拉取待处理列表
+  → 批量补充用户昵称，不在页面展示反馈 ID / 用户 ID
+  → GET /admin/api/feedbacks/:feedback_id     查看完整内容与图片并滚动到详情区
   → PUT /admin/api/feedbacks/:feedback_id/status {status, reply}
        → FeedbackService.UpdateStatus
        → resolved 状态要求 reply 必填，reply 会展示给提交用户

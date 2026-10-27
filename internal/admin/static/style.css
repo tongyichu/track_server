@@ -226,6 +226,18 @@ table.data.table .btn { white-space: nowrap; }
 .topbar .nav a.active .nav-icon { opacity: 1; filter: invert(34%) sepia(92%) saturate(1650%) hue-rotate(207deg) brightness(90%) contrast(91%); }
 .topbar .user .btn { --tblr-btn-padding-x: .65rem; --tblr-btn-padding-y: .25rem; }
 .track-shot, .thumbs a { border-color: var(--tblr-border-color); box-shadow: var(--tblr-box-shadow-sm); }
+.feedback-stat-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+.feedback-stat { display: flex; flex-direction: column; justify-content: center; gap: 6px; min-width: 0; padding: 14px 16px; }
+.feedback-stat span { color: var(--tblr-secondary); font-size: 12px; }
+.feedback-stat strong { font-size: 24px; line-height: 1.2; font-weight: 700; }
+.feedback-content { min-width: 260px; max-width: 480px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.submission-stat-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 16px; }
+.submission-stat-card { display: flex; flex-direction: column; justify-content: center; gap: 6px; min-width: 0; padding: 16px 18px; }
+.submission-stat-card span { color: var(--tblr-secondary); font-size: 13px; }
+.submission-stat-card strong { font-size: 26px; line-height: 1.2; font-weight: 700; }
+.submission-stat-card small { color: var(--tblr-secondary); line-height: 1.4; }
+.submission-stat-warning strong { color: var(--tblr-warning); }
+.submission-stat-danger strong { color: var(--tblr-danger); }
 .more-grid a { box-shadow: var(--tblr-box-shadow-card); transition: transform .15s ease, border-color .15s ease, box-shadow .15s ease; }
 .more-grid a:hover { transform: translateY(-2px); border-color: rgba(var(--tblr-primary-rgb), .35); box-shadow: var(--tblr-box-shadow); }
 #adminToastHost { z-index: 1090; }
@@ -237,6 +249,12 @@ table.data.table .btn { white-space: nowrap; }
 .modal-header, .modal-footer { border-color: var(--tblr-border-color); }
 
 @media (max-width: 767px) {
+  .submission-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .submission-stat-card { padding: 12px; }
+  .submission-stat-card strong { font-size: 22px; }
+  .feedback-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .feedback-stat { padding: 12px; }
+  .feedback-stat strong { font-size: 21px; }
   .panel.card > .card-header { min-height: 50px; padding: 12px 14px; }
   .panel.card > .card-body { padding: 14px; }
   .admin-toolbar { align-items: stretch; padding: 10px; }

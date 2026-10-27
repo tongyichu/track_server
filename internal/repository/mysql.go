@@ -2139,6 +2139,54 @@ func (r *MySQLTrackRepository) CountAll(ctx context.Context) (int64, error) {
 	return count, nil
 }
 
+func (r *MySQLTrackRepository) ListAdminTracksByTitle(ctx context.Context, title string, cursor *models.TrackListCursor, limit int) ([]*models.Track, int64, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	pattern := "%" + escapeAdminLike(title) + "%"
+	base := `FROM track_records WHERE deleted_at IS NULL AND status <> ? AND title LIKE ? ESCAPE '!'`
+	var total int64
+	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) `+base, models.TrackStatusDeleted, pattern).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	query := `SELECT id ` + base
+	args := []any{models.TrackStatusDeleted, pattern}
+	if cursor != nil && !cursor.StartTime.IsZero() {
+		query += ` AND (start_time < ? OR (start_time = ? AND id < ?))`
+		args = append(args, cursor.StartTime, cursor.StartTime, cursor.ID)
+	}
+	query += ` ORDER BY start_time DESC, id DESC LIMIT ?`
+	args = append(args, limit)
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	ids := make([]string, 0, limit)
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, 0, err
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	items := make([]*models.Track, 0, len(ids))
+	for _, id := range ids {
+		item, err := r.FindByID(ctx, id)
+		if err != nil {
+			if errors.Is(err, ErrNotFound) {
+				continue
+			}
+			return nil, 0, err
+		}
+		items = append(items, item)
+	}
+	return items, total, nil
+}
+
 func (r *MySQLTrackRepository) CountAdminUploadsBetween(ctx context.Context, start, end time.Time) (int64, error) {
 	row := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM track_records
 		WHERE created_at >= ? AND created_at < ? AND deleted_at IS NULL AND status <> ?
@@ -2516,6 +2564,54 @@ func (r *MySQLUserRepository) CountAll(ctx context.Context) (int64, error) {
 		return 0, err
 	}
 	return count, nil
+}
+
+func (r *MySQLUserRepository) ListAdminUsersByTitle(ctx context.Context, title string, cursor *models.UserListCursor, limit int) ([]*models.User, int64, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	pattern := "%" + escapeAdminLike(title) + "%"
+	base := `FROM users WHERE nickname LIKE ? ESCAPE '!'`
+	var total int64
+	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) `+base, pattern).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	query := `SELECT id ` + base
+	args := []any{pattern}
+	if cursor != nil && !cursor.CreatedAt.IsZero() {
+		query += ` AND (created_at < ? OR (created_at = ? AND id < ?))`
+		args = append(args, cursor.CreatedAt, cursor.CreatedAt, cursor.ID)
+	}
+	query += ` ORDER BY created_at DESC, id DESC LIMIT ?`
+	args = append(args, limit)
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	ids := make([]int64, 0, limit)
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, 0, err
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	items := make([]*models.User, 0, len(ids))
+	for _, id := range ids {
+		item, err := r.FindByID(ctx, id)
+		if err != nil {
+			if errors.Is(err, ErrNotFound) {
+				continue
+			}
+			return nil, 0, err
+		}
+		items = append(items, item)
+	}
+	return items, total, nil
 }
 
 func (r *MySQLUserRepository) CountAdminUsersBetween(ctx context.Context, start, end time.Time) (int64, error) {

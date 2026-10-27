@@ -3,10 +3,14 @@ package repository
 import (
 	"context"
 	"errors"
+	"regexp"
 	"time"
 
 	"github.com/tongyichu/track_server/internal/models"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 // MongoCompanionRepository is a stub of CompanionRepository backed by MongoDB.
@@ -63,6 +67,38 @@ func (r *MongoCompanionRepository) ListAllSessions(context.Context, *models.Comp
 
 func (r *MongoCompanionRepository) CountAllSessions(context.Context) (int64, error) {
 	return 0, errors.New("MongoCompanionRepository.CountAllSessions not implemented")
+}
+
+func (r *MongoCompanionRepository) ListAdminCompanionsByTitle(ctx context.Context, title string, cursor *models.CompanionSessionListCursor, limit int) ([]*models.CompanionSession, int64, error) {
+	if r.sessionCollection == nil {
+		return nil, 0, errors.New("MongoCompanionRepository.ListAdminCompanionsByTitle not implemented")
+	}
+	if limit <= 0 {
+		limit = 20
+	}
+	filter := bson.M{"title": primitive.Regex{Pattern: regexp.QuoteMeta(title), Options: "i"}}
+	total, err := r.sessionCollection.CountDocuments(ctx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+	query := bson.M{"$and": bson.A{filter}}
+	if cursor != nil && !cursor.StartedAt.IsZero() {
+		query["$and"] = bson.A{filter, bson.M{"$or": bson.A{bson.M{"started_at": bson.M{"$lt": cursor.StartedAt}}, bson.M{"started_at": cursor.StartedAt, "session_id": bson.M{"$lt": cursor.SessionID}}}}}
+	}
+	rows, err := r.sessionCollection.Find(ctx, query, options.Find().SetSort(bson.D{{Key: "started_at", Value: -1}, {Key: "session_id", Value: -1}}).SetLimit(int64(limit)))
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close(ctx)
+	items := make([]*models.CompanionSession, 0, limit)
+	for rows.Next(ctx) {
+		item := &models.CompanionSession{}
+		if err := rows.Decode(item); err != nil {
+			return nil, 0, err
+		}
+		items = append(items, item)
+	}
+	return items, total, rows.Err()
 }
 
 func (r *MongoCompanionRepository) UpsertMember(context.Context, *models.CompanionSessionMember) error {

@@ -91,6 +91,21 @@ type AdminTrackStatisticsRepository interface {
 	ListAdminDailyUploadCounts(ctx context.Context, start, end time.Time) ([]models.AdminDailyCount, error)
 }
 
+// AdminTrackTitleSearchRepository provides paginated fuzzy title search for the admin list.
+type AdminTrackTitleSearchRepository interface {
+	ListAdminTracksByTitle(ctx context.Context, title string, cursor *models.TrackListCursor, limit int) ([]*models.Track, int64, error)
+}
+
+// AdminUserTitleSearchRepository searches users by their display name (nickname).
+type AdminUserTitleSearchRepository interface {
+	ListAdminUsersByTitle(ctx context.Context, title string, cursor *models.UserListCursor, limit int) ([]*models.User, int64, error)
+}
+
+// AdminCompanionTitleSearchRepository provides paginated fuzzy session title search.
+type AdminCompanionTitleSearchRepository interface {
+	ListAdminCompanionsByTitle(ctx context.Context, title string, cursor *models.CompanionSessionListCursor, limit int) ([]*models.CompanionSession, int64, error)
+}
+
 // TrackCaloriesBackfiller is implemented by repositories that can repair
 // historical tracks whose calories were not persisted by older clients.
 type TrackCaloriesBackfiller interface {
