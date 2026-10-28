@@ -42,7 +42,7 @@ type TrackPlaceService struct {
 	runCalls      int
 	scenicCatalog *ScenicSpotCatalogService
 }
-type TrackPlaceRunResult struct{ Scanned, Matched, Unmatched, Reused, Skipped, Ineligible, Deferred, Failed, Unconfigured, ProviderQueries, MissingIndex int }
+type TrackPlaceRunResult struct{ Scanned, Matched, Unmatched, Reused, Skipped, Ineligible, Deferred, Failed, IndexRefreshFailed, InvalidSamples, Unconfigured, ProviderQueries, MissingIndex int }
 
 // AMap enrichment is a one-time business result. Keep successful positive and
 // negative results independently of the short-lived request cache. Recognize
@@ -211,7 +211,8 @@ func (s *TrackPlaceService) ResolveTracksForBackfill(ctx context.Context, trackI
 		index, err := s.maps.FindTrackGeoIndex(ctx, trackID)
 		if errors.Is(err, repository.ErrNotFound) && s.indexer != nil {
 			if indexErr := s.indexer.processJob(ctx, trackID); indexErr != nil {
-				out.Failed++
+				out.IndexRefreshFailed++
+				out.MissingIndex++
 				continue
 			}
 			index, err = s.maps.FindTrackGeoIndex(ctx, trackID)
@@ -265,28 +266,36 @@ func (s *TrackPlaceService) processWithOptions(ctx context.Context, index *model
 	inspectNativeExport := track.SourceTag == "" && nativeCoordinate && previous.RuleVersion == 1 && (previous.Status == "matched" || previous.Status == "unmatched")
 	if s.indexer != nil && (index.CoordinateSystem != "GCJ02" || inspectNativeExport) {
 		if err := s.indexer.processJob(ctx, index.TrackID); err != nil {
-			out.Failed++
-			return nil
-		}
-		index, err = s.maps.FindTrackGeoIndex(ctx, index.TrackID)
-		if err != nil {
-			return err
-		}
-		track, err = s.tracks.FindByID(ctx, index.TrackID)
-		if errors.Is(err, repository.ErrNotFound) {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		if !isTrackMapIndexEligible(track) {
-			out.Ineligible++
-			return nil
+			if refreshMissing {
+				// Backfill can still resolve against the already persisted index.
+				// Keep the failed refresh visible because the cached geometry may
+				// carry an older coordinate correction.
+				out.IndexRefreshFailed++
+			} else {
+				out.Failed++
+				return nil
+			}
+		} else {
+			index, err = s.maps.FindTrackGeoIndex(ctx, index.TrackID)
+			if err != nil {
+				return err
+			}
+			track, err = s.tracks.FindByID(ctx, index.TrackID)
+			if errors.Is(err, repository.ErrNotFound) {
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+			if !isTrackMapIndexEligible(track) {
+				out.Ineligible++
+				return nil
+			}
 		}
 	}
 	samples, err := trackPlaceSamples(index, 5)
 	if err != nil {
-		out.Failed++
+		out.InvalidSamples++
 		return nil
 	}
 	if len(samples) < 3 {
