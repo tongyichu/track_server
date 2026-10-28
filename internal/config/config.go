@@ -180,7 +180,7 @@ func Load() *Config {
 		AMapRESTKey:                      aMapRestKey,
 		TrackPlaceEnabled:                getEnv("TRACK_PLACE_ENABLED", "true") == "true",
 		TrackPlaceCron:                   getEnv("TRACK_PLACE_CRON", "@every 1m"),
-		TrackPlaceAMapDailyBudget:        int(getEnvInt64("TRACK_PLACE_AMAP_DAILY_BUDGET", 80)),
+		TrackPlaceAMapDailyBudget:        int(getEnvInt64("TRACK_PLACE_AMAP_DAILY_BUDGET", 0)),
 		TrackPlaceGoogleDailyBudget:      int(getEnvInt64("TRACK_PLACE_GOOGLE_DAILY_BUDGET", 20)),
 		TrackPlaceCacheHours:             int(getEnvInt64("TRACK_PLACE_CACHE_HOURS", 168)),
 		TrackPlaceGoogleCacheHours:       int(getEnvInt64("TRACK_PLACE_GOOGLE_CACHE_HOURS", 0)),

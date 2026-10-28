@@ -105,13 +105,16 @@ func (r *MySQLTrackPlaceRepository) SavePlaceRecord(ctx context.Context, v *mode
 	return err == nil, err
 }
 func (r *MySQLTrackPlaceRepository) ReservePlaceAPICall(ctx context.Context, provider, day string, budget int) (bool, error) {
-	if budget <= 0 {
-		return false, nil
-	}
 	if _, err := r.db.ExecContext(ctx, `INSERT IGNORE INTO track_place_api_usage(provider,usage_day,used) VALUES(?,?,0)`, provider, day); err != nil {
 		return false, err
 	}
-	res, err := r.db.ExecContext(ctx, `UPDATE track_place_api_usage SET used=used+1 WHERE provider=? AND usage_day=? AND used<?`, provider, day, budget)
+	query := `UPDATE track_place_api_usage SET used=used+1 WHERE provider=? AND usage_day=?`
+	args := []interface{}{provider, day}
+	if budget > 0 {
+		query += ` AND used<?`
+		args = append(args, budget)
+	}
+	res, err := r.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return false, err
 	}
@@ -185,12 +188,17 @@ func (r *MongoTrackPlaceRepository) SavePlaceRecord(ctx context.Context, v *mode
 	return res.MatchedCount > 0 || res.UpsertedCount > 0, nil
 }
 func (r *MongoTrackPlaceRepository) ReservePlaceAPICall(ctx context.Context, provider, day string, budget int) (bool, error) {
-	if budget <= 0 {
-		return false, nil
+	key := provider + ":" + day
+	filter := bson.M{"_id": key}
+	if budget > 0 {
+		filter["used"] = bson.M{"$lt": budget}
 	}
-	res, err := r.usage.UpdateOne(ctx, bson.M{"_id": provider + ":" + day, "used": bson.M{"$lt": budget}}, bson.M{"$inc": bson.M{"used": 1}}, options.Update().SetUpsert(true))
+	res, err := r.usage.UpdateOne(ctx, filter, bson.M{"$inc": bson.M{"used": 1}}, options.Update().SetUpsert(true))
 	if mongo.IsDuplicateKeyError(err) {
-		return false, nil
+		if budget > 0 {
+			return false, nil
+		}
+		res, err = r.usage.UpdateOne(ctx, bson.M{"_id": key}, bson.M{"$inc": bson.M{"used": 1}})
 	}
 	if err != nil {
 		return false, err
@@ -257,7 +265,7 @@ func (r *MemoryTrackPlaceRepository) ReservePlaceAPICall(_ context.Context, prov
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	key := provider + ":" + day
-	if budget <= 0 || r.usage[key] >= budget {
+	if budget > 0 && r.usage[key] >= budget {
 		return false, nil
 	}
 	r.usage[key]++

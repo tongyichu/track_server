@@ -327,9 +327,6 @@ func (s *TrackPlaceService) reserveScenicCall(ctx context.Context, provider stri
 	if provider == "google" {
 		budget = s.cfg.GoogleDailyBudget
 	}
-	if budget <= 0 {
-		return false
-	}
 	ok, err := s.store.ReservePlaceAPICall(ctx, provider, time.Now().In(placeQuotaZone).Format("2006-01-02"), budget)
 	return err == nil && ok
 }
