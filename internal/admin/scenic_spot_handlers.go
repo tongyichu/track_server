@@ -178,7 +178,11 @@ func (h *Handler) PreviewScenicSpotSource(ctx context.Context, c *app.RequestCon
 	}
 	preview, err := h.scenicSpotSvc.PreviewProviderSource(ctx, c.Param("spot_id"), body.Provider, body.ProviderID)
 	if err != nil {
-		h.scenicSpotServiceError(c, err)
+		if errors.Is(err, repository.ErrNotFound) {
+			h.scenicSpotServiceError(c, err)
+			return
+		}
+		c.JSON(http.StatusBadGateway, utils.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, utils.H{"code": 0, "data": preview})

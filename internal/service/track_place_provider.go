@@ -27,15 +27,20 @@ type placeEvidence struct {
 type amapPlaceText string
 
 func (t *amapPlaceText) UnmarshalJSON(raw []byte) error {
-	if bytes.Equal(raw, []byte("null")) || bytes.Equal(raw, []byte("[]")) {
+	if bytes.Equal(raw, []byte("null")) {
 		*t = ""
 		return nil
 	}
 	var v string
-	if err := json.Unmarshal(raw, &v); err != nil {
+	if err := json.Unmarshal(raw, &v); err == nil {
+		*t = amapPlaceText(v)
+		return nil
+	}
+	var values []string
+	if err := json.Unmarshal(raw, &values); err != nil {
 		return err
 	}
-	*t = amapPlaceText(v)
+	*t = amapPlaceText(strings.Join(values, ", "))
 	return nil
 }
 
@@ -359,8 +364,17 @@ func (s *TrackPlaceService) recordScenicDetailsCall(ctx context.Context, spot *m
 func (s *TrackPlaceService) ScenicSpotProviderPreview(ctx context.Context, spotID, provider, providerID string) (*models.TrackPrimaryScenicSpot, error) {
 	provider = strings.ToLower(strings.TrimSpace(provider))
 	providerID = strings.TrimSpace(providerID)
-	if !s.Enabled() || providerID == "" || (provider != "amap" && provider != "google") {
+	if providerID == "" || (provider != "amap" && provider != "google") {
 		return nil, errors.New("provider details unavailable")
+	}
+	if !s.Enabled() {
+		return nil, errors.New("scenic map service is not enabled")
+	}
+	if provider == "amap" && s.cfg.AMapKey == "" {
+		return nil, errors.New("AMap key is not configured")
+	}
+	if provider == "google" && s.cfg.GoogleKey == "" {
+		return nil, errors.New("Google Places key is not configured")
 	}
 	spot := &models.TrackPrimaryScenicSpot{ID: spotID, Provider: provider, ProviderID: providerID}
 	switch provider {
@@ -368,6 +382,9 @@ func (s *TrackPlaceService) ScenicSpotProviderPreview(ctx context.Context, spotI
 		s.amapScenicDetails(ctx, spot)
 	case "google":
 		s.googleScenicDetails(ctx, spot)
+	}
+	if spot.Name == "" && spot.Category == "" && spot.Address == "" && spot.Description == "" && len(spot.Photos) == 0 {
+		return nil, errors.New("provider returned no details; check the place ID, API permission, and quota")
 	}
 	return spot, nil
 }
@@ -435,8 +452,8 @@ func (s *TrackPlaceService) amapScenicDetails(ctx context.Context, spot *models.
 			Address string `json:"address"`
 			Type    string `json:"type"`
 			Photos  []struct {
-				Title string `json:"title"`
-				URL   string `json:"url"`
+				Title amapPlaceText `json:"title"`
+				URL   amapPlaceText `json:"url"`
 			} `json:"photos"`
 		} `json:"pois"`
 	}
@@ -458,8 +475,8 @@ func (s *TrackPlaceService) amapScenicDetails(ctx context.Context, spot *models.
 		if len(spot.Photos) == 3 {
 			break
 		}
-		if photoURL := safeAMapPhotoURL(photo.URL); photoURL != "" {
-			spot.Photos = append(spot.Photos, models.TrackScenicSpotPhoto{URL: photoURL, Title: photo.Title, SourceURL: "https://www.amap.com/"})
+		if photoURL := safeAMapPhotoURL(string(photo.URL)); photoURL != "" {
+			spot.Photos = append(spot.Photos, models.TrackScenicSpotPhoto{URL: photoURL, Title: strings.TrimSpace(string(photo.Title)), SourceURL: "https://www.amap.com/"})
 		}
 	}
 }

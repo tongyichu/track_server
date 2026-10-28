@@ -104,7 +104,7 @@ track_server/
 
 - 管理后台运营工作台的跨域只读统计统一走 `repository.AdminDashboardStatisticsRepository`，由 `NewAdminDashboardStatisticsRepository` 根据当前 MySQL / Mongo / in-memory 仓储族选择实现；不新增统计表，也不改变业务写入流程。周期指标按 `[start,end)` 统计，互动趋势使用收藏/导航/点赞/评论各自 `created_at`，新增用户转化漏斗使用同周期注册 Cohort 并逐级限定为完成轨迹、投稿和审核通过。数据模型见 `internal/models/admin_dashboard.go`，聚合实现见 `internal/repository/admin_dashboard*.go`。
 
-- 主景点以 `internal/models/scenic_spot.go` 的内部 SCP ID 为唯一业务 ID；MySQL、Mongo、内存仓储均由 `repository.ScenicSpotRepository` 实现。`ScenicSpotCatalogService` 管理草稿/发布、来源 ID 校验、轨迹关联、合并拆分、审计和存量回填。回填及自动识别只创建草稿并保存供应商 ID，不自动复制供应商内容；运营后台可实时预览供应商详情，手动将名称、分类、地址、简介整理为自有字段后保存。供应商图片不持久化，自有上传图片与发布后的自有资料才覆盖轨迹详情摘要。运营后台入口 `/admin/scenic_spots.html`，API 路由清单和流程见 `internal/admin/AGENTS.md`；Google 来源 ID 到期后在详情访问时验证。
+- 主景点以 `internal/models/scenic_spot.go` 的内部 SCP ID 为唯一业务 ID；MySQL、Mongo、内存仓储均由 `repository.ScenicSpotRepository` 实现。`ScenicSpotCatalogService` 管理草稿/发布、来源 ID 校验、轨迹关联、合并拆分、审计和存量回填。回填及自动识别只创建草稿并保存供应商 ID，不自动复制供应商内容；运营后台实时预览供应商详情并临时预填空白名称、分类、地址、简介字段，运营修改并保存后才成为自有资料。供应商图片不持久化，自有上传图片与发布后的自有资料才覆盖轨迹详情摘要。运营后台入口 `/admin/scenic_spots.html`，API 路由清单和流程见 `internal/admin/AGENTS.md`；Google 来源 ID 到期后在详情访问时验证。
 
 - 景点供应商调用统计只保存每日计数（景点、供应商、操作、请求/成功/失败数），不保存响应正文或照片引用；统计入口为后台 `/admin/api/scenic-spots/statistics`，显示近 30 日趋势、高调用景点、自有景点发布数及关联轨迹覆盖。内部景点已关联的详情、图片和来源 ID 核验均计数；按坐标运行的后台识别搜索不归因到单个景点，不纳入景点排行榜。存量轨迹需先运行后台回填才能按内部景点归因。MySQL/Mongo/内存仓储都实现 usage counter，相关表为 `scenic_spot_provider_usage`。
 
