@@ -411,13 +411,19 @@ func (s *ScenicSpotCatalogService) Split(ctx context.Context, operator, sourceID
 }
 
 type ScenicSpotBackfillResult struct {
-	Scanned       int    `json:"scanned"`
-	Linked        int    `json:"linked"`
-	Skipped       int    `json:"skipped"`
-	MissingSource int    `json:"missing_source"`
-	NextStartTime string `json:"next_cursor_start_time,omitempty"`
-	NextTrackID   string `json:"next_cursor_id,omitempty"`
-	HasMore       bool   `json:"has_more"`
+	Scanned              int    `json:"scanned"`
+	Linked               int    `json:"linked"`
+	Skipped              int    `json:"skipped"`
+	MissingSource        int    `json:"missing_source"`
+	ProviderQueries      int    `json:"provider_queries"`
+	ProviderMatched      int    `json:"provider_matched"`
+	ProviderUnmatched    int    `json:"provider_unmatched"`
+	ProviderDeferred     int    `json:"provider_deferred"`
+	ProviderUnconfigured int    `json:"provider_unconfigured"`
+	MissingIndex         int    `json:"missing_index"`
+	NextStartTime        string `json:"next_cursor_start_time,omitempty"`
+	NextTrackID          string `json:"next_cursor_id,omitempty"`
+	HasMore              bool   `json:"has_more"`
 }
 
 // BackfillLegacy materializes the existing primary-place decisions as internal
@@ -438,12 +444,45 @@ func (s *ScenicSpotCatalogService) BackfillLegacy(ctx context.Context, cursor *m
 	if hasMore {
 		tracks = tracks[:limit]
 	}
+	existingLinks := make(map[string]bool, len(tracks))
+	for _, track := range tracks {
+		if _, e := s.spots.GetTrackScenicSpotLink(ctx, track.ID); e == nil {
+			existingLinks[track.ID] = true
+		}
+	}
+	// Resolve only tracks that have no usable legacy provider ID. The provider
+	// service applies its normal daily budget and a ten-request per-run cap.
+	if s.provider != nil {
+		var resolveIDs []string
+		for _, track := range tracks {
+			if existingLinks[track.ID] {
+				continue
+			}
+			if !s.hasLegacyProviderID(ctx, track.ID) {
+				resolveIDs = append(resolveIDs, track.ID)
+			}
+		}
+		resolved, e := s.provider.ResolveTracksForBackfill(ctx, resolveIDs)
+		if e != nil {
+			return nil, e
+		}
+		out.ProviderQueries = resolved.ProviderQueries
+		out.ProviderMatched = resolved.Matched
+		out.ProviderUnmatched = resolved.Unmatched
+		out.ProviderDeferred = resolved.Deferred
+		out.ProviderUnconfigured = resolved.Unconfigured
+		out.MissingIndex = resolved.MissingIndex
+	}
 	for _, track := range tracks {
 		out.Scanned++
 		out.NextStartTime = track.StartTime.Format(time.RFC3339Nano)
 		out.NextTrackID = track.ID
 		if _, e := s.spots.GetTrackScenicSpotLink(ctx, track.ID); e == nil {
-			out.Skipped++
+			if existingLinks[track.ID] {
+				out.Skipped++
+			} else {
+				out.Linked++
+			}
 			continue
 		}
 		records, e := s.places.GetPlaceRecords(ctx, []string{"match:" + track.ID})
@@ -511,6 +550,31 @@ func (s *ScenicSpotCatalogService) BackfillLegacy(ctx context.Context, cursor *m
 		out.NextTrackID = tracks[len(tracks)-1].ID
 	}
 	return out, nil
+}
+
+func (s *ScenicSpotCatalogService) hasLegacyProviderID(ctx context.Context, trackID string) bool {
+	records, err := s.places.GetPlaceRecords(ctx, []string{"match:" + trackID})
+	if err != nil {
+		return false
+	}
+	record := records["match:"+trackID]
+	if record == nil {
+		return false
+	}
+	var match models.TrackPlaceMatch
+	if json.Unmarshal([]byte(record.Data), &match) != nil || match.Status != "matched" || match.PrimaryPlaceID == "" {
+		return false
+	}
+	placeRecords, err := s.places.GetPlaceRecords(ctx, []string{"place:" + match.PrimaryPlaceID})
+	if err != nil {
+		return false
+	}
+	placeRecord := placeRecords["place:"+match.PrimaryPlaceID]
+	if placeRecord == nil {
+		return false
+	}
+	var place models.TrackPlace
+	return json.Unmarshal([]byte(placeRecord.Data), &place) == nil && place.Provider != "" && place.ProviderID != ""
 }
 
 // SyncLegacyTrack links newly completed provider matches to the internal catalog.

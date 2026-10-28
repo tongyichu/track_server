@@ -42,7 +42,7 @@ type TrackPlaceService struct {
 	runCalls      int
 	scenicCatalog *ScenicSpotCatalogService
 }
-type TrackPlaceRunResult struct{ Scanned, Matched, Unmatched, Reused, Skipped, Deferred, Failed, Unconfigured int }
+type TrackPlaceRunResult struct{ Scanned, Matched, Unmatched, Reused, Skipped, Deferred, Failed, Unconfigured, ProviderQueries, MissingIndex int }
 
 // AMap enrichment is a one-time business result. Keep successful positive and
 // negative results independently of the short-lived request cache. Recognize
@@ -187,7 +187,55 @@ func (s *TrackPlaceService) RunOnce(ctx context.Context) (*TrackPlaceRunResult, 
 	}
 	return out, nil
 }
+
+// ResolveTracksForBackfill retries only the explicitly selected legacy tracks.
+// It shares the scanner's lock and provider limits so an admin action cannot
+// race the scheduled worker or exceed the per-run lookup cap.
+func (s *TrackPlaceService) ResolveTracksForBackfill(ctx context.Context, trackIDs []string) (*TrackPlaceRunResult, error) {
+	out := &TrackPlaceRunResult{}
+	if !s.Enabled() {
+		out.Unconfigured = len(trackIDs)
+		return out, nil
+	}
+	if !s.mu.TryLock() {
+		out.Deferred = len(trackIDs)
+		return out, nil
+	}
+	defer s.mu.Unlock()
+	s.runCalls = 0
+	defer func() { out.ProviderQueries = s.runCalls }()
+	for _, trackID := range trackIDs {
+		if err := ctx.Err(); err != nil {
+			return out, err
+		}
+		index, err := s.maps.FindTrackGeoIndex(ctx, trackID)
+		if errors.Is(err, repository.ErrNotFound) && s.indexer != nil {
+			if indexErr := s.indexer.processJob(ctx, trackID); indexErr != nil {
+				out.Failed++
+				continue
+			}
+			index, err = s.maps.FindTrackGeoIndex(ctx, trackID)
+		}
+		if errors.Is(err, repository.ErrNotFound) {
+			out.MissingIndex++
+			continue
+		}
+		if err != nil {
+			return out, err
+		}
+		out.Scanned++
+		if err := s.processWithOptions(ctx, index, out, true); err != nil {
+			return out, err
+		}
+	}
+	return out, nil
+}
+
 func (s *TrackPlaceService) process(ctx context.Context, index *models.TrackGeoIndex, out *TrackPlaceRunResult) error {
+	return s.processWithOptions(ctx, index, out, false)
+}
+
+func (s *TrackPlaceService) processWithOptions(ctx context.Context, index *models.TrackGeoIndex, out *TrackPlaceRunResult, refreshMissing bool) error {
 	track, err := s.tracks.FindByID(ctx, index.TrackID)
 	if errors.Is(err, repository.ErrNotFound) {
 		return nil
@@ -259,12 +307,12 @@ func (s *TrackPlaceService) process(ctx context.Context, index *models.TrackGeoI
 	} // cross-border routes keep fallback.
 	// Google content is not persisted unless an allowed cache lifetime has been
 	// explicitly configured; a standard key alone grants no permanent database.
-	if provider == "amap" && s.cfg.AMapKey == "" || provider == "google" && (s.cfg.GoogleKey == "" || s.cfg.GoogleCacheTTL <= 0) {
+	if provider == "amap" && s.cfg.AMapKey == "" || provider == "google" && s.cfg.GoogleKey == "" {
 		out.Unconfigured++
 		return nil
 	}
 	source := trackPlaceSourceVersion(index)
-	if trackPlaceRecordFresh(previousRecord) && previous.SourceVersion == source && previous.RuleVersion == trackPlaceRuleVersion {
+	if !refreshMissing && trackPlaceRecordFresh(previousRecord) && previous.SourceVersion == source && previous.RuleVersion == trackPlaceRuleVersion {
 		if previous.Status == "matched" || previous.Status == "unmatched" {
 			out.Reused++
 		} else {
@@ -286,7 +334,7 @@ func (s *TrackPlaceService) process(ctx context.Context, index *models.TrackGeoI
 		return nil
 	}
 	match := models.TrackPlaceMatch{TrackID: index.TrackID, SourceVersion: source, RuleVersion: trackPlaceRuleVersion, Provider: provider, Status: "unmatched", Relations: []models.TrackPlaceRelation{}, Attempts: previous.Attempts + 1, UpdatedAt: now}
-	reuseEvidence := previous.SourceVersion == source && previous.Provider == provider && (previous.EvidenceComplete || (previous.RuleVersion == 1 && (previous.Status == "matched" || previous.Status == "unmatched")))
+	reuseEvidence := !refreshMissing && previous.SourceVersion == source && previous.Provider == provider && (previous.EvidenceComplete || (previous.RuleVersion == 1 && (previous.Status == "matched" || previous.Status == "unmatched")))
 	var lookupErr error
 	if reuseEvidence {
 		match.Relations = append(match.Relations, previous.Relations...)

@@ -41,6 +41,15 @@ func (s *TrackPlaceService) decideTrackPlace(ctx context.Context, track *models.
 		match.PrimaryPlaceID, match.PrimaryMethod = primary, "sampled_aoi"
 		return nil
 	}
+	if match.Provider == "google" {
+		// Google nearby results have no polygon containment signal. Require the
+		// same place to recur at least three times along the five sampled points.
+		primary, ambiguous = selectRepeatedNearbyPrimary(match.Relations)
+		if primary != "" && !ambiguous {
+			match.PrimaryPlaceID, match.PrimaryMethod = primary, "repeated_nearby"
+		}
+		return nil
+	}
 	if ambiguous || match.Provider != "amap" {
 		return nil
 	}
@@ -90,4 +99,22 @@ func (s *TrackPlaceService) decideTrackPlace(ctx context.Context, track *models.
 		match.PrimaryPlaceID, match.PrimaryMethod = ids[0], "enclosed_poi"
 	}
 	return nil
+}
+
+func selectRepeatedNearbyPrimary(relations []models.TrackPlaceRelation) (string, bool) {
+	best, count, tied := "", 2, false
+	for _, relation := range relations {
+		if relation.Kind != "nearby" || relation.MatchedSamples < 3 {
+			continue
+		}
+		if relation.MatchedSamples > count {
+			best, count, tied = relation.PlaceID, relation.MatchedSamples, false
+		} else if relation.MatchedSamples == count && best != relation.PlaceID {
+			tied = true
+		}
+	}
+	if tied {
+		return "", true
+	}
+	return best, false
 }
