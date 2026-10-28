@@ -343,6 +343,35 @@ func (s *TrackPlaceService) recordScenicTrackProviderCall(ctx context.Context, t
 	}
 }
 
+func (s *TrackPlaceService) recordScenicDetailsCall(ctx context.Context, spot *models.TrackPrimaryScenicSpot, provider, operation string, succeeded bool) {
+	if spot == nil {
+		return
+	}
+	if spot.TrackID != "" {
+		s.recordScenicTrackProviderCall(ctx, spot.TrackID, provider, operation, succeeded)
+		return
+	}
+	s.recordScenicProviderCall(ctx, spot.ID, provider, operation, succeeded)
+}
+
+// ScenicSpotProviderPreview fetches provider text and photo references for the
+// authenticated admin UI. The result is transient and is never persisted.
+func (s *TrackPlaceService) ScenicSpotProviderPreview(ctx context.Context, spotID, provider, providerID string) (*models.TrackPrimaryScenicSpot, error) {
+	provider = strings.ToLower(strings.TrimSpace(provider))
+	providerID = strings.TrimSpace(providerID)
+	if !s.Enabled() || providerID == "" || (provider != "amap" && provider != "google") {
+		return nil, errors.New("provider details unavailable")
+	}
+	spot := &models.TrackPrimaryScenicSpot{ID: spotID, Provider: provider, ProviderID: providerID}
+	switch provider {
+	case "amap":
+		s.amapScenicDetails(ctx, spot)
+	case "google":
+		s.googleScenicDetails(ctx, spot)
+	}
+	return spot, nil
+}
+
 func (s *TrackPlaceService) VerifyScenicSpotSource(ctx context.Context, spotID, provider, providerID string) error {
 	if !s.Enabled() || strings.TrimSpace(providerID) == "" {
 		return errors.New("place provider unavailable")
@@ -413,11 +442,14 @@ func (s *TrackPlaceService) amapScenicDetails(ctx context.Context, spot *models.
 	}
 	err := s.doProviderRequest(ctx, req, &result)
 	succeeded := err == nil && result.Status == "1" && len(result.Pois) > 0
-	s.recordScenicTrackProviderCall(ctx, spot.TrackID, "amap", "details", succeeded)
+	s.recordScenicDetailsCall(ctx, spot, "amap", "details", succeeded)
 	if !succeeded {
 		return
 	}
 	poi := result.Pois[0]
+	if spot.Name == "" {
+		spot.Name = strings.TrimSpace(poi.Name)
+	}
 	spot.Address = strings.TrimSpace(poi.Address)
 	if spot.Category == "" {
 		spot.Category = strings.TrimSpace(poi.Type)
@@ -454,6 +486,9 @@ func (s *TrackPlaceService) googleScenicDetails(ctx context.Context, spot *model
 	req.Header.Set("X-Goog-Api-Key", s.cfg.GoogleKey)
 	req.Header.Set("X-Goog-FieldMask", "id,displayName,primaryType,formattedAddress,editorialSummary,googleMapsUri,photos.name,photos.authorAttributions")
 	var result struct {
+		DisplayName struct {
+			Text string `json:"text"`
+		} `json:"displayName"`
 		PrimaryType      string `json:"primaryType"`
 		FormattedAddress string `json:"formattedAddress"`
 		GoogleMapsURI    string `json:"googleMapsUri"`
@@ -469,9 +504,12 @@ func (s *TrackPlaceService) googleScenicDetails(ctx context.Context, spot *model
 		} `json:"photos"`
 	}
 	err := s.doProviderRequest(ctx, req, &result)
-	s.recordScenicTrackProviderCall(ctx, spot.TrackID, "google", "details", err == nil)
+	s.recordScenicDetailsCall(ctx, spot, "google", "details", err == nil)
 	if err != nil {
 		return
+	}
+	if spot.Name == "" {
+		spot.Name = strings.TrimSpace(result.DisplayName.Text)
 	}
 	spot.Address, spot.Description = result.FormattedAddress, result.EditorialSummary.Text
 	if spot.Category == "" {
@@ -491,7 +529,7 @@ func (s *TrackPlaceService) googleScenicDetails(ctx context.Context, spot *model
 		}
 		mediaErr := s.doProviderRequest(ctx, mediaReq, &media)
 		mediaOK := mediaErr == nil && strings.HasPrefix(media.PhotoURI, "https://")
-		s.recordScenicTrackProviderCall(ctx, spot.TrackID, "google", "photo", mediaOK)
+		s.recordScenicDetailsCall(ctx, spot, "google", "photo", mediaOK)
 		if !mediaOK {
 			continue
 		}

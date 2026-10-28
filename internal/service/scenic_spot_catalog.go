@@ -51,10 +51,11 @@ func (s *ScenicSpotCatalogService) audit(ctx context.Context, spotID, action, op
 func validateScenicSpot(v *models.ScenicSpot) error {
 	v.Name = strings.TrimSpace(v.Name)
 	v.Description = strings.TrimSpace(v.Description)
+	v.Address = strings.TrimSpace(v.Address)
 	v.Category = strings.TrimSpace(v.Category)
 	v.CityCode = strings.TrimSpace(v.CityCode)
 	v.CityName = strings.TrimSpace(v.CityName)
-	if utf8.RuneCountInString(v.Name) > 160 || utf8.RuneCountInString(v.Description) > 8000 || utf8.RuneCountInString(v.Category) > 100 || len(v.Aliases) > 40 || len(v.Photos) > 30 || len(v.Sources) > 8 {
+	if utf8.RuneCountInString(v.Name) > 160 || utf8.RuneCountInString(v.Description) > 8000 || utf8.RuneCountInString(v.Address) > 500 || utf8.RuneCountInString(v.Category) > 100 || len(v.Aliases) > 40 || len(v.Photos) > 30 || len(v.Sources) > 8 {
 		return invalidScenicSpot("scenic spot fields exceed limits")
 	}
 	seen := map[string]bool{}
@@ -300,6 +301,19 @@ func (s *ScenicSpotCatalogService) VerifySource(ctx context.Context, operator, s
 	s.audit(ctx, spotID, "provider_verified", operator, provider+" source verified", nil, source)
 	return spot, nil
 }
+
+// PreviewProviderSource loads live provider content for admin review without
+// copying provider text, photos, or media references into the owned catalog.
+func (s *ScenicSpotCatalogService) PreviewProviderSource(ctx context.Context, spotID, provider, providerID string) (*models.TrackPrimaryScenicSpot, error) {
+	if s == nil || s.provider == nil {
+		return nil, errors.New("provider details unavailable")
+	}
+	if _, err := s.spots.GetScenicSpot(ctx, spotID); err != nil {
+		return nil, err
+	}
+	return s.provider.ScenicSpotProviderPreview(ctx, spotID, provider, providerID)
+}
+
 func (s *ScenicSpotCatalogService) Merge(ctx context.Context, operator, targetID, sourceID string) (*models.ScenicSpot, error) {
 	if targetID == sourceID {
 		return nil, errors.New("cannot merge a scenic spot into itself")
@@ -716,7 +730,7 @@ func (s *ScenicSpotCatalogService) PrimarySpots(ctx context.Context, trackIDs []
 		if spot == nil || spot.Status != models.ScenicSpotPublished {
 			continue
 		}
-		item := &models.TrackPrimaryScenicSpot{ID: spot.ID, Name: spot.Name, Category: spot.Category, Description: spot.Description, Sources: spot.Sources}
+		item := &models.TrackPrimaryScenicSpot{ID: spot.ID, Name: spot.Name, Category: spot.Category, Description: spot.Description, Address: spot.Address, Sources: spot.Sources}
 		for _, photo := range spot.Photos {
 			item.Photos = append(item.Photos, models.TrackScenicSpotPhoto{URL: photo.URL, Title: photo.Caption, Author: photo.Attribution})
 		}

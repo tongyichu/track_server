@@ -19,6 +19,7 @@ type ScenicSpot struct {
 	Latitude    float64            `json:"latitude,omitempty" bson:"latitude,omitempty"`
 	Longitude   float64            `json:"longitude,omitempty" bson:"longitude,omitempty"`
 	Description string             `json:"description,omitempty" bson:"description,omitempty"`
+	Address     string             `json:"address,omitempty" bson:"address,omitempty"`
 	CoverURL    string             `json:"cover_url,omitempty" bson:"cover_url,omitempty"`
 	Photos      []ScenicSpotPhoto  `json:"photos,omitempty" bson:"photos,omitempty"`
 	Sources     []ScenicSpotSource `json:"sources,omitempty" bson:"sources,omitempty"`

@@ -155,6 +155,7 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	api.PUT("/scenic-spots/:spot_id", m.Handler.UpdateScenicSpot)
 	api.POST("/scenic-spots/:spot_id/status", m.Handler.SetScenicSpotStatus)
 	api.POST("/scenic-spots/:spot_id/provider-sources/verify", m.Handler.VerifyScenicSpotSource)
+	api.POST("/scenic-spots/:spot_id/provider-sources/preview", m.Handler.PreviewScenicSpotSource)
 	api.POST("/scenic-spots/:spot_id/photos", m.Handler.UploadScenicSpotPhoto)
 	api.GET("/scenic-spots/:spot_id/tracks", m.Handler.ListScenicSpotTracks)
 	api.POST("/scenic-spots/:spot_id/tracks", m.Handler.AssignScenicSpotTrack)

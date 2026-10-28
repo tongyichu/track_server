@@ -163,6 +163,27 @@ func (h *Handler) VerifyScenicSpotSource(ctx context.Context, c *app.RequestCont
 	}
 	c.JSON(http.StatusOK, utils.H{"code": 0, "data": spot})
 }
+
+func (h *Handler) PreviewScenicSpotSource(ctx context.Context, c *app.RequestContext) {
+	if !h.scenicSpotServiceReady(c) {
+		return
+	}
+	var body struct {
+		Provider   string `json:"provider"`
+		ProviderID string `json:"provider_id"`
+	}
+	if err := json.Unmarshal(c.Request.Body(), &body); err != nil || strings.TrimSpace(body.ProviderID) == "" {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "provider and provider_id are required"})
+		return
+	}
+	preview, err := h.scenicSpotSvc.PreviewProviderSource(ctx, c.Param("spot_id"), body.Provider, body.ProviderID)
+	if err != nil {
+		h.scenicSpotServiceError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": preview})
+}
+
 func (h *Handler) ListScenicSpotTracks(ctx context.Context, c *app.RequestContext) {
 	if !h.scenicSpotServiceReady(c) {
 		return

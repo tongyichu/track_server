@@ -262,6 +262,7 @@ GET /admin/api/users
   → GET /admin/api/scenic-spots/statistics 汇总自有景点发布覆盖、近 30 日供应商调用趋势与高调用景点
   → /admin/api/scenic-spots 查询、创建/编辑草稿、发布/归档、查看审计
   → POST /admin/api/scenic-spots/:spot_id/provider-sources/verify 校验高德/Google 来源 ID
+  → POST /admin/api/scenic-spots/:spot_id/provider-sources/preview 实时获取来源名称、分类、地址、简介及图片供运营查看；不保存供应商响应
   → POST /admin/api/scenic-spots/:spot_id/photos 上传后台自有图片
   → /admin/api/scenic-spots/:spot_id/tracks 搜索、关联或解除轨迹
   → POST /admin/api/scenic-spots/:spot_id/merge|split 合并目录或拆分轨迹归属
@@ -270,7 +271,7 @@ GET /admin/api/users
        → track_scenic_spot_links 关联轨迹，scenic_spot_audit_logs 记录运营操作
        → scenic_spot_provider_usage 只累计景点/provider/日期/操作的请求成功失败计数，不存供应商返回内容
 ```
-轨迹只保存内部景点关联；外部来源 ID 留在景点目录。存量回填对没有可用来源 ID 的合格轨迹强制刷新坐标查询缓存，调用地图 API；每日上限按配置执行（高德默认不设日上限），每轮最多 10 次真实请求。索引刷新失败时回退到已有索引继续匹配并单独计数；结果有明确重复命中才创建空白草稿，不复制供应商资料。回填响应提供 provider_queries、provider_matched、provider_unmatched、provider_skipped、provider_ineligible、quota_deferred、busy_deferred、provider_failed、index_refresh_failed、invalid_samples、provider_unconfigured 和 missing_index 计数。运营人员可编辑自有名称、描述和图片后发布；未发布目录不会覆盖旧轨迹摘要。后台上传图像走受鉴权的 `/api/v1/static/scenic_spots/*` 资源路由，Android 详情页可读取。更新 MySQL/Mongo/memory 任一仓储时，保持三种实现、版本冲突控制和审计行为一致。
+轨迹只保存内部景点关联；外部来源 ID 留在景点目录。存量回填对没有可用来源 ID 的合格轨迹强制刷新坐标查询缓存，调用地图 API；每日上限按配置执行（高德默认不设日上限），每轮最多 10 次真实请求。索引刷新失败时回退到已有索引继续匹配并单独计数；结果有明确重复命中才创建空白目录项，不复制供应商资料。回填响应提供 provider_queries、provider_matched、provider_unmatched、provider_skipped、provider_ineligible、quota_deferred、busy_deferred、provider_failed、index_refresh_failed、invalid_samples、provider_unconfigured 和 missing_index 计数。后台详情页实时预览供应商资料，并可将名称、分类、地址、简介填入自有字段编辑；仅自有字段会随目录保存，供应商图片只实时预览，运营上传的自有图片才会持久化。内部 `draft` 状态在界面显示为“待完善”，不改变状态机与存量值。未发布目录不会覆盖旧轨迹摘要。后台上传图像走受鉴权的 `/api/v1/static/scenic_spots/*` 资源路由，Android 详情页可读取。更新 MySQL/Mongo/memory 任一仓储时，保持三种实现、版本冲突控制和审计行为一致。
 景点页统计开始于该计数能力上线，不回填旧请求；计入已关联内部景点的来源详情、照片请求和 ID 核验，存量轨迹需先运行回填，按坐标执行的识别搜索不计入单景点排行。发布覆盖率以关联轨迹计数为准，目标是帮助运营优先补齐高调用景点的自有内容。
 [admin UI] /admin/analytics.html
   → GET /admin/api/analytics/sync-summaries?status=&limit=&offset=
