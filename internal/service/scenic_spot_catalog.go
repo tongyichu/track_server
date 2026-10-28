@@ -109,6 +109,137 @@ func (s *ScenicSpotCatalogService) List(ctx context.Context, f repository.Scenic
 	}
 	return s.spots.ListScenicSpots(ctx, f)
 }
+
+type ScenicSpotProviderContentBackfillResult struct {
+	Scanned    int    `json:"scanned"`
+	Synced     int    `json:"synced"`
+	NoSource   int    `json:"no_source"`
+	Skipped    int    `json:"skipped"`
+	Failed     int    `json:"failed"`
+	HasMore    bool   `json:"has_more"`
+	NextCursor string `json:"next_cursor,omitempty"`
+}
+
+// BackfillProviderContent fetches missing provider text and photos once and
+// stores them alongside the scenic spot. Explicit admin edits remain intact.
+func (s *ScenicSpotCatalogService) BackfillProviderContent(ctx context.Context, operator, cursor string, limit int) (*ScenicSpotProviderContentBackfillResult, error) {
+	if !s.Enabled() {
+		return nil, errors.New("scenic spot catalog unavailable")
+	}
+	if limit < 1 || limit > 10 {
+		limit = 5
+	}
+	spots, _, err := s.spots.ListScenicSpots(ctx, repository.ScenicSpotListFilter{Cursor: cursor, Limit: limit})
+	if err != nil {
+		return nil, err
+	}
+	out := &ScenicSpotProviderContentBackfillResult{Scanned: len(spots), HasMore: len(spots) == limit}
+	if len(spots) > 0 {
+		out.NextCursor = spots[len(spots)-1].ID
+	}
+	for _, spot := range spots {
+		if spot == nil || spot.Status == models.ScenicSpotMerged || spot.ProviderDataStatus == "synced" || spot.ProviderDataStatus == "no_source" {
+			out.Skipped++
+			continue
+		}
+		source := preferredScenicSpotSource(spot.Sources)
+		if source == nil {
+			spot.ProviderDataStatus = "no_source"
+			if err := s.persistProviderContentSync(ctx, spot, operator, "provider content skipped: no active source"); err != nil {
+				out.Failed++
+				continue
+			}
+			out.NoSource++
+			continue
+		}
+		preview, fetchErr := s.PreviewProviderSource(ctx, spot.ID, source.Provider, source.ProviderID)
+		if fetchErr != nil {
+			spot.ProviderDataStatus = "failed"
+			if err := s.persistProviderContentSync(ctx, spot, operator, "provider content fetch failed"); err != nil {
+				out.Failed++
+				continue
+			}
+			out.Failed++
+			continue
+		}
+		if !spot.ManualEdited && (strings.TrimSpace(spot.Name) != "" || strings.TrimSpace(spot.Category) != "" || strings.TrimSpace(spot.Address) != "" || strings.TrimSpace(spot.Description) != "" || len(spot.Photos) > 0) {
+			spot.ManualEdited = true
+		}
+		if strings.TrimSpace(spot.Name) == "" {
+			spot.Name = strings.TrimSpace(preview.Name)
+		}
+		if strings.TrimSpace(spot.Category) == "" {
+			spot.Category = strings.TrimSpace(preview.Category)
+		}
+		if strings.TrimSpace(spot.Address) == "" {
+			spot.Address = strings.TrimSpace(preview.Address)
+		}
+		if strings.TrimSpace(spot.Description) == "" {
+			spot.Description = strings.TrimSpace(preview.Description)
+		}
+		knownPhotos := make(map[string]struct{}, len(spot.Photos))
+		for _, photo := range spot.Photos {
+			knownPhotos[photo.URL] = struct{}{}
+		}
+		for _, photo := range preview.Photos {
+			if len(spot.Photos) >= 30 || strings.TrimSpace(photo.URL) == "" {
+				break
+			}
+			if _, exists := knownPhotos[photo.URL]; exists {
+				continue
+			}
+			spot.Photos = append(spot.Photos, models.ScenicSpotPhoto{
+				ID:             newScenicID("SPP-"),
+				URL:            photo.URL,
+				Caption:        strings.TrimSpace(photo.Title),
+				AltText:        strings.TrimSpace(photo.Title),
+				Attribution:    strings.TrimSpace(photo.Author),
+				AttributionURL: strings.TrimSpace(photo.AuthorURL),
+				SourceURL:      strings.TrimSpace(photo.SourceURL),
+				Provider:       source.Provider,
+			})
+			knownPhotos[photo.URL] = struct{}{}
+		}
+		now := time.Now()
+		spot.ProviderDataStatus = "synced"
+		spot.ProviderDataFetchedAt = &now
+		if err := s.persistProviderContentSync(ctx, spot, operator, source.Provider+" provider content synced"); err != nil {
+			out.Failed++
+			continue
+		}
+		out.Synced++
+	}
+	return out, nil
+}
+
+func preferredScenicSpotSource(sources []models.ScenicSpotSource) *models.ScenicSpotSource {
+	for _, provider := range []string{"amap", "google"} {
+		for i := range sources {
+			if sources[i].Provider == provider && sources[i].ProviderID != "" && sources[i].Status == "active" {
+				return &sources[i]
+			}
+		}
+	}
+	for i := range sources {
+		if sources[i].ProviderID != "" && sources[i].Status == "unverified" {
+			return &sources[i]
+		}
+	}
+	return nil
+}
+
+func (s *ScenicSpotCatalogService) persistProviderContentSync(ctx context.Context, spot *models.ScenicSpot, operator, details string) error {
+	expected := spot.Version
+	spot.Version++
+	spot.UpdatedAt = time.Now()
+	spot.UpdatedBy = operator
+	if err := s.spots.UpdateScenicSpot(ctx, spot, expected); err != nil {
+		return err
+	}
+	s.audit(ctx, spot.ID, "provider_content_sync", operator, details, nil, spot)
+	return nil
+}
+
 func (s *ScenicSpotCatalogService) Get(ctx context.Context, id string) (*models.ScenicSpot, error) {
 	return s.spots.GetScenicSpot(ctx, id)
 }
@@ -293,6 +424,8 @@ func (s *ScenicSpotCatalogService) VerifySource(ctx context.Context, operator, s
 		}
 		spot.Sources = append(spot.Sources, source)
 	}
+	spot.ProviderDataStatus = ""
+	spot.ProviderDataFetchedAt = nil
 	expected := spot.Version
 	spot.Version++
 	spot.UpdatedAt = now
@@ -304,8 +437,8 @@ func (s *ScenicSpotCatalogService) VerifySource(ctx context.Context, operator, s
 	return spot, nil
 }
 
-// PreviewProviderSource loads live provider content for admin review without
-// copying provider text, photos, or media references into the owned catalog.
+// PreviewProviderSource loads the current provider details. The admin preview
+// endpoint returns it directly; the backfill flow stores it in the catalog.
 func (s *ScenicSpotCatalogService) PreviewProviderSource(ctx context.Context, spotID, provider, providerID string) (*models.TrackPrimaryScenicSpot, error) {
 	if s == nil || s.provider == nil {
 		return nil, errors.New("provider details unavailable")
@@ -734,7 +867,7 @@ func (s *ScenicSpotCatalogService) PrimarySpots(ctx context.Context, trackIDs []
 		}
 		item := &models.TrackPrimaryScenicSpot{ID: spot.ID, Name: spot.Name, Category: spot.Category, Description: spot.Description, Address: spot.Address, Sources: spot.Sources}
 		for _, photo := range spot.Photos {
-			item.Photos = append(item.Photos, models.TrackScenicSpotPhoto{URL: photo.URL, Title: photo.Caption, Author: photo.Attribution})
+			item.Photos = append(item.Photos, models.TrackScenicSpotPhoto{URL: photo.URL, Title: photo.Caption, Author: photo.Attribution, AuthorURL: photo.AttributionURL, SourceURL: photo.SourceURL})
 		}
 		for _, source := range spot.Sources {
 			if source.Provider == link.Provider && source.Status == "active" {

@@ -360,7 +360,7 @@ func (s *TrackPlaceService) recordScenicDetailsCall(ctx context.Context, spot *m
 }
 
 // ScenicSpotProviderPreview fetches provider text and photo references for the
-// authenticated admin UI. The result is transient and is never persisted.
+// scenic catalog import and admin display flows.
 func (s *TrackPlaceService) ScenicSpotProviderPreview(ctx context.Context, spotID, provider, providerID string) (*models.TrackPrimaryScenicSpot, error) {
 	provider = strings.ToLower(strings.TrimSpace(provider))
 	providerID = strings.TrimSpace(providerID)
