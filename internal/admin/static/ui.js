@@ -3,6 +3,7 @@
     '/admin/index.html': ['App 发布', '安装包上传、版本发布与历史版本管理'],
     '/admin/users.html': ['用户管理', '查看用户资料并管理账号限制'],
     '/admin/tracks.html': ['轨迹管理', '查看、修正或删除用户轨迹'],
+    '/admin/scenic_spots.html': ['景点管理', '维护自有景点资料、地图来源与轨迹归属'],
     '/admin/track_submissions.html': ['投稿审核', '审核用户提交的结构化路线资料'],
     '/admin/route_groups.html': ['聚合路线', '维护路线组、代表轨迹和双语介绍'],
     '/admin/companions.html': ['同行管理', '查看同行会话和活动状态'],

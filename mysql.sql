@@ -50,6 +50,54 @@ CREATE TABLE `track_place_api_usage` (
     PRIMARY KEY (`provider`, `usage_day`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE `scenic_spots` (
+    `spot_id` varchar(64) NOT NULL,
+    `name` varchar(255) NOT NULL,
+    `status` varchar(16) NOT NULL,
+    `merged_into` varchar(64) NOT NULL DEFAULT '',
+    `version` bigint NOT NULL DEFAULT 1,
+    `data_json` json NOT NULL,
+    `created_at` datetime(6) NOT NULL,
+    `updated_at` datetime(6) NOT NULL,
+    PRIMARY KEY (`spot_id`),
+    KEY `idx_scenic_spot_status_name` (`status`,`name`),
+    KEY `idx_scenic_spot_merged_into` (`merged_into`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='自有主景点及已授权的来源标识';
+
+CREATE TABLE `track_scenic_spot_links` (
+    `track_id` varchar(64) NOT NULL,
+    `spot_id` varchar(64) NOT NULL,
+    `data_json` json NOT NULL,
+    `updated_at` datetime(6) NOT NULL,
+    PRIMARY KEY (`track_id`),
+    KEY `idx_track_scenic_spot_spot_track` (`spot_id`,`track_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='轨迹到内部主景点的关联';
+
+CREATE TABLE `scenic_spot_audit_logs` (
+    `audit_id` varchar(64) NOT NULL,
+    `spot_id` varchar(64) NOT NULL,
+    `action` varchar(32) NOT NULL,
+    `operator` varchar(64) NOT NULL,
+    `details` text,
+    `before_json` json DEFAULT NULL,
+    `after_json` json DEFAULT NULL,
+    `created_at` datetime(6) NOT NULL,
+    PRIMARY KEY (`audit_id`),
+    KEY `idx_scenic_spot_audit_spot_id` (`spot_id`,`audit_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='主景点运营审计流水';
+
+CREATE TABLE `scenic_spot_provider_usage` (
+    `spot_id` varchar(64) NOT NULL,
+    `provider` varchar(16) NOT NULL,
+    `usage_day` date NOT NULL,
+    `operation` varchar(16) NOT NULL,
+    `request_count` bigint unsigned NOT NULL DEFAULT 0,
+    `success_count` bigint unsigned NOT NULL DEFAULT 0,
+    `failure_count` bigint unsigned NOT NULL DEFAULT 0,
+    PRIMARY KEY (`spot_id`,`provider`,`usage_day`,`operation`),
+    KEY `idx_scenic_provider_usage_day` (`usage_day`,`provider`,`spot_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='主景点供应商 API 调用统计，仅存请求计数';
+
 CREATE TABLE `track_records` (
                                  `id` VARCHAR(64) NOT NULL,
                                  `user_id` bigint unsigned NOT NULL COMMENT '用户ID',

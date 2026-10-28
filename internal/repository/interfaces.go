@@ -32,6 +32,8 @@ var (
 	ErrAlreadyExists = errors.New("already exists")
 	// ErrForbidden indicates current user has no permission to operate the resource.
 	ErrForbidden = errors.New("forbidden")
+	// ErrConflict indicates an optimistic concurrency check failed.
+	ErrConflict = errors.New("conflict")
 )
 
 // TrackRepository defines persistence operations for Track entities.

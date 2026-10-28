@@ -3,8 +3,24 @@ package models
 import "time"
 
 type TrackPrimaryScenicSpot struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	TrackID     string                 `json:"-"`
+	ID          string                 `json:"id"`
+	Name        string                 `json:"name"`
+	Provider    string                 `json:"provider,omitempty"`
+	ProviderID  string                 `json:"provider_id,omitempty"`
+	Sources     []ScenicSpotSource     `json:"sources,omitempty"`
+	Category    string                 `json:"category,omitempty"`
+	Description string                 `json:"description,omitempty"`
+	Address     string                 `json:"address,omitempty"`
+	Photos      []TrackScenicSpotPhoto `json:"photos,omitempty"`
+}
+
+type TrackScenicSpotPhoto struct {
+	URL       string `json:"url"`
+	Title     string `json:"title,omitempty"`
+	Author    string `json:"author,omitempty"`
+	AuthorURL string `json:"author_url,omitempty"`
+	SourceURL string `json:"source_url,omitempty"`
 }
 
 // TrackPlace is shared by all tracks referencing the same provider identity.

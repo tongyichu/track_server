@@ -64,7 +64,7 @@ func (s *TrackPlaceService) PrimaryScenicSpots(ctx context.Context, ids []string
 		}
 		for id, match := range matches {
 			if place := places[match.PrimaryPlaceID]; place != nil && strings.TrimSpace(place.Name) != "" {
-				out[id] = &models.TrackPrimaryScenicSpot{ID: place.ID, Name: place.Name}
+				out[id] = &models.TrackPrimaryScenicSpot{ID: place.ID, Name: place.Name, Provider: place.Provider, ProviderID: place.ProviderID, Category: place.Category}
 			}
 		}
 	}
@@ -73,11 +73,28 @@ func (s *TrackPlaceService) PrimaryScenicSpots(ctx context.Context, ids []string
 
 func (s *TrackService) SetPlaceService(places *TrackPlaceService) { s.places = places }
 
+func (s *TrackService) SetScenicSpotCatalogService(catalog *ScenicSpotCatalogService) {
+	s.scenicCatalog = catalog
+}
+
 func (s *TrackService) primaryScenicSpots(ctx context.Context, ids []string) map[string]*models.TrackPrimaryScenicSpot {
 	places, err := s.places.PrimaryScenicSpots(ctx, ids)
 	if err != nil {
 		log.Printf("track primary scenic enrichment unavailable")
-		return nil
+		places = map[string]*models.TrackPrimaryScenicSpot{}
+	}
+	if s.scenicCatalog != nil {
+		catalog, catalogErr := s.scenicCatalog.PrimarySpots(ctx, ids)
+		if catalogErr == nil {
+			for id, spot := range catalog {
+				places[id] = spot
+			}
+		}
+	}
+	for trackID, spot := range places {
+		if spot != nil {
+			spot.TrackID = trackID
+		}
 	}
 	return places
 }

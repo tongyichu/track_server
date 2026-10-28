@@ -259,3 +259,244 @@ func safePlaceCode(code string) string {
 	}
 	return code
 }
+
+// ScenicSpotDetails reads provider content only for a track detail response. Provider
+// descriptions, photo references and media URLs are never persisted.
+func (s *TrackPlaceService) ScenicSpotDetails(ctx context.Context, spot *models.TrackPrimaryScenicSpot) {
+	if spot == nil {
+		return
+	}
+	if len(spot.Sources) > 0 {
+		for _, source := range spot.Sources {
+			if source.Status != "active" || source.ProviderID == "" {
+				continue
+			}
+			if spot.Address != "" && spot.Description != "" && len(spot.Photos) >= 3 {
+				break
+			}
+			candidate := &models.TrackPrimaryScenicSpot{TrackID: spot.TrackID, ID: spot.ID, Provider: source.Provider, ProviderID: source.ProviderID, Category: spot.Category}
+			if source.Provider == "amap" {
+				s.amapScenicDetails(ctx, candidate)
+			} else if source.Provider == "google" {
+				s.googleScenicDetails(ctx, candidate)
+			}
+			if spot.Address == "" {
+				spot.Address = candidate.Address
+			}
+			if spot.Description == "" {
+				spot.Description = candidate.Description
+			}
+			if spot.Category == "" {
+				spot.Category = candidate.Category
+			}
+			for _, photo := range candidate.Photos {
+				if len(spot.Photos) >= 3 {
+					break
+				}
+				spot.Photos = append(spot.Photos, photo)
+			}
+		}
+		return
+	}
+	if spot.ProviderID == "" || spot.Provider == "" {
+		return
+	}
+	if spot.Provider == "amap" {
+		s.amapScenicDetails(ctx, spot)
+		return
+	}
+	if spot.Provider == "google" {
+		s.googleScenicDetails(ctx, spot)
+	}
+}
+
+func (s *TrackPlaceService) reserveScenicCall(ctx context.Context, provider string) bool {
+	budget := s.cfg.AMapDailyBudget
+	if provider == "google" {
+		budget = s.cfg.GoogleDailyBudget
+	}
+	if budget <= 0 {
+		return false
+	}
+	ok, err := s.store.ReservePlaceAPICall(ctx, provider, time.Now().In(placeQuotaZone).Format("2006-01-02"), budget)
+	return err == nil && ok
+}
+
+func (s *TrackPlaceService) recordScenicProviderCall(ctx context.Context, spotID, provider, operation string, succeeded bool) {
+	if s != nil && s.scenicCatalog != nil {
+		s.scenicCatalog.RecordProviderUsage(ctx, spotID, provider, operation, succeeded)
+	}
+}
+
+func (s *TrackPlaceService) recordScenicTrackProviderCall(ctx context.Context, trackID, provider, operation string, succeeded bool) {
+	if s != nil && s.scenicCatalog != nil {
+		s.scenicCatalog.RecordProviderUsageForTrack(ctx, trackID, provider, operation, succeeded)
+	}
+}
+
+func (s *TrackPlaceService) VerifyScenicSpotSource(ctx context.Context, spotID, provider, providerID string) error {
+	if !s.Enabled() || strings.TrimSpace(providerID) == "" {
+		return errors.New("place provider unavailable")
+	}
+	if provider == "google" {
+		if s.cfg.GoogleKey == "" || !s.reserveScenicCall(ctx, "google") {
+			return errors.New("google place verification unavailable")
+		}
+		req, _ := http.NewRequest(http.MethodGet, "https://places.googleapis.com/v1/places/"+url.PathEscape(providerID), nil)
+		req.Header.Set("X-Goog-Api-Key", s.cfg.GoogleKey)
+		req.Header.Set("X-Goog-FieldMask", "id")
+		var result struct {
+			ID string `json:"id"`
+		}
+		err := s.doProviderRequest(ctx, req, &result)
+		s.recordScenicProviderCall(ctx, spotID, provider, "verify", err == nil && result.ID == providerID)
+		if err != nil {
+			return err
+		}
+		if result.ID == "" || result.ID != providerID {
+			return errors.New("google place id did not match")
+		}
+		return nil
+	}
+	if provider == "amap" {
+		if s.cfg.AMapKey == "" || !s.reserveScenicCall(ctx, "amap") {
+			return errors.New("amap place verification unavailable")
+		}
+		q := url.Values{"key": {s.cfg.AMapKey}, "id": {providerID}, "extensions": {"base"}, "output": {"json"}}
+		req, _ := http.NewRequest(http.MethodGet, "https://restapi.amap.com/v3/place/detail?"+q.Encode(), nil)
+		var result struct {
+			Status string `json:"status"`
+			Pois   []struct {
+				ID amapPlaceText `json:"id"`
+			} `json:"pois"`
+		}
+		err := s.doProviderRequest(ctx, req, &result)
+		succeeded := err == nil && result.Status == "1" && len(result.Pois) > 0 && string(result.Pois[0].ID) == providerID
+		s.recordScenicProviderCall(ctx, spotID, provider, "verify", succeeded)
+		if err != nil {
+			return err
+		}
+		if result.Status != "1" || len(result.Pois) == 0 || string(result.Pois[0].ID) != providerID {
+			return errors.New("amap place id was not found")
+		}
+		return nil
+	}
+	return errors.New("provider must be amap or google")
+}
+
+func (s *TrackPlaceService) amapScenicDetails(ctx context.Context, spot *models.TrackPrimaryScenicSpot) {
+	if !s.Enabled() || s.cfg.AMapKey == "" || !s.reserveScenicCall(ctx, "amap") {
+		return
+	}
+	q := url.Values{"key": {s.cfg.AMapKey}, "id": {spot.ProviderID}, "extensions": {"all"}, "output": {"json"}}
+	req, _ := http.NewRequest(http.MethodGet, "https://restapi.amap.com/v3/place/detail?"+q.Encode(), nil)
+	var result struct {
+		Status string `json:"status"`
+		Pois   []struct {
+			Name    string `json:"name"`
+			Address string `json:"address"`
+			Type    string `json:"type"`
+			Photos  []struct {
+				Title string `json:"title"`
+				URL   string `json:"url"`
+			} `json:"photos"`
+		} `json:"pois"`
+	}
+	err := s.doProviderRequest(ctx, req, &result)
+	succeeded := err == nil && result.Status == "1" && len(result.Pois) > 0
+	s.recordScenicTrackProviderCall(ctx, spot.TrackID, "amap", "details", succeeded)
+	if !succeeded {
+		return
+	}
+	poi := result.Pois[0]
+	spot.Address = strings.TrimSpace(poi.Address)
+	if spot.Category == "" {
+		spot.Category = strings.TrimSpace(poi.Type)
+	}
+	for _, photo := range poi.Photos {
+		if len(spot.Photos) == 3 {
+			break
+		}
+		if photoURL := safeAMapPhotoURL(photo.URL); photoURL != "" {
+			spot.Photos = append(spot.Photos, models.TrackScenicSpotPhoto{URL: photoURL, Title: photo.Title, SourceURL: "https://www.amap.com/"})
+		}
+	}
+}
+
+func safeAMapPhotoURL(raw string) string {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.User != nil {
+		return ""
+	}
+	host := strings.ToLower(u.Hostname())
+	if host != "amap.com" && !strings.HasSuffix(host, ".amap.com") && host != "autonavi.com" && !strings.HasSuffix(host, ".autonavi.com") {
+		return ""
+	}
+	u.Scheme = "https"
+	return u.String()
+}
+
+func (s *TrackPlaceService) googleScenicDetails(ctx context.Context, spot *models.TrackPrimaryScenicSpot) {
+	if !s.Enabled() || s.cfg.GoogleKey == "" || !s.reserveScenicCall(ctx, "google") {
+		return
+	}
+	u := "https://places.googleapis.com/v1/places/" + url.PathEscape(spot.ProviderID)
+	req, _ := http.NewRequest(http.MethodGet, u, nil)
+	req.Header.Set("X-Goog-Api-Key", s.cfg.GoogleKey)
+	req.Header.Set("X-Goog-FieldMask", "id,displayName,primaryType,formattedAddress,editorialSummary,googleMapsUri,photos.name,photos.authorAttributions")
+	var result struct {
+		PrimaryType      string `json:"primaryType"`
+		FormattedAddress string `json:"formattedAddress"`
+		GoogleMapsURI    string `json:"googleMapsUri"`
+		EditorialSummary struct {
+			Text string `json:"text"`
+		} `json:"editorialSummary"`
+		Photos []struct {
+			Name         string `json:"name"`
+			Attributions []struct {
+				DisplayName string `json:"displayName"`
+				URI         string `json:"uri"`
+			} `json:"authorAttributions"`
+		} `json:"photos"`
+	}
+	err := s.doProviderRequest(ctx, req, &result)
+	s.recordScenicTrackProviderCall(ctx, spot.TrackID, "google", "details", err == nil)
+	if err != nil {
+		return
+	}
+	spot.Address, spot.Description = result.FormattedAddress, result.EditorialSummary.Text
+	if spot.Category == "" {
+		spot.Category = result.PrimaryType
+	}
+	for _, photo := range result.Photos {
+		if len(spot.Photos) == 3 {
+			break
+		}
+		if photo.Name == "" || !s.reserveScenicCall(ctx, "google") {
+			break
+		}
+		mediaURL := "https://places.googleapis.com/v1/" + photo.Name + "/media?maxWidthPx=1200&skipHttpRedirect=true&key=" + url.QueryEscape(s.cfg.GoogleKey)
+		mediaReq, _ := http.NewRequest(http.MethodGet, mediaURL, nil)
+		var media struct {
+			PhotoURI string `json:"photoUri"`
+		}
+		mediaErr := s.doProviderRequest(ctx, mediaReq, &media)
+		mediaOK := mediaErr == nil && strings.HasPrefix(media.PhotoURI, "https://")
+		s.recordScenicTrackProviderCall(ctx, spot.TrackID, "google", "photo", mediaOK)
+		if !mediaOK {
+			continue
+		}
+		item := models.TrackScenicSpotPhoto{URL: media.PhotoURI, SourceURL: result.GoogleMapsURI}
+		if len(photo.Attributions) > 0 {
+			authors := make([]string, 0, len(photo.Attributions))
+			for _, attribution := range photo.Attributions {
+				if name := strings.TrimSpace(attribution.DisplayName); name != "" {
+					authors = append(authors, name)
+				}
+			}
+			item.Author = strings.Join(authors, ", ")
+			item.AuthorURL = photo.Attributions[0].URI
+		}
+		spot.Photos = append(spot.Photos, item)
+	}
+}

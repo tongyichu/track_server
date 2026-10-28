@@ -391,6 +391,9 @@ func (h *TrackHandler) GetTrackDetail(ctx context.Context, c *app.RequestContext
 			return
 		}
 	}
+	if track.PrimaryScenicSpot != nil && track.PrimaryScenicSpot.Provider != "" {
+		c.Header("Cache-Control", "no-store")
+	}
 	c.JSON(http.StatusOK, successResponse(track))
 }
 

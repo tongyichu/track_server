@@ -45,6 +45,7 @@ type Handler struct {
 	restrictionSvc     *service.AccountRestrictionService
 	routeGroupSvc      *service.TrackRouteGroupService
 	trackSubmissionSvc *service.TrackSubmissionService
+	scenicSpotSvc      *service.ScenicSpotCatalogService
 	dashboardStatsRepo repository.AdminDashboardStatisticsRepository
 	screenshotCache    *service.AssetCacheService
 	// staticRoot 是服务端本地静态资源根目录（通常为 <LogDir>/static）。
@@ -265,6 +266,12 @@ func (h *Handler) SetScreenshotCache(cache *service.AssetCacheService) {
 func (h *Handler) SetTrackSubmissionService(svc *service.TrackSubmissionService) {
 	if h != nil {
 		h.trackSubmissionSvc = svc
+	}
+}
+
+func (h *Handler) SetScenicSpotCatalogService(svc *service.ScenicSpotCatalogService) {
+	if h != nil {
+		h.scenicSpotSvc = svc
 	}
 }
 

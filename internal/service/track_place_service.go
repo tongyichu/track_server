@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"sort"
 	"strings"
@@ -29,16 +30,17 @@ type TrackPlaceConfig struct {
 	CacheTTL, GoogleCacheTTL           time.Duration
 }
 type TrackPlaceService struct {
-	cfg      TrackPlaceConfig
-	store    repository.TrackPlaceRepository
-	maps     repository.TrackMapRepository
-	tracks   repository.TrackRepository
-	reader   repository.TrackPlaceIndexReader
-	indexer  *TrackMapIndexService
-	client   *http.Client
-	mu       sync.Mutex
-	lastCall time.Time
-	runCalls int
+	cfg           TrackPlaceConfig
+	store         repository.TrackPlaceRepository
+	maps          repository.TrackMapRepository
+	tracks        repository.TrackRepository
+	reader        repository.TrackPlaceIndexReader
+	indexer       *TrackMapIndexService
+	client        *http.Client
+	mu            sync.Mutex
+	lastCall      time.Time
+	runCalls      int
+	scenicCatalog *ScenicSpotCatalogService
 }
 type TrackPlaceRunResult struct{ Scanned, Matched, Unmatched, Reused, Skipped, Deferred, Failed, Unconfigured int }
 
@@ -78,6 +80,12 @@ func NewTrackPlaceService(cfg TrackPlaceConfig, store repository.TrackPlaceRepos
 }
 func (s *TrackPlaceService) Enabled() bool {
 	return s != nil && s.cfg.Enabled && s.reader != nil && s.store != nil
+}
+
+func (s *TrackPlaceService) SetScenicSpotCatalogService(catalog *ScenicSpotCatalogService) {
+	if s != nil {
+		s.scenicCatalog = catalog
+	}
 }
 func (s *TrackPlaceService) owner() string {
 	var data [16]byte
@@ -394,6 +402,11 @@ func (s *TrackPlaceService) process(ctx context.Context, index *models.TrackGeoI
 	}
 	if err := s.save(ctx, key, &match, expires, owner); err != nil {
 		return err
+	}
+	if match.Status == "matched" && s.scenicCatalog != nil {
+		if err := s.scenicCatalog.SyncLegacyTrack(ctx, index.TrackID); err != nil {
+			log.Printf("scenic spot catalog link failed track_id=%s", index.TrackID)
+		}
 	}
 	return s.refreshGroup(ctx, index, &match)
 }

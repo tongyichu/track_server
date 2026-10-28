@@ -31,6 +31,7 @@
 - **凭证来源唯一**：管理员账号只来自环境变量。支持两种格式：
   - **推荐**：`ADMIN_ACCOUNTS=user1:bcryptHash1;user2:bcryptHash2`（多账号，`;` / `,` 分隔，首个 `:` 分割 username 与 hash）。
   - **兼容**：旧单账号 `ADMIN_USERNAME` / `ADMIN_PASSWORD_HASH`。两者同时存在时合并，同名用户以 `ADMIN_ACCOUNTS` 为准。
+  - `deploy/docker-compose.yml` 在未提供覆盖值时使用 `admin` / `admin`（密码以 bcrypt hash 注入）；生产部署如需更换，通过环境变量覆盖默认值。
   - **禁止把管理员信息写入数据库**，避免和业务用户表交叉。
 - **未配置即禁用**：上面两种来源解析出的账号集为空时，`NewModule` 返回的 `Module.Auth` 为 `nil`，`RegisterRoutes` 直接不挂载任何 `/admin/*` 路由——这是"后台未启用"的唯一信号，新增功能不要绕过这个开关。
 - **会话仅内存**：`SessionStore` 使用 `sync.RWMutex` + `map`，进程重启即失效。**不要替换为持久化存储**；管理员重新登录是合理代价。
@@ -66,6 +67,7 @@ internal/admin/
 | 埋点同步摘要 | `handlers.go` 中 `ListAnalyticsSyncSummaries`，`static/analytics.html`、`static/analytics.js` |
 | 聚合路线运营 | `handlers.go` 中 `ListRouteGroups` / `GetRouteGroup` / `RenameRouteGroup` / `MergeRouteGroup` / `RemoveRouteGroupMember` / `SetRouteGroupRepresentative`，`static/route_groups.html`、`static/route_groups.js` |
 | 轨迹投稿审核 | `handlers.go` 中 `ListTrackSubmissions` / `GetTrackSubmission` / `ReviewTrackSubmission`，统计复用 `GetDashboard`；页面位于 `static/track_submissions.html`、`static/track_submissions.js` |
+| 主景点目录 | `scenic_spot_handlers.go` + `ScenicSpotCatalogService`；页面 `static/scenic_spots.html`、`static/scenic_spots.js`；目录与调用统计由 `repository.ScenicSpotRepository` 三种实现提供 |
 
 ## 路由清单（与 `routes.go` 对齐）
 
@@ -253,6 +255,23 @@ GET /admin/api/users
        → 清理 track_map_index_jobs / track_geo_indexes / track_route_group_members
        → 若删除的是路线组代表轨迹，归档该路线组并移除其全部成员，后续由 track_route_group 任务重新聚合剩余轨迹
 ```
+
+**主景点目录**：
+```
+[admin UI] /admin/scenic_spots.html
+  → GET /admin/api/scenic-spots/statistics 汇总自有景点发布覆盖、近 30 日供应商调用趋势与高调用景点
+  → /admin/api/scenic-spots 查询、创建/编辑草稿、发布/归档、查看审计
+  → POST /admin/api/scenic-spots/:spot_id/provider-sources/verify 校验高德/Google 来源 ID
+  → POST /admin/api/scenic-spots/:spot_id/photos 上传后台自有图片
+  → /admin/api/scenic-spots/:spot_id/tracks 搜索、关联或解除轨迹
+  → POST /admin/api/scenic-spots/:spot_id/merge|split 合并目录或拆分轨迹归属
+  → POST /admin/api/scenic-spots/backfill 分页把存量主景点匹配转成内部 SCP ID 草稿
+       → ScenicSpotCatalogService + ScenicSpotRepository (MySQL / Mongo / memory)
+       → track_scenic_spot_links 关联轨迹，scenic_spot_audit_logs 记录运营操作
+       → scenic_spot_provider_usage 只累计景点/provider/日期/操作的请求成功失败计数，不存供应商返回内容
+```
+轨迹只保存内部景点关联；外部来源 ID 留在景点目录。存量回填与后台自动匹配只存来源标识并创建草稿，不复制供应商资料。运营人员可编辑自有名称、描述和图片后发布；未发布目录不会覆盖旧轨迹摘要。后台上传图像走受鉴权的 `/api/v1/static/scenic_spots/*` 资源路由，Android 详情页可读取。更新 MySQL/Mongo/memory 任一仓储时，保持三种实现、版本冲突控制和审计行为一致。
+景点页统计开始于该计数能力上线，不回填旧请求；计入已关联内部景点的来源详情、照片请求和 ID 核验，存量轨迹需先运行回填，按坐标执行的识别搜索不计入单景点排行。发布覆盖率以关联轨迹计数为准，目标是帮助运营优先补齐高调用景点的自有内容。
 [admin UI] /admin/analytics.html
   → GET /admin/api/analytics/sync-summaries?status=&limit=&offset=
   → AnalyticsRepository.ListSyncSummaries / CountSyncSummaries
@@ -261,7 +280,7 @@ GET /admin/api/users
 
 ## 改动导航
 
-- **加一个管理后台 API**：在 `handlers.go` 写 handler → `routes.go` 的 `api := g.Group("/api", m.Auth.AuthMiddleware())` 下挂载。需要操作者信息时用 `h.auth.SessionFromRequest(c)`。
+- **加一个管理后台 API**：在 `handlers.go` 或按业务域拆分的 handler 文件写 handler → `routes.go` 的 `api := g.Group("/api", m.Auth.AuthMiddleware())` 下挂载。需要操作者信息时用 `h.auth.SessionFromRequest(c)`。
 - **展示业务静态资源**：后台页面不要直接使用 `/api/v1/static/*`，应由 handler 改写为 `/admin/api/static/*`，通过 admin session 鉴权后读取 `staticRoot`。
 - **加一个公开页面/资源**：把文件放进 `static/`，在 `routes.go` 用 `serveEmbedded(...)` 或走 `/admin/static/*filepath`。**不要新增第二个 `go:embed`**。
 - **加一个侧边/顶部入口**：统一修改 `static/shell.js` 的导航配置；页面只需在自身脚本前加载 `shell.js`，不要再复制一份导航。
@@ -286,4 +305,4 @@ GET /admin/api/users
 - **误解**：进程重启后会话还在。
   **事实**：`SessionStore` 是纯内存实现，重启即清空，必须重新登录。
 - **误解**：管理员账号在数据库里。
-  **事实**：账号只来自 `ADMIN_USERNAME` / `ADMIN_PASSWORD_HASH` 环境变量，bcrypt 校验，不查任何表。
+  **事实**：账号只来自 `ADMIN_ACCOUNTS` / `ADMIN_USERNAME` / `ADMIN_PASSWORD_HASH` 环境变量，bcrypt 校验，不查任何表；Docker Compose 提供 `admin/admin` 默认值，可通过环境变量覆盖。

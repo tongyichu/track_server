@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>景点管理 - Track</title>
+  <link rel="stylesheet" href="/admin/static/vendor/tabler.min.css" />
+  <link rel="stylesheet" href="/admin/static/style.css" />
+  <style>
+    .scenic-layout{display:grid;grid-template-columns:minmax(320px,.9fr) minmax(520px,1.6fr);gap:18px;align-items:start}
+    .scenic-detail{display:grid;gap:16px}.scenic-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}.scenic-fields label{display:grid;gap:6px}.scenic-fields .full{grid-column:1/-1}
+    .scenic-photo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:10px}.scenic-photo{border:1px solid var(--tblr-border-color);border-radius:8px;padding:8px}.scenic-photo img{width:100%;height:90px;object-fit:cover;border-radius:5px}.scenic-photo input{margin-top:6px}.scenic-source-row{display:grid;grid-template-columns:120px 1fr 120px auto;gap:8px;margin-bottom:8px}
+    .scenic-spot-list{max-height:70vh;overflow:auto}.scenic-actions{display:flex;flex-wrap:wrap;gap:8px}.scenic-hint{font-size:12px;color:var(--tblr-secondary-color)}
+    .scenic-stats-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.scenic-stat{padding:16px;border:1px solid var(--tblr-border-color);border-radius:10px;background:var(--tblr-bg-surface)}.scenic-stat-label{color:var(--tblr-secondary-color);font-size:13px}.scenic-stat-value{font-size:25px;font-weight:650;margin-top:5px}.scenic-stat-note{font-size:12px;color:var(--tblr-secondary-color);margin-top:3px}
+    .scenic-stats-lower{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(320px,1fr);gap:16px;margin-top:16px}.scenic-bars{height:110px;display:flex;align-items:end;gap:4px;padding:10px 4px 0;border-bottom:1px solid var(--tblr-border-color)}.scenic-bar-col{height:100%;flex:1;display:flex;align-items:end;min-width:4px}.scenic-bar{width:100%;min-height:2px;border-radius:3px 3px 0 0;background:var(--tblr-primary);opacity:.8}.scenic-bars-label{display:flex;justify-content:space-between;color:var(--tblr-secondary-color);font-size:11px;margin-top:5px}
+    .scenic-top-table{width:100%;border-collapse:collapse}.scenic-top-table th,.scenic-top-table td{padding:9px 7px;border-bottom:1px solid var(--tblr-border-color);text-align:left;font-size:13px}.scenic-top-row{cursor:pointer}.scenic-top-row:hover{background:var(--tblr-bg-surface-secondary)}
+    @media(max-width:950px){.scenic-layout{grid-template-columns:1fr}.scenic-spot-list{max-height:35vh}.scenic-fields{grid-template-columns:1fr}.scenic-fields .full{grid-column:auto}.scenic-source-row{grid-template-columns:1fr 1fr}}
+    @media(max-width:950px){.scenic-stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.scenic-stats-lower{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <header class="topbar"></header>
+  <main class="container wide">
+    <section class="panel">
+      <div class="row scenic-actions">
+        <label>名称搜索 <input id="searchInput" type="search" placeholder="景点名称" /></label>
+        <label>状态 <select id="statusFilter" class="form-select"><option value="">全部</option><option value="draft">草稿</option><option value="published">已发布</option><option value="archived">已归档</option><option value="merged">已合并</option></select></label>
+        <button id="searchBtn" class="btn btn-primary">查询</button>
+        <button id="newBtn" class="btn btn-outline-primary">新建景点</button>
+        <button id="backfillBtn" class="btn btn-outline-secondary">回填存量主景点</button>
+        <span id="backfillProgress" class="scenic-hint"></span>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="scenic-actions align-items-center"><h2>运营统计</h2><span id="statsPeriod" class="scenic-hint"></span><span class="spacer"></span><button id="refreshStatsBtn" class="btn btn-sm btn-outline-secondary">刷新</button></div>
+      <div class="scenic-stats-grid">
+        <div class="scenic-stat"><div class="scenic-stat-label">已发布自有景点</div><div id="statsPublished" class="scenic-stat-value">—</div><div id="statsPublishedNote" class="scenic-stat-note">占全部景点</div></div>
+        <div class="scenic-stat"><div class="scenic-stat-label">关联轨迹</div><div id="statsCoveredTracks" class="scenic-stat-value">—</div><div id="statsCoveredNote" class="scenic-stat-note">发布景点覆盖轨迹</div></div>
+        <div class="scenic-stat"><div class="scenic-stat-label">地图查询 · 今日</div><div id="statsTodayCalls" class="scenic-stat-value">—</div><div class="scenic-stat-note">来源详情、图片和 ID 核验请求</div></div>
+        <div class="scenic-stat"><div class="scenic-stat-label">地图查询 · 近 30 日</div><div id="statsMonthCalls" class="scenic-stat-value">—</div><div id="statsMonthNote" class="scenic-stat-note">统计开始于本次版本上线</div></div>
+      </div>
+      <div class="scenic-stats-lower">
+        <div><h3>近 30 日查询趋势</h3><div id="statsDailyBars" class="scenic-bars"></div><div id="statsDailyLabels" class="scenic-bars-label"></div></div>
+        <div><h3>供应商调用</h3><div id="statsProviders" class="scenic-hint">加载中</div></div>
+      </div>
+      <div class="scenic-hint mt-2">调用统计从此版本上线后开始累计，包含已关联内部景点的详情、图片和来源 ID 核验请求；请先完成存量回填。后台坐标识别搜索不计入单景点排行。</div>
+      <div class="mt-3"><h3>高调用景点 · 近 30 日</h3><div class="table-responsive"><table class="scenic-top-table"><thead><tr><th>景点</th><th>状态</th><th>关联轨迹</th><th>调用</th></tr></thead><tbody id="statsTopSpots"><tr><td colspan="4" class="scenic-hint">加载中</td></tr></tbody></table></div></div>
+    </section>
+    <div class="scenic-layout">
+      <section class="panel scenic-spot-list">
+        <h2>景点目录 <span id="spotCount" class="scenic-hint"></span></h2>
+        <div class="table-responsive"><table class="table table-vcenter"><thead><tr><th>名称</th><th>来源</th><th>状态</th></tr></thead><tbody id="spotRows"><tr><td colspan="3" class="hint">加载中</td></tr></tbody></table></div>
+      </section>
+      <section id="detailPanel" class="panel scenic-detail" hidden>
+        <div class="scenic-actions align-items-center"><div><h2 id="detailTitle">景点详情</h2><div id="detailMeta" class="scenic-hint"></div></div><span class="spacer"></span><button id="saveBtn" class="btn btn-primary">保存草稿</button><button id="publishBtn" class="btn btn-success">发布</button><button id="archiveBtn" class="btn btn-outline-danger">归档</button></div>
+        <div class="scenic-fields">
+          <label>景点名称<input id="nameInput" class="form-control" maxlength="160" /></label>
+          <label>分类<input id="categoryInput" class="form-control" maxlength="100" /></label>
+          <label>城市 Code<input id="cityCodeInput" class="form-control" maxlength="16" /></label>
+          <label>城市名称<input id="cityNameInput" class="form-control" maxlength="80" /></label>
+          <label>纬度<input id="latInput" class="form-control" type="number" min="-90" max="90" step="any" /></label>
+          <label>经度<input id="lngInput" class="form-control" type="number" min="-180" max="180" step="any" /></label>
+          <label class="full">别名（每行一个）<textarea id="aliasesInput" class="form-control" rows="2"></textarea></label>
+          <label class="full">自有简介<textarea id="descriptionInput" class="form-control" rows="5" maxlength="8000"></textarea></label>
+        </div>
+        <section><div class="scenic-actions"><h3>地图来源 ID</h3><button id="addSourceBtn" class="btn btn-sm btn-outline-primary">添加来源</button></div><div id="sourcesBox"></div><div class="scenic-hint">仅保存供应商标识与核验时间；供应商简介、照片引用由详情请求实时获取。</div></section>
+        <section><div class="scenic-actions"><h3>自有图片</h3><input id="photoFile" type="file" accept="image/jpeg,image/png" /><input id="photoCaption" class="form-control" placeholder="图片说明" /><button id="uploadPhotoBtn" class="btn btn-outline-primary">上传</button></div><div id="photosBox" class="scenic-photo-grid"></div></section>
+        <section><div class="scenic-actions"><h3>关联轨迹</h3><input id="trackSearchInput" class="form-control" placeholder="按轨迹标题搜索" /><button id="trackSearchBtn" class="btn btn-outline-primary">搜索轨迹</button><input id="trackIdInput" class="form-control" placeholder="或直接输入轨迹 ID" /><button id="assignTrackBtn" class="btn btn-outline-primary">关联 ID</button></div><div id="trackSearchResults" class="scenic-hint"></div><div class="table-responsive"><table class="table table-vcenter"><thead><tr><th>轨迹</th><th>来源</th><th>操作</th><th>拆分</th></tr></thead><tbody id="linkedTrackRows"><tr><td colspan="4" class="hint">请选择景点</td></tr></tbody></table></div></section>
+        <section><div class="scenic-actions"><h3>合并 / 拆分</h3><select id="mergeTarget" class="form-select"></select><button id="mergeBtn" class="btn btn-outline-danger">将当前景点并入目标</button><input id="splitName" class="form-control" placeholder="拆分后新景点名称" /><button id="splitBtn" class="btn btn-outline-secondary">拆分选中轨迹</button></div><div class="scenic-hint">合并会将所有关联轨迹转到目标景点并保留当前景点为合并记录；拆分会创建一个草稿景点。</div></section>
+        <section><h3>操作记录</h3><div id="auditRows" class="scenic-hint">选择景点后加载</div></section>
+      </section>
+    </div>
+  </main>
+  <script src="/admin/static/vendor/tabler.min.js"></script>
+  <script src="/admin/static/shell.js"></script>
+  <script src="/admin/static/ui.js"></script>
+  <script src="/admin/static/scenic_spots.js"></script>
+</body>
+</html>

@@ -37,7 +37,7 @@
 | `track_screenshot_url` | string | 轨迹截图可下载链接（服务端本地缓存 URL，例如 `/api/v1/static/screenshots/<track_id>.jpg`） |
 | `track_no_map_bg_screenshot_url` | string | 无地图背景的轨迹路线截图可下载链接（服务端本地缓存 URL，例如 `/api/v1/static/screenshots/<track_id>_no_map_bg.jpg`） |
 | `preview_images` | object | 静态轨迹预览图：`square_day_url` / `square_night_url`（1:1）、`landscape_day_url` / `landscape_night_url`（4:3）；详情及所有轨迹摘要返回鉴权图片地址，无图或 DevMode 清空后为空对象；存储内部清空版本不下发；完整协议见 [track.md](track.md#静态轨迹预览图) |
-| `primary_scenic_spot` | object | 可选主景区 `{id,name}`；详情、推荐/搜索、本人上传/收藏与客态主页摘要统一下发。仅使用已完成且与当前空间索引源摘要一致的主归属；未识别、无主景区或资料不可用时省略，不把附近候选当主归属。只读，不接受客户端写入，完整协议见 [track.md](track.md#主景区标签) |
+| `primary_scenic_spot` | object | 可选主景区；发布后的目录记录使用内部 `{id,name,category,description,photos,sources}`，详情可实时附加 `address` 和供应商图片。列表只读目录数据，不调用地图供应商。未完成迁移/发布时兼容旧 `{id,name,provider,provider_id}`。只读，完整协议见 [track.md](track.md#主景区标签) |
 | `is_running` | bool | 是否进行中 |
 | `status` | int | 轨迹状态：`0` 删除，`1` 正常，`2` 私密 |
 | `created_at` | string | 创建时间 |

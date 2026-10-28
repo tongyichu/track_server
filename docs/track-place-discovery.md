@@ -46,7 +46,11 @@
 
 `GET /track-map/groups/:group_id/detail` 可选增加 `nearby_places`（最多3条），只读取有效本地结果，不产生外部请求；本阶段不增加景点介绍正文或客户端附近景点展示页。
 
-普通轨迹详情及全部轨迹摘要同时通过 `TrackService` 只读装饰 `primary_scenic_spot={id,name}`，供详情顶部最后一个标签使用；不会从多个 nearby 候选中临时挑选。`TrackPlaceService.PrimaryScenicSpots` 按页批量读取 match、当前空间索引和共享地点，校验源摘要及规则版本，MySQL/Mongo/内存的 `TrackPlaceIndexReader.FindPlaceGeoIndexes` 均提供批量能力。可选资料失败不阻塞轨迹主体，不新增 HTTP 路由、轨迹表列或外部地图请求。协议见 `docs/api/track.md`。
+普通轨迹详情及全部轨迹摘要通过 `TrackService` 装饰 `primary_scenic_spot`。新目录中已发布景点使用内部 `SCP-*` ID；旧地图气泡和未迁移轨迹继续使用 `place-*` ID，两种 ID 口径不得混为同一键。轨迹主景点到目录的稳定关联存于 `track_scenic_spot_links`，按页批量读取；列表只读已发布的运营内容，不调用供应商。后台自动匹配结束后，由同一后台扫描流程创建未发布景点草稿/关联；存量由景点管理页分批回填。详情只对已启用来源实时查询，并在 Google Place ID 刷新时间到期时先做 ID-only 核验；供应商返回内容与照片引用不落库。客户端上传图片属于自有内容，经业务 JWT 读取。后台 API、发布/审核、改绑、合并拆分及审计细节见 `internal/admin/AGENTS.md`；业务响应协议见 `docs/api/track.md`。
+
+主景点目录由 `scenic_spots` 自有内容记录、嵌入来源 ID、`track_scenic_spot_links` 关联和 `scenic_spot_audit_logs` 操作流水组成。内部 ID 为随机稳定 ID，不复用。合并时轨迹关联与来源 ID 并入目标，源记录标为 merged 并保留跳转；拆分为所选轨迹创建新草稿并改绑。存量回填只复制供应商身份标识，创建空白草稿，名称、分类、坐标、简介与自有图片需运营编辑后发布。Google Place ID 超过 12 个月建议刷新；仅 ID 可长期保存，照片名/URI与其他 Places 内容不持久化。高德资料同样不进入自有目录；持久化范围按适用账号授权执行。
+
+运营页 `/admin/scenic_spots.html` 展示自有景点发布数、已关联轨迹覆盖、每日供应商调用趋势和高调用景点排行。`scenic_spot_provider_usage` 只存 provider、操作类型、日期、请求数、成功数和失败数；从统计能力上线后开始累计，不回填历史请求。已关联内部景点的详情、图片和来源 ID 核验请求可按内部景点归因；存量轨迹应先运行后台回填，坐标识别扫描不纳入单景点排行。该数据用于安排自有资料维护，不包含供应商响应内容。
 
 ## 配置
 

@@ -66,7 +66,7 @@ track_server/
 │   ├── handler/            # Hertz HTTP handler + router.go 路由表（权威）
 │   ├── maparea/            # 内置 GCJ-02 景区/区县目录；生成区县基线 + 人工覆盖 + 介绍页内容
 │   ├── middleware/         # JWT 鉴权、请求元信息、Token 黑名单
-│   ├── models/             # 领域模型（Track / Recommendation / TrackSubmission / RouteGroup 路线介绍 / User / UserFollow / AccountRestriction / Companion / CompanionEvent / Achievement / Feedback / Analytics / 相关光标/子结构）
+│   ├── models/             # 领域模型（Track / Recommendation / TrackSubmission / RouteGroup 路线介绍 / ScenicSpot / User / UserFollow / AccountRestriction / Companion / CompanionEvent / Achievement / Feedback / Analytics / 相关光标/子结构）
 │   ├── repository/         # 持久化接口 + mysql / mongo / memory 三实现
 │   ├── scheduler/          # 进程内定时任务（基于 robfig/cron/v3，按 SCHEDULER_ENABLED 启停）
 │   └── service/            # 业务编排：登录、轨迹、用户、同行控制面、成就、OSS STS、资源缓存、埋点落盘
@@ -92,7 +92,7 @@ track_server/
 | HTTP 路由清单 | `internal/handler/router.go` |
 | 配置项与默认值 | `internal/config/config.go` |
 | Repository 接口契约 | `internal/repository/interfaces.go` |
-| 领域模型 | `internal/models/track.go`、`internal/models/recommendation.go`、`internal/models/track_submission.go`、`internal/models/user.go`（含 AccountRestriction）、`internal/models/companion.go`、`internal/models/achievement.go`、`internal/models/feedback.go`、`internal/models/analytics.go` |
+| 领域模型 | `internal/models/track.go`、`internal/models/recommendation.go`、`internal/models/track_submission.go`、`internal/models/scenic_spot.go`、`internal/models/user.go`（含 AccountRestriction）、`internal/models/companion.go`、`internal/models/achievement.go`、`internal/models/feedback.go`、`internal/models/analytics.go` |
 | 地图区域语义与介绍内容 | `internal/service/track_place*.go`（异步景区识别）+ `internal/maparea/districts.json`（区县基线）+ `catalog.json`（区县覆盖/旧介绍兼容）；`mainland.json` 仅用于服务路由和坐标转换；配置及维护见 `docs/track-place-discovery.md` |
 | MySQL 表结构 | `mysql.sql` |
 | 接口协议 | `docs/api/`（入口 `track_api.md`，路由索引 `docs/api/route-index.md`，账号限制接口 `docs/api/account-restriction.md`，首页地图接口 `docs/api/track-map.md`）、`login.md`、`track_companion.md`、`track_achievement_client.md`、`track_map.md`；推荐第一版设计与客户端归因协议见 `track_recommendation.md`、`track_analytics.md` |
@@ -103,6 +103,10 @@ track_server/
 ### 稳定默认值
 
 - 管理后台运营工作台的跨域只读统计统一走 `repository.AdminDashboardStatisticsRepository`，由 `NewAdminDashboardStatisticsRepository` 根据当前 MySQL / Mongo / in-memory 仓储族选择实现；不新增统计表，也不改变业务写入流程。周期指标按 `[start,end)` 统计，互动趋势使用收藏/导航/点赞/评论各自 `created_at`，新增用户转化漏斗使用同周期注册 Cohort 并逐级限定为完成轨迹、投稿和审核通过。数据模型见 `internal/models/admin_dashboard.go`，聚合实现见 `internal/repository/admin_dashboard*.go`。
+
+- 主景点以 `internal/models/scenic_spot.go` 的内部 SCP ID 为唯一业务 ID；MySQL、Mongo、内存仓储均由 `repository.ScenicSpotRepository` 实现。`ScenicSpotCatalogService` 管理草稿/发布、来源 ID 校验、轨迹关联、合并拆分、审计和存量回填。回填及自动识别只创建草稿并保存供应商 ID，不把供应商名称、坐标、描述或照片复制进目录；发布后的自有资料才覆盖轨迹详情摘要。运营后台入口 `/admin/scenic_spots.html`，API 路由清单和流程见 `internal/admin/AGENTS.md`；Google 来源 ID 到期后在详情访问时验证，供应商详情仅实时展示。
+
+- 景点供应商调用统计只保存每日计数（景点、供应商、操作、请求/成功/失败数），不保存响应正文或照片引用；统计入口为后台 `/admin/api/scenic-spots/statistics`，显示近 30 日趋势、高调用景点、自有景点发布数及关联轨迹覆盖。内部景点已关联的详情、图片和来源 ID 核验均计数；按坐标运行的后台识别搜索不归因到单个景点，不纳入景点排行榜。存量轨迹需先运行后台回填才能按内部景点归因。MySQL/Mongo/内存仓储都实现 usage counter，相关表为 `scenic_spot_provider_usage`。
 
 - 精品标识 `is_featured` 仅取投稿当前 `approved` 状态；本人已上传 `/track/my/list` 和收藏 `/track/collected/list` 也明确返回 true/false。复用 `TrackSubmissionService` 的当前页批量查询，禁止逐条补查详情或为标识下载投稿图片；响应 DTO 字段不新增表或索引，协议见 `docs/api/track-submission.md`。
 

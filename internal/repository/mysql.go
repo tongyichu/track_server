@@ -37,6 +37,10 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 	stmts := []string{
 		trackPlaceRecordSchema,
 		trackPlaceUsageSchema,
+		scenicSpotSchema,
+		trackScenicSpotLinkSchema,
+		scenicSpotAuditSchema,
+		scenicSpotProviderUsageSchema,
 		trackLikesSchema,
 		`CREATE TABLE IF NOT EXISTS users (
 			id BIGINT PRIMARY KEY,

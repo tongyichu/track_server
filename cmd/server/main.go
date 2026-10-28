@@ -59,6 +59,7 @@ func main() {
 	var analyticsRepo repository.AnalyticsRepository
 	var trackMapRepo repository.TrackMapRepository
 	var trackPlaceRepo repository.TrackPlaceRepository
+	var scenicSpotRepo repository.ScenicSpotRepository
 	var trackSubmissionRepo repository.TrackSubmissionRepository
 	var recommendationRepo repository.RecommendationRepository
 
@@ -119,6 +120,7 @@ func main() {
 				trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo, companionRepo = tr, ur, cr, lr, nr, ar, cor
 				trackMapRepo = repository.NewMySQLTrackMapRepository(db)
 				trackPlaceRepo = repository.NewMySQLTrackPlaceRepository(db)
+				scenicSpotRepo = repository.NewMySQLScenicSpotRepository(db)
 				followRepo = repository.NewMySQLFollowRepository(db)
 				likeRepo = repository.NewMySQLTrackLikeRepository(db)
 				commentRepo = repository.NewMySQLCommentRepository(db)
@@ -147,12 +149,18 @@ func main() {
 			analyticsRepo = repository.NewInMemoryAnalyticsRepository()
 		} else {
 			db := client.Database(cfg.MongoDBName)
-			mongoPlaceRepo := repository.NewMongoTrackPlaceRepository(db)
+			scenicSpotRepo = repository.NewMongoScenicSpotRepository(db)
 			indexCtx, indexCancel := context.WithTimeout(ctx, 5*time.Second)
-			if err := mongoPlaceRepo.EnsureIndexes(indexCtx); err != nil {
-				log.Printf("track place mongo indexes unavailable")
+			if err := scenicSpotRepo.(*repository.MongoScenicSpotRepository).EnsureIndexes(indexCtx); err != nil {
+				log.Printf("scenic spot mongo indexes unavailable: %v", err)
 			}
 			indexCancel()
+			mongoPlaceRepo := repository.NewMongoTrackPlaceRepository(db)
+			placeIndexCtx, placeIndexCancel := context.WithTimeout(ctx, 5*time.Second)
+			if err := mongoPlaceRepo.EnsureIndexes(placeIndexCtx); err != nil {
+				log.Printf("track place mongo indexes unavailable")
+			}
+			placeIndexCancel()
 			trackPlaceRepo = mongoPlaceRepo
 			trackRepo = repository.NewMongoTrackRepository(db.Collection("tracks"))
 			likeRepo = repository.NewMongoTrackLikeRepository(db.Collection("track_likes"))
@@ -188,6 +196,12 @@ func main() {
 			log.Println("mongo repositories initialized")
 		}
 	}
+	if scenicSpotRepo == nil {
+		scenicSpotRepo = repository.NewMemoryScenicSpotRepository()
+	}
+	if trackPlaceRepo == nil {
+		trackPlaceRepo = repository.NewMemoryTrackPlaceRepository()
+	}
 	if commentRepo == nil {
 		commentRepo = repository.NewMemoryCommentRepository()
 	}
@@ -210,6 +224,8 @@ func main() {
 	}
 
 	trackSvc := service.NewTrackService(trackRepo, collectRepo)
+	scenicSpotCatalogSvc := service.NewScenicSpotCatalogService(scenicSpotRepo, trackRepo, trackPlaceRepo)
+	trackSvc.SetScenicSpotCatalogService(scenicSpotCatalogSvc)
 	trackSubmissionSvc := service.NewTrackSubmissionService(trackSubmissionRepo, trackRepo)
 	recommendationSvc := service.NewRecommendationService(service.RecommendationConfig{
 		Enabled:        cfg.RecommendationEnabled,
@@ -486,6 +502,8 @@ func main() {
 			AMapDailyBudget: cfg.TrackPlaceAMapDailyBudget, GoogleDailyBudget: cfg.TrackPlaceGoogleDailyBudget,
 			CacheTTL: time.Duration(cfg.TrackPlaceCacheHours) * time.Hour, GoogleCacheTTL: time.Duration(cfg.TrackPlaceGoogleCacheHours) * time.Hour,
 		}, trackPlaceRepo, trackMapRepo, trackRepo, trackMapIndexSvc)
+		scenicSpotCatalogSvc.SetProviderService(trackPlaceSvc)
+		trackPlaceSvc.SetScenicSpotCatalogService(scenicSpotCatalogSvc)
 		trackRouteGroupSvc.SetPlaceService(trackPlaceSvc)
 		trackMapSvc.SetPlaceService(trackPlaceSvc)
 		trackSvc.SetPlaceService(trackPlaceSvc)
@@ -555,6 +573,7 @@ func main() {
 		))
 		adminModule.Handler.SetScreenshotCache(screenshotCache)
 		adminModule.Handler.SetTrackSubmissionService(trackSubmissionSvc)
+		adminModule.Handler.SetScenicSpotCatalogService(scenicSpotCatalogSvc)
 	}
 	defer adminModule.Close()
 	adminModule.RegisterRoutes(h)
