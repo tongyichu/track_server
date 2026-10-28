@@ -118,6 +118,7 @@ func (s *ScenicSpotCatalogService) Create(ctx context.Context, operator string, 
 	}
 	v.ID = newScenicID("SCP-")
 	v.Status = models.ScenicSpotDraft
+	v.ManualEdited = true
 	v.Version = 1
 	v.CreatedAt = time.Now()
 	v.UpdatedAt = v.CreatedAt
@@ -147,6 +148,7 @@ func (s *ScenicSpotCatalogService) Update(ctx context.Context, operator, id stri
 	}
 	v.ID = id
 	v.Status = old.Status
+	v.ManualEdited = true
 	v.MergedInto = old.MergedInto
 	v.CreatedAt = old.CreatedAt
 	v.CreatedBy = old.CreatedBy

@@ -67,7 +67,7 @@ internal/admin/
 | 埋点同步摘要 | `handlers.go` 中 `ListAnalyticsSyncSummaries`，`static/analytics.html`、`static/analytics.js` |
 | 聚合路线运营 | `handlers.go` 中 `ListRouteGroups` / `GetRouteGroup` / `RenameRouteGroup` / `MergeRouteGroup` / `RemoveRouteGroupMember` / `SetRouteGroupRepresentative`，`static/route_groups.html`、`static/route_groups.js` |
 | 轨迹投稿审核 | `handlers.go` 中 `ListTrackSubmissions` / `GetTrackSubmission` / `ReviewTrackSubmission`，统计复用 `GetDashboard`；页面位于 `static/track_submissions.html`、`static/track_submissions.js` |
-| 主景点目录 | `scenic_spot_handlers.go` + `ScenicSpotCatalogService`；页面 `static/scenic_spots.html`、`static/scenic_spots.js`；目录与调用统计由 `repository.ScenicSpotRepository` 三种实现提供 |
+| 主景点目录 | `scenic_spot_handlers.go` + `ScenicSpotCatalogService`；页面 `static/scenic_spots.html`、`static/scenic_spots.js`；目录与调用统计由 `repository.ScenicSpotRepository` 三种实现提供；目录区分自动来源与人工编辑，详情以弹窗编辑 |
 
 ## 路由清单（与 `routes.go` 对齐）
 
@@ -271,7 +271,7 @@ GET /admin/api/users
        → track_scenic_spot_links 关联轨迹，scenic_spot_audit_logs 记录运营操作
        → scenic_spot_provider_usage 只累计景点/provider/日期/操作的请求成功失败计数，不存供应商返回内容
 ```
-轨迹只保存内部景点关联；外部来源 ID 留在景点目录。存量回填对没有可用来源 ID 的合格轨迹强制刷新坐标查询缓存，调用地图 API；每日上限按配置执行（高德默认不设日上限），每轮最多 10 次真实请求。索引刷新失败时回退到已有索引继续匹配并单独计数；结果有明确重复命中才创建空白目录项，不复制供应商资料。回填响应提供 provider_queries、provider_matched、provider_unmatched、provider_skipped、provider_ineligible、quota_deferred、busy_deferred、provider_failed、index_refresh_failed、invalid_samples、provider_unconfigured 和 missing_index 计数。后台详情首屏实时预览供应商图片，并临时预填空白名称、分类、地址和简介字段到可编辑表单；运营可直接编辑，保存后才成为自有资料。进入页面自动选中首条记录并显示详情，列表可切换其他记录。供应商文字显示在编辑表单中，来源图片集中预览；运营可以添加自有图片、调整顺序和移除，顺序以保存时的 `photos` 数组顺序持久化。城市、坐标、别名及来源 ID、关联轨迹、合并拆分等次要资料和维护操作折叠显示。供应商图片只实时预览，运营上传的自有图片才会持久化。内部 `draft` 状态在界面显示为“待完善”，不改变状态机与存量值。未发布目录不会覆盖旧轨迹摘要。后台上传图像走受鉴权的 `/api/v1/static/scenic_spots/*` 资源路由，Android 详情页可读取。更新 MySQL/Mongo/memory 任一仓储时，保持三种实现、版本冲突控制和审计行为一致。
+轨迹只保存内部景点关联；外部来源 ID 留在景点目录。存量回填对没有可用来源 ID 的合格轨迹强制刷新坐标查询缓存，调用地图 API；每日上限按配置执行（高德默认不设日上限），每轮最多 10 次真实请求。索引刷新失败时回退到已有索引继续匹配并单独计数；结果有明确重复命中才创建空白目录项，不复制供应商资料。后台景点页先展示运营统计，调用榜只显示前三名；供应商调用明细不在页面展示。目录为紧凑整行，展示分类、简介和自有图片，详情在弹窗内编辑名称、分类、地址、简介和图片。首屏实时预览供应商图片，并临时预填空白文字字段；供应商图片不持久化，自有图片可添加、排序和移除，顺序以保存时的 `photos` 数组顺序持久化。城市信息只读展示，不作为编辑字段。`manual_edited` 表示由后台人工创建或保存过编辑内容；自动回填创建的记录保持 false。旧记录缺少此标记时，前端用已有自有文字或图片内容兼容识别人工资料。页面隐藏来源 ID、轨迹关联和合并拆分操作，但相应数据/API仍由服务端保留，供客户端景点关联和既有维护流程使用。景点仍沿用内部 draft/published/archived/merged 状态机；页面展示的“自动/人工”是内容来源类型，不替代发布状态。未发布目录不会覆盖旧轨迹摘要。后台上传图像走受鉴权的 `/api/v1/static/scenic_spots/*` 资源路由，Android 详情页可读取。更新 MySQL/Mongo/memory 任一仓储时，保持三种实现、版本冲突控制和审计行为一致。
 景点页统计开始于该计数能力上线，不回填旧请求；计入已关联内部景点的来源详情、照片请求和 ID 核验，存量轨迹需先运行回填，按坐标执行的识别搜索不计入单景点排行。发布覆盖率以关联轨迹计数为准，目标是帮助运营优先补齐高调用景点的自有内容。
 [admin UI] /admin/analytics.html
   → GET /admin/api/analytics/sync-summaries?status=&limit=&offset=
