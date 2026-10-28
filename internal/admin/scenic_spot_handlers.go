@@ -20,6 +20,7 @@ import (
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/common/utils"
+	"github.com/tongyichu/track_server/internal/config"
 	"github.com/tongyichu/track_server/internal/models"
 	"github.com/tongyichu/track_server/internal/repository"
 	"github.com/tongyichu/track_server/internal/service"
@@ -87,6 +88,32 @@ func (h *Handler) GetScenicSpot(ctx context.Context, c *app.RequestContext) {
 	if err != nil {
 		h.scenicSpotServiceError(c, err)
 		return
+	}
+	if v.CityName == "" && h.trackRepo != nil {
+		links, linkErr := h.scenicSpotSvc.TrackLinks(ctx, v.ID, "", 100)
+		if linkErr == nil && len(links) > 0 {
+			ids := make([]string, 0, len(links))
+			for _, link := range links {
+				ids = append(ids, link.TrackID)
+			}
+			if tracks, tracksErr := h.trackRepo.FindByIDs(ctx, ids); tracksErr == nil {
+				seen := make(map[string]struct{})
+				for _, link := range links {
+					track := tracks[link.TrackID]
+					if track == nil || track.CityCode == "" {
+						continue
+					}
+					name := config.CityNameByCode(track.CityCode)
+					if name == "" {
+						continue
+					}
+					if _, ok := seen[name]; !ok {
+						seen[name] = struct{}{}
+						v.RelatedCities = append(v.RelatedCities, name)
+					}
+				}
+			}
+		}
 	}
 	c.JSON(http.StatusOK, utils.H{"code": 0, "data": v})
 }
