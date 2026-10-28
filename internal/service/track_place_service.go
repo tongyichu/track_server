@@ -42,7 +42,7 @@ type TrackPlaceService struct {
 	runCalls      int
 	scenicCatalog *ScenicSpotCatalogService
 }
-type TrackPlaceRunResult struct{ Scanned, Matched, Unmatched, Reused, Skipped, Ineligible, Deferred, Failed, IndexRefreshFailed, InvalidSamples, Unconfigured, ProviderQueries, MissingIndex int }
+type TrackPlaceRunResult struct{ Scanned, Matched, Unmatched, Reused, Skipped, Ineligible, Deferred, QuotaDeferred, BusyDeferred, Failed, IndexRefreshFailed, InvalidSamples, Unconfigured, ProviderQueries, MissingIndex int }
 
 // AMap enrichment is a one-time business result. Keep successful positive and
 // negative results independently of the short-lived request cache. Recognize
@@ -199,6 +199,7 @@ func (s *TrackPlaceService) ResolveTracksForBackfill(ctx context.Context, trackI
 	}
 	if !s.mu.TryLock() {
 		out.Deferred = len(trackIDs)
+		out.BusyDeferred = len(trackIDs)
 		return out, nil
 	}
 	defer s.mu.Unlock()
@@ -342,6 +343,7 @@ func (s *TrackPlaceService) processWithOptions(ctx context.Context, index *model
 	}
 	if !ok {
 		out.Deferred++
+		out.BusyDeferred++
 		return nil
 	}
 	match := models.TrackPlaceMatch{TrackID: index.TrackID, SourceVersion: source, RuleVersion: trackPlaceRuleVersion, Provider: provider, Status: "unmatched", Relations: []models.TrackPlaceRelation{}, Attempts: previous.Attempts + 1, UpdatedAt: now}
@@ -411,10 +413,12 @@ func (s *TrackPlaceService) processWithOptions(ctx context.Context, index *model
 		if errors.Is(lookupErr, errPlaceBudget) {
 			match.Status = "quota_deferred"
 			out.Deferred++
+			out.QuotaDeferred++
 			out.Failed--
 			expires = nextPlaceQuotaDay(now)
 		} else if errors.Is(lookupErr, errPlaceBusy) {
 			out.Deferred++
+			out.BusyDeferred++
 			out.Failed--
 			expires = now.Add(2 * time.Minute)
 		} else {

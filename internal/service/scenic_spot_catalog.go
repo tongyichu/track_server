@@ -421,6 +421,8 @@ type ScenicSpotBackfillResult struct {
 	ProviderSkipped      int    `json:"provider_skipped"`
 	ProviderIneligible   int    `json:"provider_ineligible"`
 	ProviderDeferred     int    `json:"provider_deferred"`
+	QuotaDeferred        int    `json:"quota_deferred"`
+	BusyDeferred         int    `json:"busy_deferred"`
 	ProviderFailed       int    `json:"provider_failed"`
 	IndexRefreshFailed   int    `json:"index_refresh_failed"`
 	InvalidSamples       int    `json:"invalid_samples"`
@@ -477,6 +479,8 @@ func (s *ScenicSpotCatalogService) BackfillLegacy(ctx context.Context, cursor *m
 		out.ProviderSkipped = resolved.Skipped
 		out.ProviderIneligible = resolved.Ineligible
 		out.ProviderDeferred = resolved.Deferred
+		out.QuotaDeferred = resolved.QuotaDeferred
+		out.BusyDeferred = resolved.BusyDeferred
 		out.ProviderFailed = resolved.Failed
 		out.IndexRefreshFailed = resolved.IndexRefreshFailed
 		out.InvalidSamples = resolved.InvalidSamples
