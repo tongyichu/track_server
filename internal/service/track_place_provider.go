@@ -57,11 +57,15 @@ func placeID(provider, id string) string {
 // Endpoint URLs are fixed. Never return transport errors containing AMap's key
 // query parameter, nor raw provider response bodies, to API clients or logs.
 func (s *TrackPlaceService) providerLookup(ctx context.Context, provider string, p models.TrackPoint) ([]placeEvidence, error) {
+	return s.providerLookupWithOptions(ctx, provider, p, false)
+}
+
+func (s *TrackPlaceService) providerLookupWithOptions(ctx context.Context, provider string, p models.TrackPoint, forceRefresh bool) ([]placeEvidence, error) {
 	if provider == "google" {
 		p = mapGCJ02ToWGS84(p)
 	}
 	key := fmt.Sprintf("request:%d:%s:%.6f:%.6f", trackPlaceEvidenceVersion, provider, p.Latitude, p.Longitude)
-	return s.cachedPlaceLookup(ctx, provider, key, func() ([]placeEvidence, error) {
+	return s.cachedPlaceLookupWithOptions(ctx, provider, key, forceRefresh, func() ([]placeEvidence, error) {
 		if provider == "amap" {
 			return s.amapLookup(ctx, p)
 		}
@@ -70,11 +74,17 @@ func (s *TrackPlaceService) providerLookup(ctx context.Context, provider string,
 }
 
 func (s *TrackPlaceService) cachedPlaceLookup(ctx context.Context, provider, key string, lookup func() ([]placeEvidence, error)) ([]placeEvidence, error) {
+	return s.cachedPlaceLookupWithOptions(ctx, provider, key, false, lookup)
+}
+
+func (s *TrackPlaceService) cachedPlaceLookupWithOptions(ctx context.Context, provider, key string, forceRefresh bool, lookup func() ([]placeEvidence, error)) ([]placeEvidence, error) {
 	var cached []placeEvidence
-	if ok, err := s.loadFresh(ctx, key, &cached); err != nil {
-		return nil, err
-	} else if ok {
-		return cached, nil
+	if !forceRefresh {
+		if ok, err := s.loadFresh(ctx, key, &cached); err != nil {
+			return nil, err
+		} else if ok {
+			return cached, nil
+		}
 	}
 	if s.runCalls >= 10 {
 		return nil, errPlaceBusy
@@ -96,13 +106,15 @@ func (s *TrackPlaceService) cachedPlaceLookup(ctx context.Context, provider, key
 		}
 	}()
 	// A second worker may have completed between the first cache read and lease.
-	if ok, err := s.loadFresh(ctx, key, &cached); err != nil {
-		return nil, err
-	} else if ok {
-		if record, e := s.store.GetPlaceRecord(ctx, key); e == nil {
-			_, _ = s.store.SavePlaceRecord(ctx, record, owner)
+	if !forceRefresh {
+		if ok, err := s.loadFresh(ctx, key, &cached); err != nil {
+			return nil, err
+		} else if ok {
+			if record, e := s.store.GetPlaceRecord(ctx, key); e == nil {
+				_, _ = s.store.SavePlaceRecord(ctx, record, owner)
+			}
+			return cached, nil
 		}
-		return cached, nil
 	}
 	var paused string
 	if pause, e := s.loadFresh(ctx, "pause:"+provider, &paused); e != nil {

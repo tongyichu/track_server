@@ -42,7 +42,7 @@ type TrackPlaceService struct {
 	runCalls      int
 	scenicCatalog *ScenicSpotCatalogService
 }
-type TrackPlaceRunResult struct{ Scanned, Matched, Unmatched, Reused, Skipped, Deferred, Failed, Unconfigured, ProviderQueries, MissingIndex int }
+type TrackPlaceRunResult struct{ Scanned, Matched, Unmatched, Reused, Skipped, Ineligible, Deferred, Failed, Unconfigured, ProviderQueries, MissingIndex int }
 
 // AMap enrichment is a one-time business result. Keep successful positive and
 // negative results independently of the short-lived request cache. Recognize
@@ -244,6 +244,7 @@ func (s *TrackPlaceService) processWithOptions(ctx context.Context, index *model
 		return err
 	}
 	if !isTrackMapIndexEligible(track) {
+		out.Ineligible++
 		return nil
 	}
 	key := "match:" + index.TrackID
@@ -279,6 +280,7 @@ func (s *TrackPlaceService) processWithOptions(ctx context.Context, index *model
 			return err
 		}
 		if !isTrackMapIndexEligible(track) {
+			out.Ineligible++
 			return nil
 		}
 	}
@@ -345,7 +347,7 @@ func (s *TrackPlaceService) processWithOptions(ctx context.Context, index *model
 		}
 		candidates := map[string]*votes{}
 		for _, p := range samples {
-			values, e := s.providerLookup(ctx, provider, p)
+			values, e := s.providerLookupWithOptions(ctx, provider, p, refreshMissing)
 			if e != nil {
 				lookupErr = e
 				break
