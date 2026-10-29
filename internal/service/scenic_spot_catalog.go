@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -302,6 +303,18 @@ func (s *ScenicSpotCatalogService) StaticMap(ctx context.Context, id string) ([]
 		return nil, "", repository.ErrNotFound
 	}
 	return s.provider.ScenicSpotStaticMap(ctx, spot.ID, spot.Latitude, spot.Longitude, spot.CoordinateSystem)
+}
+func (s *ScenicSpotCatalogService) MapJSKey() string {
+	if s == nil || s.provider == nil {
+		return ""
+	}
+	return s.provider.ScenicSpotMapJSKey()
+}
+func (s *ScenicSpotCatalogService) ProxyAMapJSAPI(ctx context.Context, requestPath string, query url.Values) ([]byte, string, error) {
+	if s == nil || s.provider == nil {
+		return nil, "", errors.New("provider details unavailable")
+	}
+	return s.provider.ProxyAMapJSAPI(ctx, requestPath, query)
 }
 func (s *ScenicSpotCatalogService) Create(ctx context.Context, operator string, v *models.ScenicSpot) (*models.ScenicSpot, error) {
 	if err := validateScenicSpot(v); err != nil {

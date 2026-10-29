@@ -59,6 +59,7 @@
 | `TRACK_PLACE_ENABLED` | `true` | 自动识别开关；内存降级时强制不调用外部服务 |
 | `TRACK_PLACE_CRON` | `@every 1m` | 后台扫描周期 |
 | `AMAP_REST_KEY` | 已有配置 | 高德 Web服务 Key；缺失时沿用既有 `AMAP_WEB_KEY` / `AMAP_KEY` 兼容配置，但仍必须是有效的 Web服务凭证 |
+| `AMAP_SECURITY_JS_CODE` | 空 | 管理后台交互景点地图使用的高德 JS API 安全密钥；与 `AMAP_WEB_KEY` 配套，仅经已登录后台配置接口下发 |
 | `TRACK_PLACE_AMAP_DAILY_BUDGET` | `0` | 高德每日请求上限；默认0表示不设日上限，正数表示按该值限制 |
 | `TRACK_PLACE_CACHE_HOURS` | `168` | 高德请求级缓存有效期，最大720小时；不再用于让成功的轨迹结果/共享景区资料到期重跑 |
 | `GOOGLE_PLACES_API_KEY` | 空 | Google Places API New 服务端 Key，不读取 Android SDK Key |

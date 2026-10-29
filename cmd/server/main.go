@@ -499,6 +499,7 @@ func main() {
 		}
 		trackPlaceSvc = service.NewTrackPlaceService(service.TrackPlaceConfig{
 			Enabled: cfg.TrackPlaceEnabled && !memoryFallback, AMapKey: amapKey, GoogleKey: cfg.GooglePlacesKey,
+			AMapWebKey: cfg.AMapWebKey, AMapSecurityJSCode: cfg.AMapSecurityJSCode,
 			AMapDailyBudget: cfg.TrackPlaceAMapDailyBudget, GoogleDailyBudget: cfg.TrackPlaceGoogleDailyBudget,
 			CacheTTL: time.Duration(cfg.TrackPlaceCacheHours) * time.Hour, GoogleCacheTTL: time.Duration(cfg.TrackPlaceGoogleCacheHours) * time.Hour,
 		}, trackPlaceRepo, trackMapRepo, trackRepo, trackMapIndexSvc)

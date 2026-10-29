@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"path"
 	"strings"
 	"time"
 
@@ -488,6 +489,53 @@ func (s *TrackPlaceService) ScenicSpotStaticMap(ctx context.Context, spotID stri
 		return nil, "", errors.New("scenic spot map unavailable")
 	}
 	s.recordScenicProviderCall(ctx, spotID, "amap", "static_map", true)
+	return body, contentType, nil
+}
+
+func (s *TrackPlaceService) ScenicSpotMapJSKey() string {
+	if s == nil {
+		return ""
+	}
+	return strings.TrimSpace(s.cfg.AMapWebKey)
+}
+
+func (s *TrackPlaceService) ProxyAMapJSAPI(ctx context.Context, requestPath string, query url.Values) ([]byte, string, error) {
+	if s == nil || s.cfg.AMapSecurityJSCode == "" || s.client == nil {
+		return nil, "", errors.New("AMap JS API proxy unavailable")
+	}
+	requestPath = strings.TrimPrefix(requestPath, "/")
+	cleanPath := path.Clean(requestPath)
+	if requestPath == "" || cleanPath == "." || strings.HasPrefix(cleanPath, "../") || strings.Contains(cleanPath, "\\") {
+		return nil, "", errors.New("AMap JS API proxy path invalid")
+	}
+	host := "https://restapi.amap.com/"
+	if strings.HasPrefix(cleanPath, "v4/map/styles/") {
+		host = "https://webapi.amap.com/"
+	}
+	values := url.Values{}
+	for key, items := range query {
+		for _, item := range items {
+			values.Add(key, item)
+		}
+	}
+	values.Set("jscode", s.cfg.AMapSecurityJSCode)
+	req, _ := http.NewRequest(http.MethodGet, host+cleanPath+"?"+values.Encode(), nil)
+	resp, err := s.client.Do(req.WithContext(ctx))
+	if err != nil {
+		return nil, "", errors.New("AMap JS API proxy request failed")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return nil, "", errors.New("AMap JS API proxy request failed")
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 5<<20))
+	if err != nil || len(body) == 0 {
+		return nil, "", errors.New("AMap JS API proxy response invalid")
+	}
+	contentType := strings.TrimSpace(strings.Split(resp.Header.Get("Content-Type"), ";")[0])
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
 	return body, contentType, nil
 }
 

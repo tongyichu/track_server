@@ -26,6 +26,7 @@ var placeQuotaZone = time.FixedZone("Asia/Shanghai", 8*60*60)
 type TrackPlaceConfig struct {
 	Enabled                            bool
 	AMapKey, GoogleKey                 string
+	AMapWebKey, AMapSecurityJSCode     string
 	AMapDailyBudget, GoogleDailyBudget int
 	CacheTTL, GoogleCacheTTL           time.Duration
 }

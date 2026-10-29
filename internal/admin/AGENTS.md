@@ -262,6 +262,7 @@ GET /admin/api/users
   → GET /admin/api/scenic-spots/statistics 汇总自有景点发布覆盖、近 30 日供应商调用趋势与高调用景点
   → POST /admin/api/scenic-spots/provider-content/backfill 首次加载时游标分批同步供应商文字和图片；已同步的存量景点仅用轻量地点详情补缺失坐标，provider_coordinates_status 防止重复查询
   → GET /admin/api/scenic-spots/:spot_id/map 通过后台鉴权代理返回高德静态地图图片，供应商密钥不下发浏览器
+  → GET /admin/api/scenic-spots/map-config 向已登录管理员下发高德 Web Key；AMAP_SECURITY_JS_CODE 仅由同源地图服务代理使用，不下发浏览器
   → /admin/api/scenic-spots 查询、创建/编辑草稿、发布/归档、查看审计
   → POST /admin/api/scenic-spots/:spot_id/provider-sources/verify 校验高德/Google 来源 ID
   → POST /admin/api/scenic-spots/:spot_id/provider-sources/preview 实时获取来源详情；景点目录的存量资料由 provider-content/backfill 分批同步并保存

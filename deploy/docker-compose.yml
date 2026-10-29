@@ -32,6 +32,7 @@ services:
       - WECHAT_APP_SECRET=${WECHAT_APP_SECRET:-}
       - AMAP_WEB_KEY=${AMAP_WEB_KEY:-${AMAP_KEY:-}}
       - AMAP_REST_KEY=${AMAP_REST_KEY:-}
+      - AMAP_SECURITY_JS_CODE=${AMAP_SECURITY_JS_CODE:-}
     depends_on:
       - mongo
     ports:

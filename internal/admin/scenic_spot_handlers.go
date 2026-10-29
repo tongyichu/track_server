@@ -12,6 +12,7 @@ import (
 	_ "image/png"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -177,6 +178,36 @@ func (h *Handler) GetScenicSpotMap(ctx context.Context, c *app.RequestContext) {
 	}
 	c.Response.Header.Set("Cache-Control", "private, max-age=3600")
 	c.Data(http.StatusOK, contentType, data)
+}
+func (h *Handler) GetScenicSpotMapConfig(_ context.Context, c *app.RequestContext) {
+	if !h.scenicSpotServiceReady(c) {
+		return
+	}
+	key := h.scenicSpotSvc.MapJSKey()
+	if key == "" {
+		c.Response.Header.Set("Cache-Control", "no-store")
+		c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"configured": false}})
+		return
+	}
+	c.Response.Header.Set("Cache-Control", "no-store")
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"configured": true, "key": key, "service_host": "/admin/api/scenic-spots/amap-service"}})
+}
+func (h *Handler) ProxyScenicSpotMapService(ctx context.Context, c *app.RequestContext) {
+	if !h.scenicSpotServiceReady(c) {
+		return
+	}
+	query, err := url.ParseQuery(string(c.QueryArgs().QueryString()))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid map request"})
+		return
+	}
+	body, contentType, err := h.scenicSpotSvc.ProxyAMapJSAPI(ctx, string(c.Param("filepath")), query)
+	if err != nil {
+		c.JSON(http.StatusBadGateway, utils.H{"error": "map provider unavailable"})
+		return
+	}
+	c.Response.Header.Set("Cache-Control", "private, max-age=86400")
+	c.Data(http.StatusOK, contentType, body)
 }
 func (h *Handler) CreateScenicSpot(ctx context.Context, c *app.RequestContext) {
 	if !h.scenicSpotServiceReady(c) {

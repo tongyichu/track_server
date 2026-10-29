@@ -45,22 +45,23 @@ var DefaultTrackTypeConfigs = []TrackTypeConfig{
 
 // Config holds server configuration loaded from environment variables.
 type Config struct {
-	MongoURI        string
-	MongoDBName     string
-	MySQLDSN        string // mysql数据库连接，示例 root:$密码@tcp(172.18.0.1:3306)/track_db?charset=utf8mb4&parseTime=True
-	ServerAddr      string
-	LogDir          string
-	UseInMemory     bool
-	UseMySQL        bool // 存储是否使用mysql
-	WechatAppID     string
-	WechatAppSecret string
-	AMapWebKey      string
-	AMapRESTKey     string
-	TLSCertFile     string
-	TLSKeyFile      string
-	EnableTLS       bool
-	JWTSecret       string
-	TrackTypes      []string // 客户端可选运动类型列表，默认：徒步/跑步/爬山/骑行/自驾。
+	MongoURI           string
+	MongoDBName        string
+	MySQLDSN           string // mysql数据库连接，示例 root:$密码@tcp(172.18.0.1:3306)/track_db?charset=utf8mb4&parseTime=True
+	ServerAddr         string
+	LogDir             string
+	UseInMemory        bool
+	UseMySQL           bool // 存储是否使用mysql
+	WechatAppID        string
+	WechatAppSecret    string
+	AMapWebKey         string
+	AMapRESTKey        string
+	AMapSecurityJSCode string
+	TLSCertFile        string
+	TLSKeyFile         string
+	EnableTLS          bool
+	JWTSecret          string
+	TrackTypes         []string // 客户端可选运动类型列表，默认：徒步/跑步/爬山/骑行/自驾。
 
 	EMQXBrokerURL                    string
 	EMQXWebsocketURL                 string
@@ -167,6 +168,7 @@ func Load() *Config {
 		aMapWebKey = os.Getenv("AMAP_KEY")
 	}
 	aMapRestKey := os.Getenv("AMAP_REST_KEY")
+	aMapSecurityJSCode := os.Getenv("AMAP_SECURITY_JS_CODE")
 
 	cfg := &Config{
 		MongoURI:                         getEnv("MONGO_URI", ""),
@@ -178,6 +180,7 @@ func Load() *Config {
 		WechatAppSecret:                  os.Getenv("WECHAT_APP_SECRET"),
 		AMapWebKey:                       aMapWebKey,
 		AMapRESTKey:                      aMapRestKey,
+		AMapSecurityJSCode:               aMapSecurityJSCode,
 		TrackPlaceEnabled:                getEnv("TRACK_PLACE_ENABLED", "true") == "true",
 		TrackPlaceCron:                   getEnv("TRACK_PLACE_CRON", "@every 1m"),
 		TrackPlaceAMapDailyBudget:        int(getEnvInt64("TRACK_PLACE_AMAP_DAILY_BUDGET", 0)),
