@@ -1,7 +1,7 @@
 (function () {
   'use strict';
   const $ = id => document.getElementById(id);
-  const state = { current: null, list: [], newSpot: false, providerSyncing: false, pendingCoordinates: null, map: null, mapMarker: null, mapOriginalPosition: null, selectingMapLocation: false, mapSDKPromise: null };
+  const state = { current: null, list: [], newSpot: false, providerSyncing: false, pendingCoordinates: null, map: null, mapMarker: null, mapOriginalPosition: null, selectingMapLocation: false, mapSDKPromise: null, photoPreviewURL: null };
 
   async function api(path, options) {
     const response = await fetch('/admin/api' + path, Object.assign({ credentials: 'same-origin' }, options || {}));
@@ -74,8 +74,7 @@
     state.pendingCoordinates=null;state.selectingMapLocation=false;const lat=Number(spot.latitude),lng=Number(spot.longitude),hasCoordinates=Number.isFinite(lat)&&Number.isFinite(lng)&&lat!==0&&lng!==0;$('coordinateInfo').hidden=!hasCoordinates;$('coordinateInfo').textContent=hasCoordinates?'坐标（'+(spot.coordinate_system||'未知坐标系')+'）：'+lat.toFixed(6)+'，'+lng.toFixed(6):'';$('coordinateMap').hidden=!spot.id;$('coordinateMapError').hidden=true;$('coordinateMapHelp').hidden=!spot.id;$('coordinateMapActions').hidden=!spot.id;$('chooseMapLocationBtn').disabled=!spot.id;$('chooseMapLocationBtn').textContent=hasCoordinates?'重新选点':'选择位置';$('resetMapLocationBtn').disabled=true;$('coordinateMapActionHint').textContent='地图点击仅用于浏览；选点请先点击“'+$('chooseMapLocationBtn').textContent+'”。';$('coordinateMapImage').hidden=!hasCoordinates;
     if(hasCoordinates&&spot.id){$('coordinateMapImage').src='/admin/api/scenic-spots/'+encodeURIComponent(spot.id)+'/map?v='+encodeURIComponent(spot.version||'');}else{$('coordinateMapImage').removeAttribute('src');}$('copySpotIdBtn').disabled=!spot.id;
     if(spot.id)initializeScenicMap(spot);
-    $('providerNameHint').textContent='';$('providerCategoryHint').textContent='';$('providerAddressHint').textContent='';$('providerDescriptionHint').textContent='';$('photosBox').replaceChildren();(spot.photos||[]).forEach(addPhotoCard);
-    $('uploadPhotoBtn').disabled=state.newSpot;
+    $('providerNameHint').textContent='';$('providerCategoryHint').textContent='';$('providerAddressHint').textContent='';$('providerDescriptionHint').textContent='';clearPhotoPreview();renderPhotoCards(spot.photos||[]);
   }
   function toGCJ02(lat,lng,system){if(system!=='WGS84')return{lat,lng};const inside=lng>=72.004&&lng<=137.8347&&lat>=0.8293&&lat<=55.8271;if(!inside)return{lat,lng};let x=lng-105,y=lat-35,a=-100+2*x+3*y+.2*y*y+.1*x*y+.2*Math.sqrt(Math.abs(x));a+=(20*Math.sin(6*x*Math.PI)+20*Math.sin(2*x*Math.PI))*2/3;a+=(20*Math.sin(y*Math.PI)+40*Math.sin(y/3*Math.PI))*2/3;a+=(160*Math.sin(y/12*Math.PI)+320*Math.sin(y*Math.PI/30))*2/3;let b=300+x+2*y+.1*x*x+.1*x*y+.1*Math.sqrt(Math.abs(x));b+=(20*Math.sin(6*x*Math.PI)+20*Math.sin(2*x*Math.PI))*2/3;b+=(20*Math.sin(x*Math.PI)+40*Math.sin(x/3*Math.PI))*2/3;b+=(150*Math.sin(x/12*Math.PI)+300*Math.sin(x/30*Math.PI))*2/3;const rad=lat/180*Math.PI,magic=1-.00669342162296594323*Math.sin(rad)**2,root=Math.sqrt(magic);return{lat:lat+a*180/((6378245*(1-.00669342162296594323))/(magic*root)*Math.PI),lng:lng+b*180/(6378245/root*Math.cos(rad)*Math.PI)};}
   function loadAMapSDK(config){if(window.AMap)return Promise.resolve(window.AMap);if(state.mapSDKPromise)return state.mapSDKPromise;state.mapSDKPromise=new Promise((resolve,reject)=>{window._AMapSecurityConfig={serviceHost:window.location.origin+config.service_host};const script=document.createElement('script');script.src='https://webapi.amap.com/maps?v=2.0&key='+encodeURIComponent(config.key)+'&plugin=AMap.Scale,AMap.ToolBar';script.onload=()=>window.AMap?resolve(window.AMap):reject(new Error('高德地图 SDK 未就绪'));script.onerror=()=>reject(new Error('高德地图 SDK 加载失败'));document.head.appendChild(script);});return state.mapSDKPromise;}
@@ -90,23 +89,37 @@
     catch(error){toast(error.message,'danger');}
   }
 
-  function moveDraggedPhoto(target,event){const dragging=$('photosBox').querySelector('.scenic-photo.dragging');if(!dragging||dragging===target)return;const rect=target.getBoundingClientRect();const after=event.clientY>rect.top+rect.height/2;$('photosBox').insertBefore(dragging,after?target.nextSibling:target);}
+  function clearPhotoPreview(){if(state.photoPreviewURL){URL.revokeObjectURL(state.photoPreviewURL);state.photoPreviewURL=null;}$('photoFile').value='';}
+  function moveDraggedPhoto(target,event){const dragging=$('photosBox').querySelector('.scenic-photo-item.dragging');if(!dragging||dragging===target)return;const rect=target.getBoundingClientRect();const after=event.clientY>rect.top+rect.height/2;const addCard=$('photosBox').querySelector('.scenic-photo-add-card');if(target===addCard){$('photosBox').insertBefore(dragging,addCard);return;}const anchor=after?target.nextElementSibling:target;if(anchor==null||anchor===addCard)$('photosBox').insertBefore(dragging,addCard);else $('photosBox').insertBefore(dragging,anchor);}
+  function bindPhotoDragEvents(card,draggable){
+    card.draggable=draggable;
+    card.addEventListener('dragstart',event=>{if(!draggable)return;card.classList.add('dragging');event.dataTransfer.effectAllowed='move';event.dataTransfer.setData('text/plain',card.dataset.photoId||'photo');});
+    card.addEventListener('dragend',()=>{card.classList.remove('dragging');$('photosBox').querySelectorAll('.drop-target').forEach(item=>item.classList.remove('drop-target'));});
+    card.addEventListener('dragover',event=>{if(!$('photosBox').querySelector('.scenic-photo-item.dragging'))return;event.preventDefault();if(!card.classList.contains('dragging')){card.classList.add('drop-target');moveDraggedPhoto(card,event);}});
+    card.addEventListener('dragleave',()=>card.classList.remove('drop-target'));
+    card.addEventListener('drop',event=>{if(!$('photosBox').querySelector('.scenic-photo-item.dragging'))return;event.preventDefault();card.classList.remove('drop-target');moveDraggedPhoto(card,event);});
+  }
   function addPhotoCard(photo) {
-    const card=document.createElement('div');card.className='scenic-photo';card.draggable=true;const img=document.createElement('img');img.src=photoURL(photo.url);img.alt=photo.alt_text||photo.caption||'景点图片';
+    const card=document.createElement('div');card.className='scenic-photo scenic-photo-item';const img=document.createElement('img');img.draggable=false;img.src=photoURL(photo.url);img.alt=photo.alt_text||photo.caption||'景点图片';
+    const source=document.createElement('div');source.className='scenic-photo-source';source.textContent='来源：'+(photo.provider==='amap'?'高德':photo.provider==='google'?'谷歌':'人工');
     const caption=document.createElement('input');caption.className='form-control';caption.placeholder='图片说明';caption.value=photo.caption||'';
     const controls=document.createElement('div');controls.className='d-flex gap-2 mt-2';const remove=document.createElement('button');remove.type='button';remove.className='btn btn-sm btn-outline-danger ms-auto';remove.textContent='移除';remove.addEventListener('click',()=>card.remove());controls.appendChild(remove);
     card.dataset.photoId=photo.id;card.dataset.url=photo.url;card.dataset.altText=photo.alt_text||'';card.dataset.attribution=photo.attribution||'';card.dataset.provider=photo.provider||'';card.dataset.sourceUrl=photo.source_url||'';card.dataset.attributionUrl=photo.attribution_url||'';
-    if(photo.provider){const source=document.createElement('div');source.className='scenic-photo-source';source.textContent=photo.provider==='google'?'Google':'高德';card.appendChild(source);}
-    if(photo.source_url){const link=document.createElement('a');link.href=photo.source_url;link.target='_blank';link.rel='noopener noreferrer';link.textContent='图片来源';link.className='small d-block mt-1';card.appendChild(link);}
-    card.append(img,caption,controls);$('photosBox').appendChild(card);
-    card.addEventListener('dragstart',event=>{if(event.target.closest('input,button,a')){event.preventDefault();return;}card.classList.add('dragging');event.dataTransfer.effectAllowed='move';});
-    card.addEventListener('dragend',()=>{card.classList.remove('dragging');$('photosBox').querySelectorAll('.drop-target').forEach(item=>item.classList.remove('drop-target'));});
-    card.addEventListener('dragover',event=>{event.preventDefault();if(!card.classList.contains('dragging')){card.classList.add('drop-target');moveDraggedPhoto(card,event);}});
-    card.addEventListener('dragleave',()=>card.classList.remove('drop-target'));
-    card.addEventListener('drop',event=>{event.preventDefault();card.classList.remove('drop-target');moveDraggedPhoto(card,event);});
+    card.append(source,img,caption,controls);$('photosBox').appendChild(card);bindPhotoDragEvents(card,true);
   }
+  function addUploadPhotoCard(){
+    const card=document.createElement('div');card.className='scenic-photo scenic-photo-add-card';
+    const source=document.createElement('div');source.className='scenic-photo-source';source.textContent='来源：人工';
+    const picker=document.createElement('button');picker.type='button';picker.className='scenic-photo-picker';picker.setAttribute('aria-label','选择景点图片');picker.innerHTML='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>选择图片</span>';
+    const preview=document.createElement('img');preview.hidden=true;picker.appendChild(preview);picker.addEventListener('click',()=>{if(!state.newSpot)$('photoFile').click();else toast('请先保存景点，再上传图片','warning');});
+    const caption=document.createElement('input');caption.className='form-control scenic-photo-upload-caption';caption.placeholder='图片说明';
+    const controls=document.createElement('div');controls.className='scenic-photo-upload-controls';const upload=document.createElement('button');upload.type='button';upload.className='btn btn-sm btn-outline-primary';upload.textContent='上传';upload.disabled=true;upload.addEventListener('click',uploadPhoto);controls.appendChild(upload);
+    card.append(source,picker,caption,controls);$('photosBox').appendChild(card);bindPhotoDragEvents(card,false);
+  }
+  function renderPhotoCards(photos){$('photosBox').replaceChildren();(photos||[]).forEach(addPhotoCard);addUploadPhotoCard();}
+  function updateUploadPhotoPreview(){const card=$('photosBox').querySelector('.scenic-photo-add-card');if(!card)return;const picker=card.querySelector('.scenic-photo-picker'),preview=picker.querySelector('img'),icon=picker.querySelector('svg'),label=picker.querySelector('span'),upload=card.querySelector('button.btn-outline-primary');if(state.photoPreviewURL)URL.revokeObjectURL(state.photoPreviewURL);state.photoPreviewURL=null;const file=$('photoFile').files[0];if(file){state.photoPreviewURL=URL.createObjectURL(file);preview.src=state.photoPreviewURL;preview.hidden=false;icon.hidden=true;label.hidden=true;}else{preview.removeAttribute('src');preview.hidden=true;icon.hidden=false;label.hidden=false;}upload.disabled=!file||!state.current||!state.current.id;}
   function currentPayload() {
-    const base=state.current||{};const photos=Array.from($('photosBox').children).map(card=>{const caption=card.querySelector('input');return{id:card.dataset.photoId,url:card.dataset.url,caption:caption.value.trim(),alt_text:card.dataset.altText||undefined,attribution:card.dataset.attribution||undefined,attribution_url:card.dataset.attributionUrl||undefined,source_url:card.dataset.sourceUrl||undefined,provider:card.dataset.provider||undefined};});
+    const base=state.current||{};const photos=Array.from($('photosBox').querySelectorAll('.scenic-photo-item')).map(card=>{const caption=card.querySelector('input');return{id:card.dataset.photoId,url:card.dataset.url,caption:caption.value.trim(),alt_text:card.dataset.altText||undefined,attribution:card.dataset.attribution||undefined,attribution_url:card.dataset.attributionUrl||undefined,source_url:card.dataset.sourceUrl||undefined,provider:card.dataset.provider||undefined};});
     return Object.assign({},base,state.pendingCoordinates||{},{name:$('nameInput').value.trim(),category:$('categoryInput').value.trim(),address:$('addressInput').value.trim(),description:$('descriptionInput').value.trim(),photos});
   }
   async function save() {
@@ -115,18 +128,18 @@
     }catch(error){toast(error.message,'danger');}
   }
   async function uploadPhoto() {
-    if(!state.current)return;const file=$('photoFile').files[0];if(!file){toast('先选择 JPG 或 PNG 图片','danger');return;}const form=new FormData();form.append('file',file);form.append('caption',$('photoCaption').value.trim());
-    try{const data=await api('/scenic-spots/'+encodeURIComponent(state.current.id)+'/photos',{method:'POST',body:form});state.current=data.spot;if(data.photo)addPhotoCard(data.photo);$('detailMeta').textContent='内部 ID：'+state.current.id;$('photoFile').value='';$('photoCaption').value='';toast('图片已添加','success');}
+    if(!state.current)return;const file=$('photoFile').files[0];if(!file){toast('先选择 JPG 或 PNG 图片','danger');return;}const form=new FormData();form.append('file',file);form.append('caption',$('photosBox').querySelector('.scenic-photo-upload-caption').value.trim());
+    try{const data=await api('/scenic-spots/'+encodeURIComponent(state.current.id)+'/photos',{method:'POST',body:form});state.current=data.spot;$('detailMeta').textContent='内部 ID：'+state.current.id;clearPhotoPreview();renderPhotoCards(state.current.photos||[]);toast('图片已添加','success');}
     catch(error){toast(error.message,'danger');}
   }
   async function copySpotId() {
     const id=state.current&&state.current.id;if(!id)return;
-    try{if(navigator.clipboard&&navigator.clipboard.writeText){await navigator.clipboard.writeText(id);}else{const input=document.createElement('textarea');input.value=id;input.style.position='fixed';input.style.opacity='0';document.body.appendChild(input);input.select();const copied=document.execCommand('copy');input.remove();if(!copied)throw new Error('浏览器不支持复制');}toast('景点 ID 已复制','success');}
+    try{if(navigator.clipboard&&navigator.clipboard.writeText){await navigator.clipboard.writeText(id);}else{const input=document.createElement('textarea');input.value=id;input.style.position='fixed';input.style.opacity='0';document.body.appendChild(input);input.select();const copied=document.execCommand('copy');input.remove();if(!copied)throw new Error('浏览器不支持复制');}toast('ID 复制成功','success');}
     catch(error){toast('复制失败，请手动复制：'+id,'danger');}
   }
 
   $('searchBtn').addEventListener('click',loadList);$('searchInput').addEventListener('keydown',event=>{if(event.key==='Enter')loadList();});$('statusFilter').addEventListener('change',renderList);$('cityFilter').addEventListener('change',renderList);$('refreshStatsBtn').addEventListener('click',loadStats);
   $('newBtn').addEventListener('click',()=>{state.newSpot=true;fillForm({status:'draft',manual_edited:true});});$('closeDetailBtn').addEventListener('click',()=>$('detailModal').close());$('detailModal').addEventListener('click',event=>{if(event.target===$('detailModal'))$('detailModal').close();});
-  $('saveBtn').addEventListener('click',save);$('uploadPhotoBtn').addEventListener('click',uploadPhoto);$('copySpotIdBtn').addEventListener('click',copySpotId);$('chooseMapLocationBtn').addEventListener('click',()=>{if(state.map)setMapSelectionMode(!state.selectingMapLocation);});$('resetMapLocationBtn').addEventListener('click',resetMapLocation);
+  $('saveBtn').addEventListener('click',save);$('photoFile').addEventListener('change',updateUploadPhotoPreview);$('copySpotIdBtn').addEventListener('click',copySpotId);$('chooseMapLocationBtn').addEventListener('click',()=>{if(state.map)setMapSelectionMode(!state.selectingMapLocation);});$('resetMapLocationBtn').addEventListener('click',resetMapLocation);
   loadList();loadStats();syncProviderContent();
 })();
