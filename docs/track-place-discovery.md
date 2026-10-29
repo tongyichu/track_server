@@ -63,10 +63,9 @@
 | `TRACK_PLACE_AMAP_DAILY_BUDGET` | `0` | 高德每日请求上限；默认0表示不设日上限，正数表示按该值限制 |
 | `TRACK_PLACE_CACHE_HOURS` | `168` | 高德请求级缓存有效期，最大720小时；不再用于让成功的轨迹结果/共享景区资料到期重跑 |
 | `GOOGLE_PLACES_API_KEY` | 空 | Google Places API New 服务端 Key，不读取 Android SDK Key |
-| `TRACK_PLACE_GOOGLE_DAILY_BUDGET` | `20` | Google每日请求上限；正数按该值限制，0表示不设日上限 |
 | `TRACK_PLACE_GOOGLE_CACHE_HOURS` | `0` | 默认不持久化 Google地点内容，因而默认不运行该供应商查询；只有取得适用的暂存许可并显式配置有效期后启用，最大720小时 |
 
-Google标准 Places 权限不意味着可创建永久名称/坐标库；Place ID 可以长期保存，但其他内容应遵守适用授权。无 Key、无授权缓存配置或额度不足时，现有地图兜底可继续使用，不阻止服务启动。Key不下发客户端、不写进查询错误或日志。
+Google Places 查询不设应用侧每日预算或单轮请求数上限；真实配额和拒绝响应由 Google API 管理。Google 标准 Places 权限不意味着可创建永久名称/坐标库；Place ID 可以长期保存，但其他内容应遵守适用授权。无 Key、无授权缓存配置时，现有地图兜底可继续使用，不阻止服务启动。Key不下发客户端、不写进查询错误或日志。
 
 ## 人工验收方式
 

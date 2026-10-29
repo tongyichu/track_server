@@ -93,7 +93,7 @@ func (s *TrackPlaceService) cachedPlaceLookupWithOptions(ctx context.Context, pr
 			return cached, nil
 		}
 	}
-	if s.runCalls >= 10 {
+	if provider != "google" && s.runCalls >= 10 {
 		return nil, errPlaceBusy
 	}
 	owner := s.owner()
@@ -131,7 +131,7 @@ func (s *TrackPlaceService) cachedPlaceLookupWithOptions(ctx context.Context, pr
 	}
 	budget := s.cfg.AMapDailyBudget
 	if provider == "google" {
-		budget = s.cfg.GoogleDailyBudget
+		budget = 0
 	}
 	allowed, err := s.store.ReservePlaceAPICall(ctx, provider, time.Now().In(placeQuotaZone).Format("2006-01-02"), budget)
 	if err != nil {
@@ -332,7 +332,7 @@ func (s *TrackPlaceService) ScenicSpotDetails(ctx context.Context, spot *models.
 func (s *TrackPlaceService) reserveScenicCall(ctx context.Context, provider string) bool {
 	budget := s.cfg.AMapDailyBudget
 	if provider == "google" {
-		budget = s.cfg.GoogleDailyBudget
+		budget = 0
 	}
 	ok, err := s.store.ReservePlaceAPICall(ctx, provider, time.Now().In(placeQuotaZone).Format("2006-01-02"), budget)
 	return err == nil && ok

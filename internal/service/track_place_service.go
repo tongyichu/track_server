@@ -24,11 +24,11 @@ const trackPlaceEvidenceVersion = 1
 var placeQuotaZone = time.FixedZone("Asia/Shanghai", 8*60*60)
 
 type TrackPlaceConfig struct {
-	Enabled                            bool
-	AMapKey, GoogleKey                 string
-	AMapWebKey, AMapSecurityJSCode     string
-	AMapDailyBudget, GoogleDailyBudget int
-	CacheTTL, GoogleCacheTTL           time.Duration
+	Enabled                        bool
+	AMapKey, GoogleKey             string
+	AMapWebKey, AMapSecurityJSCode string
+	AMapDailyBudget                int
+	CacheTTL, GoogleCacheTTL       time.Duration
 }
 type TrackPlaceService struct {
 	cfg           TrackPlaceConfig
@@ -190,8 +190,8 @@ func (s *TrackPlaceService) RunOnce(ctx context.Context) (*TrackPlaceRunResult, 
 }
 
 // ResolveTracksForBackfill retries only the explicitly selected legacy tracks.
-// It shares the scanner's lock and provider limits so an admin action cannot
-// race the scheduled worker or exceed the per-run lookup cap.
+// It shares the scanner's lock and AMap limits so an admin action cannot race
+// the scheduled worker. Google lookups rely on Google API quotas.
 func (s *TrackPlaceService) ResolveTracksForBackfill(ctx context.Context, trackIDs []string) (*TrackPlaceRunResult, error) {
 	out := &TrackPlaceRunResult{}
 	if !s.Enabled() {

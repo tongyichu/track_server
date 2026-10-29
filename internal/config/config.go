@@ -110,18 +110,17 @@ type Config struct {
 	// - DANMAKU_RETENTION_DAYS：会话结束后弹幕保留天数（默认 7 天）；
 	// - TRACK_MAP_INDEX_CRON：轨迹地图索引任务的 cron 表达式（默认每 1 分钟）。
 	// - TRACK_ROUTE_GROUP_CRON：路线组离线聚合任务的 cron 表达式（默认每天 04:00）。
-	SchedulerEnabled            bool
-	DanmakuCleanupCron          string
-	DanmakuRetentionDays        int
-	TrackMapIndexCron           string
-	TrackRouteGroupCron         string
-	TrackPlaceEnabled           bool
-	TrackPlaceCron              string
-	TrackPlaceAMapDailyBudget   int
-	TrackPlaceGoogleDailyBudget int
-	TrackPlaceCacheHours        int
-	TrackPlaceGoogleCacheHours  int
-	GooglePlacesKey             string
+	SchedulerEnabled           bool
+	DanmakuCleanupCron         string
+	DanmakuRetentionDays       int
+	TrackMapIndexCron          string
+	TrackRouteGroupCron        string
+	TrackPlaceEnabled          bool
+	TrackPlaceCron             string
+	TrackPlaceAMapDailyBudget  int
+	TrackPlaceCacheHours       int
+	TrackPlaceGoogleCacheHours int
+	GooglePlacesKey            string
 
 	// 客户端埋点采集
 	// - ANALYTICS_ENABLED=false 时关闭 /api/v1/analytics/events；
@@ -184,7 +183,6 @@ func Load() *Config {
 		TrackPlaceEnabled:                getEnv("TRACK_PLACE_ENABLED", "true") == "true",
 		TrackPlaceCron:                   getEnv("TRACK_PLACE_CRON", "@every 1m"),
 		TrackPlaceAMapDailyBudget:        int(getEnvInt64("TRACK_PLACE_AMAP_DAILY_BUDGET", 0)),
-		TrackPlaceGoogleDailyBudget:      int(getEnvInt64("TRACK_PLACE_GOOGLE_DAILY_BUDGET", 20)),
 		TrackPlaceCacheHours:             int(getEnvInt64("TRACK_PLACE_CACHE_HOURS", 168)),
 		TrackPlaceGoogleCacheHours:       int(getEnvInt64("TRACK_PLACE_GOOGLE_CACHE_HOURS", 0)),
 		GooglePlacesKey:                  os.Getenv("GOOGLE_PLACES_API_KEY"),
