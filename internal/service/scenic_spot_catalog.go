@@ -966,6 +966,12 @@ func (s *ScenicSpotCatalogService) PublicSpotForTrack(ctx context.Context, track
 	return spot, nil
 }
 
+// The catalog's automatic/manual type does not gate client delivery. Only archived
+// and merged entries are hidden; draft/published are legacy workflow states.
+func scenicSpotClientVisible(spot *models.ScenicSpot) bool {
+	return spot != nil && spot.Status != models.ScenicSpotArchived && spot.Status != models.ScenicSpotMerged
+}
+
 func (s *ScenicSpotCatalogService) RefreshExpiredSources(ctx context.Context, trackID string) error {
 	if s.provider == nil {
 		return nil
@@ -1011,7 +1017,7 @@ func (s *ScenicSpotCatalogService) PrimarySpots(ctx context.Context, trackIDs []
 	}
 	for trackID, link := range links {
 		spot := spots[link.SpotID]
-		if spot == nil || spot.Status != models.ScenicSpotPublished {
+		if !scenicSpotClientVisible(spot) {
 			continue
 		}
 		item := &models.TrackPrimaryScenicSpot{ID: spot.ID, Name: spot.Name, Category: spot.Category, Description: spot.Description, Address: spot.Address, Sources: spot.Sources}

@@ -33,10 +33,12 @@ type ScenicSpotAdminStats struct {
 	ToDay                 string                    `json:"to_day"`
 	TotalSpots            int64                     `json:"total_spots"`
 	PublishedSpots        int64                     `json:"published_spots"`
+	ClientVisibleSpots    int64                     `json:"client_visible_spots"`
 	DraftSpots            int64                     `json:"draft_spots"`
 	ArchivedSpots         int64                     `json:"archived_spots"`
 	LinkedTracks          int64                     `json:"linked_tracks"`
 	PublishedLinkedTracks int64                     `json:"published_linked_tracks"`
+	ClientVisibleTracks   int64                     `json:"client_visible_linked_tracks"`
 	CallsToday            int64                     `json:"calls_today"`
 	Calls7Days            int64                     `json:"calls_7_days"`
 	Calls30Days           int64                     `json:"calls_30_days"`
@@ -158,6 +160,10 @@ func (s *ScenicSpotCatalogService) Statistics(ctx context.Context) (*ScenicSpotA
 		spotByID[spot.ID] = spot
 		count := linkCounts[spot.ID]
 		out.LinkedTracks += count
+		if scenicSpotClientVisible(spot) {
+			out.ClientVisibleSpots++
+			out.ClientVisibleTracks += count
+		}
 		if spot.Status == models.ScenicSpotPublished {
 			out.PublishedLinkedTracks += count
 		}

@@ -20,10 +20,10 @@
   async function loadStats() {
     try {
       const data=await api('/scenic-spots/statistics');$('statsPeriod').textContent=data.from_day+' 至 '+data.to_day;
-      $('statsPublished').textContent=(data.published_spots||0).toLocaleString()+' / '+(data.total_spots||0).toLocaleString();
-      $('statsPublishedNote').textContent='已发布 / 全部景点';
-      $('statsCoveredTracks').textContent=(data.published_linked_tracks||0).toLocaleString()+' / '+(data.linked_tracks||0).toLocaleString();
-      $('statsCoveredNote').textContent='发布景点覆盖轨迹 / 已关联轨迹';
+      $('statsPublished').textContent=(data.client_visible_spots||0).toLocaleString()+' / '+(data.total_spots||0).toLocaleString();
+      $('statsPublishedNote').textContent='客户端可见 / 全部景点';
+      $('statsCoveredTracks').textContent=(data.client_visible_linked_tracks||0).toLocaleString()+' / '+(data.linked_tracks||0).toLocaleString();
+      $('statsCoveredNote').textContent='可见景点覆盖轨迹 / 已关联轨迹';
       $('statsTodayCalls').textContent=(data.calls_today||0).toLocaleString();$('statsMonthCalls').textContent=(data.calls_30_days||0).toLocaleString();
       $('statsMonthNote').textContent='成功 '+(data.successes_30_days||0).toLocaleString()+' · 失败 '+(data.failures_30_days||0).toLocaleString();
       const daily=data.daily||[],max=Math.max(1,...daily.map(item=>item.requests||0)),bars=$('statsDailyBars');bars.replaceChildren();
