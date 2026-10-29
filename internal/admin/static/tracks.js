@@ -18,9 +18,6 @@
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
-  function fmtTime(s) {
-    return esc((s || '').replace('T', ' ').slice(0, 19));
-  }
   function statusText(s) {
     if (s === 0) return '已删除';
     if (s === 1) return '正常';
@@ -85,7 +82,7 @@
     }
     var resp = await fetch('/admin/api/tracks?' + params.toString());
     if (!resp.ok) {
-      tbody.innerHTML = '<tr><td colspan="9">加载失败: ' + resp.status + '</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8">加载失败: ' + resp.status + '</td></tr>';
       return;
     }
     var data = ((await resp.json()).data) || {};
@@ -107,7 +104,6 @@
         '<td>' + esc(typeNameByCode[it.track_type] || it.track_type || '') + '</td>' +
         '<td title="' + esc(it.city_code || '') + '">' + esc(cityNameByCode[it.city_code] || '未知城市') + '</td>' +
         '<td>' + esc(statusText(it.status)) + '</td>' +
-        '<td>' + fmtTime(it.start_time) + '</td>' +
         '<td><button class="js-edit-track" data-track-id="' + esc(it.id) + '">编辑</button></td>';
       tbody.appendChild(tr);
     });

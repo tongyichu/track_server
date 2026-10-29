@@ -360,7 +360,7 @@ func (h *Handler) ListScenicSpotTracks(ctx context.Context, c *app.RequestContex
 		if user := users[item.UserID]; user != nil && strings.TrimSpace(user.Nickname) != "" {
 			userName = user.Nickname
 		}
-		listItems = append(listItems, utils.H{"track_id": item.ID, "id": item.ID, "user_name": userName, "title": item.Title, "preview_images": item.PreviewImages, "track_type": item.TrackType, "city_code": item.CityCode, "status": item.Status, "start_time": item.StartTime})
+		listItems = append(listItems, utils.H{"track_id": item.ID, "id": item.ID, "user_name": userName, "title": item.Title, "preview_images": item.PreviewImages, "track_type": item.TrackType, "city_code": item.CityCode, "status": item.Status})
 	}
 	next := ""
 	if len(links) > 0 {
