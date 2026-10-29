@@ -293,6 +293,16 @@ func (s *ScenicSpotCatalogService) persistProviderContentSync(ctx context.Contex
 func (s *ScenicSpotCatalogService) Get(ctx context.Context, id string) (*models.ScenicSpot, error) {
 	return s.spots.GetScenicSpot(ctx, id)
 }
+func (s *ScenicSpotCatalogService) StaticMap(ctx context.Context, id string) ([]byte, string, error) {
+	spot, err := s.Get(ctx, id)
+	if err != nil {
+		return nil, "", err
+	}
+	if s.provider == nil || spot.Latitude == 0 || spot.Longitude == 0 {
+		return nil, "", repository.ErrNotFound
+	}
+	return s.provider.ScenicSpotStaticMap(ctx, spot.ID, spot.Latitude, spot.Longitude, spot.CoordinateSystem)
+}
 func (s *ScenicSpotCatalogService) Create(ctx context.Context, operator string, v *models.ScenicSpot) (*models.ScenicSpot, error) {
 	if err := validateScenicSpot(v); err != nil {
 		return nil, err

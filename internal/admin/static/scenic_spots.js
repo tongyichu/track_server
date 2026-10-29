@@ -70,13 +70,13 @@
     state.current=spot;$('detailModal').showModal();$('detailTitle').textContent=state.newSpot?'新建景点':(spot.name||'待补充名称');
     $('detailMeta').textContent=spot.id?'内部 ID：'+spot.id:'保存后生成内部景点 ID';setModeBadge(spot);
     $('nameInput').value=spot.name||'';$('categoryInput').value=spot.category||'';$('addressInput').value=spot.address||'';$('descriptionInput').value=spot.description||'';
-    const cities=spotCities(spot);$('cityInfo').textContent='城市：'+(cities.length?cities.join('、'):'暂无');
-    const lat=Number(spot.latitude),lng=Number(spot.longitude),hasCoordinates=Number.isFinite(lat)&&Number.isFinite(lng)&&lat!==0&&lng!==0;$('coordinateInfo').hidden=!hasCoordinates;$('coordinateInfo').textContent=hasCoordinates?'坐标（'+(spot.coordinate_system||'未知坐标系')+'）：'+lat.toFixed(6)+'，'+lng.toFixed(6):'';$('coordinateMap').hidden=!hasCoordinates;
-    if(hasCoordinates){const center=toWGS84(lat,lng,spot.coordinate_system);const delta=0.008;const bbox=[center.lng-delta,center.lat-delta,center.lng+delta,center.lat+delta].join('%2C');$('coordinateMapFrame').src='https://www.openstreetmap.org/export/embed.html?bbox='+bbox+'&layer=mapnik&marker='+center.lat.toFixed(6)+'%2C'+center.lng.toFixed(6);}else{$('coordinateMapFrame').removeAttribute('src');}$('copySpotIdBtn').disabled=!spot.id;
+    const cities=spotCities(spot);$('cityInfo').textContent=cities.length?cities.join('、'):'暂无';
+    const lat=Number(spot.latitude),lng=Number(spot.longitude),hasCoordinates=Number.isFinite(lat)&&Number.isFinite(lng)&&lat!==0&&lng!==0;$('coordinateInfo').hidden=!hasCoordinates;$('coordinateInfo').textContent=hasCoordinates?'坐标（'+(spot.coordinate_system||'未知坐标系')+'）：'+lat.toFixed(6)+'，'+lng.toFixed(6):'';$('coordinateMap').hidden=!hasCoordinates;$('coordinateMapError').hidden=true;$('coordinateMapImage').hidden=!hasCoordinates;
+    if(hasCoordinates&&spot.id){$('coordinateMapImage').src='/admin/api/scenic-spots/'+encodeURIComponent(spot.id)+'/map?v='+encodeURIComponent(spot.version||'');}else{$('coordinateMapImage').removeAttribute('src');}$('copySpotIdBtn').disabled=!spot.id;
     $('providerNameHint').textContent='';$('providerCategoryHint').textContent='';$('providerAddressHint').textContent='';$('providerDescriptionHint').textContent='';$('photosBox').replaceChildren();(spot.photos||[]).forEach(addPhotoCard);
     $('uploadPhotoBtn').disabled=state.newSpot;
   }
-  function toWGS84(lat,lng,system){if(system!=='GCJ02')return{lat,lng};const inside=lng>=72.004&&lng<=137.8347&&lat>=0.8293&&lat<=55.8271;if(!inside)return{lat,lng};let outLat=lat,outLng=lng;for(let i=0;i<3;i++){const x=outLng-105,y=outLat-35;let a=-100+2*x+3*y+.2*y*y+.1*x*y+.2*Math.sqrt(Math.abs(x));a+=(20*Math.sin(6*x*Math.PI)+20*Math.sin(2*x*Math.PI))*2/3;a+=(20*Math.sin(y*Math.PI)+40*Math.sin(y/3*Math.PI))*2/3;a+=(160*Math.sin(y/12*Math.PI)+320*Math.sin(y*Math.PI/30))*2/3;let b=300+x+2*y+.1*x*x+.1*x*y+.1*Math.sqrt(Math.abs(x));b+=(20*Math.sin(6*x*Math.PI)+20*Math.sin(2*x*Math.PI))*2/3;b+=(20*Math.sin(x*Math.PI)+40*Math.sin(x/3*Math.PI))*2/3;b+=(150*Math.sin(x/12*Math.PI)+300*Math.sin(x/30*Math.PI))*2/3;const rad=outLat/180*Math.PI,magic=1-.00669342162296594323*Math.sin(rad)**2,root=Math.sqrt(magic);const dLat=a*180/((6378245*(1-.00669342162296594323))/(magic*root)*Math.PI),dLng=b*180/(6378245/root*Math.cos(rad)*Math.PI);outLat=lat-dLat;outLng=lng-dLng;}return{lat:outLat,lng:outLng};}
+  $('coordinateMapImage').addEventListener('error',()=>{$('coordinateMapImage').hidden=true;$('coordinateMapError').hidden=false;});
   async function loadSpot(id) {
     try{const spot=await api('/scenic-spots/'+encodeURIComponent(id));state.newSpot=false;fillForm(spot);document.querySelectorAll('.scenic-row').forEach(row=>row.classList.toggle('active',row.dataset.spotId===id));renderList();}
     catch(error){toast(error.message,'danger');}
@@ -103,7 +103,7 @@
   }
   async function save() {
     try{const body=currentPayload();let spot;if(state.newSpot){spot=await api('/scenic-spots',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});}else{spot=await api('/scenic-spots/'+encodeURIComponent(state.current.id),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({expected_version:state.current.version,spot:body})});}
-      state.newSpot=false;fillForm(spot);await Promise.all([loadList(),loadStats()]);toast('景点已保存','success');
+      state.newSpot=false;fillForm(spot);$('saveHint').hidden=false;window.clearTimeout(state.saveHintTimer);state.saveHintTimer=window.setTimeout(()=>$('saveHint').hidden=true,2400);await Promise.all([loadList(),loadStats()]);
     }catch(error){toast(error.message,'danger');}
   }
   async function uploadPhoto() {

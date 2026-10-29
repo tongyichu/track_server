@@ -166,6 +166,18 @@ func (h *Handler) GetScenicSpot(ctx context.Context, c *app.RequestContext) {
 	h.enrichScenicSpotCities(ctx, []*models.ScenicSpot{v})
 	c.JSON(http.StatusOK, utils.H{"code": 0, "data": v})
 }
+func (h *Handler) GetScenicSpotMap(ctx context.Context, c *app.RequestContext) {
+	if !h.scenicSpotServiceReady(c) {
+		return
+	}
+	data, contentType, err := h.scenicSpotSvc.StaticMap(ctx, c.Param("spot_id"))
+	if err != nil {
+		h.scenicSpotServiceError(c, err)
+		return
+	}
+	c.Response.Header.Set("Cache-Control", "private, max-age=3600")
+	c.Data(http.StatusOK, contentType, data)
+}
 func (h *Handler) CreateScenicSpot(ctx context.Context, c *app.RequestContext) {
 	if !h.scenicSpotServiceReady(c) {
 		return

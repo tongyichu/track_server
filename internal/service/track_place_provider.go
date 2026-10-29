@@ -449,6 +449,48 @@ func validProviderCoordinate(lat, lng float64) bool {
 	return lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180 && lat != 0 && lng != 0
 }
 
+// ScenicSpotStaticMap returns a small authenticated proxy image so the admin
+// page does not depend on third-party iframe availability or expose map keys.
+func (s *TrackPlaceService) ScenicSpotStaticMap(ctx context.Context, spotID string, lat, lng float64, coordinateSystem string) ([]byte, string, error) {
+	if s == nil || s.cfg.AMapKey == "" || s.client == nil || !validProviderCoordinate(lat, lng) {
+		return nil, "", errors.New("scenic spot map unavailable")
+	}
+	point, err := mapPointToGCJ02(models.TrackPoint{Latitude: lat, Longitude: lng}, coordinateSystem)
+	if err != nil {
+		return nil, "", errors.New("scenic spot map unavailable")
+	}
+	if s.store != nil && !s.reserveScenicCall(ctx, "amap") {
+		return nil, "", errors.New("scenic spot map unavailable")
+	}
+	location := fmt.Sprintf("%.6f,%.6f", point.Longitude, point.Latitude)
+	q := url.Values{
+		"key":      {s.cfg.AMapKey},
+		"location": {location},
+		"zoom":     {"15"},
+		"size":     {"640*220"},
+		"markers":  {"mid,0xE55353,A:" + location},
+	}
+	req, _ := http.NewRequest(http.MethodGet, "https://restapi.amap.com/v3/staticmap?"+q.Encode(), nil)
+	resp, err := s.client.Do(req.WithContext(ctx))
+	if err != nil {
+		s.recordScenicProviderCall(ctx, spotID, "amap", "static_map", false)
+		return nil, "", errors.New("scenic spot map unavailable")
+	}
+	defer resp.Body.Close()
+	contentType := strings.ToLower(strings.TrimSpace(strings.Split(resp.Header.Get("Content-Type"), ";")[0]))
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices || (contentType != "image/png" && contentType != "image/jpeg") {
+		s.recordScenicProviderCall(ctx, spotID, "amap", "static_map", false)
+		return nil, "", errors.New("scenic spot map unavailable")
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+	if err != nil || len(body) == 0 {
+		s.recordScenicProviderCall(ctx, spotID, "amap", "static_map", false)
+		return nil, "", errors.New("scenic spot map unavailable")
+	}
+	s.recordScenicProviderCall(ctx, spotID, "amap", "static_map", true)
+	return body, contentType, nil
+}
+
 func (s *TrackPlaceService) VerifyScenicSpotSource(ctx context.Context, spotID, provider, providerID string) error {
 	if !s.Enabled() || strings.TrimSpace(providerID) == "" {
 		return errors.New("place provider unavailable")
