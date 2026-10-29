@@ -116,7 +116,7 @@
       const footer = root.querySelector('.modal-footer');
       const cancel = document.createElement('button');
       cancel.type = 'button';
-      cancel.className = 'btn btn-outline-secondary';
+      cancel.className = options.cancelDanger ? 'btn btn-outline-danger' : 'btn btn-outline-secondary';
       cancel.textContent = options.cancelText || '取消';
       const submit = document.createElement('button');
       submit.type = 'submit';
@@ -131,7 +131,18 @@
         resolve(value);
         modal.hide();
       }
-      cancel.addEventListener('click', function () { finish(null); });
+      cancel.addEventListener('click', async function () {
+        if (typeof options.onCancel !== 'function') { finish(null); return; }
+        cancel.disabled = true;
+        try {
+          const action = await options.onCancel();
+          if (action) finish({ _action: action });
+        } catch (error) {
+          window.AdminUI.alert(error.message || String(error), 'danger');
+        } finally {
+          cancel.disabled = false;
+        }
+      });
       root.querySelector('.btn-close').addEventListener('click', function () { finish(null); });
       form.addEventListener('submit', function (event) {
         event.preventDefault();

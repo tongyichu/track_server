@@ -326,17 +326,47 @@ func (h *Handler) ListScenicSpotTracks(ctx context.Context, c *app.RequestContex
 		h.scenicSpotServiceError(c, err)
 		return
 	}
-	items := make([]utils.H, 0, len(links))
+	items := make([]*models.Track, 0, len(links))
 	for _, link := range links {
 		if t := tracks[link.TrackID]; t != nil {
-			items = append(items, utils.H{"track_id": link.TrackID, "title": t.Title, "city_code": t.CityCode, "start_time": t.StartTime, "origin": link.Origin, "confidence": link.Confidence})
+			items = append(items, t)
 		}
+	}
+	h.decorateAdminTrackAssetURLs(ctx, items)
+	userIDs := make([]int64, 0, len(items))
+	seenUsers := make(map[int64]struct{}, len(items))
+	for _, item := range items {
+		if item == nil || item.UserID <= 0 {
+			continue
+		}
+		if _, ok := seenUsers[item.UserID]; ok {
+			continue
+		}
+		seenUsers[item.UserID] = struct{}{}
+		userIDs = append(userIDs, item.UserID)
+	}
+	users := map[int64]*models.User{}
+	if h.userRepo != nil && len(userIDs) > 0 {
+		if found, findErr := h.userRepo.FindByIDs(ctx, userIDs); findErr == nil && found != nil {
+			users = found
+		}
+	}
+	listItems := make([]utils.H, 0, len(items))
+	for _, item := range items {
+		if item == nil {
+			continue
+		}
+		userName := "未知用户"
+		if user := users[item.UserID]; user != nil && strings.TrimSpace(user.Nickname) != "" {
+			userName = user.Nickname
+		}
+		listItems = append(listItems, utils.H{"track_id": item.ID, "id": item.ID, "user_name": userName, "title": item.Title, "preview_images": item.PreviewImages, "track_type": item.TrackType, "city_code": item.CityCode, "status": item.Status, "start_time": item.StartTime})
 	}
 	next := ""
 	if len(links) > 0 {
 		next = links[len(links)-1].TrackID
 	}
-	c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"items": items, "next_cursor": next, "has_more": len(links) == parseAdminListLimit(string(c.Query("limit")))}})
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"items": listItems, "next_cursor": next, "has_more": len(links) == parseAdminListLimit(string(c.Query("limit")))}})
 }
 func (h *Handler) AssignScenicSpotTrack(ctx context.Context, c *app.RequestContext) {
 	if !h.scenicSpotServiceReady(c) {
