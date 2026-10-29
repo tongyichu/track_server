@@ -655,8 +655,8 @@ type ScenicSpotBackfillResult struct {
 	HasMore              bool   `json:"has_more"`
 }
 
-// BackfillLegacy materializes the existing primary-place decisions as internal
-// draft spots and track links. It never publishes imported provider-derived names.
+// BackfillLegacy materializes existing primary-place decisions as internal draft
+// spots and links, reusing names already present in the cached place match.
 func (s *ScenicSpotCatalogService) BackfillLegacy(ctx context.Context, cursor *models.TrackListCursor, limit int) (*ScenicSpotBackfillResult, error) {
 	if s.tracks == nil || s.places == nil {
 		return nil, errors.New("legacy place data unavailable")
@@ -673,10 +673,10 @@ func (s *ScenicSpotCatalogService) BackfillLegacy(ctx context.Context, cursor *m
 	if hasMore {
 		tracks = tracks[:limit]
 	}
-	existingLinks := make(map[string]bool, len(tracks))
+	existingLinks := make(map[string]*models.TrackScenicSpotLink, len(tracks))
 	for _, track := range tracks {
-		if _, e := s.spots.GetTrackScenicSpotLink(ctx, track.ID); e == nil {
-			existingLinks[track.ID] = true
+		if link, e := s.spots.GetTrackScenicSpotLink(ctx, track.ID); e == nil {
+			existingLinks[track.ID] = link
 		}
 	}
 	// Resolve only tracks that have no usable legacy provider ID. The provider
@@ -684,7 +684,7 @@ func (s *ScenicSpotCatalogService) BackfillLegacy(ctx context.Context, cursor *m
 	if s.provider != nil {
 		var resolveIDs []string
 		for _, track := range tracks {
-			if existingLinks[track.ID] {
+			if existingLinks[track.ID] != nil {
 				continue
 			}
 			if !s.hasLegacyProviderID(ctx, track.ID) {
@@ -713,8 +713,14 @@ func (s *ScenicSpotCatalogService) BackfillLegacy(ctx context.Context, cursor *m
 		out.Scanned++
 		out.NextStartTime = track.StartTime.Format(time.RFC3339Nano)
 		out.NextTrackID = track.ID
-		if _, e := s.spots.GetTrackScenicSpotLink(ctx, track.ID); e == nil {
-			if existingLinks[track.ID] {
+		if link := existingLinks[track.ID]; link != nil {
+			if e := s.backfillLegacySpotName(ctx, track.ID, link); e != nil {
+				return nil, e
+			}
+			out.Skipped++
+			continue
+		} else if _, e := s.spots.GetTrackScenicSpotLink(ctx, track.ID); e == nil {
+			if existingLinks[track.ID] != nil {
 				out.Skipped++
 			} else {
 				out.Linked++
@@ -756,9 +762,7 @@ func (s *ScenicSpotCatalogService) BackfillLegacy(ctx context.Context, cursor *m
 				expired := time.Now().Add(-time.Second)
 				source.RefreshAfter = &expired
 			}
-			// Backfill only the provider identifier. Provider-derived names,
-			// coordinates, descriptions and photos are not copied into the catalog.
-			spot = &models.ScenicSpot{ID: newScenicID("SCP-"), Sources: []models.ScenicSpotSource{source}, Status: models.ScenicSpotDraft, Version: 1, CreatedAt: time.Now(), UpdatedAt: time.Now(), CreatedBy: "backfill", UpdatedBy: "backfill"}
+			spot = &models.ScenicSpot{ID: newScenicID("SCP-"), Name: strings.TrimSpace(place.Name), Sources: []models.ScenicSpotSource{source}, Status: models.ScenicSpotDraft, Version: 1, CreatedAt: time.Now(), UpdatedAt: time.Now(), CreatedBy: "backfill", UpdatedBy: "backfill"}
 			if e = s.spots.CreateScenicSpot(ctx, spot); e != nil {
 				if !errors.Is(e, repository.ErrAlreadyExists) {
 					return nil, e
@@ -767,6 +771,9 @@ func (s *ScenicSpotCatalogService) BackfillLegacy(ctx context.Context, cursor *m
 			}
 		}
 		if e != nil {
+			return nil, e
+		}
+		if e := s.restoreScenicSpotNameFromPlace(ctx, spot, &place); e != nil {
 			return nil, e
 		}
 		link := &models.TrackScenicSpotLink{TrackID: track.ID, SpotID: spot.ID, Origin: "backfill", Provider: place.Provider, Confidence: 1, UpdatedAt: time.Now(), UpdatedBy: "backfill"}
@@ -786,6 +793,75 @@ func (s *ScenicSpotCatalogService) BackfillLegacy(ctx context.Context, cursor *m
 		out.NextTrackID = tracks[len(tracks)-1].ID
 	}
 	return out, nil
+}
+
+func (s *ScenicSpotCatalogService) backfillLegacySpotName(ctx context.Context, trackID string, link *models.TrackScenicSpotLink) error {
+	if link == nil {
+		return nil
+	}
+	spot, err := s.spots.GetScenicSpot(ctx, link.SpotID)
+	if err != nil || spot == nil || strings.TrimSpace(spot.Name) != "" || spot.ManualEdited {
+		return err
+	}
+	records, err := s.places.GetPlaceRecords(ctx, []string{"match:" + trackID})
+	if err != nil {
+		return err
+	}
+	matchRecord := records["match:"+trackID]
+	if matchRecord == nil {
+		return nil
+	}
+	var match models.TrackPlaceMatch
+	if json.Unmarshal([]byte(matchRecord.Data), &match) != nil || match.Status != "matched" || match.PrimaryPlaceID == "" {
+		return nil
+	}
+	placeKey := "place:" + match.PrimaryPlaceID
+	placeRecords, err := s.places.GetPlaceRecords(ctx, []string{placeKey})
+	if err != nil {
+		return err
+	}
+	placeRecord := placeRecords[placeKey]
+	if placeRecord == nil {
+		return nil
+	}
+	var place models.TrackPlace
+	if json.Unmarshal([]byte(placeRecord.Data), &place) != nil || strings.TrimSpace(place.Name) == "" || place.ProviderID == "" {
+		return nil
+	}
+	if link.Provider != "" && link.Provider != place.Provider {
+		return nil
+	}
+	return s.restoreScenicSpotNameFromPlace(ctx, spot, &place)
+}
+
+func (s *ScenicSpotCatalogService) restoreScenicSpotNameFromPlace(ctx context.Context, spot *models.ScenicSpot, place *models.TrackPlace) error {
+	if spot == nil || place == nil || strings.TrimSpace(spot.Name) != "" || spot.ManualEdited || strings.TrimSpace(place.Name) == "" {
+		return nil
+	}
+	sourceMatches := false
+	for _, source := range spot.Sources {
+		if source.Provider == place.Provider && source.ProviderID == place.ProviderID && source.Status != "disabled" {
+			sourceMatches = true
+			break
+		}
+	}
+	if !sourceMatches {
+		return nil
+	}
+	before := *spot
+	expected := spot.Version
+	spot.Name = strings.TrimSpace(place.Name)
+	spot.Version++
+	spot.UpdatedAt = time.Now()
+	spot.UpdatedBy = "backfill"
+	if err := s.spots.UpdateScenicSpot(ctx, spot, expected); err != nil {
+		if errors.Is(err, repository.ErrConflict) {
+			return nil
+		}
+		return err
+	}
+	s.audit(ctx, spot.ID, "backfill_name", "backfill", "cached provider match name restored", &before, spot)
+	return nil
 }
 
 func (s *ScenicSpotCatalogService) hasLegacyProviderID(ctx context.Context, trackID string) bool {

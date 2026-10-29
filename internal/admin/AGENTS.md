@@ -269,7 +269,7 @@ GET /admin/api/users
   → POST /admin/api/scenic-spots/:spot_id/photos 上传后台自有图片
   → /admin/api/scenic-spots/:spot_id/tracks 搜索、关联或解除轨迹
   → POST /admin/api/scenic-spots/:spot_id/merge|split 合并目录或拆分轨迹归属
-  → POST /admin/api/scenic-spots/backfill 分页将存量轨迹迁移到内部 SCP ID 草稿；缺少可用来源 ID 时按地图服务配置执行有预算的真实查询
+  → POST /admin/api/scenic-spots/backfill 分页将存量轨迹迁移到内部 SCP ID 草稿，并复用已有主景区匹配缓存中的名称；遇到已关联但名称为空的草稿时尝试恢复该名称。缺少可用来源 ID 时按地图服务配置执行有预算的真实查询
        → ScenicSpotCatalogService + ScenicSpotRepository (MySQL / Mongo / memory)
        → track_scenic_spot_links 关联轨迹，scenic_spot_audit_logs 记录运营操作
        → scenic_spot_provider_usage 只累计景点/provider/日期/操作的请求成功失败计数；同步后的供应商文字与图片引用保存在 scenic_spots 的资料和 photos 数组中

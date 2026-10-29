@@ -11,7 +11,7 @@
   }
   function toast(message, tone) { if (window.AdminUI) window.AdminUI.alert(message, tone); else window.alert(message); }
   function textCell(value) { const node=document.createElement('div');node.textContent=value||'—';return node; }
-  function isManual(spot) { return !!spot.manual_edited || (spot.provider_data_status!=='synced'&&!!(spot.name||spot.category||spot.address||spot.description||(spot.photos||[]).length)); }
+  function isManual(spot) { if(spot.manual_edited)return true;if((spot.sources||[]).some(source=>source&&source.status==='active'&&source.provider_id))return false;return spot.provider_data_status!=='synced'&&!!(spot.name||spot.category||spot.address||spot.description||(spot.photos||[]).length); }
   function modeLabel(spot) { return isManual(spot) ? '人工' : '自动'; }
   function setModeBadge(spot) { const badge=$('detailMode');badge.textContent=modeLabel(spot);badge.className='scenic-mode '+(isManual(spot)?'manual':'automatic'); }
   function photoURL(url) { return (url||'').startsWith('/api/v1/static/')?url.replace('/api/v1/static/','/admin/api/static/'):url; }
