@@ -357,10 +357,17 @@ func (h *Handler) ListScenicSpotTracks(ctx context.Context, c *app.RequestContex
 			continue
 		}
 		userName := "未知用户"
-		if user := users[item.UserID]; user != nil && strings.TrimSpace(user.Nickname) != "" {
-			userName = user.Nickname
+		avatarURL := ""
+		if user := users[item.UserID]; user != nil {
+			if strings.TrimSpace(user.Nickname) != "" {
+				userName = user.Nickname
+			}
+			if h.userSvc != nil {
+				h.userSvc.DecorateAvatar(ctx, user)
+			}
+			avatarURL = rewriteAdminStaticURL(user.AvatarURL)
 		}
-		listItems = append(listItems, utils.H{"track_id": item.ID, "id": item.ID, "user_name": userName, "title": item.Title, "preview_images": item.PreviewImages, "track_type": item.TrackType, "city_code": item.CityCode, "status": item.Status})
+		listItems = append(listItems, utils.H{"track_id": item.ID, "id": item.ID, "user_name": userName, "avatar_url": avatarURL, "title": item.Title, "preview_images": item.PreviewImages, "track_type": item.TrackType, "city_code": item.CityCode, "status": item.Status})
 	}
 	next := ""
 	if len(links) > 0 {

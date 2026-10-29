@@ -446,6 +446,38 @@ func (r *MongoTrackRepository) ListAdminTracksByTitle(ctx context.Context, title
 	return items, total, err
 }
 
+func (r *MongoTrackRepository) ListAdminTracks(ctx context.Context, filter AdminTrackListFilter, cursor *models.TrackListCursor, limit int) ([]*models.Track, int64, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	query := bson.M{"status": bson.M{"$ne": models.TrackStatusDeleted}}
+	if filter.Title != "" {
+		query["title"] = primitive.Regex{Pattern: regexp.QuoteMeta(filter.Title), Options: "i"}
+	}
+	if filter.CityCode != "" {
+		query["city_code"] = filter.CityCode
+	}
+	if filter.Status != nil {
+		query["status"] = *filter.Status
+	}
+	if filter.UserIDs != nil {
+		if len(filter.UserIDs) == 0 {
+			return []*models.Track{}, 0, nil
+		}
+		query["user_id"] = bson.M{"$in": filter.UserIDs}
+	}
+	var total int64
+	total, err := r.collection.CountDocuments(ctx, query)
+	if err != nil {
+		return nil, 0, err
+	}
+	if cursor != nil && !cursor.StartTime.IsZero() {
+		query["$or"] = []bson.M{{"start_time": bson.M{"$lt": cursor.StartTime}}, {"start_time": cursor.StartTime, "id": bson.M{"$lt": cursor.ID}}}
+	}
+	items, err := r.listTracks(ctx, query, options.Find().SetSort(bson.D{{Key: "start_time", Value: -1}, {Key: "id", Value: -1}}).SetLimit(int64(limit)))
+	return items, total, err
+}
+
 func adminMongoTrackUploadFilter(start, end time.Time) bson.M {
 	return bson.M{
 		"created_at":    bson.M{"$gte": start, "$lt": end},

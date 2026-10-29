@@ -19,9 +19,9 @@
 - 审核用户轨迹投稿，查看结构化路线资料和经本地缓存改写的投稿图片，按 revision 通过或驳回。
 - 管理后台内置静态资源响应支持 gzip 与 ETag 重新验证；HTML 使用 no-cache，其他嵌入资源需重新验证后复用浏览器缓存。工作台先展示 API 返回的核心数字，再异步加载 ECharts 绘制图表。
 - 投稿审核页顶部展示当前待审核与超时队列，以及本月通过、驳回、通过率和平均审核时长；复用 `/admin/api/dashboard?period=month` 的只读统计。
-- 查看、修正和删除用户轨迹；列表展示轨迹图、用户名、标题、类型、城市和状态，并支持标题模糊搜索。列表不单独放删除按钮；编辑轨迹使用共享 `static/track_editor.js` 表单，底部删除动作需二次确认，删除为软删除并同步清理关联数据。
+- 查看、修正和删除用户轨迹；列表按 ID、城市、标题、运动类型、用户名、轨迹图、状态和操作展示，支持标题及用户名模糊搜索、城市和状态筛选，并保留游标分页。用户名同时展示头像；景点详情中的相关轨迹列表复用相同列顺序。列表不单独放删除按钮；编辑轨迹使用共享 `static/track_editor.js` 表单，底部删除动作需二次确认，删除为软删除并同步清理关联数据。
 - 反馈与纠错页默认筛选待处理，展示状态统计、反馈用户名称和完整内容；点击查看会在弹窗中加载详情并处理反馈。`static/feedback_correction.js` 优先读取服务端 `correction` 快照，旧记录兼容完整的六种中英文纠错正文；不识别的内容仍按普通反馈显示，不改写原始正文。页面「纠错选项」可新增、改名、排序、启停，由 API 下发客户端。
-- 用户管理按昵称、同行管理按会话标题、轨迹管理按轨迹标题提供服务端模糊搜索，保留游标分页。
+- 用户管理按昵称、同行管理按会话标题、轨迹管理按标题和用户名提供服务端模糊搜索；轨迹列表还支持城市和状态筛选，均保留游标分页。
 
 模块对外只暴露 `admin.NewModule(...)` 与 `Module.RegisterRoutes(h)`，不被业务 handler 引用。
 
@@ -99,7 +99,7 @@ internal/admin/
 | POST | `/admin/api/users/:user_id/restrictions` | 鉴权 | 创建账号限制；`expires_at` 为空表示永久，操作人取 admin session 用户名 |
 | DELETE | `/admin/api/users/:user_id/restrictions/current` | 鉴权 | 解除当前账号限制 |
 | GET | `/admin/api/companions` | 鉴权 | 同行会话列表，支持 `title` 模糊搜索及 cursor 翻页 |
-| GET | `/admin/api/tracks` | 鉴权 | 轨迹列表，支持 `title` 模糊搜索及 cursor 翻页 |
+| GET | `/admin/api/tracks` | 鉴权 | 轨迹列表，支持 `title` / `user_name` 模糊搜索、`city_code` / `status` 筛选及 cursor 翻页 |
 | GET | `/admin/api/cities` | 鉴权 | 返回内置城市/省份 Code 与名称，供轨迹城市选择器使用 |
 | GET | `/admin/api/tracks/:track_id` | 鉴权 | 返回轨迹详情用于后台编辑 |
 | PUT | `/admin/api/tracks/:track_id` | 鉴权 | 更新轨迹业务字段（不改 ID、轨迹点与创建/更新时间）；城市/类型更新已有地图索引，状态/进行状态/原始文件变化时清理并按可索引条件重新排队 |

@@ -98,6 +98,18 @@ type AdminTrackTitleSearchRepository interface {
 	ListAdminTracksByTitle(ctx context.Context, title string, cursor *models.TrackListCursor, limit int) ([]*models.Track, int64, error)
 }
 
+// AdminTrackListFilterRepository provides the combined server-side filters used by the admin track list.
+type AdminTrackListFilterRepository interface {
+	ListAdminTracks(ctx context.Context, filter AdminTrackListFilter, cursor *models.TrackListCursor, limit int) ([]*models.Track, int64, error)
+}
+
+type AdminTrackListFilter struct {
+	Title    string
+	CityCode string
+	Status   *models.TrackStatus
+	UserIDs  []int64
+}
+
 // AdminUserTitleSearchRepository searches users by their display name (nickname).
 type AdminUserTitleSearchRepository interface {
 	ListAdminUsersByTitle(ctx context.Context, title string, cursor *models.UserListCursor, limit int) ([]*models.User, int64, error)

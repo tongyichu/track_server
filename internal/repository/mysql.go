@@ -2195,6 +2195,76 @@ func (r *MySQLTrackRepository) ListAdminTracksByTitle(ctx context.Context, title
 	return items, total, nil
 }
 
+func (r *MySQLTrackRepository) ListAdminTracks(ctx context.Context, filter AdminTrackListFilter, cursor *models.TrackListCursor, limit int) ([]*models.Track, int64, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	base := `FROM track_records WHERE deleted_at IS NULL AND status <> ?`
+	args := []any{models.TrackStatusDeleted}
+	if filter.Title != "" {
+		base += ` AND title LIKE ? ESCAPE '!'`
+		args = append(args, "%"+escapeAdminLike(filter.Title)+"%")
+	}
+	if filter.CityCode != "" {
+		base += ` AND city_code = ?`
+		args = append(args, filter.CityCode)
+	}
+	if filter.Status != nil {
+		base += ` AND status = ?`
+		args = append(args, *filter.Status)
+	}
+	if filter.UserIDs != nil {
+		if len(filter.UserIDs) == 0 {
+			return []*models.Track{}, 0, nil
+		}
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(filter.UserIDs)), ",")
+		base += ` AND user_id IN (` + placeholders + `)`
+		for _, id := range filter.UserIDs {
+			args = append(args, id)
+		}
+	}
+	var total int64
+	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) `+base, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	query := `SELECT id ` + base
+	queryArgs := append([]any(nil), args...)
+	if cursor != nil && !cursor.StartTime.IsZero() {
+		query += ` AND (start_time < ? OR (start_time = ? AND id < ?))`
+		queryArgs = append(queryArgs, cursor.StartTime, cursor.StartTime, cursor.ID)
+	}
+	query += ` ORDER BY start_time DESC, id DESC LIMIT ?`
+	queryArgs = append(queryArgs, limit)
+	rows, err := r.db.QueryContext(ctx, query, queryArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	ids := make([]string, 0, limit)
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, 0, err
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	items := make([]*models.Track, 0, len(ids))
+	for _, id := range ids {
+		item, err := r.FindByID(ctx, id)
+		if err != nil {
+			if errors.Is(err, ErrNotFound) {
+				continue
+			}
+			return nil, 0, err
+		}
+		items = append(items, item)
+	}
+	return items, total, nil
+}
+
 func (r *MySQLTrackRepository) CountAdminUploadsBetween(ctx context.Context, start, end time.Time) (int64, error) {
 	row := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM track_records
 		WHERE created_at >= ? AND created_at < ? AND deleted_at IS NULL AND status <> ?

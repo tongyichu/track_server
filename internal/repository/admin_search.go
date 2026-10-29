@@ -8,6 +8,55 @@ import (
 	"github.com/tongyichu/track_server/internal/models"
 )
 
+func (r *InMemoryTrackRepository) ListAdminTracks(_ context.Context, filter AdminTrackListFilter, cursor *models.TrackListCursor, limit int) ([]*models.Track, int64, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	userIDs := make(map[int64]struct{}, len(filter.UserIDs))
+	for _, id := range filter.UserIDs {
+		userIDs[id] = struct{}{}
+	}
+	items := make([]*models.Track, 0)
+	var total int64
+	for _, track := range r.tracks {
+		if track == nil || track.Status == models.TrackStatusDeleted {
+			continue
+		}
+		if filter.Title != "" && !strings.Contains(strings.ToLower(track.Title), strings.ToLower(filter.Title)) {
+			continue
+		}
+		if filter.CityCode != "" && track.CityCode != filter.CityCode {
+			continue
+		}
+		if filter.Status != nil && track.Status != *filter.Status {
+			continue
+		}
+		if filter.UserIDs != nil {
+			if _, ok := userIDs[track.UserID]; !ok {
+				continue
+			}
+		}
+		total++
+		if cursor != nil && !cursor.StartTime.IsZero() && (track.StartTime.After(cursor.StartTime) || (track.StartTime.Equal(cursor.StartTime) && track.ID >= cursor.ID)) {
+			continue
+		}
+		clone := *track
+		items = append(items, &clone)
+	}
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].StartTime.Equal(items[j].StartTime) {
+			return items[i].ID > items[j].ID
+		}
+		return items[i].StartTime.After(items[j].StartTime)
+	})
+	if len(items) > limit {
+		items = items[:limit]
+	}
+	return items, total, nil
+}
+
 func escapeAdminLike(value string) string {
 	value = strings.ReplaceAll(value, "!", "!!")
 	value = strings.ReplaceAll(value, "%", "!%")

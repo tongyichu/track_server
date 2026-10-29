@@ -1167,9 +1167,26 @@ func (h *Handler) ListTracks(ctx context.Context, c *app.RequestContext) {
 	}
 	limit := parseAdminListLimit(string(c.Query("limit")))
 	title := strings.TrimSpace(string(c.Query("title")))
+	userName := strings.TrimSpace(string(c.Query("user_name")))
+	cityCode := strings.TrimSpace(string(c.Query("city_code")))
+	statusRaw := strings.TrimSpace(string(c.Query("status")))
 	if utf8.RuneCountInString(title) > 128 {
 		c.JSON(http.StatusBadRequest, utils.H{"error": "title exceeds 128 characters"})
 		return
+	}
+	if utf8.RuneCountInString(userName) > 128 {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "user_name exceeds 128 characters"})
+		return
+	}
+	var status *models.TrackStatus
+	if statusRaw != "" {
+		parsed, parseErr := strconv.Atoi(statusRaw)
+		if parseErr != nil || (models.TrackStatus(parsed) != models.TrackStatusNormal && models.TrackStatus(parsed) != models.TrackStatusPrivate) {
+			c.JSON(http.StatusBadRequest, utils.H{"error": "invalid status"})
+			return
+		}
+		value := models.TrackStatus(parsed)
+		status = &value
 	}
 	var cursor *models.TrackListCursor
 	if rawAt := strings.TrimSpace(string(c.Query("cursor_start_time"))); rawAt != "" {
@@ -1185,22 +1202,43 @@ func (h *Handler) ListTracks(ctx context.Context, c *app.RequestContext) {
 		}
 		cursor = &models.TrackListCursor{StartTime: t, ID: id}
 	}
-	var items []*models.Track
-	var total int64
-	var err error
-	if title != "" {
-		search, ok := h.trackRepo.(repository.AdminTrackTitleSearchRepository)
+	var matchedUserIDs []int64
+	if userName != "" {
+		search, ok := h.userRepo.(repository.AdminUserTitleSearchRepository)
 		if !ok {
-			c.JSON(http.StatusInternalServerError, utils.H{"error": "track title search not configured"})
+			c.JSON(http.StatusInternalServerError, utils.H{"error": "user name search not configured"})
 			return
 		}
-		items, total, err = search.ListAdminTracksByTitle(ctx, title, cursor, limit)
-	} else {
-		items, err = h.trackRepo.ListAll(ctx, cursor, limit)
-		if err == nil {
-			total, err = h.trackRepo.CountAll(ctx)
+		matchedUserIDs = make([]int64, 0)
+		var userCursor *models.UserListCursor
+		for {
+			matchedUsers, _, searchErr := search.ListAdminUsersByTitle(ctx, userName, userCursor, 100)
+			if searchErr != nil {
+				c.JSON(http.StatusInternalServerError, utils.H{"error": searchErr.Error()})
+				return
+			}
+			for _, user := range matchedUsers {
+				if user != nil {
+					matchedUserIDs = append(matchedUserIDs, user.ID)
+				}
+			}
+			if len(matchedUsers) < 100 {
+				break
+			}
+			last := matchedUsers[len(matchedUsers)-1]
+			userCursor = &models.UserListCursor{CreatedAt: last.CreatedAt, ID: last.ID}
 		}
 	}
+	trackSearch, ok := h.trackRepo.(repository.AdminTrackListFilterRepository)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "track list filters not configured"})
+		return
+	}
+	filter := repository.AdminTrackListFilter{Title: title, CityCode: cityCode, Status: status, UserIDs: matchedUserIDs}
+	if userName == "" {
+		filter.UserIDs = nil
+	}
+	items, total, err := trackSearch.ListAdminTracks(ctx, filter, cursor, limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
 		return
@@ -1226,7 +1264,8 @@ func (h *Handler) ListTracks(ctx context.Context, c *app.RequestContext) {
 	}
 	type adminTrackListItem struct {
 		*models.Track
-		UserName string `json:"user_name"`
+		UserName  string `json:"user_name"`
+		AvatarURL string `json:"avatar_url"`
 	}
 	listItems := make([]adminTrackListItem, 0, len(items))
 	for _, item := range items {
@@ -1234,10 +1273,17 @@ func (h *Handler) ListTracks(ctx context.Context, c *app.RequestContext) {
 			continue
 		}
 		userName := "未知用户"
-		if user := users[item.UserID]; user != nil && strings.TrimSpace(user.Nickname) != "" {
-			userName = user.Nickname
+		avatarURL := ""
+		if user := users[item.UserID]; user != nil {
+			if strings.TrimSpace(user.Nickname) != "" {
+				userName = user.Nickname
+			}
+			if h.userSvc != nil {
+				h.userSvc.DecorateAvatar(ctx, user)
+			}
+			avatarURL = rewriteAdminStaticURL(user.AvatarURL)
 		}
-		listItems = append(listItems, adminTrackListItem{Track: item, UserName: userName})
+		listItems = append(listItems, adminTrackListItem{Track: item, UserName: userName, AvatarURL: avatarURL})
 	}
 	resp := utils.H{
 		"items":    listItems,
