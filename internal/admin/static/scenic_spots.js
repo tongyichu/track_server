@@ -77,7 +77,6 @@
     state.current=spot;$('detailModal').showModal();$('detailTitle').textContent=state.newSpot?'新建景点':(spot.name||'待补充名称');
     $('detailMeta').textContent=spot.id?'内部 ID：'+spot.id:'保存后生成内部景点 ID';setModeBadge(spot);
     $('nameInput').value=spot.name||'';$('categoryInput').value=spot.category||'';$('addressInput').value=spot.address||'';$('descriptionInput').value=spot.description||'';
-    $('queryGoogleDescriptionBtn').hidden=state.newSpot||!spot.id||!(spot.sources||[]).some(source=>source&&source.provider==='amap'&&source.status==='active');$('queryGoogleDescriptionBtn').disabled=false;$('queryGoogleDescriptionBtn').textContent='Google Maps 查询';
     const cities=spotCities(spot);$('cityInfo').textContent=cities.length?cities.join('、'):'暂无';
     state.pendingCoordinates=null;state.selectingMapLocation=false;const lat=Number(spot.latitude),lng=Number(spot.longitude),hasCoordinates=Number.isFinite(lat)&&Number.isFinite(lng)&&lat!==0&&lng!==0;$('coordinateInfo').hidden=!hasCoordinates;$('coordinateInfo').textContent=hasCoordinates?'坐标（'+(spot.coordinate_system||'未知坐标系')+'）：'+lat.toFixed(6)+'，'+lng.toFixed(6):'';$('coordinateMap').hidden=false;$('coordinateMapError').hidden=true;$('coordinateMapHelp').hidden=false;$('coordinateMapActions').hidden=false;$('chooseMapLocationBtn').disabled=false;$('chooseMapLocationBtn').textContent=hasCoordinates?'重新选点':'选择位置';$('resetMapLocationBtn').disabled=true;$('coordinateMapActionHint').textContent='地图点击仅用于浏览；选点请先点击“'+$('chooseMapLocationBtn').textContent+'”。';$('coordinateMapImage').hidden=!hasCoordinates||!spot.id;
     $('newCityFields').hidden=!state.newSpot;$('poiCandidatePanel').hidden=true;$('poiDraftPanel').hidden=true;$('providerPhotoPanel').hidden=true;$('providerPhotoCandidates').replaceChildren();state.poiDraft=null;
@@ -170,19 +169,10 @@
     catch(error){toast('复制失败，请手动复制：'+id,'danger');}
   }
 
-  async function queryGoogleDescription() {
-    const spot=state.current,button=$('queryGoogleDescriptionBtn');if(!spot||!spot.id||button.disabled)return;
-    button.disabled=true;button.textContent='查询中…';
-    try{const result=await api('/scenic-spots/'+encodeURIComponent(spot.id)+'/google-description',{method:'POST'});const description=(result.description||'').trim();if(!description){toast('Google Maps 没有提供这处景点的简介','warning');return;}$('descriptionInput').value=description;const distance=Number(result.distance_m);const detail=Number.isFinite(distance)&&distance>0?'（'+(result.place_name||'Google Maps')+'，距坐标 '+Math.round(distance)+' 米）':'（'+(result.place_name||'Google Maps')+'）';toast('已填入 Google Maps 简介'+detail+'，确认后点击保存','success');}
-    catch(error){toast('Google Maps 查询失败：'+error.message,'danger');}
-    finally{button.disabled=false;button.textContent='Google Maps 查询';}
-  }
-
   $('searchBtn').addEventListener('click',loadList);$('searchInput').addEventListener('keydown',event=>{if(event.key==='Enter')loadList();});$('statusFilter').addEventListener('change',renderList);$('cityFilter').addEventListener('change',renderList);$('refreshStatsBtn').addEventListener('click',loadStats);
   $('newProvinceSelect').addEventListener('change',()=>{const code=$('newProvinceSelect').value;populateCityOptions(code);const province=(state.regions||[]).find(item=>item.code===code);updateCurrentCity(province);focusRegion(code);});$('newCitySelect').addEventListener('change',()=>{const region=selectedRegion();updateCurrentCity(region);focusRegion(region&&region.code);});$('useClickedLocationBtn').addEventListener('click',useClickedMapLocation);$('applyPoiDraftBtn').addEventListener('click',applyPOIDraft);
   $('newBtn').addEventListener('click',()=>{state.newSpot=true;fillForm({status:'draft',manual_edited:true});});$('closeDetailBtn').addEventListener('click',()=>$('detailModal').close());$('detailModal').addEventListener('click',event=>{if(event.target===$('detailModal'))$('detailModal').close();});
   $('saveBtn').addEventListener('click',save);$('photoFile').addEventListener('change',updateUploadPhotoPreview);$('copySpotIdBtn').addEventListener('click',copySpotId);$('chooseMapLocationBtn').addEventListener('click',()=>{if(state.map)setMapSelectionMode(!state.selectingMapLocation);});$('resetMapLocationBtn').addEventListener('click',resetMapLocation);
-  $('queryGoogleDescriptionBtn').addEventListener('click',queryGoogleDescription);
   $('closeRelatedTracksBtn').addEventListener('click',()=>$('relatedTracksModal').close());$('relatedTracksModal').addEventListener('click',event=>{if(event.target===$('relatedTracksModal'))$('relatedTracksModal').close();});$('loadMoreRelatedTracksBtn').addEventListener('click',()=>loadRelatedTracks(true));
   loadList();loadStats();syncProviderContent();
 })();

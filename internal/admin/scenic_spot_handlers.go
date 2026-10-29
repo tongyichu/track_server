@@ -168,21 +168,6 @@ func (h *Handler) GetScenicSpot(ctx context.Context, c *app.RequestContext) {
 	c.JSON(http.StatusOK, utils.H{"code": 0, "data": v})
 }
 
-func (h *Handler) QueryScenicSpotGoogleDescription(ctx context.Context, c *app.RequestContext) {
-	if !h.scenicSpotServiceReady(c) {
-		return
-	}
-	result, err := h.scenicSpotSvc.GoogleDescription(ctx, c.Param("spot_id"))
-	if err != nil {
-		if errors.Is(err, repository.ErrNotFound) {
-			h.scenicSpotServiceError(c, err)
-			return
-		}
-		c.JSON(http.StatusBadGateway, utils.H{"error": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, utils.H{"code": 0, "data": result})
-}
 func (h *Handler) GetScenicSpotMap(ctx context.Context, c *app.RequestContext) {
 	if !h.scenicSpotServiceReady(c) {
 		return
