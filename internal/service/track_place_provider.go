@@ -414,10 +414,6 @@ func (s *TrackPlaceService) LookupScenicSpotGoogleDescription(ctx context.Contex
 	if spot.Latitude == 0 || spot.Longitude == 0 {
 		return nil, errors.New("scenic spot coordinates are required for Google matching")
 	}
-	if !s.reserveScenicCall(ctx, "google") {
-		return nil, errPlaceBudget
-	}
-
 	var result *ScenicSpotGoogleDescription
 	var err error
 	googleID := ""
