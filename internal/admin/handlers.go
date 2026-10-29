@@ -1206,8 +1206,41 @@ func (h *Handler) ListTracks(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 	h.decorateAdminTrackAssetURLs(ctx, items)
+	userIDs := make([]int64, 0, len(items))
+	seenUsers := make(map[int64]struct{}, len(items))
+	for _, item := range items {
+		if item == nil || item.UserID <= 0 {
+			continue
+		}
+		if _, ok := seenUsers[item.UserID]; ok {
+			continue
+		}
+		seenUsers[item.UserID] = struct{}{}
+		userIDs = append(userIDs, item.UserID)
+	}
+	users := map[int64]*models.User{}
+	if h.userRepo != nil && len(userIDs) > 0 {
+		if found, findErr := h.userRepo.FindByIDs(ctx, userIDs); findErr == nil && found != nil {
+			users = found
+		}
+	}
+	type adminTrackListItem struct {
+		*models.Track
+		UserName string `json:"user_name"`
+	}
+	listItems := make([]adminTrackListItem, 0, len(items))
+	for _, item := range items {
+		if item == nil {
+			continue
+		}
+		userName := "未知用户"
+		if user := users[item.UserID]; user != nil && strings.TrimSpace(user.Nickname) != "" {
+			userName = user.Nickname
+		}
+		listItems = append(listItems, adminTrackListItem{Track: item, UserName: userName})
+	}
 	resp := utils.H{
-		"items":    items,
+		"items":    listItems,
 		"total":    total,
 		"has_more": len(items) == limit,
 	}
