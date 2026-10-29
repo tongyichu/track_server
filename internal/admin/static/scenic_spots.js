@@ -15,6 +15,7 @@
   function modeLabel(spot) { return isManual(spot) ? '人工' : '自动'; }
   function setModeBadge(spot) { const badge=$('detailMode');badge.textContent=modeLabel(spot);badge.className='scenic-mode '+(isManual(spot)?'manual':'automatic'); }
   function photoURL(url) { return (url||'').startsWith('/api/v1/static/')?url.replace('/api/v1/static/','/admin/api/static/'):url; }
+  function spotCities(spot) { const cities=spot.related_cities&&spot.related_cities.length?spot.related_cities:[spot.city_name].filter(Boolean);return [...new Set(cities)]; }
 
   async function loadStats() {
     try {
@@ -35,19 +36,23 @@
   }
 
   function renderList() {
-    const mode=$('statusFilter').value,query=$('searchInput').value.trim().toLocaleLowerCase();
-    const spots=state.list.filter(spot=>(!mode||(mode==='manual')===isManual(spot))&&(!query||(spot.name||'').toLocaleLowerCase().includes(query)));
+    const mode=$('statusFilter').value,city=$('cityFilter').value,query=$('searchInput').value.trim().toLocaleLowerCase();
+    const spots=state.list.filter(spot=>(!mode||(mode==='manual')===isManual(spot))&&(!city||spotCities(spot).includes(city))&&(!query||(spot.name||'').toLocaleLowerCase().includes(query)));
     $('spotCount').textContent='共 '+spots.length+' 处';const host=$('spotRows');host.replaceChildren();
-    if(!spots.length){const empty=document.createElement('div');empty.className='p-3 scenic-hint';empty.textContent='没有匹配的景点';host.appendChild(empty);return;}
-    spots.forEach(spot=>{const row=document.createElement('article');row.className='scenic-row'+(state.current&&state.current.id===spot.id?' active':'');row.dataset.spotId=spot.id;row.tabIndex=0;
-      const main=document.createElement('div');main.className='scenic-row-main';const title=document.createElement('div');title.className='scenic-row-title';const titleText=document.createElement('span');titleText.className='scenic-row-title-text';titleText.textContent=spot.name||'待补充名称';const badge=document.createElement('span');badge.className='scenic-mode '+(isManual(spot)?'manual':'automatic');badge.textContent=modeLabel(spot);title.append(titleText,badge);
-      const sub=document.createElement('div');sub.className='scenic-row-sub';if(spot.category){const category=document.createElement('span');category.className='scenic-hint';category.textContent=spot.category;sub.appendChild(category);}const city=spot.city_name||spot.city_code;if(city){const cityText=document.createElement('span');cityText.className='scenic-hint scenic-city';cityText.textContent=city;sub.appendChild(cityText);}
-      const description=document.createElement('div');description.className='scenic-row-description';description.textContent=spot.description||spot.address||'暂无简介';main.append(title,sub,description);
-      const images=document.createElement('div');images.className='scenic-row-photos';(spot.photos||[]).slice(0,3).forEach(photo=>{const img=document.createElement('img');img.loading='lazy';img.src=photoURL(photo.url);img.alt=photo.caption||spot.name||'景点图片';images.appendChild(img);});row.append(main,images);row.addEventListener('click',()=>loadSpot(spot.id));row.addEventListener('keydown',event=>{if(event.key==='Enter')loadSpot(spot.id);});host.appendChild(row);
+    if(!spots.length){const empty=document.createElement('tr');empty.innerHTML='<td colspan="6" class="p-3 scenic-hint">没有匹配的景点</td>';host.appendChild(empty);return;}
+    spots.forEach(spot=>{const row=document.createElement('tr');row.dataset.spotId=spot.id;
+      const cityCell=document.createElement('td');cityCell.className='city-cell';cityCell.textContent=spotCities(spot).join('、')||'—';
+      const nameCell=document.createElement('td');nameCell.className='name-cell';nameCell.textContent=spot.name||'待补充名称';
+      const categoryCell=document.createElement('td');categoryCell.className='category-cell';categoryCell.textContent=spot.category||'—';categoryCell.title=spot.category||'';
+      const modeCell=document.createElement('td');const badge=document.createElement('span');badge.className='scenic-mode '+(isManual(spot)?'manual':'automatic');badge.textContent=modeLabel(spot);modeCell.appendChild(badge);
+      const imageCell=document.createElement('td');const images=document.createElement('div');images.className='scenic-row-photos';(spot.photos||[]).slice(0,3).forEach(photo=>{const img=document.createElement('img');img.loading='lazy';img.src=photoURL(photo.url);img.alt=photo.caption||spot.name||'景点图片';images.appendChild(img);});if(!images.children.length){const hint=document.createElement('span');hint.className='scenic-hint';hint.textContent='暂无图片';images.appendChild(hint);}imageCell.appendChild(images);
+      const actionCell=document.createElement('td');const view=document.createElement('button');view.type='button';view.className='btn btn-sm btn-outline-primary';view.textContent='查看详情';view.addEventListener('click',()=>loadSpot(spot.id));actionCell.appendChild(view);
+      row.append(cityCell,nameCell,categoryCell,modeCell,imageCell,actionCell);host.appendChild(row);
     });
   }
+  function updateCityOptions() { const select=$('cityFilter'),current=select.value,cities=[...new Set(state.list.flatMap(spotCities))].sort((a,b)=>a.localeCompare(b,'zh-CN'));select.replaceChildren(new Option('全部城市',''));cities.forEach(city=>select.add(new Option(city,city)));if(cities.includes(current))select.value=current; }
   async function loadList() {
-    try{const params=new URLSearchParams({q:$('searchInput').value.trim(),limit:'100'});const data=await api('/scenic-spots?'+params);state.list=data.items||[];renderList();}
+    try{const params=new URLSearchParams({q:$('searchInput').value.trim(),limit:'100'});const data=await api('/scenic-spots?'+params);state.list=data.items||[];updateCityOptions();renderList();}
     catch(error){toast(error.message,'danger');}
   }
 
@@ -65,9 +70,10 @@
     state.current=spot;$('detailModal').showModal();$('detailTitle').textContent=state.newSpot?'新建景点':(spot.name||'待补充名称');
     $('detailMeta').textContent=spot.id?'内部 ID：'+spot.id:'保存后生成内部景点 ID';setModeBadge(spot);
     $('nameInput').value=spot.name||'';$('categoryInput').value=spot.category||'';$('addressInput').value=spot.address||'';$('descriptionInput').value=spot.description||'';
-    const cities=spot.related_cities||[];$('cityInfo').textContent=cities.length?'城市：'+cities.join('、'):(spot.city_name||spot.city_code)?'城市：'+(spot.city_name||spot.city_code):'城市：暂无';
+    const cities=spotCities(spot);$('cityInfo').textContent='城市：'+(cities.length?cities.join('、'):'暂无');
+    const hasCoordinates=spot.latitude!==undefined||spot.longitude!==undefined;$('coordinateInfo').hidden=!hasCoordinates;$('coordinateInfo').textContent=hasCoordinates?'坐标：'+Number(spot.latitude||0).toFixed(6)+'，'+Number(spot.longitude||0).toFixed(6):'';$('copySpotIdBtn').disabled=!spot.id;
     $('providerNameHint').textContent='';$('providerCategoryHint').textContent='';$('providerAddressHint').textContent='';$('providerDescriptionHint').textContent='';$('photosBox').replaceChildren();(spot.photos||[]).forEach(addPhotoCard);
-    $('publishBtn').disabled=state.newSpot||spot.status==='merged'||spot.status==='archived';$('publishBtn').textContent=spot.status==='published'?'取消发布':'发布';$('uploadPhotoBtn').disabled=state.newSpot;
+    $('uploadPhotoBtn').disabled=state.newSpot;
   }
   async function loadSpot(id) {
     try{const spot=await api('/scenic-spots/'+encodeURIComponent(id));state.newSpot=false;fillForm(spot);document.querySelectorAll('.scenic-row').forEach(row=>row.classList.toggle('active',row.dataset.spotId===id));renderList();}
@@ -78,13 +84,11 @@
   function addPhotoCard(photo) {
     const card=document.createElement('div');card.className='scenic-photo';card.draggable=true;const img=document.createElement('img');img.src=photoURL(photo.url);img.alt=photo.alt_text||photo.caption||'景点图片';
     const caption=document.createElement('input');caption.className='form-control';caption.placeholder='图片说明';caption.value=photo.caption||'';
-    const alt=document.createElement('input');alt.className='form-control';alt.placeholder='替代文本';alt.value=photo.alt_text||'';
-    const attr=document.createElement('input');attr.className='form-control';attr.placeholder='来源/授权署名';attr.value=photo.attribution||'';
     const controls=document.createElement('div');controls.className='d-flex gap-2 mt-2';const remove=document.createElement('button');remove.type='button';remove.className='btn btn-sm btn-outline-danger ms-auto';remove.textContent='移除';remove.addEventListener('click',()=>card.remove());controls.appendChild(remove);
-    card.dataset.photoId=photo.id;card.dataset.url=photo.url;card.dataset.provider=photo.provider||'';card.dataset.sourceUrl=photo.source_url||'';card.dataset.attributionUrl=photo.attribution_url||'';
+    card.dataset.photoId=photo.id;card.dataset.url=photo.url;card.dataset.altText=photo.alt_text||'';card.dataset.attribution=photo.attribution||'';card.dataset.provider=photo.provider||'';card.dataset.sourceUrl=photo.source_url||'';card.dataset.attributionUrl=photo.attribution_url||'';
     if(photo.provider){const source=document.createElement('div');source.className='scenic-photo-source';source.textContent=photo.provider==='google'?'Google':'高德';card.appendChild(source);}
     if(photo.source_url){const link=document.createElement('a');link.href=photo.source_url;link.target='_blank';link.rel='noopener noreferrer';link.textContent='图片来源';link.className='small d-block mt-1';card.appendChild(link);}
-    card.append(img,caption,alt,attr,controls);$('photosBox').appendChild(card);
+    card.append(img,caption,controls);$('photosBox').appendChild(card);
     card.addEventListener('dragstart',event=>{if(event.target.closest('input,button,a')){event.preventDefault();return;}card.classList.add('dragging');event.dataTransfer.effectAllowed='move';});
     card.addEventListener('dragend',()=>{card.classList.remove('dragging');$('photosBox').querySelectorAll('.drop-target').forEach(item=>item.classList.remove('drop-target'));});
     card.addEventListener('dragover',event=>{event.preventDefault();if(!card.classList.contains('dragging')){card.classList.add('drop-target');moveDraggedPhoto(card,event);}});
@@ -92,7 +96,7 @@
     card.addEventListener('drop',event=>{event.preventDefault();card.classList.remove('drop-target');moveDraggedPhoto(card,event);});
   }
   function currentPayload() {
-    const base=state.current||{};const photos=Array.from($('photosBox').children).map(card=>{const inputs=card.querySelectorAll('input');return{id:card.dataset.photoId,url:card.dataset.url,caption:inputs[0].value.trim(),alt_text:inputs[1].value.trim(),attribution:inputs[2].value.trim(),attribution_url:card.dataset.attributionUrl||undefined,source_url:card.dataset.sourceUrl||undefined,provider:card.dataset.provider||undefined};});
+    const base=state.current||{};const photos=Array.from($('photosBox').children).map(card=>{const caption=card.querySelector('input');return{id:card.dataset.photoId,url:card.dataset.url,caption:caption.value.trim(),alt_text:card.dataset.altText||undefined,attribution:card.dataset.attribution||undefined,attribution_url:card.dataset.attributionUrl||undefined,source_url:card.dataset.sourceUrl||undefined,provider:card.dataset.provider||undefined};});
     return Object.assign({},base,{name:$('nameInput').value.trim(),category:$('categoryInput').value.trim(),address:$('addressInput').value.trim(),description:$('descriptionInput').value.trim(),photos});
   }
   async function save() {
@@ -100,18 +104,19 @@
       state.newSpot=false;fillForm(spot);await Promise.all([loadList(),loadStats()]);toast('景点已保存','success');
     }catch(error){toast(error.message,'danger');}
   }
-  async function setStatus(status) {
-    if(!state.current)return;try{const spot=await api('/scenic-spots/'+encodeURIComponent(state.current.id)+'/status',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status,expected_version:state.current.version})});state.newSpot=false;fillForm(spot);await Promise.all([loadList(),loadStats()]);toast(status==='published'?'已发布':'已取消发布','success');}
-    catch(error){toast(error.message,'danger');}
-  }
   async function uploadPhoto() {
     if(!state.current)return;const file=$('photoFile').files[0];if(!file){toast('先选择 JPG 或 PNG 图片','danger');return;}const form=new FormData();form.append('file',file);form.append('caption',$('photoCaption').value.trim());
     try{const data=await api('/scenic-spots/'+encodeURIComponent(state.current.id)+'/photos',{method:'POST',body:form});state.current=data.spot;if(data.photo)addPhotoCard(data.photo);$('detailMeta').textContent='内部 ID：'+state.current.id;$('photoFile').value='';$('photoCaption').value='';toast('图片已添加','success');}
     catch(error){toast(error.message,'danger');}
   }
+  async function copySpotId() {
+    const id=state.current&&state.current.id;if(!id)return;
+    try{if(navigator.clipboard&&navigator.clipboard.writeText){await navigator.clipboard.writeText(id);}else{const input=document.createElement('textarea');input.value=id;input.style.position='fixed';input.style.opacity='0';document.body.appendChild(input);input.select();const copied=document.execCommand('copy');input.remove();if(!copied)throw new Error('浏览器不支持复制');}toast('景点 ID 已复制','success');}
+    catch(error){toast('复制失败，请手动复制：'+id,'danger');}
+  }
 
-  $('searchBtn').addEventListener('click',loadList);$('searchInput').addEventListener('keydown',event=>{if(event.key==='Enter')loadList();});$('statusFilter').addEventListener('change',renderList);$('refreshStatsBtn').addEventListener('click',loadStats);
+  $('searchBtn').addEventListener('click',loadList);$('searchInput').addEventListener('keydown',event=>{if(event.key==='Enter')loadList();});$('statusFilter').addEventListener('change',renderList);$('cityFilter').addEventListener('change',renderList);$('refreshStatsBtn').addEventListener('click',loadStats);
   $('newBtn').addEventListener('click',()=>{state.newSpot=true;fillForm({status:'draft',manual_edited:true});});$('closeDetailBtn').addEventListener('click',()=>$('detailModal').close());$('detailModal').addEventListener('click',event=>{if(event.target===$('detailModal'))$('detailModal').close();});
-  $('saveBtn').addEventListener('click',save);$('publishBtn').addEventListener('click',()=>setStatus(state.current&&state.current.status==='published'?'draft':'published'));$('uploadPhotoBtn').addEventListener('click',uploadPhoto);
+  $('saveBtn').addEventListener('click',save);$('uploadPhotoBtn').addEventListener('click',uploadPhoto);$('copySpotIdBtn').addEventListener('click',copySpotId);
   loadList();loadStats();syncProviderContent();
 })();

@@ -63,11 +63,68 @@ func (h *Handler) ListScenicSpots(ctx context.Context, c *app.RequestContext) {
 		h.scenicSpotServiceError(c, err)
 		return
 	}
+	h.enrichScenicSpotCities(ctx, items)
 	next := ""
 	if len(items) > 0 {
 		next = items[len(items)-1].ID
 	}
 	c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"items": items, "total": total, "next_cursor": next, "has_more": len(items) == f.Limit}})
+}
+
+func (h *Handler) enrichScenicSpotCities(ctx context.Context, spots []*models.ScenicSpot) {
+	if h == nil || h.scenicSpotSvc == nil || h.trackRepo == nil || len(spots) == 0 {
+		return
+	}
+	linksBySpot := make(map[string][]*models.TrackScenicSpotLink, len(spots))
+	trackIDs := make([]string, 0, len(spots))
+	for _, spot := range spots {
+		if spot == nil {
+			continue
+		}
+		if spot.CityName != "" {
+			spot.RelatedCities = append(spot.RelatedCities, spot.CityName)
+		} else if name := config.CityNameByCode(spot.CityCode); name != "" {
+			spot.RelatedCities = append(spot.RelatedCities, name)
+		}
+		links, err := h.scenicSpotSvc.TrackLinks(ctx, spot.ID, "", 100)
+		if err != nil {
+			continue
+		}
+		linksBySpot[spot.ID] = links
+		for _, link := range links {
+			trackIDs = append(trackIDs, link.TrackID)
+		}
+	}
+	if len(trackIDs) == 0 {
+		return
+	}
+	tracks, err := h.trackRepo.FindByIDs(ctx, trackIDs)
+	if err != nil {
+		return
+	}
+	for _, spot := range spots {
+		if spot == nil {
+			continue
+		}
+		seen := make(map[string]struct{}, len(spot.RelatedCities))
+		for _, city := range spot.RelatedCities {
+			seen[city] = struct{}{}
+		}
+		for _, link := range linksBySpot[spot.ID] {
+			track := tracks[link.TrackID]
+			if track == nil || track.CityCode == "" {
+				continue
+			}
+			city := config.CityNameByCode(track.CityCode)
+			if city == "" {
+				continue
+			}
+			if _, ok := seen[city]; !ok {
+				seen[city] = struct{}{}
+				spot.RelatedCities = append(spot.RelatedCities, city)
+			}
+		}
+	}
 }
 func (h *Handler) GetScenicSpotStatistics(ctx context.Context, c *app.RequestContext) {
 	if !h.scenicSpotServiceReady(c) {
@@ -106,32 +163,7 @@ func (h *Handler) GetScenicSpot(ctx context.Context, c *app.RequestContext) {
 		h.scenicSpotServiceError(c, err)
 		return
 	}
-	if v.CityName == "" && h.trackRepo != nil {
-		links, linkErr := h.scenicSpotSvc.TrackLinks(ctx, v.ID, "", 100)
-		if linkErr == nil && len(links) > 0 {
-			ids := make([]string, 0, len(links))
-			for _, link := range links {
-				ids = append(ids, link.TrackID)
-			}
-			if tracks, tracksErr := h.trackRepo.FindByIDs(ctx, ids); tracksErr == nil {
-				seen := make(map[string]struct{})
-				for _, link := range links {
-					track := tracks[link.TrackID]
-					if track == nil || track.CityCode == "" {
-						continue
-					}
-					name := config.CityNameByCode(track.CityCode)
-					if name == "" {
-						continue
-					}
-					if _, ok := seen[name]; !ok {
-						seen[name] = struct{}{}
-						v.RelatedCities = append(v.RelatedCities, name)
-					}
-				}
-			}
-		}
-	}
+	h.enrichScenicSpotCities(ctx, []*models.ScenicSpot{v})
 	c.JSON(http.StatusOK, utils.H{"code": 0, "data": v})
 }
 func (h *Handler) CreateScenicSpot(ctx context.Context, c *app.RequestContext) {

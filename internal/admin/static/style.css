@@ -282,6 +282,24 @@ table.data.table .btn { white-space: nowrap; }
 .admin-companion-stats .admin-stat-panel { display: flex; flex-direction: column; gap: 6px; }
 .admin-companion-stats .admin-stat-panel > span, .admin-companion-stats small { color: var(--tblr-secondary-color); font-size: 12px; }
 .admin-companion-stats strong { font-size: 25px; line-height: 1.2; }
+.companion-row { cursor: pointer; }
+.companion-row:hover { background: var(--tblr-bg-surface-secondary); }
+.companion-dialog { width: min(1160px, calc(100vw - 32px)); max-height: calc(100vh - 32px); padding: 0; border: 1px solid var(--tblr-border-color); border-radius: var(--tblr-border-radius-xl); color: var(--tblr-body-color); background: var(--tblr-bg-surface); box-shadow: var(--tblr-box-shadow-dropdown); }
+.companion-dialog::backdrop { background: rgba(24, 36, 51, .56); }
+.companion-dialog-content { max-height: calc(100vh - 32px); overflow: auto; padding: 22px; }
+.companion-dialog-heading { position: sticky; top: -22px; z-index: 2; display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin: -22px -22px 18px; padding: 18px 22px 14px; border-bottom: 1px solid var(--tblr-border-color); background: var(--tblr-bg-surface); }
+.companion-dialog-heading h2 { margin: 0 0 4px; font-size: 18px; }
+.companion-detail-section { margin-top: 18px; }
+.companion-detail-section h3 { display: flex; align-items: baseline; gap: 8px; margin: 0 0 10px; font-size: 14px; }
+.companion-session-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 16px; }
+.companion-session-grid > div { min-width: 0; padding: 10px 12px; border: 1px solid var(--tblr-border-color); border-radius: 8px; background: var(--tblr-bg-surface-secondary); }
+.companion-session-grid strong { display: block; margin-bottom: 4px; color: var(--tblr-secondary-color); font-size: 11px; }
+.companion-session-grid span { display: block; overflow-wrap: anywhere; font-size: 13px; }
+.companion-detail-table-wrap { max-height: 240px; overflow: auto; border: 1px solid var(--tblr-border-color); border-radius: 8px; }
+.companion-detail-table-wrap table.data { min-width: 760px; margin: 0; }
+.companion-detail-table-wrap table.data th,.companion-detail-table-wrap table.data td { white-space: nowrap; }
+.companion-detail-table-wrap table.data td:nth-child(3) { white-space: normal; }
+.companion-avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; }
 @media (max-width: 1200px) {
   .admin-user-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .submission-result-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -296,9 +314,19 @@ table.data.table .btn { white-space: nowrap; }
 .modal-content { border: 0; border-radius: var(--tblr-border-radius-xl); box-shadow: var(--tblr-box-shadow-dropdown); }
 .modal-header, .modal-footer { border-color: var(--tblr-border-color); }
 
+/* Keep statistic card content inset from the border across admin pages. */
+.submission-stat-sections .submission-stat-card,
+.feedback-stat-sections .feedback-stat,
+.admin-user-summary-grid .admin-stat-panel,
+.admin-user-distribution-grid .admin-stat-panel { padding: 20px 24px !important; }
+
 @media (max-width: 767px) {
+  .submission-stat-sections .submission-stat-card,
+  .feedback-stat-sections .feedback-stat,
+  .admin-user-summary-grid .admin-stat-panel,
+  .admin-user-distribution-grid .admin-stat-panel { padding: 16px 20px !important; }
   .submission-stat-grid, .feedback-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-  .submission-queue-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .submission-queue-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .feedback-status-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-user-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
   .admin-user-distribution-grid { grid-template-columns: 1fr; gap: 12px; }
@@ -331,12 +359,26 @@ table.data.table .btn { white-space: nowrap; }
   .topbar .nav a .nav-icon { width: 21px; height: 21px; flex-basis: 21px; }
 }
 
-@media (max-width: 430px) {
+@media (max-width: 520px) {
   .submission-queue-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 430px) {
   .admin-zodiac-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-city-list { grid-template-columns: 1fr; }
   .admin-distribution-row { grid-template-columns: minmax(66px, .9fr) minmax(35px, 1fr) auto; gap: 6px; font-size: 11px; }
   .admin-distribution-row strong { min-width: 28px; }
+}
+
+@media (max-width: 767px) {
+  .companion-dialog { width: calc(100vw - 16px); max-height: calc(100vh - 16px); }
+  .companion-dialog-content { max-height: calc(100vh - 16px); padding: 14px; }
+  .companion-dialog-heading { top: -14px; margin: -14px -14px 14px; padding: 14px; }
+  .companion-session-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+}
+
+@media (max-width: 430px) {
+  .companion-session-grid { grid-template-columns: 1fr; }
 }
 
 /* 聚合路线运营：固定列布局 + 单元格截断，窄屏允许表格在容器内横向滚动。 */

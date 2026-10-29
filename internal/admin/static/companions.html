@@ -49,13 +49,24 @@
           <tr>
             <th>SessionID</th><th>发起人</th><th>标题</th><th>类型</th>
             <th>状态</th><th>可见性</th><th>弹幕</th><th>最大成员</th>
-            <th>开始时间</th><th>结束时间</th>
+            <th>开始时间</th><th>结束时间</th><th>操作</th>
           </tr>
         </thead>
         <tbody id="companionList"></tbody>
       </table>
     </section>
   </main>
+
+  <dialog id="companionDetailModal" class="companion-dialog" aria-labelledby="companionDetailTitle">
+    <div class="companion-dialog-content">
+      <div class="companion-dialog-heading"><div><h2 id="companionDetailTitle">同行会话详情</h2><div id="companionDetailSubtitle" class="hint"></div></div><button id="closeCompanionDetail" type="button" class="btn btn-outline-secondary">关闭</button></div>
+      <div id="companionDetailError" class="error" hidden></div>
+      <section class="companion-detail-section"><h3>会话基本信息</h3><div id="companionSessionInfo" class="companion-session-grid"></div></section>
+      <section class="companion-detail-section"><h3>同行人员 <span id="companionMemberHint" class="hint"></span></h3><div class="companion-detail-table-wrap"><table class="data"><thead><tr><th>用户ID</th><th>头像</th><th>昵称</th><th>角色</th><th>成员状态</th><th>在线</th><th>加入时间</th><th>最后活跃</th></tr></thead><tbody id="companionMemberList"></tbody></table></div></section>
+      <section class="companion-detail-section"><h3>实时位置 <span id="companionPositionHint" class="hint"></span></h3><div class="companion-detail-table-wrap"><table class="data"><thead><tr><th>用户ID</th><th>纬度</th><th>经度</th><th>坐标系</th><th>速度(km/h)</th><th>方向</th><th>精度(m)</th><th>海拔</th><th>采样时间</th><th>seq</th><th>来源</th></tr></thead><tbody id="companionPositionList"></tbody></table></div></section>
+      <section class="companion-detail-section"><h3>弹幕历史（最近 200 条） <span id="companionDanmakuHint" class="hint"></span></h3><div class="companion-detail-table-wrap"><table class="data"><thead><tr><th>ID</th><th>用户ID</th><th>内容</th><th>时间</th></tr></thead><tbody id="companionDanmakuList"></tbody></table></div></section>
+    </div>
+  </dialog>
 
   <script src="/admin/static/vendor/tabler.min.js"></script>
   <script src="/admin/static/shell.js"></script>
