@@ -266,6 +266,7 @@ GET /admin/api/users
   → /admin/api/scenic-spots 查询、创建/编辑草稿、发布/归档、查看审计
   → POST /admin/api/scenic-spots/:spot_id/provider-sources/verify 校验高德/Google 来源 ID
   → POST /admin/api/scenic-spots/:spot_id/provider-sources/preview 实时获取来源详情；景点目录的存量资料由 provider-content/backfill 分批同步并保存
+  → POST /admin/api/scenic-spots/:spot_id/google-description 管理员主动查询 Google Places 简介，优先使用已关联 Google Place ID，否则按景点名、城市和坐标匹配；只返回简介给编辑框，需管理员确认并保存
   → POST /admin/api/scenic-spots/:spot_id/photos 上传后台自有图片
   → /admin/api/scenic-spots/:spot_id/tracks 搜索、关联或解除轨迹
   → POST /admin/api/scenic-spots/:spot_id/merge|split 合并目录或拆分轨迹归属
@@ -276,6 +277,7 @@ GET /admin/api/users
 ```
 轨迹只保存内部景点关联；外部来源 ID 留在景点目录。存量回填对没有可用来源 ID 的合格轨迹强制刷新坐标查询缓存，调用地图 API；每日上限按配置执行（高德默认不设日上限），每轮最多 10 次真实请求。索引刷新失败时回退到已有索引继续匹配并单独计数；结果有明确重复命中才创建空白目录项。后台景点页先展示运营统计，调用榜只显示前三名；供应商调用明细不在页面展示。目录为紧凑整行，展示分类、简介和图片；“相关轨迹”操作通过景点轨迹列表接口，以轨迹管理页相同的表格字段（不含开始时间）展示关联轨迹；点击行或编辑按钮打开共享 `static/track_editor.js` 可编辑表单，保存或删除后刷新关联列表。景点详情在弹窗内编辑文字资料和图片，并显示供应商坐标、坐标系及位置地图。供应商文字同步到景点 JSON 资料，图片与人工上传图片共用 `photos` 有序数组；拖动排序和上传追加顺序都会随保存结果下发。Google 坐标按 WGS84 保存，高德坐标按 GCJ02 保存；来源同步只填补空坐标，不覆盖既有坐标，已同步记录单独请求坐标字段，避免再次请求照片媒体。城市信息只读展示，不作为编辑字段。`manual_edited` 表示资料由管理员创建或编辑保存；自动同步资料仍显示“自动”。页面隐藏来源 ID、轨迹关联编辑、合并拆分操作，但提供相关轨迹列表和编辑入口；其余数据/API仍由服务端保留，供客户端景点关联及维护流程使用。景点仍沿用内部 draft/published/archived/merged 状态机；页面展示的“自动/人工”是内容维护方式，不替代发布状态。未发布目录不会覆盖旧轨迹摘要。后台上传图像走受鉴权的 `/api/v1/static/scenic_spots/*` 资源路由，Android 详情页可读取。更新 MySQL/Mongo/memory 任一仓储时，保持三种实现、版本冲突控制和审计行为一致。
 景点页统计开始于该计数能力上线，不回填旧请求；计入已关联内部景点的来源详情、照片请求和 ID 核验，存量轨迹需先运行回填，按坐标执行的识别搜索不计入单景点排行。发布覆盖率以关联轨迹计数为准，目标是帮助运营优先补齐高调用景点的自有内容。
+高德来源景点简介旁的 Google Maps 查询按钮使用未缓存的 Places 查询，并遵守 Google 调用预算；有已关联 Google Place ID 时直接取该地点简介，否则用名称、城市和坐标匹配候选并校验名称与 5km 距离。查询不会自动更新目录，管理员确认输入框内容后仍需手动保存。
 [admin UI] /admin/analytics.html
   → GET /admin/api/analytics/sync-summaries?status=&limit=&offset=
   → AnalyticsRepository.ListSyncSummaries / CountSyncSummaries

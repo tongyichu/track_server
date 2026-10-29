@@ -294,6 +294,16 @@ func (s *ScenicSpotCatalogService) persistProviderContentSync(ctx context.Contex
 func (s *ScenicSpotCatalogService) Get(ctx context.Context, id string) (*models.ScenicSpot, error) {
 	return s.spots.GetScenicSpot(ctx, id)
 }
+func (s *ScenicSpotCatalogService) GoogleDescription(ctx context.Context, id string) (*ScenicSpotGoogleDescription, error) {
+	spot, err := s.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if s.provider == nil {
+		return nil, errors.New("Google Places service unavailable")
+	}
+	return s.provider.LookupScenicSpotGoogleDescription(ctx, spot)
+}
 func (s *ScenicSpotCatalogService) StaticMap(ctx context.Context, id string) ([]byte, string, error) {
 	spot, err := s.Get(ctx, id)
 	if err != nil {

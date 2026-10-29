@@ -13,6 +13,7 @@ import (
 	"path"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/tongyichu/track_server/internal/models"
 )
@@ -391,6 +392,137 @@ func (s *TrackPlaceService) ScenicSpotProviderPreview(ctx context.Context, spotI
 		return nil, errors.New("provider returned no details; check the place ID, API permission, and quota")
 	}
 	return spot, nil
+}
+
+type ScenicSpotGoogleDescription struct {
+	Description string  `json:"description"`
+	PlaceName   string  `json:"place_name,omitempty"`
+	DistanceM   float64 `json:"distance_m,omitempty"`
+}
+
+// LookupScenicSpotGoogleDescription performs an explicit, uncached Google
+// Places lookup for the admin's description helper. It uses a linked Google
+// place ID when one exists; otherwise it searches by the catalog name and
+// location and accepts only a nearby, name-matching result with a summary.
+func (s *TrackPlaceService) LookupScenicSpotGoogleDescription(ctx context.Context, spot *models.ScenicSpot) (*ScenicSpotGoogleDescription, error) {
+	if s == nil || !s.Enabled() || s.cfg.GoogleKey == "" {
+		return nil, errors.New("Google Places is not configured")
+	}
+	if spot == nil || strings.TrimSpace(spot.Name) == "" {
+		return nil, errors.New("scenic spot name is required")
+	}
+	if spot.Latitude == 0 || spot.Longitude == 0 {
+		return nil, errors.New("scenic spot coordinates are required for Google matching")
+	}
+	if !s.reserveScenicCall(ctx, "google") {
+		return nil, errPlaceBudget
+	}
+
+	var result *ScenicSpotGoogleDescription
+	var err error
+	googleID := ""
+	for _, source := range spot.Sources {
+		if source.Provider == "google" && source.Status == "active" && strings.TrimSpace(source.ProviderID) != "" {
+			googleID = strings.TrimSpace(source.ProviderID)
+			break
+		}
+	}
+	if googleID != "" {
+		result, err = s.googleScenicDescriptionByID(ctx, googleID)
+	} else {
+		result, err = s.searchGoogleScenicDescription(ctx, spot)
+	}
+	s.recordScenicProviderCall(ctx, spot.ID, "google", "description", err == nil)
+	return result, err
+}
+
+func (s *TrackPlaceService) googleScenicDescriptionByID(ctx context.Context, placeID string) (*ScenicSpotGoogleDescription, error) {
+	req, _ := http.NewRequest(http.MethodGet, "https://places.googleapis.com/v1/places/"+url.PathEscape(placeID), nil)
+	req.Header.Set("X-Goog-Api-Key", s.cfg.GoogleKey)
+	req.Header.Set("X-Goog-FieldMask", "displayName,editorialSummary")
+	var response struct {
+		DisplayName struct {
+			Text string `json:"text"`
+		} `json:"displayName"`
+		EditorialSummary struct {
+			Text string `json:"text"`
+		} `json:"editorialSummary"`
+	}
+	if err := s.doProviderRequest(ctx, req, &response); err != nil {
+		return nil, err
+	}
+	return &ScenicSpotGoogleDescription{Description: strings.TrimSpace(response.EditorialSummary.Text), PlaceName: strings.TrimSpace(response.DisplayName.Text)}, nil
+}
+
+func (s *TrackPlaceService) searchGoogleScenicDescription(ctx context.Context, spot *models.ScenicSpot) (*ScenicSpotGoogleDescription, error) {
+	point := models.TrackPoint{Latitude: spot.Latitude, Longitude: spot.Longitude}
+	if strings.EqualFold(spot.CoordinateSystem, "GCJ02") || strings.EqualFold(spot.CoordinateSystem, "GCJ-02") {
+		point = mapGCJ02ToWGS84(point)
+	}
+	textQuery := strings.TrimSpace(spot.Name)
+	if city := strings.TrimSpace(spot.CityName); city != "" {
+		textQuery += " " + city
+	}
+	body, _ := json.Marshal(map[string]interface{}{
+		"textQuery":      textQuery,
+		"languageCode":   "zh-CN",
+		"maxResultCount": 5,
+		"rankPreference": "DISTANCE",
+		"locationBias": map[string]interface{}{"circle": map[string]interface{}{
+			"center": map[string]float64{"latitude": point.Latitude, "longitude": point.Longitude},
+			"radius": 5000,
+		}},
+	})
+	req, _ := http.NewRequest(http.MethodPost, "https://places.googleapis.com/v1/places:searchText", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Goog-Api-Key", s.cfg.GoogleKey)
+	req.Header.Set("X-Goog-FieldMask", "places.displayName,places.location,places.editorialSummary")
+	var response struct {
+		Places []struct {
+			DisplayName struct {
+				Text string `json:"text"`
+			} `json:"displayName"`
+			Location struct {
+				Latitude  float64 `json:"latitude"`
+				Longitude float64 `json:"longitude"`
+			} `json:"location"`
+			EditorialSummary struct {
+				Text string `json:"text"`
+			} `json:"editorialSummary"`
+		} `json:"places"`
+	}
+	if err := s.doProviderRequest(ctx, req, &response); err != nil {
+		return nil, err
+	}
+	spotName := normalizeScenicMatchName(spot.Name)
+	var best *ScenicSpotGoogleDescription
+	for _, place := range response.Places {
+		name := strings.TrimSpace(place.DisplayName.Text)
+		summary := strings.TrimSpace(place.EditorialSummary.Text)
+		googleName := normalizeScenicMatchName(name)
+		if summary == "" || name == "" || (googleName != spotName && !strings.Contains(googleName, spotName) && !strings.Contains(spotName, googleName)) {
+			continue
+		}
+		distance := haversineMeters(point.Latitude, point.Longitude, place.Location.Latitude, place.Location.Longitude)
+		if distance > 5000 || (best != nil && distance >= best.DistanceM) {
+			continue
+		}
+		best = &ScenicSpotGoogleDescription{Description: summary, PlaceName: name, DistanceM: distance}
+	}
+	if best == nil {
+		return nil, errors.New("Google Maps did not return a matching place description")
+	}
+	return best, nil
+}
+
+func normalizeScenicMatchName(value string) string {
+	var normalized strings.Builder
+	for _, r := range strings.ToLower(strings.TrimSpace(value)) {
+		if !unicode.IsSpace(r) && !unicode.IsPunct(r) && !unicode.IsSymbol(r) {
+			normalized.WriteRune(r)
+		}
+	}
+	return normalized.String()
 }
 
 // ScenicSpotProviderCoordinates refreshes only the provider's point coordinate.
