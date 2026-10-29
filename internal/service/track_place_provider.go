@@ -384,9 +384,69 @@ func (s *TrackPlaceService) ScenicSpotProviderPreview(ctx context.Context, spotI
 		s.googleScenicDetails(ctx, spot)
 	}
 	if spot.Name == "" && spot.Category == "" && spot.Address == "" && spot.Description == "" && len(spot.Photos) == 0 {
+		if spot.Latitude != 0 && spot.Longitude != 0 {
+			return spot, nil
+		}
 		return nil, errors.New("provider returned no details; check the place ID, API permission, and quota")
 	}
 	return spot, nil
+}
+
+// ScenicSpotProviderCoordinates refreshes only the provider's point coordinate.
+// It deliberately avoids photo media calls when syncing already-imported records.
+func (s *TrackPlaceService) ScenicSpotProviderCoordinates(ctx context.Context, spotID, provider, providerID string) (float64, float64, string, error) {
+	provider = strings.ToLower(strings.TrimSpace(provider))
+	providerID = strings.TrimSpace(providerID)
+	if providerID == "" || (provider != "amap" && provider != "google") || !s.Enabled() {
+		return 0, 0, "", errors.New("provider coordinates unavailable")
+	}
+	if provider == "amap" {
+		if s.cfg.AMapKey == "" || !s.reserveScenicCall(ctx, provider) {
+			return 0, 0, "", errors.New("AMap coordinates unavailable")
+		}
+		q := url.Values{"key": {s.cfg.AMapKey}, "id": {providerID}, "extensions": {"base"}, "output": {"json"}}
+		req, _ := http.NewRequest(http.MethodGet, "https://restapi.amap.com/v3/place/detail?"+q.Encode(), nil)
+		var result struct {
+			Status string `json:"status"`
+			Pois   []struct {
+				Location amapPlaceText `json:"location"`
+			} `json:"pois"`
+		}
+		err := s.doProviderRequest(ctx, req, &result)
+		var lat, lng float64
+		if err == nil && result.Status == "1" && len(result.Pois) > 0 {
+			_, err = fmt.Sscanf(string(result.Pois[0].Location), "%f,%f", &lng, &lat)
+		}
+		ok := err == nil && validProviderCoordinate(lat, lng)
+		s.recordScenicProviderCall(ctx, spotID, provider, "coordinates", ok)
+		if !ok {
+			return 0, 0, "", errors.New("AMap coordinates unavailable")
+		}
+		return lat, lng, "GCJ02", nil
+	}
+	if s.cfg.GoogleKey == "" || !s.reserveScenicCall(ctx, provider) {
+		return 0, 0, "", errors.New("Google Places coordinates unavailable")
+	}
+	req, _ := http.NewRequest(http.MethodGet, "https://places.googleapis.com/v1/places/"+url.PathEscape(providerID), nil)
+	req.Header.Set("X-Goog-Api-Key", s.cfg.GoogleKey)
+	req.Header.Set("X-Goog-FieldMask", "location")
+	var result struct {
+		Location struct {
+			Latitude  float64 `json:"latitude"`
+			Longitude float64 `json:"longitude"`
+		} `json:"location"`
+	}
+	err := s.doProviderRequest(ctx, req, &result)
+	ok := err == nil && validProviderCoordinate(result.Location.Latitude, result.Location.Longitude)
+	s.recordScenicProviderCall(ctx, spotID, provider, "coordinates", ok)
+	if !ok {
+		return 0, 0, "", errors.New("Google Places coordinates unavailable")
+	}
+	return result.Location.Latitude, result.Location.Longitude, "WGS84", nil
+}
+
+func validProviderCoordinate(lat, lng float64) bool {
+	return lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180 && lat != 0 && lng != 0
 }
 
 func (s *TrackPlaceService) VerifyScenicSpotSource(ctx context.Context, spotID, provider, providerID string) error {
@@ -448,10 +508,11 @@ func (s *TrackPlaceService) amapScenicDetails(ctx context.Context, spot *models.
 	var result struct {
 		Status string `json:"status"`
 		Pois   []struct {
-			Name    string `json:"name"`
-			Address string `json:"address"`
-			Type    string `json:"type"`
-			Photos  []struct {
+			Name     string        `json:"name"`
+			Address  string        `json:"address"`
+			Type     string        `json:"type"`
+			Location amapPlaceText `json:"location"`
+			Photos   []struct {
 				Title amapPlaceText `json:"title"`
 				URL   amapPlaceText `json:"url"`
 			} `json:"photos"`
@@ -470,6 +531,10 @@ func (s *TrackPlaceService) amapScenicDetails(ctx context.Context, spot *models.
 	spot.Address = strings.TrimSpace(poi.Address)
 	if spot.Category == "" {
 		spot.Category = strings.TrimSpace(poi.Type)
+	}
+	var lat, lng float64
+	if _, err := fmt.Sscanf(string(poi.Location), "%f,%f", &lng, &lat); err == nil && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180 && lat != 0 && lng != 0 {
+		spot.Latitude, spot.Longitude, spot.CoordinateSystem = lat, lng, "GCJ02"
 	}
 	for _, photo := range poi.Photos {
 		if len(spot.Photos) == 3 {
@@ -501,7 +566,7 @@ func (s *TrackPlaceService) googleScenicDetails(ctx context.Context, spot *model
 	u := "https://places.googleapis.com/v1/places/" + url.PathEscape(spot.ProviderID)
 	req, _ := http.NewRequest(http.MethodGet, u, nil)
 	req.Header.Set("X-Goog-Api-Key", s.cfg.GoogleKey)
-	req.Header.Set("X-Goog-FieldMask", "id,displayName,primaryType,formattedAddress,editorialSummary,googleMapsUri,photos.name,photos.authorAttributions")
+	req.Header.Set("X-Goog-FieldMask", "id,displayName,primaryType,formattedAddress,editorialSummary,googleMapsUri,location,photos.name,photos.authorAttributions")
 	var result struct {
 		DisplayName struct {
 			Text string `json:"text"`
@@ -512,6 +577,10 @@ func (s *TrackPlaceService) googleScenicDetails(ctx context.Context, spot *model
 		EditorialSummary struct {
 			Text string `json:"text"`
 		} `json:"editorialSummary"`
+		Location struct {
+			Latitude  float64 `json:"latitude"`
+			Longitude float64 `json:"longitude"`
+		} `json:"location"`
 		Photos []struct {
 			Name         string `json:"name"`
 			Attributions []struct {
@@ -529,6 +598,9 @@ func (s *TrackPlaceService) googleScenicDetails(ctx context.Context, spot *model
 		spot.Name = strings.TrimSpace(result.DisplayName.Text)
 	}
 	spot.Address, spot.Description = result.FormattedAddress, result.EditorialSummary.Text
+	if result.Location.Latitude >= -90 && result.Location.Latitude <= 90 && result.Location.Longitude >= -180 && result.Location.Longitude <= 180 && result.Location.Latitude != 0 && result.Location.Longitude != 0 {
+		spot.Latitude, spot.Longitude, spot.CoordinateSystem = result.Location.Latitude, result.Location.Longitude, "WGS84"
+	}
 	if spot.Category == "" {
 		spot.Category = result.PrimaryType
 	}

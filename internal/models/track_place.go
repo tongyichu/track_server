@@ -3,16 +3,19 @@ package models
 import "time"
 
 type TrackPrimaryScenicSpot struct {
-	TrackID     string                 `json:"-"`
-	ID          string                 `json:"id"`
-	Name        string                 `json:"name"`
-	Provider    string                 `json:"provider,omitempty"`
-	ProviderID  string                 `json:"provider_id,omitempty"`
-	Sources     []ScenicSpotSource     `json:"sources,omitempty"`
-	Category    string                 `json:"category,omitempty"`
-	Description string                 `json:"description,omitempty"`
-	Address     string                 `json:"address,omitempty"`
-	Photos      []TrackScenicSpotPhoto `json:"photos,omitempty"`
+	TrackID          string                 `json:"-"`
+	ID               string                 `json:"id"`
+	Name             string                 `json:"name"`
+	Provider         string                 `json:"provider,omitempty"`
+	ProviderID       string                 `json:"provider_id,omitempty"`
+	Sources          []ScenicSpotSource     `json:"sources,omitempty"`
+	Category         string                 `json:"category,omitempty"`
+	Description      string                 `json:"description,omitempty"`
+	Address          string                 `json:"address,omitempty"`
+	Latitude         float64                `json:"latitude,omitempty"`
+	Longitude        float64                `json:"longitude,omitempty"`
+	CoordinateSystem string                 `json:"coordinate_system,omitempty"`
+	Photos           []TrackScenicSpotPhoto `json:"photos,omitempty"`
 }
 
 type TrackScenicSpotPhoto struct {

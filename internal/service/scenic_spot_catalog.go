@@ -111,13 +111,14 @@ func (s *ScenicSpotCatalogService) List(ctx context.Context, f repository.Scenic
 }
 
 type ScenicSpotProviderContentBackfillResult struct {
-	Scanned    int    `json:"scanned"`
-	Synced     int    `json:"synced"`
-	NoSource   int    `json:"no_source"`
-	Skipped    int    `json:"skipped"`
-	Failed     int    `json:"failed"`
-	HasMore    bool   `json:"has_more"`
-	NextCursor string `json:"next_cursor,omitempty"`
+	Scanned     int    `json:"scanned"`
+	Synced      int    `json:"synced"`
+	Coordinates int    `json:"coordinates"`
+	NoSource    int    `json:"no_source"`
+	Skipped     int    `json:"skipped"`
+	Failed      int    `json:"failed"`
+	HasMore     bool   `json:"has_more"`
+	NextCursor  string `json:"next_cursor,omitempty"`
 }
 
 // BackfillProviderContent fetches missing provider text and photos once and
@@ -138,12 +139,27 @@ func (s *ScenicSpotCatalogService) BackfillProviderContent(ctx context.Context, 
 		out.NextCursor = spots[len(spots)-1].ID
 	}
 	for _, spot := range spots {
-		if spot == nil || spot.Status == models.ScenicSpotMerged || spot.ProviderDataStatus == "synced" || spot.ProviderDataStatus == "no_source" {
+		if spot == nil || spot.Status == models.ScenicSpotMerged || spot.ProviderDataStatus == "no_source" {
+			out.Skipped++
+			continue
+		}
+		contentSynced := spot.ProviderDataStatus == "synced"
+		coordinatesChecked := spot.ProviderCoordinatesStatus == "synced" || spot.ProviderCoordinatesStatus == "unavailable"
+		if contentSynced && (coordinatesChecked || (spot.Latitude != 0 && spot.Longitude != 0)) {
 			out.Skipped++
 			continue
 		}
 		source := preferredScenicSpotSource(spot.Sources)
 		if source == nil {
+			if contentSynced {
+				spot.ProviderCoordinatesStatus = "unavailable"
+				if err := s.persistProviderContentSync(ctx, spot, operator, "provider coordinates skipped: no active source"); err != nil {
+					out.Failed++
+					continue
+				}
+				out.NoSource++
+				continue
+			}
 			spot.ProviderDataStatus = "no_source"
 			if err := s.persistProviderContentSync(ctx, spot, operator, "provider content skipped: no active source"); err != nil {
 				out.Failed++
@@ -152,9 +168,34 @@ func (s *ScenicSpotCatalogService) BackfillProviderContent(ctx context.Context, 
 			out.NoSource++
 			continue
 		}
+		if contentSynced {
+			lat, lng, coordinateSystem, coordinateErr := s.provider.ScenicSpotProviderCoordinates(ctx, spot.ID, source.Provider, source.ProviderID)
+			if coordinateErr != nil {
+				spot.ProviderCoordinatesStatus = "failed"
+				if err := s.persistProviderContentSync(ctx, spot, operator, "provider coordinates fetch failed"); err != nil {
+					out.Failed++
+					continue
+				}
+				out.Failed++
+				continue
+			}
+			if spot.Latitude == 0 || spot.Longitude == 0 {
+				spot.Latitude, spot.Longitude, spot.CoordinateSystem = lat, lng, coordinateSystem
+			}
+			spot.ProviderCoordinatesStatus = "synced"
+			if err := s.persistProviderContentSync(ctx, spot, operator, source.Provider+" provider coordinates synced"); err != nil {
+				out.Failed++
+				continue
+			}
+			out.Coordinates++
+			continue
+		}
 		preview, fetchErr := s.PreviewProviderSource(ctx, spot.ID, source.Provider, source.ProviderID)
 		if fetchErr != nil {
-			spot.ProviderDataStatus = "failed"
+			if !contentSynced {
+				spot.ProviderDataStatus = "failed"
+			}
+			spot.ProviderCoordinatesStatus = "failed"
 			if err := s.persistProviderContentSync(ctx, spot, operator, "provider content fetch failed"); err != nil {
 				out.Failed++
 				continue
@@ -176,6 +217,15 @@ func (s *ScenicSpotCatalogService) BackfillProviderContent(ctx context.Context, 
 		}
 		if strings.TrimSpace(spot.Description) == "" {
 			spot.Description = strings.TrimSpace(preview.Description)
+		}
+		if (spot.Latitude == 0 || spot.Longitude == 0) && preview.Latitude != 0 && preview.Longitude != 0 {
+			spot.Latitude, spot.Longitude = preview.Latitude, preview.Longitude
+			spot.CoordinateSystem = preview.CoordinateSystem
+		}
+		if preview.Latitude != 0 && preview.Longitude != 0 {
+			spot.ProviderCoordinatesStatus = "synced"
+		} else {
+			spot.ProviderCoordinatesStatus = "unavailable"
 		}
 		knownPhotos := make(map[string]struct{}, len(spot.Photos))
 		for _, photo := range spot.Photos {

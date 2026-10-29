@@ -58,10 +58,10 @@
 
   async function syncProviderContent() {
     if(state.providerSyncing)return;state.providerSyncing=true;const progress=$('providerSyncProgress');progress.hidden=false;
-    let cursor='',scanned=0,synced=0,noSource=0,failed=0;
+    let cursor='',scanned=0,synced=0,coordinates=0,noSource=0,failed=0;
     try{
-      while(true){const params=new URLSearchParams({limit:'5'});if(cursor)params.set('cursor',cursor);const result=await api('/scenic-spots/provider-content/backfill?'+params,{method:'POST'});scanned+=result.scanned||0;synced+=result.synced||0;noSource+=result.no_source||0;failed+=result.failed||0;progress.textContent='供应商资料同步：已扫描 '+scanned+' 处，已入库 '+synced+' 处，缺少来源 '+noSource+' 处，失败 '+failed+' 处';if(!result.has_more)break;cursor=result.next_cursor||'';if(!cursor)break;}
-      await Promise.all([loadList(),loadStats()]);progress.textContent='供应商资料同步完成：本轮入库 '+synced+' 处，缺少来源 '+noSource+' 处，失败 '+failed+' 处。';
+      while(true){const params=new URLSearchParams({limit:'5'});if(cursor)params.set('cursor',cursor);const result=await api('/scenic-spots/provider-content/backfill?'+params,{method:'POST'});scanned+=result.scanned||0;synced+=result.synced||0;coordinates+=result.coordinates||0;noSource+=result.no_source||0;failed+=result.failed||0;progress.textContent='供应商资料同步：已扫描 '+scanned+' 处，新增资料 '+synced+' 处，补齐坐标 '+coordinates+' 处，缺少来源 '+noSource+' 处，失败 '+failed+' 处';if(!result.has_more)break;cursor=result.next_cursor||'';if(!cursor)break;}
+      await Promise.all([loadList(),loadStats()]);progress.textContent='供应商资料同步完成：新增资料 '+synced+' 处，补齐坐标 '+coordinates+' 处，缺少来源 '+noSource+' 处，失败 '+failed+' 处。';
     }catch(error){progress.textContent='供应商资料同步中断：'+error.message;}
     finally{state.providerSyncing=false;}
   }
@@ -71,10 +71,12 @@
     $('detailMeta').textContent=spot.id?'内部 ID：'+spot.id:'保存后生成内部景点 ID';setModeBadge(spot);
     $('nameInput').value=spot.name||'';$('categoryInput').value=spot.category||'';$('addressInput').value=spot.address||'';$('descriptionInput').value=spot.description||'';
     const cities=spotCities(spot);$('cityInfo').textContent='城市：'+(cities.length?cities.join('、'):'暂无');
-    const hasCoordinates=spot.latitude!==undefined||spot.longitude!==undefined;$('coordinateInfo').hidden=!hasCoordinates;$('coordinateInfo').textContent=hasCoordinates?'坐标：'+Number(spot.latitude||0).toFixed(6)+'，'+Number(spot.longitude||0).toFixed(6):'';$('copySpotIdBtn').disabled=!spot.id;
+    const lat=Number(spot.latitude),lng=Number(spot.longitude),hasCoordinates=Number.isFinite(lat)&&Number.isFinite(lng)&&lat!==0&&lng!==0;$('coordinateInfo').hidden=!hasCoordinates;$('coordinateInfo').textContent=hasCoordinates?'坐标（'+(spot.coordinate_system||'未知坐标系')+'）：'+lat.toFixed(6)+'，'+lng.toFixed(6):'';$('coordinateMap').hidden=!hasCoordinates;
+    if(hasCoordinates){const center=toWGS84(lat,lng,spot.coordinate_system);const delta=0.008;const bbox=[center.lng-delta,center.lat-delta,center.lng+delta,center.lat+delta].join('%2C');$('coordinateMapFrame').src='https://www.openstreetmap.org/export/embed.html?bbox='+bbox+'&layer=mapnik&marker='+center.lat.toFixed(6)+'%2C'+center.lng.toFixed(6);}else{$('coordinateMapFrame').removeAttribute('src');}$('copySpotIdBtn').disabled=!spot.id;
     $('providerNameHint').textContent='';$('providerCategoryHint').textContent='';$('providerAddressHint').textContent='';$('providerDescriptionHint').textContent='';$('photosBox').replaceChildren();(spot.photos||[]).forEach(addPhotoCard);
     $('uploadPhotoBtn').disabled=state.newSpot;
   }
+  function toWGS84(lat,lng,system){if(system!=='GCJ02')return{lat,lng};const inside=lng>=72.004&&lng<=137.8347&&lat>=0.8293&&lat<=55.8271;if(!inside)return{lat,lng};let outLat=lat,outLng=lng;for(let i=0;i<3;i++){const x=outLng-105,y=outLat-35;let a=-100+2*x+3*y+.2*y*y+.1*x*y+.2*Math.sqrt(Math.abs(x));a+=(20*Math.sin(6*x*Math.PI)+20*Math.sin(2*x*Math.PI))*2/3;a+=(20*Math.sin(y*Math.PI)+40*Math.sin(y/3*Math.PI))*2/3;a+=(160*Math.sin(y/12*Math.PI)+320*Math.sin(y*Math.PI/30))*2/3;let b=300+x+2*y+.1*x*x+.1*x*y+.1*Math.sqrt(Math.abs(x));b+=(20*Math.sin(6*x*Math.PI)+20*Math.sin(2*x*Math.PI))*2/3;b+=(20*Math.sin(x*Math.PI)+40*Math.sin(x/3*Math.PI))*2/3;b+=(150*Math.sin(x/12*Math.PI)+300*Math.sin(x/30*Math.PI))*2/3;const rad=outLat/180*Math.PI,magic=1-.00669342162296594323*Math.sin(rad)**2,root=Math.sqrt(magic);const dLat=a*180/((6378245*(1-.00669342162296594323))/(magic*root)*Math.PI),dLng=b*180/(6378245/root*Math.cos(rad)*Math.PI);outLat=lat-dLat;outLng=lng-dLng;}return{lat:outLat,lng:outLng};}
   async function loadSpot(id) {
     try{const spot=await api('/scenic-spots/'+encodeURIComponent(id));state.newSpot=false;fillForm(spot);document.querySelectorAll('.scenic-row').forEach(row=>row.classList.toggle('active',row.dataset.spotId===id));renderList();}
     catch(error){toast(error.message,'danger');}

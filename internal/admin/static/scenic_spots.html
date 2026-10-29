@@ -16,6 +16,7 @@
     @media(max-width:900px){.scenic-spots-page .scenic-stats-panel,.scenic-spots-page .scenic-filter-panel{padding:18px!important}.scenic-stats-lower{gap:22px}}
     @media(max-width:560px){.scenic-spots-page .scenic-stats-panel,.scenic-spots-page .scenic-filter-panel{padding:14px!important}.scenic-spots-page .scenic-stats-grid .scenic-stat{padding:12px!important}.scenic-stats-grid{grid-template-columns:1fr 1fr}.scenic-stat-value{font-size:22px}.scenic-search .search-name,.scenic-search .search-city,.scenic-search .search-mode{flex:1 1 100%;max-width:none}.scenic-search>button{flex:1 1 auto}}
     .scenic-photo{cursor:grab}.scenic-photo:active{cursor:grabbing}.scenic-photo.dragging{opacity:.45}.scenic-photo.drop-target{outline:2px solid var(--tblr-primary)}.scenic-photo-source{font-size:11px;color:var(--tblr-secondary-color);margin-top:3px}.scenic-provider-hint{font-size:12px;color:var(--tblr-secondary-color);font-weight:400}
+    .scenic-coordinate-map{margin-top:10px;border:1px solid var(--tblr-border-color);border-radius:8px;overflow:hidden;background:var(--tblr-bg-surface-secondary)}.scenic-coordinate-map iframe{display:block;width:100%;height:220px;border:0}.scenic-coordinate-map[hidden]{display:none}
   </style>
 </head>
 <body class="scenic-spots-page">
@@ -47,7 +48,7 @@
   </main>
   <dialog id="detailModal" class="scenic-modal"><div id="detailPanel" class="scenic-modal-body">
     <div class="scenic-detail-head"><span id="cityInfo" class="scenic-city-tag">城市：暂无</span><div><h2 id="detailTitle" class="mb-1">景点资料</h2><div class="scenic-detail-actions"><span id="detailMode" class="scenic-mode"></span><span id="detailMeta" class="scenic-hint"></span><button id="copySpotIdBtn" type="button" class="btn btn-sm btn-outline-secondary" aria-label="复制景点内部 ID" title="复制内部 ID" disabled><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="7" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button></div></div><span class="spacer"></span><button id="closeDetailBtn" class="btn btn-outline-secondary">关闭</button></div>
-    <div id="coordinateInfo" class="scenic-hint mt-2" hidden></div>
+    <div id="coordinateInfo" class="scenic-hint mt-2" hidden></div><div id="coordinateMap" class="scenic-coordinate-map" hidden><iframe id="coordinateMapFrame" title="景点位置地图" loading="lazy" referrerpolicy="no-referrer"></iframe></div>
     <div class="scenic-fields mt-3">
       <label>景点名称<input id="nameInput" class="form-control" maxlength="160" /><small id="providerNameHint" class="scenic-provider-hint"></small></label>
       <label>分类<input id="categoryInput" class="form-control" maxlength="100" /><small id="providerCategoryHint" class="scenic-provider-hint"></small></label>
