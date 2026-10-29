@@ -67,7 +67,7 @@ internal/admin/
 | 埋点同步摘要 | `handlers.go` 中 `ListAnalyticsSyncSummaries`，`static/analytics.html`、`static/analytics.js` |
 | 聚合路线运营 | `handlers.go` 中 `ListRouteGroups` / `GetRouteGroup` / `RenameRouteGroup` / `MergeRouteGroup` / `RemoveRouteGroupMember` / `SetRouteGroupRepresentative`，`static/route_groups.html`、`static/route_groups.js` |
 | 轨迹投稿审核 | `handlers.go` 中 `ListTrackSubmissions` / `GetTrackSubmission` / `ReviewTrackSubmission`，统计复用 `GetDashboard`；页面位于 `static/track_submissions.html`、`static/track_submissions.js` |
-| 主景点目录 | `scenic_spot_handlers.go` + `ScenicSpotCatalogService`；页面 `static/scenic_spots.html`、`static/scenic_spots.js`；目录与调用统计由 `repository.ScenicSpotRepository` 三种实现提供；首次加载时分批同步存量供应商资料，详情以弹窗编辑并可拖动排序图片 |
+| 主景点目录 | `scenic_spot_handlers.go` + `ScenicSpotCatalogService`；页面 `static/scenic_spots.html`、`static/scenic_spots.js`；目录与调用统计由 `repository.ScenicSpotRepository` 三种实现提供；首次加载时分批同步存量供应商资料；新建时地图附近 POI 先进入备选预览，一键代入后写入供应商来源与资料/图片；详情以弹窗编辑并可拖动排序图片 |
 | 轨迹编辑弹窗 | `static/track_editor.js` 提供共享编辑表单，轨迹管理页与景点相关轨迹列表共用；保存或删除后调用页刷新各自列表 |
 
 ## 路由清单（与 `routes.go` 对齐）
