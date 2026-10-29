@@ -463,8 +463,10 @@ var (
 
 // CityOption is a human-readable city or province selector entry.
 type CityOption struct {
-	Code string `json:"code"`
-	Name string `json:"name"`
+	Code         string `json:"code"`
+	Name         string `json:"name"`
+	Level        string `json:"level"`
+	ProvinceCode string `json:"province_code,omitempty"`
 }
 
 // CityNameByCode 根据城市 Code 返回城市名称。
@@ -493,7 +495,7 @@ func CityNameByCode(code string) string {
 				continue
 			}
 			cityNameMap[c.Code] = c.Name
-			cityOptions = append(cityOptions, CityOption{Code: c.Code, Name: c.Name})
+			cityOptions = append(cityOptions, CityOption{Code: c.Code, Name: c.Name, Level: "city", ProvinceCode: c.Province + "0000"})
 		}
 		var provinces []rawProvince
 		if err := json.Unmarshal(chinaProvinceRaw, &provinces); err != nil {
@@ -507,7 +509,7 @@ func CityNameByCode(code string) string {
 				continue
 			}
 			cityNameMap[p.Code] = p.Name
-			cityOptions = append(cityOptions, CityOption{Code: p.Code, Name: p.Name})
+			cityOptions = append(cityOptions, CityOption{Code: p.Code, Name: p.Name, Level: "province"})
 		}
 		sort.Slice(cityOptions, func(i, j int) bool {
 			if cityOptions[i].Name == cityOptions[j].Name {
