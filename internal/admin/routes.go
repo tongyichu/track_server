@@ -171,6 +171,7 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	api.GET("/users", m.Handler.ListUsers)
 	api.GET("/users/:user_id", m.Handler.GetUserProfile)
 	api.PUT("/users/:user_id", m.Handler.UpdateUserProfile)
+	api.PUT("/users/:user_id/internal", m.Handler.UpdateUserInternal)
 	api.GET("/users/:user_id/restrictions/current", m.Handler.GetCurrentAccountRestriction)
 	api.POST("/users/:user_id/restrictions", m.Handler.CreateAccountRestriction)
 	api.DELETE("/users/:user_id/restrictions/current", m.Handler.RevokeCurrentAccountRestriction)

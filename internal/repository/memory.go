@@ -664,6 +664,7 @@ func (r *InMemoryUserRepository) Update(_ context.Context, u *models.User) error
 	u.ProvinceName = existing.ProvinceName
 	u.CityCode = existing.CityCode
 	u.CityName = existing.CityName
+	u.IsInternal = existing.IsInternal
 	u.UpdatedAt = time.Now()
 	r.users[u.ID] = u
 	return nil

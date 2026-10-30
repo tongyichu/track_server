@@ -54,6 +54,7 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
  province_name VARCHAR(64) NOT NULL DEFAULT '',
  city_code VARCHAR(6) NOT NULL DEFAULT '',
  city_name VARCHAR(64) NOT NULL DEFAULT '',
+ is_internal TINYINT(1) NOT NULL DEFAULT 0,
 			phone VARCHAR(32) NOT NULL DEFAULT '',
 			client_language VARCHAR(64) NOT NULL DEFAULT '',
 			token_version BIGINT NOT NULL DEFAULT 1,
@@ -2426,10 +2427,10 @@ func (r *MySQLUserRepository) CreateIfNotExists(ctx context.Context, u *models.U
 		u.TokenVersion = 1
 	}
 	_, err := r.db.ExecContext(ctx,
-		`INSERT INTO users (id, nickname, avatar_url, signature, background_url, gender, birthday, province_code, province_name, city_code, city_name, phone, client_language, token_version, created_at, updated_at)
-			 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+		`INSERT INTO users (id, nickname, avatar_url, signature, background_url, gender, birthday, province_code, province_name, city_code, city_name, is_internal, phone, client_language, token_version, created_at, updated_at)
+			 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 			 ON DUPLICATE KEY UPDATE id=id`,
-		u.ID, u.Nickname, nullableStringValue(u.AvatarURL), nullableStringValue(u.Signature), nullableStringValue(u.BackgroundURL), u.Gender, u.Birthday, u.ProvinceCode, u.ProvinceName, u.CityCode, u.CityName, u.Phone, u.ClientLanguage, u.TokenVersion, u.CreatedAt, u.UpdatedAt,
+		u.ID, u.Nickname, nullableStringValue(u.AvatarURL), nullableStringValue(u.Signature), nullableStringValue(u.BackgroundURL), u.Gender, u.Birthday, u.ProvinceCode, u.ProvinceName, u.CityCode, u.CityName, u.IsInternal, u.Phone, u.ClientLanguage, u.TokenVersion, u.CreatedAt, u.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -2439,7 +2440,7 @@ func (r *MySQLUserRepository) CreateIfNotExists(ctx context.Context, u *models.U
 
 func (r *MySQLUserRepository) FindByID(ctx context.Context, id int64) (*models.User, error) {
 	row := r.db.QueryRowContext(ctx,
-		`SELECT id, nickname, avatar_url, signature, background_url, gender, birthday, province_code, province_name, city_code, city_name, phone, client_language, token_version, created_at, updated_at FROM users WHERE id=?`,
+		`SELECT id, nickname, avatar_url, signature, background_url, gender, birthday, province_code, province_name, city_code, city_name, is_internal, phone, client_language, token_version, created_at, updated_at FROM users WHERE id=?`,
 		id,
 	)
 	var (
@@ -2448,7 +2449,7 @@ func (r *MySQLUserRepository) FindByID(ctx context.Context, id int64) (*models.U
 		signature  sql.NullString
 		background sql.NullString
 	)
-	if err := row.Scan(&u.ID, &u.Nickname, &avatarURL, &signature, &background, &u.Gender, &u.Birthday, &u.ProvinceCode, &u.ProvinceName, &u.CityCode, &u.CityName, &u.Phone, &u.ClientLanguage, &u.TokenVersion, &u.CreatedAt, &u.UpdatedAt); err != nil {
+	if err := row.Scan(&u.ID, &u.Nickname, &avatarURL, &signature, &background, &u.Gender, &u.Birthday, &u.ProvinceCode, &u.ProvinceName, &u.CityCode, &u.CityName, &u.IsInternal, &u.Phone, &u.ClientLanguage, &u.TokenVersion, &u.CreatedAt, &u.UpdatedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
@@ -2487,7 +2488,7 @@ func (r *MySQLUserRepository) FindByIDs(ctx context.Context, ids []int64) (map[i
 		return result, nil
 	}
 	placeholders := strings.TrimRight(strings.Repeat("?,", len(unique)), ",")
-	query := fmt.Sprintf(`SELECT id,nickname,avatar_url,signature,background_url,gender,birthday,province_code,province_name,city_code,city_name,phone,client_language,token_version,created_at,updated_at FROM users WHERE id IN (%s)`, placeholders)
+	query := fmt.Sprintf(`SELECT id,nickname,avatar_url,signature,background_url,gender,birthday,province_code,province_name,city_code,city_name,is_internal,phone,client_language,token_version,created_at,updated_at FROM users WHERE id IN (%s)`, placeholders)
 	args := make([]any, 0, len(unique))
 	for _, id := range unique {
 		args = append(args, id)
@@ -2500,7 +2501,7 @@ func (r *MySQLUserRepository) FindByIDs(ctx context.Context, ids []int64) (map[i
 	for rows.Next() {
 		var user models.User
 		var avatar, signature, background sql.NullString
-		if err := rows.Scan(&user.ID, &user.Nickname, &avatar, &signature, &background, &user.Gender, &user.Birthday, &user.ProvinceCode, &user.ProvinceName, &user.CityCode, &user.CityName, &user.Phone, &user.ClientLanguage, &user.TokenVersion, &user.CreatedAt, &user.UpdatedAt); err != nil {
+		if err := rows.Scan(&user.ID, &user.Nickname, &avatar, &signature, &background, &user.Gender, &user.Birthday, &user.ProvinceCode, &user.ProvinceName, &user.CityCode, &user.CityName, &user.IsInternal, &user.Phone, &user.ClientLanguage, &user.TokenVersion, &user.CreatedAt, &user.UpdatedAt); err != nil {
 			return nil, err
 		}
 		if avatar.Valid {
@@ -2523,7 +2524,7 @@ func (r *MySQLUserRepository) FindByIDs(ctx context.Context, ids []int64) (map[i
 
 func (r *MySQLUserRepository) FindByPhone(ctx context.Context, phone string) (*models.User, error) {
 	row := r.db.QueryRowContext(ctx,
-		`SELECT id, nickname, avatar_url, signature, background_url, gender, birthday, province_code, province_name, city_code, city_name, phone, client_language, token_version, created_at, updated_at FROM users WHERE phone=? LIMIT 1`,
+		`SELECT id, nickname, avatar_url, signature, background_url, gender, birthday, province_code, province_name, city_code, city_name, is_internal, phone, client_language, token_version, created_at, updated_at FROM users WHERE phone=? LIMIT 1`,
 		phone,
 	)
 	var (
@@ -2532,7 +2533,7 @@ func (r *MySQLUserRepository) FindByPhone(ctx context.Context, phone string) (*m
 		signature  sql.NullString
 		background sql.NullString
 	)
-	if err := row.Scan(&u.ID, &u.Nickname, &avatarURL, &signature, &background, &u.Gender, &u.Birthday, &u.ProvinceCode, &u.ProvinceName, &u.CityCode, &u.CityName, &u.Phone, &u.ClientLanguage, &u.TokenVersion, &u.CreatedAt, &u.UpdatedAt); err != nil {
+	if err := row.Scan(&u.ID, &u.Nickname, &avatarURL, &signature, &background, &u.Gender, &u.Birthday, &u.ProvinceCode, &u.ProvinceName, &u.CityCode, &u.CityName, &u.IsInternal, &u.Phone, &u.ClientLanguage, &u.TokenVersion, &u.CreatedAt, &u.UpdatedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
@@ -2555,7 +2556,7 @@ func (r *MySQLUserRepository) FindByPhone(ctx context.Context, phone string) (*m
 
 func (r *MySQLUserRepository) FindByNickname(ctx context.Context, nickname string) (*models.User, error) {
 	row := r.db.QueryRowContext(ctx,
-		`SELECT id, nickname, avatar_url, signature, background_url, gender, birthday, province_code, province_name, city_code, city_name, phone, client_language, token_version, created_at, updated_at FROM users WHERE nickname=? LIMIT 1`,
+		`SELECT id, nickname, avatar_url, signature, background_url, gender, birthday, province_code, province_name, city_code, city_name, is_internal, phone, client_language, token_version, created_at, updated_at FROM users WHERE nickname=? LIMIT 1`,
 		nickname,
 	)
 	var (
@@ -2564,7 +2565,7 @@ func (r *MySQLUserRepository) FindByNickname(ctx context.Context, nickname strin
 		signature  sql.NullString
 		background sql.NullString
 	)
-	if err := row.Scan(&u.ID, &u.Nickname, &avatarURL, &signature, &background, &u.Gender, &u.Birthday, &u.ProvinceCode, &u.ProvinceName, &u.CityCode, &u.CityName, &u.Phone, &u.ClientLanguage, &u.TokenVersion, &u.CreatedAt, &u.UpdatedAt); err != nil {
+	if err := row.Scan(&u.ID, &u.Nickname, &avatarURL, &signature, &background, &u.Gender, &u.Birthday, &u.ProvinceCode, &u.ProvinceName, &u.CityCode, &u.CityName, &u.IsInternal, &u.Phone, &u.ClientLanguage, &u.TokenVersion, &u.CreatedAt, &u.UpdatedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
@@ -2609,7 +2610,7 @@ func (r *MySQLUserRepository) ListAll(ctx context.Context, cursor *models.UserLi
 	if limit <= 0 {
 		limit = 20
 	}
-	query := `SELECT id, nickname, avatar_url, signature, background_url, gender, birthday, province_code, province_name, city_code, city_name, phone, client_language, token_version, created_at, updated_at FROM users`
+	query := `SELECT id, nickname, avatar_url, signature, background_url, gender, birthday, province_code, province_name, city_code, city_name, is_internal, phone, client_language, token_version, created_at, updated_at FROM users`
 	args := make([]interface{}, 0, 4)
 	if cursor != nil && !cursor.CreatedAt.IsZero() {
 		query += ` WHERE (created_at < ? OR (created_at = ? AND id < ?))`
@@ -2630,7 +2631,7 @@ func (r *MySQLUserRepository) ListAll(ctx context.Context, cursor *models.UserLi
 			signature  sql.NullString
 			background sql.NullString
 		)
-		if err := rows.Scan(&u.ID, &u.Nickname, &avatarURL, &signature, &background, &u.Gender, &u.Birthday, &u.ProvinceCode, &u.ProvinceName, &u.CityCode, &u.CityName, &u.Phone, &u.ClientLanguage, &u.TokenVersion, &u.CreatedAt, &u.UpdatedAt); err != nil {
+		if err := rows.Scan(&u.ID, &u.Nickname, &avatarURL, &signature, &background, &u.Gender, &u.Birthday, &u.ProvinceCode, &u.ProvinceName, &u.CityCode, &u.CityName, &u.IsInternal, &u.Phone, &u.ClientLanguage, &u.TokenVersion, &u.CreatedAt, &u.UpdatedAt); err != nil {
 			return nil, err
 		}
 		if avatarURL.Valid {
@@ -3814,6 +3815,7 @@ func ensureMySQLUserProfileColumns(ctx context.Context, db *sql.DB) error {
 		{"province_name", "province_name VARCHAR(64) NOT NULL DEFAULT ''"},
 		{"city_code", "city_code VARCHAR(6) NOT NULL DEFAULT ''"},
 		{"city_name", "city_name VARCHAR(64) NOT NULL DEFAULT ''"},
+		{"is_internal", "is_internal TINYINT(1) NOT NULL DEFAULT 0"},
 	} {
 		var count int
 		if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='users' AND COLUMN_NAME=?`, column.name).Scan(&count); err != nil {

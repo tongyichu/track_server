@@ -103,6 +103,26 @@ func (h *Handler) UpdateUserProfile(ctx context.Context, c *app.RequestContext) 
 	c.JSON(http.StatusOK, utils.H{"code": 0, "data": h.adminUserProfile(ctx, &clone)})
 }
 
+func (h *Handler) UpdateUserInternal(ctx context.Context, c *app.RequestContext) {
+	userID, ok := parseAdminUserID(c)
+	if !ok {
+		return
+	}
+	var body struct {
+		IsInternal bool `json:"is_internal"`
+	}
+	data, err := c.Body()
+	if err != nil || json.Unmarshal(data, &body) != nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid payload"})
+		return
+	}
+	if err := h.userRepo.UpdateInternal(ctx, userID, body.IsInternal); err != nil {
+		writeAdminUserProfileError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"status": "ok", "is_internal": body.IsInternal}})
+}
+
 func (h *Handler) adminUserProfile(ctx context.Context, user *models.User) *adminUserProfileResponse {
 	if h.userSvc != nil {
 		h.userSvc.DecorateAvatar(ctx, user)

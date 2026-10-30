@@ -27,6 +27,12 @@
     var until = r.expires_at ? ('至 ' + fmtTime(r.expires_at)) : '永久';
     return '<span class="badge bg-red-lt text-red">已限制</span><br><span class="hint">' + esc(until) + '</span><br><span class="hint">' + esc(r.reason || '') + '</span>';
   }
+  function genderText(value) {
+    return value === 'male' ? '男' : (value === 'female' ? '女' : '未设置');
+  }
+  function zodiacText(value) {
+    return distributionLabels[value] || '未设置';
+  }
 
   var distributionLabels = {
     male: '男', female: '女', unknown: '未知', aries: '白羊座', taurus: '金牛座', gemini: '双子座',
@@ -111,11 +117,7 @@
       var features = (geo.features || []).filter(function (feature) {
         return String(feature.properties.adcode) !== '100000_JD';
       });
-      var southSeaFeatures = (geo.features || []).filter(function (feature) {
-        return String(feature.properties.adcode) === '100000_JD';
-      });
       echarts.registerMap('china_provinces', { type: 'FeatureCollection', features: features });
-      echarts.registerMap('china_south_sea', { type: 'FeatureCollection', features: southSeaFeatures });
       var nameMap = {};
       features.forEach(function (feature) {
         var fullName = feature.properties.name;
@@ -145,7 +147,7 @@
         visualMap: { show: false, seriesIndex: 0, min: 0, max: max, inRange: { color: ['#edf3fa', '#8db9e8', '#206bc4'] } },
         series: [{
           type: 'map', map: 'china_provinces', nameMap: nameMap, selectedMode: 'single', roam: false,
-          layoutCenter: ['50%', '50%'], layoutSize: '100%',
+          layoutCenter: ['50%', '50%'], layoutSize: '112%',
           label: { show: true, color: '#334155', fontSize: 9, formatter: function (params) {
             return params.data && number(params.data.value) > 0 ? compactNumber(params.data.value) : '';
           } },
@@ -153,16 +155,6 @@
           select: { label: { show: true, color: '#fff', fontWeight: 700 }, itemStyle: { areaColor: '#174f94' } },
           itemStyle: { borderColor: '#fff', borderWidth: 1, areaColor: '#edf3fa' },
           data: data
-        }]
-      }, true);
-      if (!userCharts.userSouthSeaMap) userCharts.userSouthSeaMap = echarts.init(document.getElementById('userSouthSeaMap'));
-      userCharts.userSouthSeaMap.setOption({
-        series: [{
-          type: 'map', map: 'china_south_sea', silent: true, roam: false,
-          layoutCenter: ['50%', '50%'], layoutSize: '96%',
-          label: { show: false }, tooltip: { show: false },
-          itemStyle: { borderColor: '#64748b', borderWidth: 1, areaColor: '#8db9e8' },
-          data: [{ name: '', fullName: '', value: 0 }]
         }]
       }, true);
       userMap.off('click');
@@ -301,7 +293,25 @@
 
   tbody.addEventListener('change', async function (ev) {
     var input = ev.target;
-    if (!input.dataset || input.dataset.action !== 'restriction') return;
+    if (!input.dataset) return;
+    if (input.dataset.action === 'internal') {
+      var internalUserID = input.dataset.userId;
+      var isInternal = input.checked;
+      input.disabled = true;
+      var internalResponse = await fetch('/admin/api/users/' + encodeURIComponent(internalUserID) + '/internal', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_internal: isInternal })
+      });
+      if (!internalResponse.ok) {
+        AdminUI.alert('内部人员状态更新失败: ' + await internalResponse.text(), 'danger');
+        input.checked = !isInternal;
+        input.disabled = false;
+        return;
+      }
+      AdminUI.alert(isInternal ? '已设为内部人员' : '已取消内部人员', 'success');
+      loadPage();
+      return;
+    }
+    if (input.dataset.action !== 'restriction') return;
     var userID = input.dataset.userId;
     var restrict = input.checked;
     input.disabled = true;
@@ -379,7 +389,7 @@
     }
     var resp = await fetch('/admin/api/users?' + params.toString());
     if (!resp.ok) {
-      tbody.innerHTML = '<tr><td colspan="6">加载失败: ' + resp.status + '</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="9">加载失败: ' + resp.status + '</td></tr>';
       return;
     }
     var data = ((await resp.json()).data) || {};
@@ -395,9 +405,12 @@
       var tr = document.createElement('tr');
       tr.innerHTML = '<td><div class="admin-user-identity">' + avatar + '<span>' + esc(it.nickname) + '</span></div></td>' +
         '<td>' + esc(it.phone || '') + '</td>' +
+        '<td>' + esc(genderText(it.gender)) + '</td>' +
+        '<td>' + esc(zodiacText(it.zodiac_sign)) + '</td>' +
+        '<td><span class="admin-user-city-cell">' + esc(locationText(it)) + '</span></td>' +
         '<td>' + restrictionText(it.account_restriction) + '</td>' +
+        '<td><label class="form-switch admin-user-restriction-switch"><input type="checkbox" data-action="internal" data-user-id="' + esc(it.id) + '"' + (it.is_internal ? ' checked' : '') + '><span>内部</span></label></td>' +
         '<td>' + (it.last_login_at ? fmtTime(it.last_login_at) : '—') + '</td>' +
-        '<td>' + fmtTime(it.created_at) + '</td>' +
         '<td><div class="admin-user-actions"><button data-action="detail" data-user-id="' + esc(it.id) + '">查看详情</button>' +
         '<label class="form-switch admin-user-restriction-switch"><input type="checkbox" data-action="restriction" data-user-id="' + esc(it.id) + '"' + (it.account_restriction ? ' checked' : '') + '><span>限制</span></label></div></td>';
       tbody.appendChild(tr);

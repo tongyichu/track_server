@@ -26,6 +26,7 @@ type User struct {
 	ProvinceName   string    `json:"province_name" bson:"province_name"`
 	CityCode       string    `json:"city_code" bson:"city_code"`
 	CityName       string    `json:"city_name" bson:"city_name"`
+	IsInternal     bool      `json:"-" bson:"is_internal"`
 	Phone          string    `json:"phone" bson:"phone"`
 	ClientLanguage string    `json:"client_language" bson:"client_language"`
 	TokenVersion   int64     `json:"-" bson:"token_version"`

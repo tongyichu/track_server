@@ -20,6 +20,10 @@ func NewUserProfileResponse(user *models.User) *UserProfileResponse {
 	return &UserProfileResponse{User: *user, ZodiacSign: zodiacSignFromBirthday(user.Birthday)}
 }
 
+func ZodiacSignFromBirthday(birthday string) string {
+	return zodiacSignFromBirthday(birthday)
+}
+
 // Fixed Gregorian month/day ranges are a display convention, not an astronomical birth chart.
 // Keep these boundaries in sync with docs/api/user.md; clients only localize the returned code.
 func zodiacSignFromBirthday(birthday string) string {

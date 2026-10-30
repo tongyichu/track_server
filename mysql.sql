@@ -10,6 +10,7 @@ CREATE TABLE `users` (
  `province_name` varchar(64) NOT NULL DEFAULT '' COMMENT '最近确认所在地省份名称，仅本人可读',
  `city_code` varchar(6) NOT NULL DEFAULT '' COMMENT '最近确认所在地城市编码，仅本人可读',
  `city_name` varchar(64) NOT NULL DEFAULT '' COMMENT '最近确认所在地城市名称，仅本人可读',
+ `is_internal` tinyint(1) NOT NULL DEFAULT 0 COMMENT '是否内部人员，仅后台管理可见和编辑',
                           `phone` varchar(32) NOT NULL DEFAULT '' COMMENT '用户手机号',
                           `client_language` varchar(64) NOT NULL DEFAULT '' COMMENT '客户端语言',
                           `token_version` bigint NOT NULL DEFAULT '1' COMMENT '登录令牌版本号',
