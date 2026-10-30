@@ -114,6 +114,10 @@ type UserProfileDetail struct {
 	Gender            *string   `json:"gender,omitempty"`
 	Birthday          *string   `json:"birthday,omitempty"`
 	ZodiacSign        *string   `json:"zodiac_sign,omitempty"`
+	ProvinceCode      *string   `json:"province_code,omitempty"`
+	ProvinceName      *string   `json:"province_name,omitempty"`
+	CityCode          *string   `json:"city_code,omitempty"`
+	CityName          *string   `json:"city_name,omitempty"`
 	Phone             string    `json:"phone,omitempty"`
 	ClientLanguage    string    `json:"client_language,omitempty"`
 	CreatedAt         time.Time `json:"created_at"`
@@ -327,6 +331,10 @@ func (s *UserService) GetUserProfileDetail(ctx context.Context, viewerUserID int
 		detail.Birthday = &user.Birthday
 		zodiacSign := zodiacSignFromBirthday(user.Birthday)
 		detail.ZodiacSign = &zodiacSign
+		detail.ProvinceCode = &user.ProvinceCode
+		detail.ProvinceName = &user.ProvinceName
+		detail.CityCode = &user.CityCode
+		detail.CityName = &user.CityName
 		detail.Phone = user.Phone
 		detail.ClientLanguage = user.ClientLanguage
 		if s.restrictions != nil {

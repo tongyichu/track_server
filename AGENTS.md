@@ -122,6 +122,8 @@ track_server/
 
 - 个人资料的 `background_url` 用于主页顶部，数据库保存原始 OSS 地址，响应经独立 `profile_backgrounds` 缓存并使用源地址摘要区分版本；`gender` 只允许空串、`male`、`female`，详情仅本人可读。改字段时同步 MySQL 建表及幂等列迁移、Mongo/内存仓储、用户详情/更新协议与缓存注入，参见 `docs/api/user.md`。
 
+- 最近确认所在地通过 `PUT /user/profile/location` 只提交归一化 `city_code`，服务端由内置行政区数据生成 `province_code/province_name/city_code/city_name`，四字段仅本人详情返回。该接口只局部更新省市列，相同值直接成功且不写库或刷新 `updated_at`；普通资料整行更新不得覆盖省市字段。Android 按账号持久化已同步/待同步状态，运动会话首个有效地址立即检查，普通前台定位每 7 天检查一次，只有城市变化才请求，失败退避重试，不新增后台定位。协议见 `docs/api/user.md`。
+
 - 默认运动类型由 `internal/config/config.go:DefaultTrackTypeConfigs` 维护，当前 code 为 `hiking`、`running`、`climbing`、`riding`、`driving`，展示名为 `徒步`、`跑步`、`爬山`、`骑行`、`自驾`；`GET /api/v1/track/types`、轨迹入库 `track_type`、运动类型图标元信息和成就系统类型口径应保持一致。颜色元信息同样由该配置维护：`theme_color` 是日间色，`theme_color_dark` 是独立夜间色；客户端按主题直接选色，夜间字段缺失、为空或非法时回退日间色。未知自定义类型两个颜色字段均为空串；颜色不存入轨迹或数据库，协议见 `docs/api/track.md`。`track_geo_indexes.track_type` 与 `track_route_groups.track_type` 只允许保存这五个英文 code，历史别名或未知类型需在地图索引阶段归一/兜底。
 - 内置运动图标使用 MingCute 线性 SVG，源文件与许可证位于 `internal/handler/static/track_type_icon/`，由 `internal/handler/track_type_icon_handler.go` 的 go:embed 随二进制打包。登录后通过 GET/HEAD /api/v1/track/types/icons/:icon_file 读取，不依赖磁盘 static 缓存；徒步/跑步/爬山/骑行/自驾分别使用 hiking/run/mountain_2/bike/car。修改图形时必须提升文件名版本并同步 DefaultTrackTypeConfigs.IconFile，防止客户端命中旧缓存；自定义类型仍走原静态目录。
 - 运动类型双语名称由同一 `DefaultTrackTypeConfigs` 维护，`/track/types` 始终返回兼容的中文/配置名 `name` 与独立英文名 `name_en`（Hiking/Running/Climbing/Cycling/Driving），不按语言头覆盖 `name`；客户端按当前语言选字段，缓存可同时保留双语，未知自定义类型英文名为空。显示语言不改变 `type`、轨迹存储或统计口径；协议变更同步 `docs/api/track.md`、`models.md` 与路由索引。

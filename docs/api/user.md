@@ -106,6 +106,10 @@ Authorization: Bearer <token>
 | `data.gender` | string | 仅本人详情返回；空串未设置，`male` 男，`female` 女。 |
 | `data.birthday` | string | 仅本人详情返回；`YYYY-MM-DD` 日期字符串，空串表示未设置。查看他人时省略，不自动填入默认生日。 |
 | `data.zodiac_sign` | string | 仅本人详情返回；根据生日计算的只读英文 code，未设置/无效生日为空串，查看他人时省略。客户端按 code 本地化显示，空串/缺失/未知值隐藏；规则见下方“星座派生规则”。 |
+| `data.province_code` | string | 仅本人详情返回；最近确认所在地的省级行政区编码，未设置为空串。 |
+| `data.province_name` | string | 仅本人详情返回；服务端根据行政区编码生成的省份名称，未设置为空串。 |
+| `data.city_code` | string | 仅本人详情返回；最近确认所在地的归一化城市编码，未设置为空串。 |
+| `data.city_name` | string | 仅本人详情返回；服务端根据行政区编码生成的城市名称，未设置为空串。 |
 | `data.phone` | string | 手机号（可能为空）；仅查看自己时返回。 |
 | `data.client_language` | string | 客户端语言；仅查看自己时返回。 |
 | `data.created_at` | string | 创建时间。 |
@@ -406,6 +410,60 @@ MySQL 启动时幂等补充 `users.background_url VARCHAR(2048) NULL`、`users.g
 
 区间参考 [Zodiac Sign Dates](https://astrologist.com/learn/zodiac-signs/zodiac-signs-dates)，以上表格为本产品固定协议，不随外部页面更新而变更。客户端不复制计算表，只翻译 code；本地缓存随生日一同更新，未确认的日期选择不会提前改变标签。星座目前同生日仅本人可见，公开星座须单独确定隐私策略。
 
+## 更新最近确认所在地
+
+更新当前登录用户最近确认的国内省市。客户端只提交归一化城市编码，不提交原始经纬度、省份或城市名称；服务端使用内置行政区数据生成并保存 `province_code`、`province_name`、`city_code`、`city_name`。四字段仅在本人用户详情返回，客态主页、关注和粉丝列表不公开。
+
+**需要认证**
+
+### 请求
+
+```
+PUT /api/v1/user/profile/location
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+```json
+{
+  "city_code": "330100"
+}
+```
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `city_code` | string | 是 | 六位城市 AdCode。普通城市使用地级市编码，直辖市使用 `110000`、`120000`、`310000` 或 `500000`。未知编码、境外或其他不受支持的编码返回 400。 |
+
+### 响应
+
+**状态码：** `200 OK`
+
+```json
+{
+  "code": 0,
+  "data": {
+    "status": "ok"
+  }
+}
+```
+
+接口只局部更新四个省市字段，不覆盖昵称、头像、生日等其他资料。新旧四字段完全一致时也返回成功，但不执行数据库写入且不刷新 `updated_at`，因此客户端可在本地状态缺失时安全重试。
+
+### 错误响应
+
+- `400 Bad Request`：请求体不是合法 JSON，或 `city_code` 不是受支持的国内城市编码。
+- `401 Unauthorized`：缺少、无效或过期的 Token。
+- `403 Forbidden`：账号当前被限制修改个人资料。
+- `404 Not Found`：当前用户不存在。
+- `500 Internal Server Error`：读取或更新所在地失败。
+
+### 客户端同步口径与存量兼容
+
+Android 只消费已有定位结果中的有效省市，不为该功能新增后台定位或逐轨迹点逆地理编码。每次运动会话首个有效地址立即检查一次；普通前台定位每 7 天检查一次。已同步、待同步、检查时间和失败退避状态按账号隔离，只有城市编码变化才调用本接口，失败保留待同步值并退避重试。
+
+MySQL 启动时幂等补充 `users.province_code VARCHAR(6)`、`users.province_name VARCHAR(64)`、`users.city_code VARCHAR(6)`、`users.city_name VARCHAR(64)`，均为 `NOT NULL DEFAULT ''`。Mongo 和内存仓储缺失字段按空值处理。先部署服务端，再发布调用本接口的客户端。
+
+---
 
 ## 个人主页轨迹列表
 

@@ -38,6 +38,7 @@
 | 删除轨迹 | DELETE | `/track/:track_id` | 是 | [track.md](track.md#12-删除轨迹) |
 | 用户已收藏轨迹列表（含精品标识、当前用户收藏状态及总数） | GET | `/track/collected/list` | 是 | [collect-navigation.md](collect-navigation.md#13-用户已收藏轨迹列表) |
 | 更新个人信息（含背景图、性别、生日） | PUT | `/user/profile/update` | 是 | [user.md](user.md#14-更新个人信息) |
+| 更新最近确认所在地 | PUT | `/user/profile/location` | 是 | [user.md](user.md#更新最近确认所在地) |
 | 关注用户 | POST | `/user/:user_id/follow` | 是 | [user.md](user.md#42-关注用户) |
 | 取消关注用户 | DELETE | `/user/:user_id/follow` | 是 | [user.md](user.md#43-取消关注用户) |
 | 查询关注状态 | GET | `/user/:user_id/follow/status` | 是 | [user.md](user.md#44-查询关注状态) |

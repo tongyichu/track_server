@@ -262,6 +262,7 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 	auth.GET("/user/:user_id/following/list", userHandler.ListFollowing)
 	auth.GET("/user/:user_id/follower/list", userHandler.ListFollowers)
 	auth.PUT("/user/profile/update", userHandler.UpdateProfile)
+	auth.PUT("/user/profile/location", userHandler.UpdateLocation)
 	auth.PUT("/user/profile/phone", userHandler.UpdatePhone)
 	auth.PUT("/user/profile/client_language", userHandler.UpdateClientLanguage)
 }

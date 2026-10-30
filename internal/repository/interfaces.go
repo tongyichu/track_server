@@ -233,6 +233,7 @@ type UserRepository interface {
 	FindByPhone(ctx context.Context, phone string) (*models.User, error)
 	FindByNickname(ctx context.Context, nickname string) (*models.User, error)
 	Update(ctx context.Context, u *models.User) error
+	UpdateLocation(ctx context.Context, userID int64, location models.UserLocation) error
 	// ListAll 返回全量用户列表（按 created_at desc, id desc）。
 	//
 	// 约定：

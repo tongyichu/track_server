@@ -653,12 +653,17 @@ func (r *InMemoryUserRepository) FindByNickname(_ context.Context, nickname stri
 func (r *InMemoryUserRepository) Update(_ context.Context, u *models.User) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if _, ok := r.users[u.ID]; !ok {
+	existing, ok := r.users[u.ID]
+	if !ok {
 		return ErrNotFound
 	}
 	if u.TokenVersion <= 0 {
 		u.TokenVersion = 1
 	}
+	u.ProvinceCode = existing.ProvinceCode
+	u.ProvinceName = existing.ProvinceName
+	u.CityCode = existing.CityCode
+	u.CityName = existing.CityName
 	u.UpdatedAt = time.Now()
 	r.users[u.ID] = u
 	return nil

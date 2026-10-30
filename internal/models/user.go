@@ -22,6 +22,10 @@ type User struct {
 	BackgroundURL  string    `json:"background_url" bson:"background_url"`
 	Gender         string    `json:"gender" bson:"gender"`
 	Birthday       string    `json:"birthday" bson:"birthday"`
+	ProvinceCode   string    `json:"province_code" bson:"province_code"`
+	ProvinceName   string    `json:"province_name" bson:"province_name"`
+	CityCode       string    `json:"city_code" bson:"city_code"`
+	CityName       string    `json:"city_name" bson:"city_name"`
 	Phone          string    `json:"phone" bson:"phone"`
 	ClientLanguage string    `json:"client_language" bson:"client_language"`
 	TokenVersion   int64     `json:"-" bson:"token_version"`

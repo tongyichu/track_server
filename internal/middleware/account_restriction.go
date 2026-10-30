@@ -36,6 +36,7 @@ var accountRestrictedRoutes = []restrictedRoute{
 	{method: http.MethodPost, prefix: "/api/v1/user/", suffix: "/follow", message: service.AccountRestrictionMessageFollow},
 	{method: http.MethodPost, path: "/api/v1/track_collect", message: service.AccountRestrictionMessageCollect},
 	{method: http.MethodPut, path: "/api/v1/user/profile/update", message: service.AccountRestrictionMessageProfile},
+	{method: http.MethodPut, path: "/api/v1/user/profile/location", message: service.AccountRestrictionMessageProfile},
 	{method: http.MethodPut, path: "/api/v1/user/profile/phone", message: service.AccountRestrictionMessageProfile},
 	{method: http.MethodPut, path: "/api/v1/user/profile/client_language", message: service.AccountRestrictionMessageProfile},
 }

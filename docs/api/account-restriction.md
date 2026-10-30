@@ -15,7 +15,7 @@
 - 关注用户：`POST /api/v1/user/:user_id/follow`
 - 收藏轨迹：`POST /api/v1/track_collect`
 - 点赞轨迹：`POST /api/v1/track/:track_id/like`
-- 修改个人信息：`PUT /api/v1/user/profile/update`、`PUT /api/v1/user/profile/phone`、`PUT /api/v1/user/profile/client_language`
+- 修改个人信息：`PUT /api/v1/user/profile/update`、`PUT /api/v1/user/profile/location`、`PUT /api/v1/user/profile/phone`、`PUT /api/v1/user/profile/client_language`
 
 取消点赞、取消收藏、取消关注、退出登录、浏览和查询类接口不受账号限制影响。
 
