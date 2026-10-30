@@ -151,7 +151,7 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	api.GET("/scenic-spots/map-config", m.Handler.GetScenicSpotMapConfig)
 	api.GET("/scenic-spots/amap-service/*filepath", m.Handler.ProxyScenicSpotMapService)
 	api.POST("/scenic-spots/provider-content/backfill", m.Handler.BackfillScenicSpotProviderContent)
-	api.POST("/scenic-spots/descriptions/backfill", m.Handler.BackfillScenicSpotDescriptions)
+	api.POST("/scenic-spots/description/generate", m.Handler.GenerateScenicSpotDescription)
 	api.POST("/scenic-spots", m.Handler.CreateScenicSpot)
 	api.POST("/scenic-spots/backfill", m.Handler.BackfillScenicSpots)
 	api.GET("/scenic-spots/track-search", m.Handler.SearchScenicSpotTracks)

@@ -129,102 +129,13 @@ type ScenicSpotProviderContentBackfillResult struct {
 	NextCursor  string `json:"next_cursor,omitempty"`
 }
 
-type ScenicSpotDescriptionBackfillResult struct {
-	Configured bool   `json:"configured"`
-	Scanned    int    `json:"scanned"`
-	Generated  int    `json:"generated"`
-	Skipped    int    `json:"skipped"`
-	Failed     int    `json:"failed"`
-	HasMore    bool   `json:"has_more"`
-	NextCursor string `json:"next_cursor,omitempty"`
-}
-
-// BackfillMissingDescriptions fills only blank scenic spot descriptions. The
-// cursor is based on the complete catalog so failed records can be retried by
-// starting a fresh pass from the beginning.
-func (s *ScenicSpotCatalogService) BackfillMissingDescriptions(ctx context.Context, operator, cursor string, limit int) (*ScenicSpotDescriptionBackfillResult, error) {
-	if !s.Enabled() {
-		return nil, errors.New("scenic spot catalog unavailable")
-	}
-	if limit < 1 || limit > 20 {
-		limit = 5
-	}
-	spots, _, err := s.spots.ListScenicSpots(ctx, repository.ScenicSpotListFilter{Cursor: cursor, Limit: limit})
-	if err != nil {
-		return nil, err
-	}
-	result := &ScenicSpotDescriptionBackfillResult{Configured: s.descriptionGenerator != nil, Scanned: len(spots), HasMore: len(spots) == limit}
-	if len(spots) > 0 {
-		result.NextCursor = spots[len(spots)-1].ID
-	}
-	if s.descriptionGenerator == nil {
-		result.Skipped = len(spots)
-		return result, nil
-	}
-	for _, spot := range spots {
-		if spot == nil || spot.Status == models.ScenicSpotMerged || strings.TrimSpace(spot.Description) != "" {
-			result.Skipped++
-			continue
-		}
-		generated, err := s.generateMissingDescription(ctx, spot.ID, operator)
-		if err != nil {
-			log.Printf("scenic description generation failed: spot_id=%s error=%v", spot.ID, err)
-			result.Failed++
-			continue
-		}
-		if generated {
-			result.Generated++
-		} else {
-			result.Skipped++
-		}
-	}
-	return result, nil
-}
-
-func (s *ScenicSpotCatalogService) generateMissingDescription(ctx context.Context, id, operator string) (bool, error) {
+func (s *ScenicSpotCatalogService) GenerateDescription(ctx context.Context, spot *models.ScenicSpot) (string, error) {
 	if s == nil || s.descriptionGenerator == nil {
-		return false, nil
-	}
-	spot, err := s.spots.GetScenicSpot(ctx, id)
-	if err != nil {
-		return false, err
-	}
-	if spot.Status == models.ScenicSpotMerged || strings.TrimSpace(spot.Description) != "" {
-		return false, nil
+		return "", errors.New("Kimi scenic description is not configured")
 	}
 	generationCtx, cancel := context.WithTimeout(ctx, 75*time.Second)
 	defer cancel()
-	description, err := s.descriptionGenerator.Generate(generationCtx, spot)
-	if err != nil {
-		return false, err
-	}
-	description = strings.TrimSpace(description)
-	if description == "" {
-		return false, nil
-	}
-	if utf8.RuneCountInString(description) > maxScenicDescription {
-		return false, fmt.Errorf("generated scenic description exceeds %d characters", maxScenicDescription)
-	}
-	// Re-read before the compare-and-swap update so an admin edit made while
-	// Kimi was responding always wins.
-	current, err := s.spots.GetScenicSpot(ctx, id)
-	if err != nil {
-		return false, err
-	}
-	if current.Status == models.ScenicSpotMerged || strings.TrimSpace(current.Description) != "" {
-		return false, nil
-	}
-	before := current.Description
-	expected := current.Version
-	current.Description = description
-	current.Version++
-	current.UpdatedAt = time.Now()
-	current.UpdatedBy = operator
-	if err := s.spots.UpdateScenicSpot(ctx, current, expected); err != nil {
-		return false, err
-	}
-	s.audit(ctx, id, "kimi_description_generated", operator, "Kimi web search summary generated", before, description)
-	return true, nil
+	return s.descriptionGenerator.Generate(generationCtx, spot)
 }
 
 // BackfillProviderContent fetches missing provider text and photos once and
@@ -438,18 +349,18 @@ func (s *ScenicSpotCatalogService) Create(ctx context.Context, operator string, 
 			return nil, repository.ErrAlreadyExists
 		}
 	}
+	if s.descriptionGenerator != nil && strings.TrimSpace(v.Description) == "" {
+		description, err := s.GenerateDescription(ctx, v)
+		if err != nil {
+			log.Printf("scenic description generation failed: spot_id=%s error=%v", v.ID, err)
+		} else if description != "" {
+			v.Description = description
+		}
+	}
 	if err := s.spots.CreateScenicSpot(ctx, v); err != nil {
 		return nil, err
 	}
 	s.audit(ctx, v.ID, "create", operator, "draft created", nil, v)
-	if s.descriptionGenerator != nil && strings.TrimSpace(v.Description) == "" {
-		if _, err := s.generateMissingDescription(ctx, v.ID, operator); err != nil {
-			log.Printf("scenic description generation failed: spot_id=%s error=%v", v.ID, err)
-		}
-		if updated, err := s.spots.GetScenicSpot(ctx, v.ID); err == nil {
-			v = updated
-		}
-	}
 	return v, nil
 }
 func (s *ScenicSpotCatalogService) Update(ctx context.Context, operator, id string, expected int64, v *models.ScenicSpot) (*models.ScenicSpot, error) {

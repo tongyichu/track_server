@@ -261,7 +261,7 @@ GET /admin/api/users
 [admin UI] /admin/scenic_spots.html
   → GET /admin/api/scenic-spots/statistics 汇总客户端可见景点覆盖、近 30 日供应商调用趋势与高调用景点
   → POST /admin/api/scenic-spots/provider-content/backfill 首次加载时游标分批同步供应商文字和图片；已同步的存量景点仅用轻量地点详情补缺失坐标，provider_coordinates_status 防止重复查询
-  → POST /admin/api/scenic-spots/descriptions/backfill 分批对空简介使用 Kimi 联网搜索并总结；新建时也尝试生成，成功保存到景点资料，已有非空简介不覆盖
+  → POST /admin/api/scenic-spots/description/generate 使用详情弹窗当前表单内容查询 Kimi，将结果返回并填入简介编辑框；存量记录须由管理员逐条点击，保存按钮负责入库
   → GET /admin/api/scenic-spots/:spot_id/map 通过后台鉴权代理返回高德静态地图图片，供应商密钥不下发浏览器
   → GET /admin/api/scenic-spots/map-config 向已登录管理员下发高德 Web Key；AMAP_SECURITY_JS_CODE 仅由同源地图服务代理使用，不下发浏览器
   → /admin/api/scenic-spots 查询、创建/编辑草稿、发布/归档、查看审计
@@ -279,7 +279,7 @@ GET /admin/api/users
 景点页统计开始于该计数能力上线，不回填旧请求；计入已关联内部景点的来源详情、照片请求和 ID 核验，存量轨迹需先运行回填，按坐标执行的识别搜索不计入单景点排行。发布覆盖率以关联轨迹计数为准，目标是帮助运营优先补齐高调用景点的自有内容。
 所有 Google Places 查询均不受服务端每日预算或单轮请求数上限约束，由 Google API 自身配额控制。
 
-Kimi 景点简介使用 `MOONSHOT_API_KEY` 和可选的 `KIMI_SCENIC_DESCRIPTION_MODEL` 环境变量。景点管理页先完成供应商资料分页同步，再调用 `/admin/api/scenic-spots/descriptions/backfill` 为存量空简介分页生成摘要；新建记录在保存后立即尝试生成。模型检索与摘要通过 Kimi 官方 `/v1/tools/search_pro` 和 `/v1/chat/completions` 接口完成，简介限制 200 字。失败项保持为空，下一次完整扫描可重试；生成写入采用版本条件更新并在写入前再次确认字段为空。
+Kimi 景点简介使用 `MOONSHOT_API_KEY` 和可选的 `KIMI_SCENIC_DESCRIPTION_MODEL` 环境变量。存量景点详情弹窗的“AI联网查询”按钮把当前名称、城市、分类和地址提交给 `/admin/api/scenic-spots/description/generate`，结果只填入简介输入框，点击既有保存按钮后才入库；该查询不自动批量触发。新建记录在创建前对空简介尝试生成，成功后随景点资料一起保存，失败时仍可创建并保留空简介。模型检索与摘要通过 Kimi 官方 `/v1/tools/search_pro` 和 `/v1/chat/completions` 接口完成，简介限制 200 字。
 [admin UI] /admin/analytics.html
   → GET /admin/api/analytics/sync-summaries?status=&limit=&offset=
   → AnalyticsRepository.ListSyncSummaries / CountSyncSummaries

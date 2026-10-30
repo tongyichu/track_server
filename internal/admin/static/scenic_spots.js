@@ -65,16 +65,9 @@
 
   async function syncProviderContent() {
     if(state.providerSyncing)return;state.providerSyncing=true;const progress=$('providerSyncProgress');progress.hidden=false;
-    let cursor='',scanned=0,synced=0,coordinates=0,noSource=0,failed=0,descriptions=0,descriptionFailed=0,descriptionScanned=0,kimiConfigured=null,providerError='',descriptionError='';
-    while(true){try{const params=new URLSearchParams({limit:'5'});if(cursor)params.set('cursor',cursor);const result=await api('/scenic-spots/provider-content/backfill?'+params,{method:'POST'});scanned+=result.scanned||0;synced+=result.synced||0;coordinates+=result.coordinates||0;noSource+=result.no_source||0;failed+=result.failed||0;progress.textContent='供应商资料同步：已扫描 '+scanned+' 处，新增资料 '+synced+' 处，补齐坐标 '+coordinates+' 处，缺少来源 '+noSource+' 处，失败 '+failed+' 处';if(!result.has_more)break;cursor=result.next_cursor||'';if(!cursor)break;}catch(error){providerError=error.message;break;}}
-    cursor='';
-    while(true){try{const params=new URLSearchParams({limit:'2'});if(cursor)params.set('cursor',cursor);const result=await api('/scenic-spots/descriptions/backfill?'+params,{method:'POST'});kimiConfigured=result.configured===true;if(!kimiConfigured)break;descriptionScanned+=result.scanned||0;descriptions+=result.generated||0;descriptionFailed+=result.failed||0;progress.textContent='Kimi 景点简介：已扫描 '+descriptionScanned+' 处，生成 '+descriptions+' 段，失败 '+descriptionFailed+' 处';if(!result.has_more)break;cursor=result.next_cursor||'';if(!cursor)break;}catch(error){descriptionError=error.message;break;}}
-    await Promise.all([loadList(),loadStats()]);
-    if(kimiConfigured===false){progress.textContent='供应商资料同步完成；Kimi 简介未配置，空简介暂未补充。';}
-    else{progress.textContent='资料同步完成：供应商资料新增 '+synced+' 处、坐标补齐 '+coordinates+' 处；Kimi 简介生成 '+descriptions+' 段，简介生成失败 '+descriptionFailed+' 处。';}
-    if(providerError)progress.textContent+=' 供应商同步中断：'+providerError;
-    if(descriptionError)progress.textContent+=' Kimi 简介同步中断：'+descriptionError;
-    state.providerSyncing=false;
+    let cursor='',scanned=0,synced=0,coordinates=0,noSource=0,failed=0,errorMessage='';
+    try{while(true){try{const params=new URLSearchParams({limit:'5'});if(cursor)params.set('cursor',cursor);const result=await api('/scenic-spots/provider-content/backfill?'+params,{method:'POST'});scanned+=result.scanned||0;synced+=result.synced||0;coordinates+=result.coordinates||0;noSource+=result.no_source||0;failed+=result.failed||0;progress.textContent='供应商资料同步：已扫描 '+scanned+' 处，新增资料 '+synced+' 处，补齐坐标 '+coordinates+' 处，缺少来源 '+noSource+' 处，失败 '+failed+' 处';if(!result.has_more)break;cursor=result.next_cursor||'';if(!cursor)break;}catch(error){errorMessage=error.message;break;}}await Promise.all([loadList(),loadStats()]);progress.textContent='供应商资料同步完成：新增资料 '+synced+' 处，补齐坐标 '+coordinates+' 处，缺少来源 '+noSource+' 处，失败 '+failed+' 处。'+(errorMessage?'同步中断：'+errorMessage:'');}
+    finally{state.providerSyncing=false;}
   }
 
   function fillForm(spot) {
@@ -161,6 +154,13 @@
       state.newSpot=false;fillForm(spot);$('saveHint').hidden=false;window.clearTimeout(state.saveHintTimer);state.saveHintTimer=window.setTimeout(()=>$('saveHint').hidden=true,2400);await Promise.all([loadList(),loadStats()]);
     }catch(error){toast(error.message,'danger');}
   }
+  async function generateScenicDescription() {
+    const spot=currentPayload();if(!spot.name){toast('请先填写景点名称','warning');return;}
+    const button=$('generateDescriptionBtn'),hint=$('providerDescriptionHint');button.disabled=true;button.textContent='查询中…';hint.textContent='正在联网查询景点资料并整理简介';
+    try{const result=await api('/scenic-spots/description/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(spot)});if(!result.description){hint.textContent='没有查到足够可靠的介绍信息';toast('没有查到足够可靠的景点介绍','warning');return;}$('descriptionInput').value=result.description;hint.textContent='已填入简介，保存后写入景点资料';toast('AI 简介已填入','success');}
+    catch(error){hint.textContent='';toast(error.message,'danger');}
+    finally{button.disabled=false;button.textContent='AI联网查询';}
+  }
   async function uploadPhotoToSpot(spot,file,caption){const form=new FormData();form.append('file',file);form.append('caption',caption||'');const data=await api('/scenic-spots/'+encodeURIComponent(spot.id)+'/photos',{method:'POST',body:form});return data.spot;}
   async function uploadPhoto() {
     if(!state.current)return;const file=$('photoFile').files[0];if(!file){toast('先选择 JPG 或 PNG 图片','danger');return;}const form=new FormData();form.append('file',file);form.append('caption',$('photosBox').querySelector('.scenic-photo-upload-caption').value.trim());
@@ -176,7 +176,7 @@
   $('searchBtn').addEventListener('click',loadList);$('searchInput').addEventListener('keydown',event=>{if(event.key==='Enter')loadList();});$('statusFilter').addEventListener('change',renderList);$('cityFilter').addEventListener('change',renderList);$('refreshStatsBtn').addEventListener('click',loadStats);
   $('newProvinceSelect').addEventListener('change',()=>{const code=$('newProvinceSelect').value;populateCityOptions(code);const province=(state.regions||[]).find(item=>item.code===code);updateCurrentCity(province);focusRegion(code);});$('newCitySelect').addEventListener('change',()=>{const region=selectedRegion();updateCurrentCity(region);focusRegion(region&&region.code);});$('useClickedLocationBtn').addEventListener('click',useClickedMapLocation);$('applyPoiDraftBtn').addEventListener('click',applyPOIDraft);
   $('newBtn').addEventListener('click',()=>{state.newSpot=true;fillForm({status:'draft',manual_edited:true});});$('closeDetailBtn').addEventListener('click',()=>$('detailModal').close());$('detailModal').addEventListener('click',event=>{if(event.target===$('detailModal'))$('detailModal').close();});
-  $('saveBtn').addEventListener('click',save);$('photoFile').addEventListener('change',updateUploadPhotoPreview);$('copySpotIdBtn').addEventListener('click',copySpotId);$('chooseMapLocationBtn').addEventListener('click',()=>{if(state.map)setMapSelectionMode(!state.selectingMapLocation);});$('resetMapLocationBtn').addEventListener('click',resetMapLocation);
+  $('saveBtn').addEventListener('click',save);$('generateDescriptionBtn').addEventListener('click',generateScenicDescription);$('photoFile').addEventListener('change',updateUploadPhotoPreview);$('copySpotIdBtn').addEventListener('click',copySpotId);$('chooseMapLocationBtn').addEventListener('click',()=>{if(state.map)setMapSelectionMode(!state.selectingMapLocation);});$('resetMapLocationBtn').addEventListener('click',resetMapLocation);
   $('closeRelatedTracksBtn').addEventListener('click',()=>$('relatedTracksModal').close());$('relatedTracksModal').addEventListener('click',event=>{if(event.target===$('relatedTracksModal'))$('relatedTracksModal').close();});$('loadMoreRelatedTracksBtn').addEventListener('click',()=>loadRelatedTracks(true));
   loadList();loadStats();syncProviderContent();
 })();
