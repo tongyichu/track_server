@@ -123,10 +123,10 @@ type AdminDashboardCompanionStats struct {
 
 // AdminUserDistributionStats contains read-only profile and track-city aggregates.
 type AdminUserDistributionStats struct {
-	TotalUsers  int64                            `json:"total_users"`
-	Gender      []AdminDashboardDistributionItem `json:"gender"`
-	Zodiac      []AdminDashboardDistributionItem `json:"zodiac"`
-	TrackCities []AdminDashboardDistributionItem `json:"track_cities"`
+	TotalUsers int64                            `json:"total_users"`
+	Gender     []AdminDashboardDistributionItem `json:"gender"`
+	Zodiac     []AdminDashboardDistributionItem `json:"zodiac"`
+	UserCities []AdminDashboardDistributionItem `json:"user_cities"`
 }
 
 type AdminDashboardDaily struct {

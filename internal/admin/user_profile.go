@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -16,7 +17,7 @@ import (
 )
 
 type adminUserProfileResponse struct {
-	ID           int64     `json:"id"`
+	ID           string    `json:"id"`
 	Nickname     string    `json:"nickname"`
 	AvatarURL    string    `json:"avatar_url"`
 	Signature    string    `json:"signature"`
@@ -107,7 +108,7 @@ func (h *Handler) adminUserProfile(ctx context.Context, user *models.User) *admi
 		h.userSvc.DecorateAvatar(ctx, user)
 	}
 	return &adminUserProfileResponse{
-		ID: user.ID, Nickname: user.Nickname, AvatarURL: rewriteAdminStaticURL(user.AvatarURL),
+		ID: strconv.FormatInt(user.ID, 10), Nickname: user.Nickname, AvatarURL: rewriteAdminStaticURL(user.AvatarURL),
 		Signature: user.Signature, Phone: user.Phone, Gender: user.Gender, Birthday: user.Birthday,
 		ProvinceCode: user.ProvinceCode, ProvinceName: user.ProvinceName,
 		CityCode: user.CityCode, CityName: user.CityName,

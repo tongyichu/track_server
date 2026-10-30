@@ -690,8 +690,7 @@ func (h *Handler) DeleteRelease(ctx context.Context, c *app.RequestContext) {
 	c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"status": "ok"}})
 }
 
-// GetAdminUserStatistics returns profile distributions and the cities represented
-// by each user's completed tracks. Users may be counted in multiple cities.
+// GetAdminUserStatistics returns profile distributions and each user's current city.
 func (h *Handler) GetAdminUserStatistics(ctx context.Context, c *app.RequestContext) {
 	if h == nil || h.dashboardStatsRepo == nil {
 		c.JSON(http.StatusInternalServerError, utils.H{"error": "user statistics not configured"})
@@ -702,14 +701,14 @@ func (h *Handler) GetAdminUserStatistics(ctx context.Context, c *app.RequestCont
 		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
 		return
 	}
-	for i := range statistics.TrackCities {
-		if statistics.TrackCities[i].Key != "unknown" {
-			statistics.TrackCities[i].Label = config.CityNameByCode(statistics.TrackCities[i].Key)
-			if statistics.TrackCities[i].Label == "" {
-				statistics.TrackCities[i].Label = statistics.TrackCities[i].Key
+	for i := range statistics.UserCities {
+		if statistics.UserCities[i].Key != "unknown" {
+			statistics.UserCities[i].Label = config.CityNameByCode(statistics.UserCities[i].Key)
+			if statistics.UserCities[i].Label == "" {
+				statistics.UserCities[i].Label = statistics.UserCities[i].Key
 			}
 		} else {
-			statistics.TrackCities[i].Label = "未知城市"
+			statistics.UserCities[i].Label = "未知城市"
 		}
 	}
 	c.JSON(http.StatusOK, utils.H{"code": 0, "data": statistics})
@@ -1029,7 +1028,7 @@ func (h *Handler) ListUsers(ctx context.Context, c *app.RequestContext) {
 			lastLoginAt = value
 		}
 		row := utils.H{
-			"id":                  u.ID,
+			"id":                  strconv.FormatInt(u.ID, 10),
 			"nickname":            u.Nickname,
 			"avatar_url":          u.AvatarURL,
 			"phone":               u.Phone,

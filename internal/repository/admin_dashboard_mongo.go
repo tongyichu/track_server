@@ -104,15 +104,8 @@ func (r *mongoAdminDashboardRepository) GetAdminUserDistributionStatistics(ctx c
 	cityExpr := bson.M{"$cond": bson.A{
 		bson.M{"$eq": bson.A{trimmedCity, ""}}, "unknown", trimmedCity,
 	}}
-	trackFilter := bson.M{
-		"status":        bson.M{"$ne": models.TrackStatusDeleted},
-		"is_running":    false,
-		"raw_track_url": bson.M{"$nin": []interface{}{nil, ""}},
-	}
-	cityCounts, err := mongoAdminCountDistribution(ctx, r.db.Collection("tracks"), mongo.Pipeline{
-		bson.D{{Key: "$match", Value: trackFilter}},
-		bson.D{{Key: "$group", Value: bson.M{"_id": bson.M{"city": cityExpr, "user": "$user_id"}}}},
-		bson.D{{Key: "$group", Value: bson.M{"_id": "$_id.city", "count": bson.M{"$sum": 1}}}},
+	cityCounts, err := mongoAdminCountDistribution(ctx, users, mongo.Pipeline{
+		bson.D{{Key: "$group", Value: bson.M{"_id": cityExpr, "count": bson.M{"$sum": 1}}}},
 		bson.D{{Key: "$sort", Value: bson.D{{Key: "count", Value: -1}, {Key: "_id", Value: 1}}}},
 	})
 	if err != nil {

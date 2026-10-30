@@ -87,7 +87,7 @@ internal/admin/
 | GET | `/admin/api/me` | 公开 | 返回当前会话；未登录返回 401 |
 | GET | `/admin/api/releases` | 鉴权 | 列出发布记录，支持 `platform` / `status` 过滤 |
 | GET | `/admin/api/dashboard` | 鉴权 | 业务库即时统计；`period=day|week|month`，返回同进度上周期对比、用户转化、审核/反馈效率、内容质量、互动、同行与日趋势 |
-| GET | `/admin/api/users/statistics` | 鉴权 | 用户总数、性别/星座分布和全部已完成轨迹城市的去重用户数（一个用户可计入多个城市） |
+| GET | `/admin/api/users/statistics` | 鉴权 | 用户总数、性别/星座分布和 `user_cities` 用户资料所在城市分布；每个用户只计入当前设置的一个城市，未设置计入未知城市 |
 | GET | `/admin/api/companions/statistics` | 鉴权 | 同行会话当前活跃数、所选周期创建/结束/自动结束数、平均参与人数 |
 | POST | `/admin/api/releases` | 鉴权 | 发布/覆盖一个版本（按 `(platform, version_code)` 幂等） |
 | DELETE | `/admin/api/releases/:id` | 鉴权 | 删除一条发布记录 |
@@ -180,7 +180,7 @@ GET /admin/api/users
 ```
 未落盘的内置默认头像（`default_avatars/girl_01.png` 等）由后台静态代理返回简单 SVG 兜底；正式视觉素材仍应放入 `<LogDir>/static/default_avatars/`。
 
-用户管理概况位于用户列表上方，不单独展示用户总数卡片；左侧性别、星座两个 ECharts 饼图上下排列，右侧为更大的轨迹用户省份分布区域。页面使用 `/admin/api/users/statistics` 一次读取性别、生日星座和全部完成轨迹城市分布；城市按省份汇总后通过内置 `static/china_provinces.json` 和 ECharts 矢量地图展示，不加载高德 JS 或地图 Key，也不显示颜色深浅图例。省份上显示人数，超过一万用 `w` 缩写；点击省份更新右侧该省城市用户数 Top 10，海外城市和未知城市保留独立小统计。城市用户数按每个城市去重，同一用户可出现在多个城市。用户列表头像和昵称合并为“用户”列，头像为圆形；操作区使用“查看详情 + 限制开关”，开关沿用限制/解除接口，取消或失败恢复原状态。详情弹窗通过 `GET /admin/api/users/:user_id` 读取资料，所在地只读，昵称、签名、性别、生日和手机号可编辑并通过同路径 PUT 保存，保存后刷新当前页。用户列表的上次登录时间按当前页 user_id 批量查询 `login_log` 的最大 `created_at`，不得用用户资料 `updated_at` 代替；Mongo 登录日志未实现时返回无登录记录。
+用户管理概况位于用户列表上方，不单独展示用户总数卡片；左侧性别、星座两个 ECharts 饼图上下排列，右侧为更大的用户所在省份分布区域。页面使用 `/admin/api/users/statistics` 一次读取性别、生日星座和 `user_cities` 用户资料所在城市分布；MySQL、Mongo、内存仓储均直接按 `users.city_code` 计数，不再使用轨迹记录，每个用户只计入当前设置的一个城市，未设置计入未知城市。城市按省份汇总后通过内置 `static/china_provinces.json` 和 ECharts 矢量地图展示，不加载高德 JS 或地图 Key，也不显示颜色深浅图例。地图采用白色背景与灰色/蓝色高对比配色，`100000_JD` 南海诸岛拆为右下角独立小附图，主图放大显示，不展示辅助说明文字。省份上显示人数，超过一万用 `w` 缩写；点击省份更新右侧该省城市用户数 Top 10，海外城市和未知城市保留独立小统计。用户列表头像和昵称合并为“用户”列，头像为圆形；操作区使用“查看详情 + 限制开关”，开关沿用限制/解除接口，取消或失败恢复原状态。详情弹窗通过 `GET /admin/api/users/:user_id` 读取资料，所在地只读，昵称、签名、性别、生日和手机号可编辑并通过同路径 PUT 保存，保存后刷新当前页。用户列表和详情接口的 `id` 一律以 JSON 字符串下发，避免 int64 用户 ID 被 JavaScript Number 截断后请求错误用户。用户列表的上次登录时间按当前页 user_id 批量查询 `login_log` 的最大 `created_at`，不得用用户资料 `updated_at` 代替；Mongo 登录日志未实现时返回无登录记录。
 
 **账号限制运营**：
 ```

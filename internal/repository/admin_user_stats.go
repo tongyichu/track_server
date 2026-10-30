@@ -78,22 +78,22 @@ func buildAdminUserDistributionStats(total int64, genderCounts, birthdayCounts, 
 	}
 	cityItems := distributionItems(cityCounts, 0)
 	return &models.AdminUserDistributionStats{
-		TotalUsers:  total,
-		Gender:      toItems(gender, []string{"male", "female", "unknown"}),
-		Zodiac:      toItems(zodiacCounts, []string{"aries", "taurus", "gemini", "cancer", "leo", "virgo", "libra", "scorpio", "sagittarius", "capricorn", "aquarius", "pisces", "unknown"}),
-		TrackCities: cityItems,
+		TotalUsers: total,
+		Gender:     toItems(gender, []string{"male", "female", "unknown"}),
+		Zodiac:     toItems(zodiacCounts, []string{"aries", "taurus", "gemini", "cancer", "leo", "virgo", "libra", "scorpio", "sagittarius", "capricorn", "aquarius", "pisces", "unknown"}),
+		UserCities: cityItems,
 	}
 }
 
 func (r *memoryAdminDashboardRepository) GetAdminUserDistributionStatistics(_ context.Context) (*models.AdminUserDistributionStats, error) {
 	users, okUsers := r.deps.users.(*InMemoryUserRepository)
-	tracks, okTracks := r.deps.tracks.(*InMemoryTrackRepository)
-	if !okUsers || !okTracks {
+	if !okUsers {
 		return nil, errAdminStatisticsRepositoriesUnavailable
 	}
 
 	genderCounts := make(map[string]int64)
 	birthdayCounts := make(map[string]int64)
+	cityCounts := make(map[string]int64)
 	users.mu.RLock()
 	total := int64(len(users.users))
 	for _, user := range users.users {
@@ -104,29 +104,13 @@ func (r *memoryAdminDashboardRepository) GetAdminUserDistributionStatistics(_ co
 		if birthday, err := time.Parse("2006-01-02", user.Birthday); err == nil && !birthday.After(time.Now()) && birthday.Year() >= 1900 {
 			birthdayCounts[birthday.Format("01-02")]++
 		}
-	}
-	users.mu.RUnlock()
-
-	cityUsers := make(map[string]map[int64]struct{})
-	tracks.mu.RLock()
-	for _, track := range tracks.tracks {
-		if track == nil || !track.DeletedAt.IsZero() || track.Status == models.TrackStatusDeleted || track.IsRunning || strings.TrimSpace(track.RawTrackURL) == "" {
-			continue
-		}
-		city := strings.TrimSpace(track.CityCode)
+		city := strings.TrimSpace(user.CityCode)
 		if city == "" {
 			city = "unknown"
 		}
-		if cityUsers[city] == nil {
-			cityUsers[city] = make(map[int64]struct{})
-		}
-		cityUsers[city][track.UserID] = struct{}{}
+		cityCounts[city]++
 	}
-	tracks.mu.RUnlock()
-	cityCounts := make(map[string]int64, len(cityUsers))
-	for city, userIDs := range cityUsers {
-		cityCounts[city] = int64(len(userIDs))
-	}
+	users.mu.RUnlock()
 	return buildAdminUserDistributionStats(total, genderCounts, birthdayCounts, cityCounts), nil
 }
 

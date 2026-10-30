@@ -108,8 +108,14 @@
     var root = document.getElementById('userProvinceMap');
     if (!window.echarts) { root.textContent = '图表组件暂不可用'; return; }
     loadProvinceGeo().then(function (geo) {
-      echarts.registerMap('china_provinces', geo);
-      var features = geo.features || [];
+      var features = (geo.features || []).filter(function (feature) {
+        return String(feature.properties.adcode) !== '100000_JD';
+      });
+      var southSeaFeatures = (geo.features || []).filter(function (feature) {
+        return String(feature.properties.adcode) === '100000_JD';
+      });
+      echarts.registerMap('china_provinces', { type: 'FeatureCollection', features: features });
+      echarts.registerMap('china_south_sea', { type: 'FeatureCollection', features: southSeaFeatures });
       var nameMap = {};
       features.forEach(function (feature) {
         var fullName = feature.properties.name;
@@ -133,18 +139,26 @@
       if (!userMap) userMap = echarts.init(root);
       userMap.setOption({
         tooltip: { trigger: 'item', formatter: function (params) {
-          return esc(params.data.fullName) + '<br>' + number(params.data.value).toLocaleString() + ' 个城市用户记录';
+          if (!params.data || !params.data.fullName) return '';
+          return esc(params.data.fullName) + '<br>' + number(params.data.value).toLocaleString() + ' 位用户';
         } },
-        visualMap: { show: false, min: 0, max: max, inRange: { color: ['#edf3fa', '#8db9e8', '#206bc4'] } },
+        visualMap: { show: false, seriesIndex: 0, min: 0, max: max, inRange: { color: ['#e2e8f0', '#93c5fd', '#1d4ed8'] } },
         series: [{
           type: 'map', map: 'china_provinces', nameMap: nameMap, selectedMode: 'single', roam: false,
-          label: { show: true, color: '#334155', fontSize: 9, formatter: function (params) {
+          layoutCenter: ['48%', '50%'], layoutSize: '105%',
+          label: { show: true, color: '#1e293b', fontSize: 9, formatter: function (params) {
             return params.data && number(params.data.value) > 0 ? compactNumber(params.data.value) : '';
           } },
-          emphasis: { label: { show: true, color: '#102a43', fontWeight: 700 }, itemStyle: { areaColor: '#f2b84b' } },
-          select: { label: { show: true, color: '#fff', fontWeight: 700 }, itemStyle: { areaColor: '#174f94' } },
-          itemStyle: { borderColor: '#fff', borderWidth: 1, areaColor: '#edf3fa' },
+          emphasis: { label: { show: true, color: '#0f172a', fontWeight: 700 }, itemStyle: { areaColor: '#f59e0b' } },
+          select: { label: { show: true, color: '#fff', fontWeight: 700 }, itemStyle: { areaColor: '#0f172a' } },
+          itemStyle: { borderColor: '#fff', borderWidth: 1, areaColor: '#e2e8f0' },
           data: data
+        }, {
+          type: 'map', map: 'china_south_sea', silent: true, roam: false,
+          layoutCenter: ['91%', '88%'], layoutSize: '16%',
+          label: { show: false }, tooltip: { show: false },
+          itemStyle: { borderColor: '#94a3b8', borderWidth: 1, areaColor: '#cbd5e1' },
+          data: [{ name: '', fullName: '', value: 0 }]
         }]
       }, true);
       userMap.off('click');
@@ -168,7 +182,7 @@
       provinceStats[provinceCode].items.push(item);
     });
     document.getElementById('userForeignCityTotal').textContent = foreignTotal.toLocaleString();
-    document.getElementById('userForeignCityNote').textContent = foreignCities ? foreignCities + ' 个海外城市；按城市去重用户数合计，跨城市用户可能重复' : '当前没有海外轨迹城市数据';
+    document.getElementById('userForeignCityNote').textContent = foreignCities ? foreignCities + ' 个海外城市；每个用户只计入当前所在城市' : '当前没有海外城市数据';
     document.getElementById('userUnknownCityTotal').textContent = unknownTotal.toLocaleString();
     renderCityTop();
     renderProvinceMap();
@@ -180,7 +194,7 @@
       var data = (await response.json()).data || {};
       renderPie('userGenderChart', 'userGenderStats', data.gender, data.total_users);
       renderPie('userZodiacChart', 'userZodiacStats', data.zodiac, data.total_users);
-      renderProvinceStats(data.track_cities || []);
+      renderProvinceStats(data.user_cities || []);
     } catch (_) {
       ['userGenderStats', 'userZodiacStats', 'userCityStats', 'userProvinceMap'].forEach(function (id) {
         var root = document.getElementById(id); if (root) root.textContent = '统计暂不可用';
