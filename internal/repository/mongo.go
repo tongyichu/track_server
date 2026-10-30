@@ -216,6 +216,29 @@ func (r *MongoTrackRepository) FindByID(ctx context.Context, id string) (*models
 	return &track, nil
 }
 
+func (r *MongoTrackRepository) FindCompletedBySessionID(ctx context.Context, userID int64, sessionID string) (*models.Track, error) {
+	if r.collection == nil {
+		return nil, ErrNotFound
+	}
+	var track models.Track
+	filter := bson.M{
+		"user_id":    userID,
+		"session_id": sessionID,
+		"is_running": false,
+		"status":     bson.M{"$ne": 0},
+		"deleted_at": nil,
+	}
+	err := r.collection.FindOne(ctx, filter, options.FindOne().SetSort(bson.D{{Key: "created_at", Value: -1}})).Decode(&track)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	normalizeTrackDescriptionMetadata(&track)
+	return &track, nil
+}
+
 func (r *MongoTrackRepository) FindByIDs(ctx context.Context, ids []string) (map[string]*models.Track, error) {
 	result := make(map[string]*models.Track, len(ids))
 	ids = uniqueNonEmptyStrings(ids)

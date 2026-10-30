@@ -112,6 +112,8 @@ track_server/
 
 - 收藏数 `collect_count` 为当前用户与轨迹唯一收藏关系的总数，包含作者自藏；沿用 `CollectRepository.CountByTrackIDs`，列表批量统计、详情/创建/更新直接下发。详情及全部轨迹列表摘要（包含 `/track/my/list`、`/track/collected/list`）明确返回按 JWT 浏览者计算的 `collected`，false 不省略；作者身份不代表已收藏。列表通过既有 `CollectRepository.ListCollectedByTrackIDs` 按当前页批量查询，禁止逐条补查；本地 Room 列表不属于 Server 接口。POST/DELETE `/track_collect` 保留 status 并返回操作后的 collected/collect_count，重复操作幂等，不新增计数接口或独立计数表。入口见 `internal/service/track_collect_summary.go` 与 `docs/api/collect-navigation.md`；Mongo 使用用户/轨迹唯一索引和 track_id 统计索引。
 
+- 客户端结束录制后先上传原始轨迹和完整预览，再调用 `POST /track/create` 建立轨迹；已结束轨迹携带稳定 `session_id`，创建重试按用户与 session ID 返回已有记录，避免网络结果不确定时重复建轨迹。MySQL、Mongo、内存仓储都实现 `CompletedTrackSessionRepository`。新建轨迹默认公开；所有者可通过 `PUT /track/:id/update` 将 `status` 设为 1（公开）或 2（私密），设为私密时清理公开地图索引与路线组关联。协议见 `docs/api/track.md`。
+
 - 评论入口为 `CommentService` / `CommentRepository`，协议见 `docs/api/track-comments.md`。沿用点赞的轨迹可见范围；主评论和回复按创建时间、ID 倒序游标分页，回复以 root_id 平铺、reply_to_id 引用直接目标。轨迹详情/列表直接下发 comment_count/can_comment，列表按当前页批量读取计数；发布/删除响应带回总数，不另设评论状态接口。评论页只附最新作者回复摘要；总数、回复数、赞踩数随事务维护，发布以 user_id + client_comment_id 幂等。删除主评论保留有回复的占位，删除引用目标不得下发其原文。评论图片先预约 ID 再 OSS 直传并校验归属，私有缓存不挂通用 static。MySQL/Mongo/内存三实现保持一致，Mongo 评论写入要求副本集。账号限制在 CommentService 中覆盖发布、图片预约和非零评价，允许本人删除与取消评价。
 
 - 轨迹点赞独立于收藏，`track_likes` 以用户与轨迹唯一关系保证 POST/DELETE 幂等。个人获赞总数只统计其他用户对正常公开、已结束、raw_track_url 非空轨迹的现存点赞，排除作者自赞。个人主页仅展示获赞数；获赞逐条列表、聚合轨迹列表和点赞人名单接口已移除，不保留旧列表兼容入口。有效点赞关系长期保留，用于轨迹点赞状态、轨迹点赞数和个人获赞总数；允许自赞并计入轨迹点赞数，受限账号不能新增点赞但可取消。修改时同步三种仓储、用户详情计数、详情/列表的浏览者状态及 `docs/api/track-likes.md`。

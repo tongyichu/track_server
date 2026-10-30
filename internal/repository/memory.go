@@ -195,6 +195,24 @@ func (r *InMemoryTrackRepository) FindByID(_ context.Context, id string) (*model
 	return &clone, nil
 }
 
+func (r *InMemoryTrackRepository) FindCompletedBySessionID(_ context.Context, userID int64, sessionID string) (*models.Track, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var latest *models.Track
+	for _, track := range r.tracks {
+		if track != nil && track.UserID == userID && track.SessionID == sessionID && !track.IsRunning && track.DeletedAt.IsZero() {
+			if latest == nil || track.CreatedAt.After(latest.CreatedAt) {
+				copy := *track
+				latest = &copy
+			}
+		}
+	}
+	if latest == nil {
+		return nil, ErrNotFound
+	}
+	return latest, nil
+}
+
 func (r *InMemoryTrackRepository) FindByIDs(_ context.Context, ids []string) (map[string]*models.Track, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

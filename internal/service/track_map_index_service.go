@@ -63,6 +63,15 @@ func (s *TrackMapIndexService) EnqueueTrackIndexIfEligible(ctx context.Context, 
 	return s.repo.EnqueueIndexJob(ctx, track.ID, time.Now())
 }
 
+// RemoveTrackFromPublicMap removes cached geometry and route-group membership
+// after an owner hides a track.
+func (s *TrackMapIndexService) RemoveTrackFromPublicMap(ctx context.Context, trackID string) error {
+	if s == nil || s.repo == nil {
+		return nil
+	}
+	return s.repo.CleanupDeletedTrack(ctx, trackID)
+}
+
 func (s *TrackMapIndexService) RunOnce(ctx context.Context) (*TrackMapIndexRunResult, error) {
 	result := &TrackMapIndexRunResult{}
 	if s == nil || s.repo == nil {

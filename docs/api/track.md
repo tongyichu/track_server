@@ -745,7 +745,7 @@ curl -X GET "http://<host>:<port>/api/v1/track/my/list?limit=20&cursor=<next_cur
 
 ### 说明
 
-- 该接口用于“补全”轨迹记录：**只有当数据库中对应字段为空（字符串为空串或数值为 0）时才会更新**；否则该字段会被忽略并保持原值不变。
+- 除 `status` 外，该接口用于“补全”轨迹记录：**只有当数据库中对应字段为空（字符串为空串或数值为 0）时才会更新**；否则该字段会被忽略并保持原值不变。`status` 用于轨迹所有者切换公开/私密，按请求值直接更新。
 - 仅允许更新属于当前鉴权用户（Authorization Token 解析出的 `user_id`）的轨迹；若 `track_id` 不属于该用户，返回 `403 Forbidden`。
 - `is_running` 不支持更新：请求体中传入会被服务端**静默忽略**，并保持数据库原值不变。
 - 资源字段（`raw_track_url` / `track_screenshot_url` / `track_no_map_bg_screenshot_url`）在请求时通常是 OSS 地址，但响应会被服务端替换为可直接从业务服务器下载的本地链接（路径在 `/api/v1/static/...` 下，需要登录态）。
@@ -769,6 +769,7 @@ Authorization: Bearer <token>
 
 ```json
 {
+  "status": 2,
   "description": "从起点附近出发，沿本次记录路线完成约 1.2 公里。",
   "session_id": "sess_xxx",
   "city_code": "330100",
@@ -789,6 +790,7 @@ Authorization: Bearer <token>
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
+| `status` | int | 否 | 可见性：`1` 公开（新建默认值）/ `2` 私密（仅本人可见）；只接受 1 或 2，按请求值更新 |
 | `session_id` | string | 否 | 关联的同行会话 ID，仅当原值为空时才会写入；用于把同一次同行结束后各成员上传的个人轨迹串联起来 |
 | `description` | string | 否 | 默认路线说明，最多 `1000` 字符；仅当原值为空时才会写入，投稿编辑后的说明单独保存在投稿记录中 |
 | `city_code` | string | 否 | 城市 Code（仅当原值为空时才会写入） |

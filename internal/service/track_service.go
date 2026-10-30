@@ -221,6 +221,7 @@ func validateTrackSourceTag(sourceTag string) error {
 // TrackInfoPatch describes which track summary fields should be updated.
 // Nil means the field is not provided and should remain unchanged.
 type TrackInfoPatch struct {
+	Status                    *models.TrackStatus        `json:"status"`
 	Description               *string                    `json:"description"`
 	DescriptionRuleVersion    *int                       `json:"description_rule_version"`
 	PreviewImages             *models.TrackPreviewImages `json:"preview_images"`
@@ -267,7 +268,7 @@ func (p *TrackInfoPatch) normalize() {
 }
 
 func (p TrackInfoPatch) empty() bool {
-	return p.Description == nil && p.PreviewImages == nil && p.SessionID == nil &&
+	return p.Status == nil && p.Description == nil && p.PreviewImages == nil && p.SessionID == nil &&
 		p.CityCode == nil &&
 		p.LocateAddr == nil &&
 		p.TrackType == nil &&
@@ -520,6 +521,21 @@ func (s *TrackService) CreateTrack(ctx context.Context, userID int64, input Crea
 	if err := input.validate(); err != nil {
 		return nil, err
 	}
+	isRunning := true
+	if input.IsRunning != nil {
+		isRunning = *input.IsRunning
+	}
+	if !isRunning && input.SessionID != nil && *input.SessionID != "" {
+		if idempotencyRepo, ok := s.tracks.(repository.CompletedTrackSessionRepository); ok {
+			existing, findErr := idempotencyRepo.FindCompletedBySessionID(ctx, userID, *input.SessionID)
+			if findErr == nil {
+				return existing, nil
+			}
+			if !errors.Is(findErr, repository.ErrNotFound) {
+				return nil, findErr
+			}
+		}
+	}
 	// 轨迹 ID 在创建轨迹之前先由仓储层统一分配。
 	// 这样 service 只负责组装业务对象，不关心底层是 MySQL 自增序列、Mongo 兼容实现，
 	// 还是内存仓储中的测试序列，避免把 ID 生成细节散落在业务层。
@@ -531,10 +547,6 @@ func (s *TrackService) CreateTrack(ctx context.Context, userID int64, input Crea
 	startTime := now
 	if input.StartTime != nil {
 		startTime = *input.StartTime
-	}
-	isRunning := true
-	if input.IsRunning != nil {
-		isRunning = *input.IsRunning
 	}
 	if isRunning {
 		if err := s.ensureNoActiveCompanionSession(ctx, userID); err != nil {
@@ -1409,6 +1421,9 @@ func (s *TrackService) UpdateTrackInfo(ctx context.Context, userID int64, trackI
 	if patch.DescriptionRuleVersion != nil && (*patch.DescriptionRuleVersion < 0 || *patch.DescriptionRuleVersion > CurrentAutoTrackDescriptionRuleVersion) {
 		return nil, invalidArg("invalid description_rule_version")
 	}
+	if patch.Status != nil && *patch.Status != models.TrackStatusNormal && *patch.Status != models.TrackStatusPrivate {
+		return nil, invalidArg("status must be 1 (public) or 2 (private)")
+	}
 	if patch.Distance != nil && *patch.Distance < 0 {
 		return nil, invalidArg("distance must be >= 0")
 	}
@@ -1449,6 +1464,10 @@ func (s *TrackService) UpdateTrackInfo(ctx context.Context, userID int64, trackI
 	updatedRaw := false
 	updatedScreenshot := false
 	updatedNoMapBgScreenshot := false
+	if patch.Status != nil && track.Status != *patch.Status {
+		track.Status = *patch.Status
+		updated = true
+	}
 	if patch.Description != nil && *patch.Description != "" && descriptionSourceIsAuto(track.DescriptionSource) {
 		targetVersion := CurrentAutoTrackDescriptionRuleVersion
 		if patch.DescriptionRuleVersion != nil {
@@ -1549,6 +1568,17 @@ func (s *TrackService) UpdateTrackInfo(ctx context.Context, userID int64, trackI
 			track.EarnedRewards = rewards
 		}
 		if !track.IsRunning && (updatedRaw || patch.CityCode != nil || patch.TrackType != nil || patch.CoordinateSystem != nil) {
+			s.enqueueTrackMapIndex(ctx, track)
+		}
+	}
+	if patch.Status != nil {
+		if track.Status == models.TrackStatusPrivate {
+			if s.trackMapIndex != nil {
+				if err := s.trackMapIndex.RemoveTrackFromPublicMap(ctx, track.ID); err != nil {
+					return nil, fmt.Errorf("remove private track from public map: %w", err)
+				}
+			}
+		} else if !track.IsRunning && track.RawTrackURL != "" {
 			s.enqueueTrackMapIndex(ctx, track)
 		}
 	}

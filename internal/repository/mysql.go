@@ -1791,6 +1791,21 @@ func (r *MySQLTrackRepository) FindByID(ctx context.Context, id string) (*models
 	return &t, nil
 }
 
+func (r *MySQLTrackRepository) FindCompletedBySessionID(ctx context.Context, userID int64, sessionID string) (*models.Track, error) {
+	var id string
+	err := r.db.QueryRowContext(ctx,
+		`SELECT id FROM track_records WHERE user_id=? AND session_id=? AND is_running=0 AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 1`,
+		userID, sessionID,
+	).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return r.FindByID(ctx, id)
+}
+
 func (r *MySQLTrackRepository) FindByIDs(ctx context.Context, ids []string) (map[string]*models.Track, error) {
 	ids = uniqueNonEmptyStrings(ids)
 	result := make(map[string]*models.Track, len(ids))

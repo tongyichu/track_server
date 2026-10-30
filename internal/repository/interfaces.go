@@ -84,6 +84,11 @@ type TrackRepository interface {
 	ClearPreviewImages(ctx context.Context, id, resetVersion string) (int64, error)
 }
 
+// CompletedTrackSessionRepository supports idempotent retries for completed recordings.
+type CompletedTrackSessionRepository interface {
+	FindCompletedBySessionID(ctx context.Context, userID int64, sessionID string) (*models.Track, error)
+}
+
 // AdminTrackStatisticsRepository is an additive, management-only capability.
 // TrackRepository deliberately does not embed it so business repositories and
 // call sites keep their existing contract.
@@ -191,6 +196,7 @@ type TrackMapRepository interface {
 	MarkIndexJobSucceeded(ctx context.Context, trackID string, now time.Time) error
 	MarkIndexJobFailed(ctx context.Context, trackID, errMsg string, nextRunAt time.Time, now time.Time) error
 	UpsertTrackGeoIndex(ctx context.Context, index *models.TrackGeoIndex) error
+	CleanupDeletedTrack(ctx context.Context, trackID string) error
 	HasTrackGeoIndex(ctx context.Context, trackID string) (bool, error)
 	ListCompletedTracksMissingGeoIndex(ctx context.Context, limit int) ([]*models.Track, error)
 	FindTrackGeoIndex(ctx context.Context, trackID string) (*models.TrackGeoIndex, error)

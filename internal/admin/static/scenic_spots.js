@@ -73,6 +73,7 @@
 
   function fillForm(spot) {
     state.current=spot;$('detailModal').showModal();$('detailTitle').textContent=state.newSpot?'新建景点':(spot.name||'待补充名称');
+    $('aiDescriptionCandidate').hidden=true;$('aiDescriptionCandidateText').textContent='';
     $('detailMeta').textContent=spot.id?'内部 ID：'+spot.id:'保存后生成内部景点 ID';setModeBadge(spot);
     $('nameInput').value=spot.name||'';$('categoryInput').value=spot.category||'';$('addressInput').value=spot.address||'';$('descriptionInput').value=spot.description||'';
     const cities=spotCities(spot);$('cityInfo').textContent=cities.length?cities.join('、'):'暂无';
@@ -152,16 +153,17 @@
   async function save() {
     if(state.newSpot&&state.poiDraft){toast('先点击“一键代入资料”，或按此坐标新建。','warning');return;}
     try{const body=currentPayload(),pendingFile=state.newSpot?$('photoFile').files[0]:null,pendingCaption=state.newSpot?($('photosBox').querySelector('.scenic-photo-upload-caption')||{}).value||'':'';let spot;if(state.newSpot){spot=await api('/scenic-spots',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});state.newSpot=false;state.current=spot;$('newCityFields').hidden=true;const uploadButton=$('photosBox').querySelector('.scenic-photo-add-card button.btn-outline-primary');if(uploadButton)uploadButton.textContent='上传';if(pendingFile)spot=await uploadPhotoToSpot(spot,pendingFile,pendingCaption);}else{spot=await api('/scenic-spots/'+encodeURIComponent(state.current.id),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({expected_version:state.current.version,spot:body})});}
-      state.newSpot=false;fillForm(spot);$('saveHint').hidden=false;window.clearTimeout(state.saveHintTimer);state.saveHintTimer=window.setTimeout(()=>$('saveHint').hidden=true,2400);await Promise.all([loadList(),loadStats()]);
+      state.newSpot=false;state.current=spot;$('detailModal').close();await Promise.all([loadList(),loadStats()]);toast('保存成功','success');
     }catch(error){toast(error.message,'danger');}
   }
   async function generateScenicDescription() {
     const spot=currentPayload();if(!spot.name){toast('请先填写景点名称','warning');return;}
-    const button=$('generateDescriptionBtn'),hint=$('providerDescriptionHint');button.setAttribute('aria-disabled','true');showDescriptionQueryProgress(hint);
-    try{const result=await api('/scenic-spots/description/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(spot)});if(!result.description){hint.textContent='没有查到足够可靠的介绍信息';toast('没有查到足够可靠的景点介绍','warning');return;}$('descriptionInput').value=result.description;hint.textContent='已填入简介，保存后写入景点资料';toast('AI 简介已填入','success');}
+    const button=$('generateDescriptionBtn'),hint=$('providerDescriptionHint');$('aiDescriptionCandidate').hidden=true;$('aiDescriptionCandidateText').textContent='';button.setAttribute('aria-disabled','true');showDescriptionQueryProgress(hint);
+    try{const result=await api('/scenic-spots/description/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(spot)});if(!result.description){hint.textContent='没有查到足够可靠的介绍信息';toast('没有查到足够可靠的景点介绍','warning');return;}$('aiDescriptionCandidateText').textContent=result.description;$('aiDescriptionCandidate').hidden=false;hint.textContent='简介已生成，请确认后代入';}
     catch(error){hint.textContent='查询失败：'+error.message;toast(error.message,'danger');}
     finally{button.removeAttribute('aria-disabled');}
   }
+  $('applyAiDescriptionBtn').addEventListener('click',()=>{const candidate=$('aiDescriptionCandidateText').textContent.trim();if(!candidate)return;$('descriptionInput').value=candidate;$('aiDescriptionCandidate').hidden=true;$('providerDescriptionHint').textContent='已代入简介，保存后写入景点资料';});
   async function uploadPhotoToSpot(spot,file,caption){const form=new FormData();form.append('file',file);form.append('caption',caption||'');const data=await api('/scenic-spots/'+encodeURIComponent(spot.id)+'/photos',{method:'POST',body:form});return data.spot;}
   async function uploadPhoto() {
     if(!state.current)return;const file=$('photoFile').files[0];if(!file){toast('先选择 JPG 或 PNG 图片','danger');return;}const form=new FormData();form.append('file',file);form.append('caption',$('photosBox').querySelector('.scenic-photo-upload-caption').value.trim());
