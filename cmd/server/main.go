@@ -225,6 +225,14 @@ func main() {
 
 	trackSvc := service.NewTrackService(trackRepo, collectRepo)
 	scenicSpotCatalogSvc := service.NewScenicSpotCatalogService(scenicSpotRepo, trackRepo, trackPlaceRepo)
+	if cfg.MoonshotAPIKey != "" {
+		if _, memoryFallback := scenicSpotRepo.(*repository.MemoryScenicSpotRepository); !memoryFallback {
+			scenicSpotCatalogSvc.SetDescriptionGenerator(service.NewKimiScenicSpotDescriptionGenerator(cfg.MoonshotAPIKey, cfg.KimiScenicDescriptionModel))
+			log.Printf("Kimi scenic descriptions enabled: model=%s", cfg.KimiScenicDescriptionModel)
+		} else {
+			log.Printf("Kimi scenic descriptions disabled while using in-memory scenic spot storage")
+		}
+	}
 	trackSvc.SetScenicSpotCatalogService(scenicSpotCatalogSvc)
 	trackSubmissionSvc := service.NewTrackSubmissionService(trackSubmissionRepo, trackRepo)
 	recommendationSvc := service.NewRecommendationService(service.RecommendationConfig{

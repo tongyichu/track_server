@@ -155,6 +155,22 @@ func (h *Handler) BackfillScenicSpotProviderContent(ctx context.Context, c *app.
 	c.JSON(http.StatusOK, utils.H{"code": 0, "data": result})
 }
 
+func (h *Handler) BackfillScenicSpotDescriptions(ctx context.Context, c *app.RequestContext) {
+	if !h.scenicSpotServiceReady(c) {
+		return
+	}
+	limit := parseAdminListLimit(string(c.Query("limit")))
+	if limit > 5 {
+		limit = 5
+	}
+	result, err := h.scenicSpotSvc.BackfillMissingDescriptions(ctx, h.adminOperator(c), strings.TrimSpace(string(c.Query("cursor"))), limit)
+	if err != nil {
+		h.scenicSpotServiceError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": result})
+}
+
 func (h *Handler) GetScenicSpot(ctx context.Context, c *app.RequestContext) {
 	if !h.scenicSpotServiceReady(c) {
 		return

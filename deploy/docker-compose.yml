@@ -33,6 +33,8 @@ services:
       - AMAP_WEB_KEY=${AMAP_WEB_KEY:-${AMAP_KEY:-}}
       - AMAP_REST_KEY=${AMAP_REST_KEY:-}
       - AMAP_SECURITY_JS_CODE=${AMAP_SECURITY_JS_CODE:-}
+      - MOONSHOT_API_KEY=${MOONSHOT_API_KEY:-}
+      - KIMI_SCENIC_DESCRIPTION_MODEL=${KIMI_SCENIC_DESCRIPTION_MODEL:-kimi-k3.1-pro}
     depends_on:
       - mongo
     ports:

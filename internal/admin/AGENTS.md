@@ -261,6 +261,7 @@ GET /admin/api/users
 [admin UI] /admin/scenic_spots.html
   → GET /admin/api/scenic-spots/statistics 汇总客户端可见景点覆盖、近 30 日供应商调用趋势与高调用景点
   → POST /admin/api/scenic-spots/provider-content/backfill 首次加载时游标分批同步供应商文字和图片；已同步的存量景点仅用轻量地点详情补缺失坐标，provider_coordinates_status 防止重复查询
+  → POST /admin/api/scenic-spots/descriptions/backfill 分批对空简介使用 Kimi 联网搜索并总结；新建时也尝试生成，成功保存到景点资料，已有非空简介不覆盖
   → GET /admin/api/scenic-spots/:spot_id/map 通过后台鉴权代理返回高德静态地图图片，供应商密钥不下发浏览器
   → GET /admin/api/scenic-spots/map-config 向已登录管理员下发高德 Web Key；AMAP_SECURITY_JS_CODE 仅由同源地图服务代理使用，不下发浏览器
   → /admin/api/scenic-spots 查询、创建/编辑草稿、发布/归档、查看审计
@@ -277,6 +278,8 @@ GET /admin/api/users
 轨迹只保存内部景点关联；外部来源 ID 留在景点目录。存量回填对没有可用来源 ID 的合格轨迹强制刷新坐标查询缓存，调用地图 API；高德每日上限按配置执行（默认不设日上限），每轮最多 10 次真实请求；Google 不受服务端每日或单轮请求数上限约束。索引刷新失败时回退到已有索引继续匹配并单独计数；结果有明确重复命中才创建空白目录项。后台景点页先展示运营统计，调用榜只显示前三名；供应商调用明细不在页面展示。目录为紧凑整行，展示分类、简介和图片；“相关轨迹”操作通过景点轨迹列表接口，以轨迹管理页相同的表格字段（不含开始时间）展示关联轨迹；点击行或编辑按钮打开共享 `static/track_editor.js` 可编辑表单，保存或删除后刷新关联列表。景点详情在弹窗内编辑文字资料和图片，并显示供应商坐标、坐标系及位置地图。供应商文字同步到景点 JSON 资料，图片与人工上传图片共用 `photos` 有序数组；拖动排序和上传追加顺序都会随保存结果下发。Google 坐标按 WGS84 保存，高德坐标按 GCJ02 保存；来源同步只填补空坐标，不覆盖既有坐标，已同步记录单独请求坐标字段，避免再次请求照片媒体。城市信息只读展示，不作为编辑字段。`manual_edited` 表示资料由管理员创建或编辑保存；自动同步资料仍显示“自动”。页面隐藏来源 ID、轨迹关联编辑、合并拆分操作，但提供相关轨迹列表和编辑入口；其余数据/API仍由服务端保留，供客户端景点关联及维护流程使用。景点仍沿用内部 draft/published/archived/merged 状态机；页面展示的“自动/人工”是内容维护方式，不替代发布状态。未发布目录不会覆盖旧轨迹摘要。后台上传图像走受鉴权的 `/api/v1/static/scenic_spots/*` 资源路由，Android 详情页可读取。更新 MySQL/Mongo/memory 任一仓储时，保持三种实现、版本冲突控制和审计行为一致。
 景点页统计开始于该计数能力上线，不回填旧请求；计入已关联内部景点的来源详情、照片请求和 ID 核验，存量轨迹需先运行回填，按坐标执行的识别搜索不计入单景点排行。发布覆盖率以关联轨迹计数为准，目标是帮助运营优先补齐高调用景点的自有内容。
 所有 Google Places 查询均不受服务端每日预算或单轮请求数上限约束，由 Google API 自身配额控制。
+
+Kimi 景点简介使用 `MOONSHOT_API_KEY` 和可选的 `KIMI_SCENIC_DESCRIPTION_MODEL` 环境变量。景点管理页先完成供应商资料分页同步，再调用 `/admin/api/scenic-spots/descriptions/backfill` 为存量空简介分页生成摘要；新建记录在保存后立即尝试生成。模型检索与摘要通过 Kimi 官方 `/v1/tools/search_pro` 和 `/v1/chat/completions` 接口完成，简介限制 200 字。失败项保持为空，下一次完整扫描可重试；生成写入采用版本条件更新并在写入前再次确认字段为空。
 [admin UI] /admin/analytics.html
   → GET /admin/api/analytics/sync-summaries?status=&limit=&offset=
   → AnalyticsRepository.ListSyncSummaries / CountSyncSummaries

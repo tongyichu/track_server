@@ -121,6 +121,8 @@ type Config struct {
 	TrackPlaceCacheHours       int
 	TrackPlaceGoogleCacheHours int
 	GooglePlacesKey            string
+	MoonshotAPIKey             string
+	KimiScenicDescriptionModel string
 
 	// 客户端埋点采集
 	// - ANALYTICS_ENABLED=false 时关闭 /api/v1/analytics/events；
@@ -186,6 +188,8 @@ func Load() *Config {
 		TrackPlaceCacheHours:             int(getEnvInt64("TRACK_PLACE_CACHE_HOURS", 168)),
 		TrackPlaceGoogleCacheHours:       int(getEnvInt64("TRACK_PLACE_GOOGLE_CACHE_HOURS", 0)),
 		GooglePlacesKey:                  os.Getenv("GOOGLE_PLACES_API_KEY"),
+		MoonshotAPIKey:                   os.Getenv("MOONSHOT_API_KEY"),
+		KimiScenicDescriptionModel:       getEnv("KIMI_SCENIC_DESCRIPTION_MODEL", "kimi-k3.1-pro"),
 		TLSCertFile:                      tlsCert,
 		TLSKeyFile:                       tlsKey,
 		EnableTLS:                        tlsCert != "" && tlsKey != "",

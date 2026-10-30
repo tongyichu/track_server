@@ -65,12 +65,16 @@
 
   async function syncProviderContent() {
     if(state.providerSyncing)return;state.providerSyncing=true;const progress=$('providerSyncProgress');progress.hidden=false;
-    let cursor='',scanned=0,synced=0,coordinates=0,noSource=0,failed=0;
-    try{
-      while(true){const params=new URLSearchParams({limit:'5'});if(cursor)params.set('cursor',cursor);const result=await api('/scenic-spots/provider-content/backfill?'+params,{method:'POST'});scanned+=result.scanned||0;synced+=result.synced||0;coordinates+=result.coordinates||0;noSource+=result.no_source||0;failed+=result.failed||0;progress.textContent='供应商资料同步：已扫描 '+scanned+' 处，新增资料 '+synced+' 处，补齐坐标 '+coordinates+' 处，缺少来源 '+noSource+' 处，失败 '+failed+' 处';if(!result.has_more)break;cursor=result.next_cursor||'';if(!cursor)break;}
-      await Promise.all([loadList(),loadStats()]);progress.textContent='供应商资料同步完成：新增资料 '+synced+' 处，补齐坐标 '+coordinates+' 处，缺少来源 '+noSource+' 处，失败 '+failed+' 处。';
-    }catch(error){progress.textContent='供应商资料同步中断：'+error.message;}
-    finally{state.providerSyncing=false;}
+    let cursor='',scanned=0,synced=0,coordinates=0,noSource=0,failed=0,descriptions=0,descriptionFailed=0,descriptionScanned=0,kimiConfigured=null,providerError='',descriptionError='';
+    while(true){try{const params=new URLSearchParams({limit:'5'});if(cursor)params.set('cursor',cursor);const result=await api('/scenic-spots/provider-content/backfill?'+params,{method:'POST'});scanned+=result.scanned||0;synced+=result.synced||0;coordinates+=result.coordinates||0;noSource+=result.no_source||0;failed+=result.failed||0;progress.textContent='供应商资料同步：已扫描 '+scanned+' 处，新增资料 '+synced+' 处，补齐坐标 '+coordinates+' 处，缺少来源 '+noSource+' 处，失败 '+failed+' 处';if(!result.has_more)break;cursor=result.next_cursor||'';if(!cursor)break;}catch(error){providerError=error.message;break;}}
+    cursor='';
+    while(true){try{const params=new URLSearchParams({limit:'2'});if(cursor)params.set('cursor',cursor);const result=await api('/scenic-spots/descriptions/backfill?'+params,{method:'POST'});kimiConfigured=result.configured===true;if(!kimiConfigured)break;descriptionScanned+=result.scanned||0;descriptions+=result.generated||0;descriptionFailed+=result.failed||0;progress.textContent='Kimi 景点简介：已扫描 '+descriptionScanned+' 处，生成 '+descriptions+' 段，失败 '+descriptionFailed+' 处';if(!result.has_more)break;cursor=result.next_cursor||'';if(!cursor)break;}catch(error){descriptionError=error.message;break;}}
+    await Promise.all([loadList(),loadStats()]);
+    if(kimiConfigured===false){progress.textContent='供应商资料同步完成；Kimi 简介未配置，空简介暂未补充。';}
+    else{progress.textContent='资料同步完成：供应商资料新增 '+synced+' 处、坐标补齐 '+coordinates+' 处；Kimi 简介生成 '+descriptions+' 段，简介生成失败 '+descriptionFailed+' 处。';}
+    if(providerError)progress.textContent+=' 供应商同步中断：'+providerError;
+    if(descriptionError)progress.textContent+=' Kimi 简介同步中断：'+descriptionError;
+    state.providerSyncing=false;
   }
 
   function fillForm(spot) {
