@@ -123,7 +123,7 @@ func (g *KimiScenicSpotDescriptionGenerator) Generate(ctx context.Context, spot 
 			{"role": "system", "content": "你是严谨的景点资料编辑。只依据用户提供的来源资料写作，资料不支持的内容不得补充。"},
 			{"role": "user", "content": prompt},
 		},
-		"temperature": 0.2,
+		"temperature": 1,
 		"max_tokens":  500,
 	})
 	if err != nil {
