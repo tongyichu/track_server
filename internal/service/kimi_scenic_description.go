@@ -125,7 +125,9 @@ func (g *KimiScenicSpotDescriptionGenerator) Generate(ctx context.Context, spot 
 			{"role": "user", "content": prompt},
 		},
 		"temperature": 1,
-		"max_tokens":  4096,
+		// K2.6 reasoning tokens share the completion budget with its answer.
+		// The prompt caps the final description, so leave ample room for reasoning.
+		"max_tokens":  32768,
 	})
 	if err != nil {
 		return "", err
