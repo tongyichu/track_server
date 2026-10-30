@@ -63,6 +63,14 @@ body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Ro
 
 button { font: inherit; }
 
+body.admin-image-viewer-open { overflow: hidden; }
+img:not(.nav-icon):not(#coordinateMapImage):not([data-no-preview]) { cursor: zoom-in; }
+.admin-image-viewer { position: fixed; inset: 0; z-index: 20000; display: grid; place-items: center; padding: 48px 28px; background: rgba(12, 18, 28, .88); cursor: zoom-out; }
+.admin-image-viewer img { display: block; max-width: min(94vw, 1600px); max-height: 88vh; object-fit: contain; border-radius: 8px; box-shadow: 0 18px 70px rgba(0, 0, 0, .42); cursor: default; }
+.admin-image-viewer-close { position: absolute; top: 16px; right: 20px; display: grid; place-items: center; width: 42px; height: 42px; padding: 0; border: 1px solid rgba(255, 255, 255, .45); border-radius: 50%; background: rgba(255, 255, 255, .12); color: #fff; font-size: 30px; line-height: 1; cursor: pointer; }
+.admin-image-viewer-close:hover { background: rgba(255, 255, 255, .24); }
+.admin-image-viewer-caption { position: absolute; right: 24px; bottom: 15px; left: 24px; color: rgba(255, 255, 255, .9); font-size: 13px; text-align: center; pointer-events: none; }
+
 /* table */
 table.data { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px; }
 table.data th, table.data td { padding: 8px 10px; border-bottom: 1px solid #e5e6eb; text-align: left; vertical-align: top; }

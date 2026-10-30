@@ -292,7 +292,7 @@ Kimi 景点简介使用 `MOONSHOT_API_KEY` 和可选的 `KIMI_SCENIC_DESCRIPTION
 - **展示业务静态资源**：后台页面不要直接使用 `/api/v1/static/*`，应由 handler 改写为 `/admin/api/static/*`，通过 admin session 鉴权后读取 `staticRoot`。
 - **加一个公开页面/资源**：把文件放进 `static/`，在 `routes.go` 用 `serveEmbedded(...)` 或走 `/admin/static/*filepath`。**不要新增第二个 `go:embed`**。
 - **加一个侧边/顶部入口**：统一修改 `static/shell.js` 的导航配置；页面只需在自身脚本前加载 `shell.js`，不要再复制一份导航。
-- **后台组件样式**：页面先加载内置 `vendor/tabler.min.css`，再加载 `style.css`；通用 Card / Button / Form / Table / Badge 和移动端表格卡片化由 `static/ui.js` 统一增强，新增页面应加载 `vendor/tabler.min.js`、`shell.js`、`ui.js` 后再加载页面脚本，不要另写一套原生组件外观。
+- **后台组件样式**：页面先加载内置 `vendor/tabler.min.css`，再加载 `style.css`；通用 Card / Button / Form / Table / Badge、移动端表格卡片化及图片点击全屏预览由 `static/ui.js` 统一增强，新增页面应加载 `vendor/tabler.min.js`、`shell.js`、`ui.js` 后再加载页面脚本，不要另写一套原生组件外观。地图图片或其他不应预览的图片可标记 `data-no-preview`。
 - **改 cookie 策略**：只在 `auth.go` 改；保持 `HttpOnly=true`，跨站调用前提下才考虑 `SameSite=None + Secure`。
 - **调整 session TTL**：改 `routes.go` 中 `NewSessionStore(12 * time.Hour)`，不要在 cookie 与 store 两边写不一致的过期时间。
 

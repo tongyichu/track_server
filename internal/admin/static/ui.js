@@ -160,6 +160,59 @@
 
   window.AdminUI = { alert: toast, confirm: confirmDialog, form: formDialog };
 
+  let imageViewer;
+  function closeImageViewer() {
+    if (!imageViewer) return;
+    imageViewer.remove();
+    imageViewer = null;
+    document.body.classList.remove('admin-image-viewer-open');
+    document.removeEventListener('keydown', onImageViewerKeydown);
+  }
+  function onImageViewerKeydown(event) {
+    if (event.key === 'Escape') closeImageViewer();
+  }
+  function openImageViewer(image, source) {
+    closeImageViewer();
+    const overlay = document.createElement('div');
+    overlay.className = 'admin-image-viewer';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-label', '图片预览');
+    const enlarged = document.createElement('img');
+    enlarged.src = source;
+    enlarged.alt = image.alt || '';
+    enlarged.draggable = false;
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'admin-image-viewer-close';
+    close.setAttribute('aria-label', '关闭图片预览');
+    close.textContent = '×';
+    overlay.append(enlarged, close);
+    if (image.alt && image.alt.trim()) {
+      const caption = document.createElement('div');
+      caption.className = 'admin-image-viewer-caption';
+      caption.textContent = image.alt.trim();
+      overlay.appendChild(caption);
+    }
+    overlay.addEventListener('click', event => { if (event.target === overlay || event.target === close) closeImageViewer(); });
+    document.body.appendChild(overlay);
+    imageViewer = overlay;
+    document.body.classList.add('admin-image-viewer-open');
+    document.addEventListener('keydown', onImageViewerKeydown);
+    close.focus();
+  }
+  document.addEventListener('click', event => {
+    if (!(event.target instanceof HTMLImageElement)) return;
+    const image = event.target;
+    if (image.closest('[data-no-preview], .admin-image-viewer') || image.classList.contains('nav-icon') || image.id === 'coordinateMapImage') return;
+    const link = image.closest('a[href]');
+    const source = image.dataset.fullSrc || (link ? link.href : '') || image.currentSrc || image.src;
+    if (!source) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    openImageViewer(image, source);
+  }, true);
+
   function addPageHeading() {
     const meta = pageMeta[window.location.pathname];
     const main = document.querySelector('main.container');
