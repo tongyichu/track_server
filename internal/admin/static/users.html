@@ -26,19 +26,7 @@
     </div>
   </header>
 
-  <main class="container">
-    <section class="panel">
-      <div class="admin-section-heading"><h2>用户概况</h2><span class="hint">资料分布按当前用户档案统计</span></div>
-      <div class="admin-user-summary-grid">
-        <article class="admin-stat-panel admin-user-total"><span>全部用户</span><strong id="userStatsTotal">—</strong><small>当前注册用户</small></article>
-        <article class="admin-stat-panel admin-user-chart-card"><div><h3>性别分布</h3><small>包含全部用户</small></div><div class="admin-user-chart-layout"><div id="userGenderChart" class="admin-user-pie"></div><div id="userGenderStats" class="admin-user-legend"></div></div></article>
-      </div>
-      <div class="admin-section-heading admin-user-distribution-heading"><h2>用户画像分布</h2><span class="hint">城市按已完成轨迹统计，同一用户可能出现在多个城市</span></div>
-      <div class="admin-user-distribution-grid">
-        <article class="admin-stat-panel admin-user-chart-card admin-user-zodiac-card"><div><h3>星座分布</h3><small>按生日推算，包含未知</small></div><div class="admin-user-chart-layout admin-user-zodiac-layout"><div id="userZodiacChart" class="admin-user-pie"></div><div id="userZodiacStats" class="admin-user-legend admin-zodiac-legend"></div></div></article>
-        <article class="admin-stat-panel admin-user-chart-card admin-user-city-card"><div><h3>轨迹用户城市分布</h3><small>地图按省份汇总；点击省份查看人数，城市榜按已完成轨迹统计</small></div><div class="admin-user-city-layout"><div><div id="userCityMap" class="admin-user-china-map" role="img" aria-label="中国各省轨迹用户分布地图"></div><div class="admin-user-map-legend"><span>较少</span><i></i><span>较多</span></div></div><aside class="admin-user-city-aside"><div class="admin-user-foreign-stat"><span>海外城市用户数</span><strong id="userForeignCityTotal">—</strong><small id="userForeignCityNote">按城市去重统计，跨城市用户可能重复</small></div><div class="admin-user-foreign-stat admin-user-unknown-stat"><span>未知城市</span><strong id="userUnknownCityTotal">—</strong></div><h4>城市用户数 Top 10</h4><div id="userCityStats" class="admin-distribution-list admin-city-list"></div></aside></div></article>
-      </div>
-    </section>
+  <main class="container wide">
     <section class="panel">
       <h2>用户列表 <span class="hint" id="totalHint"></span></h2>
       <div class="row">
@@ -58,6 +46,18 @@
         </thead>
         <tbody id="userList"></tbody>
       </table>
+    </section>
+    <section class="panel">
+      <div class="admin-section-heading"><h2>用户概况</h2><span class="hint">资料分布按当前用户档案统计</span></div>
+      <div class="admin-user-summary-grid">
+        <article class="admin-stat-panel admin-user-total"><span>全部用户</span><strong id="userStatsTotal">—</strong><small>当前注册用户</small></article>
+        <article class="admin-stat-panel admin-user-chart-card"><div><h3>性别分布</h3><small>包含全部用户</small></div><div class="admin-user-chart-layout"><div id="userGenderChart" class="admin-user-pie"></div><div id="userGenderStats" class="admin-user-legend"></div></div></article>
+      </div>
+      <div class="admin-section-heading admin-user-distribution-heading"><h2>用户画像分布</h2><span class="hint">城市按已完成轨迹统计，同一用户可能出现在多个城市</span></div>
+      <div class="admin-user-distribution-grid">
+        <article class="admin-stat-panel admin-user-chart-card admin-user-zodiac-card"><div><h3>星座分布</h3><small>按生日推算，包含未知</small></div><div class="admin-user-chart-layout admin-user-zodiac-layout"><div id="userZodiacChart" class="admin-user-pie"></div><div id="userZodiacStats" class="admin-user-legend admin-zodiac-legend"></div></div></article>
+        <article class="admin-stat-panel admin-user-chart-card admin-user-city-card"><div><h3>轨迹用户城市分布</h3><small>地图按省份汇总；点击省份查看人数，城市榜按已完成轨迹统计</small></div><div class="admin-user-city-layout"><div><div id="userCityMap" class="admin-user-china-map" role="img" aria-label="中国各省轨迹用户分布地图"></div><div class="admin-user-map-legend"><span>较少</span><i></i><span>较多</span></div></div><aside class="admin-user-city-aside"><div class="admin-user-foreign-stat"><span>海外城市用户数</span><strong id="userForeignCityTotal">—</strong><small id="userForeignCityNote">按城市去重统计，跨城市用户可能重复</small></div><div class="admin-user-foreign-stat admin-user-unknown-stat"><span>未知城市</span><strong id="userUnknownCityTotal">—</strong></div><h4>城市用户数 Top 10</h4><div id="userCityStats" class="admin-distribution-list admin-city-list"></div></aside></div></article>
+      </div>
     </section>
   </main>
 

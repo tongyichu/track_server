@@ -281,16 +281,16 @@ table.data.table .btn { white-space: nowrap; }
 .submission-stat-danger strong { color: var(--tblr-danger); }
 .admin-section-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px 16px; margin-bottom: 14px; }
 .admin-section-heading h2 { margin: 0; }
-.admin-user-summary-grid { display: grid; grid-template-columns: minmax(180px, .6fr) minmax(0, 1.4fr); gap: 16px; }
+.admin-user-summary-grid { display: grid; grid-template-columns: minmax(180px, .45fr) minmax(0, 1.55fr); gap: 16px; }
 .admin-user-distribution-heading { margin-top: 20px; }
 .admin-user-distribution-grid { display: grid; grid-template-columns: minmax(340px, .8fr) minmax(0, 1.2fr); align-items: stretch; gap: 16px; }
 .admin-stat-panel { min-width: 0; padding: 20px 22px; border: 1px solid var(--tblr-border-color); border-radius: var(--tblr-border-radius-lg); background: var(--tblr-bg-surface); }
-.admin-user-total { display: flex; flex-direction: column; justify-content: center; gap: 7px; min-height: 228px; }
+.admin-user-total { display: flex; flex-direction: column; justify-content: center; gap: 7px; min-height: 170px; }
 .admin-user-total > span, .admin-user-total small { color: var(--tblr-secondary-color); font-size: 12px; }
 .admin-user-total > strong { font-size: 34px; line-height: 1.15; }
 .admin-user-chart-card > div:first-child > small { color: var(--tblr-secondary-color); font-size: 12px; }
 .admin-user-chart-layout { display: grid; grid-template-columns: minmax(150px, .9fr) minmax(160px, 1.1fr); align-items: center; gap: 12px; }
-.admin-user-pie { width: 100%; height: 190px; min-width: 0; }
+.admin-user-pie { width: 100%; height: 150px; min-width: 0; }
 .admin-user-legend { display: grid; align-content: center; gap: 8px; min-width: 0; }
 .admin-user-legend-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--tblr-body-color); font-size: 12px; }
 .admin-user-legend-row strong { font-size: 13px; font-variant-numeric: tabular-nums; }
@@ -300,10 +300,10 @@ table.data.table .btn { white-space: nowrap; }
 .admin-stat-panel h3 { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 0 0 16px; font-size: 14px; }
 .admin-stat-panel h3 strong { font-size: 20px; }
 .admin-user-zodiac-layout { grid-template-columns: minmax(180px, .9fr) minmax(150px, 1.1fr); }
-.admin-user-zodiac-layout .admin-user-pie { height: 330px; }
+.admin-user-zodiac-layout .admin-user-pie { height: 260px; }
 .admin-zodiac-legend { grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: center; gap: 9px 14px; }
 .admin-user-city-layout { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(235px, .8fr); gap: 16px; align-items: stretch; }
-.admin-user-china-map { min-width: 0; height: 400px; overflow: hidden; border-radius: 8px; background: #f3f7fc; color: var(--tblr-secondary-color); font-size: 13px; text-align: center; }
+.admin-user-china-map { min-width: 0; height: 320px; overflow: hidden; border-radius: 8px; background: #f3f7fc; color: var(--tblr-secondary-color); font-size: 13px; text-align: center; }
 .admin-user-map-legend { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 8px; color: var(--tblr-secondary-color); font-size: 10px; }
 .admin-user-map-legend i { width: 96px; height: 8px; border-radius: 99px; background: linear-gradient(90deg, rgba(32,107,196,.12), rgba(32,107,196,.67)); }
 .admin-user-city-aside { min-width: 0; }

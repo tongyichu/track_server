@@ -83,9 +83,9 @@ func (r *mysqlAdminDashboardRepository) GetAdminUserDistributionStatistics(ctx c
 	}
 	_ = birthdayRows.Close()
 
-	cityRows, err := r.db.QueryContext(ctx, `SELECT COALESCE(NULLIF(TRIM(city_code),''),'unknown'),COUNT(DISTINCT user_id) AS user_count
+	cityRows, err := r.db.QueryContext(ctx, `SELECT COALESCE(NULLIF(TRIM(city_code),''),'unknown') AS city_code,COUNT(DISTINCT user_id) AS user_count
 		FROM track_records WHERE `+completedTrackSQL+`
-		GROUP BY COALESCE(NULLIF(TRIM(city_code),''),'unknown')
+		GROUP BY city_code
 		ORDER BY user_count DESC, city_code`)
 	if err != nil {
 		return nil, fmt.Errorf("admin user track city distribution: %w", err)
