@@ -33,15 +33,106 @@
     cancer: '巨蟹座', leo: '狮子座', virgo: '处女座', libra: '天秤座', scorpio: '天蝎座',
     sagittarius: '射手座', capricorn: '摩羯座', aquarius: '水瓶座', pisces: '双鱼座'
   };
-  function renderDistribution(id, items, labelField) {
-    var root = document.getElementById(id);
-    if (!root) return;
-    var max = Math.max(1, (items || []).reduce(function (n, item) { return Math.max(n, Number(item.count) || 0); }, 0));
-    root.innerHTML = (items || []).map(function (item) {
-      var label = item[labelField] || distributionLabels[item.key] || item.key || '未知';
-      var count = Number(item.count) || 0;
-      return '<div class="admin-distribution-row"><span>' + esc(label) + '</span><div class="admin-distribution-track"><i style="width:' + Math.round(count * 100 / max) + '%"></i></div><strong>' + count.toLocaleString() + '</strong></div>';
-    }).join('') || '<span class="hint">暂无数据</span>';
+  var pieColors = ['#206bc4', '#2fb344', '#f59f00', '#ae3ec9', '#d63939', '#17a2b8', '#6f42c1', '#74b816', '#f76707', '#0ca678', '#4263eb', '#e64980', '#868e96'];
+  var userCharts = Object.create(null);
+  var userMap;
+  var userMapInfoWindow;
+  var amapPromise;
+  function number(value) { return Number(value || 0); }
+  function renderPie(chartID, legendID, items, total) {
+    var chartRoot = document.getElementById(chartID), legendRoot = document.getElementById(legendID);
+    if (!chartRoot || !legendRoot || !window.echarts) return;
+    var rows = (items || []).map(function (item) { return { key: item.key, name: item.label || distributionLabels[item.key] || item.key || '未知', value: number(item.count) }; });
+    var totalValue = number(total);
+    if (!userCharts[chartID]) userCharts[chartID] = echarts.init(chartRoot);
+    userCharts[chartID].setOption({
+      color: pieColors,
+      tooltip: { trigger: 'item', formatter: function (item) { return esc(item.name) + '<br>' + number(item.value).toLocaleString() + ' 人（' + item.percent + '%）'; } },
+      series: [{ type: 'pie', radius: ['57%', '82%'], center: ['50%', '50%'], avoidLabelOverlap: true, itemStyle: { borderColor: '#fff', borderWidth: 2 }, label: { show: false }, emphasis: { scale: true, scaleSize: 6 }, data: rows }],
+      graphic: [{ type: 'text', left: 'center', top: '41%', style: { text: totalValue.toLocaleString(), fill: '#182433', fontSize: 22, fontWeight: 700, textAlign: 'center' } }, { type: 'text', left: 'center', top: '55%', style: { text: chartID === 'userGenderChart' ? '全部用户' : '用户数', fill: '#667085', fontSize: 11, textAlign: 'center' } }]
+    }, true);
+    legendRoot.innerHTML = rows.map(function (item, index) {
+      return '<div class="admin-user-legend-row"><span class="admin-user-legend-label"><i style="background:' + pieColors[index % pieColors.length] + '"></i>' + esc(item.name) + '</span><strong>' + item.value.toLocaleString() + '</strong></div>';
+    }).join('') + (chartID === 'userGenderChart' ? '<div class="admin-user-legend-row admin-user-legend-total"><span>全部用户</span><strong>' + totalValue.toLocaleString() + '</strong></div>' : '');
+  }
+  function domesticProvinceCode(cityCode) {
+    var code = String(cityCode || '');
+    var prefixes = ['11','12','13','14','15','21','22','23','31','32','33','34','35','36','37','41','42','43','44','45','46','50','51','52','53','54','61','62','63','64','65','71','81','82'];
+    return /^\d{6}$/.test(code) && prefixes.indexOf(code.slice(0, 2)) >= 0 ? code.slice(0, 2) + '0000' : '';
+  }
+  function renderCityStats(items) {
+    var provinceCounts = Object.create(null), domestic = [], foreignTotal = 0, foreignCities = 0, unknownTotal = 0;
+    (items || []).forEach(function (item) {
+      var key = String(item.key || ''), count = number(item.count), provinceCode = domesticProvinceCode(key);
+      if (key === 'unknown' || !key) { unknownTotal += count; return; }
+      if (provinceCode) { provinceCounts[provinceCode] = (provinceCounts[provinceCode] || 0) + count; domestic.push(item); }
+      else { foreignTotal += count; foreignCities++; }
+    });
+    document.getElementById('userForeignCityTotal').textContent = foreignTotal.toLocaleString();
+    document.getElementById('userForeignCityNote').textContent = foreignCities ? foreignCities + ' 个海外城市；按城市去重用户数合计，跨城市用户可能重复' : '当前没有海外轨迹城市数据';
+    document.getElementById('userUnknownCityTotal').textContent = unknownTotal.toLocaleString();
+    domestic.sort(function (a, b) { return number(b.count) - number(a.count); });
+    var topCities = domestic.slice(0, 10), max = Math.max(1, ...topCities.map(function (item) { return number(item.count); }));
+    document.getElementById('userCityStats').innerHTML = topCities.map(function (item) {
+      var label = item.label || item.key || '未知';
+      var count = number(item.count);
+      return '<div class="admin-distribution-row"><span title="' + esc(label) + '">' + esc(label) + '</span><div class="admin-distribution-track"><i style="width:' + Math.round(count * 100 / max) + '%"></i></div><strong>' + count.toLocaleString() + '</strong></div>';
+    }).join('') || '<span class="hint">暂无轨迹城市数据</span>';
+    renderChinaMap(provinceCounts);
+  }
+  function loadAMap() {
+    if (window.AMap) return Promise.resolve(window.AMap);
+    if (amapPromise) return amapPromise;
+    amapPromise = fetch('/admin/api/scenic-spots/map-config', { credentials: 'same-origin' }).then(function (response) {
+      if (!response.ok) throw new Error('地图配置加载失败');
+      return response.json();
+    }).then(function (payload) {
+      var config = payload.data || {};
+      if (!config.configured || !config.key) throw new Error('地图服务暂不可用');
+      window._AMapSecurityConfig = { serviceHost: window.location.origin + config.service_host };
+      return new Promise(function (resolve, reject) {
+        var script = document.createElement('script');
+        script.src = 'https://webapi.amap.com/maps?v=2.0&key=' + encodeURIComponent(config.key) + '&plugin=AMap.Scale,AMap.DistrictSearch';
+        script.onload = function () { window.AMap ? resolve(window.AMap) : reject(new Error('地图 SDK 未就绪')); };
+        script.onerror = function () { reject(new Error('地图 SDK 加载失败')); };
+        document.head.appendChild(script);
+      });
+    });
+    return amapPromise;
+  }
+  function renderChinaMap(provinceCounts) {
+    var root = document.getElementById('userCityMap');
+    root.textContent = '地图加载中…';
+    loadAMap().then(function (AMap) {
+      if (userMap) userMap.destroy();
+      root.textContent = '';
+      userMap = new AMap.Map('userCityMap', { zoom: 4, center: [105, 36], resizeEnable: true, viewMode: '2D' });
+      userMap.addControl(new AMap.Scale());
+      var districtSearch = new AMap.DistrictSearch({ level: 'country', subdistrict: 1, extensions: 'all', showbiz: false });
+      districtSearch.search('中国', function (status, result) {
+        if (status !== 'complete' || !result.districtList || !result.districtList.length) { root.textContent = '中国地图暂时无法加载'; return; }
+        var provinces = result.districtList[0].districtList || [], max = Math.max(1, ...Object.keys(provinceCounts).map(function (code) { return provinceCounts[code]; }));
+        var overlays = [];
+        provinces.forEach(function (province) {
+          var count = number(provinceCounts[String(province.adcode || '')]);
+          (province.boundaries || []).forEach(function (boundary) {
+            var polygon = new AMap.Polygon({ path: boundary, strokeColor: '#fff', strokeWeight: 1, fillColor: '#206bc4', fillOpacity: count ? .12 + .55 * count / max : .035, cursor: count ? 'pointer' : 'default' });
+            if (count) {
+              polygon.on('click', function () {
+                var content = document.createElement('div');
+                content.className = 'admin-user-map-tooltip';
+                content.textContent = (province.name || '省级区域') + ' · ' + count.toLocaleString() + ' 个城市用户记录';
+                if (!userMapInfoWindow) userMapInfoWindow = new AMap.InfoWindow({ offset: new AMap.Pixel(0, -8) });
+                userMapInfoWindow.setContent(content);
+                userMapInfoWindow.open(userMap, province.center);
+              });
+            }
+            overlays.push(polygon);
+          });
+        });
+        if (overlays.length) { userMap.add(overlays); userMap.setFitView(overlays, false, [12, 12, 12, 12]); }
+      });
+    }).catch(function () { root.textContent = '地图暂不可用，请查看右侧城市统计'; });
   }
   async function loadUserStatistics() {
     try {
@@ -49,18 +140,14 @@
       if (!response.ok) throw new Error('统计加载失败');
       var data = (await response.json()).data || {};
       document.getElementById('userStatsTotal').textContent = Number(data.total_users || 0).toLocaleString();
-      var genderCounts = Object.create(null);
-      (data.gender || []).forEach(function (item) { genderCounts[item.key] = item.count; });
-      document.getElementById('userGenderMale').textContent = Number(genderCounts.male || 0).toLocaleString();
-      document.getElementById('userGenderFemale').textContent = Number(genderCounts.female || 0).toLocaleString();
-      document.getElementById('userGenderUnknown').textContent = Number(genderCounts.unknown || 0).toLocaleString();
-      renderDistribution('userZodiacStats', data.zodiac, 'label');
-      renderDistribution('userCityStats', data.track_cities, 'label');
+      renderPie('userGenderChart', 'userGenderStats', data.gender, data.total_users);
+      renderPie('userZodiacChart', 'userZodiacStats', data.zodiac, data.total_users);
+      renderCityStats(data.track_cities || []);
     } catch (_) {
       ['userZodiacStats', 'userCityStats'].forEach(function (id) {
         var root = document.getElementById(id); if (root) root.textContent = '统计暂不可用';
       });
-      ['userStatsTotal', 'userGenderMale', 'userGenderFemale', 'userGenderUnknown'].forEach(function (id) {
+      ['userStatsTotal', 'userForeignCityTotal', 'userUnknownCityTotal'].forEach(function (id) {
         var root = document.getElementById(id); if (root) root.textContent = '—';
       });
     }
@@ -166,7 +253,7 @@
     }
     var resp = await fetch('/admin/api/users?' + params.toString());
     if (!resp.ok) {
-      tbody.innerHTML = '<tr><td colspan="10">加载失败: ' + resp.status + '</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7">加载失败: ' + resp.status + '</td></tr>';
       return;
     }
     var data = ((await resp.json()).data) || {};
@@ -177,18 +264,15 @@
     tbody.innerHTML = '';
     items.forEach(function (it) {
       var avatar = it.avatar_url
-        ? '<img src="' + esc(it.avatar_url) + '" alt="" style="width:32px;height:32px;border-radius:50%;object-fit:cover;" />'
-        : '';
+        ? '<img class="admin-user-avatar" src="' + esc(it.avatar_url) + '" alt="" />'
+        : '<span class="admin-user-avatar admin-user-avatar-empty" aria-hidden="true">👤</span>';
       var tr = document.createElement('tr');
-      tr.innerHTML = '<td>' + it.id + '</td>' +
-        '<td>' + avatar + '</td>' +
+      tr.innerHTML = '<td>' + avatar + '</td>' +
         '<td>' + esc(it.nickname) + '</td>' +
         '<td>' + esc(it.phone || '') + '</td>' +
-        '<td>' + esc(it.client_language || '') + '</td>' +
-        '<td>' + esc(it.signature || '') + '</td>' +
         '<td>' + restrictionText(it.account_restriction) + '</td>' +
+        '<td>' + (it.last_login_at ? fmtTime(it.last_login_at) : '—') + '</td>' +
         '<td>' + fmtTime(it.created_at) + '</td>' +
-        '<td>' + fmtTime(it.updated_at) + '</td>' +
         '<td><button data-action="restrict" data-user-id="' + esc(it.id) + '">限制</button> ' +
         '<button data-action="revoke" data-user-id="' + esc(it.id) + '"' + (it.account_restriction ? '' : ' disabled') + '>解除</button></td>';
       tbody.appendChild(tr);
@@ -202,4 +286,8 @@
 
   loadUserStatistics();
   loadPage();
+  window.addEventListener('resize', function () {
+    Object.keys(userCharts).forEach(function (id) { userCharts[id].resize(); });
+    if (userMap) userMap.resize();
+  });
 })();

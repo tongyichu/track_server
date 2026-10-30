@@ -257,6 +257,7 @@ type AdminUserStatisticsRepository interface {
 type AdminDashboardStatisticsRepository interface {
 	GetAdminDashboardStatistics(ctx context.Context, query models.AdminDashboardQuery) (*models.AdminDashboardStatistics, error)
 	GetAdminUserDistributionStatistics(ctx context.Context) (*models.AdminUserDistributionStats, error)
+	GetAdminUserLastLoginTimes(ctx context.Context, userIDs []int64) (map[int64]time.Time, error)
 	GetAdminCompanionStatistics(ctx context.Context, query models.AdminDashboardQuery) (*models.AdminDashboardCompanionStats, error)
 }
 

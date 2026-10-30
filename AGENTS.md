@@ -102,7 +102,7 @@ track_server/
 
 ### 稳定默认值
 
-- 管理后台运营工作台的跨域只读统计统一走 `repository.AdminDashboardStatisticsRepository`，由 `NewAdminDashboardStatisticsRepository` 根据当前 MySQL / Mongo / in-memory 仓储族选择实现；不新增统计表，也不改变业务写入流程。周期指标按 `[start,end)` 统计，互动趋势使用收藏/导航/点赞/评论各自 `created_at`，新增用户转化漏斗使用同周期注册 Cohort 并逐级限定为完成轨迹、投稿和审核通过。数据模型见 `internal/models/admin_dashboard.go`，聚合实现见 `internal/repository/admin_dashboard*.go`。
+- 管理后台运营工作台的跨域只读统计统一走 `repository.AdminDashboardStatisticsRepository`，由 `NewAdminDashboardStatisticsRepository` 根据当前 MySQL / Mongo / in-memory 仓储族选择实现；不新增统计表，也不改变业务写入流程。周期指标按 `[start,end)` 统计，互动趋势使用收藏/导航/点赞/评论各自 `created_at`，新增用户转化漏斗使用同周期注册 Cohort 并逐级限定为完成轨迹、投稿和审核通过；用户列表上次登录按当前页批量查询 `login_log`。数据模型见 `internal/models/admin_dashboard.go`，聚合实现见 `internal/repository/admin_dashboard*.go`。
 
 - 主景点以 `internal/models/scenic_spot.go` 的内部 SCP ID 为唯一业务 ID；MySQL、Mongo、内存仓储均由 `repository.ScenicSpotRepository` 实现。`ScenicSpotCatalogService` 管理草稿/发布、来源 ID 校验、轨迹关联、合并拆分、审计和存量回填。后台首次加载景点管理页时通过 `/admin/api/scenic-spots/provider-content/backfill` 分批拉取尚未同步的供应商资料；存量简介由详情弹窗中简介标题旁的“AI联网查询”链接单条检索并填入编辑框，保存后入库。新建景点的空简介在创建前同步尝试生成并随记录保存，失败保留空值。AI 简介限 200 字，人工已有内容不会被自动覆盖。Kimi API Key 从 `MOONSHOT_API_KEY` 注入，仅在持久化仓储可用时启用；不要把密钥写入代码或提交到仓库。图片加入同一有序 `photos` 数组。后台编辑保存会设置 `manual_edited`，自动同步资料仍归为“自动”。自有图片上传追加到数组末尾，拖动排序后按数组顺序下发客户端。运营后台入口 `/admin/scenic_spots.html`，API 路由清单和流程见 `internal/admin/AGENTS.md`；Google 来源 ID 到期后在详情访问时验证。
 

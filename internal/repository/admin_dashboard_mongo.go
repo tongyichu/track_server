@@ -114,12 +114,41 @@ func (r *mongoAdminDashboardRepository) GetAdminUserDistributionStatistics(ctx c
 		bson.D{{Key: "$group", Value: bson.M{"_id": bson.M{"city": cityExpr, "user": "$user_id"}}}},
 		bson.D{{Key: "$group", Value: bson.M{"_id": "$_id.city", "count": bson.M{"$sum": 1}}}},
 		bson.D{{Key: "$sort", Value: bson.D{{Key: "count", Value: -1}, {Key: "_id", Value: 1}}}},
-		bson.D{{Key: "$limit", Value: 10}},
 	})
 	if err != nil {
 		return nil, err
 	}
 	return buildAdminUserDistributionStats(total, genderCounts, birthdayCounts, cityCounts), nil
+}
+
+func (r *mongoAdminDashboardRepository) GetAdminUserLastLoginTimes(ctx context.Context, userIDs []int64) (map[int64]time.Time, error) {
+	result := make(map[int64]time.Time, len(userIDs))
+	if len(userIDs) == 0 {
+		return result, nil
+	}
+	cursor, err := r.db.Collection("login_log").Aggregate(ctx, mongo.Pipeline{
+		bson.D{{Key: "$match", Value: bson.M{"user_id": bson.M{"$in": userIDs}}}},
+		bson.D{{Key: "$sort", Value: bson.D{{Key: "created_at", Value: -1}}}},
+		bson.D{{Key: "$group", Value: bson.M{"_id": "$user_id", "last_login_at": bson.M{"$first": "$created_at"}}}},
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	for cursor.Next(ctx) {
+		var row struct {
+			UserID      int64     `bson:"_id"`
+			LastLoginAt time.Time `bson:"last_login_at"`
+		}
+		if err := cursor.Decode(&row); err != nil {
+			return nil, err
+		}
+		result[row.UserID] = row.LastLoginAt
+	}
+	if err := cursor.Err(); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 func mongoAdminCountDistribution(ctx context.Context, collection *mongo.Collection, pipeline mongo.Pipeline) (map[string]int64, error) {

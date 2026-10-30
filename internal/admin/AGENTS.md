@@ -87,14 +87,14 @@ internal/admin/
 | GET | `/admin/api/me` | 公开 | 返回当前会话；未登录返回 401 |
 | GET | `/admin/api/releases` | 鉴权 | 列出发布记录，支持 `platform` / `status` 过滤 |
 | GET | `/admin/api/dashboard` | 鉴权 | 业务库即时统计；`period=day|week|month`，返回同进度上周期对比、用户转化、审核/反馈效率、内容质量、互动、同行与日趋势 |
-| GET | `/admin/api/users/statistics` | 鉴权 | 用户总数、性别/星座分布和已完成轨迹涉及城市的去重用户数（一个用户可计入多个城市） |
+| GET | `/admin/api/users/statistics` | 鉴权 | 用户总数、性别/星座分布和全部已完成轨迹城市的去重用户数（一个用户可计入多个城市） |
 | GET | `/admin/api/companions/statistics` | 鉴权 | 同行会话当前活跃数、所选周期创建/结束/自动结束数、平均参与人数 |
 | POST | `/admin/api/releases` | 鉴权 | 发布/覆盖一个版本（按 `(platform, version_code)` 幂等） |
 | DELETE | `/admin/api/releases/:id` | 鉴权 | 删除一条发布记录 |
 | POST | `/admin/api/releases/upload-package` | 鉴权 | multipart 上传安装包到 `<LogDir>/static/release/<platform>/` |
 | GET | `/admin/api/releases/upload-token` | 鉴权 | 旧 OSS 直传 STS 凭证接口，前端不再使用 |
 | GET | `/admin/api/static/*filepath` | 鉴权 | 后台静态资源代理，从 `<LogDir>/static/` 读取头像等资源；后台页面不要直接访问需业务 JWT 的 `/api/v1/static/*` |
-| GET | `/admin/api/users` | 鉴权 | 用户列表，支持 `title` 按昵称模糊搜索及 cursor 翻页 |
+| GET | `/admin/api/users` | 鉴权 | 用户列表，支持 `title` 按昵称模糊搜索及 cursor 翻页；返回按当前页批量统计的 `last_login_at`，取 `login_log.created_at` 最大值 |
 | GET | `/admin/api/users/:user_id/restrictions/current` | 鉴权 | 查询当前账号限制；无生效限制返回 404 |
 | POST | `/admin/api/users/:user_id/restrictions` | 鉴权 | 创建账号限制；`expires_at` 为空表示永久，操作人取 admin session 用户名 |
 | DELETE | `/admin/api/users/:user_id/restrictions/current` | 鉴权 | 解除当前账号限制 |
@@ -177,6 +177,8 @@ GET /admin/api/users
   → GET /admin/api/static/*filepath 经 AuthMiddleware 后从 <LogDir>/static/ 读取
 ```
 未落盘的内置默认头像（`default_avatars/girl_01.png` 等）由后台静态代理返回简单 SVG 兜底；正式视觉素材仍应放入 `<LogDir>/static/default_avatars/`。
+
+用户管理概况使用 `/admin/api/users/statistics` 一次读取性别、生日星座和全部完成轨迹城市分布。页面用 ECharts 饼图展示性别与星座；城市按省份汇总后用高德 JS 地图省级边界着色，右侧列出国内城市 Top 10，并单独显示海外城市和未知城市统计。城市用户数按每个城市去重，同一用户可出现在多个城市。用户列表的上次登录时间按当前页 user_id 批量查询 `login_log` 的最大 `created_at`，不得用用户资料 `updated_at` 代替；Mongo 登录日志未实现时返回无登录记录。
 
 **账号限制运营**：
 ```

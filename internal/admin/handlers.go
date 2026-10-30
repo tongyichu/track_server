@@ -1002,6 +1002,18 @@ func (h *Handler) ListUsers(ctx context.Context, c *app.RequestContext) {
 		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
 		return
 	}
+	userIDs := make([]int64, 0, len(items))
+	for _, u := range items {
+		userIDs = append(userIDs, u.ID)
+	}
+	lastLoginTimes := make(map[int64]time.Time, len(items))
+	if h.dashboardStatsRepo != nil {
+		lastLoginTimes, err = h.dashboardStatsRepo.GetAdminUserLastLoginTimes(ctx, userIDs)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+			return
+		}
+	}
 	// 与业务接口口径保持一致：把 OSS 上的 avatar_url 改写为服务器本地缓存地址
 	// （/api/v1/static/avatars/...），未配置头像的用户回退到默认头像。
 	if h.userSvc != nil {
@@ -1012,15 +1024,17 @@ func (h *Handler) ListUsers(ctx context.Context, c *app.RequestContext) {
 	}
 	rows := make([]utils.H, 0, len(items))
 	for _, u := range items {
+		var lastLoginAt interface{}
+		if value, ok := lastLoginTimes[u.ID]; ok {
+			lastLoginAt = value
+		}
 		row := utils.H{
 			"id":                  u.ID,
 			"nickname":            u.Nickname,
 			"avatar_url":          u.AvatarURL,
-			"signature":           u.Signature,
 			"phone":               u.Phone,
-			"client_language":     u.ClientLanguage,
 			"created_at":          u.CreatedAt,
-			"updated_at":          u.UpdatedAt,
+			"last_login_at":       lastLoginAt,
 			"account_restriction": nil,
 		}
 		if h.restrictionSvc != nil {

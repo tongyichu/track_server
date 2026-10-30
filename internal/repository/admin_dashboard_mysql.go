@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/tongyichu/track_server/internal/models"
@@ -85,7 +86,7 @@ func (r *mysqlAdminDashboardRepository) GetAdminUserDistributionStatistics(ctx c
 	cityRows, err := r.db.QueryContext(ctx, `SELECT COALESCE(NULLIF(TRIM(city_code),''),'unknown'),COUNT(DISTINCT user_id) AS user_count
 		FROM track_records WHERE `+completedTrackSQL+`
 		GROUP BY COALESCE(NULLIF(TRIM(city_code),''),'unknown')
-		ORDER BY user_count DESC, city_code LIMIT 10`)
+		ORDER BY user_count DESC, city_code`)
 	if err != nil {
 		return nil, fmt.Errorf("admin user track city distribution: %w", err)
 	}
@@ -105,6 +106,35 @@ func (r *mysqlAdminDashboardRepository) GetAdminUserDistributionStatistics(ctx c
 	}
 	_ = cityRows.Close()
 	return buildAdminUserDistributionStats(total, genderCounts, birthdayCounts, cityCounts), nil
+}
+
+func (r *mysqlAdminDashboardRepository) GetAdminUserLastLoginTimes(ctx context.Context, userIDs []int64) (map[int64]time.Time, error) {
+	result := make(map[int64]time.Time, len(userIDs))
+	if len(userIDs) == 0 {
+		return result, nil
+	}
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(userIDs)), ",")
+	args := make([]interface{}, len(userIDs))
+	for i, userID := range userIDs {
+		args[i] = userID
+	}
+	rows, err := r.db.QueryContext(ctx, `SELECT user_id, MAX(created_at) FROM login_log WHERE user_id IN (`+placeholders+`) GROUP BY user_id`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("admin user last login times: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var userID int64
+		var lastLogin time.Time
+		if err := rows.Scan(&userID, &lastLogin); err != nil {
+			return nil, err
+		}
+		result[userID] = lastLogin
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 const completedTrackSQL = `deleted_at IS NULL AND status <> 0 AND is_running = 0 AND raw_track_url IS NOT NULL AND raw_track_url <> ''`

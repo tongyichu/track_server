@@ -281,25 +281,48 @@ table.data.table .btn { white-space: nowrap; }
 .submission-stat-danger strong { color: var(--tblr-danger); }
 .admin-section-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px 16px; margin-bottom: 14px; }
 .admin-section-heading h2 { margin: 0; }
-.admin-user-summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.admin-user-summary-grid { display: grid; grid-template-columns: minmax(180px, .6fr) minmax(0, 1.4fr); gap: 16px; }
 .admin-user-distribution-heading { margin-top: 20px; }
-.admin-user-distribution-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; gap: 16px; }
+.admin-user-distribution-grid { display: grid; grid-template-columns: minmax(340px, .8fr) minmax(0, 1.2fr); align-items: stretch; gap: 16px; }
 .admin-stat-panel { min-width: 0; padding: 20px 22px; border: 1px solid var(--tblr-border-color); border-radius: var(--tblr-border-radius-lg); background: var(--tblr-bg-surface); }
-.admin-user-total, .admin-user-gender { display: flex; flex-direction: column; justify-content: center; gap: 5px; min-height: 112px; }
-.admin-user-total > span, .admin-user-total small, .admin-user-gender > span, .admin-user-gender small { color: var(--tblr-secondary-color); font-size: 12px; }
-.admin-user-total > strong, .admin-user-gender > strong { font-size: 27px; line-height: 1.15; }
+.admin-user-total { display: flex; flex-direction: column; justify-content: center; gap: 7px; min-height: 228px; }
+.admin-user-total > span, .admin-user-total small { color: var(--tblr-secondary-color); font-size: 12px; }
+.admin-user-total > strong { font-size: 34px; line-height: 1.15; }
+.admin-user-chart-card > div:first-child > small { color: var(--tblr-secondary-color); font-size: 12px; }
+.admin-user-chart-layout { display: grid; grid-template-columns: minmax(150px, .9fr) minmax(160px, 1.1fr); align-items: center; gap: 12px; }
+.admin-user-pie { width: 100%; height: 190px; min-width: 0; }
+.admin-user-legend { display: grid; align-content: center; gap: 8px; min-width: 0; }
+.admin-user-legend-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--tblr-body-color); font-size: 12px; }
+.admin-user-legend-row strong { font-size: 13px; font-variant-numeric: tabular-nums; }
+.admin-user-legend-label { display: inline-flex; align-items: center; gap: 7px; min-width: 0; }
+.admin-user-legend-label i { width: 9px; height: 9px; flex: 0 0 9px; border-radius: 50%; }
+.admin-user-legend-total { margin-top: 2px; padding-top: 8px; border-top: 1px solid var(--tblr-border-color); font-weight: 700; }
 .admin-stat-panel h3 { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 0 0 16px; font-size: 14px; }
 .admin-stat-panel h3 strong { font-size: 20px; }
+.admin-user-zodiac-layout { grid-template-columns: minmax(180px, .9fr) minmax(150px, 1.1fr); }
+.admin-user-zodiac-layout .admin-user-pie { height: 330px; }
+.admin-zodiac-legend { grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: center; gap: 9px 14px; }
+.admin-user-city-layout { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(235px, .8fr); gap: 16px; align-items: stretch; }
+.admin-user-china-map { min-width: 0; height: 400px; overflow: hidden; border-radius: 8px; background: #f3f7fc; color: var(--tblr-secondary-color); font-size: 13px; text-align: center; }
+.admin-user-map-legend { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 8px; color: var(--tblr-secondary-color); font-size: 10px; }
+.admin-user-map-legend i { width: 96px; height: 8px; border-radius: 99px; background: linear-gradient(90deg, rgba(32,107,196,.12), rgba(32,107,196,.67)); }
+.admin-user-city-aside { min-width: 0; }
+.admin-user-foreign-stat { display: grid; gap: 5px; margin-bottom: 14px; padding: 12px 14px; border: 1px solid #c9dafa; border-radius: 9px; background: #f4f8ff; }
+.admin-user-foreign-stat span, .admin-user-foreign-stat small { color: var(--tblr-secondary-color); font-size: 11px; line-height: 1.4; }
+.admin-user-foreign-stat strong { color: #206bc4; font-size: 24px; line-height: 1.1; }
+.admin-user-unknown-stat { grid-template-columns: 1fr auto; align-items: center; padding: 9px 12px; background: var(--tblr-bg-surface-secondary); border-color: var(--tblr-border-color); }
+.admin-user-unknown-stat strong { color: var(--tblr-body-color); font-size: 16px; }
+.admin-user-city-aside h4 { margin: 16px 0 10px; font-size: 12px; font-weight: 650; }
 .admin-distribution-list { display: grid; gap: 12px; }
-.admin-zodiac-list { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 14px; align-content: start; }
-.admin-zodiac-list .admin-distribution-row { grid-template-columns: minmax(48px, .9fr) minmax(24px, 1fr) auto; gap: 5px; font-size: 10px; }
-.admin-zodiac-list .admin-distribution-row strong { min-width: 24px; }
-.admin-city-list { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; align-content: start; }
+.admin-city-list { grid-template-columns: 1fr; gap: 9px; align-content: start; }
 .admin-distribution-row { display: grid; grid-template-columns: minmax(72px, 1fr) minmax(45px, 1.4fr) auto; align-items: center; gap: 9px; min-width: 0; font-size: 12px; }
 .admin-distribution-row > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .admin-distribution-row strong { min-width: 34px; text-align: right; }
 .admin-distribution-track { height: 7px; overflow: hidden; border-radius: 99px; background: var(--tblr-bg-surface-secondary); }
 .admin-distribution-track i { display: block; height: 100%; border-radius: inherit; background: var(--tblr-primary); }
+.admin-user-map-tooltip { padding: 4px 7px; color: #182433; font-size: 12px; white-space: nowrap; }
+.admin-user-avatar { display: block; width: 42px; height: 42px; border-radius: 9px; object-fit: cover; background: var(--tblr-bg-surface-secondary); }
+.admin-user-avatar-empty { display: grid; place-items: center; color: var(--tblr-secondary-color); font-size: 18px; }
 .admin-companion-stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
 .admin-companion-stats .admin-stat-panel { display: flex; flex-direction: column; gap: 6px; }
 .admin-companion-stats .admin-stat-panel > span, .admin-companion-stats small { color: var(--tblr-secondary-color); font-size: 12px; }
@@ -324,6 +347,7 @@ table.data.table .btn { white-space: nowrap; }
 .companion-avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; }
 @media (max-width: 1200px) {
   .admin-user-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-user-distribution-grid { grid-template-columns: 1fr; }
   .submission-result-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 .more-grid a { box-shadow: var(--tblr-box-shadow-card); transition: transform .15s ease, border-color .15s ease, box-shadow .15s ease; }
@@ -347,12 +371,17 @@ table.data.table .btn { white-space: nowrap; }
   .feedback-stat-sections .feedback-stat,
   .admin-user-summary-grid .admin-stat-panel,
   .admin-user-distribution-grid .admin-stat-panel { padding: 16px 20px !important; }
+  .admin-user-summary-grid { grid-template-columns: 1fr; }
+  .admin-user-total { min-height: 130px; }
+  .admin-user-city-layout { grid-template-columns: minmax(0, 1.25fr) minmax(210px, .75fr); gap: 12px; }
+  .admin-user-china-map { height: 340px; }
+  .admin-user-zodiac-layout { grid-template-columns: minmax(150px, .85fr) minmax(140px, 1.15fr); }
+  .admin-user-zodiac-layout .admin-user-pie { height: 300px; }
   .submission-stat-grid, .feedback-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .submission-queue-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .feedback-status-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .admin-user-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .admin-user-summary-grid { grid-template-columns: 1fr; gap: 12px; }
   .admin-user-distribution-grid { grid-template-columns: 1fr; gap: 12px; }
-  .admin-zodiac-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .admin-companion-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .admin-stat-panel { padding: 16px 18px; }
   .admin-companion-stats strong { font-size: 22px; }
@@ -388,7 +417,11 @@ table.data.table .btn { white-space: nowrap; }
 }
 
 @media (max-width: 430px) {
-  .admin-zodiac-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-user-chart-layout, .admin-user-zodiac-layout, .admin-user-city-layout { grid-template-columns: 1fr; }
+  .admin-user-chart-layout .admin-user-pie { height: 190px; }
+  .admin-user-zodiac-layout .admin-user-pie { height: 220px; }
+  .admin-user-china-map { height: 290px; }
+  .admin-zodiac-legend { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-city-list { grid-template-columns: 1fr; }
   .admin-distribution-row { grid-template-columns: minmax(66px, .9fr) minmax(35px, 1fr) auto; gap: 6px; font-size: 11px; }
   .admin-distribution-row strong { min-width: 28px; }

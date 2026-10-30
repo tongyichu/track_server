@@ -76,7 +76,7 @@ func buildAdminUserDistributionStats(total int64, genderCounts, birthdayCounts, 
 		}
 		return items
 	}
-	cityItems := distributionItems(cityCounts, 10)
+	cityItems := distributionItems(cityCounts, 0)
 	return &models.AdminUserDistributionStats{
 		TotalUsers:  total,
 		Gender:      toItems(gender, []string{"male", "female", "unknown"}),
@@ -128,6 +128,30 @@ func (r *memoryAdminDashboardRepository) GetAdminUserDistributionStatistics(_ co
 		cityCounts[city] = int64(len(userIDs))
 	}
 	return buildAdminUserDistributionStats(total, genderCounts, birthdayCounts, cityCounts), nil
+}
+
+func (r *memoryAdminDashboardRepository) GetAdminUserLastLoginTimes(_ context.Context, userIDs []int64) (map[int64]time.Time, error) {
+	result := make(map[int64]time.Time, len(userIDs))
+	logs, ok := r.deps.loginLogs.(*InMemoryLoginLogRepository)
+	if !ok {
+		return result, nil
+	}
+	logs.mu.RLock()
+	defer logs.mu.RUnlock()
+	for _, userID := range userIDs {
+		items := logs.byUser[userID]
+		if len(items) == 0 {
+			continue
+		}
+		latest := items[0].CreatedAt
+		for _, item := range items[1:] {
+			if item.CreatedAt.After(latest) {
+				latest = item.CreatedAt
+			}
+		}
+		result[userID] = latest
+	}
+	return result, nil
 }
 
 var errAdminStatisticsRepositoriesUnavailable = errors.New("admin statistics repositories unavailable")
