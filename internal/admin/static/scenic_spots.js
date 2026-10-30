@@ -10,6 +10,7 @@
     return payload.data;
   }
   function toast(message, tone) { if (window.AdminUI) window.AdminUI.alert(message, tone); else window.alert(message); }
+  function showDescriptionQueryProgress(hint) { hint.replaceChildren(document.createTextNode('正在联网查询景点资料并整理简介'));const dots=document.createElement('span');dots.className='scenic-query-dots';dots.setAttribute('aria-hidden','true');for(let i=0;i<3;i++){const dot=document.createElement('span');dot.textContent='.';dots.appendChild(dot);}hint.appendChild(dots); }
   function textCell(value) { const node=document.createElement('div');node.textContent=value||'—';return node; }
   function isManual(spot) { if(spot.manual_edited)return true;if((spot.sources||[]).some(source=>source&&source.status==='active'&&source.provider_id))return false;return spot.provider_data_status!=='synced'&&!!(spot.name||spot.category||spot.address||spot.description||(spot.photos||[]).length); }
   function modeLabel(spot) { return isManual(spot) ? '人工' : '自动'; }
@@ -156,7 +157,7 @@
   }
   async function generateScenicDescription() {
     const spot=currentPayload();if(!spot.name){toast('请先填写景点名称','warning');return;}
-    const button=$('generateDescriptionBtn'),hint=$('providerDescriptionHint');button.setAttribute('aria-disabled','true');hint.textContent='正在联网查询景点资料并整理简介';
+    const button=$('generateDescriptionBtn'),hint=$('providerDescriptionHint');button.setAttribute('aria-disabled','true');showDescriptionQueryProgress(hint);
     try{const result=await api('/scenic-spots/description/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(spot)});if(!result.description){hint.textContent='没有查到足够可靠的介绍信息';toast('没有查到足够可靠的景点介绍','warning');return;}$('descriptionInput').value=result.description;hint.textContent='已填入简介，保存后写入景点资料';toast('AI 简介已填入','success');}
     catch(error){hint.textContent='查询失败：'+error.message;toast(error.message,'danger');}
     finally{button.removeAttribute('aria-disabled');}

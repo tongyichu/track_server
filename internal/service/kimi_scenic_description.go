@@ -55,6 +55,7 @@ type kimiSearchResponse struct {
 
 type kimiCompletionResponse struct {
 	Choices []struct {
+		FinishReason string `json:"finish_reason"`
 		Message struct {
 			Content string `json:"content"`
 		} `json:"message"`
@@ -124,7 +125,7 @@ func (g *KimiScenicSpotDescriptionGenerator) Generate(ctx context.Context, spot 
 			{"role": "user", "content": prompt},
 		},
 		"temperature": 1,
-		"max_tokens":  500,
+		"max_tokens":  4096,
 	})
 	if err != nil {
 		return "", err
@@ -136,10 +137,14 @@ func (g *KimiScenicSpotDescriptionGenerator) Generate(ctx context.Context, spot 
 	if len(completion.Choices) == 0 {
 		return "", errors.New("kimi scenic summary returned no choices")
 	}
-	description := strings.TrimSpace(completion.Choices[0].Message.Content)
+	choice := completion.Choices[0]
+	description := strings.TrimSpace(choice.Message.Content)
 	description = strings.Trim(description, "\"'“”‘’` ")
 	description = strings.Join(strings.Fields(description), " ")
-	if description == "" || strings.EqualFold(description, "NO_DESCRIPTION") {
+	if description == "" {
+		return "", fmt.Errorf("kimi scenic summary returned empty content (finish_reason=%s)", choice.FinishReason)
+	}
+	if strings.EqualFold(description, "NO_DESCRIPTION") {
 		return "", nil
 	}
 	if utf8.RuneCountInString(description) > maxScenicDescription {
