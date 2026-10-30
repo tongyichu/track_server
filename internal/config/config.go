@@ -189,7 +189,7 @@ func Load() *Config {
 		TrackPlaceGoogleCacheHours:       int(getEnvInt64("TRACK_PLACE_GOOGLE_CACHE_HOURS", 0)),
 		GooglePlacesKey:                  os.Getenv("GOOGLE_PLACES_API_KEY"),
 		MoonshotAPIKey:                   os.Getenv("MOONSHOT_API_KEY"),
-		KimiScenicDescriptionModel:       getEnv("KIMI_SCENIC_DESCRIPTION_MODEL", "kimi-k3.1-pro"),
+		KimiScenicDescriptionModel:       getEnv("KIMI_SCENIC_DESCRIPTION_MODEL", "kimi-k2.6"),
 		TLSCertFile:                      tlsCert,
 		TLSKeyFile:                       tlsKey,
 		EnableTLS:                        tlsCert != "" && tlsKey != "",

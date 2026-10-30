@@ -11,6 +11,7 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -179,11 +180,12 @@ func (h *Handler) GenerateScenicSpotDescription(ctx context.Context, c *app.Requ
 	}
 	description, err := h.scenicSpotSvc.GenerateDescription(ctx, &spot)
 	if err != nil {
+		log.Printf("Kimi scenic description query failed: spot=%q err=%v", spot.Name, err)
 		if strings.Contains(err.Error(), "not configured") {
 			c.JSON(http.StatusServiceUnavailable, utils.H{"error": "AI scenic description is not configured"})
 			return
 		}
-		c.JSON(http.StatusBadGateway, utils.H{"error": "AI scenic description lookup failed"})
+		c.JSON(http.StatusBadGateway, utils.H{"error": "AI scenic description lookup failed: " + err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"description": description}})

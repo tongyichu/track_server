@@ -32,7 +32,7 @@ type KimiScenicSpotDescriptionGenerator struct {
 
 func NewKimiScenicSpotDescriptionGenerator(apiKey, model string) *KimiScenicSpotDescriptionGenerator {
 	if strings.TrimSpace(model) == "" {
-		model = "kimi-k3.1-pro"
+		model = "kimi-k2.6"
 	}
 	return &KimiScenicSpotDescriptionGenerator{
 		apiKey: strings.TrimSpace(apiKey),

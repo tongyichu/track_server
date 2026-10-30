@@ -279,7 +279,7 @@ GET /admin/api/users
 景点页统计开始于该计数能力上线，不回填旧请求；计入已关联内部景点的来源详情、照片请求和 ID 核验，存量轨迹需先运行回填，按坐标执行的识别搜索不计入单景点排行。发布覆盖率以关联轨迹计数为准，目标是帮助运营优先补齐高调用景点的自有内容。
 所有 Google Places 查询均不受服务端每日预算或单轮请求数上限约束，由 Google API 自身配额控制。
 
-Kimi 景点简介使用 `MOONSHOT_API_KEY` 和可选的 `KIMI_SCENIC_DESCRIPTION_MODEL` 环境变量。存量景点详情弹窗的“AI联网查询”按钮把当前名称、城市、分类和地址提交给 `/admin/api/scenic-spots/description/generate`，结果只填入简介输入框，点击既有保存按钮后才入库；该查询不自动批量触发。新建记录在创建前对空简介尝试生成，成功后随景点资料一起保存，失败时仍可创建并保留空简介。模型检索与摘要通过 Kimi 官方 `/v1/tools/search_pro` 和 `/v1/chat/completions` 接口完成，简介限制 200 字。
+Kimi 景点简介使用 `MOONSHOT_API_KEY` 和可选的 `KIMI_SCENIC_DESCRIPTION_MODEL` 环境变量，默认模型为 `kimi-k2.6`。存量景点详情弹窗的“AI联网查询”链接把当前名称、城市、分类和地址提交给 `/admin/api/scenic-spots/description/generate`，结果只填入简介输入框，点击既有保存按钮后才入库；该查询不自动批量触发。新建记录在创建前对空简介尝试生成，成功后随景点资料一起保存，失败时仍可创建并保留空简介。模型检索与摘要通过 Kimi 官方 `/v1/tools/search_pro` 和 `/v1/chat/completions` 接口完成，简介限制 200 字。
 [admin UI] /admin/analytics.html
   → GET /admin/api/analytics/sync-summaries?status=&limit=&offset=
   → AnalyticsRepository.ListSyncSummaries / CountSyncSummaries

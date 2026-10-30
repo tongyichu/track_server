@@ -158,7 +158,7 @@
     const spot=currentPayload();if(!spot.name){toast('请先填写景点名称','warning');return;}
     const button=$('generateDescriptionBtn'),hint=$('providerDescriptionHint');button.disabled=true;button.textContent='查询中…';hint.textContent='正在联网查询景点资料并整理简介';
     try{const result=await api('/scenic-spots/description/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(spot)});if(!result.description){hint.textContent='没有查到足够可靠的介绍信息';toast('没有查到足够可靠的景点介绍','warning');return;}$('descriptionInput').value=result.description;hint.textContent='已填入简介，保存后写入景点资料';toast('AI 简介已填入','success');}
-    catch(error){hint.textContent='';toast(error.message,'danger');}
+    catch(error){hint.textContent='查询失败：'+error.message;toast(error.message,'danger');}
     finally{button.disabled=false;button.textContent='AI联网查询';}
   }
   async function uploadPhotoToSpot(spot,file,caption){const form=new FormData();form.append('file',file);form.append('caption',caption||'');const data=await api('/scenic-spots/'+encodeURIComponent(spot.id)+'/photos',{method:'POST',body:form});return data.spot;}
