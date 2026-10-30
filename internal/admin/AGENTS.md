@@ -178,7 +178,7 @@ GET /admin/api/users
 ```
 未落盘的内置默认头像（`default_avatars/girl_01.png` 等）由后台静态代理返回简单 SVG 兜底；正式视觉素材仍应放入 `<LogDir>/static/default_avatars/`。
 
-用户管理概况使用 `/admin/api/users/statistics` 一次读取性别、生日星座和全部完成轨迹城市分布。页面用 ECharts 饼图展示性别与星座；城市按省份汇总后用高德 JS 地图省级边界着色，右侧列出国内城市 Top 10，并单独显示海外城市和未知城市统计。城市用户数按每个城市去重，同一用户可出现在多个城市。用户列表的上次登录时间按当前页 user_id 批量查询 `login_log` 的最大 `created_at`，不得用用户资料 `updated_at` 代替；Mongo 登录日志未实现时返回无登录记录。
+用户管理概况位于用户列表上方，性别、星座和轨迹用户省份分布三栏同行，不单独展示用户总数卡片。页面使用 `/admin/api/users/statistics` 一次读取性别、生日星座和全部完成轨迹城市分布，用 ECharts 饼图展示性别与星座；城市按省份汇总后通过内置 `static/china_provinces.json` 和 ECharts 矢量地图展示，不加载高德 JS 或地图 Key。省份上显示人数，超过一万用 `w` 缩写；点击省份更新右侧该省城市用户数 Top 10，海外城市和未知城市保留独立小统计。城市用户数按每个城市去重，同一用户可出现在多个城市。用户列表的上次登录时间按当前页 user_id 批量查询 `login_log` 的最大 `created_at`，不得用用户资料 `updated_at` 代替；Mongo 登录日志未实现时返回无登录记录。
 
 **账号限制运营**：
 ```
