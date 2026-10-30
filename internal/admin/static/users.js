@@ -142,22 +142,26 @@
           if (!params.data || !params.data.fullName) return '';
           return esc(params.data.fullName) + '<br>' + number(params.data.value).toLocaleString() + ' 位用户';
         } },
-        visualMap: { show: false, seriesIndex: 0, min: 0, max: max, inRange: { color: ['#e2e8f0', '#93c5fd', '#1d4ed8'] } },
+        visualMap: { show: false, seriesIndex: 0, min: 0, max: max, inRange: { color: ['#edf3fa', '#8db9e8', '#206bc4'] } },
         series: [{
           type: 'map', map: 'china_provinces', nameMap: nameMap, selectedMode: 'single', roam: false,
-          layoutCenter: ['48%', '50%'], layoutSize: '105%',
-          label: { show: true, color: '#1e293b', fontSize: 9, formatter: function (params) {
+          layoutCenter: ['50%', '50%'], layoutSize: '100%',
+          label: { show: true, color: '#334155', fontSize: 9, formatter: function (params) {
             return params.data && number(params.data.value) > 0 ? compactNumber(params.data.value) : '';
           } },
-          emphasis: { label: { show: true, color: '#0f172a', fontWeight: 700 }, itemStyle: { areaColor: '#f59e0b' } },
-          select: { label: { show: true, color: '#fff', fontWeight: 700 }, itemStyle: { areaColor: '#0f172a' } },
-          itemStyle: { borderColor: '#fff', borderWidth: 1, areaColor: '#e2e8f0' },
+          emphasis: { label: { show: true, color: '#102a43', fontWeight: 700 }, itemStyle: { areaColor: '#f2b84b' } },
+          select: { label: { show: true, color: '#fff', fontWeight: 700 }, itemStyle: { areaColor: '#174f94' } },
+          itemStyle: { borderColor: '#fff', borderWidth: 1, areaColor: '#edf3fa' },
           data: data
-        }, {
+        }]
+      }, true);
+      if (!userCharts.userSouthSeaMap) userCharts.userSouthSeaMap = echarts.init(document.getElementById('userSouthSeaMap'));
+      userCharts.userSouthSeaMap.setOption({
+        series: [{
           type: 'map', map: 'china_south_sea', silent: true, roam: false,
-          layoutCenter: ['91%', '88%'], layoutSize: '16%',
+          layoutCenter: ['50%', '50%'], layoutSize: '96%',
           label: { show: false }, tooltip: { show: false },
-          itemStyle: { borderColor: '#94a3b8', borderWidth: 1, areaColor: '#cbd5e1' },
+          itemStyle: { borderColor: '#64748b', borderWidth: 1, areaColor: '#8db9e8' },
           data: [{ name: '', fullName: '', value: 0 }]
         }]
       }, true);
