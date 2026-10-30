@@ -208,12 +208,86 @@
   var pageHint = document.getElementById('pageHint');
   var totalHint = document.getElementById('totalHint');
 
-  tbody.addEventListener('click', async function (ev) {
-    var btn = ev.target;
-    if (!btn || !btn.dataset || !btn.dataset.action) return;
-    var userID = btn.dataset.userId;
-    if (!userID) return;
-    if (btn.dataset.action === 'restrict') {
+  var detailModal = new tabler.Modal(document.getElementById('userDetailModal'), { backdrop: 'static' });
+  var detailForm = document.getElementById('userDetailForm');
+  var detailSave = document.getElementById('userDetailSave');
+  var activeDetailUserID = 0;
+
+  function locationText(user) {
+    var province = String(user.province_name || '').trim();
+    var city = String(user.city_name || '').trim();
+    if (province && city && province !== city) return province + ' · ' + city;
+    return city || province || '未设置';
+  }
+
+  async function openUserDetail(userID) {
+    activeDetailUserID = userID;
+    detailSave.disabled = true;
+    document.getElementById('userDetailName').textContent = '加载中…';
+    document.getElementById('userDetailMeta').textContent = '';
+    document.getElementById('userDetailAvatar').removeAttribute('src');
+    detailModal.show();
+    try {
+      var response = await fetch('/admin/api/users/' + encodeURIComponent(userID));
+      if (!response.ok) throw new Error(await response.text());
+      var user = (await response.json()).data || {};
+      if (activeDetailUserID !== userID) return;
+      detailForm.elements.nickname.value = user.nickname || '';
+      detailForm.elements.phone.value = user.phone || '';
+      detailForm.elements.gender.value = user.gender || '';
+      detailForm.elements.birthday.value = user.birthday || '';
+      detailForm.elements.birthday.max = new Date().toISOString().slice(0, 10);
+      detailForm.elements.signature.value = user.signature || '';
+      document.getElementById('userDetailLocation').value = locationText(user);
+      document.getElementById('userDetailName').textContent = user.nickname || '未设置昵称';
+      document.getElementById('userDetailMeta').textContent = '注册：' + fmtTime(user.created_at) + '　更新：' + fmtTime(user.updated_at);
+      if (user.avatar_url) document.getElementById('userDetailAvatar').src = user.avatar_url;
+      detailSave.disabled = false;
+    } catch (error) {
+      if (activeDetailUserID !== userID) return;
+      detailModal.hide();
+      AdminUI.alert('读取用户资料失败: ' + error.message, 'danger');
+    }
+  }
+
+  detailForm.addEventListener('submit', async function (event) {
+    event.preventDefault();
+    if (!activeDetailUserID || !detailForm.reportValidity()) return;
+    detailSave.disabled = true;
+    var payload = {
+      nickname: detailForm.elements.nickname.value.trim(),
+      phone: detailForm.elements.phone.value.trim(),
+      gender: detailForm.elements.gender.value,
+      birthday: detailForm.elements.birthday.value,
+      signature: detailForm.elements.signature.value
+    };
+    try {
+      var response = await fetch('/admin/api/users/' + encodeURIComponent(activeDetailUserID), {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+      });
+      if (!response.ok) throw new Error(await response.text());
+      detailModal.hide();
+      AdminUI.alert('用户资料已保存', 'success');
+      loadPage();
+    } catch (error) {
+      AdminUI.alert('保存失败: ' + error.message, 'danger');
+      detailSave.disabled = false;
+    }
+  });
+
+  tbody.addEventListener('click', function (ev) {
+    var btn = ev.target.closest('[data-action="detail"]');
+    if (!btn) return;
+    openUserDetail(btn.dataset.userId);
+  });
+
+  tbody.addEventListener('change', async function (ev) {
+    var input = ev.target;
+    if (!input.dataset || input.dataset.action !== 'restriction') return;
+    var userID = input.dataset.userId;
+    var restrict = input.checked;
+    input.disabled = true;
+    if (restrict) {
       var values = await AdminUI.form({
         title: '限制用户 #' + userID,
         confirmText: '确认限制',
@@ -222,41 +296,37 @@
           { name: 'days', label: '限制天数', value: '7', type: 'number', min: 1, placeholder: '留空表示永久' }
         ]
       });
-      if (!values) return;
-      var reason = values.reason.trim();
+      if (!values) { input.checked = false; input.disabled = false; return; }
       var daysRaw = values.days.trim();
-      var payload = { reason: reason };
+      var payload = { reason: values.reason.trim() };
       if (daysRaw) {
         var days = Number(daysRaw);
         if (!isFinite(days) || days <= 0) {
           AdminUI.alert('限制天数必须大于 0', 'danger');
-          return;
+          input.checked = false; input.disabled = false; return;
         }
         payload.expires_at = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
       }
-      var resp = await fetch('/admin/api/users/' + encodeURIComponent(userID) + '/restrictions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+      var response = await fetch('/admin/api/users/' + encodeURIComponent(userID) + '/restrictions', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
       });
-      if (!resp.ok) {
-        AdminUI.alert('限制失败: ' + await resp.text(), 'danger');
-        return;
+      if (!response.ok) {
+        AdminUI.alert('限制失败: ' + await response.text(), 'danger');
+        input.checked = false; input.disabled = false; return;
       }
       AdminUI.alert('账号限制已生效', 'success');
       loadPage();
       return;
     }
-    if (btn.dataset.action === 'revoke') {
-      if (!await AdminUI.confirm({ title: '解除账号限制', message: '确定解除用户 #' + userID + ' 当前的账号限制？', confirmText: '解除限制' })) return;
-      var revokeResp = await fetch('/admin/api/users/' + encodeURIComponent(userID) + '/restrictions/current', { method: 'DELETE' });
-      if (!revokeResp.ok) {
-        AdminUI.alert('解除失败: ' + await revokeResp.text(), 'danger');
-        return;
-      }
-      AdminUI.alert('账号限制已解除', 'success');
-      loadPage();
+    var confirmed = await AdminUI.confirm({ title: '解除账号限制', message: '确定解除用户 #' + userID + ' 当前的账号限制？', confirmText: '解除限制' });
+    if (!confirmed) { input.checked = true; input.disabled = false; return; }
+    var revokeResponse = await fetch('/admin/api/users/' + encodeURIComponent(userID) + '/restrictions/current', { method: 'DELETE' });
+    if (!revokeResponse.ok) {
+      AdminUI.alert('解除失败: ' + await revokeResponse.text(), 'danger');
+      input.checked = true; input.disabled = false; return;
     }
+    AdminUI.alert('账号限制已解除', 'success');
+    loadPage();
   });
 
   refreshBtn.addEventListener('click', function () {
@@ -291,7 +361,7 @@
     }
     var resp = await fetch('/admin/api/users?' + params.toString());
     if (!resp.ok) {
-      tbody.innerHTML = '<tr><td colspan="7">加载失败: ' + resp.status + '</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6">加载失败: ' + resp.status + '</td></tr>';
       return;
     }
     var data = ((await resp.json()).data) || {};
@@ -305,14 +375,13 @@
         ? '<img class="admin-user-avatar" src="' + esc(it.avatar_url) + '" alt="" />'
         : '<span class="admin-user-avatar admin-user-avatar-empty" aria-hidden="true">👤</span>';
       var tr = document.createElement('tr');
-      tr.innerHTML = '<td>' + avatar + '</td>' +
-        '<td>' + esc(it.nickname) + '</td>' +
+      tr.innerHTML = '<td><div class="admin-user-identity">' + avatar + '<span>' + esc(it.nickname) + '</span></div></td>' +
         '<td>' + esc(it.phone || '') + '</td>' +
         '<td>' + restrictionText(it.account_restriction) + '</td>' +
         '<td>' + (it.last_login_at ? fmtTime(it.last_login_at) : '—') + '</td>' +
         '<td>' + fmtTime(it.created_at) + '</td>' +
-        '<td><button data-action="restrict" data-user-id="' + esc(it.id) + '">限制</button> ' +
-        '<button data-action="revoke" data-user-id="' + esc(it.id) + '"' + (it.account_restriction ? '' : ' disabled') + '>解除</button></td>';
+        '<td><div class="admin-user-actions"><button data-action="detail" data-user-id="' + esc(it.id) + '">查看详情</button>' +
+        '<label class="form-switch admin-user-restriction-switch"><input type="checkbox" data-action="restriction" data-user-id="' + esc(it.id) + '"' + (it.account_restriction ? ' checked' : '') + '><span>限制</span></label></div></td>';
       tbody.appendChild(tr);
     });
 

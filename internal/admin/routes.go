@@ -169,6 +169,8 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	api.POST("/scenic-spots/:spot_id/split", m.Handler.SplitScenicSpot)
 	api.GET("/scenic-spots/:spot_id/audit", m.Handler.ListScenicSpotAudit)
 	api.GET("/users", m.Handler.ListUsers)
+	api.GET("/users/:user_id", m.Handler.GetUserProfile)
+	api.PUT("/users/:user_id", m.Handler.UpdateUserProfile)
 	api.GET("/users/:user_id/restrictions/current", m.Handler.GetCurrentAccountRestriction)
 	api.POST("/users/:user_id/restrictions", m.Handler.CreateAccountRestriction)
 	api.DELETE("/users/:user_id/restrictions/current", m.Handler.RevokeCurrentAccountRestriction)

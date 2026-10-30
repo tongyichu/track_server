@@ -95,6 +95,8 @@ internal/admin/
 | GET | `/admin/api/releases/upload-token` | 鉴权 | 旧 OSS 直传 STS 凭证接口，前端不再使用 |
 | GET | `/admin/api/static/*filepath` | 鉴权 | 后台静态资源代理，从 `<LogDir>/static/` 读取头像等资源；后台页面不要直接访问需业务 JWT 的 `/api/v1/static/*` |
 | GET | `/admin/api/users` | 鉴权 | 用户列表，支持 `title` 按昵称模糊搜索及 cursor 翻页；返回按当前页批量统计的 `last_login_at`，取 `login_log.created_at` 最大值 |
+| GET | `/admin/api/users/:user_id` | 鉴权 | 用户资料详情，包含头像、签名、性别、生日、手机号和最近确认所在地 |
+| PUT | `/admin/api/users/:user_id` | 鉴权 | 编辑用户昵称、签名、性别、生日和手机号；不修改所在地、头像、背景或账号关系 |
 | GET | `/admin/api/users/:user_id/restrictions/current` | 鉴权 | 查询当前账号限制；无生效限制返回 404 |
 | POST | `/admin/api/users/:user_id/restrictions` | 鉴权 | 创建账号限制；`expires_at` 为空表示永久，操作人取 admin session 用户名 |
 | DELETE | `/admin/api/users/:user_id/restrictions/current` | 鉴权 | 解除当前账号限制 |
@@ -178,7 +180,7 @@ GET /admin/api/users
 ```
 未落盘的内置默认头像（`default_avatars/girl_01.png` 等）由后台静态代理返回简单 SVG 兜底；正式视觉素材仍应放入 `<LogDir>/static/default_avatars/`。
 
-用户管理概况位于用户列表上方，性别、星座和轨迹用户省份分布三栏同行，不单独展示用户总数卡片。页面使用 `/admin/api/users/statistics` 一次读取性别、生日星座和全部完成轨迹城市分布，用 ECharts 饼图展示性别与星座；城市按省份汇总后通过内置 `static/china_provinces.json` 和 ECharts 矢量地图展示，不加载高德 JS 或地图 Key。省份上显示人数，超过一万用 `w` 缩写；点击省份更新右侧该省城市用户数 Top 10，海外城市和未知城市保留独立小统计。城市用户数按每个城市去重，同一用户可出现在多个城市。用户列表的上次登录时间按当前页 user_id 批量查询 `login_log` 的最大 `created_at`，不得用用户资料 `updated_at` 代替；Mongo 登录日志未实现时返回无登录记录。
+用户管理概况位于用户列表上方，不单独展示用户总数卡片；左侧性别、星座两个 ECharts 饼图上下排列，右侧为更大的轨迹用户省份分布区域。页面使用 `/admin/api/users/statistics` 一次读取性别、生日星座和全部完成轨迹城市分布；城市按省份汇总后通过内置 `static/china_provinces.json` 和 ECharts 矢量地图展示，不加载高德 JS 或地图 Key，也不显示颜色深浅图例。省份上显示人数，超过一万用 `w` 缩写；点击省份更新右侧该省城市用户数 Top 10，海外城市和未知城市保留独立小统计。城市用户数按每个城市去重，同一用户可出现在多个城市。用户列表头像和昵称合并为“用户”列，头像为圆形；操作区使用“查看详情 + 限制开关”，开关沿用限制/解除接口，取消或失败恢复原状态。详情弹窗通过 `GET /admin/api/users/:user_id` 读取资料，所在地只读，昵称、签名、性别、生日和手机号可编辑并通过同路径 PUT 保存，保存后刷新当前页。用户列表的上次登录时间按当前页 user_id 批量查询 `login_log` 的最大 `created_at`，不得用用户资料 `updated_at` 代替；Mongo 登录日志未实现时返回无登录记录。
 
 **账号限制运营**：
 ```

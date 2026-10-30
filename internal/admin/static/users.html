@@ -30,9 +30,11 @@
     <section class="panel">
       <div class="admin-section-heading"><h2>用户画像分布</h2><span class="hint">城市按已完成轨迹统计，同一用户可能出现在多个城市</span></div>
       <div class="admin-user-distribution-grid">
-        <article class="admin-stat-panel admin-user-chart-card"><div><h3>性别分布</h3><small>包含全部用户</small></div><div class="admin-user-chart-layout"><div id="userGenderChart" class="admin-user-pie"></div><div id="userGenderStats" class="admin-user-legend"></div></div></article>
-        <article class="admin-stat-panel admin-user-chart-card admin-user-zodiac-card"><div><h3>星座分布</h3><small>按生日推算，包含未知</small></div><div class="admin-user-chart-layout admin-user-zodiac-layout"><div id="userZodiacChart" class="admin-user-pie"></div><div id="userZodiacStats" class="admin-user-legend admin-zodiac-legend"></div></div></article>
-        <article class="admin-stat-panel admin-user-chart-card admin-user-city-card"><div><h3>轨迹用户省份分布</h3><small>点击省份查看该省城市用户数 Top 10</small></div><div class="admin-user-city-layout"><div><div id="userProvinceMap" class="admin-user-china-map" role="img" aria-label="中国各省轨迹用户分布矢量地图"></div><div class="admin-user-map-legend"><span>较少</span><i></i><span>较多</span></div></div><aside class="admin-user-city-aside"><div class="admin-user-foreign-stat"><span>海外城市用户数</span><strong id="userForeignCityTotal">—</strong><small id="userForeignCityNote">按城市去重统计，跨城市用户可能重复</small></div><div class="admin-user-foreign-stat admin-user-unknown-stat"><span>未知城市</span><strong id="userUnknownCityTotal">—</strong></div><h4 id="userCityStatsTitle">城市用户数 Top 10</h4><div id="userCityStats" class="admin-distribution-list admin-city-list"></div></aside></div></article>
+        <div class="admin-user-profile-charts">
+          <article class="admin-stat-panel admin-user-chart-card"><div><h3>性别分布</h3><small>包含全部用户</small></div><div class="admin-user-chart-layout"><div id="userGenderChart" class="admin-user-pie"></div><div id="userGenderStats" class="admin-user-legend"></div></div></article>
+          <article class="admin-stat-panel admin-user-chart-card admin-user-zodiac-card"><div><h3>星座分布</h3><small>按生日推算，包含未知</small></div><div class="admin-user-chart-layout admin-user-zodiac-layout"><div id="userZodiacChart" class="admin-user-pie"></div><div id="userZodiacStats" class="admin-user-legend admin-zodiac-legend"></div></div></article>
+        </div>
+        <article class="admin-stat-panel admin-user-chart-card admin-user-city-card"><div><h3>轨迹用户省份分布</h3><small>点击省份查看该省城市用户数 Top 10</small></div><div class="admin-user-city-layout"><div id="userProvinceMap" class="admin-user-china-map" role="img" aria-label="中国各省轨迹用户分布矢量地图"></div><aside class="admin-user-city-aside"><div class="admin-user-foreign-stat"><span>海外城市用户数</span><strong id="userForeignCityTotal">—</strong><small id="userForeignCityNote">按城市去重统计，跨城市用户可能重复</small></div><div class="admin-user-foreign-stat admin-user-unknown-stat"><span>未知城市</span><strong id="userUnknownCityTotal">—</strong></div><h4 id="userCityStatsTitle">城市用户数 Top 10</h4><div id="userCityStats" class="admin-distribution-list admin-city-list"></div></aside></div></article>
       </div>
     </section>
     <section class="panel">
@@ -45,10 +47,10 @@
         <button id="nextBtn" disabled>下一页</button>
         <span class="hint" id="pageHint"></span>
       </div>
-      <table class="data">
+      <table class="data admin-user-table">
         <thead>
           <tr>
-            <th>头像</th><th>昵称</th><th>手机号</th><th>账号限制</th>
+            <th>用户</th><th>手机号</th><th>账号限制</th>
             <th>上次登录</th><th>创建时间</th><th>操作</th>
           </tr>
         </thead>
@@ -56,6 +58,35 @@
       </table>
     </section>
   </main>
+
+  <div class="modal modal-blur fade" id="userDetailModal" tabindex="-1" aria-hidden="true" aria-labelledby="userDetailTitle">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg" role="document">
+      <form class="modal-content" id="userDetailForm">
+        <div class="modal-header">
+          <h2 class="modal-title" id="userDetailTitle">用户资料</h2>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+        </div>
+        <div class="modal-body">
+          <div class="admin-user-detail-head">
+            <img id="userDetailAvatar" class="admin-user-detail-avatar" data-no-preview alt="用户头像" />
+            <div><h3 id="userDetailName">加载中…</h3><div class="hint" id="userDetailMeta"></div></div>
+          </div>
+          <div class="admin-dialog-form admin-user-detail-grid">
+            <label class="form-label">昵称<input class="form-control" name="nickname" maxlength="20" required /></label>
+            <label class="form-label">手机号<input class="form-control" name="phone" maxlength="32" /></label>
+            <label class="form-label">性别<select class="form-select" name="gender"><option value="">未设置</option><option value="male">男</option><option value="female">女</option></select></label>
+            <label class="form-label">生日<input class="form-control" name="birthday" type="date" min="1900-01-01" /></label>
+            <label class="form-label full">所在城市<input class="form-control" id="userDetailLocation" readonly /></label>
+            <label class="form-label full">个人签名<textarea class="form-control" name="signature" maxlength="100" rows="3"></textarea></label>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+          <button type="submit" class="btn btn-primary" id="userDetailSave">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
 
   <script src="/admin/static/vendor/tabler.min.js"></script>
   <script src="/admin/static/shell.js"></script>
