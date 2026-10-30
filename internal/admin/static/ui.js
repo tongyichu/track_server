@@ -163,20 +163,16 @@
   let imageViewer;
   function closeImageViewer() {
     if (!imageViewer) return;
-    imageViewer.remove();
+    const viewer = imageViewer;
     imageViewer = null;
+    if (viewer.open) viewer.close();
+    viewer.remove();
     document.body.classList.remove('admin-image-viewer-open');
-    document.removeEventListener('keydown', onImageViewerKeydown);
-  }
-  function onImageViewerKeydown(event) {
-    if (event.key === 'Escape') closeImageViewer();
   }
   function openImageViewer(image, source) {
     closeImageViewer();
-    const overlay = document.createElement('div');
+    const overlay = document.createElement('dialog');
     overlay.className = 'admin-image-viewer';
-    overlay.setAttribute('role', 'dialog');
-    overlay.setAttribute('aria-modal', 'true');
     overlay.setAttribute('aria-label', '图片预览');
     const enlarged = document.createElement('img');
     enlarged.src = source;
@@ -198,7 +194,8 @@
     document.body.appendChild(overlay);
     imageViewer = overlay;
     document.body.classList.add('admin-image-viewer-open');
-    document.addEventListener('keydown', onImageViewerKeydown);
+    overlay.addEventListener('cancel', event => { event.preventDefault(); closeImageViewer(); });
+    overlay.showModal();
     close.focus();
   }
   document.addEventListener('click', event => {
