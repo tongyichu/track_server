@@ -32,17 +32,17 @@
   const versionNameInput = document.querySelector('input[name=version_name]');
   const versionCodeInput = document.querySelector('input[name=version_code]');
   const metadataHint = document.getElementById('packageMetadataHint');
-  const platformSelect = document.querySelector('select[name=platform]');
 
   function clearPackageMetadata() {
     pkgURLInput.value = '';
     pkgSizeInput.value = '0';
     pkgMD5Input.value = '';
+    versionNameInput.value = '';
+    versionCodeInput.value = '';
     uploadHint.textContent = '';
     metadataHint.textContent = '上传后自动识别版本信息，并生成下载地址、文件大小和 MD5。';
   }
   apkFile.addEventListener('change', clearPackageMetadata);
-  platformSelect.addEventListener('change', clearPackageMetadata);
 
   uploadBtn.addEventListener('click', async function () {
     const file = apkFile.files[0];
@@ -50,11 +50,10 @@
       uploadHint.textContent = '请先选择安装包文件';
       return;
     }
-    const platform = (platformSelect && platformSelect.value) || 'android';
     uploadHint.textContent = '正在上传 (' + (file.size / 1024 / 1024).toFixed(2) + ' MB) ...';
     try {
       const fd = new FormData();
-      fd.append('platform', platform);
+      fd.append('platform', 'android');
       fd.append('file', file);
       const resp = await fetch('/admin/api/releases/upload-package', {
         method: 'POST',
@@ -71,9 +70,13 @@
       pkgURLInput.value = data.url;
       pkgSizeInput.value = String(data.size || file.size);
       pkgMD5Input.value = data.md5 || '';
-      if (data.version_name) versionNameInput.value = data.version_name;
-      if (data.version_code > 0) versionCodeInput.value = String(data.version_code);
-      metadataHint.textContent = [data.package_name, data.version_name ? ('版本 ' + data.version_name) : '', data.version_code > 0 ? ('Build ' + data.version_code) : 'Build 号请手动填写'].filter(Boolean).join(' · ');
+      if (!data.version_name || !(data.version_code > 0)) {
+        clearPackageMetadata();
+        throw new Error('安装包版本信息识别失败，无法发布');
+      }
+      versionNameInput.value = data.version_name;
+      versionCodeInput.value = String(data.version_code);
+      metadataHint.textContent = [data.package_name, '版本 ' + data.version_name, 'Build ' + data.version_code].filter(Boolean).join(' · ');
       uploadHint.textContent = '安装包上传并解析成功';
     } catch (e) {
       uploadHint.textContent = e.message || String(e);
@@ -102,7 +105,11 @@
       status: fd.get('status') || 'published',
     };
     if (!pkgURLInput.value) {
-      publishErr.textContent = '请先选择并上传 APK/IPA';
+      publishErr.textContent = '请先选择并上传 APK';
+      return;
+    }
+    if (!payload.version_name || !(payload.version_code > 0)) {
+      publishErr.textContent = '安装包版本信息识别失败，请重新上传';
       return;
     }
     try {
@@ -124,15 +131,13 @@
   });
 
   // ---------------- 列表 ----------------
-  const filterPlatform = document.getElementById('filterPlatform');
   const filterStatus = document.getElementById('filterStatus');
   document.getElementById('refreshBtn').addEventListener('click', loadList);
-  filterPlatform.addEventListener('change', loadList);
   filterStatus.addEventListener('change', loadList);
 
   async function loadList() {
     const params = new URLSearchParams();
-    if (filterPlatform.value) params.set('platform', filterPlatform.value);
+    params.set('platform', 'android');
     if (filterStatus.value) params.set('status', filterStatus.value);
     const resp = await fetch('/admin/api/releases?' + params.toString());
     if (!resp.ok) return;
@@ -142,7 +147,6 @@
     items.forEach(function (it) {
       const tr = document.createElement('tr');
       tr.innerHTML = '<td>' + it.id + '</td>' +
-        '<td>' + esc(it.platform) + '</td>' +
         '<td>' + esc(it.version_name) + '</td>' +
         '<td>' + it.version_code + '</td>' +
         '<td>' + it.min_supported_version_code + '</td>' +

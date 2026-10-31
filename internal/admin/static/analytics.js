@@ -30,6 +30,7 @@
   var totalHint = document.getElementById('totalHint');
   var emptyDetail = document.getElementById('emptyDetail');
   var detailContent = document.getElementById('detailContent');
+  var detailModal = new tabler.Modal(document.getElementById('fileDetailModal'));
 
   statusFilter.addEventListener('change', resetAndLoad);
   refreshBtn.addEventListener('click', resetAndLoad);
@@ -132,7 +133,7 @@
         '<td class="clip" title="' + esc(f.error || '') + '">' + esc(f.error || '') + '</td>';
       fileList.appendChild(tr);
     });
-    loadPage();
+    detailModal.show();
   }
 
   function setText(id, value) {

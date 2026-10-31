@@ -55,27 +55,39 @@
       </table>
     </section>
 
-    <section class="panel" id="detailPanel">
-      <h2>文件明细</h2>
-      <div id="emptyDetail" class="hint">请选择一条同步摘要</div>
-      <div id="detailContent" class="hidden">
-        <div class="detail-grid">
-          <div><strong>摘要 ID</strong><span id="detailID"></span></div>
-          <div><strong>任务名</strong><span id="detailJob"></span></div>
-          <div><strong>状态</strong><span id="detailStatus"></span></div>
-          <div><strong>时间</strong><span id="detailTime"></span></div>
-        </div>
-        <table class="data">
-          <thead>
-            <tr>
-              <th>状态</th><th>大小</th><th>源文件数</th><th>本地源文件</th><th>OSS Key</th><th>错误</th>
-            </tr>
-          </thead>
-          <tbody id="fileList"></tbody>
-        </table>
-      </div>
-    </section>
   </main>
+
+  <div class="modal modal-blur fade" id="fileDetailModal" tabindex="-1" aria-hidden="true" aria-labelledby="fileDetailTitle">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 class="modal-title" id="fileDetailTitle">文件明细</h2>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+        </div>
+        <div class="modal-body">
+          <div id="emptyDetail" class="hint">请选择一条同步摘要</div>
+          <div id="detailContent" class="hidden">
+            <div class="detail-grid">
+              <div><strong>摘要 ID</strong><span id="detailID"></span></div>
+              <div><strong>任务名</strong><span id="detailJob"></span></div>
+              <div><strong>状态</strong><span id="detailStatus"></span></div>
+              <div><strong>时间</strong><span id="detailTime"></span></div>
+            </div>
+            <div class="table-responsive mt-3">
+              <table class="data">
+                <thead>
+                  <tr>
+                    <th>状态</th><th>大小</th><th>源文件数</th><th>本地源文件</th><th>OSS Key</th><th>错误</th>
+                  </tr>
+                </thead>
+                <tbody id="fileList"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <script src="/admin/static/vendor/tabler.min.js"></script>
   <script src="/admin/static/shell.js"></script>

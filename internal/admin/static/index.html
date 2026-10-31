@@ -31,23 +31,15 @@
     <section class="panel">
       <h2>发布新版本</h2>
       <form id="publishForm" class="grid">
-        <label>平台
-          <select name="platform" required>
-            <option value="android">Android</option>
-            <option value="ios">iOS</option>
-          </select>
-        </label>
-        <label>版本名
-          <input type="text" name="version_name" placeholder="上传后自动读取，也可调整" required />
-        </label>
-        <label>版本号
-          <input type="number" name="version_code" min="1" placeholder="上传后自动读取" required />
-        </label>
+        <input type="hidden" name="platform" value="android" />
+        <input type="hidden" name="version_name" />
+        <input type="hidden" name="version_code" />
         <label>最低支持版本号 (min_supported_version_code)
           <input type="number" name="min_supported_version_code" min="0" value="0" />
         </label>
-        <label class="row">
-          <input type="checkbox" name="force_update" /> 强制升级
+        <label class="form-switch">
+          <input class="form-check-input" type="checkbox" name="force_update" />
+          <span>强制升级</span>
         </label>
         <label>发布状态
           <select name="status">
@@ -60,7 +52,7 @@
         <fieldset class="full">
           <legend>安装包</legend>
           <div class="row">
-            <input type="file" id="apkFile" accept=".apk,.ipa" required />
+            <input type="file" id="apkFile" accept=".apk" required />
             <button type="button" id="uploadBtn">上传到服务器</button>
             <span class="hint" id="uploadHint"></span>
           </div>
@@ -85,13 +77,6 @@
     <section class="panel">
       <h2>版本列表</h2>
       <div class="row">
-        <label>平台过滤
-          <select id="filterPlatform">
-            <option value="">全部</option>
-            <option value="android">android</option>
-            <option value="ios">ios</option>
-          </select>
-        </label>
         <label>状态过滤
           <select id="filterStatus">
             <option value="">全部</option>
@@ -105,7 +90,7 @@
       <table class="data">
         <thead>
           <tr>
-            <th>ID</th><th>平台</th><th>版本名</th><th>版本号</th>
+            <th>ID</th><th>版本名</th><th>版本号</th>
             <th>最低支持</th><th>强升</th><th>状态</th>
             <th>发布人</th><th>时间</th><th>包地址</th><th>操作</th>
           </tr>
