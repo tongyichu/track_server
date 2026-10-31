@@ -102,11 +102,11 @@ track_server/
 
 ### 稳定默认值
 
-- 管理后台运营工作台的跨域只读统计统一走 `repository.AdminDashboardStatisticsRepository`，由 `NewAdminDashboardStatisticsRepository` 根据当前 MySQL / Mongo / in-memory 仓储族选择实现；不新增统计表，也不改变业务写入流程。周期指标按 `[start,end)` 统计，互动趋势使用收藏/导航/点赞/评论各自 `created_at`，新增用户转化漏斗使用同周期注册 Cohort 并逐级限定为完成轨迹、投稿和审核通过；用户列表上次登录按当前页批量查询 `login_log`。后台用户列表通过 `AdminUserListFilterRepository` 在仓储层组合筛选昵称、内部人员、资料 `city_code`、性别、生日星座和当前生效限制，筛选必须参与总数统计与游标分页，不得只过滤当前页。数据模型见 `internal/models/admin_dashboard.go`，聚合实现见 `internal/repository/admin_dashboard*.go`。
+- 管理后台运营工作台的跨域只读统计统一走 `repository.AdminDashboardStatisticsRepository`，由 `NewAdminDashboardStatisticsRepository` 根据当前 MySQL / Mongo / in-memory 仓储族选择实现；不新增统计表，也不改变业务写入流程。周期指标按 `[start,end)` 统计，互动趋势使用收藏/导航/点赞/评论各自 `created_at`，新增用户转化漏斗使用同周期注册 Cohort 并逐级限定为完成轨迹、投稿和审核通过；用户列表上次登录按当前页批量查询 `login_log`。后台用户列表通过 `AdminUserListFilterRepository` 在仓储层组合筛选昵称、内部人员、资料 `city_code`、性别、生日星座和当前生效限制，筛选必须参与总数统计与游标分页，不得只过滤当前页。数据模型见 `internal/models/admin_dashboard.go`、`admin_feature_statistics.go`，聚合实现见 `internal/repository/admin_dashboard*.go` 与 `admin_feature_statistics*.go`。地图模式新增全量 active 路线组覆盖/规模统计；同行新增近 1/7/30 天创建/结束趋势及服务端去重成员人数分布，后台平均参与人数也按成员记录计算，缺失记录不计入均值；前端共用内置 ECharts，不触发供应商查询。
 
 - 主景点以 `internal/models/scenic_spot.go` 的内部 SCP ID 为唯一业务 ID；MySQL、Mongo、内存仓储均由 `repository.ScenicSpotRepository` 实现。`ScenicSpotCatalogService` 管理草稿/发布、来源 ID 校验、轨迹关联、合并拆分、审计和存量回填。后台首次加载景点管理页时通过 `/admin/api/scenic-spots/provider-content/backfill` 分批拉取尚未同步的供应商资料；存量简介由详情弹窗中简介标题旁的“AI联网查询”链接单条检索并填入编辑框，保存后入库。新建景点的空简介在创建前同步尝试生成并随记录保存，失败保留空值。AI 简介限 200 字，人工已有内容不会被自动覆盖。Kimi API Key 从 `MOONSHOT_API_KEY` 注入，仅在持久化仓储可用时启用；不要把密钥写入代码或提交到仓库。图片加入同一有序 `photos` 数组。后台编辑保存会设置 `manual_edited`，自动同步资料仍归为“自动”。自有图片上传追加到数组末尾，拖动排序后按数组顺序下发客户端。运营后台入口 `/admin/scenic_spots.html`，API 路由清单和流程见 `internal/admin/AGENTS.md`；Google 来源 ID 到期后在详情访问时验证。
 
-- 景点供应商调用统计只保存每日计数（景点、供应商、操作、请求/成功/失败数），不保存响应正文或照片引用；后台 `/admin/api/scenic-spots/statistics` 改为只读景点内容与覆盖统计：有效景点数、覆盖城市数、关联有效已完成轨迹数、待完善景点数、资料缺项和关联轨迹 Top 10；供应商调用计数继续保留用于排查，不再展示用量图表。内部景点已关联的详情、图片和来源 ID 核验均计数；按坐标运行的后台识别搜索不归因到单个景点，不纳入景点排行榜。存量轨迹需先运行后台回填才能按内部景点归因。MySQL/Mongo/内存仓储都实现 usage counter，相关表为 `scenic_spot_provider_usage`。
+- 景点供应商调用统计只保存每日计数（景点、供应商、操作、请求/成功/失败数），不保存响应正文或照片引用；后台 `/admin/api/scenic-spots/statistics` 改为只读景点内容与覆盖统计：有效景点数、覆盖城市数、关联有效已完成轨迹数、待完善景点数、景点空间分布和近 1/7/30 天新增入库趋势；供应商调用计数继续保留用于排查，不再展示用量图表。内部景点已关联的详情、图片和来源 ID 核验均计数；按坐标运行的后台识别搜索不归因到单个景点，不纳入景点排行榜。存量轨迹需先运行后台回填才能按内部景点归因。MySQL/Mongo/内存仓储都实现 usage counter，相关表为 `scenic_spot_provider_usage`。
 
 - 精品标识 `is_featured` 仅取投稿当前 `approved` 状态；本人已上传 `/track/my/list` 和收藏 `/track/collected/list` 也明确返回 true/false。复用 `TrackSubmissionService` 的当前页批量查询，禁止逐条补查详情或为标识下载投稿图片；响应 DTO 字段不新增表或索引，协议见 `docs/api/track-submission.md`。
 

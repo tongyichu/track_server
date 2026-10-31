@@ -54,7 +54,8 @@
       document.getElementById('companionCreatedCompare').textContent = '上期 ' + Number((stats.created || {}).previous || 0).toLocaleString();
       document.getElementById('companionEnded').textContent = Number(stats.ended || 0).toLocaleString();
       document.getElementById('companionAutoEnded').textContent = '其中自动结束 ' + Number(stats.auto_ended || 0).toLocaleString();
-      document.getElementById('companionParticipants').textContent = Number(stats.avg_participants || 0).toFixed(1);
+      var average = Number(stats.avg_participants || 0);
+      document.getElementById('companionParticipants').textContent = average > 0 ? average.toFixed(1) : '—';
     } catch (_) {
       if (request !== statsRequest) return;
       ['companionActive', 'companionCreated', 'companionEnded', 'companionParticipants'].forEach(function (id) {
@@ -94,6 +95,7 @@
   titleFilter.addEventListener('input', function () { resetBtn.hidden = !titleFilter.value && !appliedTitle; });
   document.getElementById('refreshBtn').addEventListener('click', function () {
     loadCompanionStatistics();
+    if (window.AdminCompanionUsage) window.AdminCompanionUsage.refresh();
     cursorStack = [null];
     pageIndex = 0;
     loadPage();

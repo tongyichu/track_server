@@ -92,6 +92,8 @@ func (m *Module) Close() {
 // - DELETE /admin/api/tracks/:track_id     删除轨迹（鉴权，软删除并清理关联索引/收藏）
 // - GET  /admin/api/companions             同行会话列表（鉴权，cursor 翻页）
 // - GET  /admin/api/companions/statistics  同行会话运营统计（鉴权）
+// - GET  /admin/api/companions/usage-statistics  同行趋势与实际人数分布（鉴权）
+// - GET  /admin/api/route-groups/statistics  全量有效路线组覆盖与规模分布（鉴权）
 // - GET  /admin/api/companions/:session_id  同行会话详情：会话/成员/位置/弹幕（鉴权）
 // - GET  /admin/api/feedbacks              意见反馈列表（鉴权，cursor 翻页）
 // - GET  /admin/api/feedbacks/:feedback_id 意见反馈详情（鉴权）
@@ -143,6 +145,8 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	api.GET("/dashboard", m.Handler.GetDashboard)
 	api.GET("/users/statistics", m.Handler.GetAdminUserStatistics)
 	api.GET("/companions/statistics", m.Handler.GetAdminCompanionStatistics)
+	api.GET("/companions/usage-statistics", m.Handler.GetAdminCompanionUsageStatistics)
+	api.GET("/route-groups/statistics", m.Handler.GetAdminMapModeStatistics)
 
 	// 用户 / 轨迹 / 同行 列表（仅查询，提供基础翻页）
 	api.GET("/static/*filepath", m.Handler.GetStaticAsset)

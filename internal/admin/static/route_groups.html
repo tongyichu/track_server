@@ -32,6 +32,15 @@
       <div><h1>地图模式</h1><p>按运动类型和城市查找地图路线组，维护成员轨迹、代表轨迹和路线介绍。</p></div>
       <span class="route-total-pill" id="totalHint"></span>
     </div>
+    <section class="panel feature-stats">
+      <h2 class="feature-stats-title"><span>路线覆盖概况</span><button id="refreshMapStatistics" type="button" class="btn btn-sm btn-outline-secondary">刷新数据</button></h2>
+      <p id="mapStatisticsError" class="error" role="alert" hidden></p>
+      <p id="mapStatisticsScope" class="hint">全量有效路线组</p>
+      <div class="feature-stats-grid">
+        <section><div class="feature-chart-heading"><h3>路线空间覆盖</h3><button id="resetRouteMap" type="button" class="btn btn-sm btn-outline-secondary">全国视图</button></div><div class="feature-chart-stage"><div id="routeSpatialChart" class="feature-chart" role="img" aria-label="有效路线组空间覆盖分布"></div><p id="routeSpatialError" class="feature-chart-error" hidden></p></div><p id="routeSpatialSummary" class="hint feature-chart-note"></p><div id="routeMapSelection" class="feature-map-selection" hidden><label for="routeMapGroup" class="visually-hidden">选择路线组</label><select id="routeMapGroup" class="form-select form-select-sm"></select><button id="openRouteMapGroup" type="button" class="btn btn-sm btn-outline-primary">查看详情</button></div></section>
+        <section><div class="feature-chart-heading"><h3>路线组规模分布</h3><span class="hint">按组内轨迹数</span></div><div id="routeSizeChart" class="feature-chart" role="img" aria-label="路线组内轨迹数量分布"></div></section>
+      </div>
+    </section>
     <section class="panel route-groups-list-card">
       <div class="route-list-heading"><p>按区域和运动类型定位路线，再进入管理查看成员、维护名称或编辑路线介绍。</p></div>
       <div class="route-groups-toolbar">
@@ -131,6 +140,9 @@
   <script src="/admin/static/vendor/tabler.min.js"></script>
   <script src="/admin/static/shell.js"></script>
   <script src="/admin/static/ui.js"></script>
+  <script src="/admin/static/vendor/echarts.min.js"></script>
+  <script src="/admin/static/admin_usage_charts.js"></script>
   <script src="/admin/static/route_groups.js"></script>
+  <script src="/admin/static/feature_statistics.js"></script>
 </body>
 </html>

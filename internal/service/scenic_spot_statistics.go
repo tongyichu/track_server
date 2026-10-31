@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -11,18 +12,33 @@ import (
 	"github.com/tongyichu/track_server/internal/repository"
 )
 
-type ScenicSpotMissingStat struct {
-	Key   string `json:"key"`
-	Label string `json:"label"`
-	Count int64  `json:"count"`
+type ScenicSpotMapPoint struct {
+	SpotID    string  `json:"scenic_spot_id"`
+	Name      string  `json:"name"`
+	City      string  `json:"city"`
+	Latitude  float64 `json:"latitude"`
+	Longitude float64 `json:"longitude"`
 }
 
-type ScenicSpotTopTracks struct {
-	SpotID        string   `json:"scenic_spot_id"`
-	Name          string   `json:"name"`
-	City          string   `json:"city"`
-	TrackCount    int64    `json:"track_count"`
-	MissingFields []string `json:"missing_fields"`
+type ScenicSpotSpatialStats struct {
+	CoordinateSystem string               `json:"coordinate_system"`
+	Unlocated        int64                `json:"unlocated"`
+	Points           []ScenicSpotMapPoint `json:"points"`
+}
+
+type ScenicSpotTrendPoint struct {
+	At    time.Time `json:"at"`
+	Label string    `json:"label"`
+	Count int64     `json:"count"`
+}
+
+type ScenicSpotCreationTrend struct {
+	Days   int                    `json:"days"`
+	Bucket string                 `json:"bucket"`
+	Start  time.Time              `json:"start"`
+	End    time.Time              `json:"end"`
+	Total  int64                  `json:"total"`
+	Items  []ScenicSpotTrendPoint `json:"items"`
 }
 
 type ScenicSpotAdminStats struct {
@@ -31,8 +47,47 @@ type ScenicSpotAdminStats struct {
 	CoveredCities   int64                   `json:"covered_cities"`
 	LinkedTracks    int64                   `json:"linked_tracks"`
 	IncompleteSpots int64                   `json:"incomplete_spots"`
-	Missing         []ScenicSpotMissingStat `json:"missing"`
-	TopSpots        []ScenicSpotTopTracks   `json:"top_spots"`
+	Spatial         ScenicSpotSpatialStats  `json:"spatial"`
+	Trend           ScenicSpotCreationTrend `json:"trend"`
+}
+
+func newScenicSpotCreationTrend(now time.Time, days int) ScenicSpotCreationTrend {
+	trend := ScenicSpotCreationTrend{Days: days, Bucket: "day", End: now, Items: []ScenicSpotTrendPoint{}}
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	trend.Start = today.AddDate(0, 0, 1-days)
+	if days == 1 {
+		trend.Bucket = "hour"
+		trend.Start = now.Add(-24 * time.Hour)
+		for i := 0; i < 24; i++ {
+			at := trend.Start.Add(time.Duration(i) * time.Hour)
+			trend.Items = append(trend.Items, ScenicSpotTrendPoint{At: at, Label: at.Format("15:04")})
+		}
+	} else {
+		for i := 0; i < days; i++ {
+			at := trend.Start.AddDate(0, 0, i)
+			trend.Items = append(trend.Items, ScenicSpotTrendPoint{At: at, Label: at.Format("01-02")})
+		}
+	}
+	return trend
+}
+
+func (trend *ScenicSpotCreationTrend) add(createdAt time.Time) {
+	if createdAt.IsZero() || createdAt.Before(trend.Start) || !createdAt.Before(trend.End) {
+		return
+	}
+	width := 24 * time.Hour
+	if trend.Bucket == "hour" {
+		width = time.Hour
+	}
+	index := int(createdAt.Sub(trend.Start) / width)
+	if index >= 0 && index < len(trend.Items) {
+		trend.Items[index].Count++
+		trend.Total++
+	}
+}
+
+func (s *ScenicSpotCatalogService) RelatedTrackStatistics(ctx context.Context, spotIDs []string) (map[string]*repository.ScenicSpotTrackStatistics, error) {
+	return repository.CountScenicSpotTracks(ctx, s.spots, s.tracks, spotIDs)
 }
 
 func (s *ScenicSpotCatalogService) RecordProviderUsage(ctx context.Context, spotID, provider, operation string, succeeded bool) {
@@ -54,30 +109,35 @@ func (s *ScenicSpotCatalogService) RecordProviderUsageForTrack(ctx context.Conte
 	s.RecordProviderUsage(ctx, link.SpotID, provider, operation, succeeded)
 }
 
-func (s *ScenicSpotCatalogService) Statistics(ctx context.Context) (*ScenicSpotAdminStats, error) {
+func (s *ScenicSpotCatalogService) Statistics(ctx context.Context, days int) (*ScenicSpotAdminStats, error) {
+	if days != 1 && days != 7 && days != 30 {
+		return nil, invalidScenicSpot("days must be 1, 7 or 30")
+	}
+	now := time.Now().In(placeQuotaZone)
 	out := &ScenicSpotAdminStats{
-		AsOf: time.Now().In(placeQuotaZone),
-		Missing: []ScenicSpotMissingStat{
-			{Key: "description", Label: "缺简介"}, {Key: "photos", Label: "无图片"},
-			{Key: "coordinates", Label: "缺有效坐标"}, {Key: "address", Label: "缺地址"},
-		},
-		TopSpots: []ScenicSpotTopTracks{},
+		AsOf:    now,
+		Spatial: ScenicSpotSpatialStats{CoordinateSystem: "GCJ02", Points: []ScenicSpotMapPoint{}},
+		Trend:   newScenicSpotCreationTrend(now, days),
 	}
 	spots := []*models.ScenicSpot{}
 	cursor := ""
 	for {
-		page, _, err := s.spots.ListScenicSpots(ctx, repository.ScenicSpotListFilter{Cursor: cursor, Limit: 100, VisibleOnly: true})
+		page, _, err := s.spots.ListScenicSpots(ctx, repository.ScenicSpotListFilter{Cursor: cursor, Limit: 100})
 		if err != nil {
 			return nil, err
 		}
-		spots = append(spots, page...)
+		for _, spot := range page {
+			out.Trend.add(spot.CreatedAt)
+			if scenicSpotClientVisible(spot) {
+				spots = append(spots, spot)
+			}
+		}
 		if len(page) < 100 {
 			break
 		}
 		cursor = page[len(page)-1].ID
 	}
 	cities := make(map[string]struct{})
-	missingCounts := make(map[string]int64)
 	// Batch IDs to bound database parameter counts as the catalog grows.
 	for start := 0; start < len(spots); start += 500 {
 		batch := spots[start:min(start+500, len(spots))]
@@ -121,29 +181,20 @@ func (s *ScenicSpotCatalogService) Statistics(ctx context.Context) (*ScenicSpotA
 			if len(missing) > 0 {
 				out.IncompleteSpots++
 			}
-			for _, key := range missing {
-				missingCounts[key]++
-			}
 			out.LinkedTracks += count
-			if count > 0 {
-				out.TopSpots = append(out.TopSpots, ScenicSpotTopTracks{
-					SpotID: spot.ID, Name: spot.Name, City: city, TrackCount: count, MissingFields: missing,
-				})
+			if validMapLatLng(spot.Latitude, spot.Longitude) && spot.Latitude != 0 && spot.Longitude != 0 {
+				point, err := mapPointToGCJ02(models.TrackPoint{Latitude: spot.Latitude, Longitude: spot.Longitude}, spot.CoordinateSystem)
+				if err == nil {
+					out.Spatial.Points = append(out.Spatial.Points, ScenicSpotMapPoint{
+						SpotID: spot.ID, Name: spot.Name, City: city,
+						Latitude: math.Round(point.Latitude*1e6) / 1e6, Longitude: math.Round(point.Longitude*1e6) / 1e6,
+					})
+					continue
+				}
 			}
+			out.Spatial.Unlocated++
 		}
 	}
 	out.CoveredCities = int64(len(cities))
-	for i := range out.Missing {
-		out.Missing[i].Count = missingCounts[out.Missing[i].Key]
-	}
-	sort.Slice(out.TopSpots, func(i, j int) bool {
-		if out.TopSpots[i].TrackCount == out.TopSpots[j].TrackCount {
-			return out.TopSpots[i].SpotID < out.TopSpots[j].SpotID
-		}
-		return out.TopSpots[i].TrackCount > out.TopSpots[j].TrackCount
-	})
-	if len(out.TopSpots) > 10 {
-		out.TopSpots = out.TopSpots[:10]
-	}
 	return out, nil
 }

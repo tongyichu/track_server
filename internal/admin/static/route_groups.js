@@ -125,7 +125,7 @@
   }
 
   function renderGroups(items) {
-    totalHint.textContent = '共 ' + items.length + ' 条路线组';
+    totalHint.textContent = '本次显示 ' + items.length + ' 组';
     groupList.innerHTML = '';
     if (!items.length) {
       groupList.innerHTML = '<tr><td colspan="7"><div class="route-table-state"><strong>没有找到路线组</strong><span>可以调整运动类型或城市条件后重新查询。</span></div></td></tr>';
@@ -306,5 +306,6 @@
     } catch (_) { /* 城市目录不可用时保留“全部城市”，不阻塞路线组管理。 */ }
   }
 
+  window.AdminRouteGroups = { openDetail: loadDetail, refresh: loadGroups };
   loadCities().then(loadGroups);
 })();

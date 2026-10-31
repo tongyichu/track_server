@@ -89,6 +89,8 @@ internal/admin/
 | GET | `/admin/api/dashboard` | 鉴权 | 业务库即时统计；`period=day|week|month`，返回同进度上周期对比、用户转化、审核/反馈效率、内容质量、互动、同行与日趋势 |
 | GET | `/admin/api/users/statistics` | 鉴权 | 用户总数、性别/星座/年龄分布、`track_output` 云端轨迹产出分层和 `user_cities` 用户资料所在城市分布；每个用户只计入当前设置的一个城市，未设置计入未知城市 |
 | GET | `/admin/api/companions/statistics` | 鉴权 | 同行会话当前活跃数、所选周期创建/结束/自动结束数、平均参与人数 |
+| GET | `/admin/api/companions/usage-statistics` | 鉴权 | days=1/7/30，创建与结束趋势、按本周期创建房间统计的实际参与人数分布 |
+| GET | `/admin/api/route-groups/statistics` | 鉴权 | 全量 active 路线组中心点、覆盖城市和成员轨迹数分布，不受列表类型/城市筛选及 100 条上限影响 |
 | POST | `/admin/api/releases` | 鉴权 | 发布/覆盖一个版本（按 `(platform, version_code)` 幂等） |
 | DELETE | `/admin/api/releases/:id` | 鉴权 | 删除一条发布记录 |
 | POST | `/admin/api/releases/upload-package` | 鉴权 | multipart 上传安装包到 `<LogDir>/static/release/<platform>/` |
@@ -216,6 +218,10 @@ GET /admin/api/users
 **查看埋点同步摘要**：
 ```
 
+后台地图模式只增加“路线空间覆盖”和“路线组规模分布”两张图；与友同行只增加“创建/结束趋势”和“参与人数分布”，使用近 1/7/30 天切换。`AdminDashboardStatisticsRepository` 的 `GetAdminMapModeStatistics` / `GetAdminCompanionUsageStatistics` 在 MySQL、Mongo、内存仓储中只读聚合；不新增表、客户端协议或业务埋点。实现位于 `internal/repository/admin_feature_statistics*.go`，模型为 `internal/models/admin_feature_statistics.go`，后台入口为 `feature_statistics.go`。地图按全量 active 路线组中心 GCJ02 坐标展示；规模按当前 member_count 分为 0、1、2–5、6–20、21 条及以上，城市去重。同行使用趋势按创建/结束各自发生时间独立计数，不以同周期结束数除以创建数作为完成率；人数分布以本周期创建的会话为 cohort，按服务端成员记录 user_id 去重，包含曾离开或移出的成员，不使用 max_members 或客户端 actual_participant_count。没有成员记录的历史会话单列未知，平均人数只计算有成员记录的会话。近 1 天为滚动 24 小时按小时分桶，7/30 天按北京时间自然日含当天补齐空桶。统一刷新保留周期，切换失败回退到上次成功周期；两页不再增加排行和重复数字卡片。
+
+`static/admin_usage_charts.js` 共用空间聚合、折线与分布图；`static/feature_statistics.js` 是地图模式/同行页的轻量控制器，景点页通过 `scenic_spot_charts.js` 复用同一地图与趋势组件。组件均使用已内置 ECharts 和省界数据，不访问高德图表 API；地图保留视野并支持点选详情，页面按窄屏上下排列。地图模式统计刷新同时刷新列表，与友同行沿用页面顶部统一刷新按钮。
+
 **运营聚合路线**：
 ```
 [admin UI] /admin/route_groups.html
@@ -266,7 +272,7 @@ GET /admin/api/users
 **主景点目录**：
 ```
 [admin UI] /admin/scenic_spots.html
-  → GET /admin/api/scenic-spots/statistics 汇总有效景点数、覆盖城市数、关联有效轨迹数、待完善景点数、资料缺项和关联轨迹 Top 10
+  → GET /admin/api/scenic-spots/statistics 汇总有效景点数、覆盖城市数、关联有效轨迹数、待完善景点数、空间分布和新增入库趋势；days=1|7|30，默认 30
   → POST /admin/api/scenic-spots/provider-content/backfill 首次加载时游标分批同步供应商文字和图片；已同步的存量景点仅用轻量地点详情补缺失坐标，provider_coordinates_status 防止重复查询
   → POST /admin/api/scenic-spots/description/generate 使用详情弹窗当前表单内容查询 Kimi，将结果返回并填入简介编辑框；存量记录须由管理员逐条点击，保存按钮负责入库
   → GET /admin/api/scenic-spots/:spot_id/map 通过后台鉴权代理返回高德静态地图图片，供应商密钥不下发浏览器
@@ -282,7 +288,7 @@ GET /admin/api/users
        → track_scenic_spot_links 关联轨迹，scenic_spot_audit_logs 记录运营操作
        → scenic_spot_provider_usage 只累计景点/provider/日期/操作的请求成功失败计数；同步后的供应商文字与图片引用保存在 scenic_spots 的资料和 photos 数组中
 ```
-轨迹只保存内部景点关联；外部来源 ID 留在景点目录。存量回填对没有可用来源 ID 的合格轨迹强制刷新坐标查询缓存，调用地图 API；高德每日上限按配置执行（默认不设日上限），每轮最多 10 次真实请求；Google 不受服务端每日或单轮请求数上限约束。索引刷新失败时回退到已有索引继续匹配并单独计数；结果有明确重复命中才创建空白目录项。后台景点页先展示四张概况卡、资料缺项横向条形图和关联轨迹 Top 10，不再展示供应商调用量、调用趋势和高调用榜；底层供应商每日计数继续保留用于排查。统计范围排除 archived/merged；有效轨迹包含公开和私密、已完成且 raw_track_url 非空的未软删除轨迹，失效关联不计入，跨景点按每条轨迹唯一主景点关系统计。覆盖城市合并景点自身 city_code 与有效关联轨迹 city_code 去重，无法识别的城市不计入；榜单附城市和缺项标记。缺项为缺简介、无图片、缺有效非零坐标或缺地址，一处景点可有多项；待完善数按景点去重。`repository.CountCompletedScenicSpotTracks` 在 MySQL/Mongo/内存三种仓储中批量关联轨迹计数与城市，`repository.ScenicSpotMissingFields` 定义统计/筛选口径。点击缺项或待完善卡片会清空其余列表条件并使用 `GET /admin/api/scenic-spots?missing=any|description|photos|coordinates|address` 在仓储层筛选，筛选参与 total 和 cursor 分页；默认目录只列有效景点，显式 status 查询保留维护用途。列表支持加载更多，不仅筛选首批记录。统计区刷新为只读操作，加载中禁用按钮，失败保留上次数据并提示；统计加载不读取供应商调用历史或触发供应商请求。目录为紧凑整行，展示分类、简介和图片；“相关轨迹”操作通过景点轨迹列表接口，以轨迹管理页相同的表格字段（不含开始时间）展示关联轨迹；点击行或编辑按钮打开共享 `static/track_editor.js` 可编辑表单，保存或删除后刷新关联列表。景点详情在弹窗内编辑文字资料和图片，并显示供应商坐标、坐标系及位置地图。供应商文字同步到景点 JSON 资料，图片与人工上传图片共用 `photos` 有序数组；拖动排序和上传追加顺序都会随保存结果下发。Google 坐标按 WGS84 保存，高德坐标按 GCJ02 保存；来源同步只填补空坐标，不覆盖既有坐标，已同步记录单独请求坐标字段，避免再次请求照片媒体。城市信息只读展示，不作为编辑字段。`manual_edited` 表示资料由管理员创建或编辑保存；自动同步资料仍显示“自动”。页面隐藏来源 ID、轨迹关联编辑、合并拆分操作，但提供相关轨迹列表和编辑入口；其余数据/API仍由服务端保留，供客户端景点关联及维护流程使用。景点仍沿用内部 draft/published/archived/merged 状态机；页面展示的“自动/人工”是内容维护方式，不替代发布状态。未发布目录不会覆盖旧轨迹摘要。后台上传图像走受鉴权的 `/api/v1/static/scenic_spots/*` 资源路由，Android 详情页可读取。更新 MySQL/Mongo/memory 任一仓储时，保持三种实现、版本冲突控制和审计行为一致。
+轨迹只保存内部景点关联；外部来源 ID 留在景点目录。存量回填对没有可用来源 ID 的合格轨迹强制刷新坐标查询缓存，调用地图 API；高德每日上限按配置执行（默认不设日上限），每轮最多 10 次真实请求；Google 不受服务端每日或单轮请求数上限约束。索引刷新失败时回退到已有索引继续匹配并单独计数；结果有明确重复命中才创建空白目录项。后台景点页先展示四张概况卡、景点空间分布图和可切换近 1/7/30 天的新增入库趋势，不再单独展示缺项图、关联轨迹 Top 10 或供应商调用量图表；底层供应商每日计数继续保留用于排查。统计范围排除 archived/merged；有效轨迹包含公开和私密、已完成且 raw_track_url 非空的未软删除轨迹，失效关联不计入，跨景点按每条轨迹唯一主景点关系统计。覆盖城市合并景点自身 city_code 与有效关联轨迹 city_code 去重，无法识别的城市不计入。缺项为缺简介、无图片、缺有效非零坐标或缺地址，一处景点可有多项；待完善数按景点去重。`repository.CountCompletedScenicSpotTracks` 在 MySQL/Mongo/内存三种仓储中批量关联轨迹计数与城市，`repository.ScenicSpotMissingFields` 定义统计/筛选口径。点击待完善卡片会清空其余列表条件并使用 `GET /admin/api/scenic-spots?missing=any|description|photos|coordinates|address` 在仓储层筛选，筛选参与 total 和 cursor 分页；默认目录只列有效景点，显式 status 查询保留维护用途。列表支持加载更多，不仅筛选首批记录。统计区刷新为只读操作，加载中禁用按钮，失败保留上次数据并提示；统计加载不读取供应商调用历史或触发供应商请求。`static/scenic_spot_charts.js` 通过共用 `admin_usage_charts.js` 复用内置 ECharts 和中国省界底图：全量有效景点按已有坐标转换为 GCJ02 后展示，像素网格聚合随缩放重算，点击聚合点放大并可选择景点详情，缺坐标单独显示；刷新/周期切换保留当前视野。趋势按北京时间及景点 created_at 统计入库数，含回填、后续归档/合并记录；近 1 天为滚动 24 小时按小时分桶，近 7/30 天含当天按自然日分桶，空桶补零，区间为 [start,end)，不将资料 updated_at 当新增。目录为紧凑整行，展示分类、简介和图片；“相关轨迹(N)”按钮展示完整关联轨迹数量，目录列表通过仅后台使用的 `related_track_count` 下发；计数与相关轨迹弹窗一致，只排除已不存在的轨迹，不套用顶部“有效已完成轨迹”的过滤口径。`RelatedTrackStatistics` / `repository.CountScenicSpotTracks` 在 MySQL/Mongo/内存仓储按当前页批量计数并补全关联城市，不逐景点查询，也不受原先每景点首 100 条的限制。弹窗接口返回 `total`，展示总数与已加载数量，编辑/删除后重新读取并回填按钮数量。“相关轨迹”操作通过景点轨迹列表接口，以轨迹管理页相同的表格字段（不含开始时间）展示关联轨迹；点击行或编辑按钮打开共享 `static/track_editor.js` 可编辑表单，保存或删除后刷新关联列表。景点详情在弹窗内编辑文字资料和图片，并显示供应商坐标、坐标系及位置地图。供应商文字同步到景点 JSON 资料，图片与人工上传图片共用 `photos` 有序数组；拖动排序和上传追加顺序都会随保存结果下发。Google 坐标按 WGS84 保存，高德坐标按 GCJ02 保存；来源同步只填补空坐标，不覆盖既有坐标，已同步记录单独请求坐标字段，避免再次请求照片媒体。城市信息只读展示，不作为编辑字段。`manual_edited` 表示资料由管理员创建或编辑保存；自动同步资料仍显示“自动”。页面隐藏来源 ID、轨迹关联编辑、合并拆分操作，但提供相关轨迹列表和编辑入口；其余数据/API仍由服务端保留，供客户端景点关联及维护流程使用。景点仍沿用内部 draft/published/archived/merged 状态机；页面展示的“自动/人工”是内容维护方式，不替代发布状态。未发布目录不会覆盖旧轨迹摘要。后台上传图像走受鉴权的 `/api/v1/static/scenic_spots/*` 资源路由，Android 详情页可读取。更新 MySQL/Mongo/memory 任一仓储时，保持三种实现、版本冲突控制和审计行为一致。
 景点页统计开始于该计数能力上线，不回填旧请求；计入已关联内部景点的来源详情、照片请求和 ID 核验，存量轨迹需先运行回填，按坐标执行的识别搜索不计入单景点排行。发布覆盖率以关联轨迹计数为准，目标是帮助运营优先补齐高调用景点的自有内容。
 所有 Google Places 查询均不受服务端每日预算或单轮请求数上限约束，由 Google API 自身配额控制。
 

@@ -129,6 +129,7 @@ func (r *memoryAdminDashboardRepository) GetAdminCompanionStatistics(_ context.C
 		return nil, errAdminStatisticsRepositoriesUnavailable
 	}
 	result := &models.AdminDashboardCompanionStats{}
+	var roomsWithMembers int64
 	companions.mu.RLock()
 	defer companions.mu.RUnlock()
 	for _, item := range companions.sessions {
@@ -137,7 +138,10 @@ func (r *memoryAdminDashboardRepository) GetAdminCompanionStatistics(_ context.C
 		}
 		if dashboardBetween(item.StartedAt, query.Start, query.End) {
 			result.Created.Current++
-			result.AvgParticipants += float64(item.ActualParticipantCount)
+			if n := len(companions.members[item.SessionID]); n > 0 {
+				result.AvgParticipants += float64(n)
+				roomsWithMembers++
+			}
 		}
 		if dashboardBetween(item.StartedAt, query.PreviousStart, query.PreviousEnd) {
 			result.Created.Previous++
@@ -149,8 +153,8 @@ func (r *memoryAdminDashboardRepository) GetAdminCompanionStatistics(_ context.C
 			}
 		}
 	}
-	if result.Created.Current > 0 {
-		result.AvgParticipants /= float64(result.Created.Current)
+	if roomsWithMembers > 0 {
+		result.AvgParticipants /= float64(roomsWithMembers)
 	}
 	return result, nil
 }
@@ -442,6 +446,7 @@ func (r *memoryAdminDashboardRepository) GetAdminDashboardStatistics(_ context.C
 		statistics.Engagement.TopTracks = statistics.Engagement.TopTracks[:10]
 	}
 
+	var roomsWithMembers int64
 	if companions != nil {
 		companions.mu.RLock()
 		for _, item := range companions.sessions {
@@ -450,7 +455,10 @@ func (r *memoryAdminDashboardRepository) GetAdminDashboardStatistics(_ context.C
 			}
 			if dashboardBetween(item.StartedAt, query.Start, query.End) {
 				statistics.Companion.Created.Current++
-				statistics.Companion.AvgParticipants += float64(item.ActualParticipantCount)
+				if n := len(companions.members[item.SessionID]); n > 0 {
+					statistics.Companion.AvgParticipants += float64(n)
+					roomsWithMembers++
+				}
 			}
 			if dashboardBetween(item.StartedAt, query.PreviousStart, query.PreviousEnd) {
 				statistics.Companion.Created.Previous++
@@ -467,8 +475,8 @@ func (r *memoryAdminDashboardRepository) GetAdminDashboardStatistics(_ context.C
 		}
 		companions.mu.RUnlock()
 	}
-	if statistics.Companion.Created.Current > 0 {
-		statistics.Companion.AvgParticipants /= float64(statistics.Companion.Created.Current)
+	if roomsWithMembers > 0 {
+		statistics.Companion.AvgParticipants /= float64(roomsWithMembers)
 	}
 	statistics.Metrics.ActiveCompanions = statistics.Companion.Active
 

@@ -19,8 +19,7 @@
   function photoURL(url) { return (url||'').startsWith('/api/v1/static/')?url.replace('/api/v1/static/','/admin/api/static/'):url; }
   function spotCities(spot) { const cities=spot.related_cities&&spot.related_cities.length?spot.related_cities:[spot.city_name].filter(Boolean);return [...new Set(cities)]; }
 
-  const missingLabels = { description: '缺简介', photos: '无图片', coordinates: '缺有效坐标', address: '缺地址' };
-  let statsRequest = 0, statsLoaded = false, listRequest = 0;
+  let statsRequest = 0, statsLoaded = false, listRequest = 0, statisticsDays = 30, loadedDays = 30;
   function filterMissing(key) {
     $('missingFilter').value = key;
     $('searchInput').value = '';
@@ -34,9 +33,10 @@
     const request = ++statsRequest, button = $('refreshStatsBtn');
     button.disabled = true;
     button.textContent = '刷新中…';
+    window.AdminScenicSpotCharts.setLoading(true);
     $('statsError').hidden = true;
     try {
-      const data = await api('/scenic-spots/statistics', { cache: 'no-store' });
+      const data = await api('/scenic-spots/statistics?days=' + statisticsDays, { cache: 'no-store' });
       if (request !== statsRequest) return;
       const total = Number(data.total_spots || 0), incomplete = Number(data.incomplete_spots || 0);
       $('statsSpotTotal').textContent = total.toLocaleString();
@@ -46,79 +46,39 @@
       $('statsIncompleteNote').textContent = '占 ' + (total ? (incomplete * 100 / total).toFixed(1) : '0.0') + '% · 点击查看';
       const date = new Date(data.as_of);
       $('statsUpdated').textContent = '当前有效景点目录' + (Number.isNaN(date.getTime()) ? '' : ' · 更新于 ' + date.toLocaleTimeString('zh-CN', { hour12: false }));
-      const missingHost = $('statsMissing');
-      missingHost.replaceChildren();
-      (data.missing || []).forEach(item => {
-        const count = Number(item.count || 0), percent = total ? count * 100 / total : 0;
-        const row = document.createElement('button');
-        row.type = 'button';
-        row.className = 'btn btn-outline-secondary scenic-missing-item';
-        row.disabled = count === 0;
-        row.setAttribute('aria-label', (item.label || missingLabels[item.key]) + '，' + count + ' 处，点击筛选');
-        const label = document.createElement('span');
-        label.className = 'scenic-missing-label';
-        label.textContent = item.label || missingLabels[item.key];
-        const track = document.createElement('span'), fill = document.createElement('i');
-        track.className = 'scenic-missing-track';
-        fill.style.width = Math.min(100, percent) + '%';
-        track.appendChild(fill);
-        const value = document.createElement('span');
-        value.className = 'scenic-missing-count';
-        value.textContent = count.toLocaleString() + ' 处 · ' + percent.toFixed(1) + '%';
-        row.append(label, track, value);
-        row.addEventListener('click', () => filterMissing(item.key));
-        missingHost.appendChild(row);
-      });
-      const host = $('statsTopSpots');
-      host.replaceChildren();
-      const top = data.top_spots || [];
-      if (!top.length) host.textContent = '暂无关联有效轨迹的景点';
-      top.forEach((item, index) => {
-        const row = document.createElement('button');
-        row.type = 'button';
-        row.className = 'btn btn-outline-secondary scenic-top-item';
-        row.dataset.spotId = item.scenic_spot_id;
-        const rank = document.createElement('span');
-        rank.className = 'scenic-rank';
-        rank.textContent = index + 1;
-        const info = document.createElement('span');
-        info.className = 'scenic-top-info';
-        const name = document.createElement('strong');
-        name.textContent = item.name || '待补充名称';
-        name.title = name.textContent;
-        const city = document.createElement('small');
-        city.textContent = item.city || '城市未标注';
-        info.append(name, city);
-        if ((item.missing_fields || []).length) {
-          const tags = document.createElement('span');
-          tags.className = 'scenic-quality-tags';
-          item.missing_fields.forEach(key => {
-            const tag = document.createElement('small');
-            tag.textContent = missingLabels[key] || key;
-            tags.appendChild(tag);
-          });
-          info.appendChild(tags);
-        }
-        const count = document.createElement('span');
-        count.className = 'scenic-track-count';
-        count.textContent = Number(item.track_count || 0).toLocaleString() + ' 条';
-        row.append(rank, info, count);
-        row.addEventListener('click', () => loadSpot(item.scenic_spot_id));
-        host.appendChild(row);
-      });
+      loadedDays = data.trend.days;
+      await window.AdminScenicSpotCharts.render(data, spotID => loadSpot(spotID));
       statsLoaded = true;
     } catch (error) {
       if (request !== statsRequest) return;
       $('statsError').textContent = (statsLoaded ? '刷新失败，仍显示上次数据：' : '统计加载失败：') + error.message;
       $('statsError').hidden = false;
+      statisticsDays = loadedDays;
+      updateTrendButtons();
       if (!statsLoaded) {
-        $('statsMissing').textContent = '统计暂不可用，请刷新重试。';
-        $('statsTopSpots').textContent = '统计暂不可用，请刷新重试。';
+        window.AdminScenicSpotCharts.showError('统计暂不可用，请刷新重试。');
       }
     } finally {
-      if (request === statsRequest) { button.disabled = false; button.textContent = '刷新数据'; }
+      if (request === statsRequest) { button.disabled = false; button.textContent = '刷新数据'; window.AdminScenicSpotCharts.setLoading(false); }
     }
   }
+
+  function updateTrendButtons() {
+    document.querySelectorAll('[data-scenic-days]').forEach(button => {
+      const active = Number(button.dataset.scenicDays) === statisticsDays;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', String(active));
+    });
+  }
+  document.querySelectorAll('[data-scenic-days]').forEach(button => {
+    button.addEventListener('click', () => {
+      const days = Number(button.dataset.scenicDays);
+      if (days === statisticsDays) return;
+      statisticsDays = days;
+      updateTrendButtons();
+      loadStats();
+    });
+  });
 
   function renderList() {
     const mode=$('statusFilter').value,city=$('cityFilter').value,query=$('searchInput').value.trim().toLocaleLowerCase();
@@ -131,7 +91,7 @@
       const categoryCell=document.createElement('td');categoryCell.className='category-cell';categoryCell.textContent=spot.category||'—';categoryCell.title=spot.category||'';
       const modeCell=document.createElement('td');const badge=document.createElement('span');badge.className='scenic-mode '+(isManual(spot)?'manual':'automatic');badge.textContent=modeLabel(spot);modeCell.appendChild(badge);
       const imageCell=document.createElement('td');const images=document.createElement('div');images.className='scenic-row-photos';(spot.photos||[]).slice(0,3).forEach(photo=>{const img=document.createElement('img');img.loading='lazy';img.src=photoURL(photo.url);img.alt=photo.caption||spot.name||'景点图片';images.appendChild(img);});if(!images.children.length){const hint=document.createElement('span');hint.className='scenic-hint';hint.textContent='暂无图片';images.appendChild(hint);}imageCell.appendChild(images);
-      const actionCell=document.createElement('td');const actions=document.createElement('div');actions.className='d-flex gap-2 flex-wrap';const view=document.createElement('button');view.type='button';view.className='btn btn-sm btn-outline-primary';view.textContent='查看详情';view.addEventListener('click',()=>loadSpot(spot.id));const related=document.createElement('button');related.type='button';related.className='btn btn-sm btn-outline-secondary';related.textContent='相关轨迹';related.addEventListener('click',()=>openRelatedTracks(spot));actions.append(view,related);actionCell.appendChild(actions);
+      const actionCell=document.createElement('td');const actions=document.createElement('div');actions.className='d-flex gap-2 flex-wrap';const view=document.createElement('button');view.type='button';view.className='btn btn-sm btn-outline-primary';view.textContent='查看详情';view.addEventListener('click',()=>loadSpot(spot.id));const related=document.createElement('button');related.type='button';related.className='btn btn-sm btn-outline-secondary';related.textContent='相关轨迹('+Number(spot.related_track_count||0).toLocaleString()+')';related.dataset.relatedSpotId=spot.id;related.addEventListener('click',()=>openRelatedTracks(spot));actions.append(view,related);actionCell.appendChild(actions);
       row.append(cityCell,nameCell,categoryCell,modeCell,imageCell,actionCell);host.appendChild(row);
     });
   }
@@ -180,8 +140,16 @@
   const trackTypeNames={hiking:'徒步',running:'跑步',climbing:'爬山',riding:'骑行',driving:'自驾'};
   const trackTypeColors={hiking:'#16a34a',running:'#2563eb',climbing:'#ea580c',riding:'#9333ea',driving:'#0f766e'};
   let trackCityNames=null;
+  function updateRelatedTrackCount(spotID, count) {
+    const spot = state.list.find(item => item.id === spotID);
+    if (spot) spot.related_track_count = count;
+    if (state.relatedSpot && state.relatedSpot.id === spotID) state.relatedSpot.related_track_count = count;
+    document.querySelectorAll('[data-related-spot-id]').forEach(button => {
+      if (button.dataset.relatedSpotId === spotID) button.textContent = '相关轨迹(' + count.toLocaleString() + ')';
+    });
+  }
   async function openRelatedTracks(spot){state.relatedSpot=spot;state.relatedCursor='';$('relatedTracksTitle').textContent=(spot.name||'待补充名称')+' · 相关轨迹';$('relatedTracksList').replaceChildren();$('relatedTracksHint').textContent='加载中…';$('loadMoreRelatedTracksBtn').hidden=true;$('relatedTracksModal').showModal();if(!trackCityNames){try{const cities=await api('/cities');trackCityNames=Object.fromEntries((cities||[]).map(city=>[city.code,city.name]));}catch(_){trackCityNames={};}}await loadRelatedTracks(false);}
-  async function loadRelatedTracks(append){if(!state.relatedSpot)return;const button=$('loadMoreRelatedTracksBtn');button.disabled=true;try{const params=new URLSearchParams({limit:'50'});if(state.relatedCursor)params.set('cursor',state.relatedCursor);const data=await api('/scenic-spots/'+encodeURIComponent(state.relatedSpot.id)+'/tracks?'+params);const items=data.items||[],host=$('relatedTracksList');if(!append)host.replaceChildren();items.forEach(track=>{const row=document.createElement('tr');row.dataset.trackId=track.track_id;const avatarCell=document.createElement('td');avatarCell.className='track-user-cell';const avatar=document.createElement('span');avatar.className='track-user';if(track.avatar_url){const image=document.createElement('img');image.className='track-avatar';image.loading='lazy';image.src=photoURL(track.avatar_url);image.alt='';avatar.appendChild(image);}else{const fallback=document.createElement('span');fallback.className='track-avatar-fallback';fallback.textContent=(track.user_name||'用').slice(0,1);avatar.appendChild(fallback);}const userName=document.createElement('span');userName.textContent=track.user_name||'未知用户';avatar.appendChild(userName);avatarCell.appendChild(avatar);const imageCell=document.createElement('td');imageCell.className='track-preview';const imageURL=photoURL(track.preview_images&&track.preview_images.landscape_day_url);if(imageURL){const image=document.createElement('img');image.loading='lazy';image.src=imageURL;image.alt='轨迹图';imageCell.appendChild(image);}else{imageCell.textContent='无';}const city=trackCityNames&&trackCityNames[track.city_code]||'未知城市';const typeColor=trackTypeColors[track.track_type]||'#64748b';const typeCell=document.createElement('td');const typeBadge=document.createElement('span');typeBadge.className='track-type-badge';typeBadge.style.setProperty('--track-type-color',typeColor);const typeIcon=document.createElement('span');typeIcon.textContent='●';typeBadge.append(typeIcon,document.createTextNode(trackTypeNames[track.track_type]||track.track_type||'未知'));typeCell.appendChild(typeBadge);const columns=[track.id,city,track.title,typeCell,avatarCell,imageCell,track.status===1?'正常':track.status===2?'私密':track.status===0?'已删除':track.status];columns.forEach(value=>{if(value instanceof HTMLElement){row.appendChild(value);return;}const cell=document.createElement('td');cell.textContent=value===undefined||value===null||value===''?'—':String(value);row.appendChild(cell);});const action=document.createElement('td');const edit=document.createElement('button');edit.type='button';edit.className='btn btn-sm btn-outline-primary';edit.textContent='编辑';edit.addEventListener('click',event=>{event.stopPropagation();openTrackEditor(track.track_id);});action.appendChild(edit);row.appendChild(action);row.addEventListener('click',()=>openTrackEditor(track.track_id));host.appendChild(row);});if(!items.length&&!append){const empty=document.createElement('tr');empty.innerHTML='<td colspan="8" class="p-3 scenic-hint">该景点暂未关联轨迹</td>';host.appendChild(empty);}state.relatedCursor=data.next_cursor||'';$('relatedTracksHint').textContent='共显示 '+host.querySelectorAll('tr[data-track-id]').length+' 条';button.hidden=!data.has_more||!state.relatedCursor;}catch(error){$('relatedTracksHint').textContent='加载失败：'+error.message;}finally{button.disabled=false;}}
+  async function loadRelatedTracks(append){if(!state.relatedSpot)return;const spotID=state.relatedSpot.id;const button=$('loadMoreRelatedTracksBtn');button.disabled=true;try{const params=new URLSearchParams({limit:'50'});if(state.relatedCursor)params.set('cursor',state.relatedCursor);const data=await api('/scenic-spots/'+encodeURIComponent(spotID)+'/tracks?'+params);if(!state.relatedSpot||state.relatedSpot.id!==spotID)return;const items=data.items||[],host=$('relatedTracksList');if(!append)host.replaceChildren();items.forEach(track=>{const row=document.createElement('tr');row.dataset.trackId=track.track_id;const avatarCell=document.createElement('td');avatarCell.className='track-user-cell';const avatar=document.createElement('span');avatar.className='track-user';if(track.avatar_url){const image=document.createElement('img');image.className='track-avatar';image.loading='lazy';image.src=photoURL(track.avatar_url);image.alt='';avatar.appendChild(image);}else{const fallback=document.createElement('span');fallback.className='track-avatar-fallback';fallback.textContent=(track.user_name||'用').slice(0,1);avatar.appendChild(fallback);}const userName=document.createElement('span');userName.textContent=track.user_name||'未知用户';avatar.appendChild(userName);avatarCell.appendChild(avatar);const imageCell=document.createElement('td');imageCell.className='track-preview';const imageURL=photoURL(track.preview_images&&track.preview_images.landscape_day_url);if(imageURL){const image=document.createElement('img');image.loading='lazy';image.src=imageURL;image.alt='轨迹图';imageCell.appendChild(image);}else{imageCell.textContent='无';}const city=trackCityNames&&trackCityNames[track.city_code]||'未知城市';const typeColor=trackTypeColors[track.track_type]||'#64748b';const typeCell=document.createElement('td');const typeBadge=document.createElement('span');typeBadge.className='track-type-badge';typeBadge.style.setProperty('--track-type-color',typeColor);const typeIcon=document.createElement('span');typeIcon.textContent='●';typeBadge.append(typeIcon,document.createTextNode(trackTypeNames[track.track_type]||track.track_type||'未知'));typeCell.appendChild(typeBadge);const columns=[track.id,city,track.title,typeCell,avatarCell,imageCell,track.status===1?'正常':track.status===2?'私密':track.status===0?'已删除':track.status];columns.forEach(value=>{if(value instanceof HTMLElement){row.appendChild(value);return;}const cell=document.createElement('td');cell.textContent=value===undefined||value===null||value===''?'—':String(value);row.appendChild(cell);});const action=document.createElement('td');const edit=document.createElement('button');edit.type='button';edit.className='btn btn-sm btn-outline-primary';edit.textContent='编辑';edit.addEventListener('click',event=>{event.stopPropagation();openTrackEditor(track.track_id);});action.appendChild(edit);row.appendChild(action);row.addEventListener('click',()=>openTrackEditor(track.track_id));host.appendChild(row);});if(!items.length&&!append){const empty=document.createElement('tr');empty.innerHTML='<td colspan="8" class="p-3 scenic-hint">该景点暂未关联轨迹</td>';host.appendChild(empty);}state.relatedCursor=data.next_cursor||'';const total=Number(data.total||0);$('relatedTracksHint').textContent='共 '+total.toLocaleString()+' 条 · 已加载 '+host.querySelectorAll('tr[data-track-id]').length+' 条';updateRelatedTrackCount(spotID,total);button.hidden=!data.has_more||!state.relatedCursor;}catch(error){$('relatedTracksHint').textContent='加载失败：'+error.message;}finally{button.disabled=false;}}
   function formatDate(value){if(!value)return'';const date=new Date(value);return Number.isNaN(date.getTime())?String(value):date.toLocaleString('zh-CN',{hour12:false});}
   function openTrackEditor(trackID){const modal=$('relatedTracksModal');modal.close();window.AdminTrackEditor.open(trackID,{onSaved:()=>loadRelatedTracks(false),onDeleted:()=>loadRelatedTracks(false)}).catch(error=>toast('读取轨迹详情失败：'+error.message,'danger')).finally(()=>window.setTimeout(()=>{if(!modal.open)modal.showModal();},350));}
 

@@ -17,6 +17,15 @@ type ScenicSpotTrackStatistics struct {
 
 // CountCompletedScenicSpotTracks joins scenic links to valid completed tracks in the active backend.
 func CountCompletedScenicSpotTracks(ctx context.Context, spots ScenicSpotRepository, tracks TrackRepository, spotIDs []string) (map[string]*ScenicSpotTrackStatistics, error) {
+	return scenicSpotTrackStatistics(ctx, spots, tracks, spotIDs, true)
+}
+
+// CountScenicSpotTracks counts existing related tracks, matching the admin detail list.
+func CountScenicSpotTracks(ctx context.Context, spots ScenicSpotRepository, tracks TrackRepository, spotIDs []string) (map[string]*ScenicSpotTrackStatistics, error) {
+	return scenicSpotTrackStatistics(ctx, spots, tracks, spotIDs, false)
+}
+
+func scenicSpotTrackStatistics(ctx context.Context, spots ScenicSpotRepository, tracks TrackRepository, spotIDs []string, completedOnly bool) (map[string]*ScenicSpotTrackStatistics, error) {
 	ids := uniqueNonEmptyStrings(spotIDs)
 	out := make(map[string]*ScenicSpotTrackStatistics, len(ids))
 	add := func(id, city string, count int64) {
@@ -38,9 +47,13 @@ func CountCompletedScenicSpotTracks(ctx context.Context, spots ScenicSpotReposit
 			args[i] = id
 		}
 		placeholders := strings.TrimRight(strings.Repeat("?,", len(ids)), ",")
+		completedFilter := ""
+		if completedOnly {
+			completedFilter = " AND " + completedTrackAliasSQL
+		}
 		rows, err := repo.db.QueryContext(ctx, `SELECT l.spot_id,COALESCE(t.city_code,''),COUNT(*) FROM track_scenic_spot_links l
 			INNER JOIN track_records t ON t.id=l.track_id
-			WHERE l.spot_id IN (`+placeholders+`) AND `+completedTrackAliasSQL+` GROUP BY l.spot_id,t.city_code`, args...)
+			WHERE l.spot_id IN (`+placeholders+`)`+completedFilter+` GROUP BY l.spot_id,t.city_code`, args...)
 		if err != nil {
 			return nil, err
 		}
@@ -55,17 +68,20 @@ func CountCompletedScenicSpotTracks(ctx context.Context, spots ScenicSpotReposit
 		}
 		return out, rows.Err()
 	case *MongoScenicSpotRepository:
-		cur, err := repo.links.Aggregate(ctx, mongo.Pipeline{
+		pipeline := mongo.Pipeline{
 			{{Key: "$match", Value: bson.M{"scenic_spot_id": bson.M{"$in": ids}}}},
 			{{Key: "$lookup", Value: bson.M{"from": "tracks", "localField": "_id", "foreignField": "_id", "as": "track"}}},
 			{{Key: "$unwind", Value: "$track"}},
-			{{Key: "$match", Value: bson.M{
+		}
+		if completedOnly {
+			pipeline = append(pipeline, bson.D{{Key: "$match", Value: bson.M{
 				"track.status": bson.M{"$ne": models.TrackStatusDeleted}, "track.is_running": false,
 				"track.raw_track_url": bson.M{"$nin": bson.A{nil, ""}},
 				"track.deleted_at":    bson.M{"$in": bson.A{nil, time.Time{}}},
-			}}},
-			{{Key: "$group", Value: bson.M{"_id": bson.M{"spot": "$scenic_spot_id", "city": bson.M{"$ifNull": bson.A{"$track.city_code", ""}}}, "count": bson.M{"$sum": 1}}}},
-		})
+			}}})
+		}
+		pipeline = append(pipeline, bson.D{{Key: "$group", Value: bson.M{"_id": bson.M{"spot": "$scenic_spot_id", "city": bson.M{"$ifNull": bson.A{"$track.city_code", ""}}}, "count": bson.M{"$sum": 1}}}})
+		cur, err := repo.links.Aggregate(ctx, pipeline)
 		if err != nil {
 			return nil, err
 		}
@@ -105,9 +121,13 @@ func CountCompletedScenicSpotTracks(ctx context.Context, spots ScenicSpotReposit
 		defer trackRepo.mu.RUnlock()
 		for id, spotID := range links {
 			track := trackRepo.tracks[id]
-			if track != nil && track.Status != models.TrackStatusDeleted && track.DeletedAt.IsZero() && !track.IsRunning && track.RawTrackURL != "" {
-				add(spotID, track.CityCode, 1)
+			if track == nil {
+				continue
 			}
+			if completedOnly && (track.Status == models.TrackStatusDeleted || !track.DeletedAt.IsZero() || track.IsRunning || track.RawTrackURL == "") {
+				continue
+			}
+			add(spotID, track.CityCode, 1)
 		}
 		return out, nil
 	default:

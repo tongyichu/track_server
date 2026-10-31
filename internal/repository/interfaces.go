@@ -270,6 +270,8 @@ type AdminDashboardStatisticsRepository interface {
 	GetAdminUserDistributionStatistics(ctx context.Context) (*models.AdminUserDistributionStats, error)
 	GetAdminUserLastLoginTimes(ctx context.Context, userIDs []int64) (map[int64]time.Time, error)
 	GetAdminCompanionStatistics(ctx context.Context, query models.AdminDashboardQuery) (*models.AdminDashboardCompanionStats, error)
+	GetAdminMapModeStatistics(ctx context.Context) (*models.AdminMapModeStatistics, error)
+	GetAdminCompanionUsageStatistics(ctx context.Context, days int, now time.Time) (*models.AdminCompanionUsageStatistics, error)
 }
 
 // AccountRestrictionRepository defines persistence operations for management-center account restrictions.

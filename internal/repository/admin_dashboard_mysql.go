@@ -394,7 +394,7 @@ func (r *mysqlAdminDashboardRepository) loadCompanion(ctx context.Context, q mod
 		COALESCE(SUM(status='active'),0),
 		COALESCE(SUM(status='ended' AND ended_at>=? AND ended_at<?),0),
 		COALESCE(SUM(status='ended' AND ended_at>=? AND ended_at<? AND end_source='auto_close'),0),
-		AVG(CASE WHEN started_at>=? AND started_at<? THEN actual_participant_count END)
+		AVG(CASE WHEN started_at>=? AND started_at<? THEN NULLIF((SELECT COUNT(DISTINCT m.user_id) FROM companion_session_members m WHERE m.session_id=companion_sessions.session_id),0) END)
 		FROM companion_sessions`,
 		q.Start, q.End, q.PreviousStart, q.PreviousEnd,
 		q.Start, q.End, q.Start, q.End, q.Start, q.End,

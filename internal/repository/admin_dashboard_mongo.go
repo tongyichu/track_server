@@ -60,8 +60,27 @@ func (r *mongoAdminDashboardRepository) GetAdminCompanionStatistics(ctx context.
 	if err != nil {
 		return nil, err
 	}
-	result.AvgParticipants, err = mongoAverageField(ctx, sessions, bson.M{"started_at": mongoTimeRange(query.Start, query.End)}, "actual_participant_count")
+	averages, err := sessions.Aggregate(ctx, mongo.Pipeline{
+		{{Key: "$match", Value: bson.M{"started_at": mongoTimeRange(query.Start, query.End)}}},
+		{{Key: "$lookup", Value: bson.M{"from": "companion_session_members", "localField": "session_id", "foreignField": "session_id", "as": "members"}}},
+		{{Key: "$project", Value: bson.M{"count": bson.M{"$size": bson.M{"$setUnion": bson.A{"$members.user_id", bson.A{}}}}}}},
+		{{Key: "$match", Value: bson.M{"count": bson.M{"$gt": 0}}}},
+		{{Key: "$group", Value: bson.M{"_id": nil, "average": bson.M{"$avg": "$count"}}}},
+	})
 	if err != nil {
+		return nil, err
+	}
+	defer averages.Close(ctx)
+	if averages.Next(ctx) {
+		var row struct {
+			Average float64 `bson:"average"`
+		}
+		if err := averages.Decode(&row); err != nil {
+			return nil, err
+		}
+		result.AvgParticipants = row.Average
+	}
+	if err := averages.Err(); err != nil {
 		return nil, err
 	}
 	return result, nil
