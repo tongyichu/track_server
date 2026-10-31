@@ -36,7 +36,7 @@ func (s *TrackPlaceService) PrimaryScenicSpots(ctx context.Context, ids []string
 				continue
 			}
 			var match models.TrackPlaceMatch
-			if json.Unmarshal([]byte(record.Data), &match) != nil || match.TrackID != id || match.Status != "matched" || match.PrimaryPlaceID == "" || (match.RuleVersion != trackPlaceRuleVersion && match.RuleVersion != 1) {
+			if json.Unmarshal([]byte(record.Data), &match) != nil || match.TrackID != id || match.Status != "matched" || match.PrimaryPlaceID == "" || match.RuleVersion < 1 || match.RuleVersion > trackPlaceRuleVersion {
 				continue
 			}
 			matches[id] = &match

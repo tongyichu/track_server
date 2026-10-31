@@ -20,6 +20,7 @@ import (
 type TrackPlaceRepository interface {
 	GetPlaceRecord(context.Context, string) (*models.TrackPlaceRecord, error)
 	GetPlaceRecords(context.Context, []string) (map[string]*models.TrackPlaceRecord, error)
+	ListPlaceCandidateRecords(ctx context.Context, cursorTrackID string, limit int) ([]*models.TrackPlaceRecord, error)
 	LeasePlaceRecord(ctx context.Context, key, owner string, now, until time.Time) (bool, error)
 	SavePlaceRecord(ctx context.Context, record *models.TrackPlaceRecord, owner string) (bool, error)
 	ReservePlaceAPICall(ctx context.Context, provider, day string, budget int) (bool, error)

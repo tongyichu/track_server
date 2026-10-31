@@ -588,6 +588,7 @@ func main() {
 		adminModule.Handler.SetScreenshotCache(screenshotCache)
 		adminModule.Handler.SetTrackSubmissionService(trackSubmissionSvc)
 		adminModule.Handler.SetScenicSpotCatalogService(scenicSpotCatalogSvc)
+		adminModule.Handler.SetTrackPlaceService(trackPlaceSvc)
 	}
 	defer adminModule.Close()
 	adminModule.RegisterRoutes(h)

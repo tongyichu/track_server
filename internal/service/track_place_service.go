@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"sort"
@@ -18,7 +19,7 @@ import (
 	"github.com/tongyichu/track_server/internal/repository"
 )
 
-const trackPlaceRuleVersion = 2
+const trackPlaceRuleVersion = 3
 const trackPlaceEvidenceVersion = 1
 
 var placeQuotaZone = time.FixedZone("Asia/Shanghai", 8*60*60)
@@ -43,11 +44,10 @@ type TrackPlaceService struct {
 	runCalls      int
 	scenicCatalog *ScenicSpotCatalogService
 }
-type TrackPlaceRunResult struct{ Scanned, Matched, Unmatched, Reused, Skipped, Ineligible, Deferred, QuotaDeferred, BusyDeferred, Failed, IndexRefreshFailed, InvalidSamples, Unconfigured, ProviderQueries, MissingIndex int }
+type TrackPlaceRunResult struct{ Scanned, Matched, Candidates, Unmatched, Reused, Skipped, Ineligible, Deferred, QuotaDeferred, BusyDeferred, Failed, IndexRefreshFailed, InvalidSamples, Unconfigured, ProviderQueries, MissingIndex int }
 
-// AMap enrichment is a one-time business result. Keep successful positive and
-// negative results independently of the short-lived request cache. Recognize
-// records produced before this policy so upgrading never re-queries them.
+// AMap enrichment is a one-time business result. Keep successful positive,
+// ambiguous and negative results independently of the short-lived request cache.
 func trackPlaceRecordFresh(r *models.TrackPlaceRecord) bool {
 	if r == nil || r.Data == "{}" {
 		return false
@@ -61,7 +61,7 @@ func trackPlaceRecordFresh(r *models.TrackPlaceRecord) bool {
 	}
 	if strings.HasPrefix(r.Key, "match:") {
 		var match models.TrackPlaceMatch
-		return json.Unmarshal([]byte(r.Data), &match) == nil && match.Provider == "amap" && (match.Status == "matched" || match.Status == "unmatched")
+		return json.Unmarshal([]byte(r.Data), &match) == nil && match.Provider == "amap" && (match.Status == "matched" || match.Status == "candidate" || match.Status == "unmatched")
 	}
 	return false
 }
@@ -161,7 +161,8 @@ func (s *TrackPlaceService) RunOnce(ctx context.Context) (*TrackPlaceRunResult, 
 	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
 	var cursor string
-	record, err := s.store.GetPlaceRecord(ctx, "scan_cursor")
+	scanCursorKey := fmt.Sprintf("scan_cursor:v%d", trackPlaceRuleVersion)
+	record, err := s.store.GetPlaceRecord(ctx, scanCursorKey)
 	if err == nil {
 		_ = json.Unmarshal([]byte(record.Data), &cursor)
 	} else if !errors.Is(err, repository.ErrNotFound) {
@@ -172,7 +173,7 @@ func (s *TrackPlaceService) RunOnce(ctx context.Context) (*TrackPlaceRunResult, 
 		return out, err
 	}
 	if len(indexes) == 0 {
-		return out, s.save(ctx, "scan_cursor", "", time.Time{}, "")
+		return out, s.save(ctx, scanCursorKey, "", time.Time{}, "")
 	}
 	for _, index := range indexes {
 		if ctx.Err() != nil {
@@ -182,7 +183,7 @@ func (s *TrackPlaceService) RunOnce(ctx context.Context) (*TrackPlaceRunResult, 
 		if err := s.process(ctx, index, out); err != nil {
 			return out, err
 		}
-		if err := s.save(ctx, "scan_cursor", index.TrackID, time.Time{}, ""); err != nil {
+		if err := s.save(ctx, scanCursorKey, index.TrackID, time.Time{}, ""); err != nil {
 			return out, err
 		}
 	}
@@ -326,7 +327,7 @@ func (s *TrackPlaceService) processWithOptions(ctx context.Context, index *model
 	}
 	source := trackPlaceSourceVersion(index)
 	if !refreshMissing && trackPlaceRecordFresh(previousRecord) && previous.SourceVersion == source && previous.RuleVersion == trackPlaceRuleVersion {
-		if previous.Status == "matched" || previous.Status == "unmatched" {
+		if previous.Status == "matched" || previous.Status == "candidate" || previous.Status == "unmatched" {
 			out.Reused++
 		} else {
 			out.Deferred++
@@ -439,6 +440,9 @@ func (s *TrackPlaceService) processWithOptions(ctx context.Context, index *model
 		if match.PrimaryPlaceID != "" {
 			match.Status = "matched"
 			out.Matched++
+		} else if provider == "amap" && hasEnclosedPlaceCandidate(match.Relations) {
+			match.Status = "candidate"
+			out.Candidates++
 		} else {
 			out.Unmatched++
 			if len(match.Relations) == 0 && expires.Sub(now) > 24*time.Hour {

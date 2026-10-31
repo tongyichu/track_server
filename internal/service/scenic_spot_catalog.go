@@ -916,6 +916,18 @@ func (s *ScenicSpotCatalogService) hasLegacyProviderID(ctx context.Context, trac
 // SyncLegacyTrack links newly completed provider matches to the internal catalog.
 // It is called by the background place scanner, never by client list requests.
 func (s *ScenicSpotCatalogService) SyncLegacyTrack(ctx context.Context, trackID string) error {
+	return s.syncTrackPlaceMatch(ctx, trackID, "system", "auto_link", "background primary match linked to internal spot")
+}
+
+func (s *ScenicSpotCatalogService) SyncConfirmedTrack(ctx context.Context, operator, trackID string) error {
+	operator = strings.TrimSpace(operator)
+	if operator == "" {
+		operator = "admin"
+	}
+	return s.syncTrackPlaceMatch(ctx, trackID, operator, "manual_confirm", "admin confirmed candidate place")
+}
+
+func (s *ScenicSpotCatalogService) syncTrackPlaceMatch(ctx context.Context, trackID, operator, action, details string) error {
 	if s == nil || s.spots == nil || s.places == nil {
 		return nil
 	}
@@ -950,7 +962,7 @@ func (s *ScenicSpotCatalogService) SyncLegacyTrack(ctx context.Context, trackID 
 			source.RefreshAfter = &expired
 		}
 		now := time.Now()
-		spot = &models.ScenicSpot{ID: newScenicID("SCP-"), Sources: []models.ScenicSpotSource{source}, Status: models.ScenicSpotDraft, Version: 1, CreatedAt: now, UpdatedAt: now, CreatedBy: "system", UpdatedBy: "system"}
+		spot = &models.ScenicSpot{ID: newScenicID("SCP-"), Sources: []models.ScenicSpotSource{source}, Status: models.ScenicSpotDraft, Version: 1, CreatedAt: now, UpdatedAt: now, CreatedBy: operator, UpdatedBy: operator}
 		if err = s.spots.CreateScenicSpot(ctx, spot); err != nil {
 			if !errors.Is(err, repository.ErrAlreadyExists) {
 				return err
@@ -961,11 +973,15 @@ func (s *ScenicSpotCatalogService) SyncLegacyTrack(ctx context.Context, trackID 
 	if err != nil {
 		return err
 	}
-	link := &models.TrackScenicSpotLink{TrackID: trackID, SpotID: spot.ID, Origin: "auto", Provider: place.Provider, Confidence: 1, UpdatedAt: time.Now(), UpdatedBy: "system"}
+	origin := "auto"
+	if action == "manual_confirm" {
+		origin = "manual"
+	}
+	link := &models.TrackScenicSpotLink{TrackID: trackID, SpotID: spot.ID, Origin: origin, Provider: place.Provider, Confidence: 1, UpdatedAt: time.Now(), UpdatedBy: operator}
 	if err = s.spots.SetTrackScenicSpotLink(ctx, link, "", true); err != nil && !errors.Is(err, repository.ErrConflict) {
 		return err
 	}
-	s.audit(ctx, spot.ID, "auto_link", "system", "background primary match linked to internal spot", nil, link)
+	s.audit(ctx, spot.ID, action, operator, details, nil, link)
 	return nil
 }
 

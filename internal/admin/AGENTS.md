@@ -14,7 +14,7 @@
 - 查看和处理用户意见反馈（含图片预览、状态更新、用户可见反馈意见）。
 - 查看埋点 OSS 同步摘要（任务状态、文件列表、OSS key、字节数、耗时与错误）。
 - 在用户管理页查看、创建和解除账号限制；账号限制会由业务侧中间件拦截上传、发起同行、关注、收藏、修改资料等动作。
-- 查看和人工运营路线发现 RouteGroup（展示离线 `area_id` 对应的区域名称、类型与介绍页，支持改名、合并、移除成员、指定代表轨迹，以及编辑、发布和下线双语路线介绍）。
+- 查看和人工运营路线发现 RouteGroup（展示离线 `area_id` 对应的区域名称、类型与介绍页，支持改名、合并、移除成员、指定代表轨迹，以及编辑、发布和下线双语路线介绍）；景点页还提供轨迹围住多个独立景点的 candidate 队列，可确认其中一个或忽略。
 - 通过响应式工作台查看业务库即时统计：日/周/月核心增长、同周期新增用户转化、投稿与反馈处理效率、轨迹内容质量、互动趋势、热门轨迹和同行会话；该口径不依赖 T+1 埋点同步。
 - 审核用户轨迹投稿，查看结构化路线资料和经本地缓存改写的投稿图片，按 revision 通过或驳回。
 - 管理后台内置静态资源响应支持 gzip 与 ETag 重新验证；HTML 使用 no-cache，其他嵌入资源需重新验证后复用浏览器缓存。工作台先展示 API 返回的核心数字，再异步加载 ECharts 绘制图表。
@@ -103,6 +103,9 @@ internal/admin/
 | GET | `/admin/api/users/:user_id/restrictions/current` | 鉴权 | 查询当前账号限制；无生效限制返回 404 |
 | POST | `/admin/api/users/:user_id/restrictions` | 鉴权 | 创建账号限制；`expires_at` 为空表示永久，操作人取 admin session 用户名 |
 | DELETE | `/admin/api/users/:user_id/restrictions/current` | 鉴权 | 解除当前账号限制 |
+| GET | `/admin/api/place-candidates` | 鉴权 | 轨迹围住多个独立景点的候选队列，支持 cursor 翻页 |
+| POST | `/admin/api/place-candidates/:track_id/confirm` | 鉴权 | 确认指定候选为轨迹主景点并同步内部景点关联 |
+| POST | `/admin/api/place-candidates/:track_id/dismiss` | 鉴权 | 忽略当前轨迹的景点候选 |
 | GET | `/admin/api/companions` | 鉴权 | 同行会话列表，支持 `title` 模糊搜索及 cursor 翻页 |
 | GET | `/admin/api/tracks` | 鉴权 | 轨迹列表，支持 `title` / `user_name` 模糊搜索、`city_code` / `status` 筛选及 cursor 翻页 |
 | GET | `/admin/api/cities` | 鉴权 | 返回内置城市/省份 Code、名称与省市层级，供轨迹和景点选择器使用 |
@@ -284,6 +287,7 @@ GET /admin/api/users
   → /admin/api/scenic-spots/:spot_id/tracks 搜索、关联或解除轨迹
   → POST /admin/api/scenic-spots/:spot_id/merge|split 合并目录或拆分轨迹归属
   → POST /admin/api/scenic-spots/backfill 分页将存量轨迹迁移到内部 SCP ID 草稿，并复用已有主景区匹配缓存中的名称；遇到已关联但名称为空的草稿时尝试恢复该名称。缺少可用来源 ID 时按地图服务配置执行有预算的真实查询
+  → GET /admin/api/place-candidates 查看轨迹围住多个独立景点的候选；POST confirm 指定一个后更新 match 为 matched 并创建/关联内部景点，POST dismiss 仅标记候选不成立
        → ScenicSpotCatalogService + ScenicSpotRepository (MySQL / Mongo / memory)
        → track_scenic_spot_links 关联轨迹，scenic_spot_audit_logs 记录运营操作
        → scenic_spot_provider_usage 只累计景点/provider/日期/操作的请求成功失败计数；同步后的供应商文字与图片引用保存在 scenic_spots 的资料和 photos 数组中

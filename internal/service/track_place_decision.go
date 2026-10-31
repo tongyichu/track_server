@@ -101,6 +101,15 @@ func (s *TrackPlaceService) decideTrackPlace(ctx context.Context, track *models.
 	return nil
 }
 
+func hasEnclosedPlaceCandidate(relations []models.TrackPlaceRelation) bool {
+	for _, relation := range relations {
+		if relation.Kind == "enclosed_poi" && relation.Enclosed && relation.PlaceID != "" {
+			return true
+		}
+	}
+	return false
+}
+
 func selectRepeatedNearbyPrimary(relations []models.TrackPlaceRelation) (string, bool) {
 	best, count, tied := "", 2, false
 	for _, relation := range relations {

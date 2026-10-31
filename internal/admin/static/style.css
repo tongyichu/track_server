@@ -425,6 +425,10 @@ table.data td.companion-table-state { padding: 32px 14px; color: var(--tblr-seco
 .feedback-stat-sections .feedback-stat,
 .admin-user-summary-grid .admin-stat-panel { padding: 20px 24px !important; }
 .admin-user-distribution-grid .admin-stat-panel { padding: 14px 12px !important; }
+#userStatistics { padding: 22px 24px; }
+#userStatistics .admin-section-heading { margin-bottom: 14px; }
+#userStatistics .admin-user-distribution-grid { gap: 14px; }
+#userStatistics .admin-user-distribution-grid .admin-stat-panel { padding: 18px 20px !important; }
 
 @media (max-width: 1050px) {
   .admin-user-distribution-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "profile insights" "map map"; }
@@ -454,6 +458,8 @@ table.data td.companion-table-state { padding: 32px 14px; color: var(--tblr-seco
   .feedback-status-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-user-summary-grid { grid-template-columns: 1fr; gap: 12px; }
   .admin-user-distribution-grid { grid-template-columns: 1fr; grid-template-areas: "profile" "map" "insights"; gap: 10px; }
+  #userStatistics { padding: 14px 16px; }
+  #userStatistics .admin-user-distribution-grid { gap: 10px; }
   .admin-user-profile-charts { grid-template-rows: auto; }
   .admin-companion-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .admin-stat-panel { padding: 16px 18px; }
