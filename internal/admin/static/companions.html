@@ -3,68 +3,77 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>同行管理 - Track</title>
+  <title>与友同行 - Track</title>
   <link rel="stylesheet" href="/admin/static/vendor/tabler.min.css" />
   <link rel="stylesheet" href="/admin/static/style.css" />
 </head>
 <body>
-  <header class="topbar">
-    <div class="title">Track 管理后台</div>
-    <nav class="nav">
-      <a href="/admin/index.html">App 发布</a>
-      <a href="/admin/users.html">用户管理</a>
-      <a href="/admin/tracks.html">轨迹管理</a>
-      <a href="/admin/route_groups.html">聚合路线</a>
-      <a class="active" href="/admin/companions.html">同行管理</a>
-      <a href="/admin/feedbacks.html">意见反馈</a>
-      <a href="/admin/analytics.html">埋点同步</a>
-    </nav>
-    <div class="spacer"></div>
-    <div class="user">
-      <span id="userName"></span>
-      <button id="logoutBtn">退出</button>
-    </div>
-  </header>
+  <header class="topbar"></header>
 
-  <main class="container">
-    <section class="admin-companion-stats" aria-label="同行会话统计">
-      <article class="admin-stat-panel"><span>当前活跃</span><strong id="companionActive">—</strong><small>此刻状态为 active</small></article>
-      <article class="admin-stat-panel"><span>本月创建</span><strong id="companionCreated">—</strong><small id="companionCreatedCompare">较上期 —</small></article>
-      <article class="admin-stat-panel"><span>本月结束</span><strong id="companionEnded">—</strong><small>按结束时间统计</small></article>
-      <article class="admin-stat-panel"><span>自动结束</span><strong id="companionAutoEnded">—</strong><small>本月结束会话中的自动关闭</small></article>
-      <article class="admin-stat-panel"><span>平均参与人数</span><strong id="companionParticipants">—</strong><small>本月创建会话</small></article>
+  <main class="container wide companions-page">
+    <div class="page-heading">
+      <div><h1>与友同行</h1><p>查看同行房间、成员与活动记录</p></div>
+      <button id="refreshBtn" class="btn btn-outline-secondary" type="button">刷新数据</button>
+    </div>
+    <section class="admin-companion-stats" aria-label="同行房间统计">
+      <article class="admin-stat-panel"><span>进行中房间</span><strong id="companionActive">—</strong><small>当前尚未结束的房间</small></article>
+      <article class="admin-stat-panel"><span>本月创建</span><strong id="companionCreated">—</strong><small id="companionCreatedCompare">上期 —</small></article>
+      <article class="admin-stat-panel"><span>本月结束</span><strong id="companionEnded">—</strong><small id="companionAutoEnded">其中自动结束 —</small></article>
+      <article class="admin-stat-panel"><span>平均参与人数</span><strong id="companionParticipants">—</strong><small>本月创建的房间</small></article>
     </section>
+    <p id="companionStatsError" class="error" role="status" hidden></p>
     <section class="panel">
-      <h2>同行会话列表 <span class="hint" id="totalHint"></span></h2>
-      <div class="row">
-        <label>标题搜索 <input id="titleFilter" type="search" placeholder="输入同行会话标题关键词" /></label>
-        <button id="searchBtn">搜索</button>
-        <button id="refreshBtn">刷新</button>
-        <button id="prevBtn" disabled>上一页</button>
-        <button id="nextBtn" disabled>下一页</button>
-        <span class="hint" id="pageHint"></span>
-      </div>
-      <table class="data">
+      <h2>同行房间 <span class="hint" id="totalHint"></span></h2>
+      <form id="companionSearch" class="companion-search" role="search">
+        <label for="titleFilter" class="visually-hidden">搜索房间标题</label>
+        <input id="titleFilter" type="search" maxlength="128" placeholder="搜索房间标题" />
+        <button id="searchBtn" class="btn btn-primary" type="submit">搜索</button>
+        <button id="resetBtn" class="btn btn-outline-secondary" type="button" hidden>清除搜索</button>
+      </form>
+      <div class="table-responsive">
+      <table class="data companion-list-table" aria-label="同行房间列表">
         <thead>
           <tr>
-            <th>SessionID</th><th>发起人</th><th>标题</th><th>类型</th>
-            <th>状态</th><th>可见性</th><th>弹幕</th><th>最大成员</th>
-            <th>开始时间</th><th>结束时间</th><th>操作</th>
+            <th>房间</th><th>运动类型</th><th>发起人 ID</th><th>房间状态</th><th>活动时间</th><th>操作</th>
           </tr>
         </thead>
-        <tbody id="companionList"></tbody>
+        <tbody id="companionList"><tr><td colspan="6" class="companion-table-state">正在加载房间…</td></tr></tbody>
       </table>
+      </div>
+      <div class="companion-pagination">
+        <span class="hint" id="pageHint" role="status" aria-live="polite"></span>
+        <div><button id="prevBtn" class="btn btn-outline-secondary" type="button" disabled>上一页</button><button id="nextBtn" class="btn btn-outline-secondary" type="button" disabled>下一页</button></div>
+      </div>
     </section>
   </main>
 
   <dialog id="companionDetailModal" class="companion-dialog" aria-labelledby="companionDetailTitle">
     <div class="companion-dialog-content">
-      <div class="companion-dialog-heading"><div><h2 id="companionDetailTitle">同行会话详情</h2><div id="companionDetailSubtitle" class="hint"></div></div><button id="closeCompanionDetail" type="button" class="btn btn-outline-secondary">关闭</button></div>
-      <div id="companionDetailError" class="error" hidden></div>
-      <section class="companion-detail-section"><h3>会话基本信息</h3><div id="companionSessionInfo" class="companion-session-grid"></div></section>
-      <section class="companion-detail-section"><h3>同行人员 <span id="companionMemberHint" class="hint"></span></h3><div class="companion-detail-table-wrap"><table class="data"><thead><tr><th>用户ID</th><th>头像</th><th>昵称</th><th>角色</th><th>成员状态</th><th>在线</th><th>加入时间</th><th>最后活跃</th></tr></thead><tbody id="companionMemberList"></tbody></table></div></section>
-      <section class="companion-detail-section"><h3>实时位置 <span id="companionPositionHint" class="hint"></span></h3><div class="companion-detail-table-wrap"><table class="data"><thead><tr><th>用户ID</th><th>纬度</th><th>经度</th><th>坐标系</th><th>速度(km/h)</th><th>方向</th><th>精度(m)</th><th>海拔</th><th>采样时间</th><th>seq</th><th>来源</th></tr></thead><tbody id="companionPositionList"></tbody></table></div></section>
-      <section class="companion-detail-section"><h3>弹幕历史（最近 200 条） <span id="companionDanmakuHint" class="hint"></span></h3><div class="companion-detail-table-wrap"><table class="data"><thead><tr><th>ID</th><th>用户ID</th><th>内容</th><th>时间</th></tr></thead><tbody id="companionDanmakuList"></tbody></table></div></section>
+      <div class="companion-dialog-heading"><div><h2 id="companionDetailTitle">同行房间详情</h2><div id="companionDetailSubtitle" class="hint"></div></div><div class="companion-dialog-actions"><button id="refreshCompanionDetail" type="button" class="btn btn-outline-secondary">刷新详情</button><button id="closeCompanionDetail" type="button" class="btn btn-outline-secondary">关闭</button></div></div>
+      <div id="companionDetailError" class="error" role="alert" hidden></div>
+      <p id="companionDetailLoading" class="hint" role="status" hidden>正在加载房间详情…</p>
+      <div id="companionDetailBody" hidden>
+        <section class="companion-detail-section"><div id="companionSessionInfo" class="companion-session-grid"></div></section>
+        <p id="companionLocation" class="companion-location"></p>
+        <nav class="companion-tabs" role="tablist" aria-label="房间详情">
+          <button id="companionTabMembers" type="button" role="tab" aria-controls="companionPanelMembers" aria-selected="true" data-companion-tab="members">同行成员 <span id="companionMemberHint"></span></button>
+          <button id="companionTabPositions" type="button" role="tab" aria-controls="companionPanelPositions" aria-selected="false" tabindex="-1" data-companion-tab="positions">位置快照 <span id="companionPositionHint"></span></button>
+          <button id="companionTabDanmakus" type="button" role="tab" aria-controls="companionPanelDanmakus" aria-selected="false" tabindex="-1" data-companion-tab="danmakus">弹幕记录 <span id="companionDanmakuHint"></span></button>
+        </nav>
+        <section id="companionPanelMembers" class="companion-detail-section" role="tabpanel" aria-labelledby="companionTabMembers" data-companion-panel="members">
+          <p id="companionPresenceHint" class="hint"></p>
+          <div class="companion-detail-table-wrap"><table class="data"><thead><tr><th>用户</th><th>角色</th><th>成员状态</th><th>连接状态</th><th>加入时间</th><th>最后活跃</th></tr></thead><tbody id="companionMemberList"></tbody></table></div>
+        </section>
+        <section id="companionPanelPositions" class="companion-detail-section" role="tabpanel" aria-labelledby="companionTabPositions" data-companion-panel="positions" hidden>
+          <p class="hint">仅展示已保存的最近位置，点击“刷新详情”更新。</p>
+          <div class="companion-detail-table-wrap"><table class="data"><thead><tr><th>用户</th><th>经纬度 / 坐标系</th><th>速度 / 方向</th><th>精度 / 海拔</th><th>采样时间</th><th>来源 / 序号</th></tr></thead><tbody id="companionPositionList"></tbody></table></div>
+        </section>
+        <section id="companionPanelDanmakus" class="companion-detail-section" role="tabpanel" aria-labelledby="companionTabDanmakus" data-companion-panel="danmakus" hidden>
+          <p class="hint">展示最近 200 条弹幕。</p>
+          <div class="companion-detail-table-wrap"><table class="data"><thead><tr><th>发送人</th><th>内容</th><th>发送时间</th></tr></thead><tbody id="companionDanmakuList"></tbody></table></div>
+        </section>
+        <details class="companion-settings"><summary>房间设置与结束记录</summary><div id="companionSettingsInfo" class="companion-session-grid"></div></details>
+      </div>
     </div>
   </dialog>
 

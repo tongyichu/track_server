@@ -343,17 +343,47 @@ table.data.table .btn { white-space: nowrap; }
   .admin-user-detail-grid { grid-template-columns: 1fr; }
   .admin-user-actions { align-items: flex-start; flex-direction: column; gap: 8px; }
 }
-.admin-companion-stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+.admin-companion-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
 .admin-companion-stats .admin-stat-panel { display: flex; flex-direction: column; gap: 6px; }
 .admin-companion-stats .admin-stat-panel > span, .admin-companion-stats small { color: var(--tblr-secondary-color); font-size: 12px; }
 .admin-companion-stats strong { font-size: 25px; line-height: 1.2; }
 .companion-row { cursor: pointer; }
 .companion-row:hover { background: var(--tblr-bg-surface-secondary); }
+.companion-row:focus-visible { outline: 2px solid var(--tblr-primary); outline-offset: -2px; }
+.companion-search { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 18px; }
+.companion-search input { flex: 1 1 240px; max-width: 420px; }
+.companion-list-table th, .companion-list-table td { vertical-align: middle; }
+.companion-room-cell { min-width: 160px; max-width: 340px; overflow-wrap: anywhere; }
+.companion-room-cell strong, .companion-room-cell small { display: block; }
+.companion-room-cell small { margin-top: 5px; color: var(--tblr-secondary-color); font-size: 11px; }
+.companion-cell-stack { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; }
+.companion-cell-stack small { color: var(--tblr-secondary-color); font-size: 11px; }
+.companion-time { white-space: nowrap; font-size: 12px; }
+.companion-pagination { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 18px; }
+.companion-pagination > div, .companion-dialog-actions { display: flex; gap: 8px; flex-shrink: 0; }
+table.data td.companion-table-state { padding: 32px 14px; color: var(--tblr-secondary-color); text-align: center; white-space: normal; }
 .companion-dialog { width: min(1160px, calc(100vw - 32px)); max-height: calc(100vh - 32px); padding: 0; border: 1px solid var(--tblr-border-color); border-radius: var(--tblr-border-radius-xl); color: var(--tblr-body-color); background: var(--tblr-bg-surface); box-shadow: var(--tblr-box-shadow-dropdown); }
 .companion-dialog::backdrop { background: rgba(24, 36, 51, .56); }
 .companion-dialog-content { max-height: calc(100vh - 32px); overflow: auto; padding: 22px; }
 .companion-dialog-heading { position: sticky; top: -22px; z-index: 2; display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin: -22px -22px 18px; padding: 18px 22px 14px; border-bottom: 1px solid var(--tblr-border-color); background: var(--tblr-bg-surface); }
 .companion-dialog-heading h2 { margin: 0 0 4px; font-size: 18px; }
+.companion-dialog-heading > div:first-child { min-width: 0; overflow-wrap: anywhere; }
+.companion-dialog-heading .hint { font-size: 11px; }
+.companion-location { margin: 14px 0 18px; color: var(--tblr-secondary-color); font-size: 12px; overflow-wrap: anywhere; }
+.companion-tabs { display: flex; gap: 20px; overflow-x: auto; border-bottom: 1px solid var(--tblr-border-color); }
+.companion-tabs button.btn { flex: 0 0 auto; margin: 0 0 -1px; padding: 12px 0; border: 0; border-radius: 0; border-bottom: 2px solid transparent; color: var(--tblr-secondary-color); background: transparent; box-shadow: none; }
+.companion-tabs button[aria-selected="true"] { border-bottom-color: var(--tblr-primary); color: var(--tblr-primary); font-weight: 600; }
+.companion-tabs button:focus-visible { outline: 2px solid var(--tblr-primary); outline-offset: -2px; }
+.companion-tabs button span { margin-left: 4px; font-size: 11px; }
+.companion-settings { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--tblr-border-color); }
+.companion-settings summary { color: var(--tblr-secondary-color); font-size: 12px; cursor: pointer; }
+.companion-settings .companion-session-grid { margin-top: 14px; }
+.companion-user { display: flex; align-items: center; gap: 9px; min-width: 130px; }
+.companion-user > span { min-width: 0; }
+.companion-user strong, .companion-user small { display: block; white-space: normal; overflow-wrap: anywhere; }
+.companion-user strong { font-size: 12px; font-weight: 500; }
+.companion-user small { margin-top: 3px; color: var(--tblr-secondary-color); font-size: 11px; }
+.companion-dialog table.data td.companion-danmaku-content { min-width: 200px; max-width: 560px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .companion-detail-section { margin-top: 18px; }
 .companion-detail-section h3 { display: flex; align-items: baseline; gap: 8px; margin: 0 0 10px; font-size: 14px; }
 .companion-session-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 16px; }
@@ -363,8 +393,7 @@ table.data.table .btn { white-space: nowrap; }
 .companion-detail-table-wrap { max-height: 240px; overflow: auto; border: 1px solid var(--tblr-border-color); border-radius: 8px; }
 .companion-detail-table-wrap table.data { min-width: 760px; margin: 0; }
 .companion-detail-table-wrap table.data th,.companion-detail-table-wrap table.data td { white-space: nowrap; }
-.companion-detail-table-wrap table.data td:nth-child(3) { white-space: normal; }
-.companion-avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; }
+.companion-avatar { width: 32px; height: 32px; flex-shrink: 0; border-radius: 50%; object-fit: cover; }
 @media (max-width: 1200px) {
   .admin-user-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-user-distribution-grid { grid-template-columns: 1fr; }
@@ -387,6 +416,16 @@ table.data.table .btn { white-space: nowrap; }
 .admin-user-distribution-grid .admin-stat-panel { padding: 20px 22px !important; }
 
 @media (max-width: 767px) {
+  .companion-dialog-heading { flex-wrap: wrap; }
+  .companion-dialog-actions { margin-left: auto; }
+  .companion-search input { max-width: none; }
+  .companion-pagination { align-items: flex-start; flex-direction: column; }
+  .companion-room-cell { max-width: none; min-width: 0; }
+  .companion-user { min-width: 0; }
+  .companion-time { white-space: normal; }
+  .companion-detail-table-wrap table.data.admin-card-table { min-width: 0; }
+  .companion-detail-table-wrap table.data td { white-space: normal; }
+  .companion-dialog table.data td.companion-danmaku-content { min-width: 0; max-width: none; }
   .submission-stat-sections .submission-stat-card,
   .feedback-stat-sections .feedback-stat,
   .admin-user-summary-grid .admin-stat-panel,
