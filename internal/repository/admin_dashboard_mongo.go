@@ -84,18 +84,9 @@ func (r *mongoAdminDashboardRepository) GetAdminUserDistributionStatistics(ctx c
 	if err != nil {
 		return nil, err
 	}
-	birthdayFilter := bson.M{"birthday": bson.M{
-		"$regex": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
-		"$gte":   "1900-01-01",
-		"$lte":   time.Now().Format(time.DateOnly),
-	}}
 	birthdayCounts, err := mongoAdminCountDistribution(ctx, users, mongo.Pipeline{
-		bson.D{{Key: "$match", Value: birthdayFilter}},
-		bson.D{{Key: "$addFields", Value: bson.M{"parsed_birthday": bson.M{"$dateFromString": bson.M{
-			"dateString": "$birthday", "format": "%Y-%m-%d", "onError": nil, "onNull": nil,
-		}}}}},
-		bson.D{{Key: "$match", Value: bson.M{"parsed_birthday": bson.M{"$ne": nil}}}},
-		bson.D{{Key: "$group", Value: bson.M{"_id": bson.M{"$substrBytes": bson.A{"$birthday", 5, 5}}, "count": bson.M{"$sum": 1}}}},
+		bson.D{{Key: "$match", Value: bson.M{"birthday": bson.M{"$type": "string", "$ne": ""}}}},
+		bson.D{{Key: "$group", Value: bson.M{"_id": "$birthday", "count": bson.M{"$sum": 1}}}},
 	})
 	if err != nil {
 		return nil, err
@@ -111,7 +102,36 @@ func (r *mongoAdminDashboardRepository) GetAdminUserDistributionStatistics(ctx c
 	if err != nil {
 		return nil, err
 	}
-	return buildAdminUserDistributionStats(total, genderCounts, birthdayCounts, cityCounts), nil
+	outputRows, err := r.db.Collection("tracks").Aggregate(ctx, mongo.Pipeline{
+		bson.D{{Key: "$match", Value: bson.M{
+			"status": bson.M{"$ne": models.TrackStatusDeleted}, "is_running": false,
+			"raw_track_url": bson.M{"$nin": bson.A{nil, ""}},
+			"deleted_at":    bson.M{"$in": bson.A{nil, time.Time{}}},
+		}}},
+		bson.D{{Key: "$group", Value: bson.M{"_id": "$user_id", "track_count": bson.M{"$sum": 1}}}},
+		bson.D{{Key: "$lookup", Value: bson.M{"from": "users", "localField": "_id", "foreignField": "_id", "as": "owner"}}},
+		bson.D{{Key: "$match", Value: bson.M{"owner.0": bson.M{"$exists": true}}}},
+		bson.D{{Key: "$group", Value: bson.M{"_id": "$track_count", "count": bson.M{"$sum": 1}}}},
+	}, options.Aggregate().SetAllowDiskUse(true))
+	if err != nil {
+		return nil, fmt.Errorf("admin user track output distribution: %w", err)
+	}
+	defer outputRows.Close(ctx)
+	trackOutputCounts := make(map[string]int64)
+	for outputRows.Next(ctx) {
+		var row struct {
+			TrackCount int64 `bson:"_id"`
+			UserCount  int64 `bson:"count"`
+		}
+		if err := outputRows.Decode(&row); err != nil {
+			return nil, err
+		}
+		trackOutputCounts[adminTrackOutputBucket(row.TrackCount)] += row.UserCount
+	}
+	if err := outputRows.Err(); err != nil {
+		return nil, err
+	}
+	return buildAdminUserDistributionStats(total, genderCounts, birthdayCounts, cityCounts, trackOutputCounts, time.Now()), nil
 }
 
 func (r *mongoAdminDashboardRepository) GetAdminUserLastLoginTimes(ctx context.Context, userIDs []int64) (map[int64]time.Time, error) {

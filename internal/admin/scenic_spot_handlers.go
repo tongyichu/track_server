@@ -60,6 +60,14 @@ func (h *Handler) ListScenicSpots(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 	f := repository.ScenicSpotListFilter{Query: strings.TrimSpace(string(c.Query("q"))), Status: strings.TrimSpace(string(c.Query("status"))), Cursor: strings.TrimSpace(string(c.Query("cursor"))), Limit: parseAdminListLimit(string(c.Query("limit")))}
+	f.Missing = strings.TrimSpace(string(c.Query("missing")))
+	switch f.Missing {
+	case "", "any", "description", "photos", "coordinates", "address":
+	default:
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid missing field filter"})
+		return
+	}
+	f.VisibleOnly = f.Status == "" || f.Missing != ""
 	items, total, err := h.scenicSpotSvc.List(ctx, f)
 	if err != nil {
 		h.scenicSpotServiceError(c, err)

@@ -38,7 +38,7 @@ func zodiacFromMonthDay(value string) string {
 	}
 }
 
-func buildAdminUserDistributionStats(total int64, genderCounts, birthdayCounts, cityCounts map[string]int64) *models.AdminUserDistributionStats {
+func buildAdminUserDistributionStats(total int64, genderCounts, birthdayCounts, cityCounts, trackOutputCounts map[string]int64, now time.Time) *models.AdminUserDistributionStats {
 	gender := map[string]int64{"male": 0, "female": 0, "unknown": 0}
 	for key, count := range genderCounts {
 		if key == "male" || key == "female" {
@@ -54,20 +54,45 @@ func buildAdminUserDistributionStats(total int64, genderCounts, birthdayCounts, 
 		"virgo": 0, "libra": 0, "scorpio": 0, "sagittarius": 0,
 		"unknown": 0,
 	}
-	for monthDay, count := range birthdayCounts {
-		if _, err := time.Parse("01-02", monthDay); err != nil {
-			zodiacCounts["unknown"] += count
+	ageCounts := make(map[string]int64)
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	var usersWithBirthday int64
+	for value, count := range birthdayCounts {
+		birthday, err := time.Parse(time.DateOnly, value)
+		if err != nil || birthday.Year() < 1900 || birthday.After(today) {
 			continue
 		}
+		monthDay := birthday.Format("01-02")
 		zodiacCounts[zodiacFromMonthDay(monthDay)] += count
-	}
-	var usersWithBirthday int64
-	for _, count := range birthdayCounts {
 		usersWithBirthday += count
+		age := today.Year() - birthday.Year()
+		if today.Format("01-02") < monthDay {
+			age--
+		}
+		key := "55_plus"
+		switch {
+		case age < 18:
+			key = "under_18"
+		case age < 25:
+			key = "18_24"
+		case age < 35:
+			key = "25_34"
+		case age < 45:
+			key = "35_44"
+		case age < 55:
+			key = "45_54"
+		}
+		ageCounts[key] += count
 	}
 	if total > usersWithBirthday {
-		zodiacCounts["unknown"] += total - usersWithBirthday
+		zodiacCounts["unknown"] = total - usersWithBirthday
+		ageCounts["unknown"] = total - usersWithBirthday
 	}
+	var usersWithTracks int64
+	for _, key := range []string{"one", "2_5", "6_20", "21_plus"} {
+		usersWithTracks += trackOutputCounts[key]
+	}
+	trackOutputCounts["zero"] = max(int64(0), total-usersWithTracks)
 
 	toItems := func(counts map[string]int64, order []string) []models.AdminDashboardDistributionItem {
 		items := make([]models.AdminDashboardDistributionItem, 0, len(order))
@@ -78,10 +103,27 @@ func buildAdminUserDistributionStats(total int64, genderCounts, birthdayCounts, 
 	}
 	cityItems := distributionItems(cityCounts, 0)
 	return &models.AdminUserDistributionStats{
-		TotalUsers: total,
-		Gender:     toItems(gender, []string{"male", "female", "unknown"}),
-		Zodiac:     toItems(zodiacCounts, []string{"aries", "taurus", "gemini", "cancer", "leo", "virgo", "libra", "scorpio", "sagittarius", "capricorn", "aquarius", "pisces", "unknown"}),
-		UserCities: cityItems,
+		TotalUsers:  total,
+		Gender:      toItems(gender, []string{"male", "female", "unknown"}),
+		Zodiac:      toItems(zodiacCounts, []string{"aries", "taurus", "gemini", "cancer", "leo", "virgo", "libra", "scorpio", "sagittarius", "capricorn", "aquarius", "pisces", "unknown"}),
+		UserCities:  cityItems,
+		Age:         toItems(ageCounts, []string{"under_18", "18_24", "25_34", "35_44", "45_54", "55_plus", "unknown"}),
+		TrackOutput: toItems(trackOutputCounts, []string{"zero", "one", "2_5", "6_20", "21_plus"}),
+	}
+}
+
+func adminTrackOutputBucket(count int64) string {
+	switch {
+	case count == 0:
+		return "zero"
+	case count == 1:
+		return "one"
+	case count <= 5:
+		return "2_5"
+	case count <= 20:
+		return "6_20"
+	default:
+		return "21_plus"
 	}
 }
 
@@ -90,10 +132,23 @@ func (r *memoryAdminDashboardRepository) GetAdminUserDistributionStatistics(_ co
 	if !okUsers {
 		return nil, errAdminStatisticsRepositoriesUnavailable
 	}
+	tracks, okTracks := r.deps.tracks.(*InMemoryTrackRepository)
+	if !okTracks {
+		return nil, errAdminStatisticsRepositoriesUnavailable
+	}
+	userTrackCounts := make(map[int64]int64)
+	tracks.mu.RLock()
+	for _, track := range tracks.tracks {
+		if track != nil && track.Status != models.TrackStatusDeleted && track.DeletedAt.IsZero() && !track.IsRunning && track.RawTrackURL != "" {
+			userTrackCounts[track.UserID]++
+		}
+	}
+	tracks.mu.RUnlock()
 
 	genderCounts := make(map[string]int64)
 	birthdayCounts := make(map[string]int64)
 	cityCounts := make(map[string]int64)
+	trackOutputCounts := make(map[string]int64)
 	users.mu.RLock()
 	total := int64(len(users.users))
 	for _, user := range users.users {
@@ -101,8 +156,9 @@ func (r *memoryAdminDashboardRepository) GetAdminUserDistributionStatistics(_ co
 			continue
 		}
 		genderCounts[user.Gender]++
-		if birthday, err := time.Parse("2006-01-02", user.Birthday); err == nil && !birthday.After(time.Now()) && birthday.Year() >= 1900 {
-			birthdayCounts[birthday.Format("01-02")]++
+		birthdayCounts[user.Birthday]++
+		if count := userTrackCounts[user.ID]; count > 0 {
+			trackOutputCounts[adminTrackOutputBucket(count)]++
 		}
 		city := strings.TrimSpace(user.CityCode)
 		if city == "" {
@@ -111,7 +167,7 @@ func (r *memoryAdminDashboardRepository) GetAdminUserDistributionStatistics(_ co
 		cityCounts[city]++
 	}
 	users.mu.RUnlock()
-	return buildAdminUserDistributionStats(total, genderCounts, birthdayCounts, cityCounts), nil
+	return buildAdminUserDistributionStats(total, genderCounts, birthdayCounts, cityCounts, trackOutputCounts, time.Now()), nil
 }
 
 func (r *memoryAdminDashboardRepository) GetAdminUserLastLoginTimes(_ context.Context, userIDs []int64) (map[int64]time.Time, error) {

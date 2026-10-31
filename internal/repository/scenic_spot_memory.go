@@ -84,20 +84,27 @@ func (r *MemoryScenicSpotRepository) ListScenicSpots(_ context.Context, f Scenic
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	all := make([]*models.ScenicSpot, 0)
+	var total int64
 	for _, v := range r.spots {
+		if f.VisibleOnly && (v.Status == models.ScenicSpotArchived || v.Status == models.ScenicSpotMerged) {
+			continue
+		}
+		if !matchesScenicSpotMissingField(v, f.Missing) {
+			continue
+		}
 		if f.Status != "" && v.Status != f.Status {
 			continue
 		}
 		if f.Query != "" && !strings.Contains(strings.ToLower(v.Name), strings.ToLower(f.Query)) {
 			continue
 		}
+		total++
 		if f.Cursor != "" && v.ID <= f.Cursor {
 			continue
 		}
 		all = append(all, cloneScenic(v))
 	}
 	sort.Slice(all, func(i, j int) bool { return all[i].ID < all[j].ID })
-	total := int64(len(all))
 	if f.Limit <= 0 {
 		f.Limit = 20
 	}

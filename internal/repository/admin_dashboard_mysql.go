@@ -59,23 +59,20 @@ func (r *mysqlAdminDashboardRepository) GetAdminUserDistributionStatistics(ctx c
 	}
 	genderCounts := map[string]int64{"male": male, "female": female, "unknown": total - male - female}
 
-	birthdayRows, err := r.db.QueryContext(ctx, `SELECT SUBSTRING(birthday,6,5),COUNT(*) FROM users
-		WHERE birthday REGEXP '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
-		AND birthday >= '1900-01-01' AND birthday <= CURDATE()
-		AND DATE_FORMAT(STR_TO_DATE(birthday,'%Y-%m-%d'),'%Y-%m-%d')=birthday
-		GROUP BY SUBSTRING(birthday,6,5)`)
+	birthdayRows, err := r.db.QueryContext(ctx, `SELECT birthday,COUNT(*) FROM users
+		WHERE birthday IS NOT NULL AND birthday <> '' GROUP BY birthday`)
 	if err != nil {
 		return nil, fmt.Errorf("admin user zodiac distribution: %w", err)
 	}
 	birthdayCounts := make(map[string]int64)
 	for birthdayRows.Next() {
-		var monthDay string
+		var birthday string
 		var count int64
-		if err := birthdayRows.Scan(&monthDay, &count); err != nil {
+		if err := birthdayRows.Scan(&birthday, &count); err != nil {
 			_ = birthdayRows.Close()
 			return nil, err
 		}
-		birthdayCounts[monthDay] = count
+		birthdayCounts[birthday] = count
 	}
 	if err := birthdayRows.Err(); err != nil {
 		_ = birthdayRows.Close()
@@ -105,7 +102,28 @@ func (r *mysqlAdminDashboardRepository) GetAdminUserDistributionStatistics(ctx c
 		return nil, err
 	}
 	_ = cityRows.Close()
-	return buildAdminUserDistributionStats(total, genderCounts, birthdayCounts, cityCounts), nil
+
+	outputRows, err := r.db.QueryContext(ctx, `SELECT track_count,COUNT(*) FROM (
+		SELECT t.user_id,COUNT(*) AS track_count FROM track_records t
+		INNER JOIN users u ON u.id=t.user_id
+		WHERE `+completedTrackAliasSQL+` GROUP BY t.user_id
+	) user_tracks GROUP BY track_count`)
+	if err != nil {
+		return nil, fmt.Errorf("admin user track output distribution: %w", err)
+	}
+	defer outputRows.Close()
+	trackOutputCounts := make(map[string]int64)
+	for outputRows.Next() {
+		var trackCount, userCount int64
+		if err := outputRows.Scan(&trackCount, &userCount); err != nil {
+			return nil, err
+		}
+		trackOutputCounts[adminTrackOutputBucket(trackCount)] += userCount
+	}
+	if err := outputRows.Err(); err != nil {
+		return nil, err
+	}
+	return buildAdminUserDistributionStats(total, genderCounts, birthdayCounts, cityCounts, trackOutputCounts, time.Now()), nil
 }
 
 func (r *mysqlAdminDashboardRepository) GetAdminUserLastLoginTimes(ctx context.Context, userIDs []int64) (map[int64]time.Time, error) {

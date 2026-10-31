@@ -76,6 +76,13 @@ func (r *MongoScenicSpotRepository) FindScenicSpotBySource(ctx context.Context, 
 }
 func (r *MongoScenicSpotRepository) ListScenicSpots(ctx context.Context, f ScenicSpotListFilter) ([]*models.ScenicSpot, int64, error) {
 	filter := bson.M{}
+	if f.VisibleOnly {
+		filter["$and"] = bson.A{bson.M{"status": bson.M{"$nin": bson.A{models.ScenicSpotArchived, models.ScenicSpotMerged}}}}
+	}
+	if f.Missing != "" {
+		clauses, _ := filter["$and"].(bson.A)
+		filter["$and"] = append(clauses, scenicSpotMissingMongo(f.Missing))
+	}
 	if f.Status != "" {
 		filter["status"] = f.Status
 	}
@@ -86,6 +93,13 @@ func (r *MongoScenicSpotRepository) ListScenicSpots(ctx context.Context, f Sceni
 		filter["_id"] = bson.M{"$gt": f.Cursor}
 	}
 	base := bson.M{}
+	if f.VisibleOnly {
+		base["$and"] = bson.A{bson.M{"status": bson.M{"$nin": bson.A{models.ScenicSpotArchived, models.ScenicSpotMerged}}}}
+	}
+	if f.Missing != "" {
+		clauses, _ := base["$and"].(bson.A)
+		base["$and"] = append(clauses, scenicSpotMissingMongo(f.Missing))
+	}
 	if f.Status != "" {
 		base["status"] = f.Status
 	}

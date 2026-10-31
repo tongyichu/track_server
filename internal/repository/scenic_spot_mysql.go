@@ -98,6 +98,12 @@ func (r *MySQLScenicSpotRepository) FindScenicSpotBySource(ctx context.Context, 
 func (r *MySQLScenicSpotRepository) ListScenicSpots(ctx context.Context, f ScenicSpotListFilter) ([]*models.ScenicSpot, int64, error) {
 	where := ` WHERE 1=1`
 	args := []any{}
+	if f.VisibleOnly {
+		where += ` AND status NOT IN ('archived','merged')`
+	}
+	if f.Missing != "" {
+		where += ` AND (` + scenicSpotMissingSQL(f.Missing) + `)`
+	}
 	if f.Query != "" {
 		where += ` AND name LIKE ?`
 		args = append(args, "%"+strings.ReplaceAll(f.Query, "%", "\\%")+"%")

@@ -39,6 +39,8 @@
     cancer: '巨蟹座', leo: '狮子座', virgo: '处女座', libra: '天秤座', scorpio: '天蝎座',
     sagittarius: '射手座', capricorn: '摩羯座', aquarius: '水瓶座', pisces: '双鱼座'
   };
+  var ageLabels = { under_18: '18 岁以下', '18_24': '18–24 岁', '25_34': '25–34 岁', '35_44': '35–44 岁', '45_54': '45–54 岁', '55_plus': '≥55 岁', unknown: '未填写 / 无效' };
+  var trackOutputLabels = { zero: '0 条', one: '1 条', '2_5': '2–5 条', '6_20': '6–20 条', '21_plus': '≥21 条' };
   var pieColors = ['#206bc4', '#2fb344', '#f59f00', '#ae3ec9', '#d63939', '#17a2b8', '#6f42c1', '#74b816', '#f76707', '#0ca678', '#4263eb', '#e64980', '#868e96'];
   var provinceNameMap = {
     '北京市': '北京', '天津市': '天津', '上海市': '上海', '重庆市': '重庆',
@@ -75,6 +77,23 @@
       return '<div class="admin-user-legend-row"><span class="admin-user-legend-label"><i style="background:' + pieColors[index % pieColors.length] + '"></i>' + esc(item.name) + '</span><strong>' + item.value.toLocaleString() + '</strong></div>';
     }).join('') + (chartID === 'userGenderChart' ? '<div class="admin-user-legend-row admin-user-legend-total"><span>全部用户</span><strong>' + totalValue.toLocaleString() + '</strong></div>' : '');
   }
+  function renderUserBars(chartID, items, labels, total) {
+    var root = document.getElementById(chartID);
+    if (!window.echarts) { root.textContent = '图表组件暂不可用'; return; }
+    var rows = (items || []).map(function (item) {
+      return { name: labels[item.key] || item.key, value: number(item.count), itemStyle: { color: item.key === 'unknown' || item.key === 'zero' ? '#94a3b8' : '#206bc4' } };
+    });
+    function percent(value) { return number(total) > 0 ? (value * 100 / number(total)).toFixed(1) : '0.0'; }
+    if (!userCharts[chartID]) userCharts[chartID] = echarts.init(root);
+    userCharts[chartID].setOption({
+      aria: { enabled: true },
+      grid: { left: 0, right: 82, top: 12, bottom: 8, containLabel: true },
+      tooltip: { trigger: 'item', formatter: function (item) { return esc(item.name) + '<br>' + number(item.value).toLocaleString() + ' 人 · ' + percent(item.value) + '%'; } },
+      xAxis: { type: 'value', show: false, max: function (value) { return Math.max(1, value.max); } },
+      yAxis: { type: 'category', inverse: true, data: rows.map(function (item) { return item.name; }), axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: '#667085', fontSize: 11 } },
+      series: [{ type: 'bar', data: rows, barMaxWidth: 12, showBackground: true, backgroundStyle: { color: '#f1f5f9', borderRadius: 4 }, itemStyle: { borderRadius: 4 }, label: { show: true, position: 'right', color: '#475569', fontSize: 10, formatter: function (item) { return compactNumber(item.value) + ' · ' + percent(item.value) + '%'; } } }]
+    }, true);
+  }
   function domesticProvinceCode(cityCode) {
     var code = String(cityCode || '');
     var prefixes = ['11','12','13','14','15','21','22','23','31','32','33','34','35','36','37','41','42','43','44','45','46','50','51','52','53','54','61','62','63','64','65','71','81','82'];
@@ -99,14 +118,14 @@
       var label = item.label || item.key || '未知';
       var count = number(item.count);
       return '<div class="admin-distribution-row"><span title="' + esc(label) + '">' + esc(label) + '</span><div class="admin-distribution-track"><i style="width:' + Math.round(count * 100 / max) + '%"></i></div><strong>' + count.toLocaleString() + '</strong></div>';
-    }).join('') || '<span class="hint">该省暂无轨迹城市数据</span>';
+    }).join('') || '<span class="hint">该省暂无用户城市数据</span>';
   }
   function loadProvinceGeo() {
     if (!provinceGeoPromise) {
       provinceGeoPromise = fetch('/admin/static/china_provinces.json').then(function (response) {
         if (!response.ok) throw new Error('省份地图加载失败');
         return response.json();
-      });
+      }).catch(function (error) { provinceGeoPromise = null; throw error; });
     }
     return provinceGeoPromise;
   }
@@ -164,7 +183,7 @@
         renderCityTop();
         renderProvinceMap();
       });
-    }).catch(function () { root.textContent = '省份地图暂不可用，请查看右侧城市统计'; });
+    }).catch(function () { root.textContent = '省份地图暂不可用，请查看下方城市统计'; });
   }
   function renderProvinceStats(items) {
     provinceStats = Object.create(null);
@@ -180,6 +199,7 @@
     document.getElementById('userForeignCityTotal').textContent = foreignTotal.toLocaleString();
     document.getElementById('userForeignCityNote').textContent = foreignCities ? foreignCities + ' 个海外城市；每个用户只计入当前所在城市' : '当前没有海外城市数据';
     document.getElementById('userUnknownCityTotal').textContent = unknownTotal.toLocaleString();
+    if (!provinceStats[selectedProvinceCode]) selectedProvinceCode = '';
     renderCityTop();
     renderProvinceMap();
   }
@@ -198,21 +218,35 @@
       AdminUI.alert('城市列表加载失败: ' + (error.message || error), 'danger');
     }
   }
+  var statisticsLoading = false, statisticsLoaded = false;
+  var statisticsRefreshBtn = document.getElementById('refreshUserStatistics');
+  statisticsRefreshBtn.addEventListener('click', loadUserStatistics);
   async function loadUserStatistics() {
+    if (statisticsLoading) return;
+    statisticsLoading = true;
+    statisticsRefreshBtn.disabled = true;
+    statisticsRefreshBtn.textContent = '刷新中…';
+    document.getElementById('userStatistics').setAttribute('aria-busy', 'true');
+    var errorNode = document.getElementById('userStatisticsError');
+    errorNode.hidden = true;
     try {
-      var response = await fetch('/admin/api/users/statistics');
+      var response = await fetch('/admin/api/users/statistics', { cache: 'no-store' });
       if (!response.ok) throw new Error('统计加载失败');
       var data = (await response.json()).data || {};
       renderPie('userGenderChart', 'userGenderStats', data.gender, data.total_users);
       renderPie('userZodiacChart', 'userZodiacStats', data.zodiac, data.total_users);
       renderProvinceStats(data.user_cities || []);
+      renderUserBars('userAgeChart', data.age, ageLabels, data.total_users);
+      renderUserBars('userTrackOutputChart', data.track_output, trackOutputLabels, data.total_users);
+      statisticsLoaded = true;
     } catch (_) {
-      ['userGenderStats', 'userZodiacStats', 'userCityStats', 'userProvinceMap'].forEach(function (id) {
-        var root = document.getElementById(id); if (root) root.textContent = '统计暂不可用';
-      });
-      ['userForeignCityTotal', 'userUnknownCityTotal'].forEach(function (id) {
-        var root = document.getElementById(id); if (root) root.textContent = '—';
-      });
+      errorNode.textContent = statisticsLoaded ? '刷新失败，当前仍显示上次数据，请重试。' : '统计加载失败，请点击“刷新数据”重试。';
+      errorNode.hidden = false;
+    } finally {
+      statisticsLoading = false;
+      statisticsRefreshBtn.disabled = false;
+      statisticsRefreshBtn.textContent = '刷新数据';
+      document.getElementById('userStatistics').setAttribute('aria-busy', 'false');
     }
   }
 

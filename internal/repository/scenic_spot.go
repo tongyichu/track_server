@@ -7,10 +7,12 @@ import (
 )
 
 type ScenicSpotListFilter struct {
-	Query  string
-	Status string
-	Cursor string
-	Limit  int
+	Query       string
+	Status      string
+	Cursor      string
+	Limit       int
+	Missing     string
+	VisibleOnly bool
 }
 
 type ScenicSpotRepository interface {

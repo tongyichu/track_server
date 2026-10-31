@@ -26,15 +26,30 @@
     </div>
   </header>
 
-  <main class="container wide">
-    <section class="panel">
-      <div class="admin-section-heading"><h2>用户画像分布</h2></div>
+  <main class="container wide users-page">
+    <section class="panel" id="userStatistics" aria-busy="true">
+      <div class="admin-section-heading"><h2>用户画像分布</h2><button id="refreshUserStatistics" type="button" class="btn btn-sm btn-outline-secondary">刷新数据</button></div>
+      <p id="userStatisticsError" class="error" role="alert" hidden></p>
       <div class="admin-user-distribution-grid">
         <div class="admin-user-profile-charts">
           <article class="admin-stat-panel admin-user-chart-card"><div><h3>性别分布</h3></div><div class="admin-user-chart-layout"><div id="userGenderChart" class="admin-user-pie"></div><div id="userGenderStats" class="admin-user-legend"></div></div></article>
           <article class="admin-stat-panel admin-user-chart-card admin-user-zodiac-card"><div><h3>星座分布</h3></div><div class="admin-user-chart-layout admin-user-zodiac-layout"><div id="userZodiacChart" class="admin-user-pie"></div><div id="userZodiacStats" class="admin-user-legend admin-zodiac-legend"></div></div></article>
         </div>
-        <article class="admin-stat-panel admin-user-chart-card admin-user-city-card"><div><h3>用户所在省份分布</h3></div><div class="admin-user-city-layout"><div class="admin-user-map-stage"><div id="userProvinceMap" class="admin-user-china-map" role="img" aria-label="中国各省份用户所在城市分布矢量地图"></div></div><aside class="admin-user-city-aside"><div class="admin-user-foreign-stat"><span>海外城市用户数</span><strong id="userForeignCityTotal">—</strong><small id="userForeignCityNote">每个用户只计入当前所在城市</small></div><div class="admin-user-foreign-stat admin-user-unknown-stat"><span>未知城市</span><strong id="userUnknownCityTotal">—</strong></div><h4 id="userCityStatsTitle">城市用户数 Top 10</h4><div id="userCityStats" class="admin-distribution-list admin-city-list"></div></aside></div></article>
+        <article class="admin-stat-panel admin-user-chart-card admin-user-city-card">
+          <div><h3>用户所在省份分布</h3></div>
+          <div class="admin-user-map-stage"><div id="userProvinceMap" class="admin-user-china-map" role="img" aria-label="中国各省份用户所在城市分布矢量地图"></div></div>
+          <div class="admin-user-city-below">
+            <div class="admin-user-city-summary">
+              <div class="admin-user-foreign-stat"><span>海外城市</span><strong id="userForeignCityTotal">—</strong><small id="userForeignCityNote">每个用户只计入当前所在城市</small></div>
+              <div class="admin-user-foreign-stat admin-user-unknown-stat"><span>未知城市</span><strong id="userUnknownCityTotal">—</strong></div>
+            </div>
+            <div class="admin-user-city-top"><h4 id="userCityStatsTitle">城市用户数 Top 10</h4><div id="userCityStats" class="admin-distribution-list admin-city-list"></div></div>
+          </div>
+        </article>
+        <div class="admin-user-insight-charts">
+          <article class="admin-stat-panel admin-user-chart-card"><div><h3>年龄分布</h3><small>按生日计算周岁 · 全量用户</small></div><div id="userAgeChart" class="admin-user-bar-chart" role="img" aria-label="用户年龄分布柱状图"></div></article>
+          <article class="admin-stat-panel admin-user-chart-card"><div><h3>轨迹产出分层</h3><small>按每人累计完成的云端轨迹数</small></div><div id="userTrackOutputChart" class="admin-user-bar-chart" role="img" aria-label="用户云端轨迹产出分层柱状图"></div><p class="admin-user-chart-note">包含公开和私密轨迹，排除已删除、进行中及缺少原始文件的轨迹。</p></article>
+        </div>
       </div>
     </section>
     <section class="panel">
