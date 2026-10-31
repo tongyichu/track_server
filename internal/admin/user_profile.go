@@ -28,6 +28,7 @@ type adminUserProfileResponse struct {
 	ProvinceName string    `json:"province_name"`
 	CityCode     string    `json:"city_code"`
 	CityName     string    `json:"city_name"`
+	IsInternal   bool      `json:"is_internal"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }
@@ -51,11 +52,12 @@ func (h *Handler) UpdateUserProfile(ctx context.Context, c *app.RequestContext) 
 		return
 	}
 	var body struct {
-		Nickname  string `json:"nickname"`
-		Signature string `json:"signature"`
-		Phone     string `json:"phone"`
-		Gender    string `json:"gender"`
-		Birthday  string `json:"birthday"`
+		Nickname   string `json:"nickname"`
+		Signature  string `json:"signature"`
+		Phone      string `json:"phone"`
+		Gender     string `json:"gender"`
+		Birthday   string `json:"birthday"`
+		IsInternal bool   `json:"is_internal"`
 	}
 	data, err := c.Body()
 	if err != nil || json.Unmarshal(data, &body) != nil {
@@ -96,6 +98,7 @@ func (h *Handler) UpdateUserProfile(ctx context.Context, c *app.RequestContext) 
 	clone.Phone = body.Phone
 	clone.Gender = body.Gender
 	clone.Birthday = body.Birthday
+	clone.IsInternal = body.IsInternal
 	if err := h.userRepo.Update(ctx, &clone); err != nil {
 		writeAdminUserProfileError(c, err)
 		return
@@ -131,7 +134,7 @@ func (h *Handler) adminUserProfile(ctx context.Context, user *models.User) *admi
 		ID: strconv.FormatInt(user.ID, 10), Nickname: user.Nickname, AvatarURL: rewriteAdminStaticURL(user.AvatarURL),
 		Signature: user.Signature, Phone: user.Phone, Gender: user.Gender, Birthday: user.Birthday,
 		ProvinceCode: user.ProvinceCode, ProvinceName: user.ProvinceName,
-		CityCode: user.CityCode, CityName: user.CityName,
+		CityCode: user.CityCode, CityName: user.CityName, IsInternal: user.IsInternal,
 		CreatedAt: user.CreatedAt, UpdatedAt: user.UpdatedAt,
 	}
 }

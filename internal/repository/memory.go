@@ -562,13 +562,18 @@ func (r *InMemoryTrackWaypointRepository) ListByTrackID(_ context.Context, track
 
 // InMemoryUserRepository is an in-memory implementation of UserRepository.
 type InMemoryUserRepository struct {
-	mu    sync.RWMutex
-	users map[int64]*models.User
+	mu                  sync.RWMutex
+	users               map[int64]*models.User
+	accountRestrictions *InMemoryAccountRestrictionRepository
 }
 
 // NewInMemoryUserRepository creates an in-memory user repository.
 func NewInMemoryUserRepository() *InMemoryUserRepository {
 	return &InMemoryUserRepository{users: make(map[int64]*models.User)}
+}
+
+func (r *InMemoryUserRepository) SetAccountRestrictionRepository(restrictions *InMemoryAccountRestrictionRepository) {
+	r.accountRestrictions = restrictions
 }
 
 // CreateIfNotExists creates the user if it does not exist.
@@ -664,7 +669,6 @@ func (r *InMemoryUserRepository) Update(_ context.Context, u *models.User) error
 	u.ProvinceName = existing.ProvinceName
 	u.CityCode = existing.CityCode
 	u.CityName = existing.CityName
-	u.IsInternal = existing.IsInternal
 	u.UpdatedAt = time.Now()
 	r.users[u.ID] = u
 	return nil

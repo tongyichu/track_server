@@ -196,6 +196,11 @@ func main() {
 			log.Println("mongo repositories initialized")
 		}
 	}
+	if memoryUsers, ok := userRepo.(*repository.InMemoryUserRepository); ok {
+		if memoryRestrictions, ok := accountRestrictionRepo.(*repository.InMemoryAccountRestrictionRepository); ok {
+			memoryUsers.SetAccountRestrictionRepository(memoryRestrictions)
+		}
+	}
 	if scenicSpotRepo == nil {
 		scenicSpotRepo = repository.NewMemoryScenicSpotRepository()
 	}

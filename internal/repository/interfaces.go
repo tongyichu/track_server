@@ -115,9 +115,18 @@ type AdminTrackListFilter struct {
 	UserIDs  []int64
 }
 
-// AdminUserTitleSearchRepository searches users by their display name (nickname).
-type AdminUserTitleSearchRepository interface {
-	ListAdminUsersByTitle(ctx context.Context, title string, cursor *models.UserListCursor, limit int) ([]*models.User, int64, error)
+// AdminUserListFilterRepository provides combined server-side filters for the admin user list.
+type AdminUserListFilterRepository interface {
+	ListAdminUsers(ctx context.Context, filter AdminUserListFilter, cursor *models.UserListCursor, limit int) ([]*models.User, int64, error)
+}
+
+type AdminUserListFilter struct {
+	Title      string
+	IsInternal *bool
+	CityCode   string
+	Gender     string
+	ZodiacSign string
+	Restricted *bool
 }
 
 // AdminCompanionTitleSearchRepository provides paginated fuzzy session title search.

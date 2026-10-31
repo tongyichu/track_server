@@ -2592,8 +2592,8 @@ func (r *MySQLUserRepository) Update(ctx context.Context, u *models.User) error 
 	}
 	u.UpdatedAt = time.Now()
 	res, err := r.db.ExecContext(ctx,
-		`UPDATE users SET nickname=?, avatar_url=?, signature=?, background_url=?, gender=?, birthday=?, phone=?, client_language=?, token_version=?, updated_at=? WHERE id=?`,
-		u.Nickname, nullableStringValue(u.AvatarURL), nullableStringValue(u.Signature), nullableStringValue(u.BackgroundURL), u.Gender, u.Birthday, u.Phone, u.ClientLanguage, u.TokenVersion, u.UpdatedAt, u.ID,
+		`UPDATE users SET nickname=?, avatar_url=?, signature=?, background_url=?, gender=?, birthday=?, is_internal=?, phone=?, client_language=?, token_version=?, updated_at=? WHERE id=?`,
+		u.Nickname, nullableStringValue(u.AvatarURL), nullableStringValue(u.Signature), nullableStringValue(u.BackgroundURL), u.Gender, u.Birthday, u.IsInternal, u.Phone, u.ClientLanguage, u.TokenVersion, u.UpdatedAt, u.ID,
 	)
 	if err != nil {
 		return err
@@ -2664,18 +2664,54 @@ func (r *MySQLUserRepository) CountAll(ctx context.Context) (int64, error) {
 	return count, nil
 }
 
-func (r *MySQLUserRepository) ListAdminUsersByTitle(ctx context.Context, title string, cursor *models.UserListCursor, limit int) ([]*models.User, int64, error) {
+func (r *MySQLUserRepository) ListAdminUsers(ctx context.Context, filter AdminUserListFilter, cursor *models.UserListCursor, limit int) ([]*models.User, int64, error) {
 	if limit <= 0 {
 		limit = 20
 	}
-	pattern := "%" + escapeAdminLike(title) + "%"
-	base := `FROM users WHERE nickname LIKE ? ESCAPE '!'`
+	conditions := []string{"1=1"}
+	args := make([]any, 0, 16)
+	if filter.Title != "" {
+		conditions = append(conditions, `nickname LIKE ? ESCAPE '!'`)
+		args = append(args, "%"+escapeAdminLike(filter.Title)+"%")
+	}
+	if filter.IsInternal != nil {
+		conditions = append(conditions, "is_internal = ?")
+		args = append(args, *filter.IsInternal)
+	}
+	if filter.CityCode != "" {
+		conditions = append(conditions, "city_code = ?")
+		args = append(args, filter.CityCode)
+	}
+	switch filter.Gender {
+	case "male", "female":
+		conditions = append(conditions, "gender = ?")
+		args = append(args, filter.Gender)
+	case "unknown":
+		conditions = append(conditions, "(gender IS NULL OR gender NOT IN ('male', 'female'))")
+	}
+	if ranges := adminZodiacMonthDayRanges(filter.ZodiacSign); len(ranges) > 0 {
+		conditions = append(conditions, "CHAR_LENGTH(birthday) = 10", "birthday >= '1900-01-01'", "birthday <= CURRENT_DATE")
+		parts := make([]string, 0, len(ranges))
+		for _, bounds := range ranges {
+			parts = append(parts, "(RIGHT(birthday, 5) >= ? AND RIGHT(birthday, 5) <= ?)")
+			args = append(args, bounds[0], bounds[1])
+		}
+		conditions = append(conditions, "("+strings.Join(parts, " OR ")+")")
+	}
+	if filter.Restricted != nil {
+		exists := `EXISTS (SELECT 1 FROM user_account_restrictions r WHERE r.user_id = users.id AND r.status = ? AND (r.expires_at IS NULL OR r.expires_at > ?))`
+		if !*filter.Restricted {
+			exists = "NOT " + exists
+		}
+		conditions = append(conditions, exists)
+		args = append(args, models.AccountRestrictionStatusActive, time.Now())
+	}
+	base := `FROM users WHERE ` + strings.Join(conditions, " AND ")
 	var total int64
-	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) `+base, pattern).Scan(&total); err != nil {
+	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) `+base, args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 	query := `SELECT id ` + base
-	args := []any{pattern}
 	if cursor != nil && !cursor.CreatedAt.IsZero() {
 		query += ` AND (created_at < ? OR (created_at = ? AND id < ?))`
 		args = append(args, cursor.CreatedAt, cursor.CreatedAt, cursor.ID)

@@ -687,6 +687,7 @@ func (r *MongoUserRepository) Update(ctx context.Context, user *models.User) err
 		"nickname": user.Nickname, "avatar_url": user.AvatarURL, "signature": user.Signature,
 		"background_url": user.BackgroundURL, "gender": user.Gender, "phone": user.Phone,
 		"birthday":        user.Birthday,
+		"is_internal":     user.IsInternal,
 		"client_language": user.ClientLanguage, "token_version": user.TokenVersion, "updated_at": user.UpdatedAt,
 	}})
 	if err != nil {
@@ -723,34 +724,107 @@ func (r *MongoUserRepository) ListAll(ctx context.Context, cursor *models.UserLi
 	return items, rows.Err()
 }
 
-func (r *MongoUserRepository) ListAdminUsersByTitle(ctx context.Context, title string, cursor *models.UserListCursor, limit int) ([]*models.User, int64, error) {
+func (r *MongoUserRepository) ListAdminUsers(ctx context.Context, filter AdminUserListFilter, cursor *models.UserListCursor, limit int) ([]*models.User, int64, error) {
 	if limit <= 0 {
 		limit = 20
 	}
-	filter := bson.M{"nickname": primitive.Regex{Pattern: regexp.QuoteMeta(title), Options: "i"}}
-	var total int64
-	total, err := r.collection.CountDocuments(ctx, filter)
-	if err != nil {
-		return nil, 0, err
+	query := bson.M{}
+	if filter.Title != "" {
+		query["nickname"] = primitive.Regex{Pattern: regexp.QuoteMeta(filter.Title), Options: "i"}
 	}
-	query := bson.M{"$and": bson.A{filter}}
+	if filter.IsInternal != nil {
+		if *filter.IsInternal {
+			query["is_internal"] = true
+		} else {
+			query["is_internal"] = bson.M{"$ne": true}
+		}
+	}
+	if filter.CityCode != "" {
+		query["city_code"] = filter.CityCode
+	}
+	switch filter.Gender {
+	case "male", "female":
+		query["gender"] = filter.Gender
+	case "unknown":
+		query["gender"] = bson.M{"$nin": bson.A{"male", "female"}}
+	}
+	if ranges := adminZodiacMonthDayRanges(filter.ZodiacSign); len(ranges) > 0 {
+		query["birthday"] = bson.M{
+			"$regex": `^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$`,
+			"$gte":   "1900-01-01",
+			"$lte":   time.Now().Format(time.DateOnly),
+		}
+		parts := make(bson.A, 0, len(ranges))
+		for _, bounds := range ranges {
+			parts = append(parts, bson.M{"$and": bson.A{
+				bson.M{"$gte": bson.A{bson.M{"$substrCP": bson.A{"$birthday", 5, 5}}, bounds[0]}},
+				bson.M{"$lte": bson.A{bson.M{"$substrCP": bson.A{"$birthday", 5, 5}}, bounds[1]}},
+			}})
+		}
+		query["$expr"] = bson.M{"$or": parts}
+	}
+	pipeline := mongo.Pipeline{{{Key: "$match", Value: query}}}
+	if filter.Restricted != nil {
+		now := time.Now()
+		pipeline = append(pipeline,
+			bson.D{{Key: "$lookup", Value: bson.D{
+				{Key: "from", Value: "user_account_restrictions"},
+				{Key: "let", Value: bson.D{{Key: "admin_user_id", Value: "$_id"}}},
+				{Key: "pipeline", Value: mongo.Pipeline{{{Key: "$match", Value: bson.D{{Key: "$expr", Value: bson.D{{Key: "$and", Value: bson.A{
+					bson.M{"$eq": bson.A{"$user_id", "$$admin_user_id"}},
+					bson.M{"$eq": bson.A{"$status", models.AccountRestrictionStatusActive}},
+					bson.M{"$or": bson.A{
+						bson.M{"$eq": bson.A{"$expires_at", nil}},
+						bson.M{"$gt": bson.A{"$expires_at", now}},
+					}},
+				}}}}}}}}},
+				{Key: "as", Value: "admin_active_restrictions"},
+			}}},
+		)
+		size := int64(0)
+		operator := "$eq"
+		if *filter.Restricted {
+			operator = "$gt"
+		}
+		pipeline = append(pipeline, bson.D{{Key: "$match", Value: bson.D{{Key: "$expr", Value: bson.D{{Key: operator, Value: bson.A{bson.M{"$size": "$admin_active_restrictions"}, size}}}}}}})
+	}
+	itemStages := mongo.Pipeline{}
 	if cursor != nil && !cursor.CreatedAt.IsZero() {
-		query["$and"] = bson.A{filter, bson.M{"$or": bson.A{bson.M{"created_at": bson.M{"$lt": cursor.CreatedAt}}, bson.M{"created_at": cursor.CreatedAt, "_id": bson.M{"$lt": cursor.ID}}}}}
+		itemStages = append(itemStages, bson.D{{Key: "$match", Value: bson.M{"$or": bson.A{
+			bson.M{"created_at": bson.M{"$lt": cursor.CreatedAt}},
+			bson.M{"created_at": cursor.CreatedAt, "_id": bson.M{"$lt": cursor.ID}},
+		}}}})
 	}
-	rows, err := r.collection.Find(ctx, query, options.Find().SetSort(bson.D{{Key: "created_at", Value: -1}, {Key: "_id", Value: -1}}).SetLimit(int64(limit)))
+	itemStages = append(itemStages,
+		bson.D{{Key: "$sort", Value: bson.D{{Key: "created_at", Value: -1}, {Key: "_id", Value: -1}}}},
+		bson.D{{Key: "$limit", Value: limit}},
+	)
+	pipeline = append(pipeline, bson.D{{Key: "$facet", Value: bson.D{
+		{Key: "total", Value: mongo.Pipeline{{{Key: "$count", Value: "count"}}}},
+		{Key: "items", Value: itemStages},
+	}}})
+	rows, err := r.collection.Aggregate(ctx, pipeline)
 	if err != nil {
 		return nil, 0, err
 	}
 	defer rows.Close(ctx)
-	items := make([]*models.User, 0, limit)
-	for rows.Next(ctx) {
-		item := &models.User{}
-		if err := rows.Decode(item); err != nil {
-			return nil, 0, err
-		}
-		items = append(items, item)
+	if !rows.Next(ctx) {
+		return nil, 0, rows.Err()
 	}
-	return items, total, rows.Err()
+	var result struct {
+		Items []*models.User `bson:"items"`
+		Total []struct {
+			Count int64 `bson:"count"`
+		} `bson:"total"`
+	}
+	if err := rows.Decode(&result); err != nil {
+		return nil, 0, err
+	}
+	var total int64
+	if len(result.Total) > 0 {
+		total = result.Total[0].Count
+	}
+	return result.Items, total, rows.Err()
 }
 
 // CountAll is not implemented in this demo and returns an error.

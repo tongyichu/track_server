@@ -947,23 +947,64 @@ func parseAdminListLimit(raw string) int {
 	return v
 }
 
-// ListUsers 处理 GET /admin/api/users
-//
-// query：
-//   - cursor_created_at: RFC3339 时间，上一页最后一条的 created_at；
-//   - cursor_id:         上一页最后一条的用户 ID；
-//   - limit:             每页条数（默认 20，最大 100）。
-//
-// 返回：{ items: []User, total, next_cursor: {created_at, id}, has_more }
+func parseAdminOptionalBool(raw string) (*bool, bool) {
+	switch strings.TrimSpace(raw) {
+	case "":
+		return nil, true
+	case "true":
+		value := true
+		return &value, true
+	case "false":
+		value := false
+		return &value, true
+	default:
+		return nil, false
+	}
+}
+
+// ListUsers 处理 GET /admin/api/users，所有筛选均参与仓储分页与总数统计。
 func (h *Handler) ListUsers(ctx context.Context, c *app.RequestContext) {
 	if h == nil || h.userRepo == nil {
 		c.JSON(http.StatusInternalServerError, utils.H{"error": "user repository not configured"})
 		return
 	}
 	limit := parseAdminListLimit(string(c.Query("limit")))
-	title := strings.TrimSpace(string(c.Query("title")))
-	if utf8.RuneCountInString(title) > 128 {
+	filter := repository.AdminUserListFilter{
+		Title:      strings.TrimSpace(string(c.Query("title"))),
+		CityCode:   strings.TrimSpace(string(c.Query("city_code"))),
+		Gender:     strings.TrimSpace(string(c.Query("gender"))),
+		ZodiacSign: strings.TrimSpace(string(c.Query("zodiac_sign"))),
+	}
+	if utf8.RuneCountInString(filter.Title) > 128 {
 		c.JSON(http.StatusBadRequest, utils.H{"error": "title exceeds 128 characters"})
+		return
+	}
+	if len(filter.CityCode) > 32 {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid city_code"})
+		return
+	}
+	if filter.Gender != "" && filter.Gender != "male" && filter.Gender != "female" && filter.Gender != "unknown" {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid gender"})
+		return
+	}
+	validZodiacs := map[string]bool{
+		"": true, "capricorn": true, "aquarius": true, "pisces": true, "aries": true,
+		"taurus": true, "gemini": true, "cancer": true, "leo": true, "virgo": true,
+		"libra": true, "scorpio": true, "sagittarius": true,
+	}
+	if !validZodiacs[filter.ZodiacSign] {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid zodiac_sign"})
+		return
+	}
+	var ok bool
+	filter.IsInternal, ok = parseAdminOptionalBool(string(c.Query("is_internal")))
+	if !ok {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid is_internal"})
+		return
+	}
+	filter.Restricted, ok = parseAdminOptionalBool(string(c.Query("restricted")))
+	if !ok {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid restricted"})
 		return
 	}
 	var cursor *models.UserListCursor
@@ -981,22 +1022,12 @@ func (h *Handler) ListUsers(ctx context.Context, c *app.RequestContext) {
 		}
 		cursor = &models.UserListCursor{CreatedAt: t, ID: id}
 	}
-	var items []*models.User
-	var total int64
-	var err error
-	if title != "" {
-		search, ok := h.userRepo.(repository.AdminUserTitleSearchRepository)
-		if !ok {
-			c.JSON(http.StatusInternalServerError, utils.H{"error": "user title search not configured"})
-			return
-		}
-		items, total, err = search.ListAdminUsersByTitle(ctx, title, cursor, limit)
-	} else {
-		items, err = h.userRepo.ListAll(ctx, cursor, limit)
-		if err == nil {
-			total, err = h.userRepo.CountAll(ctx)
-		}
+	search, ok := h.userRepo.(repository.AdminUserListFilterRepository)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "user list filters not configured"})
+		return
 	}
+	items, total, err := search.ListAdminUsers(ctx, filter, cursor, limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
 		return
@@ -1222,7 +1253,7 @@ func (h *Handler) ListTracks(ctx context.Context, c *app.RequestContext) {
 	}
 	var matchedUserIDs []int64
 	if userName != "" {
-		search, ok := h.userRepo.(repository.AdminUserTitleSearchRepository)
+		search, ok := h.userRepo.(repository.AdminUserListFilterRepository)
 		if !ok {
 			c.JSON(http.StatusInternalServerError, utils.H{"error": "user name search not configured"})
 			return
@@ -1230,7 +1261,7 @@ func (h *Handler) ListTracks(ctx context.Context, c *app.RequestContext) {
 		matchedUserIDs = make([]int64, 0)
 		var userCursor *models.UserListCursor
 		for {
-			matchedUsers, _, searchErr := search.ListAdminUsersByTitle(ctx, userName, userCursor, 100)
+			matchedUsers, _, searchErr := search.ListAdminUsers(ctx, repository.AdminUserListFilter{Title: userName}, userCursor, 100)
 			if searchErr != nil {
 				c.JSON(http.StatusInternalServerError, utils.H{"error": searchErr.Error()})
 				return

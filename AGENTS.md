@@ -102,7 +102,7 @@ track_server/
 
 ### 稳定默认值
 
-- 管理后台运营工作台的跨域只读统计统一走 `repository.AdminDashboardStatisticsRepository`，由 `NewAdminDashboardStatisticsRepository` 根据当前 MySQL / Mongo / in-memory 仓储族选择实现；不新增统计表，也不改变业务写入流程。周期指标按 `[start,end)` 统计，互动趋势使用收藏/导航/点赞/评论各自 `created_at`，新增用户转化漏斗使用同周期注册 Cohort 并逐级限定为完成轨迹、投稿和审核通过；用户列表上次登录按当前页批量查询 `login_log`。数据模型见 `internal/models/admin_dashboard.go`，聚合实现见 `internal/repository/admin_dashboard*.go`。
+- 管理后台运营工作台的跨域只读统计统一走 `repository.AdminDashboardStatisticsRepository`，由 `NewAdminDashboardStatisticsRepository` 根据当前 MySQL / Mongo / in-memory 仓储族选择实现；不新增统计表，也不改变业务写入流程。周期指标按 `[start,end)` 统计，互动趋势使用收藏/导航/点赞/评论各自 `created_at`，新增用户转化漏斗使用同周期注册 Cohort 并逐级限定为完成轨迹、投稿和审核通过；用户列表上次登录按当前页批量查询 `login_log`。后台用户列表通过 `AdminUserListFilterRepository` 在仓储层组合筛选昵称、内部人员、资料 `city_code`、性别、生日星座和当前生效限制，筛选必须参与总数统计与游标分页，不得只过滤当前页。数据模型见 `internal/models/admin_dashboard.go`，聚合实现见 `internal/repository/admin_dashboard*.go`。
 
 - 主景点以 `internal/models/scenic_spot.go` 的内部 SCP ID 为唯一业务 ID；MySQL、Mongo、内存仓储均由 `repository.ScenicSpotRepository` 实现。`ScenicSpotCatalogService` 管理草稿/发布、来源 ID 校验、轨迹关联、合并拆分、审计和存量回填。后台首次加载景点管理页时通过 `/admin/api/scenic-spots/provider-content/backfill` 分批拉取尚未同步的供应商资料；存量简介由详情弹窗中简介标题旁的“AI联网查询”链接单条检索并填入编辑框，保存后入库。新建景点的空简介在创建前同步尝试生成并随记录保存，失败保留空值。AI 简介限 200 字，人工已有内容不会被自动覆盖。Kimi API Key 从 `MOONSHOT_API_KEY` 注入，仅在持久化仓储可用时启用；不要把密钥写入代码或提交到仓库。图片加入同一有序 `photos` 数组。后台编辑保存会设置 `manual_edited`，自动同步资料仍归为“自动”。自有图片上传追加到数组末尾，拖动排序后按数组顺序下发客户端。运营后台入口 `/admin/scenic_spots.html`，API 路由清单和流程见 `internal/admin/AGENTS.md`；Google 来源 ID 到期后在详情访问时验证。
 
@@ -124,7 +124,7 @@ track_server/
 
 - 最近确认所在地通过 `PUT /user/profile/location` 只提交归一化 `city_code`，服务端由内置行政区数据生成 `province_code/province_name/city_code/city_name`，四字段仅本人详情返回。该接口只局部更新省市列，相同值直接成功且不写库或刷新 `updated_at`；普通资料整行更新不得覆盖省市字段。Android 按账号持久化已同步/待同步状态，运动会话首个有效地址立即检查，普通前台定位每 7 天检查一次，只有城市变化才请求，失败退避重试，不新增后台定位。协议见 `docs/api/user.md`。
 
-- `users.is_internal` 是后台内部人员标识，模型 `json:"-"` 保证业务用户 API 和登录/资料响应不下发；MySQL 使用 `TINYINT(1) NOT NULL DEFAULT 0` 并启动幂等补列，Mongo/内存字段同名。仅后台用户列表和 `PUT /admin/api/users/:user_id/internal` 读取/修改，普通资料更新必须保留该字段。
+- `users.is_internal` 是后台内部人员标识，模型 `json:"-"` 保证业务用户 API 和登录/资料响应不下发；MySQL 使用 `TINYINT(1) NOT NULL DEFAULT 0` 并启动幂等补列，Mongo/内存字段同名。仅后台用户列表和详情接口读取/修改，详情保存可更新该字段，普通资料更新必须保留其当前值。
 
 - 默认运动类型由 `internal/config/config.go:DefaultTrackTypeConfigs` 维护，当前 code 为 `hiking`、`running`、`climbing`、`riding`、`driving`，展示名为 `徒步`、`跑步`、`爬山`、`骑行`、`自驾`；`GET /api/v1/track/types`、轨迹入库 `track_type`、运动类型图标元信息和成就系统类型口径应保持一致。颜色元信息同样由该配置维护：`theme_color` 是日间色，`theme_color_dark` 是独立夜间色；客户端按主题直接选色，夜间字段缺失、为空或非法时回退日间色。未知自定义类型两个颜色字段均为空串；颜色不存入轨迹或数据库，协议见 `docs/api/track.md`。`track_geo_indexes.track_type` 与 `track_route_groups.track_type` 只允许保存这五个英文 code，历史别名或未知类型需在地图索引阶段归一/兜底。
 - 内置运动图标使用 MingCute 线性 SVG，源文件与许可证位于 `internal/handler/static/track_type_icon/`，由 `internal/handler/track_type_icon_handler.go` 的 go:embed 随二进制打包。登录后通过 GET/HEAD /api/v1/track/types/icons/:icon_file 读取，不依赖磁盘 static 缓存；徒步/跑步/爬山/骑行/自驾分别使用 hiking/run/mountain_2/bike/car。修改图形时必须提升文件名版本并同步 DefaultTrackTypeConfigs.IconFile，防止客户端命中旧缓存；自定义类型仍走原静态目录。

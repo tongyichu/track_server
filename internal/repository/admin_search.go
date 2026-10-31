@@ -4,6 +4,7 @@ import (
 	"context"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/tongyichu/track_server/internal/models"
 )
@@ -95,18 +96,99 @@ func (r *InMemoryTrackRepository) ListAdminTracksByTitle(_ context.Context, titl
 	return items, total, nil
 }
 
-func (r *InMemoryUserRepository) ListAdminUsersByTitle(_ context.Context, title string, cursor *models.UserListCursor, limit int) ([]*models.User, int64, error) {
+func adminZodiacMonthDayRanges(sign string) [][2]string {
+	switch sign {
+	case "capricorn":
+		return [][2]string{{"12-22", "12-31"}, {"01-01", "01-19"}}
+	case "aquarius":
+		return [][2]string{{"01-20", "02-18"}}
+	case "pisces":
+		return [][2]string{{"02-19", "03-20"}}
+	case "aries":
+		return [][2]string{{"03-21", "04-19"}}
+	case "taurus":
+		return [][2]string{{"04-20", "05-20"}}
+	case "gemini":
+		return [][2]string{{"05-21", "06-20"}}
+	case "cancer":
+		return [][2]string{{"06-21", "07-22"}}
+	case "leo":
+		return [][2]string{{"07-23", "08-22"}}
+	case "virgo":
+		return [][2]string{{"08-23", "09-22"}}
+	case "libra":
+		return [][2]string{{"09-23", "10-22"}}
+	case "scorpio":
+		return [][2]string{{"10-23", "11-21"}}
+	case "sagittarius":
+		return [][2]string{{"11-22", "12-21"}}
+	default:
+		return nil
+	}
+}
+
+func adminUserMatchesZodiac(birthday, sign string) bool {
+	if sign == "" {
+		return true
+	}
+	date, err := time.Parse(time.DateOnly, birthday)
+	if err != nil || date.Format(time.DateOnly) != birthday || birthday < "1900-01-01" || birthday > time.Now().Format(time.DateOnly) {
+		return false
+	}
+	monthDay := date.Format("01-02")
+	for _, bounds := range adminZodiacMonthDayRanges(sign) {
+		if monthDay >= bounds[0] && monthDay <= bounds[1] {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *InMemoryAccountRestrictionRepository) hasActive(userID int64, now time.Time) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, item := range r.restrictions[userID] {
+		if item != nil && item.Status == models.AccountRestrictionStatusActive && (item.ExpiresAt == nil || item.ExpiresAt.After(now)) {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *InMemoryUserRepository) ListAdminUsers(_ context.Context, filter AdminUserListFilter, cursor *models.UserListCursor, limit int) ([]*models.User, int64, error) {
 	if limit <= 0 {
 		limit = 20
 	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	needle := strings.ToLower(title)
+	needle := strings.ToLower(filter.Title)
+	now := time.Now()
 	items := make([]*models.User, 0)
 	var total int64
 	for _, user := range r.users {
 		if user == nil || !strings.Contains(strings.ToLower(user.Nickname), needle) {
 			continue
+		}
+		if filter.IsInternal != nil && user.IsInternal != *filter.IsInternal {
+			continue
+		}
+		if filter.CityCode != "" && user.CityCode != filter.CityCode {
+			continue
+		}
+		if (filter.Gender == "male" || filter.Gender == "female") && user.Gender != filter.Gender {
+			continue
+		}
+		if filter.Gender == "unknown" && (user.Gender == "male" || user.Gender == "female") {
+			continue
+		}
+		if !adminUserMatchesZodiac(user.Birthday, filter.ZodiacSign) {
+			continue
+		}
+		if filter.Restricted != nil {
+			restricted := r.accountRestrictions != nil && r.accountRestrictions.hasActive(user.ID, now)
+			if restricted != *filter.Restricted {
+				continue
+			}
 		}
 		total++
 		if cursor != nil && !cursor.CreatedAt.IsZero() && (user.CreatedAt.After(cursor.CreatedAt) || (user.CreatedAt.Equal(cursor.CreatedAt) && user.ID >= cursor.ID)) {

@@ -28,10 +28,10 @@
     return '<span class="badge bg-red-lt text-red">已限制</span><br><span class="hint">' + esc(until) + '</span><br><span class="hint">' + esc(r.reason || '') + '</span>';
   }
   function genderText(value) {
-    return value === 'male' ? '男' : (value === 'female' ? '女' : '未设置');
+    return value === 'male' ? '男' : (value === 'female' ? '女' : '-');
   }
   function zodiacText(value) {
-    return distributionLabels[value] || '未设置';
+    return distributionLabels[value] || '-';
   }
 
   var distributionLabels = {
@@ -147,7 +147,7 @@
         visualMap: { show: false, seriesIndex: 0, min: 0, max: max, inRange: { color: ['#edf3fa', '#8db9e8', '#206bc4'] } },
         series: [{
           type: 'map', map: 'china_provinces', nameMap: nameMap, selectedMode: 'single', roam: false,
-          layoutCenter: ['50%', '50%'], layoutSize: '112%',
+          boundingCoords: [[73, 54], [136, 17]], layoutCenter: ['50%', '50%'], layoutSize: '105%',
           label: { show: true, color: '#334155', fontSize: 9, formatter: function (params) {
             return params.data && number(params.data.value) > 0 ? compactNumber(params.data.value) : '';
           } },
@@ -183,6 +183,21 @@
     renderCityTop();
     renderProvinceMap();
   }
+  async function loadCities() {
+    try {
+      var response = await fetch('/admin/api/cities');
+      if (!response.ok) throw new Error(String(response.status));
+      var cities = (await response.json()).data || [];
+      cities.forEach(function (city) {
+        var option = document.createElement('option');
+        option.value = city.code;
+        option.textContent = city.name;
+        cityFilter.appendChild(option);
+      });
+    } catch (error) {
+      AdminUI.alert('城市列表加载失败: ' + (error.message || error), 'danger');
+    }
+  }
   async function loadUserStatistics() {
     try {
       var response = await fetch('/admin/api/users/statistics');
@@ -215,6 +230,11 @@
   var refreshBtn = document.getElementById('refreshBtn');
   var searchBtn = document.getElementById('searchBtn');
   var titleFilter = document.getElementById('titleFilter');
+  var internalFilter = document.getElementById('internalFilter');
+  var cityFilter = document.getElementById('cityFilter');
+  var genderFilter = document.getElementById('genderFilter');
+  var zodiacFilter = document.getElementById('zodiacFilter');
+  var restrictedFilter = document.getElementById('restrictedFilter');
   var pageHint = document.getElementById('pageHint');
   var totalHint = document.getElementById('totalHint');
 
@@ -227,7 +247,7 @@
     var province = String(user.province_name || '').trim();
     var city = String(user.city_name || '').trim();
     if (province && city && province !== city) return province + ' · ' + city;
-    return city || province || '未设置';
+    return city || province || '-';
   }
 
   async function openUserDetail(userID) {
@@ -248,6 +268,7 @@
       detailForm.elements.birthday.value = user.birthday || '';
       detailForm.elements.birthday.max = new Date().toISOString().slice(0, 10);
       detailForm.elements.signature.value = user.signature || '';
+      detailForm.elements.is_internal.checked = !!user.is_internal;
       document.getElementById('userDetailLocation').value = locationText(user);
       document.getElementById('userDetailName').textContent = user.nickname || '未设置昵称';
       document.getElementById('userDetailMeta').textContent = '注册：' + fmtTime(user.created_at) + '　更新：' + fmtTime(user.updated_at);
@@ -269,7 +290,8 @@
       phone: detailForm.elements.phone.value.trim(),
       gender: detailForm.elements.gender.value,
       birthday: detailForm.elements.birthday.value,
-      signature: detailForm.elements.signature.value
+      signature: detailForm.elements.signature.value,
+      is_internal: detailForm.elements.is_internal.checked
     };
     try {
       var response = await fetch('/admin/api/users/' + encodeURIComponent(activeDetailUserID), {
@@ -293,25 +315,7 @@
 
   tbody.addEventListener('change', async function (ev) {
     var input = ev.target;
-    if (!input.dataset) return;
-    if (input.dataset.action === 'internal') {
-      var internalUserID = input.dataset.userId;
-      var isInternal = input.checked;
-      input.disabled = true;
-      var internalResponse = await fetch('/admin/api/users/' + encodeURIComponent(internalUserID) + '/internal', {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_internal: isInternal })
-      });
-      if (!internalResponse.ok) {
-        AdminUI.alert('内部人员状态更新失败: ' + await internalResponse.text(), 'danger');
-        input.checked = !isInternal;
-        input.disabled = false;
-        return;
-      }
-      AdminUI.alert(isInternal ? '已设为内部人员' : '已取消内部人员', 'success');
-      loadPage();
-      return;
-    }
-    if (input.dataset.action !== 'restriction') return;
+    if (!input.dataset || input.dataset.action !== 'restriction') return;
     var userID = input.dataset.userId;
     var restrict = input.checked;
     input.disabled = true;
@@ -365,6 +369,9 @@
   function resetSearch() { cursorStack = [null]; pageIndex = 0; loadPage(); }
   searchBtn.addEventListener('click', resetSearch);
   titleFilter.addEventListener('keydown', function (event) { if (event.key === 'Enter') resetSearch(); });
+  [internalFilter, cityFilter, genderFilter, zodiacFilter, restrictedFilter].forEach(function (filter) {
+    filter.addEventListener('change', resetSearch);
+  });
   prevBtn.addEventListener('click', function () {
     if (pageIndex <= 0) return;
     pageIndex -= 1;
@@ -382,6 +389,11 @@
     var params = new URLSearchParams();
     params.set('limit', String(pageSize));
     if (titleFilter.value.trim()) params.set('title', titleFilter.value.trim());
+    if (internalFilter.value) params.set('is_internal', internalFilter.value);
+    if (cityFilter.value) params.set('city_code', cityFilter.value);
+    if (genderFilter.value) params.set('gender', genderFilter.value);
+    if (zodiacFilter.value) params.set('zodiac_sign', zodiacFilter.value);
+    if (restrictedFilter.value) params.set('restricted', restrictedFilter.value);
     var cur = cursorStack[pageIndex];
     if (cur) {
       params.set('cursor_created_at', cur.created_at);
@@ -389,7 +401,7 @@
     }
     var resp = await fetch('/admin/api/users?' + params.toString());
     if (!resp.ok) {
-      tbody.innerHTML = '<tr><td colspan="9">加载失败: ' + resp.status + '</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8">加载失败: ' + resp.status + '</td></tr>';
       return;
     }
     var data = ((await resp.json()).data) || {};
@@ -402,6 +414,7 @@
       var avatar = it.avatar_url
         ? '<img class="admin-user-avatar" src="' + esc(it.avatar_url) + '" alt="" />'
         : '<span class="admin-user-avatar admin-user-avatar-empty" aria-hidden="true">👤</span>';
+      avatar = '<span class="admin-user-avatar-wrap">' + avatar + (it.is_internal ? '<span class="admin-user-inner-badge">inner</span>' : '') + '</span>';
       var tr = document.createElement('tr');
       tr.innerHTML = '<td><div class="admin-user-identity">' + avatar + '<span>' + esc(it.nickname) + '</span></div></td>' +
         '<td>' + esc(it.phone || '') + '</td>' +
@@ -409,7 +422,6 @@
         '<td>' + esc(zodiacText(it.zodiac_sign)) + '</td>' +
         '<td><span class="admin-user-city-cell">' + esc(locationText(it)) + '</span></td>' +
         '<td>' + restrictionText(it.account_restriction) + '</td>' +
-        '<td><label class="form-switch admin-user-restriction-switch"><input type="checkbox" data-action="internal" data-user-id="' + esc(it.id) + '"' + (it.is_internal ? ' checked' : '') + '><span>内部</span></label></td>' +
         '<td>' + (it.last_login_at ? fmtTime(it.last_login_at) : '—') + '</td>' +
         '<td><div class="admin-user-actions"><button data-action="detail" data-user-id="' + esc(it.id) + '">查看详情</button>' +
         '<label class="form-switch admin-user-restriction-switch"><input type="checkbox" data-action="restriction" data-user-id="' + esc(it.id) + '"' + (it.account_restriction ? ' checked' : '') + '><span>限制</span></label></div></td>';
@@ -423,6 +435,7 @@
   }
 
   loadUserStatistics();
+  loadCities();
   loadPage();
   window.addEventListener('resize', function () {
     Object.keys(userCharts).forEach(function (id) { userCharts[id].resize(); });
