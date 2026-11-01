@@ -9,6 +9,7 @@
 
 - 一个独立登录的 Web 控制台（HTML/CSS/JS 经 `go:embed` 内置）；
 - 围绕 `AppRelease` 的发布、列表、删除接口；
+- App 发布页顶部的客户端活跃统计区：活跃设备数、最新版本渗透、低于强升线设备数三张概况卡，以及版本活跃趋势（堆叠面积）、版本分布（饼图）、机型/系统版本 Top 10（条形图），支持近 7/30 天切换与统一刷新；数据来自升级检查与登录上报的 `app_client_devices` / `app_client_active_daily`，经 `AdminAssets.loadCharts()` 异步加载 ECharts，不阻塞发布列表首屏；
 - 上传 Android APK 到服务端本地静态目录的接口；发布表单固定 Android，版本名和版本号由包解析结果自动填充；
 - 通过后台会话代理读取服务端静态资源（如用户头像），避免复用业务 JWT；
 - 查看和处理用户意见反馈（含图片预览、状态更新、用户可见反馈意见）。
@@ -139,6 +140,7 @@ internal/admin/
 | DELETE | `/admin/api/releases/:id` | 鉴权 | 删除一条发布记录 |
 | POST | `/admin/api/releases/upload-package` | 鉴权 | multipart 上传安装包到 `<LogDir>/static/release/<platform>/` |
 | GET | `/admin/api/releases/upload-token` | 鉴权 | 旧 OSS 直传 STS 凭证接口，前端不再使用 |
+| GET | `/admin/api/releases/client-statistics` | 鉴权 | 客户端活跃统计：`days=7|30`，版本/机型/系统版本分布、按日版本活跃趋势与最新发布版本渗透概况（含低于强升线设备数） |
 | GET | `/admin/api/static/*filepath` | 鉴权 | 后台静态资源代理，从 `<LogDir>/static/` 读取头像等资源；后台页面不要直接访问需业务 JWT 的 `/api/v1/static/*` |
 | GET | `/admin/api/users` | 鉴权 | 用户列表，支持 `title` 昵称模糊搜索、`is_internal` / `city_code` / `gender` / `zodiac_sign` / `restricted` 组合筛选及 cursor 翻页；所有条件参与总数统计，返回按当前页批量统计的 `last_login_at` |
 | GET | `/admin/api/users/:user_id` | 鉴权 | 用户资料详情，包含头像、签名、性别、生日、手机号、内部人员标识和最近确认所在地 |

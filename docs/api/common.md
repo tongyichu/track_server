@@ -25,6 +25,9 @@ Token 的获取与说明参考 `login.md`。
 | `X-City-Code` | string | 否 | 城市 Code |
 | `X-User-ID` | string | 否（建议携带） | 用户 ID（部分接口历史上依赖该 header，建议统一携带以兼容客户端实现） |
 | `X-Device-ID` | string | 否 | 设备唯一标识 |
+| `X-Device-Model` | string | 否 | 设备型号，如 `Xiaomi 14`；用于后台客户端统计 |
+| `X-OS-Version` | string | 否 | 系统版本，如 `Android 14 (API 34)`；用于后台客户端统计 |
+| `X-Version-Code` | string | 否 | 客户端数字版本号，如 `12`；用于后台客户端统计 |
 | `X-Platform` | string | 否 | 客户端平台：`ios` / `android` |
 | `X-Client-Version` | string | 否 | 客户端版本号，如 `1.0.0` |
 | `X-Client-Language` | string | 否 | 客户端语言，如 `zh-CN` |

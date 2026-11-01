@@ -106,4 +106,7 @@ type RequestMeta struct {
 	Location       string // 地理位置
 	Platform       string // ios or android
 	DeviceID       string // 设备ID
+	DeviceModel    string // 设备型号
+	OSVersion      string // 系统版本
+	VersionCode    int64  // 客户端数字版本号（未上报为 0）
 }

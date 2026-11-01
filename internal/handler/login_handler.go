@@ -16,6 +16,7 @@ import (
 type LoginHandler struct {
 	loginSvc       *service.LoginService
 	achievementSvc *service.AchievementService
+	appReleaseSvc  *service.AppReleaseService
 	blacklist      *middleware.TokenBlacklist
 }
 
@@ -37,6 +38,19 @@ func successResponse[T any](data T) StandardResponse[T] {
 
 func NewLoginHandler(loginSvc *service.LoginService, blacklist *middleware.TokenBlacklist, achievementSvc *service.AchievementService) *LoginHandler {
 	return &LoginHandler{loginSvc: loginSvc, achievementSvc: achievementSvc, blacklist: blacklist}
+}
+
+// SetAppReleaseService 注入 App 发布服务，用于登录成功后记录设备活跃统计（可选）。
+func (h *LoginHandler) SetAppReleaseService(appReleaseSvc *service.AppReleaseService) {
+	h.appReleaseSvc = appReleaseSvc
+}
+
+// recordClientActivity 在登录成功后绑定用户记录设备活跃；失败不影响登录响应。
+func (h *LoginHandler) recordClientActivity(ctx context.Context, c *app.RequestContext, userID int64) {
+	if h.appReleaseSvc == nil {
+		return
+	}
+	h.appReleaseSvc.RecordClientActivity(ctx, middleware.GetRequestMeta(c), userID, 0)
 }
 
 func (h *LoginHandler) GetCaptcha(ctx context.Context, c *app.RequestContext) {
@@ -88,6 +102,7 @@ func (h *LoginHandler) LoginBySMS(ctx context.Context, c *app.RequestContext) {
 		c.JSON(http.StatusUnauthorized, utils.H{"error": err.Error()})
 		return
 	}
+	h.recordClientActivity(ctx, c, result.UserID)
 	if h.achievementSvc != nil {
 		levelInfo, err := h.achievementSvc.GetLevelInfo(ctx, result.UserID)
 		if err != nil {
@@ -118,6 +133,7 @@ func (h *LoginHandler) LoginByWechat(ctx context.Context, c *app.RequestContext)
 		c.JSON(http.StatusUnauthorized, utils.H{"error": err.Error()})
 		return
 	}
+	h.recordClientActivity(ctx, c, result.UserID)
 	c.JSON(http.StatusOK, result)
 }
 
@@ -141,6 +157,7 @@ func (h *LoginHandler) LoginByApple(ctx context.Context, c *app.RequestContext) 
 		c.JSON(http.StatusUnauthorized, utils.H{"error": err.Error()})
 		return
 	}
+	h.recordClientActivity(ctx, c, result.UserID)
 	c.JSON(http.StatusOK, result)
 }
 

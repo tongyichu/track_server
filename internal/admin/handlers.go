@@ -610,6 +610,23 @@ func (h *Handler) ListReleases(ctx context.Context, c *app.RequestContext) {
 	c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"items": list}})
 }
 
+// GetReleaseClientStatistics 处理 GET /admin/api/releases/client-statistics?days=7|30。
+// 返回客户端活跃设备统计：版本/机型/系统版本分布与按日版本活跃趋势，
+// 并结合最新发布版本给出渗透概况；平台固定为 Android（发布页只运营 Android）。
+func (h *Handler) GetReleaseClientStatistics(ctx context.Context, c *app.RequestContext) {
+	if h == nil || h.releaseSvc == nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "release service not configured"})
+		return
+	}
+	days, _ := strconv.Atoi(string(c.Query("days")))
+	result, err := h.releaseSvc.GetClientStatistics(ctx, models.AppReleasePlatformAndroid, days)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": result})
+}
+
 // ----- 发布版本 -----
 
 type publishReleaseBody struct {

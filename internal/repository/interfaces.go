@@ -399,6 +399,18 @@ type AppReleaseRepository interface {
 	Delete(ctx context.Context, id int64) error
 }
 
+// AppClientStatsRepository defines persistence for client device activity stats.
+//
+// 设计说明：
+//   - TouchClientDevice 以 device_id 幂等 upsert 设备最近活跃信息；同一本地自然日内
+//     设备首次出现时对 (日期, 平台, 版本) 活跃计数 +1，重复出现不重复计数；
+//   - GetClientStatistics 聚合最近 days 天：活跃设备按 last_seen_at 去重，
+//     分布维度空值归为「未知」，趋势按服务端本地自然日分桶。
+type AppClientStatsRepository interface {
+	TouchClientDevice(ctx context.Context, device *models.AppClientDevice) error
+	GetClientStatistics(ctx context.Context, days int) (*models.AppClientStatistics, error)
+}
+
 // FeedbackRepository defines persistence operations for user feedback records.
 type FeedbackRepository interface {
 	GetCorrectionConfig(ctx context.Context) (*models.FeedbackCorrectionConfig, error)

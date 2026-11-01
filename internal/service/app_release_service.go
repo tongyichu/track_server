@@ -3,7 +3,9 @@ package service
 import (
 	"context"
 	"errors"
+	"log"
 	"strings"
+	"time"
 
 	"github.com/tongyichu/track_server/internal/models"
 	"github.com/tongyichu/track_server/internal/repository"
@@ -11,12 +13,99 @@ import (
 
 // AppReleaseService 负责 App 发布与升级检查相关的业务逻辑。
 type AppReleaseService struct {
-	repo repository.AppReleaseRepository
+	repo      repository.AppReleaseRepository
+	statsRepo repository.AppClientStatsRepository
 }
 
 // NewAppReleaseService 构造 AppReleaseService。
 func NewAppReleaseService(repo repository.AppReleaseRepository) *AppReleaseService {
 	return &AppReleaseService{repo: repo}
+}
+
+// SetClientStatsRepository 注入客户端活跃统计仓储（可选，未注入时跳过采集与统计）。
+func (s *AppReleaseService) SetClientStatsRepository(statsRepo repository.AppClientStatsRepository) {
+	s.statsRepo = statsRepo
+}
+
+// RecordClientActivity 幂等记录一台设备的最近活跃信息。
+// 由升级检查（匿名，userID=0）和登录成功（绑定 userID）调用；
+// 采集失败只记录日志，不影响主流程，调用方无需处理返回错误之外的逻辑。
+func (s *AppReleaseService) RecordClientActivity(ctx context.Context, meta *models.RequestMeta, userID int64, fallbackVersionCode int64) {
+	if s == nil || s.statsRepo == nil || meta == nil {
+		return
+	}
+	deviceID := strings.TrimSpace(meta.DeviceID)
+	if deviceID == "" {
+		return
+	}
+	versionCode := meta.VersionCode
+	if versionCode <= 0 {
+		versionCode = fallbackVersionCode
+	}
+	platform := strings.TrimSpace(meta.Platform)
+	if platform != string(models.AppReleasePlatformAndroid) && platform != string(models.AppReleasePlatformIOS) {
+		platform = ""
+	}
+	device := &models.AppClientDevice{
+		DeviceID:    deviceID,
+		UserID:      userID,
+		Platform:    platform,
+		AppVersion:  strings.TrimSpace(meta.ClientVersion),
+		VersionCode: versionCode,
+		DeviceModel: strings.TrimSpace(meta.DeviceModel),
+		OSVersion:   strings.TrimSpace(meta.OSVersion),
+		LastSeenAt:  time.Now(),
+	}
+	if err := s.statsRepo.TouchClientDevice(ctx, device); err != nil {
+		log.Printf("record client activity failed: device=%s err=%v", deviceID, err)
+	}
+}
+
+// AppClientStatisticsResult 是后台客户端统计的完整响应。
+type AppClientStatisticsResult struct {
+	*models.AppClientStatistics
+	Latest *models.AppClientLatestSummary `json:"latest,omitempty"`
+}
+
+// GetClientStatistics 返回最近 days 天的客户端统计，并结合最新发布版本计算渗透概况。
+func (s *AppReleaseService) GetClientStatistics(ctx context.Context, platform models.AppReleasePlatform, days int) (*AppClientStatisticsResult, error) {
+	if s == nil || s.statsRepo == nil {
+		return nil, errors.New("app client stats not configured")
+	}
+	if days != 7 && days != 30 {
+		days = 30
+	}
+	stats, err := s.statsRepo.GetClientStatistics(ctx, days)
+	if err != nil {
+		return nil, err
+	}
+	result := &AppClientStatisticsResult{AppClientStatistics: stats}
+
+	latest, err := s.repo.GetLatestPublished(ctx, platform)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return result, nil
+		}
+		return nil, err
+	}
+	summary := &models.AppClientLatestSummary{
+		VersionName:             latest.VersionName,
+		VersionCode:             latest.VersionCode,
+		MinSupportedVersionCode: latest.MinSupportedVersionCode,
+	}
+	for _, item := range stats.VersionDistribution {
+		if item.VersionCode == latest.VersionCode {
+			summary.ActiveDevices += item.Devices
+		}
+		if item.VersionCode > 0 && item.VersionCode < latest.MinSupportedVersionCode {
+			summary.BelowMinSupported += item.Devices
+		}
+	}
+	if stats.ActiveDevices > 0 {
+		summary.SharePercent = int(summary.ActiveDevices * 100 / stats.ActiveDevices)
+	}
+	result.Latest = summary
+	return result, nil
 }
 
 // PublishReleaseInput 是管理后台发布版本的入参。
