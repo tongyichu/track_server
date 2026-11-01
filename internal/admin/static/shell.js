@@ -79,7 +79,7 @@
     { href: '/admin/dashboard.html', label: '工作台', icon: 'layout-dashboard', primary: true },
     { href: '/admin/track_submissions.html', label: '投稿审核', icon: 'clipboard-check', primary: true },
     { href: '/admin/tracks.html', label: '轨迹管理', icon: 'route', primary: true },
-    { href: '/admin/scenic_spots.html', label: '景点管理', icon: 'map-2' },
+    { href: '/admin/scenic_spots.html', label: '户外目的地', icon: 'map-2' },
     { href: '/admin/users.html', label: '用户管理', icon: 'users' },
     { href: '/admin/route_groups.html', label: '地图模式', icon: 'map-2' },
     { href: '/admin/companions.html', label: '与友同行', icon: 'friends' },

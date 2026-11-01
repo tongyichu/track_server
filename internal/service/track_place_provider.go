@@ -224,12 +224,90 @@ func (s *TrackPlaceService) amapLookup(ctx context.Context, p models.TrackPoint)
 	}
 	return out, nil
 }
-func amapScenicType(category string) bool {
-	return strings.HasPrefix(category, "11") || strings.Contains(category, "风景名胜") || strings.Contains(category, "公园")
+// 户外目的地内部分类：供应商 POI 分类归一为景区/公园/山系/湖泊四类。
+const (
+	placeKindScenic   = "scenic_spot"
+	placeKindPark     = "park"
+	placeKindMountain = "mountain"
+	placeKindLake     = "lake"
+)
+
+// placeKindFromCategory 把供应商分类（高德 typecode/类型名，Google primaryType）映射为内部目的地分类；
+// name 用于在自然地名等粗粒度分类下细分山系/湖泊。无法识别时返回空串。
+func placeKindFromCategory(provider, category, name string) string {
+	c := strings.ToLower(strings.TrimSpace(category))
+	n := strings.TrimSpace(name)
+	if c == "" {
+		return ""
+	}
+	if provider == "google" {
+		switch c {
+		case "natural_feature":
+			if containsAny(n, "湖", "河", "江", "溪", "水库") {
+				return placeKindLake
+			}
+			return placeKindMountain
+		case "park", "national_park", "campground":
+			return placeKindPark
+		default:
+			return placeKindScenic
+		}
+	}
+	switch {
+	case strings.HasPrefix(c, "1101"):
+		return placeKindPark
+	case strings.HasPrefix(c, "11"):
+		return placeKindScenic
+	case strings.HasPrefix(c, "1904"):
+		if containsAny(n, "湖", "泊", "河", "江", "溪", "水库", "海", "岛") {
+			return placeKindLake
+		}
+		return placeKindMountain
+	case strings.Contains(c, "公园"):
+		return placeKindPark
+	case strings.Contains(c, "风景名胜"):
+		return placeKindScenic
+	}
+	return ""
+}
+
+// placeCandidateOnlyKind 返回 true 表示该分类边界不稳定（山系/湖泊多为点 POI），
+// 自动识别只进候选队列，不直接归属轨迹。
+func placeCandidateOnlyKind(kind string) bool {
+	return kind == placeKindMountain || kind == placeKindLake
+}
+
+// normalizePlaceCategoryDisplay 归一新分类的目录展示名；景区/公园保留供应商原始分类文本。
+func normalizePlaceCategoryDisplay(provider, category, name string) string {
+	switch placeKindFromCategory(provider, category, name) {
+	case placeKindMountain:
+		return "山系"
+	case placeKindLake:
+		return "湖泊"
+	}
+	return strings.TrimSpace(category)
+}
+
+func containsAny(s string, subs ...string) bool {
+	for _, sub := range subs {
+		if strings.Contains(s, sub) {
+			return true
+		}
+	}
+	return false
+}
+
+// amapPlaceAdmitted 判断高德 POI 是否可进入户外目的地识别链路：
+// 11xxxx 风景名胜/公园广场、1904xx 自然地名（山峰/湖泊等），以及旧版类型名兼容。
+func amapPlaceAdmitted(typeCode, typeName string) bool {
+	code := strings.TrimSpace(typeCode)
+	name := strings.TrimSpace(typeName)
+	return strings.HasPrefix(code, "11") || strings.HasPrefix(code, "1904") ||
+		strings.Contains(name, "风景名胜") || strings.Contains(name, "公园")
 }
 
 func (s *TrackPlaceService) googleLookup(ctx context.Context, p models.TrackPoint) ([]placeEvidence, error) {
-	body, _ := json.Marshal(map[string]interface{}{"includedTypes": []string{"tourist_attraction", "park", "national_park", "museum"}, "maxResultCount": 5, "rankPreference": "DISTANCE", "languageCode": "en", "locationRestriction": map[string]interface{}{"circle": map[string]interface{}{"center": map[string]float64{"latitude": p.Latitude, "longitude": p.Longitude}, "radius": 200}}})
+	body, _ := json.Marshal(map[string]interface{}{"includedTypes": []string{"tourist_attraction", "park", "national_park", "museum", "natural_feature", "campground"}, "maxResultCount": 5, "rankPreference": "DISTANCE", "languageCode": "en", "locationRestriction": map[string]interface{}{"circle": map[string]interface{}{"center": map[string]float64{"latitude": p.Latitude, "longitude": p.Longitude}, "radius": 200}}})
 	req, _ := http.NewRequest(http.MethodPost, "https://places.googleapis.com/v1/places:searchNearby", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Goog-Api-Key", s.cfg.GoogleKey)
@@ -620,7 +698,7 @@ func (s *TrackPlaceService) amapScenicDetails(ctx context.Context, spot *models.
 	}
 	spot.Address = strings.TrimSpace(poi.Address)
 	if spot.Category == "" {
-		spot.Category = strings.TrimSpace(poi.Type)
+		spot.Category = normalizePlaceCategoryDisplay("amap", strings.TrimSpace(poi.Type), strings.TrimSpace(poi.Name))
 	}
 	var lat, lng float64
 	if _, err := fmt.Sscanf(string(poi.Location), "%f,%f", &lng, &lat); err == nil && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180 && lat != 0 && lng != 0 {
@@ -692,7 +770,7 @@ func (s *TrackPlaceService) googleScenicDetails(ctx context.Context, spot *model
 		spot.Latitude, spot.Longitude, spot.CoordinateSystem = result.Location.Latitude, result.Location.Longitude, "WGS84"
 	}
 	if spot.Category == "" {
-		spot.Category = result.PrimaryType
+		spot.Category = normalizePlaceCategoryDisplay("google", result.PrimaryType, spot.Name)
 	}
 	for _, photo := range result.Photos {
 		if len(spot.Photos) == 3 {
