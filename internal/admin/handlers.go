@@ -361,14 +361,14 @@ func (h *Handler) GetDashboard(ctx context.Context, c *app.RequestContext) {
 			return
 		}
 		decorateDashboardStatistics(statistics)
-		c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{
+		writeDashboardResponse(h.auth, c, utils.H{
 			"period":  period,
 			"range":   utils.H{"start": start, "end": now, "previous_start": previousStart, "previous_end": previousEnd},
 			"metrics": statistics.Metrics, "funnel": statistics.Funnel, "review": statistics.Review,
 			"feedback": statistics.Feedback, "content": statistics.Content,
 			"engagement": statistics.Engagement, "companion": statistics.Companion,
 			"trend": statistics.Trend, "updated_at": now,
-		}})
+		})
 		return
 	}
 
@@ -433,7 +433,7 @@ func (h *Handler) GetDashboard(ctx context.Context, c *app.RequestContext) {
 		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{
+	writeDashboardResponse(h.auth, c, utils.H{
 		"period": period,
 		"range":  utils.H{"start": start, "end": now, "previous_start": previousStart, "previous_end": previousEnd},
 		"metrics": utils.H{
@@ -445,7 +445,7 @@ func (h *Handler) GetDashboard(ctx context.Context, c *app.RequestContext) {
 		},
 		"trend":      mergeAdminDailyCounts(trendStart, trendEnd, dailyUsers, dailyTracks),
 		"updated_at": now,
-	}})
+	})
 }
 
 func decorateDashboardStatistics(statistics *models.AdminDashboardStatistics) {

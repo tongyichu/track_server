@@ -1,14 +1,4 @@
 (function () {
-  fetch('/admin/api/me').then(function (r) {
-    if (!r.ok) { window.location.href = '/admin/login.html'; return null; }
-    return r.json();
-  }).then(function (j) {
-    if (j && j.data) document.getElementById('userName').textContent = j.data.username;
-  });
-  document.getElementById('logoutBtn').addEventListener('click', async function () {
-    await fetch('/admin/api/logout', { method: 'POST' });
-    window.location.href = '/admin/login.html';
-  });
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')

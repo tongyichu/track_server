@@ -109,6 +109,7 @@
         if (field.maxLength) input.maxLength = field.maxLength;
         if (field.min != null) input.min = String(field.min);
         if (field.step != null) input.step = String(field.step);
+        if (options.readOnly) input.disabled = true;
         group.appendChild(input);
         form.appendChild(group);
       });
@@ -122,6 +123,7 @@
       submit.type = 'submit';
       submit.className = 'btn btn-primary';
       submit.textContent = options.confirmText || '保存';
+      if (options.readOnly) submit.hidden = true;
       footer.append(cancel, submit);
       const modal = new tabler.Modal(root, { backdrop: 'static' });
       let settled = false;
@@ -146,6 +148,7 @@
       root.querySelector('.btn-close').addEventListener('click', function () { finish(null); });
       form.addEventListener('submit', function (event) {
         event.preventDefault();
+        if (options.readOnly) return;
         if (!form.reportValidity()) return;
         const values = {};
         new FormData(form).forEach(function (value, key) { values[key] = String(value); });

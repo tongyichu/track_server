@@ -616,3 +616,23 @@ CREATE TABLE IF NOT EXISTS track_comment_images (
  width INT NOT NULL,height INT NOT NULL,byte_size BIGINT NOT NULL,created_at DATETIME(6) NOT NULL,
  KEY idx_comment_image_owner(user_id,created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+-- 独立后台账号状态；首次迁移后环境变量不再覆盖。整体版本 CAS 保护并发权限调整及最后管理员。
+CREATE TABLE IF NOT EXISTS admin_account_state (
+    id TINYINT UNSIGNED NOT NULL PRIMARY KEY,
+    version BIGINT NOT NULL,
+    payload JSON NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+-- 后台写操作只记录操作人、方法、对象与结果，不记录请求正文、密码或密码哈希。
+CREATE TABLE IF NOT EXISTS admin_audit_logs (
+    id VARCHAR(64) NOT NULL PRIMARY KEY,
+    actor_id VARCHAR(64) NOT NULL,
+    username VARCHAR(64) NOT NULL,
+    method VARCHAR(16) NOT NULL,
+    path VARCHAR(1024) NOT NULL,
+    status INT NOT NULL,
+    created_at DATETIME(6) NOT NULL,
+    KEY idx_admin_audit_created (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;

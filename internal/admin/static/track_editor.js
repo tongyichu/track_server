@@ -4,6 +4,8 @@
   async function openTrackEditor(trackID, options) {
     options = options || {};
     if (!trackID) return false;
+    if (!window.AdminAccess.can('tracks', false)) { window.AdminUI.alert('没有轨迹管理的查看权限', 'warning'); return false; }
+    const readOnly = !window.AdminAccess.can('tracks', true);
     const [trackResponse, citiesResponse] = await Promise.all([
       fetch('/admin/api/tracks/' + encodeURIComponent(trackID)),
       fetch('/admin/api/cities')
@@ -31,11 +33,12 @@
     }
     const preview = track.preview_images || {};
     const values = await window.AdminUI.form({
-      title: '编辑轨迹 ' + trackID,
+      title: (readOnly ? '查看轨迹 ' : '编辑轨迹 ') + trackID,
+      readOnly: readOnly,
       confirmText: '保存修改',
-      cancelText: '删除',
-      cancelDanger: true,
-      onCancel: async function () {
+      cancelText: readOnly ? '关闭' : '删除',
+      cancelDanger: !readOnly,
+      onCancel: readOnly ? null : async function () {
         const confirmed = await window.AdminUI.confirm({ title: '删除轨迹', message: '确认删除轨迹 ' + trackID + '？删除后会标记为已删除，并清理收藏和地图索引。', confirmText: '删除轨迹', danger: true });
         if (!confirmed) return false;
         const response = await fetch('/admin/api/tracks/' + encodeURIComponent(trackID), { method: 'DELETE' });

@@ -48,7 +48,7 @@
     </section>
     <section class="panel" id="detailPanel" hidden>
       <h2 id="detailTitle">投稿详情</h2><div id="detail"></div>
-      <div class="row"><input id="reviewReason" placeholder="驳回原因（驳回时必填）" class="flex1" /><button id="approveBtn">通过</button><button id="rejectBtn" class="danger">驳回</button></div>
+      <div class="row"><input id="reviewReason" data-admin-write="track_submissions" placeholder="驳回原因（驳回时必填）" class="flex1" /><button id="approveBtn" data-admin-write="track_submissions">通过</button><button id="rejectBtn" data-admin-write="track_submissions" class="danger">驳回</button></div>
     </section>
   </main>
   <script src="/admin/static/vendor/tabler.min.js"></script>

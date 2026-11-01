@@ -19,7 +19,8 @@
         err.textContent = data.error || ('登录失败: ' + resp.status);
         return;
       }
-      window.location.href = '/admin/dashboard.html';
+      const payload = await resp.json();
+      window.location.href = (payload.data && payload.data.home) || '/admin/access.html';
     } catch (e) {
       err.textContent = '网络错误: ' + e.message;
     }

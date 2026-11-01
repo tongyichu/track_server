@@ -37,7 +37,7 @@
 
   function chart(id) {
     const element = document.getElementById(id);
-    if (!element) return null;
+    if (!element || element.closest('.admin-permission-hidden')) return null;
     if (!charts[id]) charts[id] = echarts.init(element);
     return charts[id];
   }
@@ -328,18 +328,5 @@
   });
   document.getElementById('refreshDashboard').addEventListener('click', loadDashboard);
   window.addEventListener('resize', function () { Object.keys(charts).forEach(function (key) { charts[key].resize(); }); });
-  fetch('/admin/api/me').then(function (response) {
-    if (!response.ok) {
-      window.location.href = '/admin/login.html';
-      return null;
-    }
-    return response.json();
-  }).then(function (payload) {
-    if (payload && payload.data) document.getElementById('userName').textContent = payload.data.username;
-  });
-  document.getElementById('logoutBtn').addEventListener('click', async function () {
-    await fetch('/admin/api/logout', { method: 'POST' });
-    window.location.href = '/admin/login.html';
-  });
   loadDashboard();
 })();

@@ -7,7 +7,9 @@ import (
 	"crypto/sha256"
 	"embed"
 	"encoding/hex"
+	"encoding/json"
 	"io/fs"
+	"log"
 	"net/http"
 	"path"
 	"strconv"
@@ -40,16 +42,33 @@ type Module struct {
 
 // NewModule 根据配置构造 Module。
 //
-// 当 accounts 为空时，返回的 Module.Auth 为 nil，
-// RegisterRoutes 会跳过路由注册。
+// accounts 仅用于首次导入；已有持久化账号不依赖环境变量继续存在。
+// 无初始账号且数据库未初始化时 Auth 为 nil；账号库不可用则拒绝登录与受保护请求。
 //
 // staticRoot 为服务端本地静态资源根目录（通常是 <LogDir>/static）。
 // 管理后台上传的安装包会落盘到 <staticRoot>/release/<platform>/，
 // 并通过 /api/v1/static/release/<platform>/<file> 对外下发。
 // 留空表示禁用本地上传接口（接口会返回 500）。
-func NewModule(accounts map[string]string, releaseSvc *service.AppReleaseService, stsSvc *service.OSSTokenService, staticRoot string, userRepo repository.UserRepository, trackRepo repository.TrackRepository, collectRepo repository.CollectRepository, trackMapRepo repository.TrackMapRepository, companionRepo repository.CompanionRepository, analyticsRepo repository.AnalyticsRepository, userSvc *service.UserService, feedbackSvc *service.FeedbackService, restrictionSvc *service.AccountRestrictionService, routeGroupSvc *service.TrackRouteGroupService) *Module {
+func NewModule(accounts map[string]string, releaseSvc *service.AppReleaseService, stsSvc *service.OSSTokenService, staticRoot string, userRepo repository.UserRepository, trackRepo repository.TrackRepository, collectRepo repository.CollectRepository, trackMapRepo repository.TrackMapRepository, companionRepo repository.CompanionRepository, analyticsRepo repository.AnalyticsRepository, userSvc *service.UserService, feedbackSvc *service.FeedbackService, restrictionSvc *service.AccountRestrictionService, routeGroupSvc *service.TrackRouteGroupService, storage AccountStorage) *Module {
 	store := NewSessionStore(12 * time.Hour)
-	auth := NewAuthenticator(accounts, store)
+	var auth *Authenticator
+	if len(accounts) > 0 || storage != nil {
+		manager := &AccountManager{storage: storage, bootstrap: accounts}
+		auth = &Authenticator{store: store, manager: manager}
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if storage != nil {
+			version, _, err := storage.Load(ctx)
+			if err == nil && version == 0 && len(accounts) == 0 {
+				auth = nil
+			}
+		}
+		if auth != nil {
+			if _, _, err := manager.load(ctx); err != nil {
+				log.Printf("admin accounts unavailable; login and protected requests will be rejected")
+			}
+		}
+		cancel()
+	}
 	handler := NewHandler(releaseSvc, stsSvc, auth, staticRoot, userRepo, trackRepo, collectRepo, trackMapRepo, companionRepo, analyticsRepo, userSvc, feedbackSvc, restrictionSvc, routeGroupSvc)
 	return &Module{
 		Auth:    auth,
@@ -128,6 +147,9 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	g.GET("/companion_detail.html", serveAdminPage(m.Auth, "static/companion_detail.html"))
 	g.GET("/feedbacks.html", serveAdminPage(m.Auth, "static/feedbacks.html"))
 	g.GET("/analytics.html", serveAdminPage(m.Auth, "static/analytics.html"))
+	g.GET("/accounts.html", serveAdminPage(m.Auth, "static/accounts.html"))
+	g.GET("/password.html", serveAdminPage(m.Auth, "static/password.html"))
+	g.GET("/access.html", serveAdminPage(m.Auth, "static/access.html"))
 	g.GET("/static/*filepath", serveEmbeddedDir())
 
 	// 公开 API
@@ -137,6 +159,12 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 
 	// 鉴权 API
 	api := g.Group("/api", m.Auth.AuthMiddleware())
+	api.GET("/accounts", m.Auth.HandleAccounts)
+	api.POST("/accounts", m.Auth.HandleSaveAccount)
+	api.PUT("/accounts/:username", m.Auth.HandleSaveAccount)
+	api.POST("/accounts/:username/reset-password", m.Auth.HandleResetPassword)
+	api.POST("/password", m.Auth.HandleChangePassword)
+	api.GET("/audit-logs", m.Auth.HandleAuditLogs)
 	api.GET("/releases", m.Handler.ListReleases)
 	api.POST("/releases", m.Handler.PublishRelease)
 	api.DELETE("/releases/:id", m.Handler.DeleteRelease)
@@ -227,13 +255,40 @@ func serveEmbedded(name, contentType string) app.HandlerFunc {
 }
 
 func serveAdminPage(auth *Authenticator, name string) app.HandlerFunc {
-	servePage := serveEmbedded(name, "text/html; charset=utf-8")
 	return func(ctx context.Context, c *app.RequestContext) {
-		if auth == nil || auth.SessionFromRequest(c) == nil {
-			c.Redirect(http.StatusFound, []byte("/admin/login.html"))
+		c.Response.Header.Set("Cache-Control", "no-store")
+		sess, err := auth.session(ctx, c)
+		if err != nil {
+			status, _ := accountErrorStatus(err)
+			if status == 401 {
+				c.Redirect(http.StatusFound, []byte("/admin/login.html"))
+			} else {
+				c.Data(status, "text/plain; charset=utf-8", []byte("后台账号库暂不可用，请稍后重试"))
+			}
 			return
 		}
-		servePage(ctx, c)
+		if sess.Account != nil {
+			if sess.Account.MustChangePassword && name != "static/password.html" {
+				c.Redirect(http.StatusFound, []byte("/admin/password.html"))
+				return
+			}
+			module := pageModule(name)
+			commonPage := name == "static/password.html" || name == "static/access.html" || name == "static/more.html"
+			if !commonPage && (module == "" || !sess.Account.allows(module, false)) {
+				c.Data(http.StatusForbidden, "text/html; charset=utf-8", []byte(`<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>无权限</title><p>没有该页面的查看权限。</p><a href="/admin/access.html">返回后台</a></html>`))
+				return
+			}
+		}
+		data, err := staticFS.ReadFile(name)
+		if err != nil {
+			c.JSON(404, utils.H{"error": "not found"})
+			return
+		}
+		identity, _ := json.Marshal(sessionView(sess))
+		injection := append([]byte(`<script id="admin-session" type="application/json">`), identity...)
+		injection = append(injection, []byte("</script></head>")...)
+		data = bytes.Replace(data, []byte("</head>"), injection, 1)
+		c.Data(http.StatusOK, "text/html; charset=utf-8", data)
 	}
 }
 
@@ -251,6 +306,11 @@ func serveEmbeddedDir() app.HandlerFunc {
 		raw = strings.TrimPrefix(raw, "/")
 		if raw == "" || strings.Contains(raw, "..") {
 			c.JSON(http.StatusBadRequest, utils.H{"error": "invalid path"})
+			return
+		}
+		// 页面只能从经过鉴权和权限检查的具名路由访问。
+		if strings.EqualFold(path.Ext(raw), ".html") {
+			c.JSON(http.StatusNotFound, utils.H{"error": "not found"})
 			return
 		}
 		data, err := fs.ReadFile(sub, raw)

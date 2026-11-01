@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>账号管理 - Track</title>
+  <link rel="stylesheet" href="/admin/static/vendor/tabler.min.css" />
+  <link rel="stylesheet" href="/admin/static/style.css" />
+</head>
+<body>
+  <header class="topbar"></header>
+  <main class="container wide">
+    <div class="page-heading"><div><h1>账号管理</h1><p>维护后台账号、身份和页面权限</p></div><div class="d-flex gap-2"><button id="refreshAccounts" class="btn btn-outline-secondary">刷新</button><button id="createAccount" class="btn btn-primary">新增账号</button></div></div>
+    <p id="accountsError" class="alert alert-danger" hidden role="alert"></p>
+    <section class="panel"><div class="table-responsive"><table class="table data"><thead><tr><th>登录名</th><th>显示名称</th><th>身份</th><th>状态</th><th>最近登录</th><th>操作</th></tr></thead><tbody id="accountsList"></tbody></table></div></section>
+    <section class="panel mt-3"><div class="admin-section-heading"><h2>最近操作记录</h2><button id="refreshAudit" class="btn btn-sm btn-outline-secondary">刷新记录</button></div><p class="hint">展示最近 100 条操作记录，包括账号、权限与业务内容的变更。</p><p id="auditError" class="error" role="alert"></p><div class="table-responsive"><table class="table data"><thead><tr><th>时间</th><th>操作人</th><th>动作</th><th>对象</th><th>结果</th></tr></thead><tbody id="auditList"></tbody></table></div></section>
+  </main>
+  <div class="modal modal-blur fade" id="accountModal" tabindex="-1" aria-labelledby="accountTitle" aria-hidden="true"><div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable"><form id="accountForm" class="modal-content">
+    <div class="modal-header"><h2 id="accountTitle" class="modal-title">新增账号</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
+    <div class="modal-body">
+      <p id="accountFormError" class="alert alert-danger" hidden role="alert"></p>
+      <div class="row g-3">
+        <label class="col-sm-6 form-label">登录名<input name="username" class="form-control" required maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9_.@\-]{0,63}" autocomplete="off" /><small class="form-hint">创建后不可修改</small></label>
+        <label class="col-sm-6 form-label">显示名称<input name="display_name" class="form-control" maxlength="64" /></label>
+        <label class="col-sm-6 form-label">身份<select name="role" class="form-select"><option value="operator">操作员</option><option value="admin">管理员</option></select></label>
+        <label class="col-sm-6 form-label">状态<select name="enabled" class="form-select"><option value="true">启用</option><option value="false">停用</option></select></label>
+        <label id="initialPasswordField" class="col-12 form-label">临时密码<input name="password" type="password" class="form-control" minlength="8" maxlength="72" autocomplete="new-password" /><small class="form-hint">至少 8 个字符，首次登录必须修改</small></label>
+      </div>
+      <div class="mt-3"><h3>页面权限</h3><p id="adminPermissionHint" class="alert alert-info" hidden>管理员拥有全部页面和操作权限，包括账号管理。</p><p class="hint" id="operatorPermissionHint">“可操作”包含页面内的编辑、删除、审核或发布等操作。账号管理仅管理员可用。</p><div id="permissionMatrix" class="table-responsive"><table class="table"><thead><tr><th>页面</th><th>权限</th></tr></thead><tbody id="permissionRows"></tbody></table></div></div>
+    </div>
+    <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button id="saveAccount" type="submit" class="btn btn-primary">保存</button></div>
+  </form></div></div>
+  <script src="/admin/static/vendor/tabler.min.js"></script>
+  <script src="/admin/static/shell.js"></script>
+  <script src="/admin/static/ui.js"></script>
+  <script src="/admin/static/accounts.js"></script>
+</body>
+</html>

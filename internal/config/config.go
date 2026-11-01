@@ -89,9 +89,9 @@ type Config struct {
 	OSSInternalEndpoint   string // Bucket 的访问 Endpoint（内网），仅服务端从 OSS 拉取对象时使用，避免公网下行流量费用。示例：https://oss-cn-beijing-internal.aliyuncs.com
 	OSSUploadPrefix       string // 服务端为“每个用户”分配的上传目录前缀。会在服务端生成最终目录：<prefix>/<userID>/，示例 OSS_UPLOAD_PREFIX=/prod/track/user  => dir=prod/track/user/1001/
 
-	// 管理后台登录凭证（独立于业务用户的鉴权体系）
+	// 管理后台首次初始化凭证（独立于业务用户；初始化后以后台账号库为准）
 	//
-	// 推荐：通过 ADMIN_ACCOUNTS 同时配置多个管理员，格式：
+	// 推荐：通过 ADMIN_ACCOUNTS 同时配置多个初始后台账号，格式：
 	//     user1:bcryptHash1;user2:bcryptHash2
 	//   - 多个账号用 ";" 分隔；用户名与哈希用 ":" 分隔；
 	//   - 哈希里本身可能含 ":"（bcrypt 不会，但保持稳健），username 只截取首个 ":" 之前。
@@ -100,7 +100,9 @@ type Config struct {
 	//   - ADMIN_USERNAME / ADMIN_PASSWORD_HASH
 	//   - 若同时配置 ADMIN_ACCOUNTS 和 ADMIN_USERNAME，会合并；同名用户以 ADMIN_ACCOUNTS 为准。
 	//
-	// 任一来源解析为非空账号集时后台启用；否则后台禁用。
+	// 首次初始化必须包含 admin；其余现有账号迁移为操作员并默认只读。
+	// 已初始化的账号、身份和权限由后台管理，环境变量不覆盖数据库里的变更。
+	// 无初始化账号且数据库无后台账号时禁用后台；账号库不可用时拒绝鉴权，不回退到内存。
 	// 哈希生成示例：htpasswd -nbBC 10 "" "<plain>" | tr -d ':\n' | sed 's/^$2y/$2a/'
 	AdminAccounts map[string]string
 

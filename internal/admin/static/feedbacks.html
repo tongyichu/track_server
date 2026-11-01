@@ -84,7 +84,7 @@
 
     <div class="modal modal-blur fade" id="correctionConfigModal" tabindex="-1" aria-hidden="true" aria-labelledby="correctionConfigTitle">
       <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg" role="document">
-        <form class="modal-content" id="correctionConfigForm">
+        <form class="modal-content" id="correctionConfigForm" data-admin-fields="feedbacks">
           <div class="modal-header">
             <h2 class="modal-title" id="correctionConfigTitle">纠错选项</h2>
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
@@ -96,13 +96,13 @@
               <thead><tr><th>中文名称</th><th>英文（选填）</th><th>排序</th><th>启用</th><th></th></tr></thead>
               <tbody id="correctionConfigRows"></tbody>
             </table>
-            <button type="button" id="correctionConfigAdd" class="btn btn-outline-secondary mt-3" disabled>新增选项</button>
+            <button type="button" id="correctionConfigAdd" data-admin-write="feedbacks" class="btn btn-outline-secondary mt-3" disabled>新增选项</button>
             <div id="correctionConfigError" class="text-danger mt-3" role="alert"></div>
             <div id="correctionConfigSuccess" class="text-success mt-3" role="status"></div>
           </div>
           <div class="modal-footer">
             <button type="button" id="correctionConfigReload" class="btn btn-outline-secondary">重新加载</button>
-            <button type="submit" id="correctionConfigSave" class="btn btn-primary" disabled>保存</button>
+            <button type="submit" id="correctionConfigSave" data-admin-write="feedbacks" class="btn btn-primary" disabled>保存</button>
           </div>
         </form>
       </div>
@@ -143,8 +143,8 @@
                 <strong>图片</strong>
                 <div id="detailImages" class="thumbs"></div>
               </div>
-              <form id="statusForm" class="grid compact-grid">
-                <div id="correctionReplies" class="full hidden">
+              <form id="statusForm" data-admin-fields="feedbacks" class="grid compact-grid">
+                <div id="correctionReplies" data-admin-write="feedbacks" class="full hidden">
                   <span class="form-label">快捷回复</span>
                   <div class="row-actions">
                     <button type="button" class="btn btn-outline-secondary" data-reply="corrected">已修正</button>
@@ -164,7 +164,7 @@
                   <textarea name="reply" id="replyInput" rows="3" maxlength="2000" placeholder="回复会展示给用户"></textarea>
                 </label>
                 <div class="full actions">
-                  <button type="submit">保存处理结果</button>
+                  <button type="submit" data-admin-write="feedbacks">保存处理结果</button>
                   <span class="error" id="saveErr"></span>
                   <span class="ok" id="saveOk"></span>
                 </div>

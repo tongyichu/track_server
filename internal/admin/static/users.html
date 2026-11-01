@@ -81,7 +81,7 @@
 
   <div class="modal modal-blur fade" id="userDetailModal" tabindex="-1" aria-hidden="true" aria-labelledby="userDetailTitle">
     <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg" role="document">
-      <form class="modal-content" id="userDetailForm">
+      <form class="modal-content" id="userDetailForm" data-admin-fields="users">
         <div class="modal-header">
           <h2 class="modal-title" id="userDetailTitle">用户资料</h2>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
@@ -103,7 +103,7 @@
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button>
-          <button type="submit" class="btn btn-primary" id="userDetailSave">保存</button>
+          <button type="submit" class="btn btn-primary" id="userDetailSave" data-admin-write="users">保存</button>
         </div>
       </form>
     </div>

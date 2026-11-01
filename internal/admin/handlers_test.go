@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -92,11 +93,11 @@ func TestAdminFeedbackDetailRewritesImageURLAndServesImage(t *testing.T) {
 	}
 
 	h := server.Default()
-	module := NewModule(map[string]string{"admin": string(placeholderPasswordHash)}, nil, nil, staticRoot, nil, nil, nil, nil, nil, nil, nil, feedbackSvc, nil, nil)
+	module := NewModule(map[string]string{"admin": string(placeholderPasswordHash)}, nil, nil, staticRoot, nil, nil, nil, nil, nil, nil, nil, feedbackSvc, nil, nil, &adminAccountTestStorage{})
 	module.RegisterRoutes(h)
 	defer module.Close()
 
-	session, err := module.Auth.store.Create("admin")
+	session, err := createAdminHandlerSession(module)
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
@@ -150,10 +151,10 @@ func TestAdminListFeedbacksFiltersByVersionAndPhone(t *testing.T) {
 	}
 
 	h := server.Default()
-	module := NewModule(map[string]string{"admin": string(placeholderPasswordHash)}, nil, nil, t.TempDir(), userRepo, nil, nil, nil, nil, nil, nil, feedbackSvc, nil, nil)
+	module := NewModule(map[string]string{"admin": string(placeholderPasswordHash)}, nil, nil, t.TempDir(), userRepo, nil, nil, nil, nil, nil, nil, feedbackSvc, nil, nil, &adminAccountTestStorage{})
 	module.RegisterRoutes(h)
 	defer module.Close()
-	session, err := module.Auth.store.Create("admin")
+	session, err := createAdminHandlerSession(module)
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
@@ -231,10 +232,10 @@ func TestAdminRouteGroupOperations(t *testing.T) {
 
 	h := server.Default()
 	routeGroupSvc := service.NewTrackRouteGroupService(mapRepo)
-	module := NewModule(map[string]string{"admin": string(placeholderPasswordHash)}, nil, nil, t.TempDir(), nil, trackRepo, nil, mapRepo, nil, nil, nil, nil, nil, routeGroupSvc)
+	module := NewModule(map[string]string{"admin": string(placeholderPasswordHash)}, nil, nil, t.TempDir(), nil, trackRepo, nil, mapRepo, nil, nil, nil, nil, nil, routeGroupSvc, &adminAccountTestStorage{})
 	module.RegisterRoutes(h)
 	defer module.Close()
-	session, err := module.Auth.store.Create("admin")
+	session, err := createAdminHandlerSession(module)
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
@@ -336,11 +337,11 @@ func TestAdminListTracksRewritesScreenshotURL(t *testing.T) {
 	screenshotCache.SetDownloader(adminFakeDownloader{})
 
 	h := server.Default()
-	module := NewModule(map[string]string{"admin": string(placeholderPasswordHash)}, nil, nil, staticRoot, nil, trackRepo, nil, nil, nil, nil, nil, nil, nil, nil)
+	module := NewModule(map[string]string{"admin": string(placeholderPasswordHash)}, nil, nil, staticRoot, nil, trackRepo, nil, nil, nil, nil, nil, nil, nil, nil, &adminAccountTestStorage{})
 	module.Handler.SetScreenshotCache(screenshotCache)
 	module.RegisterRoutes(h)
 	defer module.Close()
-	session, err := module.Auth.store.Create("admin")
+	session, err := createAdminHandlerSession(module)
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
@@ -444,10 +445,10 @@ func TestAdminDeleteTrackCleansRelatedData(t *testing.T) {
 	}
 
 	h := server.Default()
-	module := NewModule(map[string]string{"admin": string(placeholderPasswordHash)}, nil, nil, t.TempDir(), nil, trackRepo, collectRepo, mapRepo, nil, nil, nil, nil, nil, nil)
+	module := NewModule(map[string]string{"admin": string(placeholderPasswordHash)}, nil, nil, t.TempDir(), nil, trackRepo, collectRepo, mapRepo, nil, nil, nil, nil, nil, nil, &adminAccountTestStorage{})
 	module.RegisterRoutes(h)
 	defer module.Close()
-	session, err := module.Auth.store.Create("admin")
+	session, err := createAdminHandlerSession(module)
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
@@ -536,4 +537,51 @@ func testPNGBytes() []byte {
 		0xb0, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e,
 		0x44, 0xae, 0x42, 0x60, 0x82,
 	}
+}
+
+// 既有路由用例显式注入隔离账号存储；生产入口仅注入 MySQL/Mongo，不允许降级到内存。
+type adminAccountTestStorage struct {
+	mu      sync.Mutex
+	version int64
+	data    []byte
+	audit   []AuditEntry
+}
+
+func (s *adminAccountTestStorage) Load(context.Context) (int64, []byte, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.version, append([]byte(nil), s.data...), nil
+}
+func (s *adminAccountTestStorage) Save(_ context.Context, version int64, data []byte) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if version != s.version {
+		return false, nil
+	}
+	s.version++
+	s.data = append([]byte(nil), data...)
+	return true, nil
+}
+func (s *adminAccountTestStorage) AppendAudit(_ context.Context, entry AuditEntry) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.audit = append(s.audit, entry)
+	return nil
+}
+func (s *adminAccountTestStorage) ListAudit(context.Context, int) ([]AuditEntry, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]AuditEntry(nil), s.audit...), nil
+}
+func createAdminHandlerSession(module *Module) (*Session, error) {
+	account, err := module.Auth.manager.get(context.Background(), "admin")
+	if err != nil {
+		return nil, err
+	}
+	session, err := module.Auth.store.Create("admin")
+	if err != nil {
+		return nil, err
+	}
+	session.AccountID, session.SecurityVersion = account.ID, account.SecurityVersion
+	return session, nil
 }

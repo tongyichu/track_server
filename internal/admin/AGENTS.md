@@ -28,12 +28,12 @@
 ## 硬性约束
 
 - **独立鉴权链路**：admin 走自有的 `Authenticator` + `SessionStore`（cookie 名 `admin_session`），**不要复用** `internal/middleware.JWTAuthMiddleware` 也不要在 admin 路由里塞 `RequestMeta` 中间件。业务用户与管理员是两套体系。
-- **凭证来源唯一**：管理员账号只来自环境变量。支持两种格式：
-  - **推荐**：`ADMIN_ACCOUNTS=user1:bcryptHash1;user2:bcryptHash2`（多账号，`;` / `,` 分隔，首个 `:` 分割 username 与 hash）。
-  - **兼容**：旧单账号 `ADMIN_USERNAME` / `ADMIN_PASSWORD_HASH`。两者同时存在时合并，同名用户以 `ADMIN_ACCOUNTS` 为准。
-  - `deploy/docker-compose.yml` 在未提供覆盖值时使用 `admin` / `admin`（密码以 bcrypt hash 注入）；生产部署如需更换，通过环境变量覆盖默认值。
-  - **禁止把管理员信息写入数据库**，避免和业务用户表交叉。
-- **未配置即禁用**：上面两种来源解析出的账号集为空时，`NewModule` 返回的 `Module.Auth` 为 `nil`，`RegisterRoutes` 直接不挂载任何 `/admin/*` 路由——这是"后台未启用"的唯一信号，新增功能不要绕过这个开关。
+- **账号独立持久化**：后台使用 `AccountManager` + `AccountStorage`，由 `cmd/server/main.go` 注入当前 MySQL/Mongo 的 `admin_account_state` 和 `admin_audit_logs`。账号状态以单行/单文档 JSON 加整体 version CAS 保存，账号内 `revision` 防止管理员覆盖彼此编辑，`security_version` 使停用/重置密码跨进程失效。不得复用 App 用户表，也不得在数据库不可用或业务仓储降级时回退到环境变量鉴权或内存账号。
+- **首次迁移**：仅账号状态尚未初始化时读取 `ADMIN_ACCOUNTS=user:bcryptHash;...` 与兼容的 `ADMIN_USERNAME` / `ADMIN_PASSWORD_HASH`；同名优先多账号配置。必须包含 `admin`：该账号迁移为管理员，其他既有账号迁移为操作员，默认所有当前业务页面只读，不含账号管理。保留既有密码。已迁移后数据库是唯一账号权威，环境变量不再新增、覆盖或恢复账号。新增账号与重置密码要求下次登录先改密码；新增操作员未授权页面默认无权限。
+- **启用与故障关闭**：数据库未初始化且无初始账号时不挂载后台；已有持久化账号即使移除初始化环境变量仍启用。账号库不可用时登录/受保护请求拒绝（通常 503）；未挂载时保持 404。`USE_IN_MEMORY` 不提供后台账号降级。
+- **身份与权限**：管理员拥有全部权限，只有管理员可访问 `/admin/accounts.html`、`/admin/api/accounts*` 与审计日志；操作员每个模块只有 `none/read/write` 三档，write 包含页面所有业务操作。HTML、API、受保护静态资源均校验；未知模块默认拒绝。`permissions.go` 是页面/接口权限映射权威，账号模块清单在 `accounts.go`。新增页面/API 时同步映射，不能只隐藏导航。
+- **跨页面与汇总**：景点相关轨迹的查看/编辑同时校验轨迹模块权限。工作台按各业务模块过滤指标，其他页面通过 `/dashboard?scope=tracks|track_submissions|feedbacks` 只读取自身统计。只读景点页不得触发供应商回填或编辑；共享轨迹弹窗支持只读。`shell.js` 统一身份标签、导航、只读控件和退出，不再由各业务脚本覆盖账号展示。
+- **账号保护与日志**：整体 CAS 原子保护最后一个启用的管理员，停用/改密码使所有会话失效，调整权限由后续请求实时读取。后台写请求校验同源、记录发起和 HTTP 结果；日志不可用时拒绝发起写操作，不存正文、密码或哈希。后置结果写入失败时保留发起日志并记录 server log，不能声称业务与日志跨库事务原子。所有后台受保护数据响应使用 no-store；静态 HTML 禁止通过 `/admin/static/*` 访问。
 - **会话仅内存**：`SessionStore` 使用 `sync.RWMutex` + `map`，进程重启即失效。**不要替换为持久化存储**；管理员重新登录是合理代价。
 - **静态资源经 `go:embed`**：`static/` 目录通过 `//go:embed static` 内置进二进制；新增前端文件后**必须放到** `internal/admin/static/`，否则二进制找不到。`/admin/static/*filepath` 路由只读 `staticFS`，不读磁盘。
 - **安装包本机上传**：管理后台安装包上传走 `POST /admin/api/releases/upload-package`，服务端校验 APK/IPA 并读取包内版本名、版本号/Build、应用标识，同时计算大小和 MD5；前端使用返回的下载地址自动填写 `package_url`。发布页面固定 Android/APK，版本名和版本号只由包解析结果写入隐藏字段；服务端接口仍保留 iOS 兼容性。不要再把发布包上传链路改回浏览器 OSS 直传。
@@ -43,7 +43,12 @@
 
 ```
 internal/admin/
-├── auth.go         # Authenticator + bcrypt 校验 + cookie + AuthMiddleware
+├── auth.go         # 持久化账号鉴权 + bcrypt + cookie + AuthMiddleware
+├── accounts.go     # 账号、身份、模块权限、首次导入和账号版本
+├── account_storage.go # MySQL/Mongo 状态 CAS + 操作日志
+├── account_handlers.go # 账号管理、改密与日志接口
+├── permissions.go  # HTML/API/资源与跨模块授权
+├── dashboard_permissions.go # 工作台统计响应裁剪
 ├── session.go      # SessionStore (内存 + GC 协程，TTL 默认 12h)
 ├── handlers.go     # /admin/api/releases*、/admin/api/feedbacks*、/admin/api/route-groups*、/admin/api/track-submissions*、安装包上传、列表查询
 ├── routes.go       # NewModule / RegisterRoutes / go:embed static
@@ -57,8 +62,8 @@ internal/admin/
 | --- | --- |
 | 路由清单 | `routes.go` 中 `RegisterRoutes` |
 | 鉴权与 cookie | `auth.go`（`sessionCookieName = "admin_session"`） |
-| 业务依赖注入 | `routes.go` 的 `NewModule(accounts, releaseSvc, stsSvc, staticRoot, userRepo, trackRepo, collectRepo, trackMapRepo, ..., restrictionSvc, routeGroupSvc)`；`cmd/server/main.go` 创建后通过 `Handler.SetScreenshotCache(screenshotCache)`、`Handler.SetTrackSubmissionService(trackSubmissionSvc)` 和 `Handler.SetDashboardStatisticsRepository(...)` 注入缓存、投稿与跨域只读统计能力 |
-| 前端入口 | `static/login.html`、`static/index.html` |
+| 业务依赖注入 | `routes.go` 的 `NewModule(accounts, releaseSvc, stsSvc, staticRoot, userRepo, trackRepo, collectRepo, trackMapRepo, ..., restrictionSvc, routeGroupSvc, accountStorage)`；`cmd/server/main.go` 创建后通过 `Handler.SetScreenshotCache(screenshotCache)`、`Handler.SetTrackSubmissionService(trackSubmissionSvc)` 和 `Handler.SetDashboardStatisticsRepository(...)` 注入缓存、投稿与跨域只读统计能力 |
+| 前端入口 | `static/login.html`；登录后按授权页面跳转；账号管理 `static/accounts.html`、改密 `static/password.html`、无业务权限 `static/access.html` |
 | 响应式外壳与工作台 | `static/shell.js`、`static/ui.js`、`static/style.css`、`static/dashboard.html`、`static/dashboard.js`；组件库固定为内置 Tabler 1.7.1，图标为 Tabler Icons 3.49.0，图表为 ECharts 6.1.0，均位于 `static/vendor/`，不要改成运行时 CDN |
 | 安装包上传 | `handlers.go` 中 `UploadPackage`、`static/app.js` 中 `/admin/api/releases/upload-package` |
 | 用户与账号限制 | `handlers.go` 中 `ListUsers` / `CreateAccountRestriction` / `GetCurrentAccountRestriction` / `RevokeCurrentAccountRestriction`，`static/users.html`、`static/users.js` |
@@ -131,12 +136,27 @@ internal/admin/
 | GET | `/admin/api/track-submissions/:submission_id` | 鉴权 | 投稿、轨迹和审核流水详情 |
 | POST | `/admin/api/track-submissions/:submission_id/review` | 鉴权 | 按 expected_revision 通过或驳回投稿 |
 
+### 后台账号新增路由
+
+| 方法 | 路径 | 权限 | 说明 |
+| --- | --- | --- | --- |
+| GET | `/admin/accounts.html` | 管理员 | 账号与最近操作日志 |
+| GET | `/admin/password.html` | 登录 | 修改本人密码，临时密码账号只允许此页 |
+| GET | `/admin/access.html` | 登录 | 授权页面入口；无权限时联系管理员 |
+| GET | `/admin/api/accounts` | 管理员 | 账号列表与模块目录，不下发密码哈希 |
+| POST | `/admin/api/accounts` | 管理员 | 新建账号，临时密码必须修改 |
+| PUT | `/admin/api/accounts/:username` | 管理员 | 按 revision 修改名称、身份、状态和权限 |
+| POST | `/admin/api/accounts/:username/reset-password` | 管理员 | 按 revision 重置密码并使全部登录失效 |
+| POST | `/admin/api/password` | 登录 | 验证原密码、修改本人密码并使全部登录失效 |
+| GET | `/admin/api/audit-logs` | 管理员 | 最近 100 条发起/结果日志 |
+
 ## 关键流程
 
 **登录**：
 ```
 POST /admin/api/login {username,password}
-  → Authenticator.Verify (constant-time username + bcrypt password)
+  → AccountManager 从持久化状态取账号 → bcrypt 校验 → 更新最近登录
+  → admin=管理员，其余既有账号=只读操作员（仅首次导入）
   → SessionStore.Create → Set-Cookie admin_session=<32B hex>; HttpOnly; SameSite=Lax
 ```
 
@@ -305,7 +325,7 @@ Kimi 景点简介使用 `MOONSHOT_API_KEY` 和可选的 `KIMI_SCENIC_DESCRIPTION
 
 ## 改动导航
 
-- **加一个管理后台 API**：在 `handlers.go` 或按业务域拆分的 handler 文件写 handler → `routes.go` 的 `api := g.Group("/api", m.Auth.AuthMiddleware())` 下挂载。需要操作者信息时用 `h.auth.SessionFromRequest(c)`。
+- **加一个管理后台 API**：在业务 handler 写实现 → 在 `routes.go` 的鉴权 api 组挂载 → 同步 `permissions.go` 的模块/读写/跨页面规则。需要操作者信息时用 `h.auth.SessionFromRequest(c)`；未知模块不能默认放行。
 - **展示业务静态资源**：后台页面不要直接使用 `/api/v1/static/*`，应由 handler 改写为 `/admin/api/static/*`，通过 admin session 鉴权后读取 `staticRoot`。
 - **加一个公开页面/资源**：把文件放进 `static/`，在 `routes.go` 用 `serveEmbedded(...)` 或走 `/admin/static/*filepath`。**不要新增第二个 `go:embed`**。
 - **加一个侧边/顶部入口**：统一修改 `static/shell.js` 的导航配置；页面只需在自身脚本前加载 `shell.js`，不要再复制一份导航。
@@ -329,5 +349,5 @@ Kimi 景点简介使用 `MOONSHOT_API_KEY` 和可选的 `KIMI_SCENIC_DESCRIPTION
   **事实**：那是按 userID 隔离的用户目录，policy 不允许写入 `release/`，必须用 `GetReleaseUploadCredential`。
 - **误解**：进程重启后会话还在。
   **事实**：`SessionStore` 是纯内存实现，重启即清空，必须重新登录。
-- **误解**：管理员账号在数据库里。
-  **事实**：账号只来自 `ADMIN_ACCOUNTS` / `ADMIN_USERNAME` / `ADMIN_PASSWORD_HASH` 环境变量，bcrypt 校验，不查任何表；Docker Compose 提供 `admin/admin` 默认值，可通过环境变量覆盖。
+- **误解**：改环境变量可以覆盖后台密码或恢复已停用账号。
+  **事实**：环境变量仅首次导入；此后以独立持久化账号为准。数据库不可用时拒绝鉴权，不重建临时管理员。

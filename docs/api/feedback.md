@@ -176,3 +176,6 @@
 每项 `name` 必填且最多 24 个 Unicode 字符，`name_en` 可空且最多 64 字，名称不能换行；`sort_order` 为 0-9999 整数，`enabled` 为布尔值。最多 30 项；新增项省略/留空 `id`，由服务端生成。已有 ID 不可修改或删除，不需要的选项设 `enabled=false`。保存后客户端下次进入纠错页即可看到变更，无需发版。
 
 配置由 `FeedbackRepository` 在 MySQL 的 `feedback_correction_config`、Mongo 同名 collection 或内存降级仓储保存；内存降级下进程重启后配置丢失。MySQL 启动自动补建配置表和 `user_feedbacks.correction_json`，Mongo 的反馈快照为 `correction` 子文档。
+
+
+后台页面权限遵循 [admin-accounts.md](admin-accounts.md)：反馈与纠错模块只读账号可查看反馈及纠错选项，处理反馈或保存纠错配置需该模块可操作权限。反馈页面统计通过 `/admin/api/dashboard?period=month&scope=feedbacks` 只读取反馈部分。

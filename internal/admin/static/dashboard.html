@@ -25,24 +25,24 @@
     <div id="dashboardError" class="notice error hidden"></div>
 
     <section class="metric-grid dashboard-metrics" aria-live="polite">
-      <article class="metric-card metric-primary"><span>活跃用户</span><strong id="activeUsers">--</strong><small id="activeUsersDelta">正在加载</small></article>
-      <article class="metric-card"><span>新增用户</span><strong id="newUsers">--</strong><small id="newUsersDelta">正在加载</small></article>
-      <article class="metric-card"><span>新增用户轨迹</span><strong id="uploadedTracks">--</strong><small id="uploadedTracksDelta">正在加载</small></article>
-      <article class="metric-card"><span>上传轨迹用户</span><strong id="uploadUsers">--</strong><small id="uploadUsersDelta">正在加载</small></article>
-      <article class="metric-card"><span>新增投稿</span><strong id="submissions">--</strong><small id="submissionsDelta">正在加载</small></article>
-      <a class="metric-card metric-action" href="/admin/track_submissions.html?status=pending"><span>待审核投稿</span><strong id="pendingSubmissions">--</strong><small id="pendingSubmissionHint">查看审核队列</small></a>
-      <a class="metric-card metric-action" href="/admin/feedbacks.html?status=pending"><span>待处理反馈</span><strong id="pendingFeedback">--</strong><small id="pendingFeedbackHint">查看反馈队列</small></a>
-      <a class="metric-card metric-action" href="/admin/companions.html"><span>活跃同行</span><strong id="activeCompanions">--</strong><small>查看实时会话</small></a>
+      <article class="metric-card metric-primary" data-admin-read="users"><span>活跃用户</span><strong id="activeUsers">--</strong><small id="activeUsersDelta">正在加载</small></article>
+      <article class="metric-card" data-admin-read="users"><span>新增用户</span><strong id="newUsers">--</strong><small id="newUsersDelta">正在加载</small></article>
+      <article class="metric-card" data-admin-read="tracks"><span>新增用户轨迹</span><strong id="uploadedTracks">--</strong><small id="uploadedTracksDelta">正在加载</small></article>
+      <article class="metric-card" data-admin-read="tracks"><span>上传轨迹用户</span><strong id="uploadUsers">--</strong><small id="uploadUsersDelta">正在加载</small></article>
+      <article class="metric-card" data-admin-read="track_submissions"><span>新增投稿</span><strong id="submissions">--</strong><small id="submissionsDelta">正在加载</small></article>
+      <a class="metric-card metric-action" href="/admin/track_submissions.html?status=pending" data-admin-read="track_submissions"><span>待审核投稿</span><strong id="pendingSubmissions">--</strong><small id="pendingSubmissionHint">查看审核队列</small></a>
+      <a class="metric-card metric-action" href="/admin/feedbacks.html?status=pending" data-admin-read="feedbacks"><span>待处理反馈</span><strong id="pendingFeedback">--</strong><small id="pendingFeedbackHint">查看反馈队列</small></a>
+      <a class="metric-card metric-action" href="/admin/companions.html" data-admin-read="companions"><span>活跃同行</span><strong id="activeCompanions">--</strong><small>查看实时会话</small></a>
     </section>
 
     <section class="dashboard-section">
       <div class="section-heading"><div><h2>增长与转化</h2><p>观察用户增长是否真正转化为轨迹供给和优质投稿</p></div><span class="section-range" id="rangeHint"></span></div>
       <div class="dashboard-layout dashboard-layout-main">
-        <article class="panel dashboard-card dashboard-card-wide">
+        <article class="panel dashboard-card dashboard-card-wide" data-admin-read="users tracks">
           <div class="dashboard-card-header"><div><h3>用户与轨迹趋势</h3><p>新增、活跃与上传趋势</p></div></div>
           <div class="dashboard-card-body"><div id="trendChart" class="dashboard-chart chart-large" role="img" aria-label="用户和轨迹趋势图"></div></div>
         </article>
-        <article class="panel dashboard-card">
+        <article class="panel dashboard-card" data-admin-read="users tracks track_submissions">
           <div class="dashboard-card-header"><div><h3>新增用户转化</h3><p>同周期新增用户 Cohort</p></div></div>
           <div class="dashboard-card-body"><div id="funnelChart" class="dashboard-chart chart-large" role="img" aria-label="新增用户转化漏斗"></div></div>
         </article>
@@ -52,7 +52,7 @@
     <section class="dashboard-section">
       <div class="section-heading"><div><h2>运营效率</h2><p>优先处理积压、超时和异常任务</p></div></div>
       <div class="dashboard-layout dashboard-layout-equal">
-        <article class="panel dashboard-card">
+        <article class="panel dashboard-card" data-admin-read="track_submissions">
           <div class="dashboard-card-header"><div><h3>投稿审核</h3><p>当前积压与本周期处理质量</p></div><a href="/admin/track_submissions.html?status=pending">进入审核</a></div>
           <div class="dashboard-card-body">
             <div class="stat-list stat-list-four">
@@ -67,7 +67,7 @@
           </div>
         </article>
 
-        <article class="panel dashboard-card">
+        <article class="panel dashboard-card" data-admin-read="feedbacks">
           <div class="dashboard-card-header"><div><h3>意见反馈</h3><p>处理队列、效率和来源分布</p></div><a href="/admin/feedbacks.html">处理反馈</a></div>
           <div class="dashboard-card-body">
             <div class="stat-list stat-list-four">
@@ -84,16 +84,16 @@
       </div>
     </section>
 
-    <section class="dashboard-section">
+    <section class="dashboard-section" data-admin-read="tracks">
       <div class="section-heading"><div><h2>内容供给与质量</h2><p>查看轨迹类型、区域分布以及需要修复的数据</p></div><a class="section-link" href="/admin/tracks.html">管理轨迹</a></div>
       <div class="quality-strip">
         <article><span>平均距离</span><strong id="avgDistance">--</strong></article>
         <article><span>平均时长</span><strong id="avgDuration">--</strong></article>
         <article class="warning"><span>长时间运行中</span><strong id="staleRunning">--</strong></article>
         <article class="warning"><span>零距离轨迹</span><strong id="zeroDistance">--</strong></article>
-        <article class="danger"><span>索引失败</span><strong id="failedMapJobs">--</strong></article>
-        <article><span>待建索引</span><strong id="pendingMapJobs">--</strong></article>
-        <article><span>有效路线组</span><strong id="activeRouteGroups">--</strong></article>
+        <article class="danger" data-admin-read="route_groups"><span>索引失败</span><strong id="failedMapJobs">--</strong></article>
+        <article data-admin-read="route_groups"><span>待建索引</span><strong id="pendingMapJobs">--</strong></article>
+        <article data-admin-read="route_groups"><span>有效路线组</span><strong id="activeRouteGroups">--</strong></article>
       </div>
       <div class="dashboard-layout dashboard-layout-thirds">
         <article class="panel dashboard-card"><div class="dashboard-card-header"><div><h3>公开状态</h3><p>本周期新增轨迹</p></div></div><div class="dashboard-card-body"><div id="trackStatusChart" class="dashboard-chart chart-medium"></div></div></article>
@@ -105,7 +105,7 @@
     <section class="dashboard-section">
       <div class="section-heading"><div><h2>互动与同行</h2><p>衡量内容消费效果以及同行功能使用情况</p></div></div>
       <div class="dashboard-layout dashboard-layout-main">
-        <article class="panel dashboard-card dashboard-card-wide">
+        <article class="panel dashboard-card dashboard-card-wide" data-admin-read="tracks">
           <div class="dashboard-card-header"><div><h3>内容互动趋势</h3><p>收藏、导航、点赞与评论</p></div></div>
           <div class="dashboard-card-body">
             <div class="stat-list stat-list-four engagement-summary">
@@ -117,7 +117,7 @@
             <div id="engagementChart" class="dashboard-chart chart-large"></div>
           </div>
         </article>
-        <article class="panel dashboard-card">
+        <article class="panel dashboard-card" data-admin-read="companions">
           <div class="dashboard-card-header"><div><h3>同行概览</h3><p>会话使用和结束情况</p></div><a href="/admin/companions.html">查看会话</a></div>
           <div class="dashboard-card-body companion-overview">
             <div class="companion-primary"><span>当前活跃</span><strong id="companionActive">--</strong><small>个同行会话</small></div>
@@ -129,7 +129,7 @@
         </article>
       </div>
 
-      <article class="panel dashboard-card top-tracks-card">
+      <article class="panel dashboard-card top-tracks-card" data-admin-read="tracks">
         <div class="dashboard-card-header"><div><h3>热门轨迹</h3><p>按收藏、导航、点赞和评论累计互动排序</p></div></div>
         <div class="dashboard-card-body dashboard-table-wrap">
           <table class="data dashboard-table">

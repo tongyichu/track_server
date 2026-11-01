@@ -65,6 +65,7 @@
       remove.type = 'button';
       remove.className = 'btn btn-sm btn-outline-danger';
       remove.textContent = '移除';
+      remove.dataset.adminWrite = 'feedbacks';
       remove.addEventListener('click', function () {
         row.remove();
         setDirty(true);

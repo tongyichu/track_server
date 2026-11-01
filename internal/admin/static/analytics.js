@@ -1,18 +1,5 @@
 (function () {
-  fetch('/admin/api/me').then(function (r) {
-    if (!r.ok) { window.location.href = '/admin/login.html'; return null; }
-    return r.json();
-  }).then(function (j) {
-    if (j && j.data) {
-      var el = document.getElementById('userName');
-      if (el) el.textContent = '👤 ' + j.data.username;
-    }
-  });
 
-  document.getElementById('logoutBtn').addEventListener('click', async function () {
-    await fetch('/admin/api/logout', { method: 'POST' });
-    window.location.href = '/admin/login.html';
-  });
 
   var pageSize = 20;
   var offsetStack = [0];

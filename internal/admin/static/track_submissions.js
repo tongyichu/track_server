@@ -2,8 +2,6 @@
   var selected = null;
   function esc(v) { return String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   async function api(path, options) { var r = await fetch(path, options); var j = await r.json(); if (!r.ok) throw new Error(j.error || ('HTTP '+r.status)); return j.data; }
-  api('/admin/api/me').then(function (d) { document.getElementById('userName').textContent = '👤 '+d.username; }).catch(function(){ location.href='/admin/login.html'; });
-  document.getElementById('logoutBtn').onclick = async function(){ await fetch('/admin/api/logout',{method:'POST'}); location.href='/admin/login.html'; };
   async function load() {
     var status = document.getElementById('status').value;
     var data = await api('/admin/api/track-submissions?limit=100&status='+encodeURIComponent(status));
@@ -13,7 +11,7 @@
   async function loadStats() {
     var ids = ['submissionPending', 'submissionOver24', 'submissionOver72', 'submissionApproved', 'submissionRejected', 'submissionApprovalRate', 'submissionAvgHours'];
     try {
-      var data = await api('/admin/api/dashboard?period=month');
+      var data = await api('/admin/api/dashboard?period=month&scope=track_submissions');
       var review = data.review || {};
       var reviewed = Number(review.approved || 0) + Number(review.rejected || 0);
       function set(id, value) { document.getElementById(id).textContent = value; }

@@ -1,17 +1,4 @@
 (function () {
-  fetch('/admin/api/me').then(function (r) {
-    if (!r.ok) { window.location.href = '/admin/login.html'; return null; }
-    return r.json();
-  }).then(function (j) {
-    if (j && j.data) {
-      var el = document.getElementById('userName');
-      if (el) el.textContent = '👤 ' + j.data.username;
-    }
-  });
-  document.getElementById('logoutBtn').addEventListener('click', async function () {
-    await fetch('/admin/api/logout', { method: 'POST' });
-    window.location.href = '/admin/login.html';
-  });
 
   function esc(s) {
     return String(s == null ? '' : s)
@@ -124,7 +111,7 @@
         '<td><span class="track-user">' + avatar + '<span>' + esc(it.user_name || '未知用户') + '</span></span></td>' +
         '<td>' + screenshotCell + '</td>' +
         '<td><span class="badge ' + statusClass + '">' + esc(statusText(it.status)) + '</span></td>' +
-        '<td><button class="btn btn-sm btn-outline-primary js-edit-track" data-track-id="' + esc(it.id) + '">编辑</button></td>';
+        '<td><button class="btn btn-sm btn-outline-primary js-edit-track" data-track-id="' + esc(it.id) + '">' + (AdminAccess.can('tracks', true) ? '编辑' : '查看') + '</button></td>';
       tbody.appendChild(tr);
     });
 
@@ -177,7 +164,7 @@
     var typeBody = document.getElementById('typeStats');
     var cityBody = document.getElementById('cityStats');
     try {
-      var resp = await fetch('/admin/api/dashboard?period=month');
+      var resp = await fetch('/admin/api/dashboard?period=month&scope=tracks');
       if (!resp.ok) throw new Error(String(resp.status));
       var data = ((await resp.json()).data) || {};
       if (citiesLoaded) await citiesLoaded;

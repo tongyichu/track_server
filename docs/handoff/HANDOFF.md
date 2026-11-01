@@ -1,5 +1,24 @@
 # 工作交接：协议 H5 页面（2026-10-13）
 
+## 2026-11-01：部署后台账号与页面权限
+
+- 用户在本轮明确要求部署，授权按 android-track-release 完成 track_server 的同步、提交、推送、镜像构建和生产更新；不发布 App。
+- main 已 fetch 并与 origin/main 对齐，发布源码沿用本轮通过的 go build、20 个 JS 语法检查和差异自查；不新增或运行自动化测试。
+- 部署必须保留生产 .env 和全部既有后台初始化账号，核对 OPS_INTERNAL_TOKEN 与 admin 初始化账号存在但不输出凭证。首次启动自动导入为 admin 管理员及其余只读操作员；账号库不可用不能以内存鉴权兜底。
+- 最终提交、镜像摘要、容器、内外网健康与账号初始化结果以本次部署回执和会话最终回复为准；本节为部署前记录，不能据此声称已上线。
+
+## 2026-11-01：后台账号持久化、管理员与操作员页面权限（本地实现，未部署）
+
+- 用户已确认：管理员全权限；操作员按页面 none/read/write 三档，不细分动作；跨页面检查实际所属模块。现有 `admin` 迁移为管理员，其他现有账号迁移为操作员，默认所有当前业务页面只读，账号管理固定禁止。账号/权限须持久化并可在后台新增和调整，左下角显示身份标签。
+- `internal/admin/accounts.go` 提供独立账号状态、首次导入、身份/权限、编辑 revision、security_version 和最后启用管理员保护；`account_storage.go` 提供 MySQL/Mongo 单行/单文档 version CAS 和操作日志，main 显式注入。新增 `admin_account_state`、`admin_audit_logs`，MySQL 自动建表与 mysql.sql 同步。账号库故障不使用环境变量鉴权、不降级内存；会话仍只存在内存。
+- 仅首次导入 ADMIN_ACCOUNTS 与兼容的 ADMIN_USERNAME/ADMIN_PASSWORD_HASH，必须包含 admin；保留现有密码。已初始化后以数据库为唯一权威，重启/环境变量不会覆盖后台修改。新增账号和重置密码下次登录先改密，新操作员默认未授权；新增页面不会自动授权。
+- 新增 `/admin/accounts.html`、`password.html`、`access.html` 与 `/admin/api/accounts` GET/POST、`/accounts/:username` PUT、`/accounts/:username/reset-password` POST、`/password` POST、`/audit-logs` GET。管理员可创建/调整身份/权限/状态/重置密码；账号停用保留记录，不物理删除。停用/改密使各进程的旧会话失效，权限由后续请求实时读取；已在执行的请求不承诺撤回。
+- `permissions.go` 在服务端校验 HTML/API/受保护资源及跨页面权限。静态资源目录不提供 HTML，不能绕过页面路由；景点关联轨迹需轨迹查看，轨迹编辑/删除需轨迹操作；头像、截图按使用模块放行。工作台按模块裁剪返回，其他页面复用统计加 scope 仅下发自身数据。读请求可以产生正常缓存/计数，但只读景点页不运行供应商回填。
+- `shell.js` 统一身份标签、导航过滤、只读控件、退出和改密入口；移除各页面重复的身份/退出逻辑。共享轨迹弹窗支持只读查看，景点只读禁止照片拖动/上传/删除、AI 编辑与自动回填。写操作先记录发起，再保存 HTTP 结果；日志不可用时拒绝发起。后置日志失败保留发起记录并记 server log，不声称跨存储事务。日志不记录正文、密码或哈希。
+- 最终 `go build ./...`、20 个变更/新增 JS 的 `node --check`、`git diff --check` 通过。按根 AGENTS 未新增测试用例、未运行单元/集成/接口/浏览器自动化，未启动数据库或操作生产；既有路由测试仅适配新增存储注入与会话账号版本。功能、数据库迁移和界面待用户手动验收。
+- API 分册 `docs/api/admin-accounts.md`、索引、反馈统计说明和 root/admin AGENTS 已同步。规则检查报告 `/private/tmp/track-admin-accounts-agents-check.json`：已有 root 16KB 超长/precedence 声明、大型源码超长等仍未通过；全局入口规则未落盘（~/.codex/AGENTS.md 为 0 字节）。修复全局基线命令：`python3 /Users/foxcoder/.codex/skills/agents-md-generator/scripts/manage_docs.py sync-global-codex-agents . --write`。本次不重构无关历史治理文件、不改全局配置。
+- 当前没有提交、推送或部署；生产尚未导入账号。部署时保留全部现有初始化账号配置，首次启动会自动持久化；此后新增/改密/权限调整都从后台处理。
+
 ## 2026-10-27：联合发布纠错配置
 
 - 用户明确要求联合发布，服务端本轮范围为动态纠错选项、提交快照、后台配置与纠错处理；Android 同步发布当前工作树的详情/同行/地图 UI、坐标声明及纠错入口。两仓 main fetch 后均与 origin/main 一致，无合并变更；复用同源码已通过的 go build ./...、Android assembleDebug 和语法/差异检查，不新增或运行自动化业务测试。

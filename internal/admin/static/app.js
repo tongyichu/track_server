@@ -1,23 +1,9 @@
 (function () {
   // 当前会话信息
-  const userNameEl = document.getElementById('userName');
 
   // -- 登录态校验 --
-  fetch('/admin/api/me').then(function (r) {
-    if (!r.ok) {
-      window.location.href = '/admin/login.html';
-      return null;
-    }
-    return r.json();
-  }).then(function (j) {
-    if (j && j.data) userNameEl.textContent = '👤 ' + j.data.username;
-  });
 
   // -- 退出 --
-  document.getElementById('logoutBtn').addEventListener('click', async function () {
-    await fetch('/admin/api/logout', { method: 'POST' });
-    window.location.href = '/admin/login.html';
-  });
 
   // ---------------- 本机上传 ----------------
   // 安装包直接 multipart 上传到服务端 <staticRoot>/release/<platform>/，
@@ -155,7 +141,7 @@
         '<td>' + esc(it.operator_name || '') + '</td>' +
         '<td>' + esc((it.updated_at || '').replace('T', ' ').slice(0, 19)) + '</td>' +
         '<td class="url" title="' + esc(it.package_url) + '"><a href="' + esc(it.package_url) + '" target="_blank">' + esc(it.package_url) + '</a></td>' +
-        '<td><button class="danger" data-id="' + it.id + '">删除</button></td>';
+        '<td><button data-admin-write="releases" class="danger" data-id="' + it.id + '">删除</button></td>';
       tbody.appendChild(tr);
     });
     tbody.querySelectorAll('button.danger').forEach(function (b) {

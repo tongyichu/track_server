@@ -62,6 +62,7 @@ func main() {
 	var scenicSpotRepo repository.ScenicSpotRepository
 	var trackSubmissionRepo repository.TrackSubmissionRepository
 	var recommendationRepo repository.RecommendationRepository
+	var adminAccountStorage admin.AccountStorage
 
 	if cfg.UseInMemory {
 		trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo, companionRepo = repository.NewInMemoryRepositories()
@@ -118,6 +119,12 @@ func main() {
 					_ = db.Close()
 				}()
 				trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo, companionRepo = tr, ur, cr, lr, nr, ar, cor
+				adminCtx, adminCancel := context.WithTimeout(ctx, 5*time.Second)
+				adminAccountStorage, err = admin.NewMySQLAccountStorage(adminCtx, db)
+				adminCancel()
+				if err != nil {
+					log.Printf("admin account storage unavailable; admin authentication will be disabled")
+				}
 				trackMapRepo = repository.NewMySQLTrackMapRepository(db)
 				trackPlaceRepo = repository.NewMySQLTrackPlaceRepository(db)
 				scenicSpotRepo = repository.NewMySQLScenicSpotRepository(db)
@@ -149,6 +156,13 @@ func main() {
 			analyticsRepo = repository.NewInMemoryAnalyticsRepository()
 		} else {
 			db := client.Database(cfg.MongoDBName)
+			adminCtx, adminCancel := context.WithTimeout(ctx, 5*time.Second)
+			adminAccountStorage, err = admin.NewMongoAccountStorage(adminCtx, db)
+			adminCancel()
+			if err != nil {
+				adminAccountStorage = nil
+				log.Printf("admin account storage unavailable; admin authentication will be disabled")
+			}
 			scenicSpotRepo = repository.NewMongoScenicSpotRepository(db)
 			indexCtx, indexCancel := context.WithTimeout(ctx, 5*time.Second)
 			if err := scenicSpotRepo.(*repository.MongoScenicSpotRepository).EnsureIndexes(indexCtx); err != nil {
@@ -577,9 +591,8 @@ func main() {
 		StaticRoot:                 staticRoot,
 	})
 
-	// 管理后台（独立于业务用户鉴权）。若未配置任何管理员账号，
-	// NewModule 创建出的 auth 为 nil，RegisterRoutes 会直接跳过。
-	adminModule := admin.NewModule(cfg.AdminAccounts, appReleaseSvc, ossTokenSvc, staticRoot, userRepo, trackRepo, collectRepo, trackMapRepo, companionRepo, analyticsRepo, userSvc, feedbackSvc, accountRestrictionSvc, trackRouteGroupSvc)
+	// 后台账号独立持久化；环境变量仅用于首次初始化，数据库降级不放开后台鉴权。
+	adminModule := admin.NewModule(cfg.AdminAccounts, appReleaseSvc, ossTokenSvc, staticRoot, userRepo, trackRepo, collectRepo, trackMapRepo, companionRepo, analyticsRepo, userSvc, feedbackSvc, accountRestrictionSvc, trackRouteGroupSvc, adminAccountStorage)
 	if adminModule != nil && adminModule.Handler != nil {
 		adminModule.Handler.SetDashboardStatisticsRepository(repository.NewAdminDashboardStatisticsRepository(
 			userRepo, trackRepo, collectRepo, loginLogRepo, navigationRepo, companionRepo,
@@ -595,7 +608,7 @@ func main() {
 	if adminModule != nil && adminModule.Auth != nil {
 		log.Printf("admin console enabled at /admin/ (%d account(s))", adminModule.Auth.AccountCount())
 	} else {
-		log.Println("admin console disabled: ADMIN_ACCOUNTS / ADMIN_USERNAME / ADMIN_PASSWORD_HASH not set")
+		log.Println("admin console disabled: no initialized account storage or bootstrap accounts")
 	}
 
 	// 定时任务调度器：仅在 SCHEDULER_ENABLED=true 时启动，方便后续把 API 集群与定时任务集群拆分部署。

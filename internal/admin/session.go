@@ -9,10 +9,13 @@ import (
 
 // Session 表示一个管理员登录会话。
 type Session struct {
-	Token     string
-	Username  string
-	CreatedAt time.Time
-	ExpiresAt time.Time
+	Token           string
+	Username        string
+	CreatedAt       time.Time
+	ExpiresAt       time.Time
+	AccountID       string
+	SecurityVersion int64
+	Account         *accountRecord
 }
 
 // SessionStore 是管理后台的内存会话存储，不依赖外部存储。
@@ -97,6 +100,16 @@ func (s *SessionStore) Delete(token string) {
 	s.mu.Lock()
 	delete(s.sessions, token)
 	s.mu.Unlock()
+}
+
+func (s *SessionStore) DeleteUsername(username string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for token, sess := range s.sessions {
+		if sess.Username == username {
+			delete(s.sessions, token)
+		}
+	}
 }
 
 // TTL 返回会话有效期。
