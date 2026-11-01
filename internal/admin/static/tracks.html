@@ -48,6 +48,7 @@
         <label>资料缺项 <select id="missingFilter" class="form-select"><option value="">全部</option><option value="any">任意缺项</option><option value="place_candidate">待确认景点</option><option value="scenic_spot">未关联景点</option><option value="description">缺简介</option><option value="city">缺城市</option><option value="previews">缺预览图</option></select></label>
         <button id="searchBtn" class="btn btn-primary">搜索</button>
         <button id="refreshBtn" class="btn btn-outline-secondary">刷新</button>
+        <button id="importBtn" class="btn btn-outline-primary" type="button">批量导入</button>
         <button id="prevBtn" class="btn btn-outline-secondary" disabled>上一页</button>
         <button id="nextBtn" class="btn btn-outline-secondary" disabled>下一页</button>
         <span class="hint" id="pageHint"></span>
@@ -65,6 +66,44 @@
       </div>
     </section>
   </main>
+
+  <dialog id="trackImportModal" class="companion-dialog" aria-labelledby="trackImportTitle">
+    <div class="companion-dialog-content">
+      <div class="companion-dialog-heading">
+        <div><h2 id="trackImportTitle">批量导入轨迹</h2><div class="hint">支持 JSON / GeoJSON / KML / KMZ，单次最多 50 个文件；导入后不生成预览图，可后续用客户端 DevMode 补图。</div></div>
+        <div class="companion-dialog-actions"><button id="closeTrackImport" type="button" class="btn btn-outline-secondary">关闭</button></div>
+      </div>
+      <div id="trackImportError" class="error" role="alert" hidden></div>
+      <div class="track-import-form">
+        <div class="track-import-field">
+          <span class="track-import-label">归属人（内部人员）</span>
+          <div class="track-import-owner" id="trackImportOwner">
+            <button type="button" class="btn btn-outline-secondary track-import-owner-toggle" id="trackImportOwnerToggle" aria-haspopup="listbox" aria-expanded="false">
+              <span class="track-import-owner-current" id="trackImportOwnerCurrent">请选择归属人</span>
+            </button>
+            <ul class="companion-type-menu track-import-owner-menu" id="trackImportOwnerMenu" role="listbox" aria-label="选择归属人" hidden></ul>
+          </div>
+        </div>
+        <label class="track-import-field">运动类型
+          <select id="trackImportType" class="form-select">
+            <option value="hiking">徒步</option><option value="running">跑步</option><option value="climbing">爬山</option><option value="riding">骑行</option><option value="driving">自驾</option>
+          </select>
+        </label>
+        <label class="track-import-field">坐标系
+          <select id="trackImportCoord" class="form-select">
+            <option value="WGS84">WGS84（GPS 原始 / 国际设备）</option><option value="GCJ02">GCJ02（高德 / 国内 App）</option><option value="BD09">BD09（百度）</option>
+          </select>
+        </label>
+        <div class="track-import-field">
+          <span class="track-import-label">轨迹文件</span>
+          <input id="trackImportFiles" type="file" multiple accept=".json,.geojson,.kml,.kmz" />
+          <span class="hint" id="trackImportFileHint">未选择文件</span>
+        </div>
+        <div><button id="trackImportSubmit" type="button" class="btn btn-primary" disabled>开始导入</button></div>
+      </div>
+      <div id="trackImportResults" class="track-import-results" hidden></div>
+    </div>
+  </dialog>
 
   <script src="/admin/static/vendor/tabler.min.js"></script>
   <script src="/admin/static/shell.js"></script>

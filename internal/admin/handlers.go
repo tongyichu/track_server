@@ -47,6 +47,7 @@ type Handler struct {
 	trackSubmissionSvc *service.TrackSubmissionService
 	scenicSpotSvc      *service.ScenicSpotCatalogService
 	trackPlaceSvc      *service.TrackPlaceService
+	trackImportSvc     *service.AdminTrackImportService
 	dashboardStatsRepo repository.AdminDashboardStatisticsRepository
 	screenshotCache    *service.AssetCacheService
 	// staticRoot 是服务端本地静态资源根目录（通常为 <LogDir>/static）。
@@ -280,6 +281,12 @@ func (h *Handler) SetScenicSpotCatalogService(svc *service.ScenicSpotCatalogServ
 func (h *Handler) SetTrackPlaceService(svc *service.TrackPlaceService) {
 	if h != nil {
 		h.trackPlaceSvc = svc
+	}
+}
+
+func (h *Handler) SetTrackImportService(svc *service.AdminTrackImportService) {
+	if h != nil {
+		h.trackImportSvc = svc
 	}
 }
 
@@ -1395,6 +1402,121 @@ func (h *Handler) GetTrack(ctx context.Context, c *app.RequestContext) {
 // UpdateTrack 处理 PUT /admin/api/tracks/:track_id
 //
 // 管理后台允许修正轨迹业务字段与预览图；ID、轨迹点和创建/更新时间保持系统管理。
+// ImportTracks 处理 POST /admin/api/tracks/import
+//
+// multipart/form-data：
+//   - files:             轨迹文件（JSON/GeoJSON/KML/KMZ），可多选，单次最多 50 个；
+//   - owner_user_id:     归属人用户 ID，必须是内部人员；
+//   - track_type:        运动类型 code（默认 hiking）；
+//   - coordinate_system: 原始文件坐标系 WGS84/GCJ02/BD09（默认 WGS84）。
+//
+// 返回 results: [{file_name, track_id?, title?, error?}]，单条失败不影响其他文件。
+func (h *Handler) ImportTracks(ctx context.Context, c *app.RequestContext) {
+	if h == nil || h.trackImportSvc == nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "track import service not configured"})
+		return
+	}
+	ownerID, err := strconv.ParseInt(strings.TrimSpace(c.PostForm("owner_user_id")), 10, 64)
+	if err != nil || ownerID <= 0 {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid owner_user_id"})
+		return
+	}
+	if h.userRepo == nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "user repository not configured"})
+		return
+	}
+	owner, err := h.userRepo.FindByID(ctx, ownerID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			c.JSON(http.StatusBadRequest, utils.H{"error": "owner user not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	if owner == nil || !owner.IsInternal {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "owner must be an internal user"})
+		return
+	}
+	trackType := strings.TrimSpace(c.PostForm("track_type"))
+	if trackType == "" {
+		trackType = "hiking"
+	}
+	validType := false
+	for _, item := range config.DefaultTrackTypeConfigs {
+		if item.Type == trackType {
+			validType = true
+			break
+		}
+	}
+	if !validType {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid track_type"})
+		return
+	}
+	coordinateSystem := strings.ToUpper(strings.TrimSpace(c.PostForm("coordinate_system")))
+	if coordinateSystem == "" {
+		coordinateSystem = "WGS84"
+	}
+	switch coordinateSystem {
+	case "WGS84", "GCJ02", "BD09":
+	default:
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid coordinate_system"})
+		return
+	}
+	form, err := c.MultipartForm()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid multipart form"})
+		return
+	}
+	fileHeaders := form.File["files"]
+	if len(fileHeaders) == 0 {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "files is required"})
+		return
+	}
+	if len(fileHeaders) > 50 {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "too many files: max 50 per import"})
+		return
+	}
+	tempDir, err := os.MkdirTemp("", "track-import-*")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	defer os.RemoveAll(tempDir)
+	files := make([]service.ImportTrackFile, 0, len(fileHeaders))
+	for _, header := range fileHeaders {
+		if header == nil || header.Size <= 0 {
+			continue
+		}
+		localPath := filepath.Join(tempDir, service.SanitizeImportFileName(header.Filename))
+		src, openErr := header.Open()
+		if openErr != nil {
+			c.JSON(http.StatusBadRequest, utils.H{"error": "failed to read uploaded file: " + header.Filename})
+			return
+		}
+		dst, createErr := os.Create(localPath)
+		if createErr != nil {
+			src.Close()
+			c.JSON(http.StatusInternalServerError, utils.H{"error": createErr.Error()})
+			return
+		}
+		_, copyErr := io.Copy(dst, src)
+		dst.Close()
+		src.Close()
+		if copyErr != nil {
+			c.JSON(http.StatusInternalServerError, utils.H{"error": copyErr.Error()})
+			return
+		}
+		files = append(files, service.ImportTrackFile{FileName: header.Filename, LocalPath: localPath})
+	}
+	if len(files) == 0 {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "no valid files to import"})
+		return
+	}
+	results := h.trackImportSvc.ImportTracks(ctx, ownerID, trackType, coordinateSystem, files)
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"results": results}})
+}
+
 func (h *Handler) UpdateTrack(ctx context.Context, c *app.RequestContext) {
 	if h == nil || h.trackRepo == nil {
 		c.JSON(http.StatusInternalServerError, utils.H{"error": "track repository not configured"})

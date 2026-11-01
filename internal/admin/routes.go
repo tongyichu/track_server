@@ -222,6 +222,7 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	api.POST("/users/:user_id/restrictions", m.Handler.CreateAccountRestriction)
 	api.DELETE("/users/:user_id/restrictions/current", m.Handler.RevokeCurrentAccountRestriction)
 	api.GET("/tracks", m.Handler.ListTracks)
+	api.POST("/tracks/import", m.Handler.ImportTracks)
 	api.GET("/cities", m.Handler.ListAdminCities)
 	api.GET("/tracks/:track_id", m.Handler.GetTrack)
 	api.GET("/tracks/:track_id/place-candidates", m.Handler.GetPlaceCandidate)

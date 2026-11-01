@@ -263,6 +263,18 @@ Scheduler(companion_session_autoclose，每 10 分钟)
 
 **同行关键事件时间线**：owner 可通过 `POST /api/v1/companion/session/:session_id/events` 上报成员离开、断线/重连、同行周知、关键点、风险提醒或自定义事件，并通过 `GET /api/v1/companion/session/:session_id/events` 按 `event_time,id` 游标查询。事件持久化在 `companion_events`，`client_event_id` 是同一 session 内的幂等键；单个 `session_id` 最多 100 条事件，达到上限后新事件返回 `companion event limit exceeded`，但重复 `client_event_id` 仍返回已有事件。调整事件类型、字段、上限、幂等或时间校验规则时，同步更新 `docs/api/companion.md` 与 `track_companion.md`。
 
+**后台批量导入轨迹流程**：
+```
+[admin UI] /admin/tracks.html「批量导入」
+  → POST /admin/api/tracks/import（multipart：files≤50、owner_user_id 必须内部人员、track_type、coordinate_system 默认 WGS84）
+  → service.AdminTrackImportService 逐文件 parseTrackPointsFile 解析（JSON/GeoJSON/KML/KMZ）
+  → 计算距离/起止时间/耗时/爬升/均速；城市与 locate_addr 用 maparea 目录按中位点（转 GCJ02）离线解析
+  → OSSTokenService.UploadUserObject 服务端直传原始文件到归属人用户目录，返回公开 URL
+  → TrackService.CreateTrack（owner=归属人，source_tag=manual_seed，is_running=false）
+  → 自动排队 track_map_index 并结算成就；逐文件返回 {file_name, track_id?, title?, error?}
+```
+导入不生成预览四图与路线描述（auto/v0 留空），由客户端 DevMode 后续补齐；OSS 未配置时不注入导入服务，接口返回 500。
+
 **典型业务调用链**：
 ```
 HTTP Request

@@ -200,4 +200,140 @@
       AdminUI.alert('轨迹 ID 无效', 'danger');
     }
   }
+
+  // ── 批量导入 ────────────────────────────────────────────────
+  (function setupTrackImport() {
+    var modal = document.getElementById('trackImportModal');
+    if (!modal) return;
+    var ownerToggle = document.getElementById('trackImportOwnerToggle');
+    var ownerCurrent = document.getElementById('trackImportOwnerCurrent');
+    var ownerMenu = document.getElementById('trackImportOwnerMenu');
+    var typeSelect = document.getElementById('trackImportType');
+    var coordSelect = document.getElementById('trackImportCoord');
+    var fileInput = document.getElementById('trackImportFiles');
+    var fileHint = document.getElementById('trackImportFileHint');
+    var submitBtn = document.getElementById('trackImportSubmit');
+    var errorNode = document.getElementById('trackImportError');
+    var resultsNode = document.getElementById('trackImportResults');
+    var selectedOwner = null;
+    var ownersLoaded = false;
+    var importing = false;
+
+    function ownerHTML(user) {
+      var avatar = user && user.avatar_url ? '<img src="' + esc(user.avatar_url) + '" alt="" class="companion-avatar" />' : '';
+      return '<span class="track-import-owner-option">' + avatar + '<span>' + esc(user ? user.nickname || ('用户 ' + user.id) : '') + '</span></span>';
+    }
+    function updateSubmitState() {
+      submitBtn.disabled = importing || !selectedOwner || !fileInput.files.length;
+    }
+    function closeOwnerMenu() {
+      ownerMenu.hidden = true;
+      ownerToggle.setAttribute('aria-expanded', 'false');
+    }
+    function loadOwners() {
+      if (ownersLoaded) return Promise.resolve();
+      ownerMenu.innerHTML = '<li class="hint">正在加载内部人员…</li>';
+      return fetch('/admin/api/users?is_internal=true&limit=100')
+        .then(function (resp) { return resp.json(); })
+        .then(function (payload) {
+          ownersLoaded = true;
+          var items = (payload.data && payload.data.items) || [];
+          ownerMenu.innerHTML = '';
+          if (!items.length) {
+            ownerMenu.innerHTML = '<li class="hint">暂无内部人员，请先在用户管理标记。</li>';
+            return;
+          }
+          items.forEach(function (user) {
+            var li = document.createElement('li');
+            li.setAttribute('role', 'option');
+            li.innerHTML = ownerHTML(user);
+            li.addEventListener('click', function () {
+              selectedOwner = user;
+              ownerCurrent.innerHTML = ownerHTML(user);
+              closeOwnerMenu();
+              updateSubmitState();
+            });
+            ownerMenu.appendChild(li);
+          });
+        })
+        .catch(function () {
+          ownerMenu.innerHTML = '<li class="hint">内部人员加载失败，请重新打开。</li>';
+        });
+    }
+    ownerToggle.addEventListener('click', function () {
+      var open = ownerMenu.hidden;
+      closeOwnerMenu();
+      if (open) {
+        ownerMenu.hidden = false;
+        ownerToggle.setAttribute('aria-expanded', 'true');
+        loadOwners();
+      }
+    });
+    document.addEventListener('click', function (event) {
+      if (!ownerMenu.hidden && !document.getElementById('trackImportOwner').contains(event.target)) closeOwnerMenu();
+    });
+
+    document.getElementById('importBtn').addEventListener('click', function () {
+      errorNode.hidden = true;
+      resultsNode.hidden = true;
+      if (!modal.open) modal.showModal();
+    });
+    document.getElementById('closeTrackImport').addEventListener('click', function () { modal.close(); });
+    modal.addEventListener('click', function (event) { if (event.target === modal) modal.close(); });
+    fileInput.addEventListener('change', function () {
+      var count = fileInput.files.length;
+      fileHint.textContent = count ? '已选择 ' + count + ' 个文件' : '未选择文件';
+      updateSubmitState();
+    });
+    submitBtn.addEventListener('click', function () {
+      if (importing || !selectedOwner || !fileInput.files.length) return;
+      if (fileInput.files.length > 50) {
+        errorNode.textContent = '单次最多导入 50 个文件。';
+        errorNode.hidden = false;
+        return;
+      }
+      importing = true;
+      updateSubmitState();
+      submitBtn.textContent = '正在导入…';
+      errorNode.hidden = true;
+      resultsNode.hidden = true;
+      var form = new FormData();
+      Array.from(fileInput.files).forEach(function (file) { form.append('files', file, file.name); });
+      form.append('owner_user_id', String(selectedOwner.id));
+      form.append('track_type', typeSelect.value);
+      form.append('coordinate_system', coordSelect.value);
+      fetch('/admin/api/tracks/import', { method: 'POST', body: form })
+        .then(function (resp) {
+          return resp.json().then(function (payload) {
+            if (!resp.ok) throw new Error((payload && payload.error) || ('请求失败（' + resp.status + '）'));
+            return payload;
+          });
+        })
+        .then(function (payload) {
+          var results = (payload.data && payload.data.results) || [];
+          var okCount = results.filter(function (r) { return !r.error; }).length;
+          resultsNode.innerHTML = '<p class="hint">共 ' + results.length + ' 个文件，成功 ' + okCount + ' 个。</p>' +
+            '<ul class="track-import-result-list">' + results.map(function (r) {
+              return r.error
+                ? '<li class="track-import-result-fail">✕ ' + esc(r.file_name) + '：' + esc(r.error) + '</li>'
+                : '<li class="track-import-result-ok">✓ ' + esc(r.file_name) + ' → ' + esc(r.title || '') + '（' + esc(r.track_id || '') + '）</li>';
+            }).join('') + '</ul>';
+          resultsNode.hidden = false;
+          if (okCount) {
+            cursorStack = [null];
+            pageIndex = 0;
+            loadPage();
+          }
+        })
+        .catch(function (err) {
+          errorNode.textContent = '导入失败：' + (err.message || err);
+          errorNode.hidden = false;
+        })
+        .finally(function () {
+          importing = false;
+          submitBtn.textContent = '开始导入';
+          updateSubmitState();
+        });
+    });
+  })();
 })();

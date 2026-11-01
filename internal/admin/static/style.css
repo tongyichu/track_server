@@ -381,6 +381,20 @@ table.data.table .btn { white-space: nowrap; }
 .companion-type-menu li { padding: 6px 8px; border-radius: var(--tblr-border-radius); cursor: pointer; white-space: nowrap; }
 .companion-type-menu li:hover { background: var(--tblr-bg-surface-secondary); }
 .companion-type-menu li[aria-selected="true"] { background: var(--tblr-primary-lt, rgba(32, 107, 196, .08)); }
+.track-import-form { display: flex; flex-direction: column; gap: 12px; margin-bottom: 14px; }
+.track-import-field { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 0; }
+.track-import-label { font-weight: 500; }
+.track-import-field .form-select { width: auto; min-width: 200px; }
+.track-import-owner { position: relative; }
+.track-import-owner-toggle { display: inline-flex; align-items: center; min-width: 220px; }
+.track-import-owner-current, .track-import-owner-option { display: inline-flex; align-items: center; gap: 8px; }
+.track-import-owner-option .companion-avatar, .track-import-owner-current .companion-avatar { width: 24px; height: 24px; }
+.track-import-owner-menu { max-height: 280px; overflow-y: auto; min-width: 240px; }
+.track-import-results { border-top: 1px solid var(--tblr-border-color); padding-top: 10px; max-height: 320px; overflow-y: auto; }
+.track-import-result-list { margin: 0; padding-left: 4px; list-style: none; }
+.track-import-result-list li { padding: 3px 0; overflow-wrap: anywhere; }
+.track-import-result-ok { color: var(--tblr-green, #2fb344); }
+.track-import-result-fail { color: var(--tblr-danger, #d63939); }
 .companion-list-table th, .companion-list-table td { vertical-align: middle; }
 .companion-room-cell { min-width: 160px; max-width: 340px; overflow-wrap: anywhere; }
 .companion-room-cell strong, .companion-room-cell small { display: block; }
