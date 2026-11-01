@@ -350,6 +350,7 @@ func parseKMLPoints(data []byte) ([]models.TrackPoint, error) {
 	decoder := xml.NewDecoder(bytes.NewReader(data))
 	stack := make([]string, 0, 16)
 	var points []models.TrackPoint
+	var whens []time.Time
 
 	for {
 		token, err := decoder.Token()
@@ -378,11 +379,21 @@ func parseKMLPoints(data []byte) ([]models.TrackPoint, error) {
 			switch {
 			case current == "coordinates" && hasXMLAncestor(stack, "LineString"):
 				points = append(points, parseKMLCoordinates(text, len(points))...)
+			case current == "when" && hasXMLAncestor(stack, "Track"):
+				if ts, ok := parseKMLWhen(text); ok {
+					whens = append(whens, ts)
+				}
 			case current == "coord" && hasXMLAncestor(stack, "Track"):
 				if p, ok := parseKMLCoord(text, len(points)); ok {
 					points = append(points, p)
 				}
 			}
+		}
+	}
+	// gx:Track 的 <when> 与 <gx:coord> 一一对应；数量一致时按序回填时间戳。
+	if len(whens) > 0 && len(whens) == len(points) {
+		for i := range points {
+			points[i].Timestamp = whens[i]
 		}
 	}
 	points = normalizeTrackPoints(points)
@@ -399,6 +410,17 @@ func hasXMLAncestor(stack []string, name string) bool {
 		}
 	}
 	return false
+}
+
+// parseKMLWhen 解析 gx:Track 的 <when> 时间（RFC3339/RFC3339Nano）。
+func parseKMLWhen(text string) (time.Time, bool) {
+	if ts, err := time.Parse(time.RFC3339Nano, text); err == nil {
+		return ts, true
+	}
+	if ts, err := time.Parse(time.RFC3339, text); err == nil {
+		return ts, true
+	}
+	return time.Time{}, false
 }
 
 func parseKMLCoordinates(text string, startIndex int) []models.TrackPoint {
