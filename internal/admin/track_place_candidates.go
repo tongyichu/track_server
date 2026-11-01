@@ -73,11 +73,12 @@ func (h *Handler) ConfirmPlaceCandidate(ctx context.Context, c *app.RequestConte
 		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid payload"})
 		return
 	}
-	if err := h.trackPlaceSvc.ConfirmPlaceCandidate(ctx, c.Param("track_id"), body.PlaceID, h.adminOperator(c)); err != nil {
+	suggestedTitle, err := h.trackPlaceSvc.ConfirmPlaceCandidate(ctx, c.Param("track_id"), body.PlaceID, h.adminOperator(c))
+	if err != nil {
 		h.trackPlaceServiceError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"confirmed": true}})
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"confirmed": true, "suggested_title": suggestedTitle}})
 }
 
 func (h *Handler) DismissPlaceCandidate(ctx context.Context, c *app.RequestContext) {

@@ -68,42 +68,40 @@
       finally { setBusy(false); }
     }
 
-    // 确认景点后询问是否用景点名作为轨迹标题；同意后同步表单中的标题输入框，
-    // 避免之后保存表单时把新标题覆盖回旧值。
-    async function offerTitleUpdate(place) {
-      const name = String(place.name || '').trim();
-      if (!name) return;
-      const current = String((options.track && options.track.title) || '').trim();
-      if (current === name) return;
-      let confirmed = false;
-      try {
-        confirmed = await AdminUI.confirm({ title: '更新轨迹标题', message: '是否将轨迹标题改为「' + name + '」？确认后仍可在下方表单中继续调整。', confirmText: '改标题' });
-      } catch (_) { confirmed = false; }
-      if (!confirmed) return;
-      try {
-        await request('/tracks/' + encodeURIComponent(trackID), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: name }) });
-      } catch (error) {
-        AdminUI.alert('标题更新失败：' + error.message, 'danger');
-        return;
-      }
-      if (options.track) options.track.title = name;
+    // 确认景点后，在标题输入框旁展示服务端按客户端标题生成规则算出的建议标题；
+    // 点击标签代入输入框（随表单保存生效），不自动提交。
+    function showTitleSuggestion(suggestion) {
+      suggestion = String(suggestion || '').trim();
       const form = root.closest('form');
       const input = form && form.querySelector('[name="title"]');
-      if (input) {
-        input.value = name;
+      if (!suggestion || !input || String(input.value || '').trim() === suggestion) return;
+      const old = form.querySelector('.admin-track-title-suggestion');
+      if (old) old.remove();
+      const wrap = document.createElement('div');
+      wrap.className = 'admin-track-title-suggestion mt-1';
+      const tag = document.createElement('button');
+      tag.type = 'button';
+      tag.className = 'badge bg-azure-lt text-azure';
+      tag.textContent = '代入建议标题：' + suggestion;
+      tag.title = '点击代入标题输入框，保存表单后生效';
+      tag.addEventListener('click', () => {
+        input.value = suggestion;
         input.dispatchEvent(new Event('input', { bubbles: true }));
         input.dispatchEvent(new Event('change', { bubbles: true }));
-      }
-      AdminUI.alert('标题已更新为：' + name, 'success');
+        wrap.remove();
+        AdminUI.alert('已代入建议标题，保存表单后生效', 'success');
+      });
+      wrap.appendChild(tag);
+      input.insertAdjacentElement('afterend', wrap);
     }
 
     async function confirmPlace(place) {
       if (busy || !canWrite) return;
       setBusy(true);
       try {
-        await request('/place-candidates/' + encodeURIComponent(trackID) + '/confirm', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ place_id: place.id }) });
+        const data = await request('/place-candidates/' + encodeURIComponent(trackID) + '/confirm', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ place_id: place.id }) });
         AdminUI.alert('已关联景点：' + place.name, 'success');
-        await offerTitleUpdate(place);
+        showTitleSuggestion(data && data.suggested_title);
         if (typeof options.onChanged === 'function') {
           try { await options.onChanged(); }
           catch (_) { AdminUI.alert('景点处理已生效，列表刷新失败，请手动刷新', 'warning'); }
