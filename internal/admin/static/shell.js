@@ -84,7 +84,7 @@
     { href: '/admin/route_groups.html', label: '地图模式', icon: 'map-2' },
     { href: '/admin/companions.html', label: '与友同行', icon: 'friends' },
     { href: '/admin/feedbacks.html', label: '反馈与纠错', icon: 'message-report' },
-    { href: '/admin/index.html', label: 'App 发布', icon: 'package' },
+    { href: '/admin/index.html', label: '发布管理', icon: 'package' },
     { href: '/admin/analytics.html', label: '埋点同步', icon: 'chart-bar' },
     { href: '/admin/accounts.html', label: '账号管理', icon: 'users' },
     { href: '/admin/more.html', label: '更多', icon: 'dots', mobileOnly: true, primary: true },

@@ -1,6 +1,6 @@
 (function () {
   const pageMeta = {
-    '/admin/index.html': ['App 发布', '安装包上传、版本发布与历史版本管理'],
+    '/admin/index.html': ['发布管理', '安装包上传、版本发布与历史版本管理'],
     '/admin/users.html': ['用户管理', '查看用户资料并管理账号限制'],
     '/admin/tracks.html': ['轨迹管理', '查看、修正或删除用户轨迹'],
     '/admin/scenic_spots.html': ['景点管理', '维护自有景点资料、地图来源与轨迹归属'],
