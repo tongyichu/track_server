@@ -62,7 +62,7 @@
         return wrapper;
       })(),
       fields: [
-        { name: 'user_id', label: '用户 ID', type: 'number', value: track.user_id, min: 0 },
+        { name: 'user_id', label: '用户 ID', value: trackPayload.user_id_text || String(track.user_id), maxLength: 20 },
         { name: 'session_id', label: '同行会话 ID', value: track.session_id },
         { name: 'title', label: '轨迹标题', value: track.title, maxLength: 128 },
         { name: 'city_code', label: '城市', type: 'select', value: track.city_code, options: cityFields },
@@ -98,7 +98,7 @@
     }
     const body = {
       source_feedback_id: options.sourceFeedbackID || undefined,
-      user_id: Number(values.user_id), session_id: values.session_id, title: values.title, city_code: values.city_code,
+      user_id: values.user_id, session_id: values.session_id, title: values.title, city_code: values.city_code,
       locate_addr: values.locate_addr, track_type: values.track_type, source_tag: values.source_tag,
       coordinate_system: values.coordinate_system, description: values.description, description_source: values.description_source,
       description_rule_version: Number(values.description_rule_version || 0), start_time: values.start_time,

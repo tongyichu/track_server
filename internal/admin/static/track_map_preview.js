@@ -70,7 +70,24 @@
         const end = new AMap.Marker({ position: path[path.length - 1], label: { content: '终', direction: 'top' } });
         map.add(start);
         map.add(end);
-        map.setFitView([polyline, start, end], false, [40, 40, 40, 40]);
+        const overlays = [polyline, start, end];
+        const fit = () => {
+          if (!canvas.isConnected) return;
+          map.resize();
+          map.setFitView(overlays, true, [40, 40, 40, 40], 17);
+        };
+        fit();
+        // 弹窗动画期间画布尺寸可能为 0，等真正可见后再校准一次视野。
+        window.setTimeout(fit, 350);
+        if ('IntersectionObserver' in window) {
+          const observer = new IntersectionObserver(entries => {
+            if (entries.some(entry => entry.isIntersecting)) {
+              observer.disconnect();
+              fit();
+            }
+          });
+          observer.observe(canvas);
+        }
       } catch (_) {
         if (!canvas.isConnected) return;
         body.replaceChildren();
