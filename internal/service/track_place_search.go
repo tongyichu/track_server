@@ -19,7 +19,7 @@ func parseAMapTrackPlace(a amapPlace, expires time.Time) (models.TrackPlace, boo
 	if category == "" {
 		category = string(a.Type)
 	}
-	if id == "" || len(id) > 128 || name == "" || len([]rune(name)) > 128 || !amapScenicType(category) {
+	if id == "" || len(id) > 128 || name == "" || len([]rune(name)) > 128 || !amapPlaceAdmitted(string(a.TypeCode), string(a.Type)) {
 		return models.TrackPlace{}, false
 	}
 	parts := strings.Split(string(a.Location), ",")
@@ -72,7 +72,7 @@ func (s *TrackPlaceService) enclosedPlaces(ctx context.Context, index *models.Tr
 }
 
 func (s *TrackPlaceService) amapRingPage(ctx context.Context, ring *trackPlaceRing, page int) ([]placeEvidence, error) {
-	q := url.Values{"key": {s.cfg.AMapKey}, "polygon": {fmt.Sprintf("%.6f,%.6f|%.6f,%.6f", ring.minLng, ring.maxLat, ring.maxLng, ring.minLat)}, "types": {"110000"}, "offset": {"25"}, "page": {strconv.Itoa(page)}, "extensions": {"base"}, "output": {"json"}}
+	q := url.Values{"key": {s.cfg.AMapKey}, "polygon": {fmt.Sprintf("%.6f,%.6f|%.6f,%.6f", ring.minLng, ring.maxLat, ring.maxLng, ring.minLat)}, "types": {"110000|190400"}, "offset": {"25"}, "page": {strconv.Itoa(page)}, "extensions": {"base"}, "output": {"json"}}
 	req, _ := http.NewRequest(http.MethodGet, "https://restapi.amap.com/v3/place/polygon?"+q.Encode(), nil)
 	var response struct {
 		Status   string        `json:"status"`

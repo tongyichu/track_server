@@ -407,6 +407,11 @@ func (s *TrackPlaceService) processWithOptions(ctx context.Context, index *model
 		}
 		lookupErr = s.decideTrackPlace(ctx, track, index, &match, preserved)
 	}
+	if lookupErr == nil && match.PrimaryPlaceID != "" && s.primaryPlaceCandidateOnly(ctx, match.PrimaryPlaceID) {
+		// 山系/湖泊等开放自然地物多为点 POI，边界不稳定，自动识别只进候选队列，由后台人工确认归属。
+		match.PrimaryPlaceID = ""
+		match.PrimaryMethod = ""
+	}
 	expires := now.Add(s.providerTTL(provider))
 	if lookupErr != nil {
 		match.Status = "error"
@@ -514,6 +519,18 @@ func (s *TrackPlaceService) GetPlaces(ctx context.Context, ids []string) (map[st
 	return out, nil
 }
 
+// primaryPlaceCandidateOnly 判断主归属地点是否属于「只进候选」的分类（山系/湖泊）。
+func (s *TrackPlaceService) primaryPlaceCandidateOnly(ctx context.Context, placeID string) bool {
+	places, err := s.GetPlaces(ctx, []string{placeID})
+	if err != nil {
+		return false
+	}
+	place := places[placeID]
+	if place == nil {
+		return false
+	}
+	return placeCandidateOnlyKind(placeKindFromCategory(place.Provider, place.Category, place.Name))
+}
 // Only DB reads here. Route-group rebuilds never call external providers.
 func (s *TrackPlaceService) ApplyGroupAreas(ctx context.Context, groups []*models.TrackRouteGroup, indexes []*models.TrackGeoIndex) error {
 	if !s.Enabled() {
