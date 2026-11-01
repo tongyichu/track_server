@@ -527,8 +527,13 @@ func (r *MySQLTrackMapRepository) ListRouteGroups(ctx context.Context, filter mo
 func (r *MySQLTrackMapRepository) ListRouteGroupSummaries(ctx context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackRouteGroup, error) {
 	limit := normalizeTrackMapQueryLimit(filter.Limit)
 	where, args := buildTrackRouteGroupWhere(filter)
+	query := `SELECT ` + trackRouteGroupSummaryColumns("track_route_groups") + ` FROM track_route_groups` + where + ` ORDER BY member_count DESC, updated_at DESC, group_id LIMIT ?`
 	args = append(args, limit)
-	rows, err := r.db.QueryContext(ctx, `SELECT `+trackRouteGroupSummaryColumns("track_route_groups")+` FROM track_route_groups`+where+` ORDER BY member_count DESC, updated_at DESC LIMIT ?`, args...)
+	if filter.Offset > 0 {
+		query += ` OFFSET ?`
+		args = append(args, filter.Offset)
+	}
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -542,6 +547,15 @@ func (r *MySQLTrackMapRepository) ListRouteGroupSummaries(ctx context.Context, f
 		items = append(items, group)
 	}
 	return items, rows.Err()
+}
+
+func (r *MySQLTrackMapRepository) CountRouteGroupSummaries(ctx context.Context, filter models.TrackMapQueryFilter) (int64, error) {
+	where, args := buildTrackRouteGroupWhere(filter)
+	var total int64
+	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM track_route_groups`+where, args...).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
 }
 
 func (r *MySQLTrackMapRepository) ListAllRouteGroups(ctx context.Context) ([]*models.TrackRouteGroup, error) {
@@ -1087,6 +1101,20 @@ func buildTrackRouteGroupWhere(filter models.TrackMapQueryFilter) (string, []int
 	if filter.CityCode != "" {
 		conds = append(conds, "city_codes_json LIKE ?")
 		args = append(args, "%\""+filter.CityCode+"\"%")
+	}
+	if len(filter.CityCodes) > 0 {
+		orConds := make([]string, 0, len(filter.CityCodes))
+		for _, code := range filter.CityCodes {
+			code = strings.TrimSpace(code)
+			if code == "" {
+				continue
+			}
+			orConds = append(orConds, "city_codes_json LIKE ?")
+			args = append(args, "%\""+code+"\"%")
+		}
+		if len(orConds) > 0 {
+			conds = append(conds, "("+strings.Join(orConds, " OR ")+")")
+		}
 	}
 	if filter.BBox != nil {
 		conds = append(conds, "max_lat >= ? AND min_lat <= ? AND max_lng >= ? AND min_lng <= ?")

@@ -1971,10 +1971,19 @@ func (r *InMemoryTrackMapRepository) ListRouteGroups(_ context.Context, filter m
 	}
 	sort.SliceStable(items, func(i, j int) bool {
 		if items[i].MemberCount == items[j].MemberCount {
+			if items[i].UpdatedAt.Equal(items[j].UpdatedAt) {
+				return items[i].GroupID < items[j].GroupID
+			}
 			return items[i].UpdatedAt.After(items[j].UpdatedAt)
 		}
 		return items[i].MemberCount > items[j].MemberCount
 	})
+	if filter.Offset > 0 {
+		if filter.Offset >= len(items) {
+			return []*models.TrackRouteGroup{}, nil
+		}
+		items = items[filter.Offset:]
+	}
 	if len(items) > limit {
 		items = items[:limit]
 	}
@@ -1983,6 +1992,18 @@ func (r *InMemoryTrackMapRepository) ListRouteGroups(_ context.Context, filter m
 
 func (r *InMemoryTrackMapRepository) ListRouteGroupSummaries(ctx context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackRouteGroup, error) {
 	return r.ListRouteGroups(ctx, filter)
+}
+
+func (r *InMemoryTrackMapRepository) CountRouteGroupSummaries(_ context.Context, filter models.TrackMapQueryFilter) (int64, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var total int64
+	for _, group := range r.routeGroups {
+		if routeGroupMatchesFilter(group, filter) {
+			total++
+		}
+	}
+	return total, nil
 }
 
 func (r *InMemoryTrackMapRepository) ListAllRouteGroups(_ context.Context) ([]*models.TrackRouteGroup, error) {
@@ -2377,6 +2398,18 @@ func routeGroupMatchesFilter(group *models.TrackRouteGroup, filter models.TrackM
 	}
 	if filter.CityCode != "" && !routeGroupHasCity(group, filter.CityCode) {
 		return false
+	}
+	if len(filter.CityCodes) > 0 {
+		matched := false
+		for _, code := range filter.CityCodes {
+			if code = strings.TrimSpace(code); code != "" && routeGroupHasCity(group, code) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
+		}
 	}
 	if filter.BBox != nil && !routeGroupIntersectsBBox(group, *filter.BBox) {
 		return false

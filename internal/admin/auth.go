@@ -26,8 +26,9 @@ var placeholderPasswordHash = []byte("$2a$10$CwTycUXWue0Thq9StjUM0uJ8h3zP5g6Xs4b
 
 // Authenticator 使用独立的持久化后台账号与内存会话，不回退到环境变量直接鉴权。
 type Authenticator struct {
-	store   *SessionStore
-	manager *AccountManager
+	store    *SessionStore
+	manager  *AccountManager
+	recovery *emailRecovery
 }
 
 // AccountCount 返回已加载的有效管理员账号数量。

@@ -23,16 +23,22 @@
       const data = await api('/accounts');
       modules = data.modules || [];
       updateAuditAccounts(data.items || []);
+      $('emailMigrationHint').hidden = !(data.items || []).some(account => account.can_reset_password);
       $('accountsList').replaceChildren();
       (data.items || []).forEach(account => {
         const row = document.createElement('tr');
         cell(row, account.username); cell(row, account.display_name);
         const badge = document.createElement('span'); badge.className = 'badge ' + (account.role === 'admin' ? 'bg-purple-lt' : 'bg-blue-lt'); badge.textContent = account.role === 'admin' ? '管理员' : '操作员'; cell(row, '').appendChild(badge);
-        cell(row, account.enabled ? '启用' : '停用'); cell(row, time(account.last_login_at));
+        cell(row, account.enabled ? '启用' : '停用');
+        cell(row, account.recovery_email_bound ? '已验证' : '未绑定'); cell(row, time(account.last_login_at));
         const actions = cell(row, ''); actions.className = 'row-actions';
         const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'btn btn-sm btn-outline-primary'; edit.textContent = '设置'; edit.onclick = () => openEditor(account);
-        const reset = document.createElement('button'); reset.type = 'button'; reset.className = 'btn btn-sm btn-outline-secondary'; reset.textContent = '重置密码'; reset.onclick = () => resetPassword(account);
-        actions.append(edit, reset); $('accountsList').appendChild(row);
+        actions.appendChild(edit);
+        if (account.can_reset_password) {
+          const reset = document.createElement('button'); reset.type = 'button'; reset.className = 'btn btn-sm btn-outline-secondary'; reset.textContent = '应急重置'; reset.title = '仅供未绑定邮箱账号在迁移期恢复登录'; reset.onclick = () => resetPassword(account);
+          actions.appendChild(reset);
+        }
+        $('accountsList').appendChild(row);
       });
       showError($('accountsError'), '');
       $('createAccount').disabled = false;
@@ -101,7 +107,7 @@
   $('accountModal').addEventListener('hidden.bs.modal', () => { form.elements.password.value = ''; });
 
   async function resetPassword(account) {
-    const values = await AdminUI.form({ title: '重置密码 · ' + account.username, confirmText: '重置并退出该账号全部登录', fields: [{ name: 'password', label: '临时密码（至少 8 个字符，下次登录需修改）', type: 'password', required: true, maxLength: 72 }] });
+    const values = await AdminUI.form({ title: '迁移期应急重置 · ' + account.username, confirmText: '重置并退出该账号全部登录', fields: [{ name: 'password', label: '临时密码（仅限未绑定邮箱账号，下次登录需修改）', type: 'password', required: true, maxLength: 72 }] });
     if (!values) return;
     try {
       await api('/accounts/' + encodeURIComponent(account.username) + '/reset-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: values.password, revision: account.revision }) });
@@ -127,7 +133,7 @@
       items.forEach(item => {
         const description = AdminAuditLog.describe(item), outcome = AdminAuditLog.outcome(item);
         const row = document.createElement('tr');
-        cell(row, time(item.created_at)); cell(row, item.username);
+        cell(row, time(item.created_at)); cell(row, item.actor_id === 'email-recovery' ? '邮箱找回（未登录）' : item.username);
         const action = cell(row, description.action);
         if (item.method === 'POST' && item.path === '/admin/api/scenic-spots/provider-content/backfill') {
           const automatic = document.createElement('div'); automatic.className = 'small text-secondary';

@@ -55,10 +55,17 @@ type accountRecord struct {
 	CreatedAt          time.Time         `json:"created_at"`
 	UpdatedAt          time.Time         `json:"updated_at"`
 	LastLoginAt        *time.Time        `json:"last_login_at,omitempty"`
+	Email              string            `json:"email,omitempty"`
+	EmailVerifiedAt    *time.Time        `json:"email_verified_at,omitempty"`
+	EmailBinding       *emailChallenge   `json:"email_binding,omitempty"`
+	EmailChangeProof   *emailChallenge   `json:"email_change_proof,omitempty"`
+	PasswordRecovery   *emailChallenge   `json:"password_recovery,omitempty"`
+	MailWindow         emailSendWindow   `json:"mail_window,omitempty"`
 }
 
 type accountState struct {
-	Accounts map[string]*accountRecord `json:"accounts"`
+	Accounts                    map[string]*accountRecord `json:"accounts"`
+	LegacyPasswordResetDisabled bool                      `json:"legacy_password_reset_disabled,omitempty"`
 }
 
 // accountView 是唯一可以下发浏览器的账号结构，不包含密码哈希和会话失效版本。
@@ -74,10 +81,12 @@ type accountView struct {
 	CreatedAt          time.Time         `json:"created_at"`
 	UpdatedAt          time.Time         `json:"updated_at"`
 	LastLoginAt        *time.Time        `json:"last_login_at,omitempty"`
+	RecoveryEmailBound bool              `json:"recovery_email_bound"`
+	CanResetPassword   bool              `json:"can_reset_password"`
 }
 
 func (a *accountRecord) view() accountView {
-	return accountView{a.ID, a.Username, a.DisplayName, a.Role, a.Enabled, a.Permissions, a.MustChangePassword, a.Revision, a.CreatedAt, a.UpdatedAt, a.LastLoginAt}
+	return accountView{a.ID, a.Username, a.DisplayName, a.Role, a.Enabled, a.Permissions, a.MustChangePassword, a.Revision, a.CreatedAt, a.UpdatedAt, a.LastLoginAt, a.recoveryReady(), false}
 }
 
 func (a *accountRecord) allows(module string, write bool) bool {
@@ -113,8 +122,9 @@ func (e *accountError) Error() string { return e.Message }
 func accountFailure(status int, message string) error { return &accountError{status, message} }
 
 type AccountManager struct {
-	storage   AccountStorage
-	bootstrap map[string]string
+	storage      AccountStorage
+	bootstrap    map[string]string
+	emailCodeKey []byte
 }
 
 func (m *AccountManager) load(ctx context.Context) (*accountState, int64, error) {
@@ -209,6 +219,9 @@ func (m *AccountManager) mutate(ctx context.Context, actor string, change func(*
 		}
 		if activeAdmins == 0 {
 			return accountFailure(409, "必须保留至少一个启用的管理员")
+		}
+		if allEnabledAccountsHaveEmail(state) {
+			state.LegacyPasswordResetDisabled = true
 		}
 		data, err := json.Marshal(state)
 		if err != nil {
@@ -308,6 +321,7 @@ func (m *AccountManager) saveAccount(ctx context.Context, actor, username string
 		}
 		if !body.Enabled && a.Enabled {
 			a.SecurityVersion++
+			a.clearEmailChallenges()
 		}
 		a.DisplayName = strings.TrimSpace(body.DisplayName)
 		if a.DisplayName == "" {
@@ -327,7 +341,9 @@ func (m *AccountManager) list(ctx context.Context) ([]accountView, error) {
 	}
 	items := make([]accountView, 0, len(state.Accounts))
 	for _, account := range state.Accounts {
-		items = append(items, account.view())
+		item := account.view()
+		item.CanResetPassword = !state.LegacyPasswordResetDisabled && !account.recoveryReady()
+		items = append(items, item)
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].Username < items[j].Username })
 	return items, nil
@@ -346,12 +362,16 @@ func (m *AccountManager) resetPassword(ctx context.Context, actor, username, pas
 		if a == nil {
 			return accountFailure(404, "账号不存在")
 		}
+		if state.LegacyPasswordResetDisabled || a.recoveryReady() {
+			return accountFailure(403, "该账号密码由本人管理，请使用已验证邮箱找回")
+		}
 		if a.Revision != revision {
 			return accountFailure(409, "该账号已被修改，请重新加载")
 		}
 		a.PasswordHash = string(hash)
 		a.MustChangePassword = true
 		a.SecurityVersion++
+		a.clearEmailChallenges()
 		a.Revision++
 		a.UpdatedAt = time.Now().UTC()
 		return nil
@@ -383,6 +403,7 @@ func (m *AccountManager) changePassword(ctx context.Context, sess *Session, oldP
 		}
 		current.PasswordHash = string(hash)
 		current.SecurityVersion++
+		current.clearEmailChallenges()
 		current.MustChangePassword = false
 		current.Revision++
 		current.UpdatedAt = time.Now().UTC()

@@ -233,6 +233,7 @@ type TrackMapRepository interface {
 	ListAllRouteGroups(ctx context.Context) ([]*models.TrackRouteGroup, error)
 	ListAllRouteGroupMembers(ctx context.Context) ([]*models.TrackRouteGroupMember, error)
 	ListRouteGroupSummaries(ctx context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackRouteGroup, error)
+	CountRouteGroupSummaries(ctx context.Context, filter models.TrackMapQueryFilter) (int64, error)
 	ListRouteGroupCandidates(ctx context.Context, index *models.TrackGeoIndex, limit int) ([]*models.TrackRouteGroupCandidate, error)
 	ListGeoIndexesWithoutRouteGroup(ctx context.Context, limit int) ([]*models.TrackGeoIndex, error)
 	UpsertRouteGroup(ctx context.Context, group *models.TrackRouteGroup) error

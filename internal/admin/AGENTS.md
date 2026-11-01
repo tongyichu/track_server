@@ -27,7 +27,7 @@
 
 - 用户管理支持昵称模糊搜索，以及内部人员、资料所在城市、性别、生日星座和当前账号限制状态组合筛选；同行管理按会话标题、运动类型、发起人昵称和发起人资料省市筛选（昵称/省市先在用户仓储解析为发起人 ID 集合，再由 `AdminCompanionListRepository` 在仓储层参与总数与游标分页，列表批量补充发起人昵称/头像和成员记录数），轨迹管理按标题和用户名提供服务端模糊搜索，轨迹列表还支持城市、状态和资料缺项筛选，均保留游标分页。
 
-模块对外只暴露 `admin.NewModule(...)` 与 `Module.RegisterRoutes(h)`，不被业务 handler 引用。
+模块通过 `admin.NewModule(...)`、`Module.ConfigureEmailRecovery(...)`、`Module.RegisterRoutes(h)` 注入和注册，不被业务 handler 引用；Close 同时停止会话 GC 与邮件 worker。
 
 ## 页面性能约束
 
@@ -47,6 +47,7 @@
 - **贴边必须显式且局部**：只有纯表格或其他明确设计为满宽的区域可用 `p-0` 等标记；账号列表纯表格和景点纯表格是现有例子。不得把包含标题、说明和筛选的整个业务卡片设为零内边距。表格贴边时仍保留单元格留白，文字/表单恢复正常内容边距。
 - **工具栏和宽表格不突破留白**：普通筛选工具栏使用专用 flex/grid 类，不直接借用 Bootstrap `.row`；`.row` 的负边距必须和成对的列 gutter 一起使用，不能让标题、筛选和表格边界错位。反馈页复用 `admin-toolbar feedback-toolbar`：标签/控件分成固定行，三个控件高度 40px，按钮独立分组且与控件底部对齐，分页说明放在工具栏外；中等宽度按钮整组换行，窄屏字段独占一行。不能仅加 align-items 而忽略标签高度、控件高度与换行结构。宽表格包在独立 `.table-responsive` 内，包含弹窗内的配置表，不能让整个卡片或弹窗横向溢出。
 - **提交前布局自查**：修改后台页面或共享增强逻辑时，对照桌面和窄屏规则，检查卡片四边、标题/说明/表格对齐、工具栏换行，以及加载/空态/报错/展开详情后的留白；长文本或宽表格只能在各自内容区换行或滚动。沿用根文件的人工验收约定，未实看页面不得声称视觉验收通过。
+- **展开详情不重分配列宽**：含可展开详情或长请求路径的业务表格，先明确列宽比例并用 colgroup + table-layout:fixed 固定，不能依赖自动内容测宽。最近操作记录的时间/操作人/操作内容/操作对象/结果固定为 18%/12%/34%/22%/14%，长路径、ID 和结果标签在单元格内换行，展开只改变行高；桌面最小表宽 900px，由外围表格容器局部滚动。767px 以下继续使用移动卡片布局，隐藏 colgroup 并解除最小表宽，详情/结果说明保持在内容列，不把桌面列宽强加给卡片。
 
 ## 硬性约束
 
@@ -54,11 +55,15 @@
 - **账号独立持久化**：后台使用 `AccountManager` + `AccountStorage`，由 `cmd/server/main.go` 注入当前 MySQL/Mongo 的 `admin_account_state` 和 `admin_audit_logs`。账号状态以单行/单文档 JSON 加整体 version CAS 保存，账号内 `revision` 防止管理员覆盖彼此编辑，`security_version` 使停用/重置密码跨进程失效。不得复用 App 用户表，也不得在数据库不可用或业务仓储降级时回退到环境变量鉴权或内存账号。
 - **首次迁移**：仅账号状态尚未初始化时读取 `ADMIN_ACCOUNTS=user:bcryptHash;...` 与兼容的 `ADMIN_USERNAME` / `ADMIN_PASSWORD_HASH`；同名优先多账号配置。必须包含 `admin`：该账号迁移为管理员，其他既有账号迁移为操作员，默认所有当前业务页面只读，不含账号管理。保留既有密码。已迁移后数据库是唯一账号权威，环境变量不再新增、覆盖或恢复账号。新增账号与重置密码要求下次登录先改密码；新增操作员未授权页面默认无权限。
 - **启用与故障关闭**：数据库未初始化且无初始账号时不挂载后台；已有持久化账号即使移除初始化环境变量仍启用。账号库不可用时登录/受保护请求拒绝（通常 503）；未挂载时保持 404。`USE_IN_MEMORY` 不提供后台账号降级。
-- **身份与权限**：管理员拥有全部权限，只有管理员可访问 `/admin/accounts.html`、`/admin/api/accounts*` 与审计日志；操作员每个模块只有 `none/read/write` 三档，write 包含页面所有业务操作。HTML、API、受保护静态资源均校验；未知模块默认拒绝。`permissions.go` 是页面/接口权限映射权威，账号模块清单在 `accounts.go`。新增页面/API 时同步映射，不能只隐藏导航。
+- **身份与权限**：管理员拥有全部业务模块权限，只有管理员可访问 `/admin/accounts.html`、`/admin/api/accounts*` 与审计日志；操作员每个模块只有 `none/read/write` 三档，write 包含页面所有业务操作。HTML、API、受保护静态资源均校验；未知模块默认拒绝。`permissions.go` 是页面/接口权限映射权威，账号模块清单在 `accounts.go`。新增页面/API 时同步映射，不能只隐藏导航。
 - **跨页面与汇总**：景点相关轨迹的查看/编辑同时校验轨迹模块权限。工作台按各业务模块过滤指标，其他页面通过 `/dashboard?scope=tracks|track_submissions|feedbacks` 只读取自身统计。只读景点页不得触发供应商回填或编辑；共享轨迹弹窗支持只读。`shell.js` 统一身份标签、导航、只读控件和退出，不再由各业务脚本覆盖账号展示。
 - **轨迹资料与景点候选**：景点管理页不再展示全局候选面板；共享 `track_editor.js` 通过 `place_candidates.js` 把单条轨迹的识别结果放在详情弹窗顶部，所有加载共享编辑器的页面都要先加载该模块。读取 GET `/tracks/:track_id/place-candidates` 需轨迹查看权限，既有 `/place-candidates/:track_id/confirm|dismiss` 写请求归属轨迹操作权限。`AdminUI.form.beforeFields` 挂载独立候选区，候选确认/忽略立即生效并刷新来源列表，不提交未保存的轨迹资料。源摘要失效返回 409，禁止使用过期候选。
 - **轨迹资料缺项口径**：`GET /tracks?missing=any|place_candidate|scenic_spot|description|city|previews` 在分页和总数统计前筛选；缺简介/城市按空文本，缺预览为四图任一缺失，未关联景点为无有效 draft/published 目录关联；任意缺项取各项并集。待确认 ID 由当前候选队列源摘要/规则/轨迹可索引校验取得，不触发供应商查询。MySQL 使用原生条件/关联，Mongo 使用 lookup + facet，内存由 main 注入景点仓储后使用关联快照；公共逻辑见 `repository/admin_track_missing.go`，新接口见 `docs/api/admin-tracks.md`。
-- **账号设置入口**：`shell.js` 的共享账号区只常驻显示名称、身份标签与齿轮。齿轮复用内置 `tabler.Dropdown`，桌面侧栏向上展开、移动顶栏向下展开，支持点外部关闭和键盘操作；菜单读取当前 session 和 `/admin/api/me` 显示登录名、名称、身份、最近登录，并提供现有改密页与退出入口。仅 GET 当前账号信息，不下发或展示密码/哈希。`ui.js` 不得给 dropdown-item 和下拉触发按钮自动套普通主按钮外观。退出请求失败保留当前页并在菜单提示，不把请求失败当成退出成功。
+- **账号设置入口**：`shell.js` 的共享账号区只常驻显示名称、身份标签与齿轮。齿轮复用内置 `tabler.Dropdown`，桌面侧栏向上展开、移动顶栏向下展开，支持点外部关闭和键盘操作；菜单读取当前 session 和 `/admin/api/me` 显示登录名、名称、身份、最近登录，并提供“账号安全”（保留 password.html URL，包含本人改密与邮箱验证）和退出入口。仅 GET 当前账号信息，不下发或展示密码/哈希。`ui.js` 不得给 dropdown-item 和下拉触发按钮自动套普通主按钮外观。退出请求失败保留当前页并在菜单提示，不把请求失败当成退出成功。
+- **本人邮箱与密码找回**：`email_challenges.go` 的 8 位验证码使用随机盐与服务端 HMAC 摘要（密钥从 SMTP 专用密码独立派生，凭证轮换使旧码失效），在现有账号 JSON 中与错误次数/有效期/发信配额一起 CAS 持久化；不修改 AccountStorage 接口、不回退内存。10 分钟、一次有效、累计 5 次错误失效，每用途间隔 60 秒、每账号每小时共 10 封。原邮箱、新邮箱、密码找回三用途不能互换；错误尝试也必须提交，不能因返回业务错误回滚计数。改密、停用、绑定成功使全部旧会话/挑战失效。
+- **邮箱归本人管理**：security API 只使用 session 的账号，不接受目标 username；绑定要当前密码和新邮箱验证，更换还要原邮箱验证。临时密码账号必须先改密，普通管理员编辑接口不得写入邮箱、验证码或现有密码。账号列表仅下发 recovery_email_bound/can_reset_password，完整邮箱只下发本人 GET security。已验证账号的管理员重置在服务端直接拒绝；全部启用账号绑定后持久化 legacy_password_reset_disabled，不因新建未绑定账号或 SMTP 暂不可用自动重开。未迁移账号暂保留标注“应急重置”的旧接口，不能提前让老账号失去恢复渠道。
+- **公开找回与发信**：forgot-password.html 公开，必须先将申请放入有界队列再查账号，匹配/不匹配统一 202 提示；不能把 SMTP 耗时和错误同步回传来枚举邮箱。公开接口校验同源、限制 socket peer IP（不直接信任转发头），验证码重试有跨进程持久化上限。email_recovery.go 限 2 worker/16 队列，email_sender.go 总并发 2、连接与操作超时，只允许证书校验通过的 TLS 1.2+；不回退明文 SMTP/本地 sendmail，不记录 SMTP 响应、凭证、邮件正文、验证码或摘要。不在响应/邮件中发送登录密码，不自动签发登录会话。公开找回完成单独审计，日志不可用不改密码，actor=email-recovery 代表未登录流程，不能冒充账号本人发起。普通修改/邮箱验证复用受保护审计；后台安全通知为尽力投递，通知失败不能把已完成改密误报失败。
+- **邮件配置与上线**：main 注入 ADMIN_SMTP_HOST/PORT/USERNAME/PASSWORD/FROM/TLS_MODE；未配置或非法时关闭邮件能力，登录/本人原密码改密继续工作，页面明确提示暂不可用。生产现有 OSS/STS 不是邮件服务；不要擅自开通云产品、复用 OSS AK/SK、发测试邮件或把真实 SMTP 凭证写入仓库。接入与迁移、公开响应/队列重启边界、HTTPS 要求见 `docs/admin-email-recovery.md`，示例配置 `deploy/admin-email.env.example`。
 - **账号保护与日志**：整体 CAS 原子保护最后一个启用的管理员，停用/改密码使所有会话失效，调整权限由后续请求实时读取。后台写请求校验同源、记录发起和 HTTP 结果；日志不可用时拒绝发起写操作，不存正文、密码或哈希。后置结果写入失败时保留发起日志并记录 server log，不能声称业务与日志跨库事务原子。所有后台受保护数据响应使用 no-store；静态 HTML 禁止通过 `/admin/static/*` 访问。
 - **日志账号筛选**：最近操作记录提供账号下拉选择（含停用账号）；`GET /admin/api/audit-logs?username=...` 按不可改的登录名精确匹配，MySQL/Mongo 必须先筛选再取最近 100 条。不传或空串表示全部账号。选项来自后台账号列表，刷新保留选择，快速切换忽略旧请求响应。
 - **操作记录可读性**：账号页以“操作人、中文操作内容、对象、结果”展示日志，`static/audit_log.js` 统一维护方法/路径到业务行为的映射，新增被审计操作时同步更新；`accounts.html` 在 accounts.js 前加载该模块。原始方法、路径、状态和记录 ID 放在折叠详情，用 textContent 输出，保留账号筛选及同一 attempt/result 合并。状态 0 或 3xx 不能标成功，结果仅反映请求响应，批处理不声称逐项全成功；说明景点供应商回填可由页面自动分批触发，不能仅凭接口推定每条都由人工点击。旧记录没有正文/字段差异，不推测通过或驳回、启用或停用等具体改动，不为展示描述逐条查业务库；未知动作显示通用描述和原始详情。
@@ -75,6 +80,10 @@ internal/admin/
 ├── accounts.go     # 账号、身份、模块权限、首次导入和账号版本
 ├── account_storage.go # MySQL/Mongo 状态 CAS + 操作日志
 ├── account_handlers.go # 账号管理、改密与日志接口
+├── email_challenges.go # 邮箱/找回挑战与配额，复用账号状态 CAS
+├── email_handlers.go   # 本人邮箱与公开密码找回 HTTP 接口
+├── email_recovery.go   # 有界邮件 worker、IP 限制与迁移配置入口
+├── email_sender.go     # TLS SMTP，不记录邮件或认证内容
 ├── permissions.go  # HTML/API/资源与跨模块授权
 ├── dashboard_permissions.go # 工作台统计响应裁剪
 ├── session.go      # SessionStore (内存 + GC 协程，TTL 默认 12h)
@@ -93,7 +102,7 @@ internal/admin/
 | 公共资源版本与页面传输 | `assets.go` 生成嵌入资源内容版本、预处理页面引用并压缩私有 HTML；`routes.go` 区分 immutable 静态资源与 no-store 业务响应；`static/runtime.js` 提供版本 URL 和异步图表加载 |
 | 列表图片等待 | `list_assets.go` 限制并发与头像去重；`handlers.go` 的 `decorateAdminTrackAssetURLs` 处理轨迹预览资源，仍等待缓存成功后才使用本地 URL |
 | 业务依赖注入 | `routes.go` 的 `NewModule(accounts, releaseSvc, stsSvc, staticRoot, userRepo, trackRepo, collectRepo, trackMapRepo, ..., restrictionSvc, routeGroupSvc, accountStorage)`；`cmd/server/main.go` 创建后通过 `Handler.SetScreenshotCache(screenshotCache)`、`Handler.SetTrackSubmissionService(trackSubmissionSvc)` 和 `Handler.SetDashboardStatisticsRepository(...)` 注入缓存、投稿与跨域只读统计能力 |
-| 前端入口 | `static/login.html`；登录后按授权页面跳转；账号管理 `static/accounts.html`、改密 `static/password.html`、无业务权限 `static/access.html` |
+| 前端入口 | `static/login.html`；登录后按授权页面跳转；账号管理 `static/accounts.html`、账号安全 `static/password.html`、无业务权限 `static/access.html` |
 | 响应式外壳与工作台 | `static/shell.js`、`static/ui.js`、`static/style.css`、`static/dashboard.html`、`static/dashboard.js`；组件库固定为内置 Tabler 1.7.1，图标为 Tabler Icons 3.49.0，图表为 ECharts 6.1.0，均位于 `static/vendor/`，不要改成运行时 CDN |
 | 安装包上传 | `handlers.go` 中 `UploadPackage`、`static/app.js` 中 `/admin/api/releases/upload-package` |
 | 用户与账号限制 | `handlers.go` 中 `ListUsers` / `CreateAccountRestriction` / `GetCurrentAccountRestriction` / `RevokeCurrentAccountRestriction`，`static/users.html`、`static/users.js` |
@@ -154,7 +163,7 @@ internal/admin/
 | PUT | `/admin/api/feedbacks/:feedback_id/status` | 鉴权 | 更新反馈处理状态与用户可见 `reply`；`resolved` 时 `reply` 必填 |
 | GET | `/admin/api/feedbacks/:feedback_id/images/:image_id` | 鉴权 | 读取反馈图片 |
 | GET | `/admin/api/analytics/sync-summaries` | 鉴权 | 埋点 OSS 同步摘要列表，支持 `status` / `limit` / `offset` |
-| GET | `/admin/api/route-groups` | 鉴权 | 路线组列表，支持 `track_type` / `city_code` / `limit`；返回 `area_id` 及目录区域摘要 |
+| GET | `/admin/api/route-groups` | 鉴权 | 路线组列表，支持 `track_type` / `province_code`（服务端展开为省内城市集合）/ `city_code` 筛选与 `limit` / `offset` 分页；返回 `total`、`next_offset`、`has_more`、`area_id` 及目录区域摘要 |
 | GET | `/admin/api/route-groups/:group_id` | 鉴权 | 路线组详情、`area_id` 对应区域信息与成员轨迹 |
 | PUT | `/admin/api/route-groups/:group_id/name` | 鉴权 | 人工改名 |
 | POST | `/admin/api/route-groups/:group_id/merge` | 鉴权 | 将 `source_group_id` 合并到当前路线组，并归档源路线组 |
@@ -172,13 +181,21 @@ internal/admin/
 | 方法 | 路径 | 权限 | 说明 |
 | --- | --- | --- | --- |
 | GET | `/admin/accounts.html` | 管理员 | 账号与最近操作日志 |
-| GET | `/admin/password.html` | 登录 | 修改本人密码，临时密码账号只允许此页 |
+| GET | `/admin/password.html` | 登录 | 本人账号安全，临时密码账号仅可先改密 |
+| GET | `/admin/forgot-password.html` | 公开 | 邮箱找回密码页面 |
 | GET | `/admin/access.html` | 登录 | 授权页面入口；无权限时联系管理员 |
 | GET | `/admin/api/accounts` | 管理员 | 账号列表与模块目录，不下发密码哈希 |
 | POST | `/admin/api/accounts` | 管理员 | 新建账号，临时密码必须修改 |
 | PUT | `/admin/api/accounts/:username` | 管理员 | 按 revision 修改名称、身份、状态和权限 |
-| POST | `/admin/api/accounts/:username/reset-password` | 管理员 | 按 revision 重置密码并使全部登录失效 |
+| POST | `/admin/api/accounts/:username/reset-password` | 管理员且迁移期 | 仅未绑定邮箱、旧入口未永久关闭时可应急重置 |
 | POST | `/admin/api/password` | 登录 | 验证原密码、修改本人密码并使全部登录失效 |
+| GET | `/admin/api/security` | 本人 session | 本人邮箱验证状态和邮件能力，不下发挑战摘要 |
+| POST | `/admin/api/security/email/current-code` | 本人 session | password；发送原邮箱换绑证明码 |
+| POST | `/admin/api/security/email/send-code` | 本人 session | password/email/current_code；新邮箱验证，换绑必须有原邮箱证明 |
+| POST | `/admin/api/security/email/verify` | 本人 session | code；验证保存并退出全部登录 |
+| GET | `/admin/api/password-recovery/status` | 公开 | 是否已配置邮件能力，不含账号信息 |
+| POST | `/admin/api/password-recovery/request` | 公开 | username/email，通用 202，异步有界发送 |
+| POST | `/admin/api/password-recovery/complete` | 公开 | username/email/code/password/confirmation；验证后设置密码，不自动登录 |
 | GET | `/admin/api/audit-logs` | 管理员 | 可选 username 精确筛选，返回筛选后最近 100 条发起/结果日志 |
 
 ## 关键流程
@@ -279,7 +296,8 @@ GET /admin/api/users
 **运营聚合路线**：
 ```
 [admin UI] /admin/route_groups.html
-  → GET /admin/api/route-groups?track_type=&city_code=
+  → GET /admin/api/route-groups?track_type=&province_code=&city_code=&limit=&offset=
+       → 运动类型为 icon+文字下拉，省→市级联；列表按关联区域分组成可展开的两级结构（区域 → 路线组），路线组行点「管理」打开详情弹窗
   → GET /admin/api/route-groups/:group_id 查看成员轨迹与 geo index
   → TrackRouteGroupService 按已存 area_id 补区域名称、类型、城市与介绍页链接
   → PUT /admin/api/route-groups/:group_id/name {name}

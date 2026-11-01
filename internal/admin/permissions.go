@@ -81,6 +81,9 @@ func (a *Authenticator) authorize(ctx context.Context, c *app.RequestContext, se
 	if passwordRoute {
 		allowed = true
 	}
+	if route == "/admin/api/security" || strings.HasPrefix(route, "/admin/api/security/email/") {
+		allowed = true
+	}
 	if route == "/admin/api/cities" {
 		for _, module := range []string{"tracks", "scenic_spots", "users", "route_groups"} {
 			allowed = allowed || account.allows(module, false)

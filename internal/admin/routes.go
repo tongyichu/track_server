@@ -82,6 +82,9 @@ func (m *Module) Close() {
 	if m == nil || m.Store == nil {
 		return
 	}
+	if m.Auth != nil && m.Auth.recovery != nil {
+		m.Auth.recovery.close()
+	}
 	m.Store.Close()
 }
 
@@ -135,6 +138,7 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 
 	// 静态资源：直接从 embed.FS 读出来返回
 	g.GET("/login.html", serveEmbedded("static/login.html", "text/html; charset=utf-8"))
+	g.GET("/forgot-password.html", serveEmbedded("static/forgot_password.html", "text/html; charset=utf-8"))
 	g.GET("/index.html", serveAdminPage(m.Auth, "static/index.html"))
 	g.GET("/dashboard.html", serveAdminPage(m.Auth, "static/dashboard.html"))
 	g.GET("/more.html", serveAdminPage(m.Auth, "static/more.html"))
@@ -156,6 +160,9 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	g.POST("/api/login", m.Auth.HandleLogin)
 	g.POST("/api/logout", m.Auth.HandleLogout)
 	g.GET("/api/me", m.Auth.HandleMe)
+	g.GET("/api/password-recovery/status", m.Auth.HandleRecoveryStatus)
+	g.POST("/api/password-recovery/request", m.Auth.HandleForgotPassword)
+	g.POST("/api/password-recovery/complete", m.Auth.HandleCompleteRecovery)
 
 	// 鉴权 API
 	api := g.Group("/api", m.Auth.AuthMiddleware())
@@ -164,6 +171,10 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	api.PUT("/accounts/:username", m.Auth.HandleSaveAccount)
 	api.POST("/accounts/:username/reset-password", m.Auth.HandleResetPassword)
 	api.POST("/password", m.Auth.HandleChangePassword)
+	api.GET("/security", m.Auth.HandleSecurity)
+	api.POST("/security/email/current-code", m.Auth.HandleSendEmailCode)
+	api.POST("/security/email/send-code", m.Auth.HandleSendEmailCode)
+	api.POST("/security/email/verify", m.Auth.HandleVerifyEmail)
 	api.GET("/audit-logs", m.Auth.HandleAuditLogs)
 	api.GET("/releases", m.Handler.ListReleases)
 	api.POST("/releases", m.Handler.PublishRelease)

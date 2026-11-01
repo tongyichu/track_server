@@ -104,7 +104,13 @@ type Config struct {
 	// 已初始化的账号、身份和权限由后台管理，环境变量不覆盖数据库里的变更。
 	// 无初始化账号且数据库无后台账号时禁用后台；账号库不可用时拒绝鉴权，不回退到内存。
 	// 哈希生成示例：htpasswd -nbBC 10 "" "<plain>" | tr -d ':\n' | sed 's/^$2y/$2a/'
-	AdminAccounts map[string]string
+	AdminAccounts     map[string]string
+	AdminSMTPHost     string
+	AdminSMTPPort     int
+	AdminSMTPUsername string
+	AdminSMTPPassword string
+	AdminSMTPFrom     string
+	AdminSMTPTLSMode  string
 
 	// 定时任务调度器（基于 robfig/cron/v3）
 	// - SCHEDULER_ENABLED=true 时启动，便于后续把 API 集群与定时任务集群拆开部署；
@@ -235,7 +241,13 @@ func Load() *Config {
 		OSSUploadPrefix:     getEnv("OSS_UPLOAD_PREFIX", DefaultOSSPathPrefix),
 
 		// 管理后台登录凭证（独立于业务用户鉴权）
-		AdminAccounts: parseAdminAccounts(os.Getenv("ADMIN_ACCOUNTS"), os.Getenv("ADMIN_USERNAME"), os.Getenv("ADMIN_PASSWORD_HASH")),
+		AdminAccounts:     parseAdminAccounts(os.Getenv("ADMIN_ACCOUNTS"), os.Getenv("ADMIN_USERNAME"), os.Getenv("ADMIN_PASSWORD_HASH")),
+		AdminSMTPHost:     strings.TrimSpace(os.Getenv("ADMIN_SMTP_HOST")),
+		AdminSMTPPort:     int(getEnvInt64("ADMIN_SMTP_PORT", 465)),
+		AdminSMTPUsername: os.Getenv("ADMIN_SMTP_USERNAME"),
+		AdminSMTPPassword: os.Getenv("ADMIN_SMTP_PASSWORD"),
+		AdminSMTPFrom:     strings.TrimSpace(os.Getenv("ADMIN_SMTP_FROM")),
+		AdminSMTPTLSMode:  getEnv("ADMIN_SMTP_TLS_MODE", "tls"),
 
 		// 定时任务调度器
 		SchedulerEnabled:     os.Getenv("SCHEDULER_ENABLED") == "true",
