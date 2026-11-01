@@ -64,6 +64,8 @@
 
 处理流程：服务端解析轨迹点（复用地图索引解析器，受原始文件大小上限约束）→ 计算距离/起止时间/耗时/爬升/均速 → 原始文件由服务端直传 OSS 归属人用户目录 → 走 `TrackService.CreateTrack` 建档（`source_tag=manual_seed`、已完成状态），自动排队地图索引并结算成就。城市与 locate_addr 由内置行政区目录按轨迹中位点（转 GCJ02 后）离线解析，未命中留空；标题复用标题回填的生成规则。不生成预览四图与路线描述（按 auto/v0 口径留空），可后续用客户端 DevMode 补图/补齐。OSS 未配置时导入接口不可用。
 
+上传文件格式：客户端详情/地图只解析 KMZ（zip 内 `gx:Track` KML）。已是 KMZ 的文件原样上传；KML / JSON / GeoJSON 会先按解析出的轨迹点转换为 `gx:Track` KMZ（全部点带时间戳时写入 `<when>`）再上传，保证客户端可绘制。
+
 ## 轨迹详情、重新识别与人工候选放宽
 
 `GET /admin/api/tracks/:track_id` 返回 `{code:0,data:{track, geo?}}`：

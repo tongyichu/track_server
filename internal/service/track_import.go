@@ -1,10 +1,12 @@
 package service
 
 import (
+	"archive/zip"
 	"context"
 	"errors"
 	"fmt"
 	"math"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -90,7 +92,14 @@ func (s *AdminTrackImportService) importOne(ctx context.Context, ownerUserID int
 		title = "导入的轨迹"
 	}
 
-	rawURL, err := s.oss.UploadUserObject(ownerUserID, filepath.Base(file.FileName), file.LocalPath)
+	// 客户端详情/地图只解析 KMZ（zip 内 gx:Track KML）。已是 KMZ 的原样上传；
+	// KML/JSON/GeoJSON 统一转换为 gx:Track KMZ 再上传，保证客户端可绘制。
+	uploadPath, uploadName, cleanup, err := prepareImportUpload(file, points)
+	if err != nil {
+		return fail(fmt.Errorf("转换 KMZ 失败: %w", err))
+	}
+	defer cleanup()
+	rawURL, err := s.oss.UploadUserObject(ownerUserID, uploadName, uploadPath)
 	if err != nil {
 		return fail(fmt.Errorf("原始轨迹上传 OSS 失败: %w", err))
 	}
@@ -190,6 +199,78 @@ func importTrackLocation(points []models.TrackPoint, coordinateSystem string) (s
 	default:
 		return district.CityCode, cityName
 	}
+}
+
+// prepareImportUpload 决定上传内容：已是 KMZ（zip）时直接复用原文件；
+// 否则把解析出的轨迹点写成 gx:Track KML 并打包为 KMZ。
+// 返回待上传文件路径、上传文件名与清理函数。
+func prepareImportUpload(file ImportTrackFile, points []models.TrackPoint) (string, string, func(), error) {
+	base := SanitizeImportFileName(file.FileName)
+	data, err := os.ReadFile(file.LocalPath)
+	if err != nil {
+		return "", "", func() {}, err
+	}
+	if strings.EqualFold(filepath.Ext(base), ".kmz") || isZipData(data) {
+		return file.LocalPath, base, func() {}, nil
+	}
+	tempDir, err := os.MkdirTemp("", "track-import-kmz-*")
+	if err != nil {
+		return "", "", func() {}, err
+	}
+	cleanup := func() { os.RemoveAll(tempDir) }
+	ext := filepath.Ext(base)
+	name := strings.TrimSuffix(base, ext) + ".kmz"
+	kmzPath := filepath.Join(tempDir, name)
+	if err := writeImportKMZ(kmzPath, points); err != nil {
+		cleanup()
+		return "", "", func() {}, err
+	}
+	return kmzPath, name, cleanup, nil
+}
+
+// writeImportKMZ 把轨迹点写成带 gx:Track 的 KML 并打包为 KMZ（客户端渲染所需格式）。
+func writeImportKMZ(kmzPath string, points []models.TrackPoint) error {
+	var kml strings.Builder
+	kml.WriteString("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
+	kml.WriteString("<kml xmlns=\"http://www.opengis.net/kml/2.2\" xmlns:gx=\"http://www.google.com/kml/ext/2.2\"><Document><Placemark><gx:Track>\n")
+	withTime := true
+	for _, p := range points {
+		if p.Timestamp.IsZero() {
+			withTime = false
+			break
+		}
+	}
+	if withTime {
+		for _, p := range points {
+			kml.WriteString("<when>" + p.Timestamp.UTC().Format(time.RFC3339) + "</when>\n")
+		}
+	}
+	for _, p := range points {
+		fmt.Fprintf(&kml, "<gx:coord>%.7f %.7f %.1f</gx:coord>\n", p.Longitude, p.Latitude, p.Elevation)
+	}
+	kml.WriteString("</gx:Track></Placemark></Document></kml>\n")
+
+	out, err := os.Create(kmzPath)
+	if err != nil {
+		return err
+	}
+	zw := zip.NewWriter(out)
+	entry, err := zw.Create("doc.kml")
+	if err != nil {
+		zw.Close()
+		out.Close()
+		return err
+	}
+	if _, err := entry.Write([]byte(kml.String())); err != nil {
+		zw.Close()
+		out.Close()
+		return err
+	}
+	if err := zw.Close(); err != nil {
+		out.Close()
+		return err
+	}
+	return out.Close()
 }
 
 // SanitizeImportFileName 清洗上传文件名，仅保留安全字符。

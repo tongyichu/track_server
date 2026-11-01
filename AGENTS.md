@@ -272,6 +272,7 @@ Scheduler(companion_session_autoclose，每 10 分钟)
   → POST /admin/api/tracks/import（multipart：files≤50、owner_user_id 必须内部人员、track_type、coordinate_system 默认 WGS84）
   → service.AdminTrackImportService 逐文件 parseTrackPointsFile 解析（JSON/GeoJSON/KML/KMZ）
   → 计算距离/起止时间/耗时/爬升/均速；城市与 locate_addr 用 maparea 目录按中位点（转 GCJ02）离线解析
+  → 非 KMZ 文件先转换为 gx:Track KMZ（客户端详情/地图只解析该格式），KMZ 原样保留
   → OSSTokenService.UploadUserObject 服务端直传原始文件到归属人用户目录，返回公开 URL
   → TrackService.CreateTrack（owner=归属人，source_tag=manual_seed，is_running=false）
   → 自动排队 track_map_index 并结算成就；逐文件返回 {file_name, track_id?, title?, error?}
