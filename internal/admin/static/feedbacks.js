@@ -341,7 +341,8 @@
     try {
       var response = await fetch('/admin/api/tracks/' + encodeURIComponent(trackID));
       if (!response.ok) throw new Error(response.status === 404 ? '轨迹已删除或不存在' : '读取失败: ' + response.status);
-      var track = ((await response.json()).data) || {};
+      var trackPayload = ((await response.json()).data) || {};
+      var track = trackPayload.track || trackPayload;
       if (request !== detailRequest) return;
       panel.replaceChildren();
       var heading = document.createElement('strong'); heading.textContent = '轨迹当前资料'; panel.appendChild(heading);

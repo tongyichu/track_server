@@ -395,6 +395,12 @@ table.data.table .btn { white-space: nowrap; }
 .track-import-result-list li { padding: 3px 0; overflow-wrap: anywhere; }
 .track-import-result-ok { color: var(--tblr-green, #2fb344); }
 .track-import-result-fail { color: var(--tblr-danger, #d63939); }
+.admin-track-detail-side { display: flex; flex-direction: column; gap: 16px; margin-bottom: 14px; }
+.admin-track-map-body { min-height: 0; }
+.admin-track-map-canvas { width: 100%; height: 320px; border-radius: var(--tblr-border-radius); border: 1px solid var(--tblr-border-color); overflow: hidden; }
+.admin-track-primary-spot { margin: 0 0 10px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.admin-track-spot-tag { text-decoration: none; font-size: 13px; padding: 5px 10px; }
+.admin-track-spot-tag:hover { text-decoration: underline; }
 .companion-list-table th, .companion-list-table td { vertical-align: middle; }
 .companion-room-cell { min-width: 160px; max-width: 340px; overflow-wrap: anywhere; }
 .companion-room-cell strong, .companion-room-cell small { display: block; }

@@ -15,7 +15,8 @@
       return false;
     }
     if (!citiesResponse.ok) throw new Error('城市列表加载失败: ' + citiesResponse.status);
-    const track = ((await trackResponse.json()).data) || {};
+    const trackPayload = ((await trackResponse.json()).data) || {};
+    const track = trackPayload.track || trackPayload;
     const cities = ((await citiesResponse.json()).data) || [];
     const cityNames = Object.create(null);
     cities.forEach(city => { cityNames[city.code] = city.name; });
@@ -53,7 +54,13 @@
         return 'deleted';
       },
       wide: true,
-      beforeFields: window.AdminTrackPlaceCandidates.create(trackID, { readOnly: readOnly, onChanged: options.onSaved, cityNames: cityNames }),
+      beforeFields: (function () {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'admin-track-detail-side';
+        wrapper.appendChild(window.AdminTrackPlaceCandidates.create(trackID, { readOnly: readOnly, onChanged: options.onSaved, cityNames: cityNames, track: track }));
+        if (window.AdminTrackMapPreview) wrapper.appendChild(window.AdminTrackMapPreview.create(trackPayload.geo));
+        return wrapper;
+      })(),
       fields: [
         { name: 'user_id', label: '用户 ID', type: 'number', value: track.user_id, min: 0 },
         { name: 'session_id', label: '同行会话 ID', value: track.session_id },

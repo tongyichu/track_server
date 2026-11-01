@@ -41,7 +41,7 @@ func (s *TrackPlaceService) GetPlaceCandidate(ctx context.Context, trackID strin
 	if !isTrackMapIndexEligible(track) {
 		return nil, repository.ErrNotFound
 	}
-	relations := enclosedPlaceRelations(match.Relations)
+	relations := adminCandidateRelations(match.Relations)
 	ids := make([]string, 0, len(relations))
 	for _, relation := range relations {
 		ids = append(ids, relation.PlaceID)
@@ -189,9 +189,11 @@ func (s *TrackPlaceService) ConfirmPlaceCandidate(ctx context.Context, trackID, 
 		return err
 	}
 	found := false
-	for _, relation := range match.Relations {
-		if relation.PlaceID == placeID && relation.Kind == "enclosed_poi" && relation.Enclosed {
+	method := "enclosed_poi"
+	for _, relation := range adminCandidateRelations(match.Relations) {
+		if relation.PlaceID == placeID {
 			found = true
+			method = relation.Kind
 			break
 		}
 	}
@@ -207,7 +209,7 @@ func (s *TrackPlaceService) ConfirmPlaceCandidate(ctx context.Context, trackID, 
 	}
 	match.Status = "matched"
 	match.PrimaryPlaceID = placeID
-	match.PrimaryMethod = "enclosed_poi"
+	match.PrimaryMethod = method
 	match.UpdatedAt = time.Now()
 	if err := s.save(ctx, "match:"+trackID, match, time.Time{}, ""); err != nil {
 		return err
@@ -248,7 +250,8 @@ func (s *TrackPlaceService) loadCurrentCandidate(ctx context.Context, trackID st
 		return nil, nil, err
 	}
 	var match models.TrackPlaceMatch
-	if json.Unmarshal([]byte(record.Data), &match) != nil || match.TrackID != trackID || match.RuleVersion != trackPlaceRuleVersion || match.Provider != "amap" || match.Status != "candidate" {
+	if json.Unmarshal([]byte(record.Data), &match) != nil || match.TrackID != trackID || match.RuleVersion != trackPlaceRuleVersion || match.Provider != "amap" ||
+		(match.Status != "candidate" && match.Status != "unmatched") {
 		return nil, nil, repository.ErrNotFound
 	}
 	indexes, err := s.reader.FindPlaceGeoIndexes(ctx, []string{trackID})
@@ -268,6 +271,31 @@ func enclosedPlaceRelations(relations []models.TrackPlaceRelation) []models.Trac
 		if relation.Kind == "enclosed_poi" && relation.Enclosed && relation.PlaceID != "" {
 			items = append(items, relation)
 		}
+	}
+	return items
+}
+
+// adminCandidateRelations 是后台人工确认可用的候选集合：围住的景点之外，
+// 也包含采样途经的附近景点（自动判定不出主景点时由人工快速选择）。
+func adminCandidateRelations(relations []models.TrackPlaceRelation) []models.TrackPlaceRelation {
+	items := make([]models.TrackPlaceRelation, 0, len(relations))
+	seen := make(map[string]struct{}, len(relations))
+	for _, relation := range relations {
+		if relation.PlaceID == "" {
+			continue
+		}
+		valid := relation.Kind == "enclosed_poi" && relation.Enclosed
+		if !valid && relation.Kind == "nearby" && relation.MatchedSamples >= 1 {
+			valid = true
+		}
+		if !valid {
+			continue
+		}
+		if _, ok := seen[relation.PlaceID]; ok {
+			continue
+		}
+		seen[relation.PlaceID] = struct{}{}
+		items = append(items, relation)
 	}
 	return items
 }

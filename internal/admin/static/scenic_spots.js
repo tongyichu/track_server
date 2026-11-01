@@ -281,4 +281,6 @@
   ['nameInput','categoryInput','addressInput','descriptionInput'].forEach(id=>$(id).addEventListener('input',updateSaveButton));
   $('closeRelatedTracksBtn').addEventListener('click',()=>$('relatedTracksModal').close());$('relatedTracksModal').addEventListener('click',event=>{if(event.target===$('relatedTracksModal'))$('relatedTracksModal').close();});$('loadMoreRelatedTracksBtn').addEventListener('click',()=>loadRelatedTracks(true));
   Promise.all([loadList(),loadStats()]).then(syncProviderContent);
+  const deepLinkSpotID=(new URLSearchParams(window.location.search).get('spot_id')||'').trim();
+  if(deepLinkSpotID)loadSpot(deepLinkSpotID);
 })();

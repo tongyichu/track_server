@@ -103,7 +103,7 @@ track_server/
 ### 稳定默认值
 
 - 后台本人邮箱验证与密码找回由 `internal/admin/email_*.go` 和 `Module.ConfigureEmailRecovery` 实现，使用现有账号 JSON CAS 持久化验证码摘要/次数/冷却，只允许加密 SMTP；`ADMIN_SMTP_*` 配置和迁移边界见 `docs/admin-email-recovery.md`、`internal/admin/AGENTS.md`。已验证邮箱的账号禁止管理员代重置，全部启用账号完成绑定后永久关闭旧重置入口；无邮件配置时不伪造发信成功，不能复用 OSS 凭证或以内存账号兜底。
-- 后台轨迹列表缺项筛选由 `internal/repository/admin_track_missing.go` 实现，`missing=any|place_candidate|scenic_spot|description|city|previews` 参与总数与游标分页，MySQL/Mongo/内存保持一致；main 为内存轨迹仓储注入景点仓储关联快照。候选源摘要校验复用 `TrackPlaceService`，只读筛选不触发供应商调用。景点识别候选移至共享轨迹详情弹窗，读取与确认/忽略均按轨迹模块权限；API 与口径见 `docs/api/admin-tracks.md` 和 `internal/admin/AGENTS.md`。
+- 后台轨迹列表缺项筛选由 `internal/repository/admin_track_missing.go` 实现，`missing=any|place_candidate|scenic_spot|description|city|previews` 参与总数与游标分页，MySQL/Mongo/内存保持一致；main 为内存轨迹仓储注入景点仓储关联快照。候选源摘要校验复用 `TrackPlaceService`，只读筛选不触发供应商调用。景点识别候选移至共享轨迹详情弹窗，读取与确认/忽略均按轨迹模块权限；后台人工候选放宽为围住+采样途经附近（unmatched 也可人工确认），`POST /admin/api/tracks/:track_id/place-refresh` 同步触发单条重新识别，轨迹详情附带主景点与简化轨迹线供弹窗地图绘制；API 与口径见 `docs/api/admin-tracks.md` 和 `internal/admin/AGENTS.md`。
 
 - 后台账号独立持久化在 `admin_account_state`，操作日志在 `admin_audit_logs`，由 `internal/admin/account_storage.go` 实现 MySQL/Mongo 并在 main 注入；不属于 App 用户 Repository，也不随业务仓储降级为内存。环境变量仅首次导入：`admin` 为管理员，其余现有账号默认业务页面只读。角色、页面 none/read/write 权限、跨模块校验、版本冲突、最后管理员保护和会话失效由 `internal/admin/accounts.go`、`permissions.go`、`auth.go` 维护。后台入口 `/admin/accounts.html`；细节与新增接口见 `internal/admin/AGENTS.md` 和 `docs/api/admin-accounts.md`。
 
