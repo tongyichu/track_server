@@ -181,3 +181,36 @@
 后台页面权限遵循 [admin-accounts.md](admin-accounts.md)：反馈与纠错模块只读账号可查看反馈及纠错选项，处理反馈或保存纠错配置需该模块可操作权限。反馈页面统计通过 `/admin/api/dashboard?period=month&scope=feedbacks` 只读取反馈部分。
 
 反馈页顶部仅展示待处理、处理中、已处理、已关闭四种状态数量，不再展示待处理时效卡片。筛选栏为状态、版本、手机号，刷新与翻页按钮独立分组并与控件对齐；宽表格在列表或弹窗内部滚动。此调整仅影响页面展示，工作台及统计接口中的时效字段保持兼容。
+
+
+## 纠错体验与处理结果扩展
+
+选项新增以下可选字段：`description`、`description_en`（问题解释），`notes_hint`、`notes_hint_en`（补充说明输入提示）。每项都是单行文本，最多 160 个 Unicode 字符；中文使用中文字段，英文优先英文、缺失回退中文。配置读写复用原接口及 version 条件保存。未保存配置时服务端默认六项包含解释和提示；已有配置不自动覆盖，运营可以补齐这些字段。客户端缺少解释时只展示名称，缺少提示时使用通用输入提示，不内置原因清单。
+
+`correction` 增加 `revision`（初始 0，处理或关联修改时递增）、可选 `outcome` 和 `handled_at`（RFC3339）。原 track_id、名称快照、notes 不变。历史没有这些字段时继续展示原正文和状态，不从回复文字推断处理结果。
+
+| outcome | 含义 | 对应 status |
+| --- | --- | --- |
+| corrected | 已修正 | resolved |
+| unchanged | 无需修改 | resolved |
+| unverified | 暂无法核实 | ignored |
+
+后台 `PUT /admin/api/feedbacks/:feedback_id/status` 支持如下字段，运维 `PUT /api/v1/ops/feedback/:feedback_id/status` 也接受可选 outcome/revision（无后台 session，不伪造管理员身份）：
+
+```json
+{"status":"resolved","reply":"已核对并修正轨迹地区信息。","outcome":"corrected","revision":0}
+```
+
+- 新后台对结构化纠错必须携带最近详情中的 revision；终态必须同时填写 outcome 与 reply，非终态不允许 outcome。
+- revision 失配返回 409，保留用户已填结果和回复，重新打开详情后由管理员再次确认，不自动重提。
+- 为兼容旧运维调用，不携带 revision/outcome 的原状态请求仍可用；同状态仅改回复时保留已有 outcome。重新打开为待处理/处理中会清除旧结果。
+- 处理人由后台 session 确定，时间由服务端生成；业务反馈列表/详情仅下发 outcome 和 handled_at，不下发管理员账号。
+- 后台详情额外有 handled_by 与 track_change（最近从该纠错入口实际保存的轨迹修改，含 operator/saved_at/fields）。仅保存结果或选择“已修正”不会修改轨迹。
+
+后台列表 `GET /admin/api/feedbacks` 新增 `kind=correction|feedback`、`track_id`、`correction_option_id`，可与现有筛选组合，三种仓储均在游标和条数限制前筛选。kind/轨迹/问题筛选针对有 correction 快照的记录；早期纯文本纠错仍在全部列表兼容展示，归在无结构化快照的 feedback 类型下。
+
+后台纠错详情按权限异步读取轨迹当前资料。共享轨迹编辑 `PUT /admin/api/tracks/:track_id` 可选传 `source_feedback_id`，除轨迹操作权限外同时要求反馈操作权限，并核对记录所指轨迹。成功保存实际变化后记录字段名、操作人和时间；原始值/新值不作为完整审计历史保存，历史后台操作记录保持原有行为。只保留最近一次关联修改。
+
+轨迹保存与纠错关联不构成跨仓储事务：轨迹已保存、关联失败时返回 HTTP 200 + `correction_warning`，后台必须提示部分成功，不能将此视为未保存并自动重放。资料编辑与反馈结果分别保存。无任何字段变化不生成关联修改；从其他入口的编辑或景点候选确认不自动归入此记录。
+
+Android 纠错页面使用现有轨迹详情补充摘要与日夜预览，获取失败不阻断选项和提交。说明及图片直接展示且可选，说明限 500，图片限 3 张。为保留地图文字细节，纠错图片压缩目标改为每张不超过 1 MiB、最长边 1600；服务端原有每张 5 MiB/总计 15 MiB 限制不变。提交成功可查看反馈详情或返回轨迹，记录列表与详情直接读取 outcome，旧反馈无 outcome 时维持原展示。

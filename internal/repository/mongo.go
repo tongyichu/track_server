@@ -1251,6 +1251,18 @@ func (r *MongoFeedbackRepository) List(ctx context.Context, filter models.Feedba
 	if filter.AppVersion != "" {
 		query["app_version"] = filter.AppVersion
 	}
+	if filter.Kind == "correction" {
+		query["correction"] = bson.M{"$type": "object"}
+	}
+	if filter.Kind == "feedback" {
+		query["correction"] = nil
+	}
+	if filter.TrackID != "" {
+		query["correction.track_id"] = filter.TrackID
+	}
+	if filter.OptionID != "" {
+		query["correction.option_id"] = filter.OptionID
+	}
 	if filter.Cursor != nil && !filter.Cursor.CreatedAt.IsZero() && filter.Cursor.FeedbackID != "" {
 		query["$or"] = bson.A{
 			bson.M{"created_at": bson.M{"$lt": filter.Cursor.CreatedAt}},

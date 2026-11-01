@@ -64,6 +64,7 @@ type trackMapCleanupRepository interface {
 }
 
 type updateTrackBody struct {
+	SourceFeedbackID          string                     `json:"source_feedback_id"`
 	UserID                    *int64                     `json:"user_id"`
 	SessionID                 *string                    `json:"session_id"`
 	CityCode                  *string                    `json:"city_code"`
@@ -1419,6 +1420,26 @@ func (h *Handler) UpdateTrack(ctx context.Context, c *app.RequestContext) {
 		handleAdminRepoError(c, err)
 		return
 	}
+	if body.SourceFeedbackID != "" {
+		if !h.canHandleCorrection(c) {
+			c.JSON(403, utils.H{"error": "关联纠错需反馈与纠错操作权限"})
+			return
+		}
+		if h.feedbackSvc == nil {
+			c.JSON(503, utils.H{"error": "feedback service not configured"})
+			return
+		}
+		feedback, err := h.feedbackSvc.GetOps(ctx, body.SourceFeedbackID)
+		if err != nil {
+			writeAdminFeedbackError(c, err)
+			return
+		}
+		if feedback.Correction == nil || feedback.Correction.TrackID != trackID {
+			c.JSON(400, utils.H{"error": "纠错记录与轨迹不匹配"})
+			return
+		}
+	}
+	beforeCorrectionEdit := *track
 	oldCityCode, oldType := track.CityCode, track.TrackType
 	oldStatus, oldRunning, oldRawURL := track.Status, track.IsRunning, track.RawTrackURL
 	if err := applyAdminTrackUpdate(track, body); err != nil {
@@ -1454,6 +1475,13 @@ func (h *Handler) UpdateTrack(ctx context.Context, c *app.RequestContext) {
 			}
 		} else if err != nil && !errors.Is(err, repository.ErrNotFound) {
 			c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+			return
+		}
+	}
+	if body.SourceFeedbackID != "" {
+		fields := correctionChangedFields(&beforeCorrectionEdit, track)
+		if err := h.feedbackSvc.RecordCorrectionTrackChange(ctx, body.SourceFeedbackID, trackID, h.adminOperator(c), fields); err != nil {
+			c.JSON(http.StatusOK, utils.H{"code": 0, "data": track, "correction_warning": "轨迹已保存，但关联纠错记录失败，请重新打开核实后处理反馈"})
 			return
 		}
 	}
@@ -1881,6 +1909,9 @@ func (h *Handler) ListFeedbacks(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 	filter := models.FeedbackListFilter{
+		Kind:       strings.TrimSpace(string(c.Query("kind"))),
+		TrackID:    strings.TrimSpace(string(c.Query("track_id"))),
+		OptionID:   strings.TrimSpace(string(c.Query("correction_option_id"))),
 		Status:     models.FeedbackStatus(strings.TrimSpace(string(c.Query("status")))),
 		AppVersion: strings.TrimSpace(string(c.Query("app_version"))),
 		Cursor:     cursor,
@@ -1934,12 +1965,14 @@ func (h *Handler) GetFeedback(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 	h.rewriteFeedbackImageURLs([]*models.Feedback{item})
-	c.JSON(http.StatusOK, utils.H{"code": 0, "data": item})
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": adminFeedbackDetail(item)})
 }
 
 type updateFeedbackStatusBody struct {
-	Status models.FeedbackStatus `json:"status"`
-	Reply  string                `json:"reply"`
+	Outcome  string                `json:"outcome"`
+	Revision *int64                `json:"revision"`
+	Status   models.FeedbackStatus `json:"status"`
+	Reply    string                `json:"reply"`
 }
 
 // UpdateFeedbackStatus 处理 PUT /admin/api/feedbacks/:feedback_id/status
@@ -1955,6 +1988,9 @@ func (h *Handler) UpdateFeedbackStatus(ctx context.Context, c *app.RequestContex
 		return
 	}
 	if err := h.feedbackSvc.UpdateStatus(ctx, service.UpdateFeedbackStatusInput{
+		Outcome:    body.Outcome,
+		Revision:   body.Revision,
+		Operator:   h.adminOperator(c),
 		FeedbackID: c.Param("feedback_id"),
 		Status:     body.Status,
 		Reply:      body.Reply,
@@ -2004,6 +2040,8 @@ func (h *Handler) rewriteFeedbackImageURLs(items []*models.Feedback) {
 func writeAdminFeedbackError(c *app.RequestContext, err error) {
 	var iae *service.InvalidArgumentError
 	switch {
+	case errors.Is(err, repository.ErrAlreadyExists):
+		c.JSON(http.StatusConflict, utils.H{"error": "记录已更新，请重新打开详情后再处理"})
 	case errors.As(err, &iae),
 		errors.Is(err, service.ErrFeedbackReplyRequired):
 		c.JSON(http.StatusBadRequest, utils.H{"error": err.Error()})

@@ -20,12 +20,12 @@ var correctionTrackIDPattern = regexp.MustCompile(`^NO\.[0-9A-Z]{8}$`)
 
 func defaultCorrectionConfig() *models.FeedbackCorrectionConfig {
 	return &models.FeedbackCorrectionConfig{Options: []models.FeedbackCorrectionOption{
-		{ID: "scenic", Name: "景点有误", NameEN: "Wrong scenic spot", Enabled: true, SortOrder: 10},
-		{ID: "district", Name: "地区有误", NameEN: "Wrong area", Enabled: true, SortOrder: 20},
-		{ID: "route", Name: "线路异常", NameEN: "Route issue", Enabled: true, SortOrder: 30},
-		{ID: "metrics", Name: "数据异常", NameEN: "Data issue", Enabled: true, SortOrder: 40},
-		{ID: "conditions", Name: "路况变化", NameEN: "Trail conditions", Enabled: true, SortOrder: 50},
-		{ID: "other", Name: "其他问题", NameEN: "Other", Enabled: true, SortOrder: 60},
+		{Description: "景点名称或归属不准确", DescriptionEN: "Scenic spot name or association is incorrect", NotesHint: "当前景点哪里有误？你认为正确的景点是什么？", NotesHintEN: "Which scenic spot is incorrect, and what should it be?", ID: "scenic", Name: "景点有误", NameEN: "Wrong scenic spot", Enabled: true, SortOrder: 10},
+		{Description: "城市、地区或位置描述有误", DescriptionEN: "City, area or location is incorrect", NotesHint: "请说明当前地区和你认为正确的位置", NotesHintEN: "Describe the current area and the correct location", ID: "district", Name: "地区有误", NameEN: "Wrong area", Enabled: true, SortOrder: 20},
+		{Description: "轨迹偏移、断线或存在异常路段", DescriptionEN: "Route drift, gaps or unusual sections", NotesHint: "请描述异常路段，可附地图截图标明位置", NotesHintEN: "Describe the affected section; a marked map screenshot can help", ID: "route", Name: "线路异常", NameEN: "Route issue", Enabled: true, SortOrder: 30},
+		{Description: "里程、时长、海拔等数据不准确", DescriptionEN: "Distance, duration or elevation is incorrect", NotesHint: "哪项数据有误？当前数值和参考数值分别是多少？", NotesHintEN: "Which metric is wrong? Include the current and expected values", ID: "metrics", Name: "数据异常", NameEN: "Data issue", Enabled: true, SortOrder: 40},
+		{Description: "封路、绕行或实际通行情况变化", DescriptionEN: "Closures, detours or access changes", NotesHint: "请说明具体位置、发现时间和当前路况", NotesHintEN: "Include the location, observation date and current conditions", ID: "conditions", Name: "路况变化", NameEN: "Trail conditions", Enabled: true, SortOrder: 50},
+		{Description: "其他影响轨迹信息准确性的问题", DescriptionEN: "Other issues affecting route information", NotesHint: "请描述具体问题及你建议的修改", NotesHintEN: "Describe the issue and your suggested correction", ID: "other", Name: "其他问题", NameEN: "Other", Enabled: true, SortOrder: 60},
 	}}
 }
 
@@ -77,6 +77,13 @@ func (s *FeedbackService) UpdateCorrectionConfig(ctx context.Context, input mode
 		option.NameEN = strings.TrimSpace(option.NameEN)
 		if option.Name == "" || utf8.RuneCountInString(option.Name) > 24 || utf8.RuneCountInString(option.NameEN) > 64 || strings.ContainsAny(option.Name+option.NameEN, "\r\n") {
 			return nil, invalidArg("中文名称必填且不超过 24 字，英文不超过 64 字，不能换行")
+		}
+		fields := []*string{&option.Description, &option.DescriptionEN, &option.NotesHint, &option.NotesHintEN}
+		for _, field := range fields {
+			*field = strings.TrimSpace(*field)
+			if utf8.RuneCountInString(*field) > 160 || strings.ContainsAny(*field, "\r\n") {
+				return nil, invalidArg("选项说明和填写提示最多 160 字，不能换行")
+			}
 		}
 		if option.SortOrder < 0 || option.SortOrder > 9999 {
 			return nil, invalidArg("排序应在 0 到 9999 之间")

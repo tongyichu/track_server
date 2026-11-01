@@ -394,6 +394,7 @@ type FeedbackRepository interface {
 	List(ctx context.Context, filter models.FeedbackListFilter) ([]*models.Feedback, error)
 	CountByUserAndStatuses(ctx context.Context, userID int64, statuses []models.FeedbackStatus) (int64, error)
 	UpdateStatus(ctx context.Context, feedbackID string, status models.FeedbackStatus, reply string) error
+	UpdateCorrectionStatus(ctx context.Context, feedbackID string, status models.FeedbackStatus, reply string, correction *models.FeedbackCorrection, expectedRevision int64) error
 }
 
 // AnalyticsRepository defines persistence operations for analytics sync audits.

@@ -3586,7 +3586,7 @@ func (r *MySQLFeedbackRepository) Create(ctx context.Context, feedback *models.F
 	}
 	var correctionJSON any
 	if feedback.Correction != nil {
-		data, err := json.Marshal(feedback.Correction)
+		data, err := marshalCorrectionStorage(feedback.Correction)
 		if err != nil {
 			return err
 		}
@@ -3646,6 +3646,20 @@ func (r *MySQLFeedbackRepository) List(ctx context.Context, filter models.Feedba
 	if filter.AppVersion != "" {
 		query += ` AND app_version=?`
 		args = append(args, filter.AppVersion)
+	}
+	if filter.Kind == "correction" {
+		query += ` AND correction_json IS NOT NULL AND JSON_TYPE(correction_json)='OBJECT'`
+	}
+	if filter.Kind == "feedback" {
+		query += ` AND (correction_json IS NULL OR JSON_TYPE(correction_json)='NULL')`
+	}
+	if filter.TrackID != "" {
+		query += ` AND JSON_UNQUOTE(JSON_EXTRACT(correction_json,'$.track_id'))=?`
+		args = append(args, filter.TrackID)
+	}
+	if filter.OptionID != "" {
+		query += ` AND JSON_UNQUOTE(JSON_EXTRACT(correction_json,'$.option_id'))=?`
+		args = append(args, filter.OptionID)
 	}
 	if filter.Cursor != nil && !filter.Cursor.CreatedAt.IsZero() && filter.Cursor.FeedbackID != "" {
 		query += ` AND (created_at < ? OR (created_at = ? AND feedback_id < ?))`
@@ -3748,7 +3762,9 @@ func scanFeedback(row feedbackRowScanner) (*models.Feedback, error) {
 		item.Reply = reply.String
 	}
 	if correctionJSON.Valid {
-		if err := json.Unmarshal([]byte(correctionJSON.String), &item.Correction); err != nil {
+		var err error
+		item.Correction, err = unmarshalCorrectionStorage([]byte(correctionJSON.String))
+		if err != nil {
 			return nil, err
 		}
 	}

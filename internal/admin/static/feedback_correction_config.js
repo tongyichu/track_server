@@ -57,6 +57,12 @@
     row.dataset.optionId = option.id || '';
     inputCell(row, 'name', 'text', option.name || '', '中文名称', 24);
     inputCell(row, 'name_en', 'text', option.name_en || '', '英文名称', 64);
+    [['description', '问题解释', 0], ['notes_hint', '填写提示', 0], ['description_en', 'Explanation', 1], ['notes_hint_en', 'Input hint', 1]].forEach(function (field) {
+      var input = document.createElement('input');
+      input.className = 'form-control mt-2'; input.name = field[0]; input.maxLength = 160;
+      input.placeholder = field[1] + '（选填）'; input.setAttribute('aria-label', field[1]); input.value = option[field[0]] || '';
+      row.children[field[2]].appendChild(input);
+    });
     inputCell(row, 'sort_order', 'number', option.sort_order, '排序');
     inputCell(row, 'enabled', 'checkbox', option.enabled, '启用');
     var actions = document.createElement('td');
@@ -144,6 +150,10 @@
         id: row.dataset.optionId,
         name: row.querySelector('[name=name]').value.trim(),
         name_en: row.querySelector('[name=name_en]').value.trim(),
+        description: row.querySelector('[name=description]').value.trim(),
+        description_en: row.querySelector('[name=description_en]').value.trim(),
+        notes_hint: row.querySelector('[name=notes_hint]').value.trim(),
+        notes_hint_en: row.querySelector('[name=notes_hint_en]').value.trim(),
         sort_order: Number(row.querySelector('[name=sort_order]').value),
         enabled: row.querySelector('[name=enabled]').checked
       };
@@ -158,6 +168,7 @@
         body: JSON.stringify({ version: version, options: options })
       }));
       success.textContent = '已保存';
+      document.dispatchEvent(new Event('correction-config-saved'));
     } catch (err) {
       // Keep the edited rows intact, including when another administrator saved a newer version.
       error.textContent = err.message || '保存失败，请重试';

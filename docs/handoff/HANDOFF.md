@@ -1,5 +1,23 @@
 # 工作交接：协议 H5 页面（2026-10-13）
 
+## 2026-11-01：纠错升级提交推送
+
+- 用户明确要求将 android-track-backup 与 track-server-backup 两仓代码提交推送。本仓 main fetch 后与 origin/main 为 0/0，提交本次纠错配置、结构化处理结果、三种仓储条件更新/筛选、后台核实编辑流程，以及 API/路由/模块说明和交接文档。
+- 复用本次已通过的 go build ./...、四份 JS node --check；提交前 git diff --check 通过。未新增/运行业务测试；既有规则基线检查问题保留在上一节记录，不宣称规则检查通过。
+- 本次不涉及部署或生产配置、无新表列；最终提交号和远端核验以会话回复为准。
+
+
+## 2026-11-01：backup 副本纠错流程升级
+
+- 用户明确指定仅在 android-track-backup 与 track-server-backup 开发，先同步最新远端。Server main 已为 7312801，Android main 快进到 0400ef4；未修改原 android-track/track_server 工作副本。
+- 纠错配置新增双语解释与输入提示；纠错结果 outcome/handled_at 与状态分离，处理人及最近来源编辑仅后台可见，correction revision 防并发覆盖。新数据复用现有 JSON/BSON，MySQL/Mongo/内存均支持条件更新与分页前类型/轨迹/选项筛选，无新表列。
+- 后台新增筛选、结果选择、当前轨迹资料异步核实及共享编辑入口；source_feedback_id 校验跨模块操作权限，只在实际保存后记录最近修改字段。非跨库原子，关联失败明确返回部分成功提示；无完整前后值审计、无自动轨迹修复，景点候选确认不自动关联。纯文本历史纠错仍按旧逻辑展示，结构化筛选只覆盖 correction 快照。
+- go build ./... 与变更 JS node --check 已通过；按既有约定不新增/运行业务测试，不启动数据库/容器。API/路由分册和 admin scoped 说明已更新。未提交推送或部署，线上仍旧版本；端到端及后台布局需用户验证。
+- 最终 go build ./... 曾因默认缓存目录的沙箱权限失败，已按要求申请扩权后重跑通过。共享 ui.js 的 formDialog 仅为纠错连续弹窗新增可选 waitForHidden，默认调用时序不变；四份变更 JS 静态语法检查通过。
+- AGENTS 静态校验未通过：12 个错误（root 58KB/缺 precedence、10 个既有超 1000 行文件）和 161 条路径等警告，基线 git show 已确认上述文件本来就超长。全局 /Users/foxcoder/.codex/AGENTS.md 为空，入口规则未落盘；建议修复命令 python3 /Users/foxcoder/.codex/skills/agents-md-generator/scripts/manage_docs.py sync-global-codex-agents /Users/foxcoder/work/track-server-backup --write，本轮未写全局规则或扩大治理。日志 /private/tmp/track-server-backup-correction-agents.log。
+
+
+
 ## 2026-11-01：部署中文操作日志与后台布局修复
 
 - 用户明确要求部署 Server。按 android-track-release 只处理 track_server 的 Git 同步/提交/推送、镜像构建推送和生产更新，不发布 App。main fetch 后与 origin/main 一致，无合并变化，复用同源码已经通过的 Go 构建、JS 语法与差异检查，不扩大自动化测试。

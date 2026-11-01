@@ -53,6 +53,9 @@
             <option value="ignored">已关闭</option>
           </select>
         </label>
+        <label><span>反馈类型</span><select id="kindFilter" class="form-select"><option value="">全部类型</option><option value="correction">轨迹纠错</option><option value="feedback">意见反馈</option></select></label>
+        <label><span>纠错问题</span><select id="optionFilter" class="form-select"><option value="">全部问题</option></select></label>
+        <label><span>轨迹 ID</span><input id="trackFilter" class="form-control" placeholder="NO.00000001" /></label>
         <label><span>版本</span>
           <input id="versionFilter" class="form-control" type="text" placeholder="如 1.2.0" />
         </label>
@@ -87,11 +90,11 @@
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
           </div>
           <div class="modal-body">
-            <p class="text-secondary">保存后生效。排序越小越靠前，停用不影响历史记录。</p>
+            <p class="text-secondary">解释显示在客户端选项下方，填写提示随选择更新；均支持中英文，选填且最多 160 字。排序越小越靠前，停用不影响历史记录。</p>
             <div id="correctionConfigState" class="text-secondary" role="status"></div>
             <div class="table-responsive">
             <table class="data correction-config-table hidden" id="correctionConfigTable">
-              <thead><tr><th>中文名称</th><th>英文（选填）</th><th>排序</th><th>启用</th><th></th></tr></thead>
+              <thead><tr><th>中文名称 / 解释 / 填写提示</th><th>英文（选填）</th><th>排序</th><th>启用</th><th></th></tr></thead>
               <tbody id="correctionConfigRows"></tbody>
             </table>
             </div>
@@ -123,8 +126,12 @@
                   <strong id="detailTrackTitle"></strong>
                   <span id="detailTrackID" class="text-secondary mono"></span>
                 </div>
+                <button id="detailTrackEdit" type="button" class="btn btn-outline-primary">核实 / 编辑轨迹资料</button>
                 <a id="detailTrackLink" class="btn btn-outline-primary" target="_blank" rel="noopener">查看轨迹</a>
               </div>
+              <div id="detailTrackContext" class="feedback-track-context hidden"></div>
+              <p id="detailTrackChange" class="hint mt-2"></p>
+              <p id="detailHandler" class="hint"></p>
               <div class="detail-grid">
                 <div><strong>用户名称</strong><span id="detailUserName"></span></div>
                 <div><strong>状态</strong><span id="detailStatus"></span></div>
@@ -159,11 +166,16 @@
                     <option value="ignored">已关闭</option>
                   </select>
                 </label>
+                <label id="outcomeField" class="full hidden">纠错处理结果
+                  <select id="outcomeSelect"><option value="">请选择处理结果</option><option value="corrected">已修正</option><option value="unchanged">无需修改</option><option value="unverified">暂无法核实</option></select>
+                  <span class="hint">完成纠错时必选。选择“已修正”不会自动修改轨迹，请先保存资料修改，或在回复中说明实际处理内容。</span>
+                </label>
                 <label class="full">处理回复
                   <textarea name="reply" id="replyInput" rows="3" maxlength="2000" placeholder="回复会展示给用户"></textarea>
                 </label>
                 <div class="full actions">
                   <button type="submit" data-admin-write="feedbacks">保存处理结果</button>
+                  <button type="button" id="restoreDraft" class="btn btn-outline-secondary hidden" data-admin-write="feedbacks">恢复刚才未保存的处理草稿</button>
                   <span class="error" id="saveErr"></span>
                   <span class="ok" id="saveOk"></span>
                 </div>
@@ -180,6 +192,8 @@
   <script src="/admin/static/ui.js"></script>
   <script src="/admin/static/feedback_correction.js"></script>
   <script src="/admin/static/feedback_correction_config.js"></script>
+  <script src="/admin/static/place_candidates.js"></script>
+  <script src="/admin/static/track_editor.js"></script>
   <script src="/admin/static/feedbacks.js"></script>
 </body>
 </html>
