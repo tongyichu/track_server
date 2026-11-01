@@ -26,13 +26,16 @@
 - 只读：允许列表、详情和查询，禁止写请求；获取发布上传凭证虽为 GET，也要求可操作。
 - 可操作：允许页面全部业务操作。城市选项和共享头像按实际使用模块放行，业务截图按所属模块校验。
 - 景点页的相关轨迹列表也要求轨迹查看权限；轨迹编辑/删除仍检查轨迹可操作权限。景点轨迹归属写接口同时检查景点和轨迹的可操作权限。
+- 景点识别候选放在共享轨迹详情弹窗中，读取需轨迹查看权限，确认/忽略需轨迹可操作权限；从景点相关轨迹入口打开弹窗也遵循该规则。说明见 [admin-tracks.md](admin-tracks.md)。
 - 工作台响应按各业务模块裁剪数据；轨迹、投稿和反馈页面复用 `/admin/api/dashboard?scope=tracks|track_submissions|feedbacks`，只返回自身统计，不能借此读取其他模块。
 - 只读景点页不运行供应商资料回填。公共静态资源目录不提供 HTML，所有业务页面通过具名鉴权路由访问。
 - 受保护响应不缓存，写请求校验同源。权限不足返回 403，登录失效返回 401，账号库不可用返回 503，编辑版本冲突或移除最后管理员返回 409。
 
 ## 页面与接口
 
-页面 `/admin/accounts.html` 维护账号并展示最近操作记录；`/admin/password.html` 修改本人密码；无业务页面授权时 `/admin/access.html` 提示联系管理员。登录响应和 `GET /admin/api/me` 的 `data` 包含 `username`、`display_name`、`role`、`permissions`、`must_change_password`、`expires_at`、`home` 和不含密码哈希的 `account`。登录后按 `home` 跳转。
+页面 `/admin/accounts.html` 维护账号并展示最近操作记录，记录区提供“全部账号”和各后台账号的下拉筛选（含停用账号，显示名称与登录名）；`/admin/password.html` 修改本人密码；无业务页面授权时 `/admin/access.html` 提示联系管理员。登录响应和 `GET /admin/api/me` 的 `data` 包含 `username`、`display_name`、`role`、`permissions`、`must_change_password`、`expires_at`、`home` 和不含密码哈希的 `account`。登录后按 `home` 跳转。
+
+共享账号区只显示名称、身份标签与齿轮。桌面端位于侧栏左下方，齿轮菜单向上展开；移动端保留顶栏紧凑布局，菜单向下展开。菜单展示当前账号的登录名、名称、身份和最近登录时间（`account.last_login_at`），打开时通过现有 `/admin/api/me` 刷新信息；修改密码仍进入现有改密页，退出调用现有 `/admin/api/logout`，失败时保留当前页并提示重试。菜单中不展示密码、密码哈希或内部版本字段。
 
 | 方法 | 路径 | 权限 | 请求/响应 |
 | --- | --- | --- | --- |
@@ -41,7 +44,7 @@
 | PUT | `/admin/api/accounts/:username` | 管理员 | `display_name, role, enabled, permissions, revision`；整体替换页面权限，未包含项默认无权限 |
 | POST | `/admin/api/accounts/:username/reset-password` | 管理员 | `password, revision`，使所有旧登录失效并要求改密 |
 | POST | `/admin/api/password` | 已登录，包括待改密账号 | `old_password, password`；成功后重新登录 |
-| GET | `/admin/api/audit-logs` | 管理员 | 最近 100 条操作发起/HTTP 结果记录 |
+| GET | `/admin/api/audit-logs` | 管理员 | 可选 `username` 查询参数，精确筛选该登录名的最近 100 条操作发起/HTTP 结果记录；不传或空串为全部账号 |
 
 身份枚举为 `admin` / `operator`；权限映射的 key 为 `data.modules[].id`，value 为 `none` / `read` / `write`，例如 `{"tracks":"read","scenic_spots":"write"}`。不接受账号管理模块授权给操作员。新增接口默认按页面模块授权，未知模块拒绝。
 
@@ -50,6 +53,8 @@
 ## 操作记录
 
 写操作在执行前持久化发起记录，结束后保存 HTTP 结果，记录稳定账号 ID、登录名、方法、对象路径和 UTC 时间，不保存请求正文、密码或哈希。日志存储不可用时拒绝发起写操作。后置结果写入失败会保留发起记录并记录 server log；不能据此承诺业务写入与日志之间的跨存储事务。记录状态 0 表示已发起但结果待确认，其他值为实际 HTTP 状态。
+
+账号筛选在数据库查询中先应用，再按时间和 ID 倒序取最近 100 条，不能只过滤全局最近 100 条的浏览器缓存。切换账号立即加载，刷新保持当前筛选；快速切换时忽略旧请求响应，无记录时显示空状态。
 
 ## 验证范围
 

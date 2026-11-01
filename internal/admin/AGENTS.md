@@ -17,13 +17,24 @@
 - 查看和人工运营路线发现 RouteGroup（展示离线 `area_id` 对应的区域名称、类型与介绍页，支持改名、合并、移除成员、指定代表轨迹，以及编辑、发布和下线双语路线介绍）；景点页还提供轨迹围住多个独立景点的 candidate 队列，可确认其中一个或忽略。
 - 通过响应式工作台查看业务库即时统计：日/周/月核心增长、同周期新增用户转化、投稿与反馈处理效率、轨迹内容质量、互动趋势、热门轨迹和同行会话；该口径不依赖 T+1 埋点同步。
 - 审核用户轨迹投稿，查看结构化路线资料和经本地缓存改写的投稿图片，按 revision 通过或驳回。
-- 管理后台内置静态资源响应支持 gzip 与 ETag 重新验证；HTML 使用 no-cache，其他嵌入资源需重新验证后复用浏览器缓存。工作台先展示 API 返回的核心数字，再异步加载 ECharts 绘制图表。
+- 管理后台内置静态资源支持 gzip、ETag 与内容版本缓存；公开登录页 no-cache，含账号身份的受保护 HTML 和 API no-store。工作台及列表页先加载主体数据，再异步加载 ECharts 绘图。
 - 投稿审核页顶部展示当前待审核与超时队列，以及本月通过、驳回、通过率和平均审核时长；复用 `/admin/api/dashboard?period=month` 的只读统计。
 - 查看、修正和删除用户轨迹；列表按 ID、城市、标题、运动类型、用户名、轨迹图、状态和操作展示，支持标题及用户名模糊搜索、城市和状态筛选，并保留游标分页。用户名同时展示头像；景点详情中的相关轨迹列表复用相同列顺序。列表不单独放删除按钮；编辑轨迹使用共享 `static/track_editor.js` 表单，底部删除动作需二次确认，删除为软删除并同步清理关联数据。
 - 反馈与纠错页默认筛选待处理，展示状态统计、反馈用户名称和完整内容；点击查看会在弹窗中加载详情并处理反馈。`static/feedback_correction.js` 优先读取服务端 `correction` 快照，旧记录兼容完整的六种中英文纠错正文；不识别的内容仍按普通反馈显示，不改写原始正文。页面「纠错选项」可新增、改名、排序、启停，由 API 下发客户端。
-- 用户管理支持昵称模糊搜索，以及内部人员、资料所在城市、性别、生日星座和当前账号限制状态组合筛选；同行管理按会话标题、轨迹管理按标题和用户名提供服务端模糊搜索，轨迹列表还支持城市和状态筛选，均保留游标分页。
+- 用户管理支持昵称模糊搜索，以及内部人员、资料所在城市、性别、生日星座和当前账号限制状态组合筛选；同行管理按会话标题、轨迹管理按标题和用户名提供服务端模糊搜索，轨迹列表还支持城市、状态和资料缺项筛选，均保留游标分页。
 
 模块对外只暴露 `admin.NewModule(...)` 与 `Module.RegisterRoutes(h)`，不被业务 handler 引用。
+
+## 页面性能约束
+
+修改后台页面、共享脚本或列表接口时，必须检查以下边界；不能仅靠隐藏加载提示改善体感。
+
+- **首屏主链路**：列表、筛选、详情基础字段不得等待图表库、地图底图、统计或外部资料回填。统计独立请求，先显示已返回的数字，再绘图；ECharts 统一通过 `AdminAssets.loadCharts()` 按需加载，共用一个可失败重试的 Promise，不重新引入阻塞式 vendor script。外部回填在首轮列表和统计展示完成后启动。
+- **公共资源缓存**：CSS、JS、图标、地图 JSON 等嵌入资源使用内容版本 URL；HTML 引用由 `assets.go` 统一注入，动态 URL 使用 `AdminAssets.url()`。版本匹配才允许 immutable 长缓存，未带版本或旧版本保留 ETag 重验证；修改资源必须自然改变版本，禁止手写长期不变版本号。不要新增外网 CDN 依赖。
+- **缓存隔离**：公共资源缓存不包含用户上传图片、业务数据、会话或权限。受保护 HTML/API 继续 no-store，每次受保护请求实时验证账号状态和权限；不得为提速缓存鉴权结果。压缩含身份的 HTML 不得进入共享静态 gzip 缓存。
+- **局部更新成本**：MutationObserver 只处理新增或受影响子树，同批去重；禁止每次图表、列表或提示变化都扫描整个 document。权限状态刷新仍做全量应用，新增表单、字段和业务脚本重新启用 disabled 时必须及时恢复只读锁；观察器自身写 DOM 要避免递归触发。
+- **列表数据与资源**：优先批量查询、按唯一用户/资源去重，禁止在逐行循环里重复读取同一作者。图片缓存未命中等确需等待的 I/O 使用有上限并发（当前 `list_assets.go` 为 4），保留请求取消与单次超时；响应顺序稳定，不创建每行一个无限制 goroutine，不提前返回尚未落盘的本地资源地址。
+- **异步与验收**：快速筛选/刷新忽略旧响应，失败可重试，局部统计失败不阻断列表操作。自查首次进入、再次切页、慢图表/图片和只读账号路径；遵守根文件的验证约定，默认仅构建与静态自查，功能由用户手动验证。未实测不得宣称首屏提速比例或耗时。
 
 ## 硬性约束
 
@@ -33,7 +44,11 @@
 - **启用与故障关闭**：数据库未初始化且无初始账号时不挂载后台；已有持久化账号即使移除初始化环境变量仍启用。账号库不可用时登录/受保护请求拒绝（通常 503）；未挂载时保持 404。`USE_IN_MEMORY` 不提供后台账号降级。
 - **身份与权限**：管理员拥有全部权限，只有管理员可访问 `/admin/accounts.html`、`/admin/api/accounts*` 与审计日志；操作员每个模块只有 `none/read/write` 三档，write 包含页面所有业务操作。HTML、API、受保护静态资源均校验；未知模块默认拒绝。`permissions.go` 是页面/接口权限映射权威，账号模块清单在 `accounts.go`。新增页面/API 时同步映射，不能只隐藏导航。
 - **跨页面与汇总**：景点相关轨迹的查看/编辑同时校验轨迹模块权限。工作台按各业务模块过滤指标，其他页面通过 `/dashboard?scope=tracks|track_submissions|feedbacks` 只读取自身统计。只读景点页不得触发供应商回填或编辑；共享轨迹弹窗支持只读。`shell.js` 统一身份标签、导航、只读控件和退出，不再由各业务脚本覆盖账号展示。
+- **轨迹资料与景点候选**：景点管理页不再展示全局候选面板；共享 `track_editor.js` 通过 `place_candidates.js` 把单条轨迹的识别结果放在详情弹窗顶部，所有加载共享编辑器的页面都要先加载该模块。读取 GET `/tracks/:track_id/place-candidates` 需轨迹查看权限，既有 `/place-candidates/:track_id/confirm|dismiss` 写请求归属轨迹操作权限。`AdminUI.form.beforeFields` 挂载独立候选区，候选确认/忽略立即生效并刷新来源列表，不提交未保存的轨迹资料。源摘要失效返回 409，禁止使用过期候选。
+- **轨迹资料缺项口径**：`GET /tracks?missing=any|place_candidate|scenic_spot|description|city|previews` 在分页和总数统计前筛选；缺简介/城市按空文本，缺预览为四图任一缺失，未关联景点为无有效 draft/published 目录关联；任意缺项取各项并集。待确认 ID 由当前候选队列源摘要/规则/轨迹可索引校验取得，不触发供应商查询。MySQL 使用原生条件/关联，Mongo 使用 lookup + facet，内存由 main 注入景点仓储后使用关联快照；公共逻辑见 `repository/admin_track_missing.go`，新接口见 `docs/api/admin-tracks.md`。
+- **账号设置入口**：`shell.js` 的共享账号区只常驻显示名称、身份标签与齿轮。齿轮复用内置 `tabler.Dropdown`，桌面侧栏向上展开、移动顶栏向下展开，支持点外部关闭和键盘操作；菜单读取当前 session 和 `/admin/api/me` 显示登录名、名称、身份、最近登录，并提供现有改密页与退出入口。仅 GET 当前账号信息，不下发或展示密码/哈希。`ui.js` 不得给 dropdown-item 和下拉触发按钮自动套普通主按钮外观。退出请求失败保留当前页并在菜单提示，不把请求失败当成退出成功。
 - **账号保护与日志**：整体 CAS 原子保护最后一个启用的管理员，停用/改密码使所有会话失效，调整权限由后续请求实时读取。后台写请求校验同源、记录发起和 HTTP 结果；日志不可用时拒绝发起写操作，不存正文、密码或哈希。后置结果写入失败时保留发起日志并记录 server log，不能声称业务与日志跨库事务原子。所有后台受保护数据响应使用 no-store；静态 HTML 禁止通过 `/admin/static/*` 访问。
+- **日志账号筛选**：最近操作记录提供账号下拉选择（含停用账号）；`GET /admin/api/audit-logs?username=...` 按不可改的登录名精确匹配，MySQL/Mongo 必须先筛选再取最近 100 条。不传或空串表示全部账号。选项来自后台账号列表，刷新保留选择，快速切换忽略旧请求响应。
 - **会话仅内存**：`SessionStore` 使用 `sync.RWMutex` + `map`，进程重启即失效。**不要替换为持久化存储**；管理员重新登录是合理代价。
 - **静态资源经 `go:embed`**：`static/` 目录通过 `//go:embed static` 内置进二进制；新增前端文件后**必须放到** `internal/admin/static/`，否则二进制找不到。`/admin/static/*filepath` 路由只读 `staticFS`，不读磁盘。
 - **安装包本机上传**：管理后台安装包上传走 `POST /admin/api/releases/upload-package`，服务端校验 APK/IPA 并读取包内版本名、版本号/Build、应用标识，同时计算大小和 MD5；前端使用返回的下载地址自动填写 `package_url`。发布页面固定 Android/APK，版本名和版本号只由包解析结果写入隐藏字段；服务端接口仍保留 iOS 兼容性。不要再把发布包上传链路改回浏览器 OSS 直传。
@@ -62,6 +77,8 @@ internal/admin/
 | --- | --- |
 | 路由清单 | `routes.go` 中 `RegisterRoutes` |
 | 鉴权与 cookie | `auth.go`（`sessionCookieName = "admin_session"`） |
+| 公共资源版本与页面传输 | `assets.go` 生成嵌入资源内容版本、预处理页面引用并压缩私有 HTML；`routes.go` 区分 immutable 静态资源与 no-store 业务响应；`static/runtime.js` 提供版本 URL 和异步图表加载 |
+| 列表图片等待 | `list_assets.go` 限制并发与头像去重；`handlers.go` 的 `decorateAdminTrackAssetURLs` 处理轨迹预览资源，仍等待缓存成功后才使用本地 URL |
 | 业务依赖注入 | `routes.go` 的 `NewModule(accounts, releaseSvc, stsSvc, staticRoot, userRepo, trackRepo, collectRepo, trackMapRepo, ..., restrictionSvc, routeGroupSvc, accountStorage)`；`cmd/server/main.go` 创建后通过 `Handler.SetScreenshotCache(screenshotCache)`、`Handler.SetTrackSubmissionService(trackSubmissionSvc)` 和 `Handler.SetDashboardStatisticsRepository(...)` 注入缓存、投稿与跨域只读统计能力 |
 | 前端入口 | `static/login.html`；登录后按授权页面跳转；账号管理 `static/accounts.html`、改密 `static/password.html`、无业务权限 `static/access.html` |
 | 响应式外壳与工作台 | `static/shell.js`、`static/ui.js`、`static/style.css`、`static/dashboard.html`、`static/dashboard.js`；组件库固定为内置 Tabler 1.7.1，图标为 Tabler Icons 3.49.0，图表为 ECharts 6.1.0，均位于 `static/vendor/`，不要改成运行时 CDN |
@@ -108,11 +125,12 @@ internal/admin/
 | GET | `/admin/api/users/:user_id/restrictions/current` | 鉴权 | 查询当前账号限制；无生效限制返回 404 |
 | POST | `/admin/api/users/:user_id/restrictions` | 鉴权 | 创建账号限制；`expires_at` 为空表示永久，操作人取 admin session 用户名 |
 | DELETE | `/admin/api/users/:user_id/restrictions/current` | 鉴权 | 解除当前账号限制 |
-| GET | `/admin/api/place-candidates` | 鉴权 | 轨迹围住多个独立景点的候选队列，支持 cursor 翻页 |
-| POST | `/admin/api/place-candidates/:track_id/confirm` | 鉴权 | 确认指定候选为轨迹主景点并同步内部景点关联 |
-| POST | `/admin/api/place-candidates/:track_id/dismiss` | 鉴权 | 忽略当前轨迹的景点候选 |
+| GET | `/admin/api/place-candidates` | 轨迹查看 | 保留兼容的候选队列 API，页面改为详情单条处理 |
+| GET | `/admin/api/tracks/:track_id/place-candidates` | 轨迹查看 | 单条轨迹当前有效候选，404 无候选，409 源变化 |
+| POST | `/admin/api/place-candidates/:track_id/confirm` | 轨迹操作 | 确认指定候选为轨迹主景点并同步内部景点关联 |
+| POST | `/admin/api/place-candidates/:track_id/dismiss` | 轨迹操作 | 忽略当前轨迹的景点候选 |
 | GET | `/admin/api/companions` | 鉴权 | 同行会话列表，支持 `title` 模糊搜索及 cursor 翻页 |
-| GET | `/admin/api/tracks` | 鉴权 | 轨迹列表，支持 `title` / `user_name` 模糊搜索、`city_code` / `status` 筛选及 cursor 翻页 |
+| GET | `/admin/api/tracks` | 鉴权 | 轨迹列表，支持 `title` / `user_name` 模糊搜索、`city_code` / `status` / `missing` 筛选及 cursor 翻页 |
 | GET | `/admin/api/cities` | 鉴权 | 返回内置城市/省份 Code、名称与省市层级，供轨迹和景点选择器使用 |
 | GET | `/admin/api/tracks/:track_id` | 鉴权 | 返回轨迹详情用于后台编辑 |
 | PUT | `/admin/api/tracks/:track_id` | 鉴权 | 更新轨迹业务字段（不改 ID、轨迹点与创建/更新时间）；城市/类型更新已有地图索引，状态/进行状态/原始文件变化时清理并按可索引条件重新排队 |
@@ -148,7 +166,7 @@ internal/admin/
 | PUT | `/admin/api/accounts/:username` | 管理员 | 按 revision 修改名称、身份、状态和权限 |
 | POST | `/admin/api/accounts/:username/reset-password` | 管理员 | 按 revision 重置密码并使全部登录失效 |
 | POST | `/admin/api/password` | 登录 | 验证原密码、修改本人密码并使全部登录失效 |
-| GET | `/admin/api/audit-logs` | 管理员 | 最近 100 条发起/结果日志 |
+| GET | `/admin/api/audit-logs` | 管理员 | 可选 username 精确筛选，返回筛选后最近 100 条发起/结果日志 |
 
 ## 关键流程
 
@@ -307,7 +325,7 @@ GET /admin/api/users
   → /admin/api/scenic-spots/:spot_id/tracks 搜索、关联或解除轨迹
   → POST /admin/api/scenic-spots/:spot_id/merge|split 合并目录或拆分轨迹归属
   → POST /admin/api/scenic-spots/backfill 分页将存量轨迹迁移到内部 SCP ID 草稿，并复用已有主景区匹配缓存中的名称；遇到已关联但名称为空的草稿时尝试恢复该名称。缺少可用来源 ID 时按地图服务配置执行有预算的真实查询
-  → GET /admin/api/place-candidates 查看轨迹围住多个独立景点的候选；POST confirm 指定一个后更新 match 为 matched 并创建/关联内部景点，POST dismiss 仅标记候选不成立
+  → 共享轨迹详情 GET /admin/api/tracks/:track_id/place-candidates 查看当前候选；POST confirm 指定一个后更新 match 为 matched 并创建/关联内部景点，POST dismiss 仅标记候选不成立
        → ScenicSpotCatalogService + ScenicSpotRepository (MySQL / Mongo / memory)
        → track_scenic_spot_links 关联轨迹，scenic_spot_audit_logs 记录运营操作
        → scenic_spot_provider_usage 只累计景点/provider/日期/操作的请求成功失败计数；同步后的供应商文字与图片引用保存在 scenic_spots 的资料和 photos 数组中
@@ -339,6 +357,7 @@ Kimi 景点简介使用 `MOONSHOT_API_KEY` 和可选的 `KIMI_SCENIC_DESCRIPTION
 - 测试遵循根 AGENTS 的“默认验证方式”：默认不新增或运行，由用户手动验证；仅在用户明确要求时执行 `go test ./internal/admin ./internal/service` 或其指定范围，不自动扩大为全量测试。
 - 路由变更：核对 `routes.go` 与 `static/*.js` 中前端 fetch 的 URL 是否一致。
 - 静态资源新增：确认文件位于 `internal/admin/static/` 下（`go:embed static` 才能打包）。
+- 页面/共享脚本/列表改动：逐项自查本文“页面性能约束”，对改动的 JS 执行 `node --check`；特别检查是否重新引入同步图表依赖、无版本动态资源、全页观察器扫描或重复逐行 I/O。不得把这些静态检查当作实际性能测量。
 - 接口契约变更：同步更新 `docs/api/feedback.md` 与 `docs/api/route-index.md`；`track_api.md` 仅保留轻量入口。
 
 ## 常见误解

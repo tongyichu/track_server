@@ -49,6 +49,18 @@ func (h *Handler) ListPlaceCandidates(ctx context.Context, c *app.RequestContext
 	c.JSON(http.StatusOK, utils.H{"code": 0, "data": result})
 }
 
+func (h *Handler) GetPlaceCandidate(ctx context.Context, c *app.RequestContext) {
+	if !h.trackPlaceServiceReady(c) {
+		return
+	}
+	item, err := h.trackPlaceSvc.GetPlaceCandidate(ctx, c.Param("track_id"))
+	if err != nil {
+		h.trackPlaceServiceError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": item})
+}
+
 func (h *Handler) ConfirmPlaceCandidate(ctx context.Context, c *app.RequestContext) {
 	if !h.trackPlaceServiceReady(c) {
 		return

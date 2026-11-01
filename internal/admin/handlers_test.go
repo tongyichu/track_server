@@ -568,10 +568,16 @@ func (s *adminAccountTestStorage) AppendAudit(_ context.Context, entry AuditEntr
 	s.audit = append(s.audit, entry)
 	return nil
 }
-func (s *adminAccountTestStorage) ListAudit(context.Context, int) ([]AuditEntry, error) {
+func (s *adminAccountTestStorage) ListAudit(_ context.Context, username string, limit int) ([]AuditEntry, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return append([]AuditEntry(nil), s.audit...), nil
+	entries := make([]AuditEntry, 0)
+	for i := len(s.audit) - 1; i >= 0 && len(entries) < limit; i-- {
+		if username == "" || s.audit[i].Username == username {
+			entries = append(entries, s.audit[i])
+		}
+	}
+	return entries, nil
 }
 func createAdminHandlerSession(module *Module) (*Session, error) {
 	account, err := module.Auth.manager.get(context.Background(), "admin")

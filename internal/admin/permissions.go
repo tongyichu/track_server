@@ -48,9 +48,9 @@ func requestPermission(c *app.RequestContext) (string, bool) {
 		return "accounts", write
 	case "users":
 		return "users", write
-	case "tracks":
+	case "tracks", "place-candidates":
 		return "tracks", write
-	case "scenic-spots", "place-candidates":
+	case "scenic-spots":
 		return "scenic_spots", write
 	case "route-groups":
 		return "route_groups", write

@@ -1,7 +1,7 @@
 (function () {
   let period = 'day';
+  let requestVersion = 0;
   const charts = {};
-  let chartLibraryPromise;
   const colors = ['#206bc4', '#2fb344', '#f59f00', '#ae3ec9', '#d63939', '#17a2b8', '#6f42c1', '#74b816'];
 
   function number(value) {
@@ -45,22 +45,6 @@
   function chartOption(id, option) {
     const instance = chart(id);
     if (instance) instance.setOption(option, true);
-  }
-
-  function loadChartLibrary() {
-    if (window.echarts) return Promise.resolve();
-    if (chartLibraryPromise) return chartLibraryPromise;
-    chartLibraryPromise = new Promise(function (resolve, reject) {
-      const script = document.createElement('script');
-      script.src = '/admin/static/vendor/echarts.min.js';
-      script.onload = resolve;
-      script.onerror = function () {
-        chartLibraryPromise = null;
-        reject(new Error('图表库加载失败'));
-      };
-      document.head.appendChild(script);
-    });
-    return chartLibraryPromise;
   }
 
   function axisTooltip() {
@@ -278,6 +262,7 @@
   }
 
   async function loadDashboard() {
+    const current = ++requestVersion;
     const error = document.getElementById('dashboardError');
     error.classList.add('hidden');
     try {
@@ -287,6 +272,7 @@
         return;
       }
       const payload = await response.json();
+      if (current !== requestVersion) return;
       if (!response.ok) throw new Error(payload.error || ('加载失败: ' + response.status));
       const data = payload.data || {};
       const metrics = data.metrics || {};
@@ -306,7 +292,8 @@
       renderEngagementMetrics(data.engagement);
       renderCompanion(data.companion);
       await new Promise(function (resolve) { requestAnimationFrame(resolve); });
-      await loadChartLibrary();
+      await AdminAssets.loadCharts();
+      if (current !== requestVersion) return;
       renderTrend(data.trend);
       renderFunnel(data.funnel);
       renderReviewChart(data.review);
@@ -314,6 +301,7 @@
       renderContentCharts(data.content);
       renderEngagementChart(data.engagement, data.trend);
     } catch (cause) {
+      if (current !== requestVersion) return;
       error.textContent = cause.message || String(cause);
       error.classList.remove('hidden');
     }

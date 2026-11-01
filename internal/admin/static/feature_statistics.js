@@ -19,6 +19,8 @@
         const data = await read('route-groups/statistics');
         if (current !== request) return;
         $('mapStatisticsScope').textContent = '全量有效路线组 ' + Number(data.group_count || 0).toLocaleString() + ' 组 · 覆盖 ' + Number(data.city_count || 0).toLocaleString() + ' 个城市';
+        await AdminAssets.loadCharts();
+        if (current !== request) return;
         kit.bars('routeSizeChart', data.distribution || [], '组');
         await map.render(data, id => window.AdminRouteGroups.openDetail(id));
       } catch (error) {
@@ -41,6 +43,8 @@
         if (current !== request) return;
         loadedDays = data.days;
         $('companionUsageScope').textContent = kit.date(data.start, data.bucket === 'hour') + ' — ' + kit.date(data.end, true) + ' · ' + (data.bucket === 'hour' ? '按小时' : '按天');
+        await AdminAssets.loadCharts();
+        if (current !== request) return;
         kit.trend('companionTrendChart', data.trend || [], [{ name: '创建', key: 'created', color: '#206bc4' }, { name: '结束', key: 'ended', color: '#2b8a6e' }], data.bucket === 'hour', '个房间');
         kit.bars('companionSizeChart', data.participants || [], '个房间');
       } catch (error) {

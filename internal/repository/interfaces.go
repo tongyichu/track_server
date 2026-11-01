@@ -109,10 +109,12 @@ type AdminTrackListFilterRepository interface {
 }
 
 type AdminTrackListFilter struct {
-	Title    string
-	CityCode string
-	Status   *models.TrackStatus
-	UserIDs  []int64
+	Title                  string
+	CityCode               string
+	Status                 *models.TrackStatus
+	UserIDs                []int64
+	Missing                string
+	PlaceCandidateTrackIDs []string
 }
 
 // AdminUserListFilterRepository provides combined server-side filters for the admin user list.

@@ -1053,12 +1053,7 @@ func (h *Handler) ListUsers(ctx context.Context, c *app.RequestContext) {
 	}
 	// 与业务接口口径保持一致：把 OSS 上的 avatar_url 改写为服务器本地缓存地址
 	// （/api/v1/static/avatars/...），未配置头像的用户回退到默认头像。
-	if h.userSvc != nil {
-		for _, u := range items {
-			h.userSvc.DecorateAvatar(ctx, u)
-			u.AvatarURL = rewriteAdminStaticURL(u.AvatarURL)
-		}
-	}
+	h.decorateAdminUserAvatars(ctx, items)
 	rows := make([]utils.H, 0, len(items))
 	for _, u := range items {
 		var lastLoginAt interface{}
@@ -1226,6 +1221,11 @@ func (h *Handler) ListTracks(ctx context.Context, c *app.RequestContext) {
 	userName := strings.TrimSpace(string(c.Query("user_name")))
 	cityCode := strings.TrimSpace(string(c.Query("city_code")))
 	statusRaw := strings.TrimSpace(string(c.Query("status")))
+	missing := strings.TrimSpace(string(c.Query("missing")))
+	if !repository.ValidAdminTrackMissingFilter(missing) {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid missing field filter"})
+		return
+	}
 	if utf8.RuneCountInString(title) > 128 {
 		c.JSON(http.StatusBadRequest, utils.H{"error": "title exceeds 128 characters"})
 		return
@@ -1290,7 +1290,15 @@ func (h *Handler) ListTracks(ctx context.Context, c *app.RequestContext) {
 		c.JSON(http.StatusInternalServerError, utils.H{"error": "track list filters not configured"})
 		return
 	}
-	filter := repository.AdminTrackListFilter{Title: title, CityCode: cityCode, Status: status, UserIDs: matchedUserIDs}
+	filter := repository.AdminTrackListFilter{Title: title, CityCode: cityCode, Status: status, UserIDs: matchedUserIDs, Missing: missing}
+	if (missing == "any" || missing == "place_candidate") && h.trackPlaceSvc != nil {
+		candidateIDs, err := h.trackPlaceSvc.PendingPlaceCandidateTrackIDs(ctx)
+		if err != nil {
+			h.trackPlaceServiceError(c, err)
+			return
+		}
+		filter.PlaceCandidateTrackIDs = candidateIDs
+	}
 	if userName == "" {
 		filter.UserIDs = nil
 	}
@@ -1323,6 +1331,11 @@ func (h *Handler) ListTracks(ctx context.Context, c *app.RequestContext) {
 		UserName  string `json:"user_name"`
 		AvatarURL string `json:"avatar_url"`
 	}
+	authors := make([]*models.User, 0, len(users))
+	for _, userID := range userIDs {
+		authors = append(authors, users[userID])
+	}
+	h.decorateAdminUserAvatars(ctx, authors)
 	listItems := make([]adminTrackListItem, 0, len(items))
 	for _, item := range items {
 		if item == nil {
@@ -1333,9 +1346,6 @@ func (h *Handler) ListTracks(ctx context.Context, c *app.RequestContext) {
 		if user := users[item.UserID]; user != nil {
 			if strings.TrimSpace(user.Nickname) != "" {
 				userName = user.Nickname
-			}
-			if h.userSvc != nil {
-				h.userSvc.DecorateAvatar(ctx, user)
 			}
 			avatarURL = rewriteAdminStaticURL(user.AvatarURL)
 		}
@@ -1739,10 +1749,16 @@ func rewriteAdminStaticURL(raw string) string {
 }
 
 func (h *Handler) decorateAdminTrackAssetURLs(ctx context.Context, items []*models.Track) {
+	unique := make([]*models.Track, 0, len(items))
+	seen := make(map[*models.Track]bool, len(items))
 	for _, item := range items {
-		if item == nil {
-			continue
+		if item != nil && !seen[item] {
+			seen[item] = true
+			unique = append(unique, item)
 		}
+	}
+	parallelAdminAssets(len(unique), func(index int) {
+		item := unique[index]
 		if h != nil && h.screenshotCache != nil {
 			item.TrackScreenshotURL = h.ensureAdminScreenshotCached(ctx, item.UserID, item.ID, item.TrackScreenshotURL)
 			item.TrackNoMapBgScreenshotURL = h.ensureAdminScreenshotCached(ctx, item.UserID, item.ID+"_no_map_bg", item.TrackNoMapBgScreenshotURL)
@@ -1752,7 +1768,7 @@ func (h *Handler) decorateAdminTrackAssetURLs(ctx context.Context, items []*mode
 		item.TrackNoMapBgScreenshotURL = rewriteAdminStaticURL(item.TrackNoMapBgScreenshotURL)
 		item.RawTrackURL = rewriteAdminStaticURL(item.RawTrackURL)
 		item.PreviewImages.LandscapeDayURL = rewriteAdminStaticURL(item.PreviewImages.LandscapeDayURL)
-	}
+	})
 }
 
 func (h *Handler) ensureAdminScreenshotCached(ctx context.Context, userID int64, key, src string) string {

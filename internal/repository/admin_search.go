@@ -13,6 +13,11 @@ func (r *InMemoryTrackRepository) ListAdminTracks(_ context.Context, filter Admi
 	if limit <= 0 {
 		limit = 20
 	}
+	linked := r.adminLinkedScenicTracks(filter.Missing)
+	candidates := make(map[string]bool, len(filter.PlaceCandidateTrackIDs))
+	for _, id := range filter.PlaceCandidateTrackIDs {
+		candidates[id] = true
+	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	userIDs := make(map[int64]struct{}, len(filter.UserIDs))
@@ -38,6 +43,9 @@ func (r *InMemoryTrackRepository) ListAdminTracks(_ context.Context, filter Admi
 			if _, ok := userIDs[track.UserID]; !ok {
 				continue
 			}
+		}
+		if !adminTrackMatchesMissing(track, filter.Missing, linked[track.ID], candidates[track.ID]) {
+			continue
 		}
 		total++
 		if cursor != nil && !cursor.StartTime.IsZero() && (track.StartTime.After(cursor.StartTime) || (track.StartTime.Equal(cursor.StartTime) && track.ID >= cursor.ID)) {

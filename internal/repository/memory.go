@@ -15,9 +15,10 @@ import (
 
 // InMemoryTrackRepository is an in-memory implementation of TrackRepository for tests and development.
 type InMemoryTrackRepository struct {
-	mu           sync.RWMutex
-	tracks       map[string]*models.Track
-	nextTrackSeq uint64
+	mu               sync.RWMutex
+	tracks           map[string]*models.Track
+	nextTrackSeq     uint64
+	adminScenicSpots *MemoryScenicSpotRepository
 }
 
 // InMemoryTrackWaypointRepository is an in-memory implementation of TrackWaypointRepository.

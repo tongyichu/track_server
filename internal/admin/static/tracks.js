@@ -44,6 +44,8 @@
   var userNameFilter = document.getElementById('userNameFilter');
   var cityFilter = document.getElementById('cityFilter');
   var statusFilter = document.getElementById('statusFilter');
+  var missingFilter = document.getElementById('missingFilter');
+  var pageRequest = 0;
   var pageHint = document.getElementById('pageHint');
   var totalHint = document.getElementById('totalHint');
 
@@ -58,6 +60,7 @@
   userNameFilter.addEventListener('keydown', function (event) { if (event.key === 'Enter') resetSearch(); });
   cityFilter.addEventListener('change', resetSearch);
   statusFilter.addEventListener('change', resetSearch);
+  missingFilter.addEventListener('change', resetSearch);
   prevBtn.addEventListener('click', function () {
     if (pageIndex <= 0) return;
     pageIndex -= 1;
@@ -72,23 +75,31 @@
   });
 
   async function loadPage() {
+    var request = ++pageRequest;
+    var hints = { any: '任一资料项缺失或存在待确认景点的轨迹都会列出。', scenic_spot: '未关联景点包含正常的非景区轨迹，可结合其他条件筛选。', previews: '四种日夜预览图中任意一张缺失，即视为预览图不完整。' };
+    var hint = document.getElementById('missingHint');
+    hint.textContent = hints[missingFilter.value] || '';
+    hint.hidden = !hint.textContent;
     var params = new URLSearchParams();
     params.set('limit', String(pageSize));
     if (titleFilter.value.trim()) params.set('title', titleFilter.value.trim());
     if (userNameFilter.value.trim()) params.set('user_name', userNameFilter.value.trim());
     if (cityFilter.value) params.set('city_code', cityFilter.value);
     if (statusFilter.value) params.set('status', statusFilter.value);
+    if (missingFilter.value) params.set('missing', missingFilter.value);
     var cur = cursorStack[pageIndex];
     if (cur) {
       params.set('cursor_start_time', cur.start_time);
       params.set('cursor_id', String(cur.id));
     }
     var resp = await fetch('/admin/api/tracks?' + params.toString());
+    if (request !== pageRequest) return;
     if (!resp.ok) {
       tbody.innerHTML = '<tr><td colspan="8">加载失败: ' + resp.status + '</td></tr>';
       return;
     }
     var data = ((await resp.json()).data) || {};
+    if (request !== pageRequest) return;
     var items = data.items || [];
     totalCount = data.total || 0;
     lastNextCursor = data.next_cursor || null;

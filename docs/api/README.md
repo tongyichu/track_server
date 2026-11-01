@@ -20,6 +20,7 @@
 | 用户详情、个人信息更新、关注/粉丝关系 | [user.md](user.md) |
 | 账号限制拦截与运维管理 | [account-restriction.md](account-restriction.md) |
 | 管理后台账号、身份与页面权限（独立 `/admin` 路由） | [admin-accounts.md](admin-accounts.md) |
+| 后台轨迹缺项筛选与景点候选确认（独立 `/admin` 路由） | [admin-tracks.md](admin-tracks.md) |
 | App 升级检查 | [upgrade.md](upgrade.md) |
 | 意见反馈提交、历史列表、图片读取、运维处理 | [feedback.md](feedback.md) |
 | 成就摘要、奖励、等级规则 H5、运维刷新 | [achievement.md](achievement.md) |

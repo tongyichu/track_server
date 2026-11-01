@@ -218,6 +218,11 @@ func main() {
 	if scenicSpotRepo == nil {
 		scenicSpotRepo = repository.NewMemoryScenicSpotRepository()
 	}
+	if memoryTracks, ok := trackRepo.(*repository.InMemoryTrackRepository); ok {
+		if memorySpots, ok := scenicSpotRepo.(*repository.MemoryScenicSpotRepository); ok {
+			memoryTracks.SetAdminScenicSpotRepository(memorySpots)
+		}
+	}
 	if trackPlaceRepo == nil {
 		trackPlaceRepo = repository.NewMemoryTrackPlaceRepository()
 	}

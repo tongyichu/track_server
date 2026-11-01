@@ -2221,6 +2221,10 @@ func (r *MySQLTrackRepository) ListAdminTracks(ctx context.Context, filter Admin
 	}
 	base := `FROM track_records WHERE deleted_at IS NULL AND status <> ?`
 	args := []any{models.TrackStatusDeleted}
+	if condition, values := adminTrackMissingSQL(filter); condition != "" {
+		base += " AND (" + condition + ")"
+		args = append(args, values...)
+	}
 	if filter.Title != "" {
 		base += ` AND title LIKE ? ESCAPE '!'`
 		args = append(args, "%"+escapeAdminLike(filter.Title)+"%")

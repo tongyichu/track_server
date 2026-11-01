@@ -52,6 +52,7 @@
         return 'deleted';
       },
       wide: true,
+      beforeFields: window.AdminTrackPlaceCandidates.create(trackID, { readOnly: readOnly, onChanged: options.onSaved, cityNames: cityNames }),
       fields: [
         { name: 'user_id', label: '用户 ID', type: 'number', value: track.user_id, min: 0 },
         { name: 'session_id', label: '同行会话 ID', value: track.session_id },

@@ -46,7 +46,7 @@
     }, true);
   }
   function loadGeometry() {
-    if (!geometryPromise) geometryPromise = fetch('/admin/static/china_provinces.json').then(response => {
+    if (!geometryPromise) geometryPromise = fetch(AdminAssets.url('/admin/static/china_provinces.json')).then(response => {
       if (!response.ok) throw new Error('地图底图加载失败');
       return response.json();
     }).then(geo => { echarts.registerMap('admin-spatial-china', { type: 'FeatureCollection', features: geo.features.filter(feature => String(feature.properties.adcode) !== '100000_JD') }); }).catch(error => { geometryPromise = null; throw error; });
@@ -103,7 +103,7 @@
         const current = ++version;
         open = onOpen;
         try {
-          if (!window.echarts) throw new Error('图表组件暂不可用');
+          await AdminAssets.loadCharts();
           await loadGeometry();
           if (current !== version) return;
           points = data.points || []; unlocated = Number(data.unlocated || 0);

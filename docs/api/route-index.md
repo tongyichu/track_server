@@ -101,7 +101,7 @@
 个人信息字段扩展：`GET /user/:user_id/detail` 与 `PUT /user/profile/update` 支持背景图、性别、生日；性别、生日和服务端派生的 `zodiac_sign` 仅本人详情返回。登录 `user` 与资料更新响应也带星座，无新路由或星座存储字段，详见 [用户接口](user.md)。路由和鉴权分组保持不变。
 
 
-## 管理后台账号（独立 `/admin` 路径）
+## 管理后台（独立 `/admin` 路径）
 
 以下使用后台 session，不属于 `/api/v1`。
 
@@ -112,4 +112,10 @@
 | 调整身份、状态与页面权限 | PUT | `/admin/api/accounts/:username` | 管理员 session | [admin-accounts.md](admin-accounts.md) |
 | 重置后台账号密码 | POST | `/admin/api/accounts/:username/reset-password` | 管理员 session | [admin-accounts.md](admin-accounts.md) |
 | 修改本人后台密码 | POST | `/admin/api/password` | 后台 session | [admin-accounts.md](admin-accounts.md) |
-| 最近后台操作日志 | GET | `/admin/api/audit-logs` | 管理员 session | [admin-accounts.md](admin-accounts.md) |
+| 最近后台操作日志（可选 username 精确筛选） | GET | `/admin/api/audit-logs` | 管理员 session | [admin-accounts.md](admin-accounts.md) |
+| 后台轨迹列表（含 missing 缺项筛选） | GET | `/admin/api/tracks` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |
+| 后台轨迹详情 | GET | `/admin/api/tracks/:track_id` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |
+| 单条轨迹景点候选 | GET | `/admin/api/tracks/:track_id/place-candidates` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |
+| 轨迹景点候选队列（兼容） | GET | `/admin/api/place-candidates` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |
+| 确认轨迹景点候选 | POST | `/admin/api/place-candidates/:track_id/confirm` | 轨迹操作 | [admin-tracks.md](admin-tracks.md) |
+| 忽略轨迹景点候选 | POST | `/admin/api/place-candidates/:track_id/dismiss` | 轨迹操作 | [admin-tracks.md](admin-tracks.md) |

@@ -213,6 +213,7 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	api.GET("/tracks", m.Handler.ListTracks)
 	api.GET("/cities", m.Handler.ListAdminCities)
 	api.GET("/tracks/:track_id", m.Handler.GetTrack)
+	api.GET("/tracks/:track_id/place-candidates", m.Handler.GetPlaceCandidate)
 	api.PUT("/tracks/:track_id", m.Handler.UpdateTrack)
 	api.DELETE("/tracks/:track_id", m.Handler.DeleteTrack)
 	api.GET("/track-submissions", m.Handler.ListTrackSubmissions)
@@ -245,7 +246,7 @@ func redirectToLogin(_ context.Context, c *app.RequestContext) {
 
 func serveEmbedded(name, contentType string) app.HandlerFunc {
 	return func(_ context.Context, c *app.RequestContext) {
-		data, err := staticFS.ReadFile(name)
+		data, err := embeddedPage(name)
 		if err != nil {
 			c.JSON(http.StatusNotFound, utils.H{"error": "not found"})
 			return
@@ -279,7 +280,7 @@ func serveAdminPage(auth *Authenticator, name string) app.HandlerFunc {
 				return
 			}
 		}
-		data, err := staticFS.ReadFile(name)
+		data, err := embeddedPage(name)
 		if err != nil {
 			c.JSON(404, utils.H{"error": "not found"})
 			return
@@ -288,7 +289,7 @@ func serveAdminPage(auth *Authenticator, name string) app.HandlerFunc {
 		injection := append([]byte(`<script id="admin-session" type="application/json">`), identity...)
 		injection = append(injection, []byte("</script></head>")...)
 		data = bytes.Replace(data, []byte("</head>"), injection, 1)
-		c.Data(http.StatusOK, "text/html; charset=utf-8", data)
+		servePrivateHTML(c, data)
 	}
 }
 
@@ -318,7 +319,11 @@ func serveEmbeddedDir() app.HandlerFunc {
 			c.JSON(http.StatusNotFound, utils.H{"error": "not found"})
 			return
 		}
-		serveEmbeddedAsset(c, contentTypeFor(raw), data, "public, max-age=0, must-revalidate")
+		cacheControl := "public, max-age=0, must-revalidate"
+		if c.Query("v") == adminAssetVersion() {
+			cacheControl = "public, max-age=31536000, immutable"
+		}
+		serveEmbeddedAsset(c, contentTypeFor(raw), data, cacheControl)
 	}
 }
 
@@ -390,6 +395,15 @@ func gzipEmbeddedAsset(etag string, data []byte) ([]byte, error) {
 	if cached, ok := embeddedGzipCache.Load(etag); ok {
 		return cached.([]byte), nil
 	}
+	compressed, err := gzipBytes(data)
+	if err != nil {
+		return nil, err
+	}
+	cached, _ := embeddedGzipCache.LoadOrStore(etag, compressed)
+	return cached.([]byte), nil
+}
+
+func gzipBytes(data []byte) ([]byte, error) {
 	var output bytes.Buffer
 	writer := gzip.NewWriter(&output)
 	if _, err := writer.Write(data); err != nil {
@@ -398,9 +412,7 @@ func gzipEmbeddedAsset(etag string, data []byte) ([]byte, error) {
 	if err := writer.Close(); err != nil {
 		return nil, err
 	}
-	compressed := output.Bytes()
-	cached, _ := embeddedGzipCache.LoadOrStore(etag, compressed)
-	return cached.([]byte), nil
+	return output.Bytes(), nil
 }
 
 func contentTypeFor(name string) string {

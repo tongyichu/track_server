@@ -50,9 +50,13 @@
   }
   function renderPie(chartID, legendID, items, total) {
     var chartRoot = document.getElementById(chartID), legendRoot = document.getElementById(legendID);
-    if (!chartRoot || !legendRoot || !window.echarts) return;
+    if (!chartRoot || !legendRoot) return;
     var rows = (items || []).map(function (item) { return { key: item.key, name: item.label || distributionLabels[item.key] || item.key || '未知', value: number(item.count) }; });
     var totalValue = number(total);
+    legendRoot.innerHTML = rows.map(function (item, index) {
+      return '<div class="admin-user-legend-row"><span class="admin-user-legend-label"><i style="background:' + pieColors[index % pieColors.length] + '"></i>' + esc(item.name) + '</span><strong>' + item.value.toLocaleString() + '</strong></div>';
+    }).join('') + (chartID === 'userGenderChart' ? '<div class="admin-user-legend-row admin-user-legend-total"><span>全部用户</span><strong>' + totalValue.toLocaleString() + '</strong></div>' : '');
+    if (!window.echarts) return;
     if (!userCharts[chartID]) userCharts[chartID] = echarts.init(chartRoot);
     userCharts[chartID].setOption({
       color: pieColors,
@@ -60,9 +64,6 @@
       series: [{ type: 'pie', radius: ['57%', '82%'], center: ['50%', '50%'], avoidLabelOverlap: true, itemStyle: { borderColor: '#fff', borderWidth: 2 }, label: { show: false }, emphasis: { scale: true, scaleSize: 6 }, data: rows }],
       graphic: [{ type: 'text', left: 'center', top: '41%', style: { text: totalValue.toLocaleString(), fill: '#182433', fontSize: 22, fontWeight: 700, textAlign: 'center' } }, { type: 'text', left: 'center', top: '55%', style: { text: chartID === 'userGenderChart' ? '全部用户' : '用户数', fill: '#667085', fontSize: 11, textAlign: 'center' } }]
     }, true);
-    legendRoot.innerHTML = rows.map(function (item, index) {
-      return '<div class="admin-user-legend-row"><span class="admin-user-legend-label"><i style="background:' + pieColors[index % pieColors.length] + '"></i>' + esc(item.name) + '</span><strong>' + item.value.toLocaleString() + '</strong></div>';
-    }).join('') + (chartID === 'userGenderChart' ? '<div class="admin-user-legend-row admin-user-legend-total"><span>全部用户</span><strong>' + totalValue.toLocaleString() + '</strong></div>' : '');
   }
   function renderUserBars(chartID, items, labels, total) {
     var root = document.getElementById(chartID);
@@ -109,7 +110,7 @@
   }
   function loadProvinceGeo() {
     if (!provinceGeoPromise) {
-      provinceGeoPromise = fetch('/admin/static/china_provinces.json').then(function (response) {
+      provinceGeoPromise = fetch(AdminAssets.url('/admin/static/china_provinces.json')).then(function (response) {
         if (!response.ok) throw new Error('省份地图加载失败');
         return response.json();
       }).catch(function (error) { provinceGeoPromise = null; throw error; });
@@ -172,7 +173,7 @@
       });
     }).catch(function () { root.textContent = '省份地图暂不可用，请查看下方城市统计'; });
   }
-  function renderProvinceStats(items) {
+  function renderProvinceStats(items, drawMap) {
     provinceStats = Object.create(null);
     var foreignTotal = 0, foreignCities = 0, unknownTotal = 0;
     (items || []).forEach(function (item) {
@@ -188,7 +189,7 @@
     document.getElementById('userUnknownCityTotal').textContent = unknownTotal.toLocaleString();
     if (!provinceStats[selectedProvinceCode]) selectedProvinceCode = '';
     renderCityTop();
-    renderProvinceMap();
+    if (drawMap !== false) renderProvinceMap();
   }
   async function loadCities() {
     try {
@@ -222,7 +223,11 @@
       var data = (await response.json()).data || {};
       renderPie('userGenderChart', 'userGenderStats', data.gender, data.total_users);
       renderPie('userZodiacChart', 'userZodiacStats', data.zodiac, data.total_users);
-      renderProvinceStats(data.user_cities || []);
+      renderProvinceStats(data.user_cities || [], false);
+      await AdminAssets.loadCharts();
+      renderPie('userGenderChart', 'userGenderStats', data.gender, data.total_users);
+      renderPie('userZodiacChart', 'userZodiacStats', data.zodiac, data.total_users);
+      renderProvinceMap();
       renderUserBars('userAgeChart', data.age, ageLabels, data.total_users);
       renderUserBars('userTrackOutputChart', data.track_output, trackOutputLabels, data.total_users);
       statisticsLoaded = true;

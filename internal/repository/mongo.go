@@ -489,15 +489,18 @@ func (r *MongoTrackRepository) ListAdminTracks(ctx context.Context, filter Admin
 		}
 		query["user_id"] = bson.M{"$in": filter.UserIDs}
 	}
+	if filter.Missing != "" {
+		return r.listAdminTracksWithMissing(ctx, query, filter, cursor, limit)
+	}
 	var total int64
 	total, err := r.collection.CountDocuments(ctx, query)
 	if err != nil {
 		return nil, 0, err
 	}
 	if cursor != nil && !cursor.StartTime.IsZero() {
-		query["$or"] = []bson.M{{"start_time": bson.M{"$lt": cursor.StartTime}}, {"start_time": cursor.StartTime, "id": bson.M{"$lt": cursor.ID}}}
+		query["$or"] = []bson.M{{"start_time": bson.M{"$lt": cursor.StartTime}}, {"start_time": cursor.StartTime, "_id": bson.M{"$lt": cursor.ID}}}
 	}
-	items, err := r.listTracks(ctx, query, options.Find().SetSort(bson.D{{Key: "start_time", Value: -1}, {Key: "id", Value: -1}}).SetLimit(int64(limit)))
+	items, err := r.listTracks(ctx, query, options.Find().SetSort(bson.D{{Key: "start_time", Value: -1}, {Key: "_id", Value: -1}}).SetLimit(int64(limit)))
 	return items, total, err
 }
 

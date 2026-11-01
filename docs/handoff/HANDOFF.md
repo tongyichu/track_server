@@ -1,5 +1,50 @@
 # 工作交接：协议 H5 页面（2026-10-13）
 
+## 2026-11-01：部署后台交互、轨迹候选与页面性能优化
+
+- 用户明确要求部署 Server。按 android-track-release 仅同步、提交、推送 track_server，再构建并推送 linux/amd64 镜像、精确更新生产容器；不修改或发布 App。main fetch 后与 origin/main 一致，无合并源码变化，复用本轮已通过的 Go 构建、相关 JS 语法检查与差异自查，不新增或运行自动化测试。
+- 发布包括最近操作记录按账号筛选、左下角名称/身份/齿轮设置菜单、景点候选迁入轨迹详情、轨迹资料缺项筛选，以及静态资源版本缓存、异步图表、局部 DOM 观察器、有界图片缓存并发和后台性能开发约束。无新配置或数据表，保留账号与权限持久化数据。
+- 生产旧 update_track_server.sh 存在宽匹配历史容器/镜像风险，沿用上次已经确认的安全路径：先 pull 并核对源码标签、manifest 和 image config，仅停止/删除确切的 track_server_go 后用精确镜像 ID 启动；保留 .env、持久化目录、旧镜像和历史容器。ping 正文为纯文本 hello track app，不按 JSON 解析。会话仍为内存，服务重启后需重新登录。
+- 发布回执目录 `/private/tmp/track-admin-ui-deploy-zpbd0l4a`。本节为部署前记录，最终提交、推送、镜像、容器和内外网健康结果以该目录回执和本轮最终回复为准，不能仅据本节认定部署成功。部署前 handoff 已归档到 `docs/handoff/history_handoff/HANDOFF-20261101-114047.md`。
+
+## 2026-11-01：后台页面加载优化与性能规则沉淀（本地实现，未部署）
+
+- 用户反馈部分后台页面点击打开偏慢，并要求把问题抽象记录到后台 AGENTS，避免后续重犯。本轮继续保留账号日志筛选、齿轮设置菜单、轨迹景点候选与资料缺项筛选等先前全部未提交改动；没有新增部署或提交授权。
+- `assets.go` 对嵌入静态目录生成统一内容版本、缓存无账号信息的页面模板、给 HTML 静态引用注入版本与 `runtime.js`；动态图标/地图 JSON 使用 `AdminAssets.url()`。只有匹配当前内容版本的公开静态资源使用一年 immutable 缓存，无版本/旧版本继续 ETag 重验证；资源变化自动换 URL。公开登录页 no-cache，受保护页面/API 继续 no-store 和实时账号校验，未缓存权限。私有 HTML 支持 gzip，但不存入公共 gzip 缓存。
+- 用户、地图模式、同行、景点页移除阻塞式 ECharts 标签，列表脚本无需等待图表库开始工作；共享 `AdminAssets.loadCharts()` 按需异步加载并在失败后允许重试，工作台也复用此入口。用户分布文字、景点核心数字先展示。工作台/统计与地图渲染保留或补充请求序号，避免加载库期间旧响应覆盖新选择。景点供应商回填推迟到首轮列表和统计完成后再启动。
+- `shell.js` 权限观察器由每次 DOM 变化扫描整个 document，改为同批去重的局部子树处理；账号权限刷新仍全量应用，并观察 disabled/权限标记变化以恢复只读锁。`ui.js` 的新增节点和表格增强也在同批去重，减少列表与图表更新重复遍历。
+- 列表头像/轨迹预览缓存未命中的逐条等待改为 `list_assets.go` 中最多 4 路并发，单页相同作者不再重复处理头像，处理后的列表顺序保持原序。继续等待缓存成功才使用本地 URL，保留原有 5 秒单次超时和请求 context；没有引入未落盘图片 URL 或无限制 goroutine。尚未重构工作台全量统计聚合、账号限制逐行查询等其他潜在热点，不宣称已覆盖所有慢接口。
+- `internal/admin/AGENTS.md` 新增“页面性能约束”，提炼首屏依赖、内容版本缓存、私有数据隔离、局部观察器、批量去重/有界 I/O、异步竞态和验收边界；索引定位到 assets.go/runtime.js/list_assets.go，提交前清单要求检查是否重新引入相同问题。按 agents-md-generator 技能做针对性现有规则更新，未重建治理体系或触发无关目录整改。
+- `go build ./...` 通过；runtime/admin_usage_charts/feature_statistics/scenic_spot_charts/scenic_spots/dashboard/users/shell/ui 共 9 个 JS 的 `node --check` 和 `git diff --check` 通过。遵循项目约定未新增/运行测试、接口自动化、测试容器或生产业务操作；未做浏览器实测或前后耗时对比，不声称具体提速幅度，功能和界面由用户手动验证。
+- 已执行 AGENTS 校验与 freshness：仍有 12 个既有问题（根文件超 16KB、缺 precedence、若干旧源码超长）和 161 条 warning；根规则缺新鲜度元信息，全局 `/Users/foxcoder/.codex/AGENTS.md` 为空，即全局入口规则未落盘。报告 `/private/tmp/track-admin-performance-agents-check.json` 与 `/private/tmp/track-admin-performance-freshness.json`，不能宣称规则检查全绿。全局修复命令为 `python3 /Users/foxcoder/.codex/skills/agents-md-generator/scripts/manage_docs.py sync-global-codex-agents . --write`，未擅自修改工作区外全局规则。
+- 当前仍未提交、推送或部署；线上仍为 afc8fdd。旧生产更新脚本宽匹配风险和安全更新路径见后续部署交接。本轮更新前完整 handoff 已归档到 `docs/handoff/history_handoff/HANDOFF-20261101-113918.md`。
+
+## 2026-11-01：景点候选迁入轨迹详情与轨迹资料缺项筛选（本地实现，未部署）
+
+- 用户明确同意按所建议范围开发：候选处理放入各自轨迹详情弹窗，轨迹列表增加任意缺项、待确认景点、未关联景点、缺简介、缺城市、缺预览图；保留之前账号日志下拉筛选和齿轮菜单的全部未提交改动。
+- 景点页删除全局候选面板。`place_candidates.js` 改为共享单轨迹候选组件，`track_editor.js` 用 `AdminUI.form.beforeFields` 将其挂在弹窗顶部；tracks/scenic 页面均先加载该组件。只读可看，轨迹 write 才能确认/忽略，操作立即生效、刷新来源列表，不提交未保存的轨迹表单。处理后候选/缺项过滤可使对应行退出当前结果。
+- 新增 GET `/admin/api/tracks/:track_id/place-candidates`，`TrackPlaceService.GetPlaceCandidate` 复用源摘要、规则、状态和可索引轨迹校验；404 无有效候选、409 源变化、503 未启用。读取仅查持久化缓存，不消耗供应商额度。保留全局 GET 队列作为兼容接口；现有候选确认/忽略 POST 改按轨迹模块授权并沿用写操作审计。
+- `/admin/api/tracks` 新增 missing=any/place_candidate/scenic_spot/description/city/previews；`AdminTrackListFilter` 扩展 Missing 与当前有效候选 IDs。候选 IDs 经既有队列分页、源/规则和资料有效性校验取得，无人为截断。`repository/admin_track_missing.go` 统一缺项口径，MySQL 原生条件/关联、Mongo lookup+facet、内存关联快照均在总数和游标前过滤，支持与原条件组合。Mongo 受影响轨迹列表游标/排序统一使用真实 `_id` 字段。
+- 未关联景点指无 draft/published 自有目录关联，包含正常的非景区轨迹；缺预览为四种日夜图任一缺失。页面增加必要口径提示，快速切换筛选忽略旧响应。main 为内存轨迹仓储注入内存景点仓储，读关联快照时不同时持有两仓储锁，数据库降级不新增外部依赖。没有新增数据表、迁移、配置或依赖。
+- 文档 `docs/api/admin-tracks.md`、API 入口/索引、景点识别方案、账号权限说明以及 root/admin AGENTS 已同步。最终 `go build ./...`、place_candidates/tracks/track_editor/ui/shell/accounts 六个 JS 的 `node --check`、`git diff --check` 通过；按项目约定未新增或运行自动化测试，未启动测试数据库或操作生产，功能与界面由用户手动验收。
+- 本轮所有改动尚未提交、推送或部署，生产仍为 afc8fdd；后续部署要包含先前两项待发布后台改动。旧生产更新脚本存在宽匹配历史容器风险，应按确切 track_server_go 更新并保留历史容器/镜像，详见后文部署交接与回执。
+
+## 2026-11-01：精简账号区与齿轮设置菜单（本地实现，未部署）
+
+- 用户要求直接设计并开发，不需要展示预览。共享账号区只常驻显示名称、身份标签与齿轮，移除常驻改密链接和退出按钮；此轮没有创建或交付预览文件。
+- `static/shell.js` 使用现有内置 `tabler.Dropdown`：桌面侧栏向上展开，移动顶栏向下展开，支持点外部关闭、键盘导航和 Escape。菜单展示登录账号、名称、身份、最近登录时间，打开时通过既有 `/admin/api/me` 刷新信息；改密仍使用现有页面，退出仍调用现有接口。长名称在常驻区省略，菜单内完整换行；限高支持小屏滚动。
+- 退出按钮请求期间禁用防止重复提交；失败留在当前页并显示重试提示，不因网络/服务错误误示已退出。所有账号信息使用 textContent，下发和展示的数据不含密码、哈希或内部版本。
+- `static/ui.js` 跳过 dropdown-item 和下拉触发按钮的普通主按钮增强，`static/style.css` 增加紧凑账号区、齿轮与菜单样式。未增加 API、数据表、依赖或账号权限；相关 admin AGENTS 与账号 API 文档同步。
+- `go build ./...`、shell.js/ui.js/accounts.js 的 `node --check`、`git diff --check` 通过。遵循项目约定，未新增或运行自动化测试、未操作生产；界面交互待用户手动验收。前一轮操作记录账号下拉筛选改动完整保留，两项变更均尚未提交、推送或部署。
+- 生产当前仍是上轮已部署的 afc8fdd。部署历史及宽匹配更新脚本风险见下方交接；后续部署应精确替换 track_server_go，并保留历史容器和旧镜像。
+
+## 2026-11-01：最近操作记录按账号下拉筛选（本地实现，未部署）
+
+- 用户要求管理员按账号名称通过下拉菜单筛选最近操作记录。账号列表提供“全部账号”和各账号，显示名称不同于登录名时同时展示，停用账号也可选择；切换立即查询，刷新保留选择，无记录显示空状态，快速切换忽略旧请求响应。
+- `GET /admin/api/audit-logs` 新增可选 `username` 查询参数，按固定登录名精确匹配；空值或不传保留原有全部账号行为。`AccountStorage.ListAudit` 的 MySQL/Mongo 实现先筛选再倒序 LIMIT 100，避免只筛全局最近 100 条造成记录缺失。接口仍固定仅管理员可读；不涉及表结构或配置变更。
+- 修改 `account_storage.go`、`account_handlers.go`、`static/accounts.html`、`static/accounts.js`，既有路由测试 fixture 只适配接口参数；API 分册、索引与 admin scoped AGENTS 同步。`go build ./...`、`node --check internal/admin/static/accounts.js`、`git diff --check` 通过。按根 AGENTS 未新增或运行自动化测试，未启动数据库或操作生产，功能待用户手动验收。
+- 本次筛选变更尚未提交、推送或部署。上轮账号系统已部署源码为 main/afc8fdd，3 个账号、MySQL 与内外网健康正常，回执 `/private/tmp/track-admin-accounts-deploy-QGhpG9/receipt.md`。生产旧更新脚本的宽匹配会命中 14 个历史容器，上轮未执行该脚本，采用精确容器名完成替换并保留历史容器与旧镜像；后续部署不要直接运行旧脚本误删历史容器。
+
 ## 2026-11-01：部署后台账号与页面权限
 
 - 用户在本轮明确要求部署，授权按 android-track-release 完成 track_server 的同步、提交、推送、镜像构建和生产更新；不发布 App。

@@ -19,7 +19,7 @@ type AccountStorage interface {
 	Load(context.Context) (version int64, data []byte, err error)
 	Save(ctx context.Context, version int64, data []byte) (bool, error)
 	AppendAudit(context.Context, AuditEntry) error
-	ListAudit(context.Context, int) ([]AuditEntry, error)
+	ListAudit(context.Context, string, int) ([]AuditEntry, error)
 }
 
 type AuditEntry struct {
@@ -90,8 +90,16 @@ func (s *mysqlAccountStorage) AppendAudit(ctx context.Context, entry AuditEntry)
 	return err
 }
 
-func (s *mysqlAccountStorage) ListAudit(ctx context.Context, limit int) ([]AuditEntry, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT id,actor_id,username,method,path,status,created_at FROM admin_audit_logs ORDER BY created_at DESC,id DESC LIMIT ?", limit)
+func (s *mysqlAccountStorage) ListAudit(ctx context.Context, username string, limit int) ([]AuditEntry, error) {
+	query := "SELECT id,actor_id,username,method,path,status,created_at FROM admin_audit_logs"
+	args := make([]interface{}, 0, 2)
+	if username != "" {
+		query += " WHERE username=?"
+		args = append(args, username)
+	}
+	query += " ORDER BY created_at DESC,id DESC LIMIT ?"
+	args = append(args, limit)
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -151,8 +159,12 @@ func (s *mongoAccountStorage) AppendAudit(ctx context.Context, entry AuditEntry)
 	return err
 }
 
-func (s *mongoAccountStorage) ListAudit(ctx context.Context, limit int) ([]AuditEntry, error) {
-	cur, err := s.audit.Find(ctx, bson.M{}, options.Find().SetSort(bson.D{{Key: "created_at", Value: -1}, {Key: "_id", Value: -1}}).SetLimit(int64(limit)))
+func (s *mongoAccountStorage) ListAudit(ctx context.Context, username string, limit int) ([]AuditEntry, error) {
+	filter := bson.M{}
+	if username != "" {
+		filter["username"] = username
+	}
+	cur, err := s.audit.Find(ctx, filter, options.Find().SetSort(bson.D{{Key: "created_at", Value: -1}, {Key: "_id", Value: -1}}).SetLimit(int64(limit)))
 	if err != nil {
 		return nil, err
 	}

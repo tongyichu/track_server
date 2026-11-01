@@ -86,6 +86,7 @@
       const root = createModal(options);
       const form = document.createElement('form');
       form.className = 'admin-dialog-form';
+      if (options.beforeFields) root.querySelector('.modal-body').appendChild(options.beforeFields);
       (options.fields || []).forEach(function (field) {
         const group = document.createElement('label');
         group.className = 'form-label';
@@ -249,7 +250,7 @@
   }
 
   function enhanceButton(button) {
-    if (button.hasAttribute('data-period') || button.classList.contains('btn-close')) return;
+    if (button.hasAttribute('data-period') || button.classList.contains('btn-close') || button.matches('.dropdown-item, [data-bs-toggle="dropdown"]')) return;
     button.classList.add('btn');
     if (Array.from(button.classList).some(function (name) { return /^btn-(primary|secondary|success|danger|warning|info|light|dark|outline)/.test(name); })) return;
     const id = button.id || '';
@@ -342,12 +343,21 @@
   addPageHeading();
   enhance(document);
   new MutationObserver(function (mutations) {
+    const roots = new Set(), tables = new Set();
     mutations.forEach(function (mutation) {
       mutation.addedNodes.forEach(function (node) {
-        if (node.nodeType === Node.ELEMENT_NODE) enhance(node);
+        if (node.nodeType === Node.ELEMENT_NODE) roots.add(node);
       });
       const table = mutation.target.closest && mutation.target.closest('table.data');
-      if (table) enhanceTable(table);
+      if (table) tables.add(table);
     });
+    roots.forEach(function (node) {
+      if (!node.isConnected) return;
+      for (let parent = node.parentElement; parent; parent = parent.parentElement) {
+        if (roots.has(parent)) return;
+      }
+      enhance(node);
+    });
+    tables.forEach(function (table) { if (table.isConnected) enhanceTable(table); });
   }).observe(document.body, { childList: true, subtree: true });
 })();

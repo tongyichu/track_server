@@ -102,6 +102,8 @@ track_server/
 
 ### 稳定默认值
 
+- 后台轨迹列表缺项筛选由 `internal/repository/admin_track_missing.go` 实现，`missing=any|place_candidate|scenic_spot|description|city|previews` 参与总数与游标分页，MySQL/Mongo/内存保持一致；main 为内存轨迹仓储注入景点仓储关联快照。候选源摘要校验复用 `TrackPlaceService`，只读筛选不触发供应商调用。景点识别候选移至共享轨迹详情弹窗，读取与确认/忽略均按轨迹模块权限；API 与口径见 `docs/api/admin-tracks.md` 和 `internal/admin/AGENTS.md`。
+
 - 后台账号独立持久化在 `admin_account_state`，操作日志在 `admin_audit_logs`，由 `internal/admin/account_storage.go` 实现 MySQL/Mongo 并在 main 注入；不属于 App 用户 Repository，也不随业务仓储降级为内存。环境变量仅首次导入：`admin` 为管理员，其余现有账号默认业务页面只读。角色、页面 none/read/write 权限、跨模块校验、版本冲突、最后管理员保护和会话失效由 `internal/admin/accounts.go`、`permissions.go`、`auth.go` 维护。后台入口 `/admin/accounts.html`；细节与新增接口见 `internal/admin/AGENTS.md` 和 `docs/api/admin-accounts.md`。
 
 - 管理后台运营工作台的跨域只读统计统一走 `repository.AdminDashboardStatisticsRepository`，由 `NewAdminDashboardStatisticsRepository` 根据当前 MySQL / Mongo / in-memory 仓储族选择实现；不新增统计表，也不改变业务写入流程。周期指标按 `[start,end)` 统计，互动趋势使用收藏/导航/点赞/评论各自 `created_at`，新增用户转化漏斗使用同周期注册 Cohort 并逐级限定为完成轨迹、投稿和审核通过；用户列表上次登录按当前页批量查询 `login_log`。后台用户列表通过 `AdminUserListFilterRepository` 在仓储层组合筛选昵称、内部人员、资料 `city_code`、性别、生日星座和当前生效限制，筛选必须参与总数统计与游标分页，不得只过滤当前页。数据模型见 `internal/models/admin_dashboard.go`、`admin_feature_statistics.go`，聚合实现见 `internal/repository/admin_dashboard*.go` 与 `admin_feature_statistics*.go`。地图模式新增全量 active 路线组覆盖/规模统计；同行新增近 1/7/30 天创建/结束趋势及服务端去重成员人数分布，后台平均参与人数也按成员记录计算，缺失记录不计入均值；前端共用内置 ECharts，不触发供应商查询。

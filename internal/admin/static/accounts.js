@@ -4,6 +4,7 @@
   const form = $('accountForm');
   const modal = new tabler.Modal($('accountModal'), { backdrop: 'static' });
   let modules = [], selected = null, saving = false;
+  let auditRequest = 0;
 
   async function api(path, options) {
     const response = await fetch('/admin/api' + path, options);
@@ -21,6 +22,7 @@
     try {
       const data = await api('/accounts');
       modules = data.modules || [];
+      updateAuditAccounts(data.items || []);
       $('accountsList').replaceChildren();
       (data.items || []).forEach(account => {
         const row = document.createElement('tr');
@@ -36,6 +38,20 @@
       $('createAccount').disabled = false;
     } catch (error) { showError($('accountsError'), error.message); }
     finally { $('refreshAccounts').disabled = false; }
+  }
+
+  function updateAuditAccounts(accounts) {
+    const filter = $('auditAccountFilter'), previous = filter.value;
+    const all = document.createElement('option'); all.value = ''; all.textContent = '全部账号';
+    filter.replaceChildren(all);
+    accounts.forEach(account => {
+      const option = document.createElement('option'); option.value = account.username;
+      option.textContent = (account.display_name && account.display_name !== account.username ? account.display_name + '（' + account.username + '）' : account.username) + (account.enabled ? '' : '（已停用）');
+      filter.appendChild(option);
+    });
+    filter.value = accounts.some(account => account.username === previous) ? previous : '';
+    filter.disabled = false;
+    if (filter.value !== previous) loadAudit();
   }
 
   function updateRole() {
@@ -97,9 +113,16 @@
   }
 
   async function loadAudit() {
+    const request = ++auditRequest, username = $('auditAccountFilter').value;
     $('refreshAudit').disabled = true;
+    showError($('auditError'), '');
+    auditState('正在加载…');
+    $('auditHint').textContent = '展示' + (username ? '所选账号' : '所有账号') + '最近 100 条操作日志，包括账号、权限与业务内容的变更。';
     try {
-      const data = await api('/audit-logs');
+      const params = new URLSearchParams();
+      if (username) params.set('username', username);
+      const data = await api('/audit-logs' + (username ? '?' + params.toString() : ''));
+      if (request !== auditRequest) return;
       const items = data.items || [], completed = new Set(items.filter(item => item.id.endsWith(':result')).map(item => item.id.split(':')[0]));
       $('auditList').replaceChildren();
       items.filter(item => item.status || !completed.has(item.id.split(':')[0])).forEach(item => {
@@ -108,14 +131,23 @@
         cell(row, !item.status ? '已发起，结果待确认' : item.status < 400 ? '成功' : '失败 (' + item.status + ')');
         $('auditList').appendChild(row);
       });
+      if (!$('auditList').children.length) auditState(username ? '该账号暂无操作记录' : '暂无操作记录');
       showError($('auditError'), '');
-    } catch (error) { showError($('auditError'), error.message); }
-    finally { $('refreshAudit').disabled = false; }
+    } catch (error) {
+      if (request !== auditRequest) return;
+      showError($('auditError'), error.message); auditState('加载失败，请刷新重试');
+    } finally { if (request === auditRequest) $('refreshAudit').disabled = false; }
+  }
+  function auditState(message) {
+    const row = document.createElement('tr');
+    const td = cell(row, message); td.colSpan = 5; td.className = 'text-secondary text-center';
+    $('auditList').replaceChildren(row);
   }
   form.elements.role.addEventListener('change', updateRole);
   $('createAccount').disabled = true;
   $('createAccount').onclick = () => openEditor(null);
   $('refreshAccounts').onclick = load;
   $('refreshAudit').onclick = loadAudit;
+  $('auditAccountFilter').addEventListener('change', loadAudit);
   load(); loadAudit();
 })();

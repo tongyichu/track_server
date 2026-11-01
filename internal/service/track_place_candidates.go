@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
 	"strings"
 	"time"
@@ -26,6 +27,67 @@ type TrackPlaceCandidatePage struct {
 	Items      []*TrackPlaceCandidateItem `json:"items"`
 	NextCursor string                     `json:"next_cursor"`
 	HasMore    bool                       `json:"has_more"`
+}
+
+func (s *TrackPlaceService) GetPlaceCandidate(ctx context.Context, trackID string) (*TrackPlaceCandidateItem, error) {
+	match, _, err := s.loadCurrentCandidate(ctx, strings.TrimSpace(trackID))
+	if err != nil {
+		return nil, err
+	}
+	track, err := s.tracks.FindByID(ctx, match.TrackID)
+	if err != nil {
+		return nil, err
+	}
+	if !isTrackMapIndexEligible(track) {
+		return nil, repository.ErrNotFound
+	}
+	relations := enclosedPlaceRelations(match.Relations)
+	ids := make([]string, 0, len(relations))
+	for _, relation := range relations {
+		ids = append(ids, relation.PlaceID)
+	}
+	places, err := s.GetPlaces(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	item := &TrackPlaceCandidateItem{TrackID: track.ID, Title: track.Title, CityCode: track.CityCode, TrackType: track.TrackType, StartTime: track.StartTime, Relations: relations, UpdatedAt: match.UpdatedAt}
+	for _, relation := range relations {
+		if place := places[relation.PlaceID]; place != nil {
+			item.Places = append(item.Places, place)
+		}
+	}
+	if len(item.Places) == 0 {
+		return nil, repository.ErrNotFound
+	}
+	return item, nil
+}
+
+// PendingPlaceCandidateTrackIDs 复用当前候选队列的源版本和可索引校验，不触发供应商识别。
+func (s *TrackPlaceService) PendingPlaceCandidateTrackIDs(ctx context.Context) ([]string, error) {
+	ids := make([]string, 0)
+	if s == nil || !s.Enabled() {
+		return ids, nil
+	}
+	cursor := ""
+	for {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		page, err := s.ListPlaceCandidates(ctx, cursor, 20)
+		if err != nil {
+			return nil, err
+		}
+		for _, item := range page.Items {
+			ids = append(ids, item.TrackID)
+		}
+		if !page.HasMore {
+			return ids, nil
+		}
+		if page.NextCursor == "" || page.NextCursor <= cursor {
+			return nil, errors.New("track place candidate cursor did not advance")
+		}
+		cursor = page.NextCursor
+	}
 }
 
 func (s *TrackPlaceService) ListPlaceCandidates(ctx context.Context, cursor string, limit int) (*TrackPlaceCandidatePage, error) {

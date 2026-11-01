@@ -3,6 +3,7 @@ package admin
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/cloudwego/hertz/pkg/app"
@@ -103,7 +104,8 @@ func (a *Authenticator) HandleChangePassword(ctx context.Context, c *app.Request
 func (a *Authenticator) HandleAuditLogs(ctx context.Context, c *app.RequestContext) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	items, err := a.manager.storage.ListAudit(ctx, 100)
+	username := strings.TrimSpace(string(c.Query("username")))
+	items, err := a.manager.storage.ListAudit(ctx, username, 100)
 	if err != nil {
 		writeAccountError(c, err)
 		return
