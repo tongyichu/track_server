@@ -47,6 +47,7 @@ type Handler struct {
 	trackSubmissionSvc *service.TrackSubmissionService
 	scenicSpotSvc      *service.ScenicSpotCatalogService
 	trackPlaceSvc      *service.TrackPlaceService
+	trackImportSvc     *service.AdminTrackImportService
 	dashboardStatsRepo repository.AdminDashboardStatisticsRepository
 	screenshotCache    *service.AssetCacheService
 	// staticRoot 是服务端本地静态资源根目录（通常为 <LogDir>/static）。
@@ -280,6 +281,12 @@ func (h *Handler) SetScenicSpotCatalogService(svc *service.ScenicSpotCatalogServ
 func (h *Handler) SetTrackPlaceService(svc *service.TrackPlaceService) {
 	if h != nil {
 		h.trackPlaceSvc = svc
+	}
+}
+
+func (h *Handler) SetTrackImportService(svc *service.AdminTrackImportService) {
+	if h != nil {
+		h.trackImportSvc = svc
 	}
 }
 
@@ -1391,6 +1398,7 @@ func (h *Handler) ListAdminCities(ctx context.Context, c *app.RequestContext) {
 }
 
 // GetTrack returns the persisted track fields without rewriting asset URLs.
+// 响应额外附带 primary_scenic_spot（已确认/自动归属的主景点）与 geo（地图索引简化轨迹线，GCJ02）。
 func (h *Handler) GetTrack(ctx context.Context, c *app.RequestContext) {
 	if h == nil || h.trackRepo == nil {
 		c.JSON(http.StatusInternalServerError, utils.H{"error": "track repository not configured"})
@@ -1406,12 +1414,209 @@ func (h *Handler) GetTrack(ctx context.Context, c *app.RequestContext) {
 		handleAdminRepoError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, utils.H{"code": 0, "data": track})
+	if h.trackPlaceSvc != nil {
+		if spots, spotErr := h.trackPlaceSvc.PrimaryScenicSpots(ctx, []string{track.ID}); spotErr == nil {
+			track.PrimaryScenicSpot = spots[track.ID]
+		}
+	}
+	data := utils.H{"track": track}
+	if h.trackMapRepo != nil {
+		if index, indexErr := h.trackMapRepo.FindTrackGeoIndex(ctx, track.ID); indexErr == nil && index != nil && index.SimplifiedPolylineJSON != "" {
+			data["geo"] = utils.H{
+				"simplified_polyline": json.RawMessage(index.SimplifiedPolylineJSON),
+				"coordinate_system":   index.CoordinateSystem,
+				"start_lat":           index.StartLat,
+				"start_lng":           index.StartLng,
+				"end_lat":             index.EndLat,
+				"end_lng":             index.EndLng,
+			}
+		}
+	}
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": data})
+}
+
+// RefreshTrackPlaceCandidate 处理 POST /admin/api/tracks/:track_id/place-refresh
+//
+// 同步对单条轨迹重新执行景点识别（复用后台识别任务同一锁与配额），
+// 返回识别后的 match 状态；任务忙返回 409。
+func (h *Handler) RefreshTrackPlaceCandidate(ctx context.Context, c *app.RequestContext) {
+	if h == nil || h.trackPlaceSvc == nil {
+		c.JSON(http.StatusServiceUnavailable, utils.H{"error": "track place service not configured"})
+		return
+	}
+	trackID := strings.TrimSpace(c.Param("track_id"))
+	if trackID == "" {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "track_id is required"})
+		return
+	}
+	result, err := h.trackPlaceSvc.ResolveTracksForBackfill(ctx, []string{trackID})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	if result == nil {
+		c.JSON(http.StatusServiceUnavailable, utils.H{"error": "track place service unavailable"})
+		return
+	}
+	if result.BusyDeferred > 0 || result.Deferred > 0 {
+		c.JSON(http.StatusConflict, utils.H{"error": "识别任务正在处理其他轨迹，请稍后重试"})
+		return
+	}
+	if result.Unconfigured > 0 {
+		c.JSON(http.StatusServiceUnavailable, utils.H{"error": "景点识别未启用"})
+		return
+	}
+	if result.MissingIndex > 0 {
+		c.JSON(http.StatusNotFound, utils.H{"error": "该轨迹暂无可用的地图索引，无法识别"})
+		return
+	}
+	status := ""
+	if candidate, candErr := h.trackPlaceSvc.GetPlaceCandidate(ctx, trackID); candErr == nil && candidate != nil {
+		status = "candidate"
+	}
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{
+		"scanned":    result.Scanned,
+		"has_result": status == "candidate",
+	}})
+}
+
+// GetTrackMapConfig 处理 GET /admin/api/tracks/map-config
+//
+// 与景点地图同一高德 Web(JS API) 配置，供轨迹详情地图在轨迹模块权限下读取。
+func (h *Handler) GetTrackMapConfig(_ context.Context, c *app.RequestContext) {
+	if h == nil || h.scenicSpotSvc == nil {
+		c.Response.Header.Set("Cache-Control", "no-store")
+		c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"configured": false}})
+		return
+	}
+	key := h.scenicSpotSvc.MapJSKey()
+	if key == "" {
+		c.Response.Header.Set("Cache-Control", "no-store")
+		c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"configured": false}})
+		return
+	}
+	c.Response.Header.Set("Cache-Control", "no-store")
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"configured": true, "key": key, "service_host": "/admin/api/tracks/amap-service"}})
 }
 
 // UpdateTrack 处理 PUT /admin/api/tracks/:track_id
 //
 // 管理后台允许修正轨迹业务字段与预览图；ID、轨迹点和创建/更新时间保持系统管理。
+// ImportTracks 处理 POST /admin/api/tracks/import
+//
+// multipart/form-data：
+//   - files:             轨迹文件（JSON/GeoJSON/KML/KMZ），可多选，单次最多 50 个；
+//   - owner_user_id:     归属人用户 ID，必须是内部人员；
+//   - track_type:        运动类型 code（默认 hiking）；
+//   - coordinate_system: 原始文件坐标系 WGS84/GCJ02/BD09（默认 WGS84）。
+//
+// 返回 results: [{file_name, track_id?, title?, error?}]，单条失败不影响其他文件。
+func (h *Handler) ImportTracks(ctx context.Context, c *app.RequestContext) {
+	if h == nil || h.trackImportSvc == nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "track import service not configured"})
+		return
+	}
+	ownerID, err := strconv.ParseInt(strings.TrimSpace(c.PostForm("owner_user_id")), 10, 64)
+	if err != nil || ownerID <= 0 {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid owner_user_id"})
+		return
+	}
+	if h.userRepo == nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "user repository not configured"})
+		return
+	}
+	owner, err := h.userRepo.FindByID(ctx, ownerID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			c.JSON(http.StatusBadRequest, utils.H{"error": "owner user not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	if owner == nil || !owner.IsInternal {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "owner must be an internal user"})
+		return
+	}
+	trackType := strings.TrimSpace(c.PostForm("track_type"))
+	if trackType == "" {
+		trackType = "hiking"
+	}
+	validType := false
+	for _, item := range config.DefaultTrackTypeConfigs {
+		if item.Type == trackType {
+			validType = true
+			break
+		}
+	}
+	if !validType {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid track_type"})
+		return
+	}
+	coordinateSystem := strings.ToUpper(strings.TrimSpace(c.PostForm("coordinate_system")))
+	if coordinateSystem == "" {
+		coordinateSystem = "WGS84"
+	}
+	switch coordinateSystem {
+	case "WGS84", "GCJ02", "BD09":
+	default:
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid coordinate_system"})
+		return
+	}
+	form, err := c.MultipartForm()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid multipart form"})
+		return
+	}
+	fileHeaders := form.File["files"]
+	if len(fileHeaders) == 0 {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "files is required"})
+		return
+	}
+	if len(fileHeaders) > 50 {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "too many files: max 50 per import"})
+		return
+	}
+	tempDir, err := os.MkdirTemp("", "track-import-*")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	defer os.RemoveAll(tempDir)
+	files := make([]service.ImportTrackFile, 0, len(fileHeaders))
+	for _, header := range fileHeaders {
+		if header == nil || header.Size <= 0 {
+			continue
+		}
+		localPath := filepath.Join(tempDir, service.SanitizeImportFileName(header.Filename))
+		src, openErr := header.Open()
+		if openErr != nil {
+			c.JSON(http.StatusBadRequest, utils.H{"error": "failed to read uploaded file: " + header.Filename})
+			return
+		}
+		dst, createErr := os.Create(localPath)
+		if createErr != nil {
+			src.Close()
+			c.JSON(http.StatusInternalServerError, utils.H{"error": createErr.Error()})
+			return
+		}
+		_, copyErr := io.Copy(dst, src)
+		dst.Close()
+		src.Close()
+		if copyErr != nil {
+			c.JSON(http.StatusInternalServerError, utils.H{"error": copyErr.Error()})
+			return
+		}
+		files = append(files, service.ImportTrackFile{FileName: header.Filename, LocalPath: localPath})
+	}
+	if len(files) == 0 {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "no valid files to import"})
+		return
+	}
+	results := h.trackImportSvc.ImportTracks(ctx, ownerID, trackType, coordinateSystem, files)
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"results": results}})
+}
+
 func (h *Handler) UpdateTrack(ctx context.Context, c *app.RequestContext) {
 	if h == nil || h.trackRepo == nil {
 		c.JSON(http.StatusInternalServerError, utils.H{"error": "track repository not configured"})

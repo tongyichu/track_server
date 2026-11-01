@@ -332,6 +332,40 @@ func GetBucketID(uid int64) int64 {
 	return uid % config.OSSFileBucketSize
 }
 
+// UploadUserObject 由服务端直接把本地文件上传到指定用户的隔离目录
+// （<prefix>/<bucketID>/，与客户端 STS 上传目录一致），返回客户端同口径的公开访问 URL。
+// 仅供管理后台批量导入等服务端场景使用；文件名校验与客户端 buildObjectKey 对齐。
+func (s *OSSTokenService) UploadUserObject(userID int64, fileName, localPath string) (string, error) {
+	if s == nil {
+		return "", errors.New("oss sts service is nil")
+	}
+	if userID <= 0 {
+		return "", invalidArg("user_id must be > 0")
+	}
+	fileName = strings.TrimSpace(fileName)
+	if fileName == "" || strings.ContainsAny(fileName, `/\`) {
+		return "", invalidArg("invalid file name")
+	}
+	base := strings.Trim(s.ossUploadPrefix, "/")
+	if base == "" {
+		base = config.DefaultOSSPathPrefix
+	}
+	dir := fmt.Sprintf("%s/%d/", base, GetBucketID(userID))
+	objectKey := fmt.Sprintf("%s%d_%s", dir, time.Now().UnixMilli(), fileName)
+	if err := s.UploadLocalFileToOSS(objectKey, localPath); err != nil {
+		return "", err
+	}
+	host := strings.TrimPrefix(strings.TrimPrefix(strings.TrimSpace(s.ossEndpoint), "https://"), "http://")
+	host = strings.TrimRight(host, "/")
+	if host == "" {
+		if s.ossRegion == "" {
+			return "", errors.New("oss endpoint/region is not configured")
+		}
+		host = "oss-" + s.ossRegion + ".aliyuncs.com"
+	}
+	return fmt.Sprintf("https://%s.%s/%s", s.ossBucket, host, objectKey), nil
+}
+
 // GetReadCredential 为指定 userID 申请一份“仅允许读取”的临时凭证。
 //
 // 目录隔离：相比 GetUploadCredential，读权限放宽到“用户目录的上一层”，

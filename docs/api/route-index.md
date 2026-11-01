@@ -121,7 +121,10 @@
 | 验证邮件并重新设置密码 | POST | `/admin/api/password-recovery/complete` | 否 | [admin-accounts.md](admin-accounts.md) |
 | 最近后台操作日志（可选 username 精确筛选） | GET | `/admin/api/audit-logs` | 管理员 session | [admin-accounts.md](admin-accounts.md) |
 | 后台轨迹列表（含 missing 缺项筛选） | GET | `/admin/api/tracks` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |
+| 后台批量导入轨迹 | POST | `/admin/api/tracks/import` | 轨迹操作 | [admin-tracks.md](admin-tracks.md) |
 | 后台轨迹详情 | GET | `/admin/api/tracks/:track_id` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |
+| 单条轨迹重新识别 | POST | `/admin/api/tracks/:track_id/place-refresh` | 轨迹操作 | [admin-tracks.md](admin-tracks.md) |
+| 轨迹地图高德配置 / 服务代理 | GET | `/admin/api/tracks/map-config`、`/admin/api/tracks/amap-service` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |
 | 单条轨迹景点候选 | GET | `/admin/api/tracks/:track_id/place-candidates` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |
 | 轨迹景点候选队列（兼容） | GET | `/admin/api/place-candidates` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |
 | 确认轨迹景点候选 | POST | `/admin/api/place-candidates/:track_id/confirm` | 轨迹操作 | [admin-tracks.md](admin-tracks.md) |

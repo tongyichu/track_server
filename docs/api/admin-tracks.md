@@ -48,3 +48,31 @@
 只读用户可以查看候选，操作按钮仅对轨迹 write 用户显示。确认关联直接生效，忽略需确认；处理期间锁定候选区按钮，完成后刷新来源列表。候选操作独立于基础资料表单，不自动保存未提交的轨迹字段。过期/已变化候选操作失败后收起旧选项，允许刷新读取当前状态。
 
 `GET /admin/api/place-candidates` 保留为兼容和内部队列读取接口，归属轨迹查看权限，页面不再加载全局队列。
+
+## 批量导入轨迹
+
+`POST /admin/api/tracks/import`（轨迹管理 write 权限，multipart/form-data）把轨迹文件批量导入并归属给指定内部人员：
+
+| 字段 | 说明 |
+| --- | --- |
+| `files` | 轨迹文件（JSON / GeoJSON / KML / KMZ），可多选，单次最多 50 个 |
+| `owner_user_id` | 归属人用户 ID，必须是 `is_internal` 内部人员 |
+| `track_type` | 运动类型 code（hiking/running/climbing/riding/driving），默认 `hiking`，整批统一 |
+| `coordinate_system` | 原始文件坐标系 `WGS84` / `GCJ02` / `BD09`，默认 `WGS84` |
+
+响应 `{code:0,data:{results:[{file_name, track_id?, title?, error?}]}}`，逐文件独立成功或失败，互不影响。
+
+处理流程：服务端解析轨迹点（复用地图索引解析器，受原始文件大小上限约束）→ 计算距离/起止时间/耗时/爬升/均速 → 原始文件由服务端直传 OSS 归属人用户目录 → 走 `TrackService.CreateTrack` 建档（`source_tag=manual_seed`、已完成状态），自动排队地图索引并结算成就。城市与 locate_addr 由内置行政区目录按轨迹中位点（转 GCJ02 后）离线解析，未命中留空；标题复用标题回填的生成规则。不生成预览四图与路线描述（按 auto/v0 口径留空），可后续用客户端 DevMode 补图/补齐。OSS 未配置时导入接口不可用。
+
+## 轨迹详情、重新识别与人工候选放宽
+
+`GET /admin/api/tracks/:track_id` 返回 `{code:0,data:{track, geo?}}`：
+
+- `track`：轨迹持久化字段；`track.primary_scenic_spot={id,name}` 为当前主景点（自动归属或人工确认），无则省略。
+- `geo`：地图索引简化轨迹线 `{simplified_polyline, coordinate_system, start_lat/lng, end_lat/lng}`，坐标为 GCJ02，可直接在高德地图绘制；无索引时省略。
+
+`POST /admin/api/tracks/:track_id/place-refresh`（轨迹操作权限）：同步对单条轨迹重新执行景点识别，复用后台识别任务同一互斥锁与供应商配额；任务忙返回 409，识别未启用 503，无可用地图索引 404。成功后前端重新读取候选。
+
+`GET /admin/api/tracks/:track_id/place-candidates` 的人工候选集合放宽：除围住的景点（`enclosed_poi`）外，还包含采样途经的附近景点（`nearby` 且 `matched_samples≥1`，按 place_id 去重）；自动判定为 `unmatched` 的识别记录同样可读取候选并由人工确认。`confirm` 接受上述任一候选，主景点方法记录为对应 `kind`。`missing=place_candidate` 缺项筛选与全局候选队列仍只统计自动规则的 `candidate` 状态，不受放宽影响。
+
+`GET /admin/api/tracks/map-config`（轨迹查看）：返回高德 Web(JS API) `key` 与 `service_host=/admin/api/tracks/amap-service`，供轨迹详情地图使用；`GET /admin/api/tracks/amap-service` 为同源高德服务代理（安全密钥不下发浏览器）。与景点页 `/scenic-spots/map-config` 同一配置，仅权限归属不同。

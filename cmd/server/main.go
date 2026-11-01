@@ -624,6 +624,9 @@ func main() {
 		adminModule.Handler.SetTrackSubmissionService(trackSubmissionSvc)
 		adminModule.Handler.SetScenicSpotCatalogService(scenicSpotCatalogSvc)
 		adminModule.Handler.SetTrackPlaceService(trackPlaceSvc)
+		if ossTokenSvc != nil {
+			adminModule.Handler.SetTrackImportService(service.NewAdminTrackImportService(trackSvc, ossTokenSvc))
+		}
 	}
 	defer adminModule.Close()
 	adminModule.RegisterRoutes(h)
