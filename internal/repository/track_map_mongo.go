@@ -467,8 +467,11 @@ func (r *MongoTrackMapRepository) ListRouteGroups(ctx context.Context, filter mo
 func (r *MongoTrackMapRepository) ListRouteGroupSummaries(ctx context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackRouteGroup, error) {
 	limit := normalizeTrackMapQueryLimit(filter.Limit)
 	opts := options.Find().
-		SetSort(bson.D{{Key: "member_count", Value: -1}, {Key: "updated_at", Value: -1}}).
+		SetSort(bson.D{{Key: "member_count", Value: -1}, {Key: "updated_at", Value: -1}, {Key: "_id", Value: 1}}).
 		SetLimit(int64(limit))
+	if filter.Offset > 0 {
+		opts.SetSkip(int64(filter.Offset))
+	}
 	cur, err := r.groups.Find(ctx, mongoTrackRouteGroupFilter(filter), opts)
 	if err != nil {
 		return nil, err
@@ -483,6 +486,10 @@ func (r *MongoTrackMapRepository) ListRouteGroupSummaries(ctx context.Context, f
 		items = append(items, &group)
 	}
 	return items, cur.Err()
+}
+
+func (r *MongoTrackMapRepository) CountRouteGroupSummaries(ctx context.Context, filter models.TrackMapQueryFilter) (int64, error) {
+	return r.groups.CountDocuments(ctx, mongoTrackRouteGroupFilter(filter))
 }
 
 func (r *MongoTrackMapRepository) ListAllRouteGroups(ctx context.Context) ([]*models.TrackRouteGroup, error) {
@@ -878,6 +885,17 @@ func mongoTrackRouteGroupFilter(filter models.TrackMapQueryFilter) bson.M {
 	}
 	if filter.CityCode != "" {
 		conds = append(conds, bson.M{"city_codes": filter.CityCode})
+	}
+	if len(filter.CityCodes) > 0 {
+		codes := make([]string, 0, len(filter.CityCodes))
+		for _, code := range filter.CityCodes {
+			if code = strings.TrimSpace(code); code != "" {
+				codes = append(codes, code)
+			}
+		}
+		if len(codes) > 0 {
+			conds = append(conds, bson.M{"city_codes": bson.M{"$in": codes}})
+		}
 	}
 	if filter.BBox != nil {
 		conds = append(conds, bson.M{

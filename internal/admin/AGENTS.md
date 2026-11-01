@@ -163,7 +163,7 @@ internal/admin/
 | PUT | `/admin/api/feedbacks/:feedback_id/status` | 鉴权 | 更新反馈处理状态与用户可见 `reply`；`resolved` 时 `reply` 必填 |
 | GET | `/admin/api/feedbacks/:feedback_id/images/:image_id` | 鉴权 | 读取反馈图片 |
 | GET | `/admin/api/analytics/sync-summaries` | 鉴权 | 埋点 OSS 同步摘要列表，支持 `status` / `limit` / `offset` |
-| GET | `/admin/api/route-groups` | 鉴权 | 路线组列表，支持 `track_type` / `city_code` / `limit`；返回 `area_id` 及目录区域摘要 |
+| GET | `/admin/api/route-groups` | 鉴权 | 路线组列表，支持 `track_type` / `province_code`（服务端展开为省内城市集合）/ `city_code` 筛选与 `limit` / `offset` 分页；返回 `total`、`next_offset`、`has_more`、`area_id` 及目录区域摘要 |
 | GET | `/admin/api/route-groups/:group_id` | 鉴权 | 路线组详情、`area_id` 对应区域信息与成员轨迹 |
 | PUT | `/admin/api/route-groups/:group_id/name` | 鉴权 | 人工改名 |
 | POST | `/admin/api/route-groups/:group_id/merge` | 鉴权 | 将 `source_group_id` 合并到当前路线组，并归档源路线组 |
@@ -296,7 +296,8 @@ GET /admin/api/users
 **运营聚合路线**：
 ```
 [admin UI] /admin/route_groups.html
-  → GET /admin/api/route-groups?track_type=&city_code=
+  → GET /admin/api/route-groups?track_type=&province_code=&city_code=&limit=&offset=
+       → 运动类型为 icon+文字下拉，省→市级联；列表按关联区域分组成可展开的两级结构（区域 → 路线组），路线组行点「管理」打开详情弹窗
   → GET /admin/api/route-groups/:group_id 查看成员轨迹与 geo index
   → TrackRouteGroupService 按已存 area_id 补区域名称、类型、城市与介绍页链接
   → PUT /admin/api/route-groups/:group_id/name {name}

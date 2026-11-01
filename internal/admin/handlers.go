@@ -2066,13 +2066,38 @@ func (h *Handler) ListRouteGroups(ctx context.Context, c *app.RequestContext) {
 		TrackType: strings.TrimSpace(string(c.Query("track_type"))),
 		CityCode:  strings.TrimSpace(string(c.Query("city_code"))),
 		Limit:     parseAdminListLimit(string(c.Query("limit"))),
+		Offset:    parseAdminListOffset(string(c.Query("offset"))),
 	}
-	items, err := h.routeGroupSvc.ListRouteGroupSummaries(ctx, filter)
+	if provinceCode := strings.TrimSpace(string(c.Query("province_code"))); provinceCode != "" {
+		filter.CityCodes = adminCityCodesOfProvince(provinceCode)
+	}
+	items, total, err := h.routeGroupSvc.ListRouteGroupSummaries(ctx, filter)
 	if err != nil {
 		writeAdminRouteGroupError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"items": items, "total": len(items)}})
+	nextOffset := filter.Offset + len(items)
+	hasMore := int64(nextOffset) < total
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"items": items, "total": total, "next_offset": nextOffset, "has_more": hasMore}})
+}
+
+// adminCityCodesOfProvince 展开省份 Code 为该省全部城市 Code（含省级 Code 本身），用于路线组省份筛选。
+func adminCityCodesOfProvince(provinceCode string) []string {
+	codes := []string{provinceCode}
+	for _, option := range config.CityOptions() {
+		if option.Level == "city" && option.ProvinceCode == provinceCode {
+			codes = append(codes, option.Code)
+		}
+	}
+	return codes
+}
+
+func parseAdminListOffset(raw string) int {
+	offset, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil || offset < 0 {
+		return 0
+	}
+	return offset
 }
 
 // GetRouteGroup 处理 GET /admin/api/route-groups/:group_id

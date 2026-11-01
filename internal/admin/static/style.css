@@ -866,3 +866,39 @@ table.admin-audit-table { width: 100%; min-width: 900px; table-layout: fixed; }
 .correction-config-table { min-width: 720px; }
 .correction-config-table td:nth-child(-n+2) { min-width: 250px; }
 .feedback-track-context { margin-top: 14px; padding: 14px; border: 1px solid var(--tblr-border-color); border-radius: 10px; overflow-wrap: anywhere; }
+
+/* 地图模式：运动类型下拉（icon + 文字）与省市级联 */
+.route-groups-toolbar .route-type-field { display: grid; gap: 5px; min-width: 210px; width: min(240px, 100%); color: var(--tblr-secondary-color); font-size: 12px; font-weight: 550; }
+.route-type-select { position: relative; }
+.route-type-toggle { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 38px; padding: 6px 12px; border: 1px solid var(--tblr-border-color); border-radius: var(--tblr-border-radius); background: var(--tblr-bg-forms); color: var(--tblr-body-color); font-size: 13px; cursor: pointer; }
+.route-type-toggle:focus-visible { outline: 2px solid var(--tblr-primary); outline-offset: 1px; }
+.route-type-toggle-label { flex: 1; text-align: left; }
+.route-type-toggle-caret { width: 8px; height: 8px; border-right: 2px solid var(--tblr-secondary-color); border-bottom: 2px solid var(--tblr-secondary-color); transform: rotate(45deg) translateY(-2px); }
+.route-type-menu { position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; right: 0; display: grid; gap: 2px; padding: 6px; border: 1px solid var(--tblr-border-color); border-radius: 10px; background: var(--tblr-bg-surface); box-shadow: 0 8px 24px rgba(0, 0, 0, .12); }
+.route-type-option { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 10px; border: none; border-radius: 7px; background: transparent; color: var(--tblr-body-color); font-size: 13px; text-align: left; cursor: pointer; }
+.route-type-option:hover, .route-type-option:focus-visible { background: rgba(var(--tblr-primary-rgb), .08); outline: none; }
+.route-type-option.active { background: rgba(var(--tblr-primary-rgb), .12); font-weight: 600; }
+.route-type-option-icon { flex: 0 0 18px; width: 18px; height: 18px; -webkit-mask-size: contain; mask-size: contain; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; -webkit-mask-position: center; mask-position: center; }
+.route-type-option-icon-all { position: relative; border: 1.5px solid var(--tblr-secondary-color); border-radius: 50%; background: transparent; }
+.route-type-badge-icon { display: inline-block; width: 14px; height: 14px; margin-right: 5px; vertical-align: -2px; -webkit-mask-size: contain; mask-size: contain; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; -webkit-mask-position: center; mask-position: center; }
+
+/* 地图模式：按区域分组的可展开列表 */
+.route-group-table .route-area-header > td { padding: 0; background: var(--tblr-bg-surface-secondary); border-top: 2px solid var(--tblr-border-color); }
+.route-area-toggle { display: flex; align-items: center; gap: 10px; width: 100%; padding: 11px 14px; border: none; background: transparent; color: var(--tblr-body-color); font-size: 13px; text-align: left; cursor: pointer; }
+.route-area-toggle:hover { background: rgba(var(--tblr-primary-rgb), .05); }
+.route-area-chevron { flex: 0 0 auto; width: 8px; height: 8px; border-right: 2px solid var(--tblr-secondary-color); border-bottom: 2px solid var(--tblr-secondary-color); transform: rotate(45deg); transition: transform .15s ease; }
+.route-area-toggle[aria-expanded="false"] .route-area-chevron { transform: rotate(-45deg); }
+.route-area-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.route-area-title strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.route-area-cities { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--tblr-secondary-color); font-size: 12px; }
+.route-area-type-icons { display: flex; align-items: center; gap: 6px; }
+.route-area-type-icon { width: 16px; height: 16px; }
+.route-area-stats { flex: 0 0 auto; color: var(--tblr-secondary-color); font-size: 12px; font-variant-numeric: tabular-nums; }
+.route-group-table tr.route-group-row-collapsed { display: none; }
+.route-list-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 14px; padding: 0 4px; }
+.route-list-footer .hint { margin: 0; }
+
+@media (max-width: 767px) {
+  .route-groups-toolbar .route-type-field, .route-groups-toolbar label { width: 100%; min-width: 0; }
+  .route-area-cities, .route-area-type-icons { display: none; }
+}

@@ -405,10 +405,14 @@ type TrackMapPoint struct {
 type TrackMapQueryFilter struct {
 	TrackType string
 	CityCode  string
+	// CityCodes matches groups covering any of the given cities (admin province filter).
+	CityCodes []string
 	BBox      *TrackMapBBox
 	Center    *TrackMapPoint
 	RadiusM   int
 	Limit     int
+	// Offset skips leading rows for admin pagination; defaults to 0.
+	Offset int
 }
 
 // TrackMapCoverTrack is a lightweight representative track payload.
