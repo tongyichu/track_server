@@ -283,10 +283,8 @@
       setText('statProcessing', stats.processing);
       setText('statResolved', stats.resolved);
       setText('statIgnored', stats.ignored);
-      setText('statOver24', stats.pending_over_24h);
-      setText('statOver72', stats.pending_over_72h);
     } catch (_) {
-      ['statPending', 'statProcessing', 'statResolved', 'statIgnored', 'statOver24', 'statOver72'].forEach(function (id) { setText(id, '—'); });
+      ['statPending', 'statProcessing', 'statResolved', 'statIgnored'].forEach(function (id) { setText(id, '—'); });
     }
   }
 

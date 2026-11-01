@@ -1,5 +1,44 @@
 # 工作交接：协议 H5 页面（2026-10-13）
 
+## 2026-11-01：部署中文操作日志与后台布局修复
+
+- 用户明确要求部署 Server。按 android-track-release 只处理 track_server 的 Git 同步/提交/推送、镜像构建推送和生产更新，不发布 App。main fetch 后与 origin/main 一致，无合并变化，复用同源码已经通过的 Go 构建、JS 语法与差异检查，不扩大自动化测试。
+- 发布范围为中文操作日志说明及折叠原始请求详情、共享卡片默认内容边距、账号列表显式满宽表格、反馈列表标题/筛选布局及表格局部滚动，删除反馈页待处理时效卡片并只保留四种处理状态数量；包含相应 AGENTS 布局约束和文档。没有数据表、配置或权限变更，统计接口的时效字段保持兼容。
+- 生产旧更新脚本存在宽匹配历史容器/镜像风险，本轮继续使用已经核实的精确容器替换流程：先验证已推送镜像的 manifest/config/source revision，再仅停止并移除 track_server_go，以确切 image ID 启动；保留 .env、持久化目录、历史容器和旧镜像。远端脚本兼容 Python 3.6，ping 正文按纯文本 hello track app 核对。后台内存会话因重启失效，持久化账号和权限保留。
+- 回执目录 `/private/tmp/track-admin-audit-layout-deploy-md4tr31q`；本节为部署前记录，最终 Git 提交/推送、镜像、容器和内外网健康结果以该目录回执及本轮最终回复为准，不能仅据本节认定上线成功。此前 handoff 已完整归档至 `docs/handoff/history_handoff/HANDOFF-20261101-123244.md`。
+
+## 2026-11-01：反馈页边距、筛选对齐与移除待处理时效卡片（本地实现，未部署）
+
+- 用户先要求反馈与纠错页也修正边距，随后明确取消“待处理时效”统计，并指出反馈列表筛选元素没有对齐。本轮将两项要求合并完成，保留账号中文日志和卡片统一内边距的先前未提交改动。
+- 反馈列表标题与“纠错选项”入口复用可换行的 admin-section-heading；筛选栏移除 Bootstrap row（其负 gutter 会突破卡片留白），显式使用 admin-toolbar feedback-toolbar。最终采用 Grid 三个字段列与独立按钮组：标签和 40px 控件分成固定行，按钮最小 40px 并与输入控件底部对齐；1050px 以下按钮整组换行，767px 以下字段单列。分页提示移到工具栏外，空提示不占位，避免长提示挤歪按钮。
+- 反馈列表及纠错选项弹窗内表格包独立 table-responsive，宽内容只在相应表格区域内滚动；沿用共享桌面 18px/窄屏 14px 内容留白和已有弹窗 body 留白。详情处理表单没有 row 负边距，未扩大重构。
+- 删除“待处理时效”标题及 24/72 小时两张卡片、feedbacks.js 的对应 DOM 更新与错误恢复引用，以及失去用途的 aging/warning/danger CSS；顶部仅保留待处理、处理中、已处理、已关闭四种状态数量。服务端统计及工作台时效字段保持兼容，没有删除共享协议或改变业务查询、状态处理逻辑。
+- admin AGENTS 的布局约束补充普通工具栏不能直接借 row、标签和控件行高度、按钮分组换行、分页说明独立及宽表格局部滚动；API feedback 分册同步页面范围。无新增 API、表结构、依赖、配置或权限变化。
+- 最终 `go build ./...`、feedbacks.js 的 `node --check` 与 `git diff --check` 通过；静态搜索确认反馈页不存在 statOver24/statOver72/aging 卡片残留。按项目约定未新增/运行自动化测试、浏览器或接口自动化、生产操作；布局效果待用户手动验收，不宣称浏览器视觉检查通过。
+- AGENTS/freshness 仍报告既有仓库治理问题，报告 `/private/tmp/track-admin-feedback-spacing-agents.json`、`/private/tmp/track-admin-feedback-spacing-freshness.json`；更新前 handoff 已归档至 `docs/handoff/history_handoff/HANDOFF-20261101-122306.md`。
+- 本轮和此前中文日志/卡片边距修改均尚未提交、推送或部署。线上仍为 main/096c0c4，发布结果见 `/private/tmp/track-admin-ui-deploy-zpbd0l4a/receipt.md`。下次部署需一起包含这些未发布改动，生产更新仍须精确容器名操作，避免旧脚本宽匹配历史容器。
+
+## 2026-11-01：修复账号操作记录卡片贴边并固化布局规则（本地实现，未部署）
+
+- 用户提供截图 `/Users/foxcoder/Desktop/WX20261101-121541@2x.png`，指出“最近操作记录”标题、说明、账号筛选/刷新控件贴近卡片边缘，并要求把反复出现的边距问题写进后台 Agent 规则。本轮保留上一轮中文日志说明全部未提交修改。
+- 原因为 ui.js/enhanceCard 对无直接 H2 的卡片加 `.card.card-body` 到同一节点，但 style.css 的 `.panel.card { padding:0 }` 覆盖了该路径；原有内边距仅覆盖 `.panel.card > .card-body` 子节点结构。截图标题在 admin-section-heading 内，正好走同节点分支。之前实现时未检查到此共享样式覆盖。
+- 统一让子节点和同节点 card-body 都有默认桌面 18px、窄屏 14px 内边距，无需修改增强脚本或为截图标题单独添加 margin；同类卡片一并恢复正常留白。账号列表是纯表格，显式使用 p-0 保留原本满宽布局和单元格内边距；景点纯表格已有相同显式标记。没有直接 H2 的用户统计等区域已有更具体的布局规则，按原 CSS 优先级保留。
+- `internal/admin/AGENTS.md` 新增“卡片布局与边距约束”及提交前检查：标题/提示/工具栏不得贴边，两种增强结构都要覆盖，p-0 仅限刻意满宽区域，同时检查桌面/窄屏、空态/加载/报错/展开详情和长内容。规则描述根因与排查步骤，不仅重复“注意边距”。
+- `go build ./...` 和 `git diff --check` 通过。默认未新增/运行测试、浏览器或接口自动化、生产操作；截图与 CSS 级联为本轮定位依据，未声称实际浏览器视觉验收完成，功能界面由用户手动验收。
+- AGENTS 与 freshness 检查仍报告仓库既有元信息/超长文件等问题，报告 `/private/tmp/track-admin-card-padding-agents.json`、`/private/tmp/track-admin-card-padding-freshness.json`；更新前 handoff 归档至 `docs/handoff/history_handoff/HANDOFF-20261101-121756.md`。
+- 本轮边距修复及上轮中文行为日志都尚未提交、推送或部署；生产仍为 main/096c0c4，完整上次成功部署回执 `/private/tmp/track-admin-ui-deploy-zpbd0l4a/receipt.md`。下次部署须包含两轮未发布改动。
+
+## 2026-11-01：最近操作记录改为中文业务行为说明（本地实现，未部署）
+
+- 用户反馈账号管理的最近操作记录难懂，要求描述行为。本轮将原来的 method/path 主展示改成时间、操作人、中文操作内容、操作对象和结果，保留账号下拉筛选、请求竞态保护以及发起/结果合并，不改变存储或接口。
+- 新增 `static/audit_log.js`：按当前所有被审计接口的方法/路径映射业务行为，包含账号设置/改密、版本上传与发布、景点目录及来源/图片/关联处理、候选确认忽略、用户限制、轨迹编辑删除、投稿审核、路线组和反馈配置/处理等。只根据现有事实解释，旧记录无需迁移；未知动作回退“执行后台操作”并可查看原始请求。
+- `accounts.html` 在 accounts.js 前加载该模块；accounts.js 使用 DocumentFragment 一次性渲染，用 textContent 输出用户数据。原始方法、路径、HTTP 状态、记录编号、行为和结果说明放在“说明与请求详情”中；错误/待确认另显示常见原因。0 为结果待确认，2xx 仅表示请求成功返回，3xx 不再错误标为成功，4xx/5xx 为请求失败，不伪装成具体服务端错误正文。
+- 景点供应商资料回填注明景点页可自动分批触发，因此连续日志不一定是人工重复点击；不推定每条来源。批处理单条请求成功不等于所有项目完成。现有日志不含正文/字段差异，无法还原审核通过或驳回、具体启停、字段前后值、回复内容等，说明明确此边界，不猜测、不逐条读取业务库、不保存密码。
+- 更新 admin scoped AGENTS，要求新增审计动作同步中文映射并保持结果语义/历史信息边界，账号 API 分册同步展示说明。无新增 API、数据库字段、依赖或配置。
+- `go build ./...` 通过；audit_log.js/accounts.js 的 `node --check` 和 `git diff --check` 通过。按项目约定未新增或运行自动化测试、接口或浏览器自动化，也未操作生产，具体界面由用户手动验收。
+- AGENTS/freshness 检查仍有原有超长文件、根元信息等问题，未声称全绿；报告 `/private/tmp/track-admin-audit-description-agents.json` 和 `/private/tmp/track-admin-audit-description-freshness.json`。更新前 handoff 已完整归档至 `docs/handoff/history_handoff/HANDOFF-20261101-121429.md`。
+- 本轮尚未提交、推送或部署。当前线上为已部署 main/096c0c453b029206abb9f26099fde24d07d2ac3a；上一轮发布内外健康 200，3 个持久化账号正常、静态资源版本 d9873391763537a5da93，完整成功回执 `/private/tmp/track-admin-ui-deploy-zpbd0l4a/receipt.md`，不能将本轮中文日志展示视为已上线。
+
 ## 2026-11-01：部署后台交互、轨迹候选与页面性能优化
 
 - 用户明确要求部署 Server。按 android-track-release 仅同步、提交、推送 track_server，再构建并推送 linux/amd64 镜像、精确更新生产容器；不修改或发布 App。main fetch 后与 origin/main 一致，无合并源码变化，复用本轮已通过的 Go 构建、相关 JS 语法检查与差异自查，不新增或运行自动化测试。
