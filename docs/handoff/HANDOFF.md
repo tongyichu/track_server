@@ -1,5 +1,26 @@
 # 工作交接：协议 H5 页面（2026-10-13）
 
+## 2026-11-01：本人邮箱验证、邮件找回密码与管理员重置迁移（本地实现，未部署）
+
+- 用户认可“邮件用于验证身份后自行设置新密码，不发送登录密码”，明确要求开发；过程中表示尚无邮件准备，要求检查现有 Server 支持哪家。只读核查生产 /root/.env 的配置项名称/是否存在，以及 Postfix 状态：已有阿里云 OSS/STS，没有 SMTP/邮件配置，Postfix/sendmail 未启动且没有 relay。未输出密钥、未开通云产品、未修改生产配置或发送真实邮件。推荐兼容阿里云邮件推送的加密 SMTP，实际启用仍需发信域名、发信地址、SMTP 专用凭证。
+- `email_challenges.go` 在现有后台账号 JSON 中保存邮箱、验证时间、三用途挑战、发信冷却/窗口计数，沿用 MySQL/Mongo CAS，无新表或 AccountStorage 接口变更。8 位验证码随机生成、10 分钟/一次有效/最多 5 次错误；用途隔离、随机盐和服务端 HMAC-SHA256 摘要，密钥由 SMTP 专用密码独立派生，不写账号库；轮换凭证会使旧码失效。错误次数与成功消耗同样提交 CAS；每用途间隔 60 秒、每账号每小时共 10 封，改密不重置限额。
+- `email_sender.go` 仅证书校验通过的 TLS 1.2+ SMTP（465 隐式 TLS，或强制 STARTTLS），总并发 2、连接和操作超时，不回退明文/本地 sendmail，不记录 SMTP 响应、凭证、邮件正文或代码。`email_recovery.go` 通过 Module.ConfigureEmailRecovery 注入，公开申请 2 worker/16 队列并在查账号之前统一返回 202，隐藏匹配与 SMTP 耗时差异；socket peer IP 限制有界保存 4096 项，不信任客户端转发头。公开完成另有 2 路并发上限，防止无限并发 bcrypt/CAS；队列不持久化，挑战/配额持久化，具体边界已文档化。
+- 自己绑定邮箱需当前密码及新邮箱验证码，更换需先验证原邮箱，再验证新邮箱；接口只取 session 本人，不接受目标账号。临时密码用户先改密才可绑定。邮箱必须唯一，不能被管理员账户编辑覆盖；完整邮箱只给本人 GET security，账号列表只新增 recovery_email_bound/can_reset_password。绑定/换绑成功、本人改密、找回和停用清理旧挑战并使会话失效；发送安全通知为尽力投递，不因通知失败误报已完成的变更失败。
+- 新增公开 GET `/admin/forgot-password.html`，GET `/admin/api/password-recovery/status`、POST request/complete；新增本人 GET `/admin/api/security`、POST `/security/email/current-code|send-code|verify`。`permissions.go` 允许已完成首次改密的所有登录账号管理本人邮箱，包括无业务页权限/只读操作员；现有 `/admin/password.html` 改为“账号安全”，齿轮入口同步。公开完成校验同源、密码确认、验证码，并在变更前单独持久化审计，失败不能绕过日志；actor=email-recovery 显示为“邮箱找回（未登录）”，不能把失败申请认作用户本人操作。没有邮件能力时明确 503/页面不可用，不伪造发送成功，原登录/本人改密仍可用。
+- 管理员重置分阶段退出：已验证邮箱的账号立即在 UI/服务端禁止代重置；未绑定账号在迁移期保留“应急重置”和提示。全部启用账号完成绑定后永久写入 legacy_password_reset_disabled，之后新建未绑定账号或 SMTP 暂不可用都不重开旧入口。新增账号仍需临时密码首次改密后及时验证邮箱；原邮箱丢失或未绑定账号的身份恢复不提供绕过入口，迁移安排与回滚旧 JSON 写回风险见文档。
+- main/config 注入 ADMIN_SMTP_HOST/PORT/USERNAME/PASSWORD/FROM/TLS_MODE；默认无配置关闭邮件，非法配置告警不含凭证。新增 `deploy/admin-email.env.example`（无真实凭证）、`docs/admin-email-recovery.md`；API 分册、README/路由索引与 root/admin AGENTS 同步行为和约束。此前固定操作记录列宽的未部署改动完整保留，所有更改均尚未提交、推送或部署；线上仍为 7312801，旧成功回执 `/private/tmp/track-admin-audit-layout-deploy-md4tr31q/receipt.md`。
+- 最终 `go build ./...` 通过；account_security/forgot_password/accounts/audit_log/shell/password 六个 JS 的 `node --check`、`git diff --check` 通过。按根约定未新增/运行单元、集成、接口或浏览器自动化，未使用真实账号发送邮件；收件箱投递、验证码并发/错误/过期、权限隔离、迁移关闭和界面由用户手动验收。此处不能声称实际邮件链路已可用。
+- AGENTS 校验仍为 12 个历史结构/超长文件问题、169 条 warning（比原 161 新增的 8 条是已在 routes.go 注册的 HTTP URL 被规则器当文件路径检查，并非缺失文件），freshness 根元信息问题仍在。报告 `/private/tmp/track-admin-email-recovery-agents.json` 与 `/private/tmp/track-admin-email-recovery-freshness.json`，不宣称全绿；全局 ~/.codex/AGENTS.md 原本为空，未擅改。更新前 handoff 已完整归档到 `docs/handoff/history_handoff/HANDOFF-20261101-185341.md`。
+
+## 2026-11-01：固定最近操作记录列宽，避免详情展开挤动表格（本地实现，未部署）
+
+- 用户反馈最近操作记录展开/收起详情时表格抖动明显，明确要求从一开始定义各列宽度权重。本轮从干净的 main/7312801 工作树开始，只修改操作记录表结构、样式及对应规则文档。
+- accounts.html 为操作记录增加语义 colgroup，style.css 使用 table-layout:fixed，时间/操作人/操作内容/操作对象/结果比例为 18%/12%/34%/22%/14%。比例由列定义确定，加载/空态 colspan 和展开后的长文本不再参与自动列宽分配；详情展开仍允许正常增加行高，不隐藏正文。
+- 桌面表格最小宽度 900px，不足时在已有 table-responsive 区域内横向滚动。长方法路径、账号/对象 ID、结果标签在单元格内换行，移除详情原本 160px 最小宽度和 480px 固定上限，改为服从单元格宽度。767px 以下保留共享移动卡片布局，隐藏 colgroup、取消最小表宽，并让操作内容/结果说明的元素始终放在卡片内容列。
+- admin scoped AGENTS 增加“展开详情不重分配列宽”约束，固定上述比例、局部滚动和移动卡片边界；无 API、日志存储、权限、筛选或请求逻辑变化，不修改根 AGENTS 或业务协议。
+- `go build ./...` 与 `git diff --check` 通过。无 JS 修改，不重复无关语法检查；按项目约定未新增或运行自动化测试、浏览器或接口自动化，未操作生产，实际展开/收起效果待用户手动验收。AGENTS/freshness 校验仍有原有治理问题，报告 `/private/tmp/track-admin-audit-columns-agents.json` 和 `/private/tmp/track-admin-audit-columns-freshness.json`，未声称检查全绿。
+- 更新前完整 handoff 已归档到 `docs/handoff/history_handoff/HANDOFF-20261101-181448.md`。本轮尚未提交、推送或部署；上一轮 main/7312801 已成功部署，内外健康 200、3 个账号加载正常，资源版本 1c3dc1b3de2850b6845d，成功回执 `/private/tmp/track-admin-audit-layout-deploy-md4tr31q/receipt.md`。
+
 ## 2026-11-01：部署中文操作日志与后台布局修复
 
 - 用户明确要求部署 Server。按 android-track-release 只处理 track_server 的 Git 同步/提交/推送、镜像构建推送和生产更新，不发布 App。main fetch 后与 origin/main 一致，无合并变化，复用同源码已经通过的 Go 构建、JS 语法与差异检查，不扩大自动化测试。

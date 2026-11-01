@@ -12,11 +12,25 @@
   <main class="container wide">
     <div class="page-heading"><div><h1>账号管理</h1><p>维护后台账号、身份和页面权限</p></div><div class="d-flex gap-2"><button id="refreshAccounts" class="btn btn-outline-secondary">刷新</button><button id="createAccount" class="btn btn-primary">新增账号</button></div></div>
     <p id="accountsError" class="alert alert-danger" hidden role="alert"></p>
-    <section class="panel p-0"><div class="table-responsive"><table class="table data"><thead><tr><th>登录名</th><th>显示名称</th><th>身份</th><th>状态</th><th>最近登录</th><th>操作</th></tr></thead><tbody id="accountsList"></tbody></table></div></section>
+    <p id="emailMigrationHint" class="alert alert-info" hidden>邮箱找回迁移中：已验证邮箱的账号由本人管理密码；未完成绑定的账号暂保留应急重置。全部启用账号完成绑定后，应急入口永久关闭。请各账号在“账号安全”中验证本人邮箱。</p>
+    <section class="panel p-0"><div class="table-responsive"><table class="table data"><thead><tr><th>登录名</th><th>显示名称</th><th>身份</th><th>状态</th><th>找回邮箱</th><th>最近登录</th><th>操作</th></tr></thead><tbody id="accountsList"></tbody></table></div></section>
     <section class="panel mt-3">
       <div class="admin-section-heading flex-wrap gap-2"><h2>最近操作记录</h2><div class="d-flex flex-wrap align-items-center gap-2"><label for="auditAccountFilter" class="mb-0">账号</label><select id="auditAccountFilter" class="form-select form-select-sm w-auto" style="max-width:100%" disabled><option value="">全部账号</option></select><button id="refreshAudit" class="btn btn-sm btn-outline-secondary">刷新记录</button></div></div>
       <p id="auditHint" class="hint">展示所有账号最近的修改、处理和发布等操作，同一操作的发起与结果合并显示，不包含普通浏览记录。</p>
-      <p id="auditError" class="error" role="alert"></p><div class="table-responsive"><table class="table data admin-audit-table"><thead><tr><th>时间</th><th>操作人</th><th>操作内容</th><th>操作对象</th><th>结果</th></tr></thead><tbody id="auditList" aria-live="polite"></tbody></table></div>
+      <p id="auditError" class="error" role="alert"></p>
+      <div class="table-responsive">
+        <table class="table data admin-audit-table">
+          <colgroup>
+            <col class="admin-audit-col-time" />
+            <col class="admin-audit-col-actor" />
+            <col class="admin-audit-col-action" />
+            <col class="admin-audit-col-target" />
+            <col class="admin-audit-col-result" />
+          </colgroup>
+          <thead><tr><th>时间</th><th>操作人</th><th>操作内容</th><th>操作对象</th><th>结果</th></tr></thead>
+          <tbody id="auditList" aria-live="polite"></tbody>
+        </table>
+      </div>
     </section>
   </main>
   <div class="modal modal-blur fade" id="accountModal" tabindex="-1" aria-labelledby="accountTitle" aria-hidden="true"><div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable"><form id="accountForm" class="modal-content">

@@ -110,8 +110,15 @@
 | 后台账号列表与页面目录 | GET | `/admin/api/accounts` | 管理员 session | [admin-accounts.md](admin-accounts.md) |
 | 新增后台账号 | POST | `/admin/api/accounts` | 管理员 session | [admin-accounts.md](admin-accounts.md) |
 | 调整身份、状态与页面权限 | PUT | `/admin/api/accounts/:username` | 管理员 session | [admin-accounts.md](admin-accounts.md) |
-| 重置后台账号密码 | POST | `/admin/api/accounts/:username/reset-password` | 管理员 session | [admin-accounts.md](admin-accounts.md) |
+| 迁移期应急重置后台密码 | POST | `/admin/api/accounts/:username/reset-password` | 管理员 session，且目标未验证邮箱/旧入口未关闭 | [admin-accounts.md](admin-accounts.md) |
 | 修改本人后台密码 | POST | `/admin/api/password` | 后台 session | [admin-accounts.md](admin-accounts.md) |
+| 本人找回邮箱状态 | GET | `/admin/api/security` | 本人后台 session | [admin-accounts.md](admin-accounts.md) |
+| 原邮箱验证码 | POST | `/admin/api/security/email/current-code` | 本人后台 session | [admin-accounts.md](admin-accounts.md) |
+| 新邮箱验证码 | POST | `/admin/api/security/email/send-code` | 本人后台 session | [admin-accounts.md](admin-accounts.md) |
+| 验证并保存本人邮箱 | POST | `/admin/api/security/email/verify` | 本人后台 session | [admin-accounts.md](admin-accounts.md) |
+| 邮件找回能力 | GET | `/admin/api/password-recovery/status` | 否 | [admin-accounts.md](admin-accounts.md) |
+| 申请邮件找回 | POST | `/admin/api/password-recovery/request` | 否 | [admin-accounts.md](admin-accounts.md) |
+| 验证邮件并重新设置密码 | POST | `/admin/api/password-recovery/complete` | 否 | [admin-accounts.md](admin-accounts.md) |
 | 最近后台操作日志（可选 username 精确筛选） | GET | `/admin/api/audit-logs` | 管理员 session | [admin-accounts.md](admin-accounts.md) |
 | 后台轨迹列表（含 missing 缺项筛选） | GET | `/admin/api/tracks` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |
 | 后台轨迹详情 | GET | `/admin/api/tracks/:track_id` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |

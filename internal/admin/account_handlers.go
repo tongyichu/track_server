@@ -98,6 +98,9 @@ func (a *Authenticator) HandleChangePassword(ctx context.Context, c *app.Request
 		return
 	}
 	a.store.DeleteUsername(sess.Username)
+	if a.recovery != nil && sess.Account.recoveryReady() {
+		a.recovery.notify(sess.Username, sess.Account.Email, "后台登录密码已修改，全部旧登录及旧验证码已失效。如非本人操作，请及时核实。")
+	}
 	c.JSON(200, utils.H{"code": 0, "data": utils.H{"status": "ok"}})
 }
 

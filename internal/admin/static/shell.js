@@ -118,7 +118,7 @@
     '<div class="admin-account-menu-heading">当前账号</div>',
     '<dl class="admin-account-details"><div><dt>登录账号</dt><dd id="accountMenuUsername"></dd></div><div><dt>名称</dt><dd id="accountMenuName"></dd></div><div><dt>身份</dt><dd id="accountMenuRole"></dd></div><div><dt>最近登录</dt><dd id="accountMenuLastLogin"></dd></div></dl>',
     '<div class="dropdown-divider"></div>',
-    '<a href="/admin/password.html" class="dropdown-item">' + passwordIcon + '<span>修改密码</span></a>',
+    '<a href="/admin/password.html" class="dropdown-item">' + passwordIcon + '<span>账号安全</span></a>',
     '<button id="logoutBtn" type="button" class="dropdown-item text-danger">' + logoutIcon + '<span>退出登录</span></button>',
     '<p id="accountMenuError" class="admin-account-menu-error" role="alert" hidden></p>',
     '</div></div>'

@@ -9,6 +9,10 @@ body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Ro
 .login-box button:not(.btn) { width: 100%; padding: 9px; background: #0070f3; color: #fff; border: 0; border-radius: 4px; font-size: 14px; cursor: pointer; }
 .login-box button:not(.btn):hover { background: #005bd1; }
 .login-box .btn { width: 100%; }
+.admin-auth-link { display: inline-block; margin-top: 16px; font-size: 13px; }
+.admin-recovery-box { max-width: 460px; }
+.admin-recovery-box p { overflow-wrap: anywhere; }
+.admin-password-panel[hidden], .admin-password-panel [hidden], .login-box [hidden] { display: none !important; }
 .login-box .error { color: #d93026; min-height: 18px; margin: 8px 0 0; font-size: 13px; }
 
 /* topbar */
@@ -820,11 +824,24 @@ table.data td.companion-table-state { padding: 32px 14px; color: var(--tblr-seco
 .admin-account-details > div { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 12px; align-items: start; }
 .admin-account-details dt { margin: 0; color: var(--tblr-secondary); font-size: 12px; font-weight: 400; }
 .admin-account-details dd { margin: 0; color: var(--tblr-body-color); font-size: 12px; font-weight: 500; text-align: right; overflow-wrap: anywhere; }
-.admin-audit-table td { vertical-align: top; overflow-wrap: anywhere; }
-.admin-audit-details { margin-top: 6px; min-width: 160px; max-width: 480px; font-size: 12px; color: var(--tblr-secondary-color); }
+table.admin-audit-table { width: 100%; min-width: 900px; table-layout: fixed; }
+.admin-audit-col-time { width: 18%; }
+.admin-audit-col-actor { width: 12%; }
+.admin-audit-col-action { width: 34%; }
+.admin-audit-col-target { width: 22%; }
+.admin-audit-col-result { width: 14%; }
+.admin-audit-table td { vertical-align: top; white-space: normal; overflow-wrap: anywhere; }
+.admin-audit-table .badge { max-width: 100%; white-space: normal; line-height: 1.5; text-align: left; }
+.admin-audit-details { width: 100%; min-width: 0; margin-top: 6px; font-size: 12px; color: var(--tblr-secondary-color); }
 .admin-audit-details summary { cursor: pointer; color: var(--tblr-primary); }
 .admin-audit-details p { margin: 6px 0 0; white-space: normal; overflow-wrap: anywhere; }
 .admin-audit-result-note { margin-top: 6px; max-width: 280px; font-size: 12px; white-space: normal; color: var(--tblr-secondary-color); }
+@media (max-width: 767px) {
+  table.admin-audit-table { min-width: 0; }
+  .admin-audit-table colgroup { display: none; }
+  .admin-audit-table td:nth-child(3) > *,
+  .admin-audit-table td:nth-child(5) > * { min-width: 0; grid-column: 2; }
+}
 .topbar .user .admin-account-menu .dropdown-item { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 40px; padding: 9px 10px; margin: 0; border: 0; border-radius: 7px; background: transparent; box-shadow: none; font-size: 13px; text-align: left; cursor: pointer; }
 .topbar .user .admin-account-menu .dropdown-item:hover, .topbar .user .admin-account-menu .dropdown-item:focus { background: var(--tblr-bg-surface-secondary); }
 .topbar .user .admin-account-menu .dropdown-item:disabled { opacity: .6; cursor: wait; }

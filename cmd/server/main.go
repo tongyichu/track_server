@@ -598,6 +598,9 @@ func main() {
 
 	// 后台账号独立持久化；环境变量仅用于首次初始化，数据库降级不放开后台鉴权。
 	adminModule := admin.NewModule(cfg.AdminAccounts, appReleaseSvc, ossTokenSvc, staticRoot, userRepo, trackRepo, collectRepo, trackMapRepo, companionRepo, analyticsRepo, userSvc, feedbackSvc, accountRestrictionSvc, trackRouteGroupSvc, adminAccountStorage)
+	if err := adminModule.ConfigureEmailRecovery(admin.SMTPConfig{Host: cfg.AdminSMTPHost, Port: cfg.AdminSMTPPort, Username: cfg.AdminSMTPUsername, Password: cfg.AdminSMTPPassword, From: cfg.AdminSMTPFrom, TLSMode: cfg.AdminSMTPTLSMode}); err != nil {
+		log.Print("admin email recovery unavailable: check account storage and SMTP configuration")
+	}
 	if adminModule != nil && adminModule.Handler != nil {
 		adminModule.Handler.SetDashboardStatisticsRepository(repository.NewAdminDashboardStatisticsRepository(
 			userRepo, trackRepo, collectRepo, loginLogRepo, navigationRepo, companionRepo,
