@@ -36,17 +36,30 @@
       <form id="companionSearch" class="companion-search" role="search">
         <label for="titleFilter" class="visually-hidden">搜索房间标题</label>
         <input id="titleFilter" type="search" maxlength="128" placeholder="搜索房间标题" />
+        <label for="ownerNameFilter" class="visually-hidden">搜索发起人名称</label>
+        <input id="ownerNameFilter" type="search" maxlength="128" placeholder="搜索发起人名称" />
+        <div class="companion-type-filter" id="trackTypeFilter">
+          <button type="button" class="btn btn-outline-secondary companion-type-toggle" id="trackTypeToggle" aria-haspopup="listbox" aria-expanded="false">
+            <span class="companion-type-current" id="trackTypeCurrent">全部类型</span>
+          </button>
+          <ul class="companion-type-menu" id="trackTypeMenu" role="listbox" aria-label="运动类型筛选" hidden></ul>
+        </div>
+        <label for="provinceFilter" class="visually-hidden">按省份筛选</label>
+        <select id="provinceFilter" class="form-select"><option value="">全部省份</option></select>
+        <label for="cityFilter" class="visually-hidden">按城市筛选</label>
+        <select id="cityFilter" class="form-select" disabled><option value="">全部城市</option></select>
         <button id="searchBtn" class="btn btn-primary" type="submit">搜索</button>
-        <button id="resetBtn" class="btn btn-outline-secondary" type="button" hidden>清除搜索</button>
+        <button id="resetBtn" class="btn btn-outline-secondary" type="button" hidden>清除筛选</button>
       </form>
+      <p class="hint companion-filter-hint">省份与城市按发起人资料所在地筛选</p>
       <div class="table-responsive">
       <table class="data companion-list-table" aria-label="同行房间列表">
         <thead>
           <tr>
-            <th>房间</th><th>运动类型</th><th>发起人 ID</th><th>房间状态</th><th>活动时间</th><th>操作</th>
+            <th>房间</th><th>运动类型</th><th>发起人</th><th>房间状态</th><th>开始时间</th><th>用时</th><th>参与人数</th><th>操作</th>
           </tr>
         </thead>
-        <tbody id="companionList"><tr><td colspan="6" class="companion-table-state">正在加载房间…</td></tr></tbody>
+        <tbody id="companionList"><tr><td colspan="8" class="companion-table-state">正在加载房间…</td></tr></tbody>
       </table>
       </div>
       <div class="companion-pagination">

@@ -25,7 +25,7 @@
 - 纠错处理结果与状态分离：corrected/unchanged 配 resolved，unverified 配 ignored；新版后台提交 revision 作条件更新，终态必须填写结果及用户可见回复，冲突返回 409 且保留草稿。处理人只从后台 session 取值。服务与仓储入口为 internal/service/feedback_resolution.go 和 internal/repository/feedback_resolution.go；复用 correction_json/BSON，不新增表列。
 - 纠错详情按轨迹查看权限异步读取当前资料，并复用共享 track_editor.js；来源 source_feedback_id 的轨迹保存同时要求轨迹操作与反馈操作权限，核对纠错与轨迹一致后，只在实际保存成功且字段变化时记录最近关联修改的字段名、处理人和时间。轨迹写入与反馈关联非跨仓储事务，关联失败返回 correction_warning，页面必须明确提示轨迹已保存。仅修改反馈状态不视为轨迹已修正；历史无结构化快照时不能伪造关联。后台详情额外返回 handled_by/track_change，业务客户端不下发管理员身份及内部改动记录。
 
-- 用户管理支持昵称模糊搜索，以及内部人员、资料所在城市、性别、生日星座和当前账号限制状态组合筛选；同行管理按会话标题、轨迹管理按标题和用户名提供服务端模糊搜索，轨迹列表还支持城市、状态和资料缺项筛选，均保留游标分页。
+- 用户管理支持昵称模糊搜索，以及内部人员、资料所在城市、性别、生日星座和当前账号限制状态组合筛选；同行管理按会话标题、运动类型、发起人昵称和发起人资料省市筛选（昵称/省市先在用户仓储解析为发起人 ID 集合，再由 `AdminCompanionListRepository` 在仓储层参与总数与游标分页，列表批量补充发起人昵称/头像和成员记录数），轨迹管理按标题和用户名提供服务端模糊搜索，轨迹列表还支持城市、状态和资料缺项筛选，均保留游标分页。
 
 模块对外只暴露 `admin.NewModule(...)` 与 `Module.RegisterRoutes(h)`，不被业务 handler 引用。
 
@@ -142,7 +142,7 @@ internal/admin/
 | GET | `/admin/api/tracks/:track_id/place-candidates` | 轨迹查看 | 单条轨迹当前有效候选，404 无候选，409 源变化 |
 | POST | `/admin/api/place-candidates/:track_id/confirm` | 轨迹操作 | 确认指定候选为轨迹主景点并同步内部景点关联 |
 | POST | `/admin/api/place-candidates/:track_id/dismiss` | 轨迹操作 | 忽略当前轨迹的景点候选 |
-| GET | `/admin/api/companions` | 鉴权 | 同行会话列表，支持 `title` 模糊搜索及 cursor 翻页 |
+| GET | `/admin/api/companions` | 鉴权 | 同行会话列表，支持 `title` 模糊搜索、`owner_name` 发起人昵称模糊搜索、`track_type` 精确筛选、`province_code` / `city_code` 按发起人资料所在地筛选及 cursor 翻页；返回发起人昵称/头像与成员记录数 |
 | GET | `/admin/api/tracks` | 鉴权 | 轨迹列表，支持 `title` / `user_name` 模糊搜索、`city_code` / `status` / `missing` 筛选及 cursor 翻页 |
 | GET | `/admin/api/cities` | 鉴权 | 返回内置城市/省份 Code、名称与省市层级，供轨迹和景点选择器使用 |
 | GET | `/admin/api/tracks/:track_id` | 鉴权 | 返回轨迹详情用于后台编辑 |

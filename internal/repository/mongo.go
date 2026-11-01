@@ -745,6 +745,9 @@ func (r *MongoUserRepository) ListAdminUsers(ctx context.Context, filter AdminUs
 	if filter.CityCode != "" {
 		query["city_code"] = filter.CityCode
 	}
+	if filter.ProvinceCode != "" {
+		query["province_code"] = filter.ProvinceCode
+	}
 	switch filter.Gender {
 	case "male", "female":
 		query["gender"] = filter.Gender

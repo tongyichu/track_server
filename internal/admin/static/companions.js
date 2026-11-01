@@ -22,6 +22,32 @@
     var color = value === 'active' || value === 'online' ? 'bg-green-lt text-green' : 'bg-secondary-lt text-secondary';
     return '<span class="badge ' + color + '">' + esc(label(value)) + '</span>';
   }
+  var typeVisuals = {
+    hiking: { color: '#16a34a', icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 20 6-11 4 6 3-4 5 9H3Z"/><path d="m8 20 4-6 3 3"/></svg>' },
+    running: { color: '#2563eb', icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="14.5" cy="4.5" r="2"/><path d="m12 8-3 4 4 2 2 5m-6-7-4 1m7-5 4 3 3 1m-9 2-3 5"/></svg>' },
+    climbing: { color: '#ea580c', icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 20 7-14 4 8 2-4 5 10H3Z"/><path d="m9 20 3-6 3 2"/></svg>' },
+    riding: { color: '#9333ea', icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="17" r="3.5"/><circle cx="18" cy="17" r="3.5"/><path d="m6 17 4-7h4l4 7m-8-7 4 7H6m5-10h3"/></svg>' },
+    driving: { color: '#0f766e', icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 11 1.5-5h11L19 11l2 2v5h-2v-2H5v2H3v-5l2-2Z"/><path d="M6.5 11h11M6 14h.01M18 14h.01"/></svg>' }
+  };
+  var fallbackTypeVisual = { color: '#64748b', icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v8m-4-4h8"/></svg>' };
+  function typeBadge(trackType) {
+    var type = typeVisuals[trackType] || fallbackTypeVisual;
+    return '<span class="track-type-badge" style="--track-type-color:' + type.color + '">' + type.icon + '<span>' + esc(label(trackType)) + '</span></span>';
+  }
+  function fmtDuration(start, end) {
+    var startTime = new Date(start).getTime();
+    if (Number.isNaN(startTime)) return '—';
+    var endTime = end && !String(end).startsWith('0001-') ? new Date(end).getTime() : Date.now();
+    if (Number.isNaN(endTime) || endTime < startTime) return '—';
+    var minutes = Math.floor((endTime - startTime) / 60000);
+    var days = Math.floor(minutes / 1440), hours = Math.floor((minutes % 1440) / 60), mins = minutes % 60;
+    var text = days > 0 ? days + ' 天 ' + hours + ' 小时' : (hours > 0 ? hours + ' 小时 ' + mins + ' 分' : mins + ' 分钟');
+    return end && !String(end).startsWith('0001-') ? text : text + '（进行中）';
+  }
+  function safeImageURL(s) {
+    s = String(s || '').trim();
+    return (s.indexOf('/admin/api/static/') === 0 || s.indexOf('https://') === 0 || s.indexOf('http://') === 0) ? s : '';
+  }
   async function apiJSON(url) {
     var response = await fetch(url);
     if (response.status === 401) { window.location.href = '/admin/login.html'; throw new Error('登录已失效'); }
@@ -59,20 +85,112 @@
   }
 
   var cursorStack = [null], pageIndex = 0, lastNextCursor = null, listRequest = 0;
-  var appliedTitle = '';
+  var applied = { title: '', ownerName: '', trackType: '', provinceCode: '', cityCode: '' };
   var tbody = document.getElementById('companionList');
   var prevBtn = document.getElementById('prevBtn');
   var nextBtn = document.getElementById('nextBtn');
   var titleFilter = document.getElementById('titleFilter');
+  var ownerNameFilter = document.getElementById('ownerNameFilter');
+  var provinceFilter = document.getElementById('provinceFilter');
+  var cityFilter = document.getElementById('cityFilter');
   var pageHint = document.getElementById('pageHint');
   var totalHint = document.getElementById('totalHint');
   var resetBtn = document.getElementById('resetBtn');
   var detailModal = document.getElementById('companionDetailModal');
   var detailRequest = 0, currentSessionID = '';
 
+  // 运动类型下拉（icon + 文字）
+  var selectedType = '';
+  var typeToggle = document.getElementById('trackTypeToggle');
+  var typeCurrent = document.getElementById('trackTypeCurrent');
+  var typeMenu = document.getElementById('trackTypeMenu');
+  function typeOptionHTML(code) {
+    if (!code) return '<span class="companion-type-any">全部类型</span>';
+    var type = typeVisuals[code] || fallbackTypeVisual;
+    return '<span class="track-type-badge" style="--track-type-color:' + type.color + '">' + type.icon + '<span>' + esc(label(code)) + '</span></span>';
+  }
+  function renderTypeMenu() {
+    typeMenu.innerHTML = '';
+    [''].concat(Object.keys(typeVisuals)).forEach(function (code) {
+      var li = document.createElement('li');
+      li.setAttribute('role', 'option');
+      li.setAttribute('aria-selected', String(code === selectedType));
+      li.dataset.value = code;
+      li.innerHTML = typeOptionHTML(code);
+      li.addEventListener('click', function () { selectType(code); });
+      typeMenu.appendChild(li);
+    });
+  }
+  function selectType(code) {
+    selectedType = code;
+    typeCurrent.innerHTML = typeOptionHTML(code);
+    closeTypeMenu();
+  }
+  function closeTypeMenu() {
+    typeMenu.hidden = true;
+    typeToggle.setAttribute('aria-expanded', 'false');
+  }
+  typeToggle.addEventListener('click', function () {
+    var open = typeMenu.hidden;
+    closeTypeMenu();
+    if (open) {
+      typeMenu.hidden = false;
+      typeToggle.setAttribute('aria-expanded', 'true');
+    }
+  });
+  document.addEventListener('click', function (event) {
+    if (!typeMenu.hidden && !document.getElementById('trackTypeFilter').contains(event.target)) closeTypeMenu();
+  });
+  typeToggle.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape') closeTypeMenu();
+  });
+  renderTypeMenu();
+
+  // 省份 / 城市级联（数据源 /admin/api/cities）
+  var regionsPromise = null;
+  function loadRegions() {
+    if (!regionsPromise) {
+      regionsPromise = apiJSON('/admin/api/cities').then(function (payload) {
+        return Array.isArray(payload) ? payload : (payload.items || []);
+      });
+    }
+    return regionsPromise;
+  }
+  function populateProvinceOptions(regions) {
+    provinceFilter.replaceChildren(new Option('全部省份', ''));
+    regions.filter(function (item) { return item.level === 'province'; })
+      .forEach(function (item) { provinceFilter.add(new Option(item.name, item.code)); });
+  }
+  function populateCityOptions(regions, provinceCode) {
+    cityFilter.replaceChildren(new Option('全部城市', ''));
+    regions.filter(function (item) { return item.level === 'city' && item.province_code === provinceCode; })
+      .forEach(function (item) { cityFilter.add(new Option(item.name, item.code)); });
+    cityFilter.disabled = !provinceCode;
+  }
+  loadRegions().then(function (regions) {
+    populateProvinceOptions(regions);
+    populateCityOptions(regions, '');
+  }).catch(function () { /* 省市选项加载失败时保留输入筛选可用 */ });
+  provinceFilter.addEventListener('change', function () {
+    loadRegions().then(function (regions) { populateCityOptions(regions, provinceFilter.value); }).catch(function () {});
+  });
+
+  function hasActiveFilter() {
+    return !!(applied.title || applied.ownerName || applied.trackType || applied.provinceCode || applied.cityCode);
+  }
+  function pendingFilterChange() {
+    return titleFilter.value.trim() !== applied.title || ownerNameFilter.value.trim() !== applied.ownerName ||
+      selectedType !== applied.trackType || provinceFilter.value !== applied.provinceCode || cityFilter.value !== applied.cityCode;
+  }
   function resetSearch() {
-    appliedTitle = titleFilter.value.trim();
-    resetBtn.hidden = !appliedTitle;
+    applied = {
+      title: titleFilter.value.trim(),
+      ownerName: ownerNameFilter.value.trim(),
+      trackType: selectedType,
+      provinceCode: provinceFilter.value,
+      cityCode: cityFilter.value
+    };
+    resetBtn.hidden = !hasActiveFilter();
     cursorStack = [null];
     pageIndex = 0;
     loadPage();
@@ -81,8 +199,17 @@
     event.preventDefault();
     resetSearch();
   });
-  resetBtn.addEventListener('click', function () { titleFilter.value = ''; resetSearch(); });
-  titleFilter.addEventListener('input', function () { resetBtn.hidden = !titleFilter.value && !appliedTitle; });
+  resetBtn.addEventListener('click', function () {
+    titleFilter.value = '';
+    ownerNameFilter.value = '';
+    selectType('');
+    provinceFilter.value = '';
+    loadRegions().then(function (regions) { populateCityOptions(regions, ''); }).catch(function () {});
+    resetSearch();
+  });
+  [titleFilter, ownerNameFilter].forEach(function (input) {
+    input.addEventListener('input', function () { resetBtn.hidden = !hasActiveFilter() && !pendingFilterChange() && !input.value; });
+  });
   document.getElementById('refreshBtn').addEventListener('click', function () {
     loadCompanionStatistics();
     if (window.AdminCompanionUsage) window.AdminCompanionUsage.refresh();
@@ -109,7 +236,11 @@
   async function loadPage() {
     var request = ++listRequest;
     var params = new URLSearchParams({ limit: '20' });
-    if (appliedTitle) params.set('title', appliedTitle);
+    if (applied.title) params.set('title', applied.title);
+    if (applied.ownerName) params.set('owner_name', applied.ownerName);
+    if (applied.trackType) params.set('track_type', applied.trackType);
+    if (applied.provinceCode) params.set('province_code', applied.provinceCode);
+    if (applied.cityCode) params.set('city_code', applied.cityCode);
     var cur = cursorStack[pageIndex];
     if (cur) {
       params.set('cursor_started_at', cur.started_at);
@@ -120,7 +251,7 @@
     totalHint.textContent = '';
     pageHint.textContent = '正在加载…';
     tbody.setAttribute('aria-busy', 'true');
-    showEmpty(tbody, 6, '正在加载房间…');
+    showEmpty(tbody, 8, '正在加载房间…');
     try {
       var data = await apiJSON('/admin/api/companions?' + params.toString());
       if (request !== listRequest) return;
@@ -128,14 +259,19 @@
       lastNextCursor = data.next_cursor || null;
       tbody.replaceChildren();
       items.forEach(function (it) {
+        var ownerAvatar = safeImageURL(it.owner_avatar_url);
         var tr = document.createElement('tr');
         tr.className = 'companion-row';
         tr.tabIndex = 0;
         tr.setAttribute('aria-label', '查看房间：' + (it.title || it.session_id));
-        tr.innerHTML = '<td><div class="companion-room-cell"><strong>' + esc(it.title || '未命名房间') + '</strong><small>' + esc(it.session_id) + '</small></div></td>' +
-          '<td>' + esc(label(it.track_type)) + '</td><td>' + esc(it.owner_user_id) + '</td>' +
+        tr.innerHTML = '<td><div class="companion-room-cell"><strong>' + esc(it.title || '未命名房间') + '</strong></div></td>' +
+          '<td>' + typeBadge(it.track_type) + '</td>' +
+          '<td><div class="companion-user">' + (ownerAvatar ? '<img src="' + esc(ownerAvatar) + '" alt="" class="companion-avatar" />' : '') +
+          '<span><strong>' + esc(it.owner_name || '未知用户') + '</strong></span></div></td>' +
           '<td><div class="companion-cell-stack">' + badge(it.status) + '<small>' + esc(label(it.visibility)) + '房间</small></div></td>' +
-          '<td><div class="companion-cell-stack companion-time"><span>开始 ' + esc(fmtTime(it.started_at)) + '</span><small>' + (it.status === 'active' ? '尚未结束' : '结束 ' + esc(fmtTime(it.ended_at))) + '</small></div></td>' +
+          '<td>' + esc(fmtTime(it.started_at)) + '</td>' +
+          '<td>' + esc(fmtDuration(it.started_at, it.status === 'active' ? null : it.ended_at)) + '</td>' +
+          '<td>' + esc(Number(it.member_count || 0) + ' / ' + (it.max_members || 0)) + '</td>' +
           '<td><button type="button" class="btn btn-sm btn-outline-primary companion-view">查看详情</button></td>';
         tr.addEventListener('click', function () { loadDetail(it.session_id); });
         tr.addEventListener('keydown', function (event) {
@@ -144,13 +280,13 @@
         tr.querySelector('.companion-view').addEventListener('click', function (event) { event.stopPropagation(); loadDetail(it.session_id); });
         tbody.appendChild(tr);
       });
-      if (!items.length) showEmpty(tbody, 6, appliedTitle ? '未找到匹配的房间，请调整标题关键词。' : '暂无同行房间。');
+      if (!items.length) showEmpty(tbody, 8, hasActiveFilter() ? '未找到匹配的房间，请调整筛选条件。' : '暂无同行房间。');
       nextBtn.disabled = !lastNextCursor;
       totalHint.textContent = '共 ' + Number(data.total || 0).toLocaleString() + ' 个房间';
       pageHint.textContent = '第 ' + (pageIndex + 1) + ' 页 · 本页 ' + items.length + ' 个房间';
     } catch (error) {
       if (request !== listRequest) return;
-      showEmpty(tbody, 6, '加载失败：' + error.message + '。请点击“刷新数据”重试。');
+      showEmpty(tbody, 8, '加载失败：' + error.message + '。请点击“刷新数据”重试。');
       pageHint.textContent = '加载失败';
     } finally {
       if (request === listRequest) {

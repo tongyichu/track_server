@@ -183,6 +183,9 @@ func (r *InMemoryUserRepository) ListAdminUsers(_ context.Context, filter AdminU
 		if filter.CityCode != "" && user.CityCode != filter.CityCode {
 			continue
 		}
+		if filter.ProvinceCode != "" && user.ProvinceCode != filter.ProvinceCode {
+			continue
+		}
 		if (filter.Gender == "male" || filter.Gender == "female") && user.Gender != filter.Gender {
 			continue
 		}
@@ -220,18 +223,39 @@ func (r *InMemoryUserRepository) ListAdminUsers(_ context.Context, filter AdminU
 	return items, total, nil
 }
 
-func (r *InMemoryCompanionRepository) ListAdminCompanionsByTitle(_ context.Context, title string, cursor *models.CompanionSessionListCursor, limit int) ([]*models.CompanionSession, int64, error) {
+func (r *InMemoryCompanionRepository) ListAdminCompanions(_ context.Context, filter AdminCompanionListFilter, cursor *models.CompanionSessionListCursor, limit int) ([]*models.CompanionSession, int64, error) {
 	if limit <= 0 {
 		limit = 20
 	}
+	if filter.OwnerIDs != nil && len(filter.OwnerIDs) == 0 {
+		return []*models.CompanionSession{}, 0, nil
+	}
+	var ownerSet map[int64]struct{}
+	if filter.OwnerIDs != nil {
+		ownerSet = make(map[int64]struct{}, len(filter.OwnerIDs))
+		for _, id := range filter.OwnerIDs {
+			ownerSet[id] = struct{}{}
+		}
+	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	needle := strings.ToLower(title)
+	needle := strings.ToLower(filter.Title)
 	items := make([]*models.CompanionSession, 0)
 	var total int64
 	for _, session := range r.sessions {
-		if session == nil || !strings.Contains(strings.ToLower(session.Title), needle) {
+		if session == nil {
 			continue
+		}
+		if needle != "" && !strings.Contains(strings.ToLower(session.Title), needle) {
+			continue
+		}
+		if filter.TrackType != "" && session.TrackType != filter.TrackType {
+			continue
+		}
+		if ownerSet != nil {
+			if _, ok := ownerSet[session.OwnerUserID]; !ok {
+				continue
+			}
 		}
 		total++
 		if cursor != nil && !cursor.StartedAt.IsZero() && (session.StartedAt.After(cursor.StartedAt) || (session.StartedAt.Equal(cursor.StartedAt) && session.SessionID >= cursor.SessionID)) {
@@ -250,4 +274,15 @@ func (r *InMemoryCompanionRepository) ListAdminCompanionsByTitle(_ context.Conte
 		items = items[:limit]
 	}
 	return items, total, nil
+}
+
+// CountMembersBySessionIDs 批量统计每个会话的成员记录数。仅供管理后台使用。
+func (r *InMemoryCompanionRepository) CountMembersBySessionIDs(_ context.Context, sessionIDs []string) (map[string]int, error) {
+	counts := make(map[string]int, len(sessionIDs))
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, sessionID := range sessionIDs {
+		counts[sessionID] = len(r.members[sessionID])
+	}
+	return counts, nil
 }
