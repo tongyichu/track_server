@@ -57,6 +57,7 @@ func main() {
 	var accountRestrictionRepo repository.AccountRestrictionRepository
 	var feedbackRepo repository.FeedbackRepository
 	var analyticsRepo repository.AnalyticsRepository
+	var appClientStatsRepo repository.AppClientStatsRepository
 	var trackMapRepo repository.TrackMapRepository
 	var trackPlaceRepo repository.TrackPlaceRepository
 	var scenicSpotRepo repository.ScenicSpotRepository
@@ -74,6 +75,7 @@ func main() {
 		accountRestrictionRepo = repository.NewInMemoryAccountRestrictionRepository()
 		feedbackRepo = repository.NewInMemoryFeedbackRepository()
 		analyticsRepo = repository.NewInMemoryAnalyticsRepository()
+		appClientStatsRepo = repository.NewInMemoryAppClientStatsRepository()
 		log.Println("using in-memory repositories")
 	} else if cfg.UseMySQL {
 		db, err := repository.OpenMySQL(cfg.MySQLDSN)
@@ -88,6 +90,7 @@ func main() {
 			accountRestrictionRepo = repository.NewInMemoryAccountRestrictionRepository()
 			feedbackRepo = repository.NewInMemoryFeedbackRepository()
 			analyticsRepo = repository.NewInMemoryAnalyticsRepository()
+			appClientStatsRepo = repository.NewInMemoryAppClientStatsRepository()
 		} else if err := db.PingContext(ctx); err != nil {
 			log.Printf("failed to ping mysql, fallback to memory: %v", err)
 			_ = db.Close()
@@ -100,6 +103,7 @@ func main() {
 			accountRestrictionRepo = repository.NewInMemoryAccountRestrictionRepository()
 			feedbackRepo = repository.NewInMemoryFeedbackRepository()
 			analyticsRepo = repository.NewInMemoryAnalyticsRepository()
+			appClientStatsRepo = repository.NewInMemoryAppClientStatsRepository()
 		} else {
 			tr, ur, cr, lr, nr, ar, cor, err := repository.NewMySQLRepositories(ctx, db)
 			if err != nil {
@@ -114,6 +118,7 @@ func main() {
 				accountRestrictionRepo = repository.NewInMemoryAccountRestrictionRepository()
 				feedbackRepo = repository.NewInMemoryFeedbackRepository()
 				analyticsRepo = repository.NewInMemoryAnalyticsRepository()
+				appClientStatsRepo = repository.NewInMemoryAppClientStatsRepository()
 			} else {
 				defer func() {
 					_ = db.Close()
@@ -137,6 +142,12 @@ func main() {
 				analyticsRepo = repository.NewMySQLAnalyticsRepository(db)
 				trackSubmissionRepo = repository.NewMySQLTrackSubmissionRepository(db)
 				recommendationRepo = repository.NewMySQLRecommendationRepository(db)
+				statsCtx, statsCancel := context.WithTimeout(ctx, 5*time.Second)
+				appClientStatsRepo, err = repository.NewMySQLAppClientStatsRepository(statsCtx, db)
+				statsCancel()
+				if err != nil {
+					log.Printf("app client stats repository unavailable: %v", err)
+				}
 				log.Println("using mysql repositories")
 			}
 		}
@@ -154,6 +165,7 @@ func main() {
 			accountRestrictionRepo = repository.NewInMemoryAccountRestrictionRepository()
 			feedbackRepo = repository.NewInMemoryFeedbackRepository()
 			analyticsRepo = repository.NewInMemoryAnalyticsRepository()
+			appClientStatsRepo = repository.NewInMemoryAppClientStatsRepository()
 		} else {
 			db := client.Database(cfg.MongoDBName)
 			adminCtx, adminCancel := context.WithTimeout(ctx, 5*time.Second)
@@ -189,6 +201,7 @@ func main() {
 			accountRestrictionRepo = repository.NewMongoAccountRestrictionRepository(db.Collection("user_account_restrictions"))
 			feedbackRepo = repository.NewMongoFeedbackRepository(db.Collection("user_feedbacks"))
 			analyticsRepo = repository.NewMongoAnalyticsRepository(db.Collection("analytics_sync_summaries"))
+			appClientStatsRepo = repository.NewMongoAppClientStatsRepository()
 			trackSubmissionRepo = repository.NewMongoTrackSubmissionRepository(db.Collection("track_submissions"))
 			recommendationRepo = repository.NewMongoRecommendationRepository(
 				db.Collection("recommend_feed_sessions"),
@@ -290,6 +303,7 @@ func main() {
 	commentSvc.SetRestrictions(accountRestrictionSvc)
 	loginSvc := service.NewLoginService(userRepo, loginLogRepo, cfg.WechatAppID, cfg.WechatAppSecret, cfg.JWTSecret)
 	appReleaseSvc := service.NewAppReleaseService(appReleaseRepo)
+	appReleaseSvc.SetClientStatsRepository(appClientStatsRepo)
 	feedbackSvc := service.NewFeedbackService(feedbackRepo, filepath.Join(cfg.LogDir, "feedback", "images"), trackRepo)
 	companionSvc := service.NewCompanionService(companionRepo, userRepo)
 	companionSvc.SetTrackRepository(trackRepo)

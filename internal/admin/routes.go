@@ -180,6 +180,7 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	api.POST("/releases", m.Handler.PublishRelease)
 	api.DELETE("/releases/:id", m.Handler.DeleteRelease)
 	api.GET("/releases/upload-token", m.Handler.GetReleaseUploadCredential)
+	api.GET("/releases/client-statistics", m.Handler.GetReleaseClientStatistics)
 	api.POST("/releases/upload-package", m.Handler.UploadPackage)
 	api.GET("/dashboard", m.Handler.GetDashboard)
 	api.GET("/users/statistics", m.Handler.GetAdminUserStatistics)

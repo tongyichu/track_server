@@ -433,6 +433,32 @@ CREATE TABLE `app_releases` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='App 发布信息表';
 
 
+CREATE TABLE `app_client_devices` (
+                                `device_id` VARCHAR(128) NOT NULL COMMENT '设备唯一标识（客户端上报）',
+                                `user_id` BIGINT NOT NULL DEFAULT '0' COMMENT '最近登录用户ID，未登录为0',
+                                `platform` VARCHAR(16) NOT NULL DEFAULT '' COMMENT 'android / ios',
+                                `app_version` VARCHAR(32) NOT NULL DEFAULT '' COMMENT 'App 版本名',
+                                `version_code` BIGINT NOT NULL DEFAULT '0' COMMENT 'App 数字版本号',
+                                `device_model` VARCHAR(128) NOT NULL DEFAULT '' COMMENT '设备型号',
+                                `os_version` VARCHAR(64) NOT NULL DEFAULT '' COMMENT '系统版本',
+                                `first_seen_at` DATETIME(6) NOT NULL,
+                                `last_seen_at` DATETIME(6) NOT NULL,
+                                PRIMARY KEY (`device_id`),
+                                KEY `idx_app_client_devices_last_seen` (`last_seen_at`),
+                                KEY `idx_app_client_devices_user` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='客户端设备活跃信息表';
+
+
+CREATE TABLE `app_client_active_daily` (
+                                `stat_date` DATE NOT NULL COMMENT '统计日期（服务端本地自然日）',
+                                `platform` VARCHAR(16) NOT NULL DEFAULT '',
+                                `version_code` BIGINT NOT NULL DEFAULT '0',
+                                `app_version` VARCHAR(32) NOT NULL DEFAULT '',
+                                `active_devices` BIGINT NOT NULL DEFAULT '0' COMMENT '当天出现过的去重设备数',
+                                PRIMARY KEY (`stat_date`,`platform`,`version_code`,`app_version`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='客户端按日版本活跃统计表';
+
+
 CREATE TABLE `login_log` (
                              `id` BIGINT NOT NULL AUTO_INCREMENT,
                              `user_id` BIGINT NOT NULL COMMENT '用户ID',

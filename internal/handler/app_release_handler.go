@@ -60,5 +60,7 @@ func (h *AppReleaseHandler) CheckUpgrade(ctx context.Context, c *app.RequestCont
 		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
 		return
 	}
+	// 记录设备活跃（版本分布/机型分布统计），失败仅记录日志，不影响升级检查响应。
+	h.svc.RecordClientActivity(ctx, middleware.GetRequestMeta(c), 0, versionCode)
 	c.JSON(http.StatusOK, successResponse(result))
 }

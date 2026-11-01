@@ -161,5 +161,153 @@
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
+  // ---------------- 客户端统计 ----------------
+  const csSection = document.getElementById('clientStats');
+  const csDays = document.getElementById('clientStatsDays');
+  const csRefresh = document.getElementById('refreshClientStats');
+  const csError = document.getElementById('clientStatsError');
+  const csChartIds = ['csTrendChart', 'csVersionChart', 'csModelChart', 'csOsChart'];
+  const csCharts = {};
+
+  function csChart(id) {
+    if (!window.echarts) return null;
+    const el = document.getElementById(id);
+    if (!el) return null;
+    if (!csCharts[id]) csCharts[id] = echarts.init(el);
+    return csCharts[id];
+  }
+
+  function csVersionLabel(item) {
+    if (item.label && item.label !== '未知' && item.version_code > 0) {
+      return item.label + ' (' + item.version_code + ')';
+    }
+    if (item.label && item.label !== '未知') return item.label;
+    if (item.version_code > 0) return 'Build ' + item.version_code;
+    return '未知';
+  }
+
+  function csTopWithOther(items, limit) {
+    const list = (items || []).slice();
+    if (list.length <= limit) return list;
+    const top = list.slice(0, limit);
+    const rest = list.slice(limit).reduce(function (sum, it) { return sum + (it.devices || 0); }, 0);
+    top.push({ label: '其他', devices: rest });
+    return top;
+  }
+
+  function csRenderBar(id, items) {
+    const chart = csChart(id);
+    if (!chart) return;
+    const labels = items.map(function (it) { return it.label; }).reverse();
+    const values = items.map(function (it) { return it.devices; }).reverse();
+    chart.setOption({
+      grid: { left: 8, right: 30, top: 8, bottom: 8, containLabel: true },
+      tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+      xAxis: { type: 'value', minInterval: 1 },
+      yAxis: { type: 'category', data: labels, axisLabel: { width: 110, overflow: 'truncate' } },
+      series: [{ type: 'bar', data: values, barMaxWidth: 18, itemStyle: { color: '#206bc4', borderRadius: [0, 4, 4, 0] }, label: { show: true, position: 'right', color: '#667085' } }],
+    }, true);
+  }
+
+  function csRenderCharts(data) {
+    const versionItems = (data.version_distribution || []).map(function (it) {
+      return { name: csVersionLabel(it), value: it.devices };
+    });
+    const versionChart = csChart('csVersionChart');
+    if (versionChart) {
+      versionChart.setOption({
+        tooltip: { trigger: 'item', formatter: '{b}<br/>{c} 台 ({d}%)' },
+        legend: { bottom: 0, type: 'scroll' },
+        series: [{
+          type: 'pie', radius: ['42%', '68%'], center: ['50%', '44%'],
+          itemStyle: { borderRadius: 6, borderColor: '#fff', borderWidth: 2 },
+          label: { formatter: '{b}\n{d}%' },
+          data: versionItems,
+        }],
+      }, true);
+    }
+
+    csRenderBar('csModelChart', csTopWithOther(data.device_model_distribution || [], 10));
+    csRenderBar('csOsChart', csTopWithOther(data.os_version_distribution || [], 10));
+
+    const trendChart = csChart('csTrendChart');
+    if (trendChart) {
+      const dates = [];
+      const seriesMap = {};
+      (data.daily_trend || []).forEach(function (day) {
+        dates.push(day.date);
+        (day.versions || []).forEach(function (v) {
+          const name = csVersionLabel(v);
+          if (!seriesMap[name]) seriesMap[name] = {};
+          seriesMap[name][day.date] = v.devices;
+        });
+      });
+      const series = Object.keys(seriesMap).map(function (name) {
+        return {
+          name: name, type: 'line', stack: 'devices', smooth: true, showSymbol: false,
+          areaStyle: { opacity: 0.25 }, emphasis: { focus: 'series' },
+          data: dates.map(function (d) { return seriesMap[name][d] || 0; }),
+        };
+      });
+      trendChart.setOption({
+        tooltip: { trigger: 'axis' },
+        legend: { bottom: 0, type: 'scroll' },
+        grid: { left: 8, right: 16, top: 16, bottom: 34, containLabel: true },
+        xAxis: { type: 'category', boundaryGap: false, data: dates },
+        yAxis: { type: 'value', minInterval: 1 },
+        series: series,
+      }, true);
+    }
+  }
+
+  async function loadClientStats() {
+    if (!csSection) return;
+    csError.hidden = true;
+    csRefresh.disabled = true;
+    csDays.disabled = true;
+    csSection.setAttribute('aria-busy', 'true');
+    try {
+      const resp = await fetch('/admin/api/releases/client-statistics?days=' + csDays.value);
+      if (!resp.ok) {
+        const j = await resp.json().catch(function () { return {}; });
+        throw new Error(j.error || ('统计加载失败: ' + resp.status));
+      }
+      const data = (await resp.json()).data || {};
+      document.getElementById('csActiveDevices').textContent = data.active_devices || 0;
+      document.getElementById('csActiveNote').textContent = '近 ' + (data.days || csDays.value) + ' 天去重设备';
+      const latest = data.latest || null;
+      if (latest) {
+        document.getElementById('csLatestDevices').textContent = latest.active_devices + ' 台';
+        document.getElementById('csLatestNote').textContent =
+          latest.version_name + ' (' + latest.version_code + ') · 占比 ' + latest.share_percent + '%';
+        document.getElementById('csBelowMin').textContent = latest.below_min_supported + ' 台';
+        document.getElementById('csBelowMinNote').textContent = '版本号低于 ' + latest.min_supported_version_code;
+      } else {
+        document.getElementById('csLatestDevices').textContent = '—';
+        document.getElementById('csLatestNote').textContent = '暂无已发布版本';
+        document.getElementById('csBelowMin').textContent = '—';
+        document.getElementById('csBelowMinNote').textContent = '暂无强升线';
+      }
+      await AdminAssets.loadCharts();
+      csRenderCharts(data);
+    } catch (e) {
+      csError.textContent = e.message || String(e);
+      csError.hidden = false;
+    } finally {
+      csRefresh.disabled = false;
+      csDays.disabled = false;
+      csSection.setAttribute('aria-busy', 'false');
+    }
+  }
+
+  if (csSection) {
+    csRefresh.addEventListener('click', loadClientStats);
+    csDays.addEventListener('change', loadClientStats);
+    window.addEventListener('resize', function () {
+      csChartIds.forEach(function (id) { if (csCharts[id]) csCharts[id].resize(); });
+    });
+    loadClientStats();
+  }
+
   loadList();
 })();
