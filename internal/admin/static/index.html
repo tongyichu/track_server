@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>App 发布管理 - Track</title>
+  <title>发布管理 - Track</title>
   <link rel="stylesheet" href="/admin/static/vendor/tabler.min.css" />
   <link rel="stylesheet" href="/admin/static/style.css" />
 </head>
@@ -11,7 +11,7 @@
   <header class="topbar">
     <div class="title">Track 管理后台</div>
     <nav class="nav">
-      <a class="active" href="/admin/index.html">App 发布</a>
+      <a class="active" href="/admin/index.html">发布管理</a>
       <a href="/admin/users.html">用户管理</a>
       <a href="/admin/tracks.html">轨迹管理</a>
       <a href="/admin/track_submissions.html">投稿审核</a>
@@ -28,6 +28,32 @@
   </header>
 
   <main class="container">
+    <section class="panel admin-client-stats" id="clientStats" aria-busy="true">
+      <div class="admin-section-heading">
+        <h2>客户端统计</h2>
+        <div class="row">
+          <select id="clientStatsDays">
+            <option value="7">近 7 天</option>
+            <option value="30" selected>近 30 天</option>
+          </select>
+          <button id="refreshClientStats" type="button" class="btn btn-sm btn-outline-secondary">刷新数据</button>
+        </div>
+      </div>
+      <p class="hint">口径：周期内活跃的去重设备，来自客户端升级检查与登录上报；趋势按自然日统计当天出现过的设备。</p>
+      <p id="clientStatsError" class="error" role="alert" hidden></p>
+      <div class="metric-grid">
+        <div class="metric-card"><span>活跃设备</span><strong id="csActiveDevices">—</strong><small id="csActiveNote">周期内去重设备</small></div>
+        <div class="metric-card"><span>最新版本活跃</span><strong id="csLatestDevices">—</strong><small id="csLatestNote">暂无已发布版本</small></div>
+        <div class="metric-card"><span>低于强升线设备</span><strong id="csBelowMin">—</strong><small id="csBelowMinNote">暂无强升线</small></div>
+      </div>
+      <div class="feature-stats-grid">
+        <article class="admin-stat-panel"><h3>版本活跃趋势</h3><div id="csTrendChart" class="chart-medium" role="img" aria-label="版本活跃趋势堆叠面积图"></div></article>
+        <article class="admin-stat-panel"><h3>版本分布</h3><div id="csVersionChart" class="chart-small" role="img" aria-label="版本分布饼图"></div></article>
+        <article class="admin-stat-panel"><h3>机型分布 Top 10</h3><div id="csModelChart" class="chart-small" role="img" aria-label="机型分布条形图"></div></article>
+        <article class="admin-stat-panel"><h3>系统版本分布</h3><div id="csOsChart" class="chart-small" role="img" aria-label="系统版本分布条形图"></div></article>
+      </div>
+    </section>
+
     <section class="panel" data-admin-write="releases">
       <h2>发布新版本</h2>
       <form id="publishForm" data-admin-write="releases" class="grid">
@@ -72,32 +98,6 @@
           <span class="ok" id="publishOk"></span>
         </div>
       </form>
-    </section>
-
-    <section class="panel" id="clientStats" aria-busy="true">
-      <div class="admin-section-heading">
-        <h2>客户端统计</h2>
-        <div class="row">
-          <select id="clientStatsDays">
-            <option value="7">近 7 天</option>
-            <option value="30" selected>近 30 天</option>
-          </select>
-          <button id="refreshClientStats" type="button" class="btn btn-sm btn-outline-secondary">刷新数据</button>
-        </div>
-      </div>
-      <p class="hint">口径：周期内活跃的去重设备，来自客户端升级检查与登录上报；趋势按自然日统计当天出现过的设备。</p>
-      <p id="clientStatsError" class="error" role="alert" hidden></p>
-      <div class="metric-grid">
-        <div class="metric-card"><span>活跃设备</span><strong id="csActiveDevices">—</strong><small id="csActiveNote">周期内去重设备</small></div>
-        <div class="metric-card"><span>最新版本活跃</span><strong id="csLatestDevices">—</strong><small id="csLatestNote">暂无已发布版本</small></div>
-        <div class="metric-card"><span>低于强升线设备</span><strong id="csBelowMin">—</strong><small id="csBelowMinNote">暂无强升线</small></div>
-      </div>
-      <div class="feature-stats-grid">
-        <article class="admin-stat-panel"><h3>版本活跃趋势</h3><div id="csTrendChart" class="chart-large" role="img" aria-label="版本活跃趋势堆叠面积图"></div></article>
-        <article class="admin-stat-panel"><h3>版本分布</h3><div id="csVersionChart" class="chart-medium" role="img" aria-label="版本分布饼图"></div></article>
-        <article class="admin-stat-panel"><h3>机型分布 Top 10</h3><div id="csModelChart" class="chart-medium" role="img" aria-label="机型分布条形图"></div></article>
-        <article class="admin-stat-panel"><h3>系统版本分布</h3><div id="csOsChart" class="chart-medium" role="img" aria-label="系统版本分布条形图"></div></article>
-      </div>
     </section>
 
     <section class="panel">
