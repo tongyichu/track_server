@@ -955,6 +955,7 @@ func (s *ScenicSpotCatalogService) syncTrackPlaceMatch(ctx context.Context, trac
 		return nil
 	}
 	spot, err := s.spots.FindScenicSpotBySource(ctx, place.Provider, place.ProviderID)
+	created := false
 	if errors.Is(err, repository.ErrNotFound) {
 		source := models.ScenicSpotSource{Provider: place.Provider, ProviderID: place.ProviderID, Status: "active"}
 		if place.Provider == "google" {
@@ -963,11 +964,15 @@ func (s *ScenicSpotCatalogService) syncTrackPlaceMatch(ctx context.Context, trac
 		}
 		now := time.Now()
 		spot = &models.ScenicSpot{ID: newScenicID("SCP-"), Sources: []models.ScenicSpotSource{source}, Status: models.ScenicSpotDraft, Version: 1, CreatedAt: now, UpdatedAt: now, CreatedBy: operator, UpdatedBy: operator}
+		// 初始名称直接取供应商识别结果，客户端名称标签不等待后台资料回填。
+		spot.Name = strings.TrimSpace(place.Name)
 		if err = s.spots.CreateScenicSpot(ctx, spot); err != nil {
 			if !errors.Is(err, repository.ErrAlreadyExists) {
 				return err
 			}
 			spot, err = s.spots.FindScenicSpotBySource(ctx, place.Provider, place.ProviderID)
+		} else {
+			created = true
 		}
 	}
 	if err != nil {
@@ -982,7 +987,47 @@ func (s *ScenicSpotCatalogService) syncTrackPlaceMatch(ctx context.Context, trac
 		return err
 	}
 	s.audit(ctx, spot.ID, action, operator, details, nil, link)
+	if created {
+		// 新户外目的地异步生成简介，不阻塞识别任务；失败保留空简介，可由后台手动补齐。
+		go s.autoGenerateSpotDescription(spot.ID)
+	}
 	return nil
+}
+
+// autoGenerateSpotDescription 为自动创建的新目的地生成 AI 简介；已有简介或人工编辑过的记录不覆盖。
+func (s *ScenicSpotCatalogService) autoGenerateSpotDescription(spotID string) {
+	if s == nil || s.descriptionGenerator == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	spot, err := s.spots.GetScenicSpot(ctx, spotID)
+	if err != nil || spot.ManualEdited || strings.TrimSpace(spot.Description) != "" {
+		return
+	}
+	description, err := s.GenerateDescription(ctx, spot)
+	if err != nil {
+		log.Printf("auto scenic description failed: spot=%s err=%v", spotID, err)
+		return
+	}
+	description = strings.TrimSpace(description)
+	if description == "" {
+		return
+	}
+	latest, err := s.spots.GetScenicSpot(ctx, spotID)
+	if err != nil || latest.ManualEdited || strings.TrimSpace(latest.Description) != "" || latest.Status == models.ScenicSpotMerged {
+		return
+	}
+	latest.Description = description
+	expected := latest.Version
+	latest.Version++
+	latest.UpdatedAt = time.Now()
+	latest.UpdatedBy = "system"
+	if err := s.spots.UpdateScenicSpot(ctx, latest, expected); err != nil {
+		log.Printf("auto scenic description save failed: spot=%s err=%v", spotID, err)
+		return
+	}
+	s.audit(ctx, spotID, "auto_description", "system", "auto generated description for new outdoor destination", nil, latest)
 }
 
 func (s *ScenicSpotCatalogService) PublicSpotForTrack(ctx context.Context, trackID string) (*models.ScenicSpot, error) {

@@ -9,11 +9,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"math"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/tongyichu/track_server/internal/models"
@@ -21,9 +23,10 @@ import (
 )
 
 const (
-	defaultTrackMapIndexBatchSize = 10
-	maxRawTrackIndexFileBytes     = 50 << 20 // 50 MiB
-	maxSimplifiedTrackMapPoints   = 500
+	defaultTrackMapIndexBatchSize    = 10
+	maxRawTrackIndexFileBytes        = 50 << 20 // 50 MiB
+	maxSimplifiedTrackMapPoints      = 500
+	trackMapIndexMissingScanInterval = 10 * time.Minute
 )
 
 // TrackMapIndexService builds map indexes for completed public tracks.
@@ -32,6 +35,11 @@ type TrackMapIndexService struct {
 	tracks        repository.TrackRepository
 	rawTrackCache *AssetCacheService
 	workerID      string
+	kick          chan struct{}
+	// runMu 串行化 kick 与定时任务触发的 RunOnce，避免并发轮重复下载解析同一批轨迹、瞬时内存翻倍。
+	runMu sync.Mutex
+	// lastMissingScan 限制补偿扫描频率：认领待处理任务每分钟可做，全量缺索引扫描只按间隔执行。
+	lastMissingScan time.Time
 }
 
 type TrackMapIndexRunResult struct {
@@ -42,11 +50,26 @@ type TrackMapIndexRunResult struct {
 }
 
 func NewTrackMapIndexService(repo repository.TrackMapRepository, tracks repository.TrackRepository, rawTrackCache *AssetCacheService) *TrackMapIndexService {
-	return &TrackMapIndexService{
+	s := &TrackMapIndexService{
 		repo:          repo,
 		tracks:        tracks,
 		rawTrackCache: rawTrackCache,
 		workerID:      fmt.Sprintf("track-map-index-%d", time.Now().UnixNano()),
+		kick:          make(chan struct{}, 1),
+	}
+	go s.kickLoop()
+	return s
+}
+
+// kickLoop 响应上传完成后的即时触发，尽快处理新入队的索引任务；
+// 连续触发会合并为一轮，周期性 Scheduler 仍作为失败重试的兜底。
+func (s *TrackMapIndexService) kickLoop() {
+	for range s.kick {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		if _, err := s.RunOnce(ctx); err != nil {
+			log.Printf("track map index kick run failed: %v", err)
+		}
+		cancel()
 	}
 }
 
@@ -60,7 +83,15 @@ func (s *TrackMapIndexService) EnqueueTrackIndexIfEligible(ctx context.Context, 
 	if !isTrackMapIndexEligible(track) {
 		return nil
 	}
-	return s.repo.EnqueueIndexJob(ctx, track.ID, time.Now())
+	if err := s.repo.EnqueueIndexJob(ctx, track.ID, time.Now()); err != nil {
+		return err
+	}
+	// 非阻塞触发后台立即处理，请求链路不等待下载与解析。
+	select {
+	case s.kick <- struct{}{}:
+	default:
+	}
+	return nil
 }
 
 // RemoveTrackFromPublicMap removes cached geometry and route-group membership
@@ -80,16 +111,24 @@ func (s *TrackMapIndexService) RunOnce(ctx context.Context) (*TrackMapIndexRunRe
 	if s.tracks == nil {
 		return result, errors.New("track repository is not configured")
 	}
-	now := time.Now()
-	missing, err := s.repo.ListCompletedTracksMissingGeoIndex(ctx, 100)
-	if err != nil {
-		return result, err
+	// 已有 kick 或定时轮正在处理时直接跳过本轮，待处理任务由下一轮认领。
+	if !s.runMu.TryLock() {
+		return result, nil
 	}
-	for _, track := range missing {
-		if err := s.EnqueueTrackIndexIfEligible(ctx, track); err != nil {
+	defer s.runMu.Unlock()
+	now := time.Now()
+	if now.Sub(s.lastMissingScan) >= trackMapIndexMissingScanInterval {
+		s.lastMissingScan = now
+		missing, err := s.repo.ListCompletedTracksMissingGeoIndex(ctx, 100)
+		if err != nil {
 			return result, err
 		}
-		result.EnqueuedMissing++
+		for _, track := range missing {
+			if err := s.EnqueueTrackIndexIfEligible(ctx, track); err != nil {
+				return result, err
+			}
+			result.EnqueuedMissing++
+		}
 	}
 
 	jobs, err := s.repo.ClaimPendingIndexJobs(ctx, s.workerID, now, defaultTrackMapIndexBatchSize)

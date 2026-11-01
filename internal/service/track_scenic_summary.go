@@ -87,6 +87,10 @@ func (s *TrackService) primaryScenicSpots(ctx context.Context, ids []string) map
 		catalog, catalogErr := s.scenicCatalog.PrimarySpots(ctx, ids)
 		if catalogErr == nil {
 			for id, spot := range catalog {
+				// 目录条目名称可能尚未回填，保留识别记录中的名称，避免空名覆盖导致客户端标签缺失。
+				if existing := places[id]; existing != nil && spot != nil && strings.TrimSpace(spot.Name) == "" {
+					spot.Name = existing.Name
+				}
 				places[id] = spot
 			}
 		}
