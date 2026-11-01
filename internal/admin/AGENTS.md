@@ -69,6 +69,7 @@
 - **日志账号筛选**：最近操作记录提供账号下拉选择（含停用账号）；`GET /admin/api/audit-logs?username=...` 按不可改的登录名精确匹配，MySQL/Mongo 必须先筛选再取最近 100 条。不传或空串表示全部账号。选项来自后台账号列表，刷新保留选择，快速切换忽略旧请求响应。
 - **操作记录可读性**：账号页以“操作人、中文操作内容、对象、结果”展示日志，`static/audit_log.js` 统一维护方法/路径到业务行为的映射，新增被审计操作时同步更新；`accounts.html` 在 accounts.js 前加载该模块。原始方法、路径、状态和记录 ID 放在折叠详情，用 textContent 输出，保留账号筛选及同一 attempt/result 合并。状态 0 或 3xx 不能标成功，结果仅反映请求响应，批处理不声称逐项全成功；说明景点供应商回填可由页面自动分批触发，不能仅凭接口推定每条都由人工点击。旧记录没有正文/字段差异，不推测通过或驳回、启用或停用等具体改动，不为展示描述逐条查业务库；未知动作显示通用描述和原始详情。
 - **会话仅内存**：`SessionStore` 使用 `sync.RWMutex` + `map`，进程重启即失效。**不要替换为持久化存储**；管理员重新登录是合理代价。
+- **int64 ID 禁止经 JS Number 往返**：用户 ID 等业务 ID 是 18 位 int64，超出 JS Number 安全整数范围；JS 的 `String(number)` 还会把大整数四舍五入打印（`177920323643916288` → `"177920323643916300"`），经表单保存即写坏数据（2026-11-01 轨迹归属人因此被写错过）。约定：接口下发用字符串字段（用户列表 `id`、轨迹详情 `user_id_text`），前端只做文本展示与原样字符串回传，服务端按 `json.Number`/字符串解析；新增涉及 int64 ID 的后台接口与表单时沿用该约定，URL 路径参数天然是字符串无需处理。
 - **静态资源经 `go:embed`**：`static/` 目录通过 `//go:embed static` 内置进二进制；新增前端文件后**必须放到** `internal/admin/static/`，否则二进制找不到。`/admin/static/*filepath` 路由只读 `staticFS`，不读磁盘。
 - **安装包本机上传**：管理后台安装包上传走 `POST /admin/api/releases/upload-package`，服务端校验 APK/IPA 并读取包内版本名、版本号/Build、应用标识，同时计算大小和 MD5；前端使用返回的下载地址自动填写 `package_url`。发布页面固定 Android/APK，版本名和版本号只由包解析结果写入隐藏字段；服务端接口仍保留 iOS 兼容性。不要再把发布包上传链路改回浏览器 OSS 直传。
 - **路径前缀固定 `/admin`**：所有路由都注册在 `h.Group("/admin")` 之下；前端 `fetch` 也写死 `/admin/api/...` 与 `/admin/static/...`。修改前缀需要同时改 `routes.go` 与 `static/*` 中的 URL。
@@ -157,7 +158,7 @@ internal/admin/
 | GET | `/admin/api/tracks` | 鉴权 | 轨迹列表，支持 `title` / `user_name` 模糊搜索、`city_code` / `status` / `missing` 筛选及 cursor 翻页 |
 | POST | `/admin/api/tracks/import` | 轨迹操作 | 批量导入轨迹文件归属内部人员，multipart `files`（≤50）+ `owner_user_id` + `track_type` + `coordinate_system`，逐文件返回结果 |
 | GET | `/admin/api/cities` | 鉴权 | 返回内置城市/省份 Code、名称与省市层级，供轨迹和景点选择器使用 |
-| GET | `/admin/api/tracks/:track_id` | 鉴权 | 返回 `{track, geo?}`：轨迹详情、主景点（track.primary_scenic_spot）与地图索引简化轨迹线（GCJ02） |
+| GET | `/admin/api/tracks/:track_id` | 鉴权 | 返回 `{track, user_id_text, geo?}`：轨迹详情、主景点（track.primary_scenic_spot）与地图索引简化轨迹线（GCJ02）；`user_id_text` 是字符串形式的归属人 ID，编辑表单必须按字符串原样回传，避免 int64 经 JS Number 精度丢失 |
 | POST | `/admin/api/tracks/:track_id/place-refresh` | 轨迹操作 | 同步触发单条轨迹重新景点识别；任务忙 409，无索引 404 |
 | GET | `/admin/api/tracks/map-config` | 轨迹查看 | 轨迹详情地图的高德 Web Key 配置（service_host 指向 `/admin/api/tracks/amap-service`） |
 | GET | `/admin/api/tracks/amap-service` | 轨迹查看 | 高德 JS API 服务代理（与景点地图同一实现） |
@@ -413,3 +414,5 @@ Kimi 景点简介使用 `MOONSHOT_API_KEY` 和可选的 `KIMI_SCENIC_DESCRIPTION
   **事实**：`SessionStore` 是纯内存实现，重启即清空，必须重新登录。
 - **误解**：改环境变量可以覆盖后台密码或恢复已停用账号。
   **事实**：环境变量仅首次导入；此后以独立持久化账号为准。数据库不可用时拒绝鉴权，不重建临时管理员。
+- **误解**：后台表单里 int64 的用户 ID 用 number 输入框往返是安全的。
+  **事实**：JS Number 存不下 18 位 ID 且 `String()` 会截断打印，保存即写坏归属；必须用字符串字段下发并原样回传（见硬性约束「int64 ID 禁止经 JS Number 往返」）。
