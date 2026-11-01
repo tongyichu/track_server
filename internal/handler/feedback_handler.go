@@ -157,14 +157,18 @@ func (h *FeedbackHandler) UpdateOpsStatus(ctx context.Context, c *app.RequestCon
 		return
 	}
 	var body struct {
-		Status models.FeedbackStatus `json:"status"`
-		Reply  string                `json:"reply"`
+		Outcome  string                `json:"outcome"`
+		Revision *int64                `json:"revision"`
+		Status   models.FeedbackStatus `json:"status"`
+		Reply    string                `json:"reply"`
 	}
 	if err := json.Unmarshal(c.Request.Body(), &body); err != nil {
 		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid payload"})
 		return
 	}
 	if err := h.feedbackSvc.UpdateStatus(ctx, service.UpdateFeedbackStatusInput{
+		Outcome:    body.Outcome,
+		Revision:   body.Revision,
 		FeedbackID: c.Param("feedback_id"),
 		Status:     body.Status,
 		Reply:      body.Reply,
@@ -224,7 +228,7 @@ func (h *FeedbackHandler) checkInternalToken(c *app.RequestContext) bool {
 func (h *FeedbackHandler) writeFeedbackError(c *app.RequestContext, err error) {
 	var iae *service.InvalidArgumentError
 	switch {
-	case errors.Is(err, service.ErrCorrectionOptionUnavailable):
+	case errors.Is(err, service.ErrCorrectionOptionUnavailable), errors.Is(err, repository.ErrAlreadyExists):
 		c.JSON(http.StatusConflict, utils.H{"error": err.Error()})
 	case errors.As(err, &iae),
 		errors.Is(err, service.ErrFeedbackImageTooMany),

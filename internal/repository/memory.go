@@ -1262,6 +1262,15 @@ func (r *InMemoryFeedbackRepository) List(_ context.Context, filter models.Feedb
 		if filter.AppVersion != "" && item.AppVersion != filter.AppVersion {
 			continue
 		}
+		if filter.Kind == "correction" && item.Correction == nil || filter.Kind == "feedback" && item.Correction != nil {
+			continue
+		}
+		if filter.TrackID != "" && (item.Correction == nil || item.Correction.TrackID != filter.TrackID) {
+			continue
+		}
+		if filter.OptionID != "" && (item.Correction == nil || item.Correction.OptionID != filter.OptionID) {
+			continue
+		}
 		if filter.Cursor != nil {
 			if item.CreatedAt.After(filter.Cursor.CreatedAt) {
 				continue
@@ -1326,6 +1335,15 @@ func cloneFeedback(in *models.Feedback) *models.Feedback {
 	clone := *in
 	if in.Correction != nil {
 		correction := *in.Correction
+		if correction.HandledAt != nil {
+			handled := *correction.HandledAt
+			correction.HandledAt = &handled
+		}
+		if correction.TrackChange != nil {
+			change := *correction.TrackChange
+			change.Fields = append([]string(nil), change.Fields...)
+			correction.TrackChange = &change
+		}
 		clone.Correction = &correction
 	}
 	if len(in.Images) > 0 {

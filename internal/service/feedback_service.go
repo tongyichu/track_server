@@ -61,6 +61,9 @@ type SubmitFeedbackInput struct {
 }
 
 type UpdateFeedbackStatusInput struct {
+	Outcome    string
+	Operator   string
+	Revision   *int64
 	FeedbackID string
 	Status     models.FeedbackStatus
 	Reply      string
@@ -167,6 +170,16 @@ func (s *FeedbackService) ListOps(ctx context.Context, status models.FeedbackSta
 
 func (s *FeedbackService) ListOpsFiltered(ctx context.Context, filter models.FeedbackListFilter, limit int) (*models.FeedbackPage, error) {
 	filter.AppVersion = strings.TrimSpace(filter.AppVersion)
+	filter.Kind, filter.TrackID, filter.OptionID = strings.TrimSpace(filter.Kind), strings.TrimSpace(filter.TrackID), strings.TrimSpace(filter.OptionID)
+	if filter.Kind != "" && filter.Kind != "feedback" && filter.Kind != "correction" {
+		return nil, invalidArg("invalid feedback kind")
+	}
+	if filter.TrackID != "" && !correctionTrackIDPattern.MatchString(filter.TrackID) {
+		return nil, invalidArg("invalid track_id")
+	}
+	if len(filter.OptionID) > 128 {
+		return nil, invalidArg("invalid correction_option_id")
+	}
 	if filter.Status != "" && !isValidFeedbackStatus(filter.Status) {
 		return nil, invalidArg("invalid status")
 	}
@@ -242,7 +255,17 @@ func (s *FeedbackService) UpdateStatus(ctx context.Context, in UpdateFeedbackSta
 	if in.Status == models.FeedbackStatusResolved && reply == "" {
 		return ErrFeedbackReplyRequired
 	}
-	return s.repo.UpdateStatus(ctx, strings.TrimSpace(in.FeedbackID), in.Status, reply)
+	item, err := s.GetOps(ctx, strings.TrimSpace(in.FeedbackID))
+	if err != nil {
+		return err
+	}
+	if item.Correction != nil {
+		return s.updateCorrectionStatus(ctx, item, in, reply)
+	}
+	if in.Outcome != "" {
+		return invalidArg("普通反馈不能设置纠错处理结果")
+	}
+	return s.repo.UpdateStatus(ctx, item.FeedbackID, in.Status, reply)
 }
 
 func (s *FeedbackService) GetImageFile(ctx context.Context, userID int64, feedbackID, imageID string, allowAny bool) (*FeedbackImageFile, error) {

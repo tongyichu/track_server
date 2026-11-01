@@ -44,6 +44,9 @@ type FeedbackListCursor struct {
 }
 
 type FeedbackListFilter struct {
+	Kind       string
+	TrackID    string
+	OptionID   string
 	UserID     int64
 	Status     FeedbackStatus
 	AppVersion string

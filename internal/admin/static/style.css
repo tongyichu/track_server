@@ -250,10 +250,10 @@ table.data.table .btn { white-space: nowrap; }
 .feedback-stat { display: flex; flex-direction: column; justify-content: center; gap: 8px; min-width: 0; min-height: 112px; margin: 0; padding: 20px 22px; }
 .feedback-stat span { color: var(--tblr-secondary); font-size: 12px; }
 .feedback-stat strong { font-size: 24px; line-height: 1.2; font-weight: 700; }
-.feedback-toolbar { display: grid; grid-template-columns: minmax(100px, .7fr) repeat(2, minmax(130px, 1fr)) auto; align-items: end; gap: 12px; }
+.feedback-toolbar { display: grid; grid-template-columns: repeat(3, minmax(130px, 1fr)); align-items: end; gap: 12px; }
 .feedback-toolbar label { display: grid; grid-template-rows: auto 40px; min-width: 0; gap: 6px; margin: 0; }
 .feedback-toolbar .form-control, .feedback-toolbar .form-select { width: 100%; min-width: 0; height: 40px; margin: 0; }
-.feedback-toolbar-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.feedback-toolbar-actions { grid-column: 1 / -1; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .feedback-toolbar-actions .btn { min-height: 40px; margin: 0; white-space: nowrap; }
 .feedback-page-hint { margin: 0 0 12px; }
 .feedback-page-hint:empty { display: none; }
@@ -862,3 +862,7 @@ table.admin-audit-table { width: 100%; min-width: 900px; table-layout: fixed; }
   .topbar .user.admin-account-footer { flex: 0 1 auto; max-width: calc(100vw - 116px); }
   .topbar .user .admin-settings-toggle { flex-basis: 40px; width: 40px; height: 40px; padding: 10px; }
 }
+
+.correction-config-table { min-width: 720px; }
+.correction-config-table td:nth-child(-n+2) { min-width: 250px; }
+.feedback-track-context { margin-top: 14px; padding: 14px; border: 1px solid var(--tblr-border-color); border-radius: 10px; overflow-wrap: anywhere; }

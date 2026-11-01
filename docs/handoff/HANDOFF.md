@@ -1,5 +1,13 @@
 # 工作交接：协议 H5 页面（2026-10-13）
 
+## 2026-11-01：双仓同步推送、小米安装与 Server 部署
+
+- 用户授权双仓同步最新、推送、安装小米并部署 Server。先提交保留本地代码，再普通 merge 合入远端；只处理原工作仓库，不修改 backup 副本。
+- 合并 origin/main/ae951f6 的纠错配置与核实处理升级，保留本人邮箱找回、账号安全和操作记录固定列宽；反馈六字段采用三列布局与独立整行按钮。无 SMTP 配置，不启用邮件、不发送真实邮件，保留生产配置及账号权限持久化。
+- 合并后执行 Android assembleDebug、Go build、JS 静态语法及 diff 检查；不新增或运行自动化业务测试，业务与界面由用户手动验收。本节写入时构建和上线待执行，不能视为已成功。
+- 先提交推送再按最终提交构建 linux/amd64 镜像；生产仅替换精确容器 track_server_go，保留环境、持久化目录、历史容器与旧镜像，核对 MySQL 和账号启动及内外健康。邮件保持 disabled。
+- 更新前交接归档：`docs/handoff/history_handoff/HANDOFF-20261101-190811.md`。最终提交、APK、安装启动、镜像与部署健康回执：`/private/tmp/track-sync-xiaomi-deploy-tpvtywtz/receipt.md`，以完成回执和会话回复为准。
+
 ## 2026-11-01：本人邮箱验证、邮件找回密码与管理员重置迁移（本地实现，未部署）
 
 - 用户认可“邮件用于验证身份后自行设置新密码，不发送登录密码”，明确要求开发；过程中表示尚无邮件准备，要求检查现有 Server 支持哪家。只读核查生产 /root/.env 的配置项名称/是否存在，以及 Postfix 状态：已有阿里云 OSS/STS，没有 SMTP/邮件配置，Postfix/sendmail 未启动且没有 relay。未输出密钥、未开通云产品、未修改生产配置或发送真实邮件。推荐兼容阿里云邮件推送的加密 SMTP，实际启用仍需发信域名、发信地址、SMTP 专用凭证。
@@ -20,6 +28,23 @@
 - admin scoped AGENTS 增加“展开详情不重分配列宽”约束，固定上述比例、局部滚动和移动卡片边界；无 API、日志存储、权限、筛选或请求逻辑变化，不修改根 AGENTS 或业务协议。
 - `go build ./...` 与 `git diff --check` 通过。无 JS 修改，不重复无关语法检查；按项目约定未新增或运行自动化测试、浏览器或接口自动化，未操作生产，实际展开/收起效果待用户手动验收。AGENTS/freshness 校验仍有原有治理问题，报告 `/private/tmp/track-admin-audit-columns-agents.json` 和 `/private/tmp/track-admin-audit-columns-freshness.json`，未声称检查全绿。
 - 更新前完整 handoff 已归档到 `docs/handoff/history_handoff/HANDOFF-20261101-181448.md`。本轮尚未提交、推送或部署；上一轮 main/7312801 已成功部署，内外健康 200、3 个账号加载正常，资源版本 1c3dc1b3de2850b6845d，成功回执 `/private/tmp/track-admin-audit-layout-deploy-md4tr31q/receipt.md`。
+## 2026-11-01：纠错升级提交推送
+
+- 用户明确要求将 android-track-backup 与 track-server-backup 两仓代码提交推送。本仓 main fetch 后与 origin/main 为 0/0，提交本次纠错配置、结构化处理结果、三种仓储条件更新/筛选、后台核实编辑流程，以及 API/路由/模块说明和交接文档。
+- 复用本次已通过的 go build ./...、四份 JS node --check；提交前 git diff --check 通过。未新增/运行业务测试；既有规则基线检查问题保留在上一节记录，不宣称规则检查通过。
+- 本次不涉及部署或生产配置、无新表列；最终提交号和远端核验以会话回复为准。
+
+
+## 2026-11-01：backup 副本纠错流程升级
+
+- 用户明确指定仅在 android-track-backup 与 track-server-backup 开发，先同步最新远端。Server main 已为 7312801，Android main 快进到 0400ef4；未修改原 android-track/track_server 工作副本。
+- 纠错配置新增双语解释与输入提示；纠错结果 outcome/handled_at 与状态分离，处理人及最近来源编辑仅后台可见，correction revision 防并发覆盖。新数据复用现有 JSON/BSON，MySQL/Mongo/内存均支持条件更新与分页前类型/轨迹/选项筛选，无新表列。
+- 后台新增筛选、结果选择、当前轨迹资料异步核实及共享编辑入口；source_feedback_id 校验跨模块操作权限，只在实际保存后记录最近修改字段。非跨库原子，关联失败明确返回部分成功提示；无完整前后值审计、无自动轨迹修复，景点候选确认不自动关联。纯文本历史纠错仍按旧逻辑展示，结构化筛选只覆盖 correction 快照。
+- go build ./... 与变更 JS node --check 已通过；按既有约定不新增/运行业务测试，不启动数据库/容器。API/路由分册和 admin scoped 说明已更新。未提交推送或部署，线上仍旧版本；端到端及后台布局需用户验证。
+- 最终 go build ./... 曾因默认缓存目录的沙箱权限失败，已按要求申请扩权后重跑通过。共享 ui.js 的 formDialog 仅为纠错连续弹窗新增可选 waitForHidden，默认调用时序不变；四份变更 JS 静态语法检查通过。
+- AGENTS 静态校验未通过：12 个错误（root 58KB/缺 precedence、10 个既有超 1000 行文件）和 161 条路径等警告，基线 git show 已确认上述文件本来就超长。全局 /Users/foxcoder/.codex/AGENTS.md 为空，入口规则未落盘；建议修复命令 python3 /Users/foxcoder/.codex/skills/agents-md-generator/scripts/manage_docs.py sync-global-codex-agents /Users/foxcoder/work/track-server-backup --write，本轮未写全局规则或扩大治理。日志 /private/tmp/track-server-backup-correction-agents.log。
+
+
 
 ## 2026-11-01：部署中文操作日志与后台布局修复
 

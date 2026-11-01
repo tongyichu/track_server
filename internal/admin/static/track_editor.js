@@ -35,6 +35,7 @@
     const values = await window.AdminUI.form({
       title: (readOnly ? '查看轨迹 ' : '编辑轨迹 ') + trackID,
       readOnly: readOnly,
+      waitForHidden: !!options.waitForHidden,
       confirmText: '保存修改',
       cancelText: readOnly ? '关闭' : '删除',
       cancelDanger: !readOnly,
@@ -89,6 +90,7 @@
       return false;
     }
     const body = {
+      source_feedback_id: options.sourceFeedbackID || undefined,
       user_id: Number(values.user_id), session_id: values.session_id, title: values.title, city_code: values.city_code,
       locate_addr: values.locate_addr, track_type: values.track_type, source_tag: values.source_tag,
       coordinate_system: values.coordinate_system, description: values.description, description_source: values.description_source,
@@ -108,7 +110,9 @@
         window.AdminUI.alert(message, 'danger');
         return false;
       }
-      window.AdminUI.alert('轨迹已保存', 'success');
+      const saved = await response.json();
+      if (saved.correction_warning) window.AdminUI.alert(saved.correction_warning, 'warning');
+      else window.AdminUI.alert('轨迹已保存', 'success');
       if (typeof options.onSaved === 'function') await options.onSaved();
       return true;
     } catch (error) {

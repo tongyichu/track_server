@@ -21,6 +21,10 @@
 - 投稿审核页顶部展示当前待审核与超时队列，以及本月通过、驳回、通过率和平均审核时长；复用 `/admin/api/dashboard?period=month` 的只读统计。
 - 查看、修正和删除用户轨迹；列表按 ID、城市、标题、运动类型、用户名、轨迹图、状态和操作展示，支持标题及用户名模糊搜索、城市和状态筛选，并保留游标分页。用户名同时展示头像；景点详情中的相关轨迹列表复用相同列顺序。列表不单独放删除按钮；编辑轨迹使用共享 `static/track_editor.js` 表单，底部删除动作需二次确认，删除为软删除并同步清理关联数据。
 - 反馈与纠错页默认筛选待处理，展示状态统计、反馈用户名称和完整内容；点击查看会在弹窗中加载详情并处理反馈。`static/feedback_correction.js` 优先读取服务端 `correction` 快照，旧记录兼容完整的六种中英文纠错正文；不识别的内容仍按普通反馈显示，不改写原始正文。页面「纠错选项」可新增、改名、排序、启停，由 API 下发客户端。
+- 纠错选项支持 description/description_en 与 notes_hint/notes_hint_en（可空、单行、各最多 160 字），后台配置与客户端展示共用协议，不按显示名称推导类别。反馈列表的 kind/track_id/correction_option_id 在 MySQL/Mongo/内存仓储分页前过滤，仅按结构化 correction 识别类型，旧文本纠错保留兼容展示。
+- 纠错处理结果与状态分离：corrected/unchanged 配 resolved，unverified 配 ignored；新版后台提交 revision 作条件更新，终态必须填写结果及用户可见回复，冲突返回 409 且保留草稿。处理人只从后台 session 取值。服务与仓储入口为 internal/service/feedback_resolution.go 和 internal/repository/feedback_resolution.go；复用 correction_json/BSON，不新增表列。
+- 纠错详情按轨迹查看权限异步读取当前资料，并复用共享 track_editor.js；来源 source_feedback_id 的轨迹保存同时要求轨迹操作与反馈操作权限，核对纠错与轨迹一致后，只在实际保存成功且字段变化时记录最近关联修改的字段名、处理人和时间。轨迹写入与反馈关联非跨仓储事务，关联失败返回 correction_warning，页面必须明确提示轨迹已保存。仅修改反馈状态不视为轨迹已修正；历史无结构化快照时不能伪造关联。后台详情额外返回 handled_by/track_change，业务客户端不下发管理员身份及内部改动记录。
+
 - 用户管理支持昵称模糊搜索，以及内部人员、资料所在城市、性别、生日星座和当前账号限制状态组合筛选；同行管理按会话标题、轨迹管理按标题和用户名提供服务端模糊搜索，轨迹列表还支持城市、状态和资料缺项筛选，均保留游标分页。
 
 模块通过 `admin.NewModule(...)`、`Module.ConfigureEmailRecovery(...)`、`Module.RegisterRoutes(h)` 注入和注册，不被业务 handler 引用；Close 同时停止会话 GC 与邮件 worker。

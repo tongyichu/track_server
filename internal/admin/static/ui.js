@@ -128,10 +128,12 @@
       footer.append(cancel, submit);
       const modal = new tabler.Modal(root, { backdrop: 'static' });
       let settled = false;
+      let pendingValue = null;
       function finish(value) {
         if (settled) return;
         settled = true;
-        resolve(value);
+        pendingValue = value;
+        if (!options.waitForHidden) resolve(value);
         modal.hide();
       }
       cancel.addEventListener('click', async function () {
@@ -156,7 +158,7 @@
         finish(values);
       });
       submit.addEventListener('click', function () { form.requestSubmit(); });
-      root.addEventListener('hidden.bs.modal', function () { if (!settled) resolve(null); root.remove(); });
+      root.addEventListener('hidden.bs.modal', function () { if (options.waitForHidden && settled) resolve(pendingValue); else if (!settled) resolve(null); root.remove(); });
       modal.show();
       setTimeout(function () { const first = form.querySelector('input, textarea'); if (first) first.focus(); }, 150);
     });
