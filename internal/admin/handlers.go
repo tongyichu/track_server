@@ -1570,6 +1570,10 @@ func handleAdminRepoError(c *app.RequestContext, err error) {
 // ListCompanions 处理 GET /admin/api/companions
 //
 // query：
+//   - title:        房间标题模糊搜索；
+//   - owner_name:   发起人昵称模糊搜索；
+//   - track_type:   运动类型精确筛选；
+//   - province_code / city_code: 按发起人资料所在省市精确筛选；
 //   - cursor_started_at: RFC3339 时间，上一页最后一条的 started_at；
 //   - cursor_session_id: 上一页最后一条会话的 session_id；
 //   - limit:             每页条数（默认 20，最大 100）。
@@ -1580,8 +1584,20 @@ func (h *Handler) ListCompanions(ctx context.Context, c *app.RequestContext) {
 	}
 	limit := parseAdminListLimit(string(c.Query("limit")))
 	title := strings.TrimSpace(string(c.Query("title")))
+	ownerName := strings.TrimSpace(string(c.Query("owner_name")))
+	trackType := strings.TrimSpace(string(c.Query("track_type")))
+	provinceCode := strings.TrimSpace(string(c.Query("province_code")))
+	cityCode := strings.TrimSpace(string(c.Query("city_code")))
 	if utf8.RuneCountInString(title) > 128 {
 		c.JSON(http.StatusBadRequest, utils.H{"error": "title exceeds 128 characters"})
+		return
+	}
+	if utf8.RuneCountInString(ownerName) > 128 {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "owner_name exceeds 128 characters"})
+		return
+	}
+	if utf8.RuneCountInString(trackType) > 32 {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid track_type"})
 		return
 	}
 	var cursor *models.CompanionSessionListCursor
@@ -1598,28 +1614,134 @@ func (h *Handler) ListCompanions(ctx context.Context, c *app.RequestContext) {
 		}
 		cursor = &models.CompanionSessionListCursor{StartedAt: t, SessionID: sid}
 	}
-	var items []*models.CompanionSession
-	var total int64
-	var err error
-	if title != "" {
-		search, ok := h.companionRepo.(repository.AdminCompanionTitleSearchRepository)
+	// 发起人昵称 / 省 / 市先解析为发起人 ID 集合，再下沉到同行仓储参与总数与分页。
+	var ownerIDs []int64
+	ownerFilterActive := ownerName != "" || provinceCode != "" || cityCode != ""
+	if ownerFilterActive {
+		search, ok := h.userRepo.(repository.AdminUserListFilterRepository)
 		if !ok {
-			c.JSON(http.StatusInternalServerError, utils.H{"error": "companion title search not configured"})
+			c.JSON(http.StatusInternalServerError, utils.H{"error": "user search not configured"})
 			return
 		}
-		items, total, err = search.ListAdminCompanionsByTitle(ctx, title, cursor, limit)
-	} else {
-		items, err = h.companionRepo.ListAllSessions(ctx, cursor, limit)
-		if err == nil {
-			total, err = h.companionRepo.CountAllSessions(ctx)
+		ownerIDs = make([]int64, 0)
+		resolved := map[int64]bool{}
+		first := true
+		addFilter := func(filter repository.AdminUserListFilter) bool {
+			matched := make(map[int64]bool)
+			var userCursor *models.UserListCursor
+			for {
+				users, _, err := search.ListAdminUsers(ctx, filter, userCursor, 100)
+				if err != nil {
+					c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+					return false
+				}
+				for _, user := range users {
+					if user != nil {
+						matched[user.ID] = true
+					}
+				}
+				if len(users) < 100 {
+					break
+				}
+				last := users[len(users)-1]
+				userCursor = &models.UserListCursor{CreatedAt: last.CreatedAt, ID: last.ID}
+			}
+			if first {
+				resolved = matched
+				first = false
+			} else {
+				for id := range resolved {
+					if !matched[id] {
+						delete(resolved, id)
+					}
+				}
+			}
+			return true
+		}
+		if ownerName != "" && !addFilter(repository.AdminUserListFilter{Title: ownerName}) {
+			return
+		}
+		if cityCode != "" && !addFilter(repository.AdminUserListFilter{CityCode: cityCode}) {
+			return
+		}
+		if provinceCode != "" && !addFilter(repository.AdminUserListFilter{ProvinceCode: provinceCode}) {
+			return
+		}
+		for id := range resolved {
+			ownerIDs = append(ownerIDs, id)
 		}
 	}
+	listRepo, ok := h.companionRepo.(repository.AdminCompanionListRepository)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "companion list filters not configured"})
+		return
+	}
+	items, total, err := listRepo.ListAdminCompanions(ctx, repository.AdminCompanionListFilter{
+		Title: title, TrackType: trackType, OwnerIDs: ownerIDs,
+	}, cursor, limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
 		return
 	}
+	// 按当前页批量补充发起人昵称/头像与成员记录数，去重且不逐行查询。
+	ownerIDSet := make(map[int64]struct{}, len(items))
+	sessionIDs := make([]string, 0, len(items))
+	for _, item := range items {
+		if item == nil {
+			continue
+		}
+		sessionIDs = append(sessionIDs, item.SessionID)
+		if item.OwnerUserID > 0 {
+			ownerIDSet[item.OwnerUserID] = struct{}{}
+		}
+	}
+	ownerIDList := make([]int64, 0, len(ownerIDSet))
+	for id := range ownerIDSet {
+		ownerIDList = append(ownerIDList, id)
+	}
+	owners := map[int64]*models.User{}
+	if h.userRepo != nil && len(ownerIDList) > 0 {
+		if found, findErr := h.userRepo.FindByIDs(ctx, ownerIDList); findErr == nil && found != nil {
+			owners = found
+		}
+	}
+	authors := make([]*models.User, 0, len(owners))
+	for _, id := range ownerIDList {
+		authors = append(authors, owners[id])
+	}
+	h.decorateAdminUserAvatars(ctx, authors)
+	memberCounts := map[string]int{}
+	if counts, countErr := listRepo.CountMembersBySessionIDs(ctx, sessionIDs); countErr == nil && counts != nil {
+		memberCounts = counts
+	}
+	type adminCompanionListItem struct {
+		*models.CompanionSession
+		OwnerName   string `json:"owner_name"`
+		OwnerAvatar string `json:"owner_avatar_url"`
+		MemberCount int    `json:"member_count"`
+	}
+	listItems := make([]adminCompanionListItem, 0, len(items))
+	for _, item := range items {
+		if item == nil {
+			continue
+		}
+		ownerName := "未知用户"
+		ownerAvatar := ""
+		if owner := owners[item.OwnerUserID]; owner != nil {
+			if strings.TrimSpace(owner.Nickname) != "" {
+				ownerName = owner.Nickname
+			}
+			ownerAvatar = rewriteAdminStaticURL(owner.AvatarURL)
+		}
+		listItems = append(listItems, adminCompanionListItem{
+			CompanionSession: item,
+			OwnerName:        ownerName,
+			OwnerAvatar:      ownerAvatar,
+			MemberCount:      memberCounts[item.SessionID],
+		})
+	}
 	resp := utils.H{
-		"items":    items,
+		"items":    listItems,
 		"total":    total,
 		"has_more": len(items) == limit,
 	}

@@ -69,21 +69,47 @@ func (r *MongoCompanionRepository) CountAllSessions(context.Context) (int64, err
 	return 0, errors.New("MongoCompanionRepository.CountAllSessions not implemented")
 }
 
-func (r *MongoCompanionRepository) ListAdminCompanionsByTitle(ctx context.Context, title string, cursor *models.CompanionSessionListCursor, limit int) ([]*models.CompanionSession, int64, error) {
+// ListAdminCompanions 按组合筛选条件返回同行会话（按 started_at desc, session_id desc）。仅供管理后台使用。
+func (r *MongoCompanionRepository) ListAdminCompanions(ctx context.Context, filter AdminCompanionListFilter, cursor *models.CompanionSessionListCursor, limit int) ([]*models.CompanionSession, int64, error) {
 	if r.sessionCollection == nil {
-		return nil, 0, errors.New("MongoCompanionRepository.ListAdminCompanionsByTitle not implemented")
+		return nil, 0, errors.New("MongoCompanionRepository.ListAdminCompanions not implemented")
 	}
 	if limit <= 0 {
 		limit = 20
 	}
-	filter := bson.M{"title": primitive.Regex{Pattern: regexp.QuoteMeta(title), Options: "i"}}
-	total, err := r.sessionCollection.CountDocuments(ctx, filter)
+	conditions := bson.A{}
+	if filter.Title != "" {
+		conditions = append(conditions, bson.M{"title": primitive.Regex{Pattern: regexp.QuoteMeta(filter.Title), Options: "i"}})
+	}
+	if filter.TrackType != "" {
+		conditions = append(conditions, bson.M{"track_type": filter.TrackType})
+	}
+	if filter.OwnerIDs != nil {
+		if len(filter.OwnerIDs) == 0 {
+			return []*models.CompanionSession{}, 0, nil
+		}
+		conditions = append(conditions, bson.M{"owner_user_id": bson.M{"$in": filter.OwnerIDs}})
+	}
+	query := bson.M{}
+	if len(conditions) > 0 {
+		query["$and"] = conditions
+	}
+	if cursor != nil && !cursor.StartedAt.IsZero() {
+		cursorCond := bson.M{"$or": bson.A{bson.M{"started_at": bson.M{"$lt": cursor.StartedAt}}, bson.M{"started_at": cursor.StartedAt, "session_id": bson.M{"$lt": cursor.SessionID}}}}
+		if len(conditions) > 0 {
+			query["$and"] = append(conditions, cursorCond)
+		} else {
+			query = cursorCond
+		}
+	}
+	total, err := r.sessionCollection.CountDocuments(ctx, func() bson.M {
+		if len(conditions) > 0 {
+			return bson.M{"$and": conditions}
+		}
+		return bson.M{}
+	}())
 	if err != nil {
 		return nil, 0, err
-	}
-	query := bson.M{"$and": bson.A{filter}}
-	if cursor != nil && !cursor.StartedAt.IsZero() {
-		query["$and"] = bson.A{filter, bson.M{"$or": bson.A{bson.M{"started_at": bson.M{"$lt": cursor.StartedAt}}, bson.M{"started_at": cursor.StartedAt, "session_id": bson.M{"$lt": cursor.SessionID}}}}}
 	}
 	rows, err := r.sessionCollection.Find(ctx, query, options.Find().SetSort(bson.D{{Key: "started_at", Value: -1}, {Key: "session_id", Value: -1}}).SetLimit(int64(limit)))
 	if err != nil {
@@ -99,6 +125,37 @@ func (r *MongoCompanionRepository) ListAdminCompanionsByTitle(ctx context.Contex
 		items = append(items, item)
 	}
 	return items, total, rows.Err()
+}
+
+// CountMembersBySessionIDs 批量统计每个会话的成员记录数。仅供管理后台使用。
+func (r *MongoCompanionRepository) CountMembersBySessionIDs(ctx context.Context, sessionIDs []string) (map[string]int, error) {
+	counts := make(map[string]int, len(sessionIDs))
+	if len(sessionIDs) == 0 {
+		return counts, nil
+	}
+	if r.memberCollection == nil {
+		return nil, errors.New("MongoCompanionRepository.CountMembersBySessionIDs not implemented")
+	}
+	pipeline := mongo.Pipeline{
+		{{Key: "$match", Value: bson.M{"session_id": bson.M{"$in": sessionIDs}}}},
+		{{Key: "$group", Value: bson.M{"_id": "$session_id", "count": bson.M{"$sum": 1}}}},
+	}
+	rows, err := r.memberCollection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close(ctx)
+	for rows.Next(ctx) {
+		var result struct {
+			SessionID string `bson:"_id"`
+			Count     int    `bson:"count"`
+		}
+		if err := rows.Decode(&result); err != nil {
+			return nil, err
+		}
+		counts[result.SessionID] = result.Count
+	}
+	return counts, rows.Err()
 }
 
 func (r *MongoCompanionRepository) UpsertMember(context.Context, *models.CompanionSessionMember) error {

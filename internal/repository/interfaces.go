@@ -129,11 +129,24 @@ type AdminUserListFilter struct {
 	Gender     string
 	ZodiacSign string
 	Restricted *bool
+	// ProvinceCode 按用户资料所在省份精确筛选；与 CityCode 同时设置时取交集。
+	ProvinceCode string
 }
 
-// AdminCompanionTitleSearchRepository provides paginated fuzzy session title search.
-type AdminCompanionTitleSearchRepository interface {
-	ListAdminCompanionsByTitle(ctx context.Context, title string, cursor *models.CompanionSessionListCursor, limit int) ([]*models.CompanionSession, int64, error)
+// AdminCompanionListRepository provides the combined server-side filters used by the admin companion list.
+type AdminCompanionListRepository interface {
+	// ListAdminCompanions 按筛选条件返回同行会话（按 started_at desc, session_id desc），
+	// 所有条件在仓储层参与总数统计与游标分页。
+	ListAdminCompanions(ctx context.Context, filter AdminCompanionListFilter, cursor *models.CompanionSessionListCursor, limit int) ([]*models.CompanionSession, int64, error)
+	// CountMembersBySessionIDs 批量统计每个会话的成员记录数（含曾加入后离开/移出的成员）。仅供管理后台使用。
+	CountMembersBySessionIDs(ctx context.Context, sessionIDs []string) (map[string]int, error)
+}
+
+type AdminCompanionListFilter struct {
+	Title     string
+	TrackType string
+	// OwnerIDs 限制发起人范围（昵称/省市筛选解析结果）；nil 表示不限制，非 nil 空切片表示无匹配。
+	OwnerIDs []int64
 }
 
 // TrackCaloriesBackfiller is implemented by repositories that can repair

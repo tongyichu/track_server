@@ -2686,6 +2686,10 @@ func (r *MySQLUserRepository) ListAdminUsers(ctx context.Context, filter AdminUs
 		conditions = append(conditions, "city_code = ?")
 		args = append(args, filter.CityCode)
 	}
+	if filter.ProvinceCode != "" {
+		conditions = append(conditions, "province_code = ?")
+		args = append(args, filter.ProvinceCode)
+	}
 	switch filter.Gender {
 	case "male", "female":
 		conditions = append(conditions, "gender = ?")

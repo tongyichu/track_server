@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/go-sql-driver/mysql"
@@ -246,17 +247,37 @@ func (r *MySQLCompanionRepository) CountAllSessions(ctx context.Context) (int64,
 	return count, nil
 }
 
-func (r *MySQLCompanionRepository) ListAdminCompanionsByTitle(ctx context.Context, title string, cursor *models.CompanionSessionListCursor, limit int) ([]*models.CompanionSession, int64, error) {
+// ListAdminCompanions 按组合筛选条件返回同行会话（按 started_at desc, session_id desc）。仅供管理后台使用。
+func (r *MySQLCompanionRepository) ListAdminCompanions(ctx context.Context, filter AdminCompanionListFilter, cursor *models.CompanionSessionListCursor, limit int) ([]*models.CompanionSession, int64, error) {
 	if limit <= 0 {
 		limit = 20
 	}
-	pattern := "%" + escapeAdminLike(title) + "%"
+	where := ` WHERE 1=1`
+	args := []any{}
+	if filter.Title != "" {
+		where += ` AND companion_sessions.title LIKE ? ESCAPE '!'`
+		args = append(args, "%"+escapeAdminLike(filter.Title)+"%")
+	}
+	if filter.TrackType != "" {
+		where += ` AND companion_sessions.track_type = ?`
+		args = append(args, filter.TrackType)
+	}
+	if filter.OwnerIDs != nil {
+		if len(filter.OwnerIDs) == 0 {
+			return []*models.CompanionSession{}, 0, nil
+		}
+		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(filter.OwnerIDs)), ",")
+		where += ` AND companion_sessions.owner_user_id IN (` + placeholders + `)`
+		for _, id := range filter.OwnerIDs {
+			args = append(args, id)
+		}
+	}
 	var total int64
-	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM companion_sessions WHERE title LIKE ? ESCAPE '!'`, pattern).Scan(&total); err != nil {
+	countArgs := append([]any(nil), args...)
+	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM companion_sessions`+where, countArgs...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
-	query := companionSessionSelectSQL() + ` WHERE companion_sessions.title LIKE ? ESCAPE '!'`
-	args := []any{pattern}
+	query := companionSessionSelectSQL() + where
 	if cursor != nil && !cursor.StartedAt.IsZero() {
 		query += ` AND (companion_sessions.started_at < ? OR (companion_sessions.started_at = ? AND companion_sessions.session_id < ?))`
 		args = append(args, cursor.StartedAt, cursor.StartedAt, cursor.SessionID)
@@ -280,6 +301,34 @@ func (r *MySQLCompanionRepository) ListAdminCompanionsByTitle(ctx context.Contex
 		return nil, 0, err
 	}
 	return items, total, nil
+}
+
+// CountMembersBySessionIDs 批量统计每个会话的成员记录数。仅供管理后台使用。
+func (r *MySQLCompanionRepository) CountMembersBySessionIDs(ctx context.Context, sessionIDs []string) (map[string]int, error) {
+	counts := make(map[string]int, len(sessionIDs))
+	if len(sessionIDs) == 0 {
+		return counts, nil
+	}
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(sessionIDs)), ",")
+	args := make([]any, 0, len(sessionIDs))
+	for _, id := range sessionIDs {
+		args = append(args, id)
+	}
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT session_id, COUNT(*) FROM companion_session_members WHERE session_id IN (`+placeholders+`) GROUP BY session_id`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var sessionID string
+		var count int
+		if err := rows.Scan(&sessionID, &count); err != nil {
+			return nil, err
+		}
+		counts[sessionID] = count
+	}
+	return counts, rows.Err()
 }
 
 func (r *MySQLCompanionRepository) UpsertMember(ctx context.Context, member *models.CompanionSessionMember) error {
