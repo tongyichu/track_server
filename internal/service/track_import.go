@@ -72,6 +72,7 @@ func (s *AdminTrackImportService) importOne(ctx context.Context, ownerUserID int
 	if len(points) < 2 {
 		return fail(errors.New("轨迹点不足 2 个，无法生成轨迹"))
 	}
+	ensureImportTimestamps(points, trackType)
 
 	distance := importTrackDistance(points)
 	startTime, endTime := importTrackTimeRange(points)
@@ -131,6 +132,39 @@ func (s *AdminTrackImportService) importOne(ctx context.Context, ownerUserID int
 }
 
 func stringPtr(v string) *string { return &v }
+
+// ensureImportTimestamps 在源文件完全不带时间戳时，按运动类型的估算速度
+// 沿轨迹累计合成时间戳（起点为当前时间），保证耗时/均速/热量可计算，
+// 且转换后的 KMZ 带 <when> 使客户端配速/海拔图表可绘制。已有时间戳的不动。
+func ensureImportTimestamps(points []models.TrackPoint, trackType string) {
+	for _, p := range points {
+		if !p.Timestamp.IsZero() {
+			return
+		}
+	}
+	speedMps := importTrackNominalSpeedKmh(trackType) / 3.6
+	points[0].Timestamp = time.Now()
+	for i := 1; i < len(points); i++ {
+		seg := haversineMeters(points[i-1].Latitude, points[i-1].Longitude, points[i].Latitude, points[i].Longitude)
+		points[i].Timestamp = points[i-1].Timestamp.Add(time.Duration(seg/speedMps * float64(time.Second)))
+	}
+}
+
+// importTrackNominalSpeedKmh 返回各运动类型的估算速度（km/h），仅用于合成时间戳。
+func importTrackNominalSpeedKmh(trackType string) float64 {
+	switch normalizeTrackTypeCode(trackType) {
+	case "running":
+		return 10
+	case "climbing":
+		return 2.5
+	case "riding":
+		return 15
+	case "driving":
+		return 60
+	default: // hiking 及其他
+		return 4
+	}
+}
 
 // importTrackDistance 用 haversine 累加相邻点距离（米）。
 func importTrackDistance(points []models.TrackPoint) float64 {

@@ -339,6 +339,7 @@ GET /admin/api/users
        → AdminTrackImportService 逐文件解析（复用地图索引解析器）→ 服务端直传 OSS 归属人目录
        → TrackService.CreateTrack 建档（source_tag=manual_seed，已完成），自动排队地图索引与成就结算
        → 城市/地址由内置行政区目录离线解析；不生成预览四图与路线描述，由客户端 DevMode 后续补齐
+       → 源文件无时间戳时按运动类型估算速度沿轨迹合成时间戳（见 docs/api/admin-tracks.md），保证耗时/热量/均速与客户端图表可用
        → 展示 preview_images.landscape_day_url（日间横版 4:3），并经后台静态代理访问
        → 用户名通过当前页 user_id 批量读取用户昵称，列表不展示 user_id
   → GET /admin/api/dashboard?period=month 展示本月轨迹类型与城市统计表
