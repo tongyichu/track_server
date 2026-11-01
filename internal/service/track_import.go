@@ -90,6 +90,9 @@ func (s *AdminTrackImportService) importOne(ctx context.Context, ownerUserID int
 	cityCode, locateAddr := importTrackLocation(points, coordinateSystem)
 	titleTrack := &models.Track{TrackType: trackType, Distance: distance, LocateAddr: locateAddr, StartTime: startTime}
 	title := generatedTrackTitle(titleTrack, points)
+	if nameTitle := importTitleFromFileName(file.FileName); nameTitle != "" {
+		title = nameTitle
+	}
 	if title == "" {
 		title = "导入的轨迹"
 	}
@@ -335,6 +338,31 @@ func writeImportKMZ(kmzPath string, points []models.TrackPoint) error {
 		return err
 	}
 	return out.Close()
+}
+
+// importTitleFromFileName 从上传文件名提取默认标题：去扩展名后含汉字时
+// 直接作为标题（运营文件命名即路线名，如「北京奥森北园画马2026」），
+// 否则返回空串走自动生成规则。最长截取 40 个字符。
+func importTitleFromFileName(name string) string {
+	base := strings.TrimSuffix(filepath.Base(strings.TrimSpace(name)), filepath.Ext(name))
+	base = strings.TrimSpace(base)
+	if !hasHanRune(base) {
+		return ""
+	}
+	runes := []rune(base)
+	if len(runes) > 40 {
+		base = string(runes[:40])
+	}
+	return base
+}
+
+func hasHanRune(s string) bool {
+	for _, r := range s {
+		if r >= 0x4e00 && r <= 0x9fff {
+			return true
+		}
+	}
+	return false
 }
 
 // SanitizeImportFileName 清洗上传文件名，仅保留安全字符。

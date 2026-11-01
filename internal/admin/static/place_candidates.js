@@ -68,6 +68,52 @@
       finally { setBusy(false); }
     }
 
+    // 确认景点后询问是否用景点名作为轨迹标题；同意后同步表单中的标题输入框，
+    // 避免之后保存表单时把新标题覆盖回旧值。
+    async function offerTitleUpdate(place) {
+      const name = String(place.name || '').trim();
+      if (!name) return;
+      const current = String((options.track && options.track.title) || '').trim();
+      if (current === name) return;
+      let confirmed = false;
+      try {
+        confirmed = await AdminUI.confirm({ title: '更新轨迹标题', message: '是否将轨迹标题改为「' + name + '」？确认后仍可在下方表单中继续调整。', confirmText: '改标题' });
+      } catch (_) { confirmed = false; }
+      if (!confirmed) return;
+      try {
+        await request('/tracks/' + encodeURIComponent(trackID), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: name }) });
+      } catch (error) {
+        AdminUI.alert('标题更新失败：' + error.message, 'danger');
+        return;
+      }
+      if (options.track) options.track.title = name;
+      const form = root.closest('form');
+      const input = form && form.querySelector('[name="title"]');
+      if (input) {
+        input.value = name;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      AdminUI.alert('标题已更新为：' + name, 'success');
+    }
+
+    async function confirmPlace(place) {
+      if (busy || !canWrite) return;
+      setBusy(true);
+      try {
+        await request('/place-candidates/' + encodeURIComponent(trackID) + '/confirm', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ place_id: place.id }) });
+        AdminUI.alert('已关联景点：' + place.name, 'success');
+        await offerTitleUpdate(place);
+        if (typeof options.onChanged === 'function') {
+          try { await options.onChanged(); }
+          catch (_) { AdminUI.alert('景点处理已生效，列表刷新失败，请手动刷新', 'warning'); }
+        }
+      } catch (error) {
+        if (error.status === 404 || error.status === 409) state('当前候选或轨迹数据已变化，请重新识别后重试');
+        AdminUI.alert('处理失败：' + error.message, 'danger');
+      } finally { setBusy(false); }
+    }
+
     async function load() {
       if (busy) return;
       const current = ++sequence;
@@ -93,7 +139,7 @@
             const actions = document.createElement('div'); actions.dataset.adminWrite = 'tracks';
             const confirm = document.createElement('button'); confirm.type = 'button'; confirm.className = 'btn btn-sm btn-outline-primary'; confirm.textContent = '确认关联';
             confirm.dataset.unavailable = String(!place.name || !place.name.trim());
-            confirm.addEventListener('click', () => act('/place-candidates/' + encodeURIComponent(trackID) + '/confirm', { place_id: place.id }, '已关联景点：' + place.name));
+            confirm.addEventListener('click', () => confirmPlace(place));
             actions.appendChild(confirm); row.appendChild(actions);
           }
           body.appendChild(row);
