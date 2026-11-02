@@ -86,10 +86,15 @@ table.data td.clip { max-width: 280px; overflow: hidden; text-overflow: ellipsis
 table.data td.mono, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 table.data tr.selected { background: #eef6ff; }
 table.data .danger { color: #d93026; background: #fff; border: 1px solid #d93026; padding: 3px 8px; border-radius: 4px; cursor: pointer; }
-table.data td.release-notes-cell { max-width: 200px; }
-table.data td.release-notes-cell span { display: inline-block; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
-table.data button.link { color: #0070f3; background: none; border: none; padding: 0 2px; cursor: pointer; font-size: 12px; }
-tr.release-notes-expanded td { background: #f7f8fa; }
+.release-notes-editor { display: flex; flex-direction: column; gap: 6px; margin: 6px 0; }
+.release-note-item { display: flex; gap: 6px; align-items: center; }
+.release-note-item input { flex: 1; }
+.release-note-remove { flex: none; width: 28px; height: 28px; line-height: 1; border: 1px solid #ccd0d6; background: #fff; border-radius: 4px; cursor: pointer; color: #667085; font-size: 16px; }
+.release-note-remove:hover { color: #d93026; border-color: #d93026; }
+table.data td.release-notes-cell { min-width: 220px; max-width: 420px; }
+pre.release-notes-inline { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; line-height: 1.6; }
+table.release-detail-table { margin-top: 0; }
+table.release-detail-table th { width: 130px; white-space: nowrap; }
 pre.release-notes-full { margin: 0; max-height: 220px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; line-height: 1.6; }
 .row-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .row-actions button:not(.btn) { padding: 3px 8px; border: 1px solid #ccd0d6; background: #fff; border-radius: 4px; cursor: pointer; }

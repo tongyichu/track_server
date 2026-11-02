@@ -167,6 +167,7 @@ X-Platform: android
 | `min_supported_version_code` | int64 | 否 | 最低支持版本号，默认 `0`，不得大于 `version_code` |
 | `release_notes` | string | 否 | 用户可见的版本说明 |
 | `force_update` | bool | 否 | 是否强制升级，默认 `false` |
+| `operator_name` | string | 否 | 发布人名称。传入时服务端保存为 `<operator_name> from api`（超长截断），缺省为 `android-track-release` |
 
 请求示例：
 

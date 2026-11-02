@@ -107,7 +107,7 @@ track_server/
 
 - 后台账号独立持久化在 `admin_account_state`，操作日志在 `admin_audit_logs`，由 `internal/admin/account_storage.go` 实现 MySQL/Mongo 并在 main 注入；不属于 App 用户 Repository，也不随业务仓储降级为内存。环境变量仅首次导入：`admin` 为管理员，其余现有账号默认业务页面只读。角色、页面 none/read/write 权限、跨模块校验、版本冲突、最后管理员保护和会话失效由 `internal/admin/accounts.go`、`permissions.go`、`auth.go` 维护。后台入口 `/admin/accounts.html`；细节与新增接口见 `internal/admin/AGENTS.md` 和 `docs/api/admin-accounts.md`。
 
-- 升级检查 `GET /api/v1/upgrade/check` 响应在保留旧 `release_notes`（最新版本说明）的同时，可选下发 `changelogs` 数组：`AppReleaseService.CheckUpgrade` 汇总该平台所有 `version_code` 大于客户端当前版本的 `published` 版本说明，按版本号倒序、跳过空说明；聚合查询失败时降级为只返回最新版本说明，纯增量协议、老客户端无感知。协议见 `docs/api/upgrade.md`。
+- 升级检查 `GET /api/v1/upgrade/check` 响应在保留旧 `release_notes`（最新版本说明）的同时，可选下发 `changelogs` 数组：`AppReleaseService.CheckUpgrade` 汇总该平台所有 `version_code` 大于客户端当前版本的 `published` 版本说明，按版本号倒序、跳过空说明；聚合查询失败时降级为只返回最新版本说明，纯增量协议、老客户端无感知。运维发布接口 `POST /api/v1/ops/releases/android` 支持可选 `operator_name`，服务端保存为 `<operator_name> from api`（缺省 `android-track-release`），后台版本列表发布人列直接展示。协议见 `docs/api/upgrade.md`。
 
 - 客户端活跃统计由 `repository.AppClientStatsRepository` 提供：`app_client_devices` 以 device_id 幂等 upsert 设备最近活跃信息（user_id 仅登录后补绑，其余字段只在新值非空/非零时覆盖），同一本地自然日首次出现对 `app_client_active_daily(日期,平台,版本)` 计数 +1。采集入口为公开的升级检查和三种登录成功路径（`AppReleaseService.RecordClientActivity`），失败仅记日志不影响主流程；客户端经公共请求头 `X-Device-Model` / `X-OS-Version` / `X-Version-Code` 上报机型、系统版本与数字版本号（见 `docs/api/common.md`），缺失归为「未知」。后台发布管理页统计区读取 `GET /admin/api/releases/client-statistics?days=7|30`：活跃设备口径为 last_seen_at 在周期内的去重设备，含版本/机型/系统版本分布、按日版本活跃趋势和最新发布版本渗透概况（含低于强升线设备数）。MySQL/内存实现完整，Mongo 为未实现 stub（与 MongoAppReleaseRepository 一致）。
 

@@ -88,9 +88,11 @@
           <input type="hidden" name="package_md5" />
         </fieldset>
 
-        <label class="full">版本说明 (release_notes)
-          <textarea name="release_notes" rows="4"></textarea>
-        </label>
+        <div class="full">
+          <span class="form-label">版本说明 (release_notes)</span>
+          <div id="releaseNotesList" class="release-notes-editor"></div>
+          <button type="button" id="addReleaseNote" class="btn btn-sm btn-outline-secondary">+ 添加一条</button>
+        </div>
 
         <div class="full actions">
           <button type="submit">发布</button>
@@ -118,7 +120,7 @@
           <tr>
             <th>ID</th><th>版本名</th><th>版本号</th>
             <th>最低支持</th><th>强升</th><th>状态</th>
-            <th>发布人</th><th>时间</th><th>包大小</th><th>更新说明</th><th>包地址</th><th>操作</th>
+            <th>发布人</th><th>时间</th><th>包大小</th><th>更新说明</th><th>操作</th>
           </tr>
         </thead>
         <tbody id="releaseList"></tbody>

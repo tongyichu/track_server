@@ -135,6 +135,15 @@ func (h *AppReleaseOpsHandler) PublishAndroid(ctx context.Context, c *app.Reques
 	}
 
 	publicURL := "/api/v1/static/release/android/" + finalName
+	operatorName := strings.TrimSpace(string(c.FormValue("operator_name")))
+	if operatorName == "" {
+		operatorName = "android-track-release"
+	} else {
+		if len(operatorName) > 56 {
+			operatorName = operatorName[:56]
+		}
+		operatorName += " from api"
+	}
 	release, err := h.svc.Publish(ctx, service.PublishReleaseInput{
 		Platform:                models.AppReleasePlatformAndroid,
 		VersionName:             versionName,
@@ -146,7 +155,7 @@ func (h *AppReleaseOpsHandler) PublishAndroid(ctx context.Context, c *app.Reques
 		ReleaseNotes:            string(c.FormValue("release_notes")),
 		ForceUpdate:             forceUpdate,
 		Status:                  models.AppReleaseStatusPublished,
-		OperatorName:            "android-track-release",
+		OperatorName:            operatorName,
 	})
 	if err != nil {
 		_ = os.Remove(dstPath)

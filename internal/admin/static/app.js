@@ -73,6 +73,46 @@
   const publishForm = document.getElementById('publishForm');
   const publishErr = document.getElementById('publishErr');
   const publishOk = document.getElementById('publishOk');
+  const notesList = document.getElementById('releaseNotesList');
+  const addNoteBtn = document.getElementById('addReleaseNote');
+
+  function addNoteRow(value) {
+    const row = document.createElement('div');
+    row.className = 'release-note-item';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.maxLength = 200;
+    input.placeholder = '一条更新内容，如：新增轨迹分享';
+    input.value = value || '';
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'release-note-remove';
+    remove.textContent = '×';
+    remove.title = '删除该条';
+    remove.addEventListener('click', function () {
+      row.remove();
+      if (!notesList.querySelector('.release-note-item')) addNoteRow();
+    });
+    row.append(input, remove);
+    notesList.appendChild(row);
+    return input;
+  }
+
+  function collectReleaseNotes() {
+    return Array.from(notesList.querySelectorAll('.release-note-item input'))
+      .map(function (input) { return input.value.trim(); })
+      .filter(Boolean)
+      .join('\n');
+  }
+
+  function resetReleaseNotes() {
+    notesList.innerHTML = '';
+    addNoteRow();
+  }
+
+  addNoteBtn.addEventListener('click', function () { addNoteRow().focus(); });
+  resetReleaseNotes();
+
   publishForm.addEventListener('submit', async function (e) {
     e.preventDefault();
     publishErr.textContent = '';
@@ -86,7 +126,7 @@
       package_url: (fd.get('package_url') || '').trim(),
       package_size: parseInt(fd.get('package_size') || '0', 10),
       package_md5: (fd.get('package_md5') || '').trim(),
-      release_notes: fd.get('release_notes') || '',
+      release_notes: collectReleaseNotes(),
       force_update: fd.get('force_update') === 'on',
       status: fd.get('status') || 'published',
     };
@@ -110,6 +150,7 @@
         return;
       }
       publishOk.textContent = '发布成功';
+      resetReleaseNotes();
       loadList();
     } catch (e) {
       publishErr.textContent = e.message || String(e);
@@ -127,6 +168,71 @@
     return (bytes / 1024).toFixed(1) + ' KB';
   }
 
+  function showReleaseDetail(it) {
+    const root = document.createElement('div');
+    root.className = 'modal modal-blur fade';
+    root.tabIndex = -1;
+    root.innerHTML = '<div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg"><div class="modal-content">' +
+      '<div class="modal-header"><h5 class="modal-title">版本详情</h5><button type="button" class="btn-close" aria-label="关闭"></button></div>' +
+      '<div class="modal-body"></div>' +
+      '<div class="modal-footer"><button type="button" class="btn btn-outline-secondary">关闭</button></div>' +
+      '</div></div>';
+    const rows = [
+      ['ID', String(it.id)],
+      ['平台', it.platform || ''],
+      ['版本名', it.version_name || ''],
+      ['版本号', String(it.version_code)],
+      ['最低支持版本号', String(it.min_supported_version_code)],
+      ['强制升级', it.force_update ? '是' : '否'],
+      ['状态', it.status || ''],
+      ['发布人', it.operator_name || '—'],
+      ['创建时间', (it.created_at || '').replace('T', ' ').slice(0, 19)],
+      ['更新时间', (it.updated_at || '').replace('T', ' ').slice(0, 19)],
+      ['包大小', formatSize(it.package_size)],
+      ['包 MD5', it.package_md5 || '—'],
+    ];
+    const table = document.createElement('table');
+    table.className = 'data release-detail-table';
+    rows.forEach(function (pair) {
+      const tr = document.createElement('tr');
+      const th = document.createElement('th');
+      th.textContent = pair[0];
+      const td = document.createElement('td');
+      td.textContent = pair[1];
+      if (pair[0] === '包 MD5') td.className = 'mono';
+      tr.append(th, td);
+      table.appendChild(tr);
+    });
+    const urlTr = document.createElement('tr');
+    const urlTh = document.createElement('th');
+    urlTh.textContent = '包地址';
+    const urlTd = document.createElement('td');
+    const link = document.createElement('a');
+    link.href = it.package_url || '#';
+    link.target = '_blank';
+    link.textContent = it.package_url || '—';
+    urlTd.appendChild(link);
+    urlTr.append(urlTh, urlTd);
+    table.appendChild(urlTr);
+    const notesTr = document.createElement('tr');
+    const notesTh = document.createElement('th');
+    notesTh.textContent = '更新说明';
+    const notesTd = document.createElement('td');
+    const pre = document.createElement('pre');
+    pre.className = 'release-notes-full';
+    pre.textContent = (it.release_notes || '').trim() || '—';
+    notesTd.appendChild(pre);
+    notesTr.append(notesTh, notesTd);
+    table.appendChild(notesTr);
+    root.querySelector('.modal-body').appendChild(table);
+    document.body.appendChild(root);
+    const modal = new tabler.Modal(root);
+    root.querySelector('.btn-close').addEventListener('click', function () { modal.hide(); });
+    root.querySelector('.modal-footer button').addEventListener('click', function () { modal.hide(); });
+    root.addEventListener('hidden.bs.modal', function () { root.remove(); });
+    modal.show();
+  }
+
   async function loadList() {
     const params = new URLSearchParams();
     params.set('platform', 'android');
@@ -138,7 +244,6 @@
     tbody.innerHTML = '';
     items.forEach(function (it) {
       const notes = (it.release_notes || '').trim();
-      const firstLine = notes.split('\n').map(function (s) { return s.trim(); }).filter(Boolean)[0] || '';
       const tr = document.createElement('tr');
       tr.innerHTML = '<td>' + it.id + '</td>' +
         '<td>' + esc(it.version_name) + '</td>' +
@@ -150,42 +255,28 @@
         '<td>' + esc((it.updated_at || '').replace('T', ' ').slice(0, 19)) + '</td>' +
         '<td>' + formatSize(it.package_size) + '</td>' +
         '<td class="release-notes-cell"></td>' +
-        '<td class="url" title="' + esc(it.package_url) + '"><a href="' + esc(it.package_url) + '" target="_blank">' + esc(it.package_url) + '</a></td>' +
-        '<td><button data-admin-write="releases" class="danger" data-id="' + it.id + '">删除</button></td>';
+        '<td class="row-actions"></td>';
       const notesCell = tr.querySelector('.release-notes-cell');
       if (notes) {
-        const summary = document.createElement('span');
-        summary.textContent = firstLine.length > 30 ? firstLine.slice(0, 30) + '…' : firstLine;
-        notesCell.appendChild(summary);
-        notesCell.appendChild(document.createTextNode(' '));
-        const toggle = document.createElement('button');
-        toggle.type = 'button';
-        toggle.className = 'link';
-        toggle.textContent = '展开';
-        let expandedRow = null;
-        toggle.addEventListener('click', function () {
-          if (expandedRow) {
-            expandedRow.remove();
-            expandedRow = null;
-            toggle.textContent = '展开';
-            return;
-          }
-          expandedRow = document.createElement('tr');
-          expandedRow.className = 'release-notes-expanded';
-          const td = document.createElement('td');
-          td.colSpan = 12;
-          const pre = document.createElement('pre');
-          pre.className = 'release-notes-full';
-          pre.textContent = notes;
-          td.appendChild(pre);
-          expandedRow.appendChild(td);
-          tr.after(expandedRow);
-          toggle.textContent = '收起';
-        });
-        notesCell.appendChild(toggle);
+        const pre = document.createElement('pre');
+        pre.className = 'release-notes-inline';
+        pre.textContent = notes;
+        notesCell.appendChild(pre);
       } else {
         notesCell.textContent = '—';
       }
+      const actions = tr.querySelector('.row-actions');
+      const detailBtn = document.createElement('button');
+      detailBtn.type = 'button';
+      detailBtn.textContent = '查看详情';
+      detailBtn.addEventListener('click', function () { showReleaseDetail(it); });
+      const deleteBtn = document.createElement('button');
+      deleteBtn.type = 'button';
+      deleteBtn.className = 'danger';
+      deleteBtn.dataset.id = it.id;
+      deleteBtn.setAttribute('data-admin-write', 'releases');
+      deleteBtn.textContent = '删除';
+      actions.append(detailBtn, deleteBtn);
       tbody.appendChild(tr);
     });
     tbody.querySelectorAll('button.danger').forEach(function (b) {
