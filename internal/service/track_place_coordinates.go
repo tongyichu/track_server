@@ -11,14 +11,14 @@ import (
 	"github.com/tongyichu/track_server/internal/models"
 )
 
-// Map indexes and viewport APIs use GCJ02 in mainland China; elsewhere the
-// transform is identity. The original uploaded track and its CRS are unchanged.
+// Map indexes and viewport APIs use GCJ02 in mainland China, Hong Kong and Macau;
+// elsewhere the transform is identity. Raw files and their CRS are unchanged.
 func mapPointToGCJ02(p models.TrackPoint, source string) (models.TrackPoint, error) {
 	switch strings.ToUpper(strings.ReplaceAll(strings.TrimSpace(source), "-", "")) {
 	case "", "GCJ02":
 		return p, nil // legacy indexes were already treated as GCJ02.
 	case "WGS84":
-		if maparea.IsMainland(p.Latitude, p.Longitude) {
+		if maparea.UsesGCJ02(p.Latitude, p.Longitude) {
 			a, b := mapCoordinateDelta(p.Latitude, p.Longitude)
 			p.Latitude += a
 			p.Longitude += b
@@ -36,7 +36,7 @@ func mapPointToGCJ02(p models.TrackPoint, source string) (models.TrackPoint, err
 	}
 }
 func mapGCJ02ToWGS84(p models.TrackPoint) models.TrackPoint {
-	if !maparea.IsMainland(p.Latitude, p.Longitude) {
+	if !maparea.UsesGCJ02(p.Latitude, p.Longitude) {
 		return p
 	}
 	target := p

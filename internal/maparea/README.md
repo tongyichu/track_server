@@ -12,7 +12,7 @@
 
 自动景区识别入口为 `internal/service/track_place_service.go`，完整流程和配置见 [自动景区识别](../../docs/track-place-discovery.md)。开启 `TRACK_PLACE_ENABLED` 后，`catalog.json` 中旧手工景区矩形仅保留介绍兼容，不再决定路线组的自动归属；这里的目录继续作为行政区兜底及人工文案覆盖。
 
-`mainland.json` 由 DataV.GeoAtlas `areas_v3/bound/100000_full.json` 中大陆31个省级行政区域生成，保留 Polygon/MultiPolygon及内洞，仅用来选择地图服务和坐标转换；不能当作景区边界。更新时筛选整数 adcode、排除710000/810000/820000，合并各要素为MultiPolygon并保留来源信息。`mainland.go` 为每个面预计算外包框后再做点包含判断。
+`mainland.json` 由 DataV.GeoAtlas `areas_v3/bound/100000_full.json` 中大陆31个省级行政区域生成，保留 Polygon/MultiPolygon及内洞，仅用于大陆地图服务范围判断；不能当作景区边界，也不能直接作为完整坐标转换覆盖范围。更新时筛选整数 adcode、排除710000/810000/820000，合并各要素为MultiPolygon并保留来源信息。`mainland.go` 为每个面预计算外包框后再做点包含判断。
 
 当前快照 `2026-10-27` 覆盖 DataV `areas_v3/bound/all.json` 索引中的全部 2,875 个末级行政区域，涉及 34 个省级区域、370 个城市/归属代码，原有 194 个区域 ID 全部保留：
 
@@ -51,3 +51,9 @@ go run ./cmd/update-map-districts -cache build/maparea-source-2026-10-27 -versio
 6. 发布新二进制后，存量路线组需要重新执行 `track_route_group` 聚合才会使用新边界。默认调度为每天 04:00；仅替换二进制不会即时回填数据库中的 `area_id`。自动景区识别仍在行政区匹配后覆盖为有效主景点，不因扩充行政区目录改变优先级。
 
 `track_route_group` 离线任务生成 RouteGroup 后，先用 `bounds` 快速预筛，再用 `Polygon` / `MultiPolygon` 对 RouteGroup 中心做最终点包含判断，并把稳定 ID 写入 `track_route_groups.area_id`；MultiPolygon 的离散区域和 Polygon 内洞均按 GeoJSON 语义处理。geometry 不存在时才按 `bounds` 兜底，未命中时 `area_id` 保持为空。`/track-map/view` 请求只按已存 `area_id` 查询目录详情，不再执行点包含计算；空 `area_id` 继续使用原网格数量气泡。
+
+### 坐标转换覆盖范围
+
+`UsesGCJ02`（`coordinate_region.go`）供 WGS84↔GCJ02 转换使用，与 `IsMainland` 的地图服务选择职责分开。转换范围包含大陆及香港、澳门；港澳使用 `districts.json` 对应城市全部区县的总外包框，并向四边扩展 0.01 度，覆盖坐标偏移及岸边轨迹，避免行政边界切开同一条路线。更新港澳行政区目录时同步核对该范围。大陆保留原 Polygon/MultiPolygon 判断，不扩大为覆盖邻国的矩形。
+
+原始轨迹文件及 `coordinate_system` 不因该修复改写。既有错误空间索引需要在修复上线后通过索引任务重新生成；后台坐标预览直接读取原始文件，使用新转换逻辑。Android 的地图选择与转换实现独立维护。

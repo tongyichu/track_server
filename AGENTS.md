@@ -93,7 +93,7 @@ track_server/
 | 配置项与默认值 | `internal/config/config.go` |
 | Repository 接口契约 | `internal/repository/interfaces.go` |
 | 领域模型 | `internal/models/track.go`、`internal/models/recommendation.go`、`internal/models/track_submission.go`、`internal/models/scenic_spot.go`、`internal/models/user.go`（含 AccountRestriction）、`internal/models/companion.go`、`internal/models/achievement.go`、`internal/models/feedback.go`、`internal/models/analytics.go` |
-| 地图区域语义与介绍内容 | `internal/service/track_place*.go`（异步景区识别）+ `internal/maparea/districts.json`（区县基线）+ `catalog.json`（区县覆盖/旧介绍兼容）；`mainland.json` 仅用于服务路由和坐标转换；配置及维护见 `docs/track-place-discovery.md` |
+| 地图区域语义与介绍内容 | `internal/service/track_place*.go`（异步景区识别）+ `internal/maparea/districts.json`（区县基线）+ `catalog.json`（区县覆盖/旧介绍兼容）；`mainland.json` 仅用于大陆服务路由判断；坐标转换使用 `maparea.UsesGCJ02`，独立补齐香港/澳门及岸边缓冲；配置及维护见 `docs/track-place-discovery.md` |
 | MySQL 表结构 | `mysql.sql` |
 | 接口协议 | `docs/api/`（入口 `track_api.md`，路由索引 `docs/api/route-index.md`，账号限制接口 `docs/api/account-restriction.md`，首页地图接口 `docs/api/track-map.md`）、`login.md`、`track_companion.md`、`track_achievement_client.md`、`track_map.md`；推荐第一版设计与客户端归因协议见 `track_recommendation.md`、`track_analytics.md` |
 | 客户端埋点方案 | `track_analytics.md`、`docs/api/analytics.md` |
