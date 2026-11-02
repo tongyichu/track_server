@@ -1716,6 +1716,45 @@ func (h *Handler) UpdateTrack(ctx context.Context, c *app.RequestContext) {
 	c.JSON(http.StatusOK, utils.H{"code": 0, "data": track})
 }
 
+// RestoreTrack 处理 POST /admin/api/tracks/:track_id/restore
+// 恢复软删除的轨迹：status 还原为公开、清空 deleted_at，并重新排队地图索引
+// （删除时已清理 geo index 与索引任务）。删除时清理的收藏与路线组成员关系不可恢复。
+func (h *Handler) RestoreTrack(ctx context.Context, c *app.RequestContext) {
+	if h == nil || h.trackRepo == nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "track repository not configured"})
+		return
+	}
+	trackID := strings.TrimSpace(c.Param("track_id"))
+	if trackID == "" {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "track_id is required"})
+		return
+	}
+	track, err := h.trackRepo.FindByID(ctx, trackID)
+	if err != nil {
+		handleAdminRepoError(c, err)
+		return
+	}
+	if track.Status != models.TrackStatusDeleted {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "轨迹未处于已删除状态"})
+		return
+	}
+	track.Status = models.TrackStatusNormal
+	track.IsRunning = false
+	track.DeletedAt = time.Time{}
+	track.UpdatedAt = time.Now()
+	if err := h.trackRepo.Update(ctx, track); err != nil {
+		handleAdminRepoError(c, err)
+		return
+	}
+	if h.trackMapRepo != nil && strings.TrimSpace(track.RawTrackURL) != "" {
+		if err := h.trackMapRepo.EnqueueIndexJob(ctx, track.ID, time.Now()); err != nil {
+			c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+			return
+		}
+	}
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"status": "ok"}})
+}
+
 // DeleteTrack 处理 DELETE /admin/api/tracks/:track_id
 func (h *Handler) DeleteTrack(ctx context.Context, c *app.RequestContext) {
 	if h == nil || h.trackRepo == nil {

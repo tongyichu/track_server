@@ -164,6 +164,7 @@ internal/admin/
 | GET | `/admin/api/tracks/amap-service` | 轨迹查看 | 高德 JS API 服务代理（与景点地图同一实现） |
 | PUT | `/admin/api/tracks/:track_id` | 鉴权 | 更新轨迹业务字段（不改 ID、轨迹点与创建/更新时间）；城市/类型更新已有地图索引，状态/进行状态/原始文件变化时清理并按可索引条件重新排队 |
 | DELETE | `/admin/api/tracks/:track_id` | 鉴权 | 删除轨迹：标记 `status=0`，并清理收藏、地图索引任务、geo index、路线组成员 |
+| POST | `/admin/api/tracks/:track_id/restore` | 鉴权 | 恢复已删除轨迹：还原为公开、清空 `deleted_at` 并重新排队地图索引；收藏与路线组成员关系不可恢复。详情弹窗对已删除轨迹把删除按钮换成恢复 |
 | GET | `/admin/api/feedbacks` | 鉴权 | 意见反馈列表，补充用户名称，支持 `status` / `app_version` / `phone` / `cursor` / `limit` |
 | GET/PUT | `/admin/api/feedback-correction-config` | 鉴权 | 读取含停用项的完整配置，按 version 条件保存；冲突返回 409 |
 | GET | `/admin/api/feedbacks/:feedback_id` | 鉴权 | 意见反馈详情 |
@@ -353,6 +354,8 @@ GET /admin/api/users
        → 清理 track_collects
        → 清理 track_map_index_jobs / track_geo_indexes / track_route_group_members
        → 若删除的是路线组代表轨迹，归档该路线组并移除其全部成员，后续由 track_route_group 任务重新聚合剩余轨迹
+  → POST /admin/api/tracks/:track_id/restore（已删除轨迹详情弹窗底部按钮变为「恢复」）
+       → status 还原为公开、清空 deleted_at，重新排队地图索引任务；收藏与路线组成员关系不可恢复
 ```
 
 **主景点目录**：

@@ -33,14 +33,27 @@
       return date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate()) + 'T' + pad(date.getHours()) + ':' + pad(date.getMinutes());
     }
     const preview = track.preview_images || {};
+    const isDeleted = track.status === 0;
     const values = await window.AdminUI.form({
       title: (readOnly ? '查看轨迹 ' : '编辑轨迹 ') + trackID,
       readOnly: readOnly,
       waitForHidden: !!options.waitForHidden,
       confirmText: '保存修改',
-      cancelText: readOnly ? '关闭' : '删除',
-      cancelDanger: !readOnly,
-      onCancel: readOnly ? null : async function () {
+      cancelText: readOnly ? '关闭' : (isDeleted ? '恢复' : '删除'),
+      cancelDanger: !readOnly && !isDeleted,
+      onCancel: readOnly ? null : isDeleted ? async function () {
+        const confirmed = await window.AdminUI.confirm({ title: '恢复轨迹', message: '确认恢复轨迹 ' + trackID + '？恢复后状态为公开，并会重新排队地图索引；删除时清理的收藏与路线组成员关系不会恢复。', confirmText: '恢复轨迹' });
+        if (!confirmed) return false;
+        const response = await fetch('/admin/api/tracks/' + encodeURIComponent(trackID) + '/restore', { method: 'POST' });
+        if (!response.ok) {
+          let message = '恢复失败: ' + response.status;
+          try { const result = await response.json(); if (result && result.error) message += ' ' + result.error; } catch (_) {}
+          window.AdminUI.alert(message, 'danger');
+          return false;
+        }
+        window.AdminUI.alert('轨迹已恢复为公开状态', 'success');
+        return 'restored';
+      } : async function () {
         const confirmed = await window.AdminUI.confirm({ title: '删除轨迹', message: '确认删除轨迹 ' + trackID + '？删除后会标记为已删除，并清理收藏和地图索引。', confirmText: '删除轨迹', danger: true });
         if (!confirmed) return false;
         const response = await fetch('/admin/api/tracks/' + encodeURIComponent(trackID), { method: 'DELETE' });
@@ -94,6 +107,10 @@
     if (!values) return false;
     if (values._action === 'deleted') {
       if (typeof options.onDeleted === 'function') await options.onDeleted();
+      return false;
+    }
+    if (values._action === 'restored') {
+      if (typeof options.onSaved === 'function') await options.onSaved();
       return false;
     }
     const body = {

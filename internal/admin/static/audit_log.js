@@ -36,6 +36,7 @@
     ['DELETE', 'users/:user/restrictions/current', '解除用户账号限制', '用户 {user}'],
     ['PUT', 'tracks/:track', '修改轨迹资料', '轨迹 {track}'],
     ['DELETE', 'tracks/:track', '删除轨迹', '轨迹 {track}'],
+    ['POST', 'tracks/:track/restore', '恢复已删除轨迹', '轨迹 {track}'],
     ['POST', 'track-submissions/:submission/review', '审核轨迹投稿', '投稿 {submission}', '历史记录未保存本次是通过还是驳回；请在投稿详情查看审核结果。'],
     ['PUT', 'route-groups/:group/name', '修改路线组名称', '路线组 {group}'],
     ['POST', 'route-groups/:group/merge', '合并路线组', '路线组 {group}', '历史记录未保存另一方的路线组编号。'],
