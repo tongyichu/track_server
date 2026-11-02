@@ -40,6 +40,7 @@ type Handler struct {
 	trackRepo          repository.TrackRepository
 	collectRepo        repository.CollectRepository
 	trackMapRepo       repository.TrackMapRepository
+	trackMapIndexSvc   *service.TrackMapIndexService
 	companionRepo      repository.CompanionRepository
 	analyticsRepo      repository.AnalyticsRepository
 	feedbackSvc        *service.FeedbackService
@@ -72,7 +73,7 @@ type trackMapCleanupRepository interface {
 
 type updateTrackBody struct {
 	SourceFeedbackID string `json:"source_feedback_id"`
-	// UserID 用 json.Number 接收，前端按字符串回传，避免 int64 经 JS Number 精度丢失。
+	// 兼容旧表单回传原归属人，但不允许通过后台修改归属。
 	UserID                    *json.Number               `json:"user_id"`
 	SessionID                 *string                    `json:"session_id"`
 	CityCode                  *string                    `json:"city_code"`
@@ -102,10 +103,9 @@ type updateTrackBody struct {
 func applyAdminTrackUpdate(track *models.Track, body updateTrackBody) error {
 	if body.UserID != nil {
 		userID, err := body.UserID.Int64()
-		if err != nil || userID < 0 {
-			return errors.New("user_id must be a non-negative integer")
+		if err != nil || userID != track.UserID {
+			return errors.New("user_id cannot be changed")
 		}
-		track.UserID = userID
 	}
 	setString := func(dst *string, src *string, max int, field string) error {
 		if src == nil {
@@ -1725,7 +1725,7 @@ func (h *Handler) UpdateTrack(ctx context.Context, c *app.RequestContext) {
 	}
 	beforeCorrectionEdit := *track
 	oldCityCode, oldType := track.CityCode, track.TrackType
-	oldStatus, oldRunning, oldRawURL := track.Status, track.IsRunning, track.RawTrackURL
+	oldStatus, oldRunning, oldRawURL, oldCoordinate := track.Status, track.IsRunning, track.RawTrackURL, track.CoordinateSystem
 	if err := applyAdminTrackUpdate(track, body); err != nil {
 		c.JSON(http.StatusBadRequest, utils.H{"error": err.Error()})
 		return
@@ -1734,7 +1734,7 @@ func (h *Handler) UpdateTrack(ctx context.Context, c *app.RequestContext) {
 		handleAdminRepoError(c, err)
 		return
 	}
-	mapEligibilityChanged := oldStatus != track.Status || oldRunning != track.IsRunning || oldRawURL != track.RawTrackURL
+	mapEligibilityChanged := oldStatus != track.Status || oldRunning != track.IsRunning || oldRawURL != track.RawTrackURL || oldCoordinate != track.CoordinateSystem
 	if h.trackMapRepo != nil && mapEligibilityChanged {
 		if cleaner, ok := h.trackMapRepo.(trackMapCleanupRepository); ok {
 			if err := cleaner.CleanupDeletedTrack(ctx, track.ID); err != nil {

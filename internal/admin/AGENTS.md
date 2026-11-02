@@ -32,6 +32,8 @@
 
 省市筛选：用户管理 `GET /admin/api/users` 接收 `province_code`，与 `city_code` 按用户资料取交集；户外目的地 `GET /admin/api/scenic-spots` 接收 `province_code` / `city_code`，城市优先，匹配目的地自身城市或任一仍存在的关联轨迹城市。`repository.ScenicSpotIDsByTrackCities` 为 MySQL/Mongo/内存提供关联城市匹配，`ScenicSpotListFilter` 将地域条件用于分页前筛选和 total；不得退回仅过滤浏览器已加载记录。省市下拉共用 `/admin/api/cities`，直辖市省级码保留可选。协议见 `docs/api/admin-regions.md`。
 
+共享轨迹编辑器的 `user_id_text` 只读，保存不传 `user_id`，服务端仅兼容回传原 ID 并拒绝更换归属。坐标系和来源标签使用下拉选项，未知历史值保留。`GET /tracks/:track_id/map-preview` 归属轨迹查看权限，由 `TrackMapIndexService.PreviewCoordinateSystems` 读取原始轨迹并返回按 WGS84/GCJ02/BD09 解释的三组 GCJ02 预览线；不得将既有 GCJ02 索引线二次转换。预览独立异步加载，准备后切换立即重绘且保持视野，关闭弹窗释放地图及取消请求。保存坐标系变更纳入旧空间索引清理及重新排队流程；预览自身不写业务数据。`ui.js` 支持字段 `readOnly` / `onChange` 及表单 `onClosed` 生命周期。接口细节见 `docs/api/admin-tracks.md`。
+
 ## 页面性能约束
 
 修改后台页面、共享脚本或列表接口时，必须检查以下边界；不能仅靠隐藏加载提示改善体感。
@@ -71,7 +73,7 @@
 - **日志账号筛选**：最近操作记录提供账号下拉选择（含停用账号）；`GET /admin/api/audit-logs?username=...` 按不可改的登录名精确匹配，MySQL/Mongo 必须先筛选再取最近 100 条。不传或空串表示全部账号。选项来自后台账号列表，刷新保留选择，快速切换忽略旧请求响应。
 - **操作记录可读性**：账号页以“操作人、中文操作内容、对象、结果”展示日志，`static/audit_log.js` 统一维护方法/路径到业务行为的映射，新增被审计操作时同步更新；`accounts.html` 在 accounts.js 前加载该模块。原始方法、路径、状态和记录 ID 放在折叠详情，用 textContent 输出，保留账号筛选及同一 attempt/result 合并。状态 0 或 3xx 不能标成功，结果仅反映请求响应，批处理不声称逐项全成功；说明景点供应商回填可由页面自动分批触发，不能仅凭接口推定每条都由人工点击。旧记录没有正文/字段差异，不推测通过或驳回、启用或停用等具体改动，不为展示描述逐条查业务库；未知动作显示通用描述和原始详情。
 - **会话仅内存**：`SessionStore` 使用 `sync.RWMutex` + `map`，进程重启即失效。**不要替换为持久化存储**；管理员重新登录是合理代价。
-- **int64 ID 禁止经 JS Number 往返**：用户 ID 等业务 ID 是 18 位 int64，超出 JS Number 安全整数范围；JS 的 `String(number)` 还会把大整数四舍五入打印（`177920323643916288` → `"177920323643916300"`），经表单保存即写坏数据（2026-11-01 轨迹归属人因此被写错过）。约定：接口下发用字符串字段（用户列表 `id`、轨迹详情 `user_id_text`），前端只做文本展示与原样字符串回传，服务端按 `json.Number`/字符串解析；新增涉及 int64 ID 的后台接口与表单时沿用该约定，URL 路径参数天然是字符串无需处理。
+- **int64 ID 禁止经 JS Number 往返**：用户 ID 等业务 ID 是 18 位 int64，超出 JS Number 安全整数范围；JS 的 `String(number)` 还会把大整数四舍五入打印（`177920323643916288` → `"177920323643916300"`），经表单保存即写坏数据（2026-11-01 轨迹归属人因此被写错过）。约定：接口下发用字符串字段（用户列表 `id`、轨迹详情 `user_id_text`），前端只做文本展示，需提交的 ID 按字符串回传；轨迹归属人只读且不提交，服务端按 `json.Number`/字符串校验旧页面回传值必须等于原 ID；新增涉及 int64 ID 的后台接口与表单时沿用该约定，URL 路径参数天然是字符串无需处理。
 - **静态资源经 `go:embed`**：`static/` 目录通过 `//go:embed static` 内置进二进制；新增前端文件后**必须放到** `internal/admin/static/`，否则二进制找不到。`/admin/static/*filepath` 路由只读 `staticFS`，不读磁盘。
 - **安装包本机上传**：管理后台安装包上传走 `POST /admin/api/releases/upload-package`，服务端校验 APK/IPA 并读取包内版本名、版本号/Build、应用标识，同时计算大小和 MD5；前端使用返回的下载地址自动填写 `package_url`。发布页面固定 Android/APK，版本名和版本号只由包解析结果写入隐藏字段；服务端接口仍保留 iOS 兼容性。不要再把发布包上传链路改回浏览器 OSS 直传。
 - **路径前缀固定 `/admin`**：所有路由都注册在 `h.Group("/admin")` 之下；前端 `fetch` 也写死 `/admin/api/...` 与 `/admin/static/...`。修改前缀需要同时改 `routes.go` 与 `static/*` 中的 URL。
@@ -161,7 +163,7 @@ internal/admin/
 | GET | `/admin/api/tracks` | 鉴权 | 轨迹列表，支持 `title` / `user_name` 模糊搜索、`province_code`（展开为省内城市集合，`city_code` 优先）/ `city_code` / `status`（1 公开、2 私密、0 已删除，默认排除已删除）/ `missing` 筛选及 cursor 翻页 |
 | POST | `/admin/api/tracks/import` | 轨迹操作 | 批量导入轨迹文件归属内部人员，multipart `files`（≤50）+ `owner_user_id` + `track_type` + `coordinate_system`，逐文件返回结果 |
 | GET | `/admin/api/cities` | 鉴权 | 返回内置城市/省份 Code、名称与省市层级，供轨迹和景点选择器使用 |
-| GET | `/admin/api/tracks/:track_id` | 鉴权 | 返回 `{track, user_id_text, geo?}`：轨迹详情、主景点（track.primary_scenic_spot）与地图索引简化轨迹线（GCJ02）；`user_id_text` 是字符串形式的归属人 ID，编辑表单必须按字符串原样回传，避免 int64 经 JS Number 精度丢失 |
+| GET | `/admin/api/tracks/:track_id` | 鉴权 | 返回 `{track, user_id_text, geo?}`：轨迹详情、主景点（track.primary_scenic_spot）与地图索引简化轨迹线（GCJ02）；`user_id_text` 是字符串形式的归属人 ID，编辑表单只读显示该字符串且保存不提交 user_id，服务端拒绝变更归属人，避免 int64 经 JS Number 精度丢失 |
 | POST | `/admin/api/tracks/:track_id/place-refresh` | 轨迹操作 | 同步触发单条轨迹重新景点识别；任务忙 409，无索引 404 |
 | GET | `/admin/api/tracks/map-config` | 轨迹查看 | 轨迹详情地图的高德 Web Key 配置（service_host 指向 `/admin/api/tracks/amap-service`） |
 | GET | `/admin/api/tracks/amap-service` | 轨迹查看 | 高德 JS API 服务代理（与景点地图同一实现） |
@@ -426,4 +428,4 @@ Kimi 景点简介使用 `MOONSHOT_API_KEY` 和可选的 `KIMI_SCENIC_DESCRIPTION
 - **误解**：改环境变量可以覆盖后台密码或恢复已停用账号。
   **事实**：环境变量仅首次导入；此后以独立持久化账号为准。数据库不可用时拒绝鉴权，不重建临时管理员。
 - **误解**：后台表单里 int64 的用户 ID 用 number 输入框往返是安全的。
-  **事实**：JS Number 存不下 18 位 ID 且 `String()` 会截断打印，保存即写坏归属；必须用字符串字段下发并原样回传（见硬性约束「int64 ID 禁止经 JS Number 往返」）。
+  **事实**：JS Number 存不下 18 位 ID 且 `String()` 会截断打印，保存即写坏归属；必须用字符串字段下发；轨迹归属人只读，不参与保存（见硬性约束「int64 ID 禁止经 JS Number 往返」）。

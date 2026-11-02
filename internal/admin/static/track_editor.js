@@ -25,6 +25,10 @@
     const typeNames = { hiking: '徒步', running: '跑步', climbing: '爬山', riding: '骑行', driving: '自驾' };
     const typeFields = Object.keys(typeNames).map(value => ({ value, label: typeNames[value] }));
     if (track.track_type && !typeNames[track.track_type]) typeFields.push({ value: track.track_type, label: track.track_type });
+    const sourceFields = [{ value: '', label: '用户录制（默认）' }, { value: 'manual_seed', label: '人工导入' }];
+    const coordinateFields = [{ value: '', label: '未设置' }, { value: 'WGS84', label: 'WGS84（GPS / 国际坐标）' }, { value: 'GCJ02', label: 'GCJ02（高德 / 国内坐标）' }, { value: 'BD09', label: 'BD09（百度坐标）' }];
+    if (track.source_tag && !sourceFields.some(item => item.value === track.source_tag)) sourceFields.push({ value: track.source_tag, label: '历史值（' + track.source_tag + '）' });
+    if (track.coordinate_system && !coordinateFields.some(item => item.value === track.coordinate_system)) coordinateFields.push({ value: track.coordinate_system, label: '历史值（' + track.coordinate_system + '）' });
     function timeValue(value) {
       if (!value) return '';
       const date = new Date(value);
@@ -34,9 +38,11 @@
     }
     const preview = track.preview_images || {};
     const isDeleted = track.status === 0;
+    const mapPreview = window.AdminTrackMapPreview ? window.AdminTrackMapPreview.create(trackPayload.geo, { trackID: trackID, coordinateSystem: track.coordinate_system }) : null;
     const values = await window.AdminUI.form({
       title: (readOnly ? '查看轨迹 ' : '编辑轨迹 ') + trackID,
       readOnly: readOnly,
+      onClosed: function () { if (mapPreview) mapPreview.dispose(); },
       waitForHidden: !!options.waitForHidden,
       confirmText: isDeleted ? '彻底删除' : '保存修改',
       cancelText: readOnly ? '关闭' : (isDeleted ? '恢复' : '删除'),
@@ -71,18 +77,18 @@
         const wrapper = document.createElement('div');
         wrapper.className = 'admin-track-detail-side';
         wrapper.appendChild(window.AdminTrackPlaceCandidates.create(trackID, { readOnly: readOnly, onChanged: options.onSaved, cityNames: cityNames, track: track }));
-        if (window.AdminTrackMapPreview) wrapper.appendChild(window.AdminTrackMapPreview.create(trackPayload.geo));
+        if (mapPreview) wrapper.appendChild(mapPreview);
         return wrapper;
       })(),
       fields: [
-        { name: 'user_id', label: '用户 ID', value: trackPayload.user_id_text || String(track.user_id), maxLength: 20 },
+        { name: 'user_id', label: '用户 ID（不可修改）', value: trackPayload.user_id_text || '', readOnly: true },
         { name: 'session_id', label: '同行会话 ID', value: track.session_id },
         { name: 'title', label: '轨迹标题', value: track.title, maxLength: 128 },
         { name: 'city_code', label: '城市', type: 'select', value: track.city_code, options: cityFields },
         { name: 'locate_addr', label: '位置描述', value: track.locate_addr, maxLength: 512 },
         { name: 'track_type', label: '轨迹类型', type: 'select', value: track.track_type, options: typeFields },
-        { name: 'source_tag', label: '来源标签', value: track.source_tag, maxLength: 128 },
-        { name: 'coordinate_system', label: '坐标系', value: track.coordinate_system, maxLength: 32 },
+        { name: 'source_tag', label: '来源标签', type: 'select', value: track.source_tag, options: sourceFields },
+        { name: 'coordinate_system', label: '坐标系', type: 'select', value: track.coordinate_system, options: coordinateFields, onChange: function (value) { if (mapPreview) mapPreview.setCoordinateSystem(value); } },
         { name: 'description', label: '轨迹描述', type: 'textarea', value: track.description, maxLength: 4000, full: true },
         { name: 'description_source', label: '描述来源', value: track.description_source, maxLength: 64 },
         { name: 'description_rule_version', label: '描述规则版本', type: 'number', value: track.description_rule_version, min: 0 },
@@ -138,7 +144,7 @@
     }
     const body = {
       source_feedback_id: options.sourceFeedbackID || undefined,
-      user_id: values.user_id, session_id: values.session_id, title: values.title, city_code: values.city_code,
+      session_id: values.session_id, title: values.title, city_code: values.city_code,
       locate_addr: values.locate_addr, track_type: values.track_type, source_tag: values.source_tag,
       coordinate_system: values.coordinate_system, description: values.description, description_source: values.description_source,
       description_rule_version: Number(values.description_rule_version || 0), start_time: values.start_time,

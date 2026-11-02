@@ -110,7 +110,9 @@
         if (field.maxLength) input.maxLength = field.maxLength;
         if (field.min != null) input.min = String(field.min);
         if (field.step != null) input.step = String(field.step);
+        if (field.readOnly) input.readOnly = true;
         if (options.readOnly) input.disabled = true;
+        if (typeof field.onChange === 'function') input.addEventListener('change', function () { field.onChange(input.value); });
         group.appendChild(input);
         form.appendChild(group);
       });
@@ -158,7 +160,7 @@
         finish(values);
       });
       submit.addEventListener('click', function () { form.requestSubmit(); });
-      root.addEventListener('hidden.bs.modal', function () { if (options.waitForHidden && settled) resolve(pendingValue); else if (!settled) resolve(null); root.remove(); });
+      root.addEventListener('hidden.bs.modal', function () { if (typeof options.onClosed === 'function') options.onClosed(); if (options.waitForHidden && settled) resolve(pendingValue); else if (!settled) resolve(null); root.remove(); });
       modal.show();
       setTimeout(function () { const first = form.querySelector('input, textarea'); if (first) first.focus(); }, 150);
     });
