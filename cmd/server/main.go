@@ -597,10 +597,20 @@ func main() {
 		log.Printf("server listening on %s (HTTP)", cfg.ServerAddr)
 	}
 
+	permissionCtx, permissionCancel := context.WithTimeout(context.Background(), 15*time.Second)
+	permissionRepo, permissionErr := repository.NewPermissionSnapshotRepository(permissionCtx, userRepo)
+	permissionCancel()
+	var permissionSnapshotSvc *service.PermissionSnapshotService
+	if permissionErr != nil {
+		log.Printf("permission snapshots unavailable: %v", permissionErr)
+	} else {
+		permissionSnapshotSvc = service.NewPermissionSnapshotService(permissionRepo)
+	}
 	tokenBlacklist := middleware.NewTokenBlacklist()
 	defer tokenBlacklist.Close()
 
 	handler.RegisterRoutes(h, handler.Deps{
+		PermissionSnapshotService:  permissionSnapshotSvc,
 		TrackService:               trackSvc,
 		CommentService:             commentSvc,
 		TrackLikeService:           likeSvc,
@@ -637,6 +647,7 @@ func main() {
 		adminModule.Handler.SetTrackSubmissionService(trackSubmissionSvc)
 		adminModule.Handler.SetScenicSpotCatalogService(scenicSpotCatalogSvc)
 		adminModule.Handler.SetTrackPlaceService(trackPlaceSvc)
+		adminModule.Handler.SetPermissionSnapshotService(permissionSnapshotSvc)
 		adminModule.Handler.SetTrackMapIndexService(trackMapIndexSvc)
 		if ossTokenSvc != nil {
 			adminModule.Handler.SetTrackImportService(service.NewAdminTrackImportService(trackSvc, ossTokenSvc))

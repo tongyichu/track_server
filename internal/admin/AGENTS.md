@@ -429,3 +429,7 @@ Kimi 景点简介使用 `MOONSHOT_API_KEY` 和可选的 `KIMI_SCENIC_DESCRIPTION
   **事实**：环境变量仅首次导入；此后以独立持久化账号为准。数据库不可用时拒绝鉴权，不重建临时管理员。
 - **误解**：后台表单里 int64 的用户 ID 用 number 输入框往返是安全的。
   **事实**：JS Number 存不下 18 位 ID 且 `String()` 会截断打印，保存即写坏归属；必须用字符串字段下发；轨迹归属人只读，不参与保存（见硬性约束「int64 ID 禁止经 JS Number 往返」）。
+
+## 用户设备权限
+
+- `permission_snapshot.go` 提供用户详情的设备快照读取，路由 `/users/:user_id/permission-snapshots` 归属 users 读取权限。`static/user_permissions.js` 独立异步加载，关闭/切用户取消旧请求；按安装实例显示机型、版本、采集和收到时间，非实时状态。已开启绿色、未开启红色、未知/不适用灰色，普通系统权限折叠；未知项用 textContent 安全显示，禁止把无上报视为关闭。

@@ -13,6 +13,7 @@ import (
 
 // Deps groups all handler dependencies.
 type Deps struct {
+	PermissionSnapshotService  *service.PermissionSnapshotService
 	CommentService             *service.CommentService
 	TrackLikeService           *service.TrackLikeService
 	TrackService               *service.TrackService
@@ -265,6 +266,7 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 	auth.GET("/user/:user_id/follower/list", userHandler.ListFollowers)
 	auth.PUT("/user/profile/update", userHandler.UpdateProfile)
 	auth.PUT("/user/profile/location", userHandler.UpdateLocation)
+	auth.PUT("/user/permission-snapshot", permissionSnapshotHandler(deps.PermissionSnapshotService))
 	auth.PUT("/user/profile/phone", userHandler.UpdatePhone)
 	auth.PUT("/user/profile/client_language", userHandler.UpdateClientLanguage)
 }

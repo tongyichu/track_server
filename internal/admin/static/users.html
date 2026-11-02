@@ -101,6 +101,11 @@
             <label class="form-label full">个人签名<textarea class="form-control" name="signature" maxlength="100" rows="3"></textarea></label>
             <label class="form-switch admin-user-detail-internal full"><input class="form-check-input" type="checkbox" name="is_internal"><span>内部人员</span></label>
           </div>
+          <section class="mt-3 border rounded p-3" aria-label="设备权限">
+            <h3>设备权限</h3>
+            <p class="hint">按安装实例分别展示最近快照，非实时状态；每天首次打开、登录或升级后上报。重装应用会显示为新设备记录。</p>
+            <div id="userPermissionSnapshots" aria-live="polite"></div>
+          </section>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button>
@@ -114,6 +119,7 @@
   <script src="/admin/static/shell.js"></script>
   <script src="/admin/static/ui.js"></script>
 
+  <script src="/admin/static/user_permissions.js"></script>
   <script src="/admin/static/users.js"></script>
 </body>
 </html>

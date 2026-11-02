@@ -4,6 +4,8 @@
 
 | 接口 | 方法 | 路径 | 需要认证 | 文档 |
 | --- | --- | --- | --- | --- |
+| 上报设备权限快照 | PUT | `/user/permission-snapshot` | 是 | [permission-snapshots.md](permission-snapshots.md) |
+| 后台查看用户设备权限 | GET | `/admin/api/users/:user_id/permission-snapshots` | 后台 users 读取权限 | [permission-snapshots.md](permission-snapshots.md) |
 | 创建轨迹（含可选默认路线说明） | POST | `/track/create` | 是 | [track.md](track.md#1-创建轨迹) |
 | 推荐轨迹列表（个性化 Feed Session，支持 `city_code` 筛选） | GET | `/track/recommend/list` | 是 | [track.md](track.md#2-推荐轨迹列表) |
 | 轨迹详情（含默认路线说明、收藏状态及可选主景区） | GET | `/track/:track_id/detail` | 是 | [track.md](track.md#3-轨迹详情)、[主景区标签](track.md#主景区标签) |

@@ -357,3 +357,7 @@ HTTP Request
 | Navigation | "使用他人轨迹导航"的使用次数统计（与 Collect 独立） |
 | AssetCache | 把 OSS 私有对象按需缓存到服务器本地并通过 `/api/v1/static/*` 下发的服务 |
 | STS | 阿里云临时凭证，用于客户端直传 OSS |
+
+## 设备权限快照
+
+- `internal/{models,repository,service,handler}/permission_snapshot.go` 负责 JWT 账号 + 安装实例全量快照；启动时按用户仓储选择 MySQL/Mongo/内存，初始化失败只禁用快照接口，不静默转内存。表/集合为 `user_permission_snapshots`，按 sequence 单调替换，收到时间由服务端生成；未知权限键、分类、状态必须兼容。协议见 `docs/api/permission-snapshots.md`。

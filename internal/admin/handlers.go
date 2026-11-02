@@ -32,26 +32,27 @@ import (
 
 // Handler 聚合管理后台需要的业务依赖。
 type Handler struct {
-	releaseSvc         *service.AppReleaseService
-	stsSvc             *service.OSSTokenService
-	auth               *Authenticator
-	userRepo           repository.UserRepository
-	userSvc            *service.UserService
-	trackRepo          repository.TrackRepository
-	collectRepo        repository.CollectRepository
-	trackMapRepo       repository.TrackMapRepository
-	trackMapIndexSvc   *service.TrackMapIndexService
-	companionRepo      repository.CompanionRepository
-	analyticsRepo      repository.AnalyticsRepository
-	feedbackSvc        *service.FeedbackService
-	restrictionSvc     *service.AccountRestrictionService
-	routeGroupSvc      *service.TrackRouteGroupService
-	trackSubmissionSvc *service.TrackSubmissionService
-	scenicSpotSvc      *service.ScenicSpotCatalogService
-	trackPlaceSvc      *service.TrackPlaceService
-	trackImportSvc     *service.AdminTrackImportService
-	dashboardStatsRepo repository.AdminDashboardStatisticsRepository
-	screenshotCache    *service.AssetCacheService
+	permissionSnapshotSvc *service.PermissionSnapshotService
+	releaseSvc            *service.AppReleaseService
+	stsSvc                *service.OSSTokenService
+	auth                  *Authenticator
+	userRepo              repository.UserRepository
+	userSvc               *service.UserService
+	trackRepo             repository.TrackRepository
+	collectRepo           repository.CollectRepository
+	trackMapRepo          repository.TrackMapRepository
+	trackMapIndexSvc      *service.TrackMapIndexService
+	companionRepo         repository.CompanionRepository
+	analyticsRepo         repository.AnalyticsRepository
+	feedbackSvc           *service.FeedbackService
+	restrictionSvc        *service.AccountRestrictionService
+	routeGroupSvc         *service.TrackRouteGroupService
+	trackSubmissionSvc    *service.TrackSubmissionService
+	scenicSpotSvc         *service.ScenicSpotCatalogService
+	trackPlaceSvc         *service.TrackPlaceService
+	trackImportSvc        *service.AdminTrackImportService
+	dashboardStatsRepo    repository.AdminDashboardStatisticsRepository
+	screenshotCache       *service.AssetCacheService
 	// staticRoot 是服务端本地静态资源根目录（通常为 <LogDir>/static）。
 	// 管理后台上传的安装包会落到 <staticRoot>/release/<platform>/ 下，
 	// 并通过 /api/v1/static/release/<platform>/<file> 对外下发。

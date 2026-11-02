@@ -221,6 +221,7 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	api.POST("/place-candidates/:track_id/dismiss", m.Handler.DismissPlaceCandidate)
 	api.GET("/users", m.Handler.ListUsers)
 	api.GET("/users/:user_id", m.Handler.GetUserProfile)
+	api.GET("/users/:user_id/permission-snapshots", m.Handler.ListUserPermissionSnapshots)
 	api.PUT("/users/:user_id", m.Handler.UpdateUserProfile)
 	api.PUT("/users/:user_id/internal", m.Handler.UpdateUserInternal)
 	api.GET("/users/:user_id/restrictions/current", m.Handler.GetCurrentAccountRestriction)

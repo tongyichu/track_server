@@ -271,6 +271,10 @@
   var detailForm = document.getElementById('userDetailForm');
   var detailSave = document.getElementById('userDetailSave');
   var activeDetailUserID = 0;
+  document.getElementById('userDetailModal').addEventListener('hidden.bs.modal', function () {
+    activeDetailUserID = 0;
+    AdminUserPermissions.cancel();
+  });
 
   function locationText(user) {
     var province = String(user.province_name || '').trim();
@@ -281,6 +285,7 @@
 
   async function openUserDetail(userID) {
     activeDetailUserID = userID;
+    AdminUserPermissions.load(userID);
     detailSave.disabled = true;
     document.getElementById('userDetailName').textContent = '加载中…';
     document.getElementById('userDetailMeta').textContent = '';

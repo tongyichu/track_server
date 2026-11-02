@@ -675,3 +675,12 @@ CREATE TABLE IF NOT EXISTS admin_audit_logs (
     created_at DATETIME(6) NOT NULL,
     KEY idx_admin_audit_created (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE IF NOT EXISTS user_permission_snapshots (
+ user_id BIGINT NOT NULL,
+ installation_id VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+ sequence BIGINT NOT NULL,
+ received_at DATETIME(6) NOT NULL,
+ data_json JSON NOT NULL,
+ PRIMARY KEY(user_id,installation_id), KEY idx_permission_user_received(user_id,received_at)
+);
