@@ -113,6 +113,7 @@ func (m *Module) Close() {
 // - PUT  /admin/api/tracks/:track_id       更新轨迹业务字段（鉴权）
 // - DELETE /admin/api/tracks/:track_id     删除轨迹（鉴权，软删除并清理关联索引/收藏）
 // - POST /admin/api/tracks/:track_id/restore 恢复已删除轨迹（鉴权，还原公开并重新排队地图索引）
+// - POST /admin/api/tracks/:track_id/purge  彻底删除已下架轨迹（鉴权，物理删除 DB 关联数据并尽力清 OSS 文件）
 // - GET  /admin/api/companions             同行会话列表（鉴权，cursor 翻页）
 // - GET  /admin/api/companions/statistics  同行会话运营统计（鉴权）
 // - GET  /admin/api/companions/usage-statistics  同行趋势与实际人数分布（鉴权）
@@ -234,6 +235,7 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	api.PUT("/tracks/:track_id", m.Handler.UpdateTrack)
 	api.DELETE("/tracks/:track_id", m.Handler.DeleteTrack)
 	api.POST("/tracks/:track_id/restore", m.Handler.RestoreTrack)
+	api.POST("/tracks/:track_id/purge", m.Handler.PurgeTrack)
 	api.GET("/track-submissions", m.Handler.ListTrackSubmissions)
 	api.GET("/track-submissions/:submission_id", m.Handler.GetTrackSubmission)
 	api.POST("/track-submissions/:submission_id/review", m.Handler.ReviewTrackSubmission)

@@ -6,7 +6,7 @@
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
   function statusText(s) {
-    if (s === 0) return '已删除';
+    if (s === 0) return '已下架';
     if (s === 1) return '公开';
     if (s === 2) return '私密';
     return String(s);
@@ -136,8 +136,8 @@
     nextBtn.disabled = !lastNextCursor;
     pageHint.textContent = '第 ' + (pageIndex + 1) + ' 页（' + items.length + ' 条）';
     totalHint.textContent = statusFilter.value === '0'
-      ? '共 ' + totalCount + ' 条已删除轨迹'
-      : '共 ' + totalCount + ' 条轨迹（不含已删除）';
+      ? '共 ' + totalCount + ' 条已下架轨迹'
+      : '共 ' + totalCount + ' 条轨迹（不含已下架）';
   }
 
   tbody.addEventListener('click', async function (ev) {

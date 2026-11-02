@@ -7,9 +7,11 @@
 `GET /admin/api/tracks` 保留 `title`、`user_name`、`city_code`、`status`、`limit`、`cursor_start_time`、`cursor_id`，新增可选 `province_code` 与 `missing`：
 
 - `province_code`：省级 Code，服务端展开为该省全部城市 Code 后按 `city_code IN (...)` 筛选；与 `city_code` 同时传时 `city_code` 优先。
-- `status`：`1` 公开、`2` 私密、`0` 已删除。默认（不传或传 1/2）排除已删除记录；传 `0` 改为只列已删除（`status=0`）的轨迹。
+- `status`：`1` 公开、`2` 私密、`0` 已下架（软删除，页面文案为「已下架」，含客户端用户删除与后台删除）。默认（不传或传 1/2）排除已下架记录；传 `0` 改为只列已下架（`status=0`）的轨迹。
 
-`POST /admin/api/tracks/:track_id/restore`（轨迹操作权限）恢复软删除的轨迹：状态还原为公开（`status=1`）、清空 `deleted_at`，并重新排队地图索引任务（删除时 geo index 与索引任务已清理）；非已删除状态返回 400。删除时清理的收藏与路线组成员关系不可恢复。轨迹详情弹窗对已删除轨迹把底部「删除」按钮换成「恢复」，确认后调用该接口。
+`POST /admin/api/tracks/:track_id/restore`（轨迹操作权限）恢复已下架轨迹：状态还原为公开（`status=1`）、清空 `deleted_at`，并重新排队地图索引任务（删除时 geo index 与索引任务已清理）；非已下架状态返回 400。删除时清理的收藏与路线组成员关系不可恢复。轨迹详情弹窗对已下架轨迹把底部「删除」按钮换成「恢复」，确认后调用该接口。
+
+`POST /admin/api/tracks/:track_id/purge`（轨迹操作权限）彻底删除已下架轨迹，不可恢复：仅允许 `status=0` 的轨迹（否则 400），在事务中物理删除 `track_records` 及全部关联数据（轨迹点、收藏、导航记录、地图索引任务与 geo index、路线组成员、景点关联、景点识别记录、点赞、评论及评论反应/图片/统计、投稿及图片与审核流水），成功后尽力删除 OSS 原始轨迹文件与预览图（仅允许删除用户内容前缀下的对象，按精确 object key 授权；失败不阻断并在响应 `oss_warning` 中返回）。评论图片的 OSS 对象、用户已领取的成就奖励、历史同行会话与操作日志不在清理范围。轨迹详情弹窗对已下架轨迹把主按钮换成「彻底删除」，前端双重确认后调用。
 
 `missing` 可选值：
 

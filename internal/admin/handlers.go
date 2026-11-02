@@ -60,6 +60,11 @@ type adminTrackDeleter interface {
 	AdminSoftDeleteAndCleanupTx(ctx context.Context, trackID string) error
 }
 
+// adminTrackHardDeleter 物理删除已下架轨迹及关联数据（见各仓储实现注释）。
+type adminTrackHardDeleter interface {
+	AdminHardDeleteTrack(ctx context.Context, trackID string) error
+}
+
 type trackMapCleanupRepository interface {
 	CleanupDeletedTrack(ctx context.Context, trackID string) error
 }
@@ -1753,6 +1758,62 @@ func (h *Handler) RestoreTrack(ctx context.Context, c *app.RequestContext) {
 		}
 	}
 	c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"status": "ok"}})
+}
+
+// PurgeTrack 处理 POST /admin/api/tracks/:track_id/purge
+// 彻底删除已下架轨迹：物理删除数据库记录与全部关联数据（见仓储实现），
+// 成功后尽力删除 OSS 原始轨迹文件与预览图。仅允许已下架（status=0）轨迹；
+// OSS 删除失败不阻断，响应中返回 oss_warning。
+func (h *Handler) PurgeTrack(ctx context.Context, c *app.RequestContext) {
+	if h == nil || h.trackRepo == nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "track repository not configured"})
+		return
+	}
+	trackID := strings.TrimSpace(c.Param("track_id"))
+	if trackID == "" {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "track_id is required"})
+		return
+	}
+	track, err := h.trackRepo.FindByID(ctx, trackID)
+	if err != nil {
+		handleAdminRepoError(c, err)
+		return
+	}
+	if track.Status != models.TrackStatusDeleted {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "只有已下架的轨迹才能彻底删除"})
+		return
+	}
+	deleter, ok := h.trackRepo.(adminTrackHardDeleter)
+	if !ok {
+		c.JSON(http.StatusServiceUnavailable, utils.H{"error": "hard delete not supported by track repository"})
+		return
+	}
+	if err := deleter.AdminHardDeleteTrack(ctx, trackID); err != nil {
+		handleAdminRepoError(c, err)
+		return
+	}
+	ossWarning := ""
+	if h.stsSvc != nil {
+		objects := []string{track.RawTrackURL, track.TrackScreenshotURL, track.TrackNoMapBgScreenshotURL,
+			track.PreviewImages.SquareDayURL, track.PreviewImages.SquareNightURL,
+			track.PreviewImages.LandscapeDayURL, track.PreviewImages.LandscapeNightURL}
+		kept := objects[:0]
+		for _, object := range objects {
+			if strings.TrimSpace(object) != "" {
+				kept = append(kept, object)
+			}
+		}
+		if len(kept) > 0 {
+			if err := h.stsSvc.DeleteUserObjects(track.UserID, kept); err != nil {
+				ossWarning = "数据库记录已删除，部分 OSS 文件清理失败：" + err.Error()
+			}
+		}
+	}
+	data := utils.H{"status": "ok"}
+	if ossWarning != "" {
+		data["oss_warning"] = ossWarning
+	}
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": data})
 }
 
 // DeleteTrack 处理 DELETE /admin/api/tracks/:track_id

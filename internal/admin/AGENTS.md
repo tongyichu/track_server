@@ -20,7 +20,7 @@
 - 审核用户轨迹投稿，查看结构化路线资料和经本地缓存改写的投稿图片，按 revision 通过或驳回。
 - 管理后台内置静态资源支持 gzip、ETag 与内容版本缓存；公开登录页 no-cache，含账号身份的受保护 HTML 和 API no-store。工作台及列表页先加载主体数据，再异步加载 ECharts 绘图。
 - 投稿审核页顶部展示当前待审核与超时队列，以及本月通过、驳回、通过率和平均审核时长；复用 `/admin/api/dashboard?period=month` 的只读统计。
-- 查看、修正和删除用户轨迹；列表按 ID、城市、标题、运动类型、用户名、轨迹图、状态和操作展示，支持标题及用户名模糊搜索、省→市级联筛选（省份由服务端展开为城市集合，city_code 优先）、状态筛选（公开/私密/已删除，默认排除已删除，选已删除则只列已删记录），并保留游标分页。用户名同时展示头像；景点详情中的相关轨迹列表复用相同列顺序。列表不单独放删除按钮；编辑轨迹使用共享 `static/track_editor.js` 表单，底部删除动作需二次确认，删除为软删除并同步清理关联数据。
+- 查看、修正和删除用户轨迹；列表按 ID、城市、标题、运动类型、用户名、轨迹图、状态和操作展示，支持标题及用户名模糊搜索、省→市级联筛选（省份由服务端展开为城市集合，city_code 优先）、状态筛选（公开/私密/已下架，默认排除已下架，选已下架则只列已下架记录），并保留游标分页。`status=0` 统一称「下架」（软删除，含客户端用户删除与后台删除），下架轨迹可恢复或彻底删除（purge）。用户名同时展示头像；景点详情中的相关轨迹列表复用相同列顺序。列表不单独放删除按钮；编辑轨迹使用共享 `static/track_editor.js` 表单，底部删除动作需二次确认，删除为软删除并同步清理关联数据。
 - 反馈与纠错页默认筛选待处理，展示状态统计、反馈用户名称和完整内容；点击查看会在弹窗中加载详情并处理反馈。`static/feedback_correction.js` 优先读取服务端 `correction` 快照，旧记录兼容完整的六种中英文纠错正文；不识别的内容仍按普通反馈显示，不改写原始正文。页面「纠错选项」可新增、改名、排序、启停，由 API 下发客户端。
 - 纠错选项支持 description/description_en 与 notes_hint/notes_hint_en（可空、单行、各最多 160 字），后台配置与客户端展示共用协议，不按显示名称推导类别。反馈列表的 kind/track_id/correction_option_id 在 MySQL/Mongo/内存仓储分页前过滤，仅按结构化 correction 识别类型，旧文本纠错保留兼容展示。
 - 纠错处理结果与状态分离：corrected/unchanged 配 resolved，unverified 配 ignored；新版后台提交 revision 作条件更新，终态必须填写结果及用户可见回复，冲突返回 409 且保留草稿。处理人只从后台 session 取值。服务与仓储入口为 internal/service/feedback_resolution.go 和 internal/repository/feedback_resolution.go；复用 correction_json/BSON，不新增表列。
@@ -163,8 +163,9 @@ internal/admin/
 | GET | `/admin/api/tracks/map-config` | 轨迹查看 | 轨迹详情地图的高德 Web Key 配置（service_host 指向 `/admin/api/tracks/amap-service`） |
 | GET | `/admin/api/tracks/amap-service` | 轨迹查看 | 高德 JS API 服务代理（与景点地图同一实现） |
 | PUT | `/admin/api/tracks/:track_id` | 鉴权 | 更新轨迹业务字段（不改 ID、轨迹点与创建/更新时间）；城市/类型更新已有地图索引，状态/进行状态/原始文件变化时清理并按可索引条件重新排队 |
-| DELETE | `/admin/api/tracks/:track_id` | 鉴权 | 删除轨迹：标记 `status=0`，并清理收藏、地图索引任务、geo index、路线组成员 |
-| POST | `/admin/api/tracks/:track_id/restore` | 鉴权 | 恢复已删除轨迹：还原为公开、清空 `deleted_at` 并重新排队地图索引；收藏与路线组成员关系不可恢复。详情弹窗对已删除轨迹把删除按钮换成恢复 |
+| DELETE | `/admin/api/tracks/:track_id` | 鉴权 | 删除轨迹（页面文案为下架）：标记 `status=0`，并清理收藏、地图索引任务、geo index、路线组成员 |
+| POST | `/admin/api/tracks/:track_id/restore` | 鉴权 | 恢复已下架轨迹：还原为公开、清空 `deleted_at` 并重新排队地图索引；收藏与路线组成员关系不可恢复。详情弹窗对已下架轨迹把删除按钮换成恢复 |
+| POST | `/admin/api/tracks/:track_id/purge` | 鉴权 | 彻底删除已下架轨迹（仅限 `status=0`，不可恢复）：事务物理删除主表与全部关联数据（轨迹点/收藏/导航/索引/路线组成员/景点关联与识别记录/点赞/评论全套/投稿全套），成功后尽力删 OSS 原始文件与预览图（`OSSTokenService.DeleteUserObjects`，仅限用户内容前缀、按精确 key 授权，失败返回 `oss_warning` 不阻断）。详情弹窗对已下架轨迹主按钮为「彻底删除」，前端双重确认 |
 | GET | `/admin/api/feedbacks` | 鉴权 | 意见反馈列表，补充用户名称，支持 `status` / `app_version` / `phone` / `cursor` / `limit` |
 | GET/PUT | `/admin/api/feedback-correction-config` | 鉴权 | 读取含停用项的完整配置，按 version 条件保存；冲突返回 409 |
 | GET | `/admin/api/feedbacks/:feedback_id` | 鉴权 | 意见反馈详情 |
@@ -354,8 +355,10 @@ GET /admin/api/users
        → 清理 track_collects
        → 清理 track_map_index_jobs / track_geo_indexes / track_route_group_members
        → 若删除的是路线组代表轨迹，归档该路线组并移除其全部成员，后续由 track_route_group 任务重新聚合剩余轨迹
-  → POST /admin/api/tracks/:track_id/restore（已删除轨迹详情弹窗底部按钮变为「恢复」）
+  → POST /admin/api/tracks/:track_id/restore（已下架轨迹详情弹窗底部按钮变为「恢复」）
        → status 还原为公开、清空 deleted_at，重新排队地图索引任务；收藏与路线组成员关系不可恢复
+  → POST /admin/api/tracks/:track_id/purge（已下架轨迹详情弹窗主按钮为「彻底删除」，双重确认）
+       → 仅限 status=0；事务物理删除主表与全部关联数据，成功后尽力删 OSS 原始文件与预览图（oss_warning 不阻断）
 ```
 
 **主景点目录**：

@@ -79,6 +79,31 @@ func (r *InMemoryTrackRepository) ListAdminTracks(_ context.Context, filter Admi
 	return items, total, nil
 }
 
+// AdminHardDeleteTrack 内存实现的物理删除：仅允许删除已下架轨迹，
+// 内存仓储只持有轨迹主表与（注入的）景点关联，删除主表记录并清理景点关联。
+func (r *InMemoryTrackRepository) AdminHardDeleteTrack(_ context.Context, trackID string) error {
+	trackID = strings.TrimSpace(trackID)
+	if trackID == "" {
+		return ErrNotFound
+	}
+	r.mu.Lock()
+	track, ok := r.tracks[trackID]
+	if !ok {
+		r.mu.Unlock()
+		return ErrNotFound
+	}
+	if track.Status != models.TrackStatusDeleted {
+		r.mu.Unlock()
+		return ErrConflict
+	}
+	delete(r.tracks, trackID)
+	r.mu.Unlock()
+	if r.adminScenicSpots != nil {
+		_ = r.adminScenicSpots.DeleteTrackScenicSpotLink(context.Background(), trackID, "")
+	}
+	return nil
+}
+
 func escapeAdminLike(value string) string {
 	value = strings.ReplaceAll(value, "!", "!!")
 	value = strings.ReplaceAll(value, "%", "!%")

@@ -550,6 +550,84 @@ func (s *OSSTokenService) DownloadObject(userID int64, ossObjectURL, localPath s
 	return nil
 }
 
+// DeleteUserObjects 物理删除指定的 OSS 对象（原始轨迹、预览图等）。
+// 安全约束：只允许删除 <ossUploadPrefix>/ 用户内容前缀下的对象，拒绝其他
+// 前缀（如 release/、scenic_spots/）；STS policy 按精确 object key 逐个授权，
+// 凭证不放宽到目录级。单个对象删除失败不影响其余对象，返回汇总错误。
+func (s *OSSTokenService) DeleteUserObjects(userID int64, objectURLs []string) error {
+	if s == nil {
+		return errors.New("oss sts service is nil")
+	}
+	if s.ossInternalEndpoint == "" {
+		return errors.New("oss internal endpoint is not configured")
+	}
+	prefix := strings.Trim(s.ossUploadPrefix, "/") + "/"
+	keys := make([]string, 0, len(objectURLs))
+	for _, raw := range objectURLs {
+		_, _, key, err := s.parseOSSObjectURL(raw)
+		if err != nil || key == "" || strings.Contains(key, "..") || !strings.HasPrefix(key, prefix) {
+			log.Printf("[OSSDelete] skip_invalid_key user_id=%d source=%s", userID, redactURL(raw))
+			continue
+		}
+		keys = append(keys, key)
+	}
+	if len(keys) == 0 {
+		return nil
+	}
+	resources := make([]string, 0, len(keys))
+	for _, key := range keys {
+		resources = append(resources, fmt.Sprintf("acs:oss:*:*:%s/%s", s.ossBucket, key))
+	}
+	policyJSON, err := json.Marshal(map[string]any{
+		"Version": "1",
+		"Statement": []map[string]any{{
+			"Action":   []string{"oss:DeleteObject"},
+			"Effect":   "Allow",
+			"Resource": resources,
+		}},
+	})
+	if err != nil {
+		return err
+	}
+	roleSessionName := fmt.Sprintf("%sdelete-%d", s.roleSessionPrefix, time.Now().Unix())
+	if len(roleSessionName) > 64 {
+		roleSessionName = roleSessionName[:64]
+	}
+	req := sts.CreateAssumeRoleRequest()
+	req.Scheme = "https"
+	req.RoleArn = s.roleARN
+	req.RoleSessionName = roleSessionName
+	req.DurationSeconds = requests.NewInteger(int(s.durationSeconds))
+	req.Policy = string(policyJSON)
+	resp, err := s.stsClient.AssumeRole(req)
+	if err != nil {
+		return err
+	}
+	cred := resp.Credentials
+	if cred.AccessKeyId == "" || cred.AccessKeySecret == "" || cred.SecurityToken == "" {
+		return errors.New("sts returned empty credentials")
+	}
+	cli, err := ossclient.New(s.ossInternalEndpoint, cred.AccessKeyId, cred.AccessKeySecret, ossclient.SecurityToken(cred.SecurityToken))
+	if err != nil {
+		return err
+	}
+	bkt, err := cli.Bucket(s.ossBucket)
+	if err != nil {
+		return err
+	}
+	var failed []string
+	for _, key := range keys {
+		if err := bkt.DeleteObject(key); err != nil {
+			log.Printf("[OSSDelete] delete_object_error user_id=%d object_key=%s err=%v", userID, key, err)
+			failed = append(failed, key)
+		}
+	}
+	if len(failed) > 0 {
+		return fmt.Errorf("failed to delete %d/%d oss objects", len(failed), len(keys))
+	}
+	return nil
+}
+
 // parseOSSObjectURL 从 OSS 对象完整 URL 中解析出 bucket/endpoint/objectKey。
 // 若传入的是相对路径（不含 scheme），则视为 objectKey。
 func (s *OSSTokenService) parseOSSObjectURL(raw string) (bucket, endpoint, objectKey string, err error) {
