@@ -20,7 +20,7 @@
 - 审核用户轨迹投稿，查看结构化路线资料和经本地缓存改写的投稿图片，按 revision 通过或驳回。
 - 管理后台内置静态资源支持 gzip、ETag 与内容版本缓存；公开登录页 no-cache，含账号身份的受保护 HTML 和 API no-store。工作台及列表页先加载主体数据，再异步加载 ECharts 绘图。
 - 投稿审核页顶部展示当前待审核与超时队列，以及本月通过、驳回、通过率和平均审核时长；复用 `/admin/api/dashboard?period=month` 的只读统计。
-- 查看、修正和删除用户轨迹；列表按 ID、城市、标题、运动类型、用户名、轨迹图、状态和操作展示，支持标题及用户名模糊搜索、城市和状态筛选，并保留游标分页。用户名同时展示头像；景点详情中的相关轨迹列表复用相同列顺序。列表不单独放删除按钮；编辑轨迹使用共享 `static/track_editor.js` 表单，底部删除动作需二次确认，删除为软删除并同步清理关联数据。
+- 查看、修正和删除用户轨迹；列表按 ID、城市、标题、运动类型、用户名、轨迹图、状态和操作展示，支持标题及用户名模糊搜索、省→市级联筛选（省份由服务端展开为城市集合，city_code 优先）、状态筛选（公开/私密/已删除，默认排除已删除，选已删除则只列已删记录），并保留游标分页。用户名同时展示头像；景点详情中的相关轨迹列表复用相同列顺序。列表不单独放删除按钮；编辑轨迹使用共享 `static/track_editor.js` 表单，底部删除动作需二次确认，删除为软删除并同步清理关联数据。
 - 反馈与纠错页默认筛选待处理，展示状态统计、反馈用户名称和完整内容；点击查看会在弹窗中加载详情并处理反馈。`static/feedback_correction.js` 优先读取服务端 `correction` 快照，旧记录兼容完整的六种中英文纠错正文；不识别的内容仍按普通反馈显示，不改写原始正文。页面「纠错选项」可新增、改名、排序、启停，由 API 下发客户端。
 - 纠错选项支持 description/description_en 与 notes_hint/notes_hint_en（可空、单行、各最多 160 字），后台配置与客户端展示共用协议，不按显示名称推导类别。反馈列表的 kind/track_id/correction_option_id 在 MySQL/Mongo/内存仓储分页前过滤，仅按结构化 correction 识别类型，旧文本纠错保留兼容展示。
 - 纠错处理结果与状态分离：corrected/unchanged 配 resolved，unverified 配 ignored；新版后台提交 revision 作条件更新，终态必须填写结果及用户可见回复，冲突返回 409 且保留草稿。处理人只从后台 session 取值。服务与仓储入口为 internal/service/feedback_resolution.go 和 internal/repository/feedback_resolution.go；复用 correction_json/BSON，不新增表列。
@@ -155,7 +155,7 @@ internal/admin/
 | POST | `/admin/api/place-candidates/:track_id/confirm` | 轨迹操作 | 确认指定候选为轨迹主景点并同步内部景点关联 |
 | POST | `/admin/api/place-candidates/:track_id/dismiss` | 轨迹操作 | 忽略当前轨迹的景点候选 |
 | GET | `/admin/api/companions` | 鉴权 | 同行会话列表，支持 `title` 模糊搜索、`owner_name` 发起人昵称模糊搜索、`track_type` 精确筛选、`province_code` / `city_code` 按发起人资料所在地筛选及 cursor 翻页；返回发起人昵称/头像与成员记录数 |
-| GET | `/admin/api/tracks` | 鉴权 | 轨迹列表，支持 `title` / `user_name` 模糊搜索、`city_code` / `status` / `missing` 筛选及 cursor 翻页 |
+| GET | `/admin/api/tracks` | 鉴权 | 轨迹列表，支持 `title` / `user_name` 模糊搜索、`province_code`（展开为省内城市集合，`city_code` 优先）/ `city_code` / `status`（1 公开、2 私密、0 已删除，默认排除已删除）/ `missing` 筛选及 cursor 翻页 |
 | POST | `/admin/api/tracks/import` | 轨迹操作 | 批量导入轨迹文件归属内部人员，multipart `files`（≤50）+ `owner_user_id` + `track_type` + `coordinate_system`，逐文件返回结果 |
 | GET | `/admin/api/cities` | 鉴权 | 返回内置城市/省份 Code、名称与省市层级，供轨迹和景点选择器使用 |
 | GET | `/admin/api/tracks/:track_id` | 鉴权 | 返回 `{track, user_id_text, geo?}`：轨迹详情、主景点（track.primary_scenic_spot）与地图索引简化轨迹线（GCJ02）；`user_id_text` 是字符串形式的归属人 ID，编辑表单必须按字符串原样回传，避免 int64 经 JS Number 精度丢失 |

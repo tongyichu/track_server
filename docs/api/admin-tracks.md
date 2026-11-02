@@ -4,7 +4,12 @@
 
 ## 列表与资料缺项
 
-`GET /admin/api/tracks` 保留 `title`、`user_name`、`city_code`、`status`、`limit`、`cursor_start_time`、`cursor_id`，新增可选 `missing`：
+`GET /admin/api/tracks` 保留 `title`、`user_name`、`city_code`、`status`、`limit`、`cursor_start_time`、`cursor_id`，新增可选 `province_code` 与 `missing`：
+
+- `province_code`：省级 Code，服务端展开为该省全部城市 Code 后按 `city_code IN (...)` 筛选；与 `city_code` 同时传时 `city_code` 优先。
+- `status`：`1` 公开、`2` 私密、`0` 已删除。默认（不传或传 1/2）排除已删除记录；传 `0` 改为只列已删除（`status=0`）的轨迹。
+
+`missing` 可选值：
 
 | 值 | 页面选项 | 口径 |
 | --- | --- | --- |

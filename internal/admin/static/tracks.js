@@ -7,7 +7,7 @@
   }
   function statusText(s) {
     if (s === 0) return '已删除';
-    if (s === 1) return '正常';
+    if (s === 1) return '公开';
     if (s === 2) return '私密';
     return String(s);
   }
@@ -43,6 +43,7 @@
   var titleFilter = document.getElementById('titleFilter');
   var userNameFilter = document.getElementById('userNameFilter');
   var cityFilter = document.getElementById('cityFilter');
+  var provinceFilter = document.getElementById('provinceFilter');
   var statusFilter = document.getElementById('statusFilter');
   var missingFilter = document.getElementById('missingFilter');
   var pageRequest = 0;
@@ -59,6 +60,10 @@
   titleFilter.addEventListener('keydown', function (event) { if (event.key === 'Enter') resetSearch(); });
   userNameFilter.addEventListener('keydown', function (event) { if (event.key === 'Enter') resetSearch(); });
   cityFilter.addEventListener('change', resetSearch);
+  provinceFilter.addEventListener('change', function () {
+    populateCityOptions(cityOptions, provinceFilter.value);
+    resetSearch();
+  });
   statusFilter.addEventListener('change', resetSearch);
   missingFilter.addEventListener('change', resetSearch);
   prevBtn.addEventListener('click', function () {
@@ -84,6 +89,7 @@
     params.set('limit', String(pageSize));
     if (titleFilter.value.trim()) params.set('title', titleFilter.value.trim());
     if (userNameFilter.value.trim()) params.set('user_name', userNameFilter.value.trim());
+    if (provinceFilter.value) params.set('province_code', provinceFilter.value);
     if (cityFilter.value) params.set('city_code', cityFilter.value);
     if (statusFilter.value) params.set('status', statusFilter.value);
     if (missingFilter.value) params.set('missing', missingFilter.value);
@@ -114,7 +120,7 @@
         : '<span class="hint">无</span>';
       var avatarURL = safeImageURL(it.avatar_url);
       var avatar = avatarURL ? '<img class="track-avatar" src="' + esc(avatarURL) + '" alt="" loading="lazy">' : '<span class="track-avatar-fallback">' + esc((it.user_name || '用').slice(0, 1)) + '</span>';
-      var statusClass = it.status === 1 ? 'bg-green-lt' : 'bg-secondary-lt';
+      var statusClass = it.status === 1 ? 'bg-green-lt' : it.status === 0 ? 'bg-red-lt' : 'bg-secondary-lt';
       tr.innerHTML = '<td class="track-id">' + esc(it.id) + '</td>' +
         '<td title="' + esc(it.city_code || '') + '">' + esc(cityNameByCode[it.city_code] || '未知城市') + '</td>' +
         '<td class="track-title-cell">' + esc(it.title || '') + '</td>' +
@@ -129,7 +135,9 @@
     prevBtn.disabled = pageIndex <= 0;
     nextBtn.disabled = !lastNextCursor;
     pageHint.textContent = '第 ' + (pageIndex + 1) + ' 页（' + items.length + ' 条）';
-    totalHint.textContent = '共 ' + totalCount + ' 条轨迹（不含已删除）';
+    totalHint.textContent = statusFilter.value === '0'
+      ? '共 ' + totalCount + ' 条已删除轨迹'
+      : '共 ' + totalCount + ' 条轨迹（不含已删除）';
   }
 
   tbody.addEventListener('click', async function (ev) {
@@ -145,16 +153,25 @@
 
   async function editTrack(trackID, btn) { return window.AdminTrackEditor.open(trackID, { onSaved: loadPage, onDeleted: loadPage }); }
 
+  function populateCityOptions(regions, provinceCode) {
+    cityFilter.replaceChildren(new Option('全部城市', ''));
+    regions.filter(function (item) {
+      return item.level === 'city' && (!provinceCode || item.province_code === provinceCode);
+    }).forEach(function (city) {
+      cityFilter.add(new Option(city.name, city.code));
+    });
+  }
+
   async function loadCities() {
     try {
       var resp = await fetch('/admin/api/cities');
       if (!resp.ok) throw new Error(String(resp.status));
       var data = ((await resp.json()).data) || [];
       cityOptions = data;
-      data.forEach(function (city) {
-        cityNameByCode[city.code] = city.name;
-        var option = document.createElement('option'); option.value = city.code; option.textContent = city.name; cityFilter.appendChild(option);
-      });
+      data.forEach(function (item) { if (item.level === 'city') cityNameByCode[item.code] = item.name; });
+      data.filter(function (item) { return item.level === 'province'; })
+        .forEach(function (item) { provinceFilter.add(new Option(item.name, item.code)); });
+      populateCityOptions(data, '');
       return data;
     } catch (err) {
       AdminUI.alert('城市列表加载失败: ' + (err.message || err), 'danger');

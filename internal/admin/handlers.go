@@ -1264,13 +1264,14 @@ func (h *Handler) ListTracks(ctx context.Context, c *app.RequestContext) {
 	var status *models.TrackStatus
 	if statusRaw != "" {
 		parsed, parseErr := strconv.Atoi(statusRaw)
-		if parseErr != nil || (models.TrackStatus(parsed) != models.TrackStatusNormal && models.TrackStatus(parsed) != models.TrackStatusPrivate) {
+		if parseErr != nil || (models.TrackStatus(parsed) != models.TrackStatusNormal && models.TrackStatus(parsed) != models.TrackStatusPrivate && models.TrackStatus(parsed) != models.TrackStatusDeleted) {
 			c.JSON(http.StatusBadRequest, utils.H{"error": "invalid status"})
 			return
 		}
 		value := models.TrackStatus(parsed)
 		status = &value
 	}
+	provinceCode := strings.TrimSpace(string(c.Query("province_code")))
 	var cursor *models.TrackListCursor
 	if rawAt := strings.TrimSpace(string(c.Query("cursor_start_time"))); rawAt != "" {
 		t, err := time.Parse(time.RFC3339Nano, rawAt)
@@ -1318,6 +1319,9 @@ func (h *Handler) ListTracks(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 	filter := repository.AdminTrackListFilter{Title: title, CityCode: cityCode, Status: status, UserIDs: matchedUserIDs, Missing: missing}
+	if cityCode == "" && provinceCode != "" {
+		filter.CityCodes = adminCityCodesOfProvince(provinceCode)
+	}
 	if (missing == "any" || missing == "place_candidate") && h.trackPlaceSvc != nil {
 		candidateIDs, err := h.trackPlaceSvc.PendingPlaceCandidateTrackIDs(ctx)
 		if err != nil {

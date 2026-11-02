@@ -2219,8 +2219,13 @@ func (r *MySQLTrackRepository) ListAdminTracks(ctx context.Context, filter Admin
 	if limit <= 0 {
 		limit = 20
 	}
+	// 默认排除已删除；显式筛选「已删除」时改为只看 status=0 的记录。
 	base := `FROM track_records WHERE deleted_at IS NULL AND status <> ?`
 	args := []any{models.TrackStatusDeleted}
+	if filter.Status != nil && *filter.Status == models.TrackStatusDeleted {
+		base = `FROM track_records WHERE status = ?`
+		args = []any{models.TrackStatusDeleted}
+	}
 	if condition, values := adminTrackMissingSQL(filter); condition != "" {
 		base += " AND (" + condition + ")"
 		args = append(args, values...)
@@ -2232,8 +2237,14 @@ func (r *MySQLTrackRepository) ListAdminTracks(ctx context.Context, filter Admin
 	if filter.CityCode != "" {
 		base += ` AND city_code = ?`
 		args = append(args, filter.CityCode)
+	} else if len(filter.CityCodes) > 0 {
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(filter.CityCodes)), ",")
+		base += ` AND city_code IN (` + placeholders + `)`
+		for _, code := range filter.CityCodes {
+			args = append(args, code)
+		}
 	}
-	if filter.Status != nil {
+	if filter.Status != nil && *filter.Status != models.TrackStatusDeleted {
 		base += ` AND status = ?`
 		args = append(args, *filter.Status)
 	}

@@ -474,13 +474,18 @@ func (r *MongoTrackRepository) ListAdminTracks(ctx context.Context, filter Admin
 		limit = 20
 	}
 	query := bson.M{"status": bson.M{"$ne": models.TrackStatusDeleted}}
+	if filter.Status != nil && *filter.Status == models.TrackStatusDeleted {
+		query = bson.M{"status": models.TrackStatusDeleted}
+	}
 	if filter.Title != "" {
 		query["title"] = primitive.Regex{Pattern: regexp.QuoteMeta(filter.Title), Options: "i"}
 	}
 	if filter.CityCode != "" {
 		query["city_code"] = filter.CityCode
+	} else if len(filter.CityCodes) > 0 {
+		query["city_code"] = bson.M{"$in": filter.CityCodes}
 	}
-	if filter.Status != nil {
+	if filter.Status != nil && *filter.Status != models.TrackStatusDeleted {
 		query["status"] = *filter.Status
 	}
 	if filter.UserIDs != nil {

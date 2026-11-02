@@ -24,10 +24,18 @@ func (r *InMemoryTrackRepository) ListAdminTracks(_ context.Context, filter Admi
 	for _, id := range filter.UserIDs {
 		userIDs[id] = struct{}{}
 	}
+	cityCodes := make(map[string]struct{}, len(filter.CityCodes))
+	for _, code := range filter.CityCodes {
+		cityCodes[code] = struct{}{}
+	}
+	wantDeleted := filter.Status != nil && *filter.Status == models.TrackStatusDeleted
 	items := make([]*models.Track, 0)
 	var total int64
 	for _, track := range r.tracks {
-		if track == nil || track.Status == models.TrackStatusDeleted {
+		if track == nil {
+			continue
+		}
+		if wantDeleted != (track.Status == models.TrackStatusDeleted) {
 			continue
 		}
 		if filter.Title != "" && !strings.Contains(strings.ToLower(track.Title), strings.ToLower(filter.Title)) {
@@ -35,6 +43,11 @@ func (r *InMemoryTrackRepository) ListAdminTracks(_ context.Context, filter Admi
 		}
 		if filter.CityCode != "" && track.CityCode != filter.CityCode {
 			continue
+		}
+		if filter.CityCode == "" && len(cityCodes) > 0 {
+			if _, ok := cityCodes[track.CityCode]; !ok {
+				continue
+			}
 		}
 		if filter.Status != nil && track.Status != *filter.Status {
 			continue
