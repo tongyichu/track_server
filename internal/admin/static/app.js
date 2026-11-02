@@ -165,7 +165,6 @@
       publishOk.textContent = '发布成功';
       resetReleaseNotes();
       loadList();
-      loadChangelogs();
     } catch (e) {
       publishErr.textContent = e.message || String(e);
     }
@@ -260,7 +259,6 @@
       const tr = document.createElement('tr');
       tr.innerHTML = '<td>' + it.id + '</td>' +
         '<td>' + esc(it.version_name) + '</td>' +
-        '<td>' + it.version_code + '</td>' +
         '<td>' + it.min_supported_version_code + '</td>' +
         '<td>' + (it.force_update ? '是' : '否') + '</td>' +
         '<td>' + esc(it.status) + '</td>' +
@@ -296,32 +294,57 @@
     });
   }
 
-  // ---------------- 更新日志（独立留存） ----------------
-  async function loadChangelogs() {
-    const tbody = document.getElementById('changelogList');
-    if (!tbody) return;
-    const resp = await fetch('/admin/api/releases/changelogs?platform=android');
-    if (!resp.ok) return;
-    const items = ((await resp.json()).data || {}).items || [];
-    tbody.innerHTML = '';
-    if (items.length === 0) {
-      const tr = document.createElement('tr');
-      tr.innerHTML = '<td colspan="5" style="text-align:center;color:#98a2b3;">暂无更新日志</td>';
-      tbody.appendChild(tr);
-      return;
+  // ---------------- 更新日志弹窗（独立留存） ----------------
+  async function showChangelogModal() {
+    const root = document.createElement('div');
+    root.className = 'modal modal-blur fade';
+    root.tabIndex = -1;
+    root.innerHTML = '<div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg"><div class="modal-content">' +
+      '<div class="modal-header"><h5 class="modal-title">更新日志</h5><button type="button" class="btn-close" aria-label="关闭"></button></div>' +
+      '<div class="modal-body"><div class="changelog-loading">加载中…</div></div>' +
+      '<div class="modal-footer"><button type="button" class="btn btn-outline-secondary">关闭</button></div>' +
+      '</div></div>';
+    document.body.appendChild(root);
+    const modal = new tabler.Modal(root);
+    root.querySelector('.btn-close').addEventListener('click', function () { modal.hide(); });
+    root.querySelector('.modal-footer button').addEventListener('click', function () { modal.hide(); });
+    root.addEventListener('hidden.bs.modal', function () { root.remove(); });
+    modal.show();
+
+    const body = root.querySelector('.modal-body');
+    try {
+      const resp = await fetch('/admin/api/releases/changelogs?platform=android');
+      if (!resp.ok) throw new Error('加载失败: ' + resp.status);
+      const items = ((await resp.json()).data || {}).items || [];
+      body.innerHTML = '';
+      if (items.length === 0) {
+        body.innerHTML = '<div class="changelog-loading">暂无更新日志</div>';
+        return;
+      }
+      items.forEach(function (it) {
+        const entry = document.createElement('div');
+        entry.className = 'changelog-entry';
+        const head = document.createElement('div');
+        head.className = 'changelog-entry-head';
+        const version = document.createElement('strong');
+        version.textContent = it.version_name || '';
+        const meta = document.createElement('span');
+        meta.className = 'changelog-entry-meta';
+        const time = (it.created_at || '').replace('T', ' ').slice(0, 19);
+        meta.textContent = [it.operator_name, time].filter(Boolean).join(' · ');
+        head.append(version, meta);
+        const notes = document.createElement('div');
+        notes.className = 'changelog-entry-notes';
+        renderNoteLines(notes, it.release_notes);
+        entry.append(head, notes);
+        body.appendChild(entry);
+      });
+    } catch (e) {
+      body.innerHTML = '<div class="changelog-loading">' + esc(e.message || String(e)) + '</div>';
     }
-    items.forEach(function (it) {
-      const tr = document.createElement('tr');
-      tr.innerHTML = '<td>' + esc(it.version_name) + '</td>' +
-        '<td>' + it.version_code + '</td>' +
-        '<td>' + esc(it.operator_name || '—') + '</td>' +
-        '<td>' + esc((it.created_at || '').replace('T', ' ').slice(0, 19)) + '</td>' +
-        '<td class="release-notes-cell"></td>';
-      const notesCell = tr.querySelector('.release-notes-cell');
-      renderNoteLines(notesCell, it.release_notes);
-      tbody.appendChild(tr);
-    });
   }
+
+  document.getElementById('openChangelogs').addEventListener('click', showChangelogModal);
 
   function renderNoteLines(cell, notes) {
     const lines = String(notes || '').split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
@@ -492,5 +515,4 @@
   }
 
   loadList();
-  loadChangelogs();
 })();

@@ -101,7 +101,10 @@
     </section>
 
     <section class="panel">
-      <h2>版本列表</h2>
+      <div class="admin-section-heading">
+        <h2>版本列表</h2>
+        <a href="javascript:void(0)" class="admin-link" id="openChangelogs">更新日志</a>
+      </div>
       <div class="row">
         <label>状态过滤
           <select id="filterStatus">
@@ -116,23 +119,12 @@
       <table class="data">
         <thead>
           <tr>
-            <th>ID</th><th>版本名</th><th>版本号</th>
+            <th>ID</th><th>版本名</th>
             <th>最低支持</th><th>强升</th><th>状态</th>
             <th>发布人</th><th>时间</th><th>包大小</th><th>更新说明</th><th>操作</th>
           </tr>
         </thead>
         <tbody id="releaseList"></tbody>
-      </table>
-    </section>
-
-    <section class="panel">
-      <h2>更新日志</h2>
-      <p class="hint">所有历史版本的更新说明独立留存，删除发布记录或安装包不影响此列表。</p>
-      <table class="data">
-        <thead>
-          <tr><th>版本</th><th>版本号</th><th>发布人</th><th>时间</th><th>更新说明</th></tr>
-        </thead>
-        <tbody id="changelogList"></tbody>
       </table>
     </section>
   </main>
