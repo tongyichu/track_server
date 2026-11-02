@@ -401,6 +401,17 @@ type AppReleaseRepository interface {
 	Delete(ctx context.Context, id int64) error
 }
 
+// AppReleaseChangelogRepository defines persistence for release changelogs.
+//
+// 设计说明：
+// - changelog 独立于发布记录保存，发布记录（及安装包文件）删除后仍完整留存；
+// - Upsert 以 (platform, version_code) 为唯一键，重复发布同版本覆盖说明；
+// - List 按 version_code 倒序返回。
+type AppReleaseChangelogRepository interface {
+	Upsert(ctx context.Context, entry *models.AppReleaseChangelog) error
+	List(ctx context.Context, platform models.AppReleasePlatform) ([]*models.AppReleaseChangelog, error)
+}
+
 // AppClientStatsRepository defines persistence for client device activity stats.
 //
 // 设计说明：

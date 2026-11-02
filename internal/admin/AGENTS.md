@@ -138,7 +138,8 @@ internal/admin/
 | GET | `/admin/api/companions/usage-statistics` | 鉴权 | days=1/7/30，创建与结束趋势、按本周期创建房间统计的实际参与人数分布 |
 | GET | `/admin/api/route-groups/statistics` | 鉴权 | 全量 active 路线组中心点、覆盖城市和成员轨迹数分布，不受列表类型/城市筛选及 100 条上限影响 |
 | POST | `/admin/api/releases` | 鉴权 | 发布/覆盖一个版本（按 `(platform, version_code)` 幂等） |
-| DELETE | `/admin/api/releases/:id` | 鉴权 | 删除一条发布记录 |
+| DELETE | `/admin/api/releases/:id` | 鉴权 | 删除一条发布记录，并尽力删除落在本机 `<LogDir>/static/release/` 的安装包文件；独立留存的 changelog 不受影响 |
+| GET | `/admin/api/releases/changelogs` | 鉴权 | 版本更新日志（`platform` 过滤，默认 android），来自 `app_release_changelogs`，发布记录删除后仍留存 |
 | POST | `/admin/api/releases/upload-package` | 鉴权 | multipart 上传安装包到 `<LogDir>/static/release/<platform>/` |
 | GET | `/admin/api/releases/upload-token` | 鉴权 | 旧 OSS 直传 STS 凭证接口，前端不再使用 |
 | GET | `/admin/api/releases/client-statistics` | 鉴权 | 客户端活跃统计：`days=7|30`，版本/机型/系统版本分布、按日版本活跃趋势与最新发布版本渗透概况（含低于强升线设备数） |

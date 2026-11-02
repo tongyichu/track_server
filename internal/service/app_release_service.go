@@ -14,8 +14,9 @@ import (
 
 // AppReleaseService 负责 App 发布与升级检查相关的业务逻辑。
 type AppReleaseService struct {
-	repo      repository.AppReleaseRepository
-	statsRepo repository.AppClientStatsRepository
+	repo          repository.AppReleaseRepository
+	statsRepo     repository.AppClientStatsRepository
+	changelogRepo repository.AppReleaseChangelogRepository
 }
 
 // NewAppReleaseService 构造 AppReleaseService。
@@ -26,6 +27,19 @@ func NewAppReleaseService(repo repository.AppReleaseRepository) *AppReleaseServi
 // SetClientStatsRepository 注入客户端活跃统计仓储（可选，未注入时跳过采集与统计）。
 func (s *AppReleaseService) SetClientStatsRepository(statsRepo repository.AppClientStatsRepository) {
 	s.statsRepo = statsRepo
+}
+
+// SetChangelogRepository 注入版本更新日志仓储（可选，未注入时跳过 changelog 留存）。
+func (s *AppReleaseService) SetChangelogRepository(changelogRepo repository.AppReleaseChangelogRepository) {
+	s.changelogRepo = changelogRepo
+}
+
+// ListChangelogs 返回独立留存的版本更新日志（按版本号倒序，不受发布记录删除影响）。
+func (s *AppReleaseService) ListChangelogs(ctx context.Context, platform models.AppReleasePlatform) ([]*models.AppReleaseChangelog, error) {
+	if s == nil || s.changelogRepo == nil {
+		return nil, errors.New("app release changelog not configured")
+	}
+	return s.changelogRepo.List(ctx, platform)
 }
 
 // RecordClientActivity 幂等记录一台设备的最近活跃信息。
@@ -174,6 +188,20 @@ func (s *AppReleaseService) Publish(ctx context.Context, in PublishReleaseInput)
 	}
 	if err := s.repo.Upsert(ctx, release); err != nil {
 		return nil, err
+	}
+	// changelog 独立留存：记录失败仅记日志，不影响发布主流程。
+	if s.changelogRepo != nil {
+		entry := &models.AppReleaseChangelog{
+			Platform:     release.Platform,
+			VersionName:  release.VersionName,
+			VersionCode:  release.VersionCode,
+			ReleaseNotes: release.ReleaseNotes,
+			OperatorName: release.OperatorName,
+		}
+		if err := s.changelogRepo.Upsert(ctx, entry); err != nil {
+			log.Printf("record release changelog failed: platform=%s version_code=%d err=%v",
+				release.Platform, release.VersionCode, err)
+		}
 	}
 	return release, nil
 }

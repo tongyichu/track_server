@@ -100,7 +100,8 @@ func (m *Module) Close() {
 // - GET  /admin/api/me                查询当前会话
 // - GET  /admin/api/releases          列出版本（鉴权）
 // - POST /admin/api/releases          发布版本（鉴权）
-// - DELETE /admin/api/releases/:id    删除版本（鉴权）
+// - DELETE /admin/api/releases/:id    删除版本并尽力删除本机安装包文件，changelog 留存（鉴权）
+// - GET  /admin/api/releases/changelogs 独立留存的版本更新日志（鉴权）
 // - POST /admin/api/releases/upload-package 上传安装包到本机静态目录（鉴权）
 // - GET  /admin/api/releases/upload-token  旧 OSS 直传凭证接口（鉴权，前端不再使用）
 // - GET  /admin/api/users                  用户列表（鉴权，cursor 翻页）
@@ -181,6 +182,7 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	api.GET("/releases", m.Handler.ListReleases)
 	api.POST("/releases", m.Handler.PublishRelease)
 	api.DELETE("/releases/:id", m.Handler.DeleteRelease)
+	api.GET("/releases/changelogs", m.Handler.ListReleaseChangelogs)
 	api.GET("/releases/upload-token", m.Handler.GetReleaseUploadCredential)
 	api.GET("/releases/client-statistics", m.Handler.GetReleaseClientStatistics)
 	api.POST("/releases/upload-package", m.Handler.UploadPackage)

@@ -48,3 +48,19 @@ type AppReleaseListFilter struct {
 	Platform AppReleasePlatform
 	Status   AppReleaseStatus
 }
+
+// AppReleaseChangelog 是独立留存的版本更新日志。
+//
+// 设计要点：
+// - 与 app_releases 解耦：删除发布记录（含安装包文件）不影响 changelog 留存；
+// - (platform, version_code) 唯一，重复发布同一版本时覆盖说明并保留首次发布时间。
+type AppReleaseChangelog struct {
+	ID           int64              `json:"id" bson:"_id,omitempty"`
+	Platform     AppReleasePlatform `json:"platform" bson:"platform"`
+	VersionName  string             `json:"version_name" bson:"version_name"`
+	VersionCode  int64              `json:"version_code" bson:"version_code"`
+	ReleaseNotes string             `json:"release_notes" bson:"release_notes"`
+	OperatorName string             `json:"operator_name" bson:"operator_name"`
+	CreatedAt    time.Time          `json:"created_at" bson:"created_at"`
+	UpdatedAt    time.Time          `json:"updated_at" bson:"updated_at"`
+}

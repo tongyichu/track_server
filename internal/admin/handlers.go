@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path"
@@ -702,6 +703,9 @@ func (h *Handler) PublishRelease(ctx context.Context, c *app.RequestContext) {
 }
 
 // DeleteRelease 处理 DELETE /admin/api/releases/:id
+//
+// 删除发布记录的同时尽力删除本机静态目录中的安装包文件；
+// 独立留存的 changelog（app_release_changelogs）不受删除影响。
 func (h *Handler) DeleteRelease(ctx context.Context, c *app.RequestContext) {
 	if h == nil || h.releaseSvc == nil {
 		c.JSON(http.StatusInternalServerError, utils.H{"error": "release service not configured"})
@@ -711,6 +715,15 @@ func (h *Handler) DeleteRelease(ctx context.Context, c *app.RequestContext) {
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil || id <= 0 {
 		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid id"})
+		return
+	}
+	release, err := h.releaseSvc.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			c.JSON(http.StatusNotFound, utils.H{"error": "not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
 		return
 	}
 	if err := h.releaseSvc.Delete(ctx, id); err != nil {
@@ -726,7 +739,44 @@ func (h *Handler) DeleteRelease(ctx context.Context, c *app.RequestContext) {
 		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
 		return
 	}
+	h.removeLocalReleasePackage(release.PackageURL)
 	c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"status": "ok"}})
+}
+
+// removeLocalReleasePackage 尽力删除落在本机静态目录的发布包；远端 URL 或删除失败仅记日志。
+func (h *Handler) removeLocalReleasePackage(packageURL string) {
+	const prefix = "/api/v1/static/release/"
+	if h == nil || h.staticRoot == "" || !strings.HasPrefix(packageURL, prefix) {
+		return
+	}
+	fileName := strings.TrimPrefix(packageURL, prefix)
+	if fileName == "" || strings.Contains(fileName, "..") {
+		return
+	}
+	path := filepath.Join(h.staticRoot, "release", fileName)
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		log.Printf("remove release package failed: %s err=%v", path, err)
+	}
+}
+
+// ListReleaseChangelogs 处理 GET /admin/api/releases/changelogs?platform=android
+//
+// 返回独立留存的版本更新日志，发布记录删除后仍可查询。
+func (h *Handler) ListReleaseChangelogs(ctx context.Context, c *app.RequestContext) {
+	if h == nil || h.releaseSvc == nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "release service not configured"})
+		return
+	}
+	platform := models.AppReleasePlatform(string(c.Query("platform")))
+	if platform == "" {
+		platform = models.AppReleasePlatformAndroid
+	}
+	items, err := h.releaseSvc.ListChangelogs(ctx, platform)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"items": items}})
 }
 
 // GetAdminUserStatistics returns profile distributions and each user's current city.

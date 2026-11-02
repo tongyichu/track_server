@@ -432,6 +432,19 @@ CREATE TABLE `app_releases` (
                                 KEY `idx_platform_status_code` (`platform`,`status`,`version_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='App 发布信息表';
 
+CREATE TABLE `app_release_changelogs` (
+                                `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                                `platform` VARCHAR(16) NOT NULL COMMENT 'android / ios',
+                                `version_name` VARCHAR(32) NOT NULL COMMENT '版本名，例如 1.2.3',
+                                `version_code` INT UNSIGNED NOT NULL COMMENT '版本号',
+                                `release_notes` TEXT COMMENT '版本说明',
+                                `operator_name` VARCHAR(64) NOT NULL DEFAULT '' COMMENT '发布操作者名称',
+                                `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                                `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                                PRIMARY KEY (`id`),
+                                UNIQUE KEY `uk_platform_version_code` (`platform`,`version_code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='App 版本更新日志（独立于发布记录留存）';
+
 
 CREATE TABLE `app_client_devices` (
                                 `device_id` VARCHAR(128) NOT NULL COMMENT '设备唯一标识（客户端上报）',

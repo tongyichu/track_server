@@ -58,6 +58,7 @@ func main() {
 	var feedbackRepo repository.FeedbackRepository
 	var analyticsRepo repository.AnalyticsRepository
 	var appClientStatsRepo repository.AppClientStatsRepository
+	var appReleaseChangelogRepo repository.AppReleaseChangelogRepository
 	var trackMapRepo repository.TrackMapRepository
 	var trackPlaceRepo repository.TrackPlaceRepository
 	var scenicSpotRepo repository.ScenicSpotRepository
@@ -76,6 +77,7 @@ func main() {
 		feedbackRepo = repository.NewInMemoryFeedbackRepository()
 		analyticsRepo = repository.NewInMemoryAnalyticsRepository()
 		appClientStatsRepo = repository.NewInMemoryAppClientStatsRepository()
+		appReleaseChangelogRepo = repository.NewInMemoryAppReleaseChangelogRepository()
 		log.Println("using in-memory repositories")
 	} else if cfg.UseMySQL {
 		db, err := repository.OpenMySQL(cfg.MySQLDSN)
@@ -148,6 +150,12 @@ func main() {
 				if err != nil {
 					log.Printf("app client stats repository unavailable: %v", err)
 				}
+				changelogCtx, changelogCancel := context.WithTimeout(ctx, 5*time.Second)
+				appReleaseChangelogRepo, err = repository.NewMySQLAppReleaseChangelogRepository(changelogCtx, db)
+				changelogCancel()
+				if err != nil {
+					log.Printf("app release changelog repository unavailable: %v", err)
+				}
 				log.Println("using mysql repositories")
 			}
 		}
@@ -202,6 +210,7 @@ func main() {
 			feedbackRepo = repository.NewMongoFeedbackRepository(db.Collection("user_feedbacks"))
 			analyticsRepo = repository.NewMongoAnalyticsRepository(db.Collection("analytics_sync_summaries"))
 			appClientStatsRepo = repository.NewMongoAppClientStatsRepository()
+			appReleaseChangelogRepo = repository.NewMongoAppReleaseChangelogRepository()
 			trackSubmissionRepo = repository.NewMongoTrackSubmissionRepository(db.Collection("track_submissions"))
 			recommendationRepo = repository.NewMongoRecommendationRepository(
 				db.Collection("recommend_feed_sessions"),
@@ -302,8 +311,12 @@ func main() {
 	commentSvc := service.NewCommentService(commentRepo, trackRepo, userSvc)
 	commentSvc.SetRestrictions(accountRestrictionSvc)
 	loginSvc := service.NewLoginService(userRepo, loginLogRepo, cfg.WechatAppID, cfg.WechatAppSecret, cfg.JWTSecret)
+	if appReleaseChangelogRepo == nil {
+		appReleaseChangelogRepo = repository.NewInMemoryAppReleaseChangelogRepository()
+	}
 	appReleaseSvc := service.NewAppReleaseService(appReleaseRepo)
 	appReleaseSvc.SetClientStatsRepository(appClientStatsRepo)
+	appReleaseSvc.SetChangelogRepository(appReleaseChangelogRepo)
 	feedbackSvc := service.NewFeedbackService(feedbackRepo, filepath.Join(cfg.LogDir, "feedback", "images"), trackRepo)
 	companionSvc := service.NewCompanionService(companionRepo, userRepo)
 	companionSvc.SetTrackRepository(trackRepo)

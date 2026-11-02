@@ -26,7 +26,7 @@
     versionNameInput.value = '';
     versionCodeInput.value = '';
     uploadHint.textContent = '';
-    metadataHint.textContent = '上传后自动识别版本信息，并生成下载地址、文件大小和 MD5。';
+    metadataHint.textContent = '';
   }
   apkFile.addEventListener('change', clearPackageMetadata);
 
@@ -74,7 +74,17 @@
   const publishErr = document.getElementById('publishErr');
   const publishOk = document.getElementById('publishOk');
   const notesList = document.getElementById('releaseNotesList');
-  const addNoteBtn = document.getElementById('addReleaseNote');
+
+  function refreshNoteRowButtons() {
+    const rows = Array.from(notesList.querySelectorAll('.release-note-item'));
+    rows.forEach(function (row, index) {
+      const btn = row.querySelector('button');
+      const isLast = index === rows.length - 1;
+      btn.textContent = isLast ? '+' : '×';
+      btn.title = isLast ? '添加一条' : '删除该条';
+      btn.classList.toggle('release-note-add', isLast);
+    });
+  }
 
   function addNoteRow(value) {
     const row = document.createElement('div');
@@ -84,17 +94,21 @@
     input.maxLength = 200;
     input.placeholder = '一条更新内容，如：新增轨迹分享';
     input.value = value || '';
-    const remove = document.createElement('button');
-    remove.type = 'button';
-    remove.className = 'release-note-remove';
-    remove.textContent = '×';
-    remove.title = '删除该条';
-    remove.addEventListener('click', function () {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'release-note-remove';
+    btn.addEventListener('click', function () {
+      if (btn.classList.contains('release-note-add')) {
+        addNoteRow().focus();
+        return;
+      }
       row.remove();
       if (!notesList.querySelector('.release-note-item')) addNoteRow();
+      refreshNoteRowButtons();
     });
-    row.append(input, remove);
+    row.append(input, btn);
     notesList.appendChild(row);
+    refreshNoteRowButtons();
     return input;
   }
 
@@ -110,7 +124,6 @@
     addNoteRow();
   }
 
-  addNoteBtn.addEventListener('click', function () { addNoteRow().focus(); });
   resetReleaseNotes();
 
   publishForm.addEventListener('submit', async function (e) {
@@ -152,6 +165,7 @@
       publishOk.textContent = '发布成功';
       resetReleaseNotes();
       loadList();
+      loadChangelogs();
     } catch (e) {
       publishErr.textContent = e.message || String(e);
     }
@@ -218,10 +232,10 @@
     const notesTh = document.createElement('th');
     notesTh.textContent = '更新说明';
     const notesTd = document.createElement('td');
-    const pre = document.createElement('pre');
-    pre.className = 'release-notes-full';
-    pre.textContent = (it.release_notes || '').trim() || '—';
-    notesTd.appendChild(pre);
+    const notesScroll = document.createElement('div');
+    notesScroll.className = 'release-notes-detail';
+    renderNoteLines(notesScroll, it.release_notes);
+    notesTd.appendChild(notesScroll);
     notesTr.append(notesTh, notesTd);
     table.appendChild(notesTr);
     root.querySelector('.modal-body').appendChild(table);
@@ -243,7 +257,6 @@
     const tbody = document.getElementById('releaseList');
     tbody.innerHTML = '';
     items.forEach(function (it) {
-      const notes = (it.release_notes || '').trim();
       const tr = document.createElement('tr');
       tr.innerHTML = '<td>' + it.id + '</td>' +
         '<td>' + esc(it.version_name) + '</td>' +
@@ -257,14 +270,7 @@
         '<td class="release-notes-cell"></td>' +
         '<td class="row-actions"></td>';
       const notesCell = tr.querySelector('.release-notes-cell');
-      if (notes) {
-        const pre = document.createElement('pre');
-        pre.className = 'release-notes-inline';
-        pre.textContent = notes;
-        notesCell.appendChild(pre);
-      } else {
-        notesCell.textContent = '—';
-      }
+      renderNoteLines(notesCell, it.release_notes);
       const actions = tr.querySelector('.row-actions');
       const detailBtn = document.createElement('button');
       detailBtn.type = 'button';
@@ -281,12 +287,53 @@
     });
     tbody.querySelectorAll('button.danger').forEach(function (b) {
       b.addEventListener('click', async function () {
-        if (!await AdminUI.confirm({ title: '删除发布版本', message: '确认删除版本 #' + b.dataset.id + '？', confirmText: '删除版本', danger: true })) return;
+        if (!await AdminUI.confirm({ title: '删除发布版本', message: '确认删除版本 #' + b.dataset.id + '？将同时删除安装包文件，更新日志会保留。', confirmText: '删除版本', danger: true })) return;
         const r = await fetch('/admin/api/releases/' + b.dataset.id, { method: 'DELETE' });
         if (!r.ok) { AdminUI.alert('删除失败', 'danger'); return; }
         AdminUI.alert('发布版本已删除', 'success');
         loadList();
       });
+    });
+  }
+
+  // ---------------- 更新日志（独立留存） ----------------
+  async function loadChangelogs() {
+    const tbody = document.getElementById('changelogList');
+    if (!tbody) return;
+    const resp = await fetch('/admin/api/releases/changelogs?platform=android');
+    if (!resp.ok) return;
+    const items = ((await resp.json()).data || {}).items || [];
+    tbody.innerHTML = '';
+    if (items.length === 0) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td colspan="5" style="text-align:center;color:#98a2b3;">暂无更新日志</td>';
+      tbody.appendChild(tr);
+      return;
+    }
+    items.forEach(function (it) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td>' + esc(it.version_name) + '</td>' +
+        '<td>' + it.version_code + '</td>' +
+        '<td>' + esc(it.operator_name || '—') + '</td>' +
+        '<td>' + esc((it.created_at || '').replace('T', ' ').slice(0, 19)) + '</td>' +
+        '<td class="release-notes-cell"></td>';
+      const notesCell = tr.querySelector('.release-notes-cell');
+      renderNoteLines(notesCell, it.release_notes);
+      tbody.appendChild(tr);
+    });
+  }
+
+  function renderNoteLines(cell, notes) {
+    const lines = String(notes || '').split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
+    if (lines.length === 0) {
+      cell.textContent = '—';
+      return;
+    }
+    lines.forEach(function (line) {
+      const item = document.createElement('div');
+      item.className = 'release-note-line';
+      item.textContent = line;
+      cell.appendChild(item);
     });
   }
 
@@ -445,4 +492,5 @@
   }
 
   loadList();
+  loadChangelogs();
 })();

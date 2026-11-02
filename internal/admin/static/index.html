@@ -60,42 +60,40 @@
         <input type="hidden" name="platform" value="android" />
         <input type="hidden" name="version_name" />
         <input type="hidden" name="version_code" />
-        <label>最低支持版本号 (min_supported_version_code)
-          <input type="number" name="min_supported_version_code" min="0" value="0" />
-        </label>
-        <label class="form-switch">
-          <input class="form-check-input" type="checkbox" name="force_update" />
-          <span>强制升级</span>
-        </label>
-        <label>发布状态
-          <select name="status">
-            <option value="published">published</option>
-            <option value="draft">draft</option>
-            <option value="archived">archived</option>
-          </select>
-        </label>
+        <input type="hidden" name="package_url" />
+        <input type="hidden" name="package_size" value="0" />
+        <input type="hidden" name="package_md5" />
 
-        <fieldset class="full">
-          <legend>安装包</legend>
-          <div class="row">
+        <div class="full row release-form-row">
+          <label>最低支持版本号
+            <input type="number" name="min_supported_version_code" min="0" value="0" />
+          </label>
+          <label>发布状态
+            <select name="status">
+              <option value="published">published</option>
+              <option value="draft">draft</option>
+              <option value="archived">archived</option>
+            </select>
+          </label>
+          <label class="release-file-label">选择安装包
             <input type="file" id="apkFile" accept=".apk" required />
-            <button type="button" id="uploadBtn">上传到服务器</button>
-            <span class="hint" id="uploadHint"></span>
-          </div>
-          <div class="hint" id="packageMetadataHint">上传后自动识别版本信息，并生成下载地址、文件大小和 MD5。</div>
-          <input type="hidden" name="package_url" />
-          <input type="hidden" name="package_size" value="0" />
-          <input type="hidden" name="package_md5" />
-        </fieldset>
+          </label>
+          <button type="button" id="uploadBtn">上传到服务器</button>
+          <span class="hint" id="uploadHint"></span>
+        </div>
+        <div class="full hint" id="packageMetadataHint"></div>
 
         <div class="full">
           <span class="form-label">版本说明 (release_notes)</span>
           <div id="releaseNotesList" class="release-notes-editor"></div>
-          <button type="button" id="addReleaseNote" class="btn btn-sm btn-outline-secondary">+ 添加一条</button>
         </div>
 
         <div class="full actions">
           <button type="submit">发布</button>
+          <label class="form-switch release-force-switch">
+            <input class="form-check-input" type="checkbox" name="force_update" />
+            <span>强制升级</span>
+          </label>
           <span class="error" id="publishErr"></span>
           <span class="ok" id="publishOk"></span>
         </div>
@@ -124,6 +122,17 @@
           </tr>
         </thead>
         <tbody id="releaseList"></tbody>
+      </table>
+    </section>
+
+    <section class="panel">
+      <h2>更新日志</h2>
+      <p class="hint">所有历史版本的更新说明独立留存，删除发布记录或安装包不影响此列表。</p>
+      <table class="data">
+        <thead>
+          <tr><th>版本</th><th>版本号</th><th>发布人</th><th>时间</th><th>更新说明</th></tr>
+        </thead>
+        <tbody id="changelogList"></tbody>
       </table>
     </section>
   </main>
