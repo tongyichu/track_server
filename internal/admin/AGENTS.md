@@ -20,7 +20,7 @@
 - 审核用户轨迹投稿，查看结构化路线资料和经本地缓存改写的投稿图片，按 revision 通过或驳回。
 - 管理后台内置静态资源支持 gzip、ETag 与内容版本缓存；公开登录页 no-cache，含账号身份的受保护 HTML 和 API no-store。工作台及列表页先加载主体数据，再异步加载 ECharts 绘图。
 - 投稿审核页顶部展示当前待审核与超时队列，以及本月通过、驳回、通过率和平均审核时长；复用 `/admin/api/dashboard?period=month` 的只读统计。
-- 查看、修正和删除用户轨迹；列表按 ID、城市、标题、运动类型、用户名、轨迹图、状态和操作展示，支持标题及用户名模糊搜索、城市和状态筛选，并保留游标分页。用户名同时展示头像；景点详情中的相关轨迹列表复用相同列顺序。列表不单独放删除按钮；编辑轨迹使用共享 `static/track_editor.js` 表单，底部删除动作需二次确认，删除为软删除并同步清理关联数据。
+- 查看、修正和删除用户轨迹；列表按 ID、城市、标题、运动类型、用户名、轨迹图、状态和操作展示，支持标题及用户名模糊搜索、省→市级联筛选（省份由服务端展开为城市集合，city_code 优先）、状态筛选（公开/私密/已下架，默认排除已下架，选已下架则只列已下架记录），并保留游标分页。`status=0` 统一称「下架」（软删除，含客户端用户删除与后台删除），下架轨迹可恢复或彻底删除（purge）。用户名同时展示头像；景点详情中的相关轨迹列表复用相同列顺序。列表不单独放删除按钮；编辑轨迹使用共享 `static/track_editor.js` 表单，底部删除动作需二次确认，删除为软删除并同步清理关联数据。
 - 反馈与纠错页默认筛选待处理，展示状态统计、反馈用户名称和完整内容；点击查看会在弹窗中加载详情并处理反馈。`static/feedback_correction.js` 优先读取服务端 `correction` 快照，旧记录兼容完整的六种中英文纠错正文；不识别的内容仍按普通反馈显示，不改写原始正文。页面「纠错选项」可新增、改名、排序、启停，由 API 下发客户端。
 - 纠错选项支持 description/description_en 与 notes_hint/notes_hint_en（可空、单行、各最多 160 字），后台配置与客户端展示共用协议，不按显示名称推导类别。反馈列表的 kind/track_id/correction_option_id 在 MySQL/Mongo/内存仓储分页前过滤，仅按结构化 correction 识别类型，旧文本纠错保留兼容展示。
 - 纠错处理结果与状态分离：corrected/unchanged 配 resolved，unverified 配 ignored；新版后台提交 revision 作条件更新，终态必须填写结果及用户可见回复，冲突返回 409 且保留草稿。处理人只从后台 session 取值。服务与仓储入口为 internal/service/feedback_resolution.go 和 internal/repository/feedback_resolution.go；复用 correction_json/BSON，不新增表列。
@@ -58,7 +58,7 @@
 - **启用与故障关闭**：数据库未初始化且无初始账号时不挂载后台；已有持久化账号即使移除初始化环境变量仍启用。账号库不可用时登录/受保护请求拒绝（通常 503）；未挂载时保持 404。`USE_IN_MEMORY` 不提供后台账号降级。
 - **身份与权限**：管理员拥有全部业务模块权限，只有管理员可访问 `/admin/accounts.html`、`/admin/api/accounts*` 与审计日志；操作员每个模块只有 `none/read/write` 三档，write 包含页面所有业务操作。HTML、API、受保护静态资源均校验；未知模块默认拒绝。`permissions.go` 是页面/接口权限映射权威，账号模块清单在 `accounts.go`。新增页面/API 时同步映射，不能只隐藏导航。
 - **跨页面与汇总**：景点相关轨迹的查看/编辑同时校验轨迹模块权限。工作台按各业务模块过滤指标，其他页面通过 `/dashboard?scope=tracks|track_submissions|feedbacks` 只读取自身统计。只读景点页不得触发供应商回填或编辑；共享轨迹弹窗支持只读。`shell.js` 统一身份标签、导航、只读控件和退出，不再由各业务脚本覆盖账号展示。
-- **轨迹资料与景点候选**：景点管理页不再展示全局候选面板；共享 `track_editor.js` 通过 `place_candidates.js` 把单条轨迹的识别结果放在详情弹窗顶部，所有加载共享编辑器的页面都要先加载该模块。读取 GET `/tracks/:track_id/place-candidates` 需轨迹查看权限，既有 `/place-candidates/:track_id/confirm|dismiss` 写请求归属轨迹操作权限。`AdminUI.form.beforeFields` 挂载独立候选区（`place_candidates.js`）与轨迹地图区（`track_map_preview.js`），候选确认/忽略立即生效并刷新来源列表，不提交未保存的轨迹资料。源摘要失效返回 409，禁止使用过期候选。后台人工候选放宽为「围住景点 + 采样途经附近（matched_samples≥1）」，自动判定 unmatched 的记录同样可由人工确认关联；`POST /tracks/:track_id/place-refresh`（轨迹操作权限）同步触发单条重新识别，复用后台任务同一锁与配额，任务忙返回 409。详情还返回主景点 `primary_scenic_spot`（点击跳 `/admin/scenic_spots.html?spot_id=` 深链打开详情）与地图索引简化轨迹线 `geo`（GCJ02）；轨迹地图复用高德 Web Key，经 `/tracks/map-config` 与 `/tracks/amap-service` 代理（轨迹模块权限），不依赖景点模块权限。
+- **轨迹资料与景点候选**：景点管理页不再展示全局候选面板；共享 `track_editor.js` 通过 `place_candidates.js` 把单条轨迹的识别结果放在详情弹窗顶部，所有加载共享编辑器的页面都要先加载该模块。读取 GET `/tracks/:track_id/place-candidates` 需轨迹查看权限，既有 `/place-candidates/:track_id/confirm|dismiss` 写请求归属轨迹操作权限。`AdminUI.form.beforeFields` 挂载独立候选区（`place_candidates.js`）与轨迹地图区（`track_map_preview.js`），候选确认/忽略立即生效并刷新来源列表，不提交未保存的轨迹资料。源摘要失效返回 409，禁止使用过期候选。后台人工候选放宽为「围住景点 + 采样途经附近（matched_samples≥1）」，自动判定 unmatched 的记录同样可由人工确认关联；`POST /tracks/:track_id/place-refresh`（轨迹操作权限）同步触发单条重新识别，复用后台任务同一锁与配额，任务忙返回 409。确认关联成功后响应返回 `suggested_title`（按客户端标题生成规则以景点名为地名生成，环线判定用简化轨迹线），前端在标题输入框旁展示可点击代入的标签，代入随表单保存生效，不自动提交。详情还返回主景点 `primary_scenic_spot`（点击跳 `/admin/scenic_spots.html?spot_id=` 深链打开详情）与地图索引简化轨迹线 `geo`（GCJ02）；轨迹地图复用高德 Web Key，经 `/tracks/map-config` 与 `/tracks/amap-service` 代理（轨迹模块权限），不依赖景点模块权限。
 - **轨迹资料缺项口径**：`GET /tracks?missing=any|place_candidate|scenic_spot|description|city|previews` 在分页和总数统计前筛选；缺简介/城市按空文本，缺预览为四图任一缺失，未关联景点为无有效 draft/published 目录关联；任意缺项取各项并集。待确认 ID 由当前候选队列源摘要/规则/轨迹可索引校验取得，不触发供应商查询。MySQL 使用原生条件/关联，Mongo 使用 lookup + facet，内存由 main 注入景点仓储后使用关联快照；公共逻辑见 `repository/admin_track_missing.go`，新接口见 `docs/api/admin-tracks.md`。
 - **账号设置入口**：`shell.js` 的共享账号区只常驻显示名称、身份标签与齿轮。齿轮复用内置 `tabler.Dropdown`，桌面侧栏向上展开、移动顶栏向下展开，支持点外部关闭和键盘操作；菜单读取当前 session 和 `/admin/api/me` 显示登录名、名称、身份、最近登录，并提供“账号安全”（保留 password.html URL，包含本人改密与邮箱验证）和退出入口。仅 GET 当前账号信息，不下发或展示密码/哈希。`ui.js` 不得给 dropdown-item 和下拉触发按钮自动套普通主按钮外观。退出请求失败保留当前页并在菜单提示，不把请求失败当成退出成功。
 - **本人邮箱与密码找回**：`email_challenges.go` 的 8 位验证码使用随机盐与服务端 HMAC 摘要（密钥从 SMTP 专用密码独立派生，凭证轮换使旧码失效），在现有账号 JSON 中与错误次数/有效期/发信配额一起 CAS 持久化；不修改 AccountStorage 接口、不回退内存。10 分钟、一次有效、累计 5 次错误失效，每用途间隔 60 秒、每账号每小时共 10 封。原邮箱、新邮箱、密码找回三用途不能互换；错误尝试也必须提交，不能因返回业务错误回滚计数。改密、停用、绑定成功使全部旧会话/挑战失效。
@@ -155,7 +155,7 @@ internal/admin/
 | POST | `/admin/api/place-candidates/:track_id/confirm` | 轨迹操作 | 确认指定候选为轨迹主景点并同步内部景点关联 |
 | POST | `/admin/api/place-candidates/:track_id/dismiss` | 轨迹操作 | 忽略当前轨迹的景点候选 |
 | GET | `/admin/api/companions` | 鉴权 | 同行会话列表，支持 `title` 模糊搜索、`owner_name` 发起人昵称模糊搜索、`track_type` 精确筛选、`province_code` / `city_code` 按发起人资料所在地筛选及 cursor 翻页；返回发起人昵称/头像与成员记录数 |
-| GET | `/admin/api/tracks` | 鉴权 | 轨迹列表，支持 `title` / `user_name` 模糊搜索、`city_code` / `status` / `missing` 筛选及 cursor 翻页 |
+| GET | `/admin/api/tracks` | 鉴权 | 轨迹列表，支持 `title` / `user_name` 模糊搜索、`province_code`（展开为省内城市集合，`city_code` 优先）/ `city_code` / `status`（1 公开、2 私密、0 已删除，默认排除已删除）/ `missing` 筛选及 cursor 翻页 |
 | POST | `/admin/api/tracks/import` | 轨迹操作 | 批量导入轨迹文件归属内部人员，multipart `files`（≤50）+ `owner_user_id` + `track_type` + `coordinate_system`，逐文件返回结果 |
 | GET | `/admin/api/cities` | 鉴权 | 返回内置城市/省份 Code、名称与省市层级，供轨迹和景点选择器使用 |
 | GET | `/admin/api/tracks/:track_id` | 鉴权 | 返回 `{track, user_id_text, geo?}`：轨迹详情、主景点（track.primary_scenic_spot）与地图索引简化轨迹线（GCJ02）；`user_id_text` 是字符串形式的归属人 ID，编辑表单必须按字符串原样回传，避免 int64 经 JS Number 精度丢失 |
@@ -163,7 +163,9 @@ internal/admin/
 | GET | `/admin/api/tracks/map-config` | 轨迹查看 | 轨迹详情地图的高德 Web Key 配置（service_host 指向 `/admin/api/tracks/amap-service`） |
 | GET | `/admin/api/tracks/amap-service` | 轨迹查看 | 高德 JS API 服务代理（与景点地图同一实现） |
 | PUT | `/admin/api/tracks/:track_id` | 鉴权 | 更新轨迹业务字段（不改 ID、轨迹点与创建/更新时间）；城市/类型更新已有地图索引，状态/进行状态/原始文件变化时清理并按可索引条件重新排队 |
-| DELETE | `/admin/api/tracks/:track_id` | 鉴权 | 删除轨迹：标记 `status=0`，并清理收藏、地图索引任务、geo index、路线组成员 |
+| DELETE | `/admin/api/tracks/:track_id` | 鉴权 | 删除轨迹（页面文案为下架）：标记 `status=0`，并清理收藏、地图索引任务、geo index、路线组成员 |
+| POST | `/admin/api/tracks/:track_id/restore` | 鉴权 | 恢复已下架轨迹：还原为公开、清空 `deleted_at` 并重新排队地图索引；收藏与路线组成员关系不可恢复。详情弹窗对已下架轨迹把删除按钮换成恢复 |
+| POST | `/admin/api/tracks/:track_id/purge` | 鉴权 | 彻底删除已下架轨迹（仅限 `status=0`，不可恢复）：事务物理删除主表与全部关联数据（轨迹点/收藏/导航/索引/路线组成员/景点关联与识别记录/点赞/评论全套/投稿全套），成功后尽力删 OSS 原始文件与预览图（`OSSTokenService.DeleteUserObjects`，仅限用户内容前缀、按精确 key 授权，失败返回 `oss_warning` 不阻断）。详情弹窗对已下架轨迹主按钮为「彻底删除」，前端双重确认 |
 | GET | `/admin/api/feedbacks` | 鉴权 | 意见反馈列表，补充用户名称，支持 `status` / `app_version` / `phone` / `cursor` / `limit` |
 | GET/PUT | `/admin/api/feedback-correction-config` | 鉴权 | 读取含停用项的完整配置，按 version 条件保存；冲突返回 409 |
 | GET | `/admin/api/feedbacks/:feedback_id` | 鉴权 | 意见反馈详情 |
@@ -339,6 +341,8 @@ GET /admin/api/users
        → AdminTrackImportService 逐文件解析（复用地图索引解析器）→ 服务端直传 OSS 归属人目录
        → TrackService.CreateTrack 建档（source_tag=manual_seed，已完成），自动排队地图索引与成就结算
        → 城市/地址由内置行政区目录离线解析；不生成预览四图与路线描述，由客户端 DevMode 后续补齐
+       → 源文件无时间戳时按运动类型估算速度沿轨迹合成时间戳（见 docs/api/admin-tracks.md），保证耗时/热量/均速与客户端图表可用
+       → 标题默认自动生成；文件名（去扩展名）含汉字时优先用文件名做标题（≤40 字符）
        → 展示 preview_images.landscape_day_url（日间横版 4:3），并经后台静态代理访问
        → 用户名通过当前页 user_id 批量读取用户昵称，列表不展示 user_id
   → GET /admin/api/dashboard?period=month 展示本月轨迹类型与城市统计表
@@ -351,6 +355,10 @@ GET /admin/api/users
        → 清理 track_collects
        → 清理 track_map_index_jobs / track_geo_indexes / track_route_group_members
        → 若删除的是路线组代表轨迹，归档该路线组并移除其全部成员，后续由 track_route_group 任务重新聚合剩余轨迹
+  → POST /admin/api/tracks/:track_id/restore（已下架轨迹详情弹窗底部按钮变为「恢复」）
+       → status 还原为公开、清空 deleted_at，重新排队地图索引任务；收藏与路线组成员关系不可恢复
+  → POST /admin/api/tracks/:track_id/purge（已下架轨迹详情弹窗主按钮为「彻底删除」，双重确认）
+       → 仅限 status=0；事务物理删除主表与全部关联数据，成功后尽力删 OSS 原始文件与预览图（oss_warning 不阻断）
 ```
 
 **主景点目录**：

@@ -24,10 +24,18 @@ func (r *InMemoryTrackRepository) ListAdminTracks(_ context.Context, filter Admi
 	for _, id := range filter.UserIDs {
 		userIDs[id] = struct{}{}
 	}
+	cityCodes := make(map[string]struct{}, len(filter.CityCodes))
+	for _, code := range filter.CityCodes {
+		cityCodes[code] = struct{}{}
+	}
+	wantDeleted := filter.Status != nil && *filter.Status == models.TrackStatusDeleted
 	items := make([]*models.Track, 0)
 	var total int64
 	for _, track := range r.tracks {
-		if track == nil || track.Status == models.TrackStatusDeleted {
+		if track == nil {
+			continue
+		}
+		if wantDeleted != (track.Status == models.TrackStatusDeleted) {
 			continue
 		}
 		if filter.Title != "" && !strings.Contains(strings.ToLower(track.Title), strings.ToLower(filter.Title)) {
@@ -35,6 +43,11 @@ func (r *InMemoryTrackRepository) ListAdminTracks(_ context.Context, filter Admi
 		}
 		if filter.CityCode != "" && track.CityCode != filter.CityCode {
 			continue
+		}
+		if filter.CityCode == "" && len(cityCodes) > 0 {
+			if _, ok := cityCodes[track.CityCode]; !ok {
+				continue
+			}
 		}
 		if filter.Status != nil && track.Status != *filter.Status {
 			continue
@@ -64,6 +77,31 @@ func (r *InMemoryTrackRepository) ListAdminTracks(_ context.Context, filter Admi
 		items = items[:limit]
 	}
 	return items, total, nil
+}
+
+// AdminHardDeleteTrack 内存实现的物理删除：仅允许删除已下架轨迹，
+// 内存仓储只持有轨迹主表与（注入的）景点关联，删除主表记录并清理景点关联。
+func (r *InMemoryTrackRepository) AdminHardDeleteTrack(_ context.Context, trackID string) error {
+	trackID = strings.TrimSpace(trackID)
+	if trackID == "" {
+		return ErrNotFound
+	}
+	r.mu.Lock()
+	track, ok := r.tracks[trackID]
+	if !ok {
+		r.mu.Unlock()
+		return ErrNotFound
+	}
+	if track.Status != models.TrackStatusDeleted {
+		r.mu.Unlock()
+		return ErrConflict
+	}
+	delete(r.tracks, trackID)
+	r.mu.Unlock()
+	if r.adminScenicSpots != nil {
+		_ = r.adminScenicSpots.DeleteTrackScenicSpotLink(context.Background(), trackID, "")
+	}
+	return nil
 }
 
 func escapeAdminLike(value string) string {

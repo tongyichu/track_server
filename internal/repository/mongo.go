@@ -5,6 +5,7 @@ import (
 
 	"errors"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -474,13 +475,18 @@ func (r *MongoTrackRepository) ListAdminTracks(ctx context.Context, filter Admin
 		limit = 20
 	}
 	query := bson.M{"status": bson.M{"$ne": models.TrackStatusDeleted}}
+	if filter.Status != nil && *filter.Status == models.TrackStatusDeleted {
+		query = bson.M{"status": models.TrackStatusDeleted}
+	}
 	if filter.Title != "" {
 		query["title"] = primitive.Regex{Pattern: regexp.QuoteMeta(filter.Title), Options: "i"}
 	}
 	if filter.CityCode != "" {
 		query["city_code"] = filter.CityCode
+	} else if len(filter.CityCodes) > 0 {
+		query["city_code"] = bson.M{"$in": filter.CityCodes}
 	}
-	if filter.Status != nil {
+	if filter.Status != nil && *filter.Status != models.TrackStatusDeleted {
 		query["status"] = *filter.Status
 	}
 	if filter.UserIDs != nil {
@@ -502,6 +508,56 @@ func (r *MongoTrackRepository) ListAdminTracks(ctx context.Context, filter Admin
 	}
 	items, err := r.listTracks(ctx, query, options.Find().SetSort(bson.D{{Key: "start_time", Value: -1}, {Key: "_id", Value: -1}}).SetLimit(int64(limit)))
 	return items, total, err
+}
+
+// AdminHardDeleteTrack 物理删除已下架轨迹及其关联文档（与 MySQL 版同口径，尽力清理）。
+// 仅允许删除 status=deleted 的记录。评论图片等 OSS 对象不在仓储层处理。
+func (r *MongoTrackRepository) AdminHardDeleteTrack(ctx context.Context, trackID string) error {
+	trackID = strings.TrimSpace(trackID)
+	if trackID == "" {
+		return ErrNotFound
+	}
+	res, err := r.collection.DeleteOne(ctx, bson.M{"_id": trackID, "status": models.TrackStatusDeleted})
+	if err != nil {
+		return err
+	}
+	if res.DeletedCount == 0 {
+		var count int64
+		count, err = r.collection.CountDocuments(ctx, bson.M{"_id": trackID})
+		if err != nil {
+			return err
+		}
+		if count == 0 {
+			return ErrNotFound
+		}
+		return ErrConflict
+	}
+	db := r.collection.Database()
+	byTrackID := bson.M{"track_id": trackID}
+	// 投稿：先取 submission_id 再删图片/事件。
+	if subIDs, err := db.Collection("track_submissions").Distinct(ctx, "_id", byTrackID); err == nil && len(subIDs) > 0 {
+		inSub := bson.M{"submission_id": bson.M{"$in": subIDs}}
+		_, _ = db.Collection("track_submission_images").DeleteMany(ctx, inSub)
+		_, _ = db.Collection("track_submission_events").DeleteMany(ctx, inSub)
+	}
+	// 评论反应按 comment_id 清理。
+	if commentIDs, err := db.Collection("track_comments").Distinct(ctx, "_id", byTrackID); err == nil && len(commentIDs) > 0 {
+		_, _ = db.Collection("track_comment_reactions").DeleteMany(ctx, bson.M{"comment_id": bson.M{"$in": commentIDs}})
+	}
+	for _, name := range []string{
+		"track_submissions", "track_waypoints", "track_collects", "track_navigations",
+		"track_map_index_jobs", "track_geo_indexes", "track_route_group_members",
+		"track_scenic_spot_links", "track_likes", "track_comment_images",
+		"track_comment_stats", "track_comments",
+	} {
+		if _, err := db.Collection(name).DeleteMany(ctx, byTrackID); err != nil {
+			return err
+		}
+	}
+	if _, err := db.Collection("track_place_records").DeleteMany(ctx, bson.M{"_id": "match:" + trackID}); err != nil {
+		return err
+	}
+	return nil
 }
 
 func adminMongoTrackUploadFilter(start, end time.Time) bson.M {

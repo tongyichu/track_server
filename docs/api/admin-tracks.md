@@ -4,7 +4,16 @@
 
 ## 列表与资料缺项
 
-`GET /admin/api/tracks` 保留 `title`、`user_name`、`city_code`、`status`、`limit`、`cursor_start_time`、`cursor_id`，新增可选 `missing`：
+`GET /admin/api/tracks` 保留 `title`、`user_name`、`city_code`、`status`、`limit`、`cursor_start_time`、`cursor_id`，新增可选 `province_code` 与 `missing`：
+
+- `province_code`：省级 Code，服务端展开为该省全部城市 Code 后按 `city_code IN (...)` 筛选；与 `city_code` 同时传时 `city_code` 优先。
+- `status`：`1` 公开、`2` 私密、`0` 已下架（软删除，页面文案为「已下架」，含客户端用户删除与后台删除）。默认（不传或传 1/2）排除已下架记录；传 `0` 改为只列已下架（`status=0`）的轨迹。
+
+`POST /admin/api/tracks/:track_id/restore`（轨迹操作权限）恢复已下架轨迹：状态还原为公开（`status=1`）、清空 `deleted_at`，并重新排队地图索引任务（删除时 geo index 与索引任务已清理）；非已下架状态返回 400。删除时清理的收藏与路线组成员关系不可恢复。轨迹详情弹窗对已下架轨迹把底部「删除」按钮换成「恢复」，确认后调用该接口。
+
+`POST /admin/api/tracks/:track_id/purge`（轨迹操作权限）彻底删除已下架轨迹，不可恢复：仅允许 `status=0` 的轨迹（否则 400），在事务中物理删除 `track_records` 及全部关联数据（轨迹点、收藏、导航记录、地图索引任务与 geo index、路线组成员、景点关联、景点识别记录、点赞、评论及评论反应/图片/统计、投稿及图片与审核流水），成功后尽力删除 OSS 原始轨迹文件与预览图（仅允许删除用户内容前缀下的对象，按精确 object key 授权；失败不阻断并在响应 `oss_warning` 中返回）。评论图片的 OSS 对象、用户已领取的成就奖励、历史同行会话与操作日志不在清理范围。轨迹详情弹窗对已下架轨迹把主按钮换成「彻底删除」，前端双重确认后调用。
+
+`missing` 可选值：
 
 | 值 | 页面选项 | 口径 |
 | --- | --- | --- |
@@ -62,7 +71,9 @@
 
 响应 `{code:0,data:{results:[{file_name, track_id?, title?, error?}]}}`，逐文件独立成功或失败，互不影响。
 
-处理流程：服务端解析轨迹点（复用地图索引解析器，受原始文件大小上限约束）→ 计算距离/起止时间/耗时/爬升/均速 → 原始文件由服务端直传 OSS 归属人用户目录 → 走 `TrackService.CreateTrack` 建档（`source_tag=manual_seed`、已完成状态），自动排队地图索引并结算成就。城市与 locate_addr 由内置行政区目录按轨迹中位点（转 GCJ02 后）离线解析，未命中留空；标题复用标题回填的生成规则。不生成预览四图与路线描述（按 auto/v0 口径留空），可后续用客户端 DevMode 补图/补齐。OSS 未配置时导入接口不可用。
+处理流程：服务端解析轨迹点（复用地图索引解析器，受原始文件大小上限约束）→ 计算距离/起止时间/耗时/爬升/均速 → 原始文件由服务端直传 OSS 归属人用户目录 → 走 `TrackService.CreateTrack` 建档（`source_tag=manual_seed`、已完成状态），自动排队地图索引并结算成就。解析器支持 KML/KMZ 中 `gx:Track` 的 `<when>` 时间戳（与 `<gx:coord>` 一一对应时按序回填），带真实时间的轨迹耗时/均速/热量按真实时间计算。源文件完全不带时间戳时，服务端按运动类型的估算速度（hiking 4、running 10、climbing 2.5、riding 15、driving 60 km/h）沿轨迹累计合成时间戳（起点为当前时间），并做拟真处理：逐段速度 ±25% 确定性抖动、按坡度爬坡减速/下坡加速、徒步与爬山每行进 12~20 分钟插入 1~4 分钟休息，使客户端配速/海拔图表接近真实记录；部分点有时间戳时保持原样。城市与 locate_addr 由内置行政区目录按轨迹中位点（转 GCJ02 后）离线解析，未命中留空；标题默认复用标题回填的生成规则；当文件名（去扩展名）含汉字时优先用文件名作为标题（最长 40 字符），因为运营文件命名通常即路线名。不生成预览四图与路线描述（按 auto/v0 口径留空），可后续用客户端 DevMode 补图/补齐。OSS 未配置时导入接口不可用。
+
+上传文件格式：客户端详情/地图只解析 KMZ（zip 内 `gx:Track` KML）。已是 KMZ 的文件原样上传；KML / JSON / GeoJSON 会先按解析出的轨迹点转换为 `gx:Track` KMZ（全部点带时间戳时写入 `<when>`；无时间戳文件会先按估算速度合成）再上传，保证客户端可绘制。
 
 ## 轨迹详情、重新识别与人工候选放宽
 
@@ -74,6 +85,8 @@
 `POST /admin/api/tracks/:track_id/place-refresh`（轨迹操作权限）：同步对单条轨迹重新执行景点识别，复用后台识别任务同一互斥锁与供应商配额；任务忙返回 409，识别未启用 503，无可用地图索引 404。成功后前端重新读取候选。
 
 `GET /admin/api/tracks/:track_id/place-candidates` 的人工候选集合放宽：除围住的景点（`enclosed_poi`）外，还包含采样途经的附近景点（`nearby` 且 `matched_samples≥1`，按 place_id 去重）；自动判定为 `unmatched` 的识别记录同样可读取候选并由人工确认。`confirm` 接受上述任一候选，主景点方法记录为对应 `kind`。`missing=place_candidate` 缺项筛选与全局候选队列仍只统计自动规则的 `candidate` 状态，不受放宽影响。
+
+确认关联成功后，响应额外返回 `suggested_title`：服务端按客户端标题生成规则（`{景点名}周边{运动}[环线]`，环线判定用地图索引简化轨迹线）以景点名为地名生成的建议标题；与当前标题一致或无法生成时为空串。前端在标题输入框旁展示「代入建议标题」标签，点击仅代入输入框并随表单保存生效，不自动提交。
 
 `GET /admin/api/tracks/map-config`（轨迹查看）：返回高德 Web(JS API) `key` 与 `service_host=/admin/api/tracks/amap-service`，供轨迹详情地图使用；`GET /admin/api/tracks/amap-service` 为同源高德服务代理（安全密钥不下发浏览器）。与景点页 `/scenic-spots/map-config` 同一配置，仅权限归属不同。
 

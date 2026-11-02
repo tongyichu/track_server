@@ -1667,6 +1667,67 @@ func (r *MySQLTrackRepository) AdminSoftDeleteAndCleanupTx(ctx context.Context, 
 	return tx.Commit()
 }
 
+// AdminHardDeleteTrack 在一个 MySQL 事务中物理删除已下架轨迹及其全部关联数据。
+//
+// 仅允许删除 status=0 的记录（防止误删活数据）。清理范围：
+// track_records / track_waypoints / track_collects / track_navigations /
+// track_map_index_jobs / track_geo_indexes / track_route_group_members /
+// track_scenic_spot_links / track_place_records(match:<id>) / track_likes /
+// track_comments(+reactions/images/stats) / track_submissions(+images/events)。
+// 评论图片的 OSS 对象不在本次删除范围（仅清库表记录）。
+// 用户已领取的成就奖励与历史同行会话、操作日志不在清理范围内；
+// OSS 原始文件与预览图由调用方（handler）在事务成功后另行删除。
+func (r *MySQLTrackRepository) AdminHardDeleteTrack(ctx context.Context, trackID string) error {
+	trackID = strings.TrimSpace(trackID)
+	if trackID == "" {
+		return ErrNotFound
+	}
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var status int
+	if err := tx.QueryRowContext(ctx, `SELECT status FROM track_records WHERE id=? LIMIT 1`, trackID).Scan(&status); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		}
+		return err
+	}
+	if models.TrackStatus(status) != models.TrackStatusDeleted {
+		return ErrConflict
+	}
+	statements := []struct {
+		query string
+		args  []any
+	}{
+		{`DELETE FROM track_submission_images WHERE submission_id IN (SELECT submission_id FROM track_submissions WHERE track_id=?)`, []any{trackID}},
+		{`DELETE FROM track_submission_events WHERE submission_id IN (SELECT submission_id FROM track_submissions WHERE track_id=?)`, []any{trackID}},
+		{`DELETE FROM track_submissions WHERE track_id=?`, []any{trackID}},
+		{`DELETE FROM track_waypoints WHERE track_id=?`, []any{trackID}},
+		{`DELETE FROM track_collects WHERE track_id=?`, []any{trackID}},
+		{`DELETE FROM track_navigations WHERE track_id=?`, []any{trackID}},
+		{`DELETE FROM track_map_index_jobs WHERE track_id=?`, []any{trackID}},
+		{`DELETE FROM track_geo_indexes WHERE track_id=?`, []any{trackID}},
+		{`DELETE FROM track_route_group_members WHERE track_id=?`, []any{trackID}},
+		{`DELETE FROM track_scenic_spot_links WHERE track_id=?`, []any{trackID}},
+		{`DELETE FROM track_place_records WHERE record_key=?`, []any{"match:" + trackID}},
+		{`DELETE FROM track_likes WHERE track_id=?`, []any{trackID}},
+		{`DELETE FROM track_comment_reactions WHERE comment_id IN (SELECT id FROM track_comments WHERE track_id=?)`, []any{trackID}},
+		{`DELETE FROM track_comment_images WHERE track_id=?`, []any{trackID}},
+		{`DELETE FROM track_comment_stats WHERE track_id=?`, []any{trackID}},
+		{`DELETE FROM track_comments WHERE track_id=?`, []any{trackID}},
+		{`DELETE FROM track_records WHERE id=?`, []any{trackID}},
+	}
+	for _, stmt := range statements {
+		if _, err := tx.ExecContext(ctx, stmt.query, stmt.args...); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
 type mysqlTrackRouteGroupRef struct {
 	GroupID           string
 	RepresentativeID  string
@@ -2219,8 +2280,13 @@ func (r *MySQLTrackRepository) ListAdminTracks(ctx context.Context, filter Admin
 	if limit <= 0 {
 		limit = 20
 	}
+	// 默认排除已删除；显式筛选「已删除」时改为只看 status=0 的记录。
 	base := `FROM track_records WHERE deleted_at IS NULL AND status <> ?`
 	args := []any{models.TrackStatusDeleted}
+	if filter.Status != nil && *filter.Status == models.TrackStatusDeleted {
+		base = `FROM track_records WHERE status = ?`
+		args = []any{models.TrackStatusDeleted}
+	}
 	if condition, values := adminTrackMissingSQL(filter); condition != "" {
 		base += " AND (" + condition + ")"
 		args = append(args, values...)
@@ -2232,8 +2298,14 @@ func (r *MySQLTrackRepository) ListAdminTracks(ctx context.Context, filter Admin
 	if filter.CityCode != "" {
 		base += ` AND city_code = ?`
 		args = append(args, filter.CityCode)
+	} else if len(filter.CityCodes) > 0 {
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(filter.CityCodes)), ",")
+		base += ` AND city_code IN (` + placeholders + `)`
+		for _, code := range filter.CityCodes {
+			args = append(args, code)
+		}
 	}
-	if filter.Status != nil {
+	if filter.Status != nil && *filter.Status != models.TrackStatusDeleted {
 		base += ` AND status = ?`
 		args = append(args, *filter.Status)
 	}

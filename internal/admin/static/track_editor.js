@@ -33,15 +33,28 @@
       return date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate()) + 'T' + pad(date.getHours()) + ':' + pad(date.getMinutes());
     }
     const preview = track.preview_images || {};
+    const isDeleted = track.status === 0;
     const values = await window.AdminUI.form({
       title: (readOnly ? '查看轨迹 ' : '编辑轨迹 ') + trackID,
       readOnly: readOnly,
       waitForHidden: !!options.waitForHidden,
-      confirmText: '保存修改',
-      cancelText: readOnly ? '关闭' : '删除',
-      cancelDanger: !readOnly,
-      onCancel: readOnly ? null : async function () {
-        const confirmed = await window.AdminUI.confirm({ title: '删除轨迹', message: '确认删除轨迹 ' + trackID + '？删除后会标记为已删除，并清理收藏和地图索引。', confirmText: '删除轨迹', danger: true });
+      confirmText: isDeleted ? '彻底删除' : '保存修改',
+      cancelText: readOnly ? '关闭' : (isDeleted ? '恢复' : '删除'),
+      cancelDanger: !readOnly && !isDeleted,
+      onCancel: readOnly ? null : isDeleted ? async function () {
+        const confirmed = await window.AdminUI.confirm({ title: '恢复轨迹', message: '确认恢复轨迹 ' + trackID + '？恢复后状态为公开，并会重新排队地图索引；删除时清理的收藏与路线组成员关系不会恢复。', confirmText: '恢复轨迹' });
+        if (!confirmed) return false;
+        const response = await fetch('/admin/api/tracks/' + encodeURIComponent(trackID) + '/restore', { method: 'POST' });
+        if (!response.ok) {
+          let message = '恢复失败: ' + response.status;
+          try { const result = await response.json(); if (result && result.error) message += ' ' + result.error; } catch (_) {}
+          window.AdminUI.alert(message, 'danger');
+          return false;
+        }
+        window.AdminUI.alert('轨迹已恢复为公开状态', 'success');
+        return 'restored';
+      } : async function () {
+        const confirmed = await window.AdminUI.confirm({ title: '删除轨迹', message: '确认删除轨迹 ' + trackID + '？删除后标记为下架（数据保留，可在已下架筛选中恢复），并清理收藏和地图索引。', confirmText: '删除轨迹', danger: true });
         if (!confirmed) return false;
         const response = await fetch('/admin/api/tracks/' + encodeURIComponent(trackID), { method: 'DELETE' });
         if (!response.ok) {
@@ -50,7 +63,7 @@
           window.AdminUI.alert(message, 'danger');
           return false;
         }
-        window.AdminUI.alert('轨迹已删除', 'success');
+        window.AdminUI.alert('轨迹已下架', 'success');
         return 'deleted';
       },
       wide: true,
@@ -93,6 +106,33 @@
     });
     if (!values) return false;
     if (values._action === 'deleted') {
+      if (typeof options.onDeleted === 'function') await options.onDeleted();
+      return false;
+    }
+    if (values._action === 'restored') {
+      if (typeof options.onSaved === 'function') await options.onSaved();
+      return false;
+    }
+    if (isDeleted) {
+      // 已下架轨迹的主按钮是「彻底删除」：双重确认后物理删除，不可恢复。
+      const first = await window.AdminUI.confirm({ title: '彻底删除轨迹', message: '彻底删除 ' + trackID + ' 将物理删除数据库记录与关联数据（收藏、评论、点赞、索引、景点关联、投稿），并清理 OSS 原始文件与预览图，不可恢复。确认继续？', confirmText: '继续', danger: true });
+      if (!first) return false;
+      const second = await window.AdminUI.confirm({ title: '再次确认', message: '这是最后确认：' + trackID + ' 删除后服务端不再留存任何数据。', confirmText: '彻底删除', danger: true });
+      if (!second) return false;
+      const purgeResponse = await fetch('/admin/api/tracks/' + encodeURIComponent(trackID) + '/purge', { method: 'POST' });
+      if (!purgeResponse.ok) {
+        let message = '彻底删除失败: ' + purgeResponse.status;
+        try { const result = await purgeResponse.json(); if (result && result.error) message += ' ' + result.error; } catch (_) {}
+        window.AdminUI.alert(message, 'danger');
+        return false;
+      }
+      try {
+        const result = await purgeResponse.json();
+        const warning = result && result.data && result.data.oss_warning;
+        window.AdminUI.alert(warning || '轨迹已彻底删除', warning ? 'warning' : 'success');
+      } catch (_) {
+        window.AdminUI.alert('轨迹已彻底删除', 'success');
+      }
       if (typeof options.onDeleted === 'function') await options.onDeleted();
       return false;
     }

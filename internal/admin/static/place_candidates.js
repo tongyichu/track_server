@@ -68,6 +68,50 @@
       finally { setBusy(false); }
     }
 
+    // 确认景点后，在标题输入框旁展示服务端按客户端标题生成规则算出的建议标题；
+    // 点击标签代入输入框（随表单保存生效），不自动提交。
+    function showTitleSuggestion(suggestion) {
+      suggestion = String(suggestion || '').trim();
+      const form = root.closest('form');
+      const input = form && form.querySelector('[name="title"]');
+      if (!suggestion || !input || String(input.value || '').trim() === suggestion) return;
+      const old = form.querySelector('.admin-track-title-suggestion');
+      if (old) old.remove();
+      const wrap = document.createElement('div');
+      wrap.className = 'admin-track-title-suggestion mt-1';
+      const tag = document.createElement('button');
+      tag.type = 'button';
+      tag.className = 'badge bg-azure-lt text-azure';
+      tag.textContent = '代入建议标题：' + suggestion;
+      tag.title = '点击代入标题输入框，保存表单后生效';
+      tag.addEventListener('click', () => {
+        input.value = suggestion;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+        wrap.remove();
+        AdminUI.alert('已代入建议标题，保存表单后生效', 'success');
+      });
+      wrap.appendChild(tag);
+      input.insertAdjacentElement('afterend', wrap);
+    }
+
+    async function confirmPlace(place) {
+      if (busy || !canWrite) return;
+      setBusy(true);
+      try {
+        const data = await request('/place-candidates/' + encodeURIComponent(trackID) + '/confirm', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ place_id: place.id }) });
+        AdminUI.alert('已关联景点：' + place.name, 'success');
+        showTitleSuggestion(data && data.suggested_title);
+        if (typeof options.onChanged === 'function') {
+          try { await options.onChanged(); }
+          catch (_) { AdminUI.alert('景点处理已生效，列表刷新失败，请手动刷新', 'warning'); }
+        }
+      } catch (error) {
+        if (error.status === 404 || error.status === 409) state('当前候选或轨迹数据已变化，请重新识别后重试');
+        AdminUI.alert('处理失败：' + error.message, 'danger');
+      } finally { setBusy(false); }
+    }
+
     async function load() {
       if (busy) return;
       const current = ++sequence;
@@ -93,7 +137,7 @@
             const actions = document.createElement('div'); actions.dataset.adminWrite = 'tracks';
             const confirm = document.createElement('button'); confirm.type = 'button'; confirm.className = 'btn btn-sm btn-outline-primary'; confirm.textContent = '确认关联';
             confirm.dataset.unavailable = String(!place.name || !place.name.trim());
-            confirm.addEventListener('click', () => act('/place-candidates/' + encodeURIComponent(trackID) + '/confirm', { place_id: place.id }, '已关联景点：' + place.name));
+            confirm.addEventListener('click', () => confirmPlace(place));
             actions.appendChild(confirm); row.appendChild(actions);
           }
           body.appendChild(row);

@@ -178,15 +178,17 @@ func (s *TrackPlaceService) ListPlaceCandidates(ctx context.Context, cursor stri
 	return &TrackPlaceCandidatePage{Items: items, NextCursor: nextCursor, HasMore: len(records) == limit || moreCandidates}, nil
 }
 
-func (s *TrackPlaceService) ConfirmPlaceCandidate(ctx context.Context, trackID, placeID, operator string) error {
+// ConfirmPlaceCandidate 确认候选为轨迹主景点，返回按客户端标题生成规则、
+// 以景点名为地名生成的建议标题（与当前标题相同或无法生成时为空串）。
+func (s *TrackPlaceService) ConfirmPlaceCandidate(ctx context.Context, trackID, placeID, operator string) (string, error) {
 	trackID = strings.TrimSpace(trackID)
 	placeID = strings.TrimSpace(placeID)
 	if trackID == "" || placeID == "" {
-		return invalidArg("track_id and place_id are required")
+		return "", invalidArg("track_id and place_id are required")
 	}
 	match, index, err := s.loadCurrentCandidate(ctx, trackID)
 	if err != nil {
-		return err
+		return "", err
 	}
 	found := false
 	method := "enclosed_poi"
@@ -198,28 +200,49 @@ func (s *TrackPlaceService) ConfirmPlaceCandidate(ctx context.Context, trackID, 
 		}
 	}
 	if !found {
-		return invalidArg("place is not a candidate for this track")
+		return "", invalidArg("place is not a candidate for this track")
 	}
 	places, err := s.GetPlaces(ctx, []string{placeID})
 	if err != nil {
-		return err
+		return "", err
 	}
 	if places[placeID] == nil || strings.TrimSpace(places[placeID].Name) == "" {
-		return repository.ErrNotFound
+		return "", repository.ErrNotFound
 	}
 	match.Status = "matched"
 	match.PrimaryPlaceID = placeID
 	match.PrimaryMethod = method
 	match.UpdatedAt = time.Now()
 	if err := s.save(ctx, "match:"+trackID, match, time.Time{}, ""); err != nil {
-		return err
+		return "", err
 	}
 	if s.scenicCatalog != nil {
 		if err := s.scenicCatalog.SyncConfirmedTrack(ctx, operator, trackID); err != nil {
 			log.Printf("confirmed scenic spot catalog link failed track_id=%s", trackID)
 		}
 	}
-	return s.refreshGroup(ctx, index, match)
+	suggestion := s.suggestedTrackTitle(ctx, trackID, places[placeID].Name, index)
+	return suggestion, s.refreshGroup(ctx, index, match)
+}
+
+// suggestedTrackTitle 复用标题回填的生成规则：地名换成景点名，环线判定用
+// 地图索引简化轨迹线。与当前标题一致或生成失败时返回空串。
+func (s *TrackPlaceService) suggestedTrackTitle(ctx context.Context, trackID, spotName string, index *models.TrackGeoIndex) string {
+	track, err := s.tracks.FindByID(ctx, trackID)
+	if err != nil || track == nil {
+		return ""
+	}
+	candidate := *track
+	candidate.LocateAddr = spotName
+	var points []models.TrackPoint
+	if index != nil {
+		points = index.SimplifiedPolyline
+	}
+	title := generatedTrackTitle(&candidate, points)
+	if title == "" || title == track.Title {
+		return ""
+	}
+	return title
 }
 
 func (s *TrackPlaceService) DismissPlaceCandidate(ctx context.Context, trackID string) error {
