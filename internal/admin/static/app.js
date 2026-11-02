@@ -121,6 +121,12 @@
   document.getElementById('refreshBtn').addEventListener('click', loadList);
   filterStatus.addEventListener('change', loadList);
 
+  function formatSize(bytes) {
+    if (!(bytes > 0)) return '—';
+    if (bytes >= 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+    return (bytes / 1024).toFixed(1) + ' KB';
+  }
+
   async function loadList() {
     const params = new URLSearchParams();
     params.set('platform', 'android');
@@ -131,6 +137,8 @@
     const tbody = document.getElementById('releaseList');
     tbody.innerHTML = '';
     items.forEach(function (it) {
+      const notes = (it.release_notes || '').trim();
+      const firstLine = notes.split('\n').map(function (s) { return s.trim(); }).filter(Boolean)[0] || '';
       const tr = document.createElement('tr');
       tr.innerHTML = '<td>' + it.id + '</td>' +
         '<td>' + esc(it.version_name) + '</td>' +
@@ -140,8 +148,44 @@
         '<td>' + esc(it.status) + '</td>' +
         '<td>' + esc(it.operator_name || '') + '</td>' +
         '<td>' + esc((it.updated_at || '').replace('T', ' ').slice(0, 19)) + '</td>' +
+        '<td>' + formatSize(it.package_size) + '</td>' +
+        '<td class="release-notes-cell"></td>' +
         '<td class="url" title="' + esc(it.package_url) + '"><a href="' + esc(it.package_url) + '" target="_blank">' + esc(it.package_url) + '</a></td>' +
         '<td><button data-admin-write="releases" class="danger" data-id="' + it.id + '">删除</button></td>';
+      const notesCell = tr.querySelector('.release-notes-cell');
+      if (notes) {
+        const summary = document.createElement('span');
+        summary.textContent = firstLine.length > 30 ? firstLine.slice(0, 30) + '…' : firstLine;
+        notesCell.appendChild(summary);
+        notesCell.appendChild(document.createTextNode(' '));
+        const toggle = document.createElement('button');
+        toggle.type = 'button';
+        toggle.className = 'link';
+        toggle.textContent = '展开';
+        let expandedRow = null;
+        toggle.addEventListener('click', function () {
+          if (expandedRow) {
+            expandedRow.remove();
+            expandedRow = null;
+            toggle.textContent = '展开';
+            return;
+          }
+          expandedRow = document.createElement('tr');
+          expandedRow.className = 'release-notes-expanded';
+          const td = document.createElement('td');
+          td.colSpan = 12;
+          const pre = document.createElement('pre');
+          pre.className = 'release-notes-full';
+          pre.textContent = notes;
+          td.appendChild(pre);
+          expandedRow.appendChild(td);
+          tr.after(expandedRow);
+          toggle.textContent = '收起';
+        });
+        notesCell.appendChild(toggle);
+      } else {
+        notesCell.textContent = '—';
+      }
       tbody.appendChild(tr);
     });
     tbody.querySelectorAll('button.danger').forEach(function (b) {

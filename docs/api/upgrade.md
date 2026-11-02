@@ -49,7 +49,8 @@ X-Platform: android
 | `package_url` | string | 安装包下载地址。**Android** 为 OSS 直接下载链接；**iOS** 为 AppStore 跳转链接 |
 | `package_size` | int64 | 安装包大小（字节）。iOS 通常为 `0` |
 | `package_md5` | string | 安装包 MD5（可选）。iOS 通常为空 |
-| `release_notes` | string | 版本说明文案，可包含换行 |
+| `release_notes` | string | 最新发布版本的版本说明文案，可包含换行 |
+| `changelogs` | array | 可选。跨版本升级聚合说明：所有 `version_code` 大于客户端当前版本的 `published` 版本说明，按版本号倒序，空说明的版本已跳过。元素字段：`version_name`、`version_code`、`release_notes`。老客户端可忽略该字段，继续只展示 `release_notes` |
 
 #### 强制升级判定逻辑
 
@@ -82,7 +83,19 @@ X-Platform: android
     "package_url": "https://track-resource.oss-cn-beijing.aliyuncs.com/release/android/1714378800-app-1.3.0.apk",
     "package_size": 28456321,
     "package_md5": "a1b2c3d4e5f60718293a4b5c6d7e8f90",
-    "release_notes": "1. 新增轨迹分享\n2. 修复地图卡顿"
+    "release_notes": "1. 新增轨迹分享\n2. 修复地图卡顿",
+    "changelogs": [
+      {
+        "version_name": "1.3.0",
+        "version_code": 130,
+        "release_notes": "1. 新增轨迹分享\n2. 修复地图卡顿"
+      },
+      {
+        "version_name": "1.2.5",
+        "version_code": 125,
+        "release_notes": "修复已知问题"
+      }
+    ]
   }
 }
 ```

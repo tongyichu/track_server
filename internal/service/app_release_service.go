@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"sort"
 	"strings"
 	"time"
 
@@ -207,17 +208,25 @@ func (s *AppReleaseService) Delete(ctx context.Context, id int64) error {
 	return s.repo.Delete(ctx, id)
 }
 
+// UpgradeChangelogItem 是跨版本升级时单个版本的更新说明。
+type UpgradeChangelogItem struct {
+	VersionName string `json:"version_name"`
+	VersionCode int64  `json:"version_code"`
+	ReleaseNotes string `json:"release_notes"`
+}
+
 // UpgradeCheckResult 是客户端升级检查的结果。
 type UpgradeCheckResult struct {
-	HasUpdate               bool   `json:"has_update"`
-	ForceUpdate             bool   `json:"force_update"`
-	LatestVersionName       string `json:"latest_version_name"`
-	LatestVersionCode       int64  `json:"latest_version_code"`
-	MinSupportedVersionCode int64  `json:"min_supported_version_code"`
-	PackageURL              string `json:"package_url"`
-	PackageSize             int64  `json:"package_size"`
-	PackageMD5              string `json:"package_md5"`
-	ReleaseNotes            string `json:"release_notes"`
+	HasUpdate               bool                   `json:"has_update"`
+	ForceUpdate             bool                   `json:"force_update"`
+	LatestVersionName       string                 `json:"latest_version_name"`
+	LatestVersionCode       int64                  `json:"latest_version_code"`
+	MinSupportedVersionCode int64                  `json:"min_supported_version_code"`
+	PackageURL              string                 `json:"package_url"`
+	PackageSize             int64                  `json:"package_size"`
+	PackageMD5              string                 `json:"package_md5"`
+	ReleaseNotes            string                 `json:"release_notes"`
+	Changelogs              []UpgradeChangelogItem `json:"changelogs,omitempty"`
 }
 
 // CheckUpgrade 用于客户端升级检查。
@@ -248,7 +257,7 @@ func (s *AppReleaseService) CheckUpgrade(ctx context.Context, platform models.Ap
 	}
 
 	force := latest.ForceUpdate || currentVersionCode < latest.MinSupportedVersionCode
-	return &UpgradeCheckResult{
+	result := &UpgradeCheckResult{
 		HasUpdate:               true,
 		ForceUpdate:             force,
 		LatestVersionName:       latest.VersionName,
@@ -258,5 +267,36 @@ func (s *AppReleaseService) CheckUpgrade(ctx context.Context, platform models.Ap
 		PackageSize:             latest.PackageSize,
 		PackageMD5:              latest.PackageMD5,
 		ReleaseNotes:            latest.ReleaseNotes,
-	}, nil
+	}
+
+	// 跨版本升级聚合：收集所有比当前版本新的 published 版本的说明，
+	// 按版本号倒序，跳过空说明；失败时降级为只返回最新版本说明。
+	releases, err := s.repo.List(ctx, models.AppReleaseListFilter{
+		Platform: platform,
+		Status:   models.AppReleaseStatusPublished,
+	})
+	if err == nil {
+		var changelogs []UpgradeChangelogItem
+		for _, r := range releases {
+			if r == nil || r.VersionCode <= currentVersionCode {
+				continue
+			}
+			notes := strings.TrimSpace(r.ReleaseNotes)
+			if notes == "" {
+				continue
+			}
+			changelogs = append(changelogs, UpgradeChangelogItem{
+				VersionName:  r.VersionName,
+				VersionCode:  r.VersionCode,
+				ReleaseNotes: notes,
+			})
+		}
+		sort.Slice(changelogs, func(i, j int) bool {
+			return changelogs[i].VersionCode > changelogs[j].VersionCode
+		})
+		result.Changelogs = changelogs
+	} else {
+		log.Printf("list changelogs for upgrade check failed: platform=%s err=%v", platform, err)
+	}
+	return result, nil
 }
