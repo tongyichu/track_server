@@ -61,6 +61,17 @@ func (h *Handler) ListScenicSpots(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 	f := repository.ScenicSpotListFilter{Query: strings.TrimSpace(string(c.Query("q"))), Status: strings.TrimSpace(string(c.Query("status"))), Cursor: strings.TrimSpace(string(c.Query("cursor"))), Limit: parseAdminListLimit(string(c.Query("limit")))}
+	cityCode := strings.TrimSpace(string(c.Query("city_code")))
+	provinceCode := strings.TrimSpace(string(c.Query("province_code")))
+	if len(cityCode) > 32 || len(provinceCode) > 32 {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid region code"})
+		return
+	}
+	if cityCode != "" {
+		f.CityCodes = []string{cityCode}
+	} else if provinceCode != "" {
+		f.CityCodes = adminCityCodesOfProvince(provinceCode)
+	}
 	f.Missing = strings.TrimSpace(string(c.Query("missing")))
 	switch f.Missing {
 	case "", "any", "description", "photos", "coordinates", "address":

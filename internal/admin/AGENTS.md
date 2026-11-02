@@ -30,6 +30,8 @@
 
 模块通过 `admin.NewModule(...)`、`Module.ConfigureEmailRecovery(...)`、`Module.RegisterRoutes(h)` 注入和注册，不被业务 handler 引用；Close 同时停止会话 GC 与邮件 worker。
 
+省市筛选：用户管理 `GET /admin/api/users` 接收 `province_code`，与 `city_code` 按用户资料取交集；户外目的地 `GET /admin/api/scenic-spots` 接收 `province_code` / `city_code`，城市优先，匹配目的地自身城市或任一仍存在的关联轨迹城市。`repository.ScenicSpotIDsByTrackCities` 为 MySQL/Mongo/内存提供关联城市匹配，`ScenicSpotListFilter` 将地域条件用于分页前筛选和 total；不得退回仅过滤浏览器已加载记录。省市下拉共用 `/admin/api/cities`，直辖市省级码保留可选。协议见 `docs/api/admin-regions.md`。
+
 ## 页面性能约束
 
 修改后台页面、共享脚本或列表接口时，必须检查以下边界；不能仅靠隐藏加载提示改善体感。
@@ -144,7 +146,7 @@ internal/admin/
 | GET | `/admin/api/releases/upload-token` | 鉴权 | 旧 OSS 直传 STS 凭证接口，前端不再使用 |
 | GET | `/admin/api/releases/client-statistics` | 鉴权 | 客户端活跃统计：`days=7|30`，版本/机型/系统版本分布、按日版本活跃趋势与最新发布版本渗透概况（含低于强升线设备数） |
 | GET | `/admin/api/static/*filepath` | 鉴权 | 后台静态资源代理，从 `<LogDir>/static/` 读取头像等资源；后台页面不要直接访问需业务 JWT 的 `/api/v1/static/*` |
-| GET | `/admin/api/users` | 鉴权 | 用户列表，支持 `title` 昵称模糊搜索、`is_internal` / `city_code` / `gender` / `zodiac_sign` / `restricted` 组合筛选及 cursor 翻页；所有条件参与总数统计，返回按当前页批量统计的 `last_login_at` |
+| GET | `/admin/api/users` | 鉴权 | 用户列表，支持 `title` 昵称模糊搜索、`is_internal` / `province_code` / `city_code` / `gender` / `zodiac_sign` / `restricted` 组合筛选及 cursor 翻页；所有条件参与总数统计，返回按当前页批量统计的 `last_login_at` |
 | GET | `/admin/api/users/:user_id` | 鉴权 | 用户资料详情，包含头像、签名、性别、生日、手机号、内部人员标识和最近确认所在地 |
 | PUT | `/admin/api/users/:user_id` | 鉴权 | 编辑用户昵称、签名、性别、生日、手机号和 `is_internal`；不修改所在地、头像、背景或账号关系 |
 | PUT | `/admin/api/users/:user_id/internal` | 鉴权 | 仅更新 `is_internal` 内部人员标识；普通资料更新保留该字段 |
@@ -337,7 +339,7 @@ GET /admin/api/users
 ```
 [admin UI] /admin/tracks.html
   → GET /admin/api/tracks 拉取轨迹列表
-  → 「批量导入」弹窗：选择归属人（内部人员下拉，头像+昵称，GET /admin/api/users?is_internal=true）、运动类型、坐标系与多个轨迹文件
+  → 列表上方常驻的边框「批量导入」区域（紧凑栅格，窄屏单列，无弹窗）：选择归属人（内部人员下拉，头像+昵称，GET /admin/api/users?is_internal=true）、运动类型、坐标系与多个轨迹文件
   → POST /admin/api/tracks/import（multipart）
        → AdminTrackImportService 逐文件解析（复用地图索引解析器）→ 服务端直传 OSS 归属人目录
        → TrackService.CreateTrack 建档（source_tag=manual_seed，已完成），自动排队地图索引与成就结算

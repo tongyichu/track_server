@@ -92,7 +92,13 @@ func (r *MongoScenicSpotRepository) ListScenicSpots(ctx context.Context, f Sceni
 	if f.Cursor != "" {
 		filter["_id"] = bson.M{"$gt": f.Cursor}
 	}
+	if len(f.CityCodes) > 0 {
+		filter["$or"] = bson.A{bson.M{"city_code": bson.M{"$in": f.CityCodes}}, bson.M{"_id": bson.M{"$in": append([]string{}, f.RelatedCitySpotIDs...)}}}
+	}
 	base := bson.M{}
+	if len(f.CityCodes) > 0 {
+		base["$or"] = filter["$or"]
+	}
 	if f.VisibleOnly {
 		base["$and"] = bson.A{bson.M{"status": bson.M{"$nin": bson.A{models.ScenicSpotArchived, models.ScenicSpotMerged}}}}
 	}

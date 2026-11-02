@@ -132,3 +132,5 @@
 | 忽略轨迹景点候选 | POST | `/admin/api/place-candidates/:track_id/dismiss` | 轨迹操作 | [admin-tracks.md](admin-tracks.md) |
 
 纠错协议扩展（现有路由）：`GET /feedback/correction-options` 与后台配置接口支持双语问题解释/填写提示；`GET /admin/api/feedbacks` 支持 kind/track_id/correction_option_id 仓储筛选；后台反馈详情支持 handled_by/track_change，状态更新支持 outcome/revision；`PUT /admin/api/tracks/:track_id` 可选 source_feedback_id。详见 [feedback.md](feedback.md#纠错体验与处理结果扩展)，权限仍由既有路由映射及跨模块校验执行。
+
+后台地域筛选：`GET /admin/api/users`（用户查看）支持 `province_code`；`GET /admin/api/scenic-spots`（景点查看）支持 `province_code` / `city_code`，见 [admin-regions.md](admin-regions.md)。

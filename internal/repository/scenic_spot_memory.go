@@ -85,7 +85,17 @@ func (r *MemoryScenicSpotRepository) ListScenicSpots(_ context.Context, f Scenic
 	defer r.mu.RUnlock()
 	all := make([]*models.ScenicSpot, 0)
 	var total int64
+	wantedCities, relatedSpots := map[string]bool{}, map[string]bool{}
+	for _, code := range f.CityCodes {
+		wantedCities[code] = true
+	}
+	for _, id := range f.RelatedCitySpotIDs {
+		relatedSpots[id] = true
+	}
 	for _, v := range r.spots {
+		if len(f.CityCodes) > 0 && !wantedCities[v.CityCode] && !relatedSpots[v.ID] {
+			continue
+		}
 		if f.VisibleOnly && (v.Status == models.ScenicSpotArchived || v.Status == models.ScenicSpotMerged) {
 			continue
 		}

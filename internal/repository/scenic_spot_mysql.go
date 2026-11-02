@@ -98,6 +98,19 @@ func (r *MySQLScenicSpotRepository) FindScenicSpotBySource(ctx context.Context, 
 func (r *MySQLScenicSpotRepository) ListScenicSpots(ctx context.Context, f ScenicSpotListFilter) ([]*models.ScenicSpot, int64, error) {
 	where := ` WHERE 1=1`
 	args := []any{}
+	if len(f.CityCodes) > 0 {
+		where += ` AND (JSON_UNQUOTE(JSON_EXTRACT(data_json,'$.city_code')) IN (` + strings.TrimRight(strings.Repeat("?,", len(f.CityCodes)), ",") + `)`
+		for _, code := range f.CityCodes {
+			args = append(args, code)
+		}
+		if len(f.RelatedCitySpotIDs) > 0 {
+			where += ` OR spot_id IN (` + strings.TrimRight(strings.Repeat("?,", len(f.RelatedCitySpotIDs)), ",") + `)`
+			for _, id := range f.RelatedCitySpotIDs {
+				args = append(args, id)
+			}
+		}
+		where += `)`
+	}
 	if f.VisibleOnly {
 		where += ` AND status NOT IN ('archived','merged')`
 	}

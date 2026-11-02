@@ -115,6 +115,13 @@ func (s *ScenicSpotCatalogService) List(ctx context.Context, f repository.Scenic
 	if !s.Enabled() {
 		return nil, 0, errors.New("scenic spot catalog unavailable")
 	}
+	if len(f.CityCodes) > 0 {
+		ids, err := repository.ScenicSpotIDsByTrackCities(ctx, s.spots, s.tracks, f.CityCodes)
+		if err != nil {
+			return nil, 0, err
+		}
+		f.RelatedCitySpotIDs = ids
+	}
 	return s.spots.ListScenicSpots(ctx, f)
 }
 

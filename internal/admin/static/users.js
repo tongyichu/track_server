@@ -191,17 +191,19 @@
     renderCityTop();
     if (drawMap !== false) renderProvinceMap();
   }
+  var filterRegions = [];
+  function populateFilterCities() {
+    cityFilter.replaceChildren(new Option('全部城市', ''));
+    filterRegions.filter(function (item) { return (!provinceFilter.value || item.province_code === provinceFilter.value || item.code === provinceFilter.value); }).forEach(function (item) { cityFilter.add(new Option(item.name, item.code)); });
+  }
   async function loadCities() {
     try {
       var response = await fetch('/admin/api/cities');
       if (!response.ok) throw new Error(String(response.status));
       var cities = (await response.json()).data || [];
-      cities.forEach(function (city) {
-        var option = document.createElement('option');
-        option.value = city.code;
-        option.textContent = city.name;
-        cityFilter.appendChild(option);
-      });
+      filterRegions = cities;
+      cities.filter(function (item) { return item.level === 'province'; }).forEach(function (item) { provinceFilter.add(new Option(item.name, item.code)); });
+      populateFilterCities();
     } catch (error) {
       AdminUI.alert('城市列表加载失败: ' + (error.message || error), 'danger');
     }
@@ -257,6 +259,7 @@
   var searchBtn = document.getElementById('searchBtn');
   var titleFilter = document.getElementById('titleFilter');
   var internalFilter = document.getElementById('internalFilter');
+  var provinceFilter = document.getElementById('provinceFilter');
   var cityFilter = document.getElementById('cityFilter');
   var genderFilter = document.getElementById('genderFilter');
   var zodiacFilter = document.getElementById('zodiacFilter');
@@ -395,6 +398,7 @@
   function resetSearch() { cursorStack = [null]; pageIndex = 0; loadPage(); }
   searchBtn.addEventListener('click', resetSearch);
   titleFilter.addEventListener('keydown', function (event) { if (event.key === 'Enter') resetSearch(); });
+  provinceFilter.addEventListener('change', function () { populateFilterCities(); resetSearch(); });
   [internalFilter, cityFilter, genderFilter, zodiacFilter, restrictedFilter].forEach(function (filter) {
     filter.addEventListener('change', resetSearch);
   });
@@ -416,6 +420,7 @@
     params.set('limit', String(pageSize));
     if (titleFilter.value.trim()) params.set('title', titleFilter.value.trim());
     if (internalFilter.value) params.set('is_internal', internalFilter.value);
+    if (provinceFilter.value) params.set('province_code', provinceFilter.value);
     if (cityFilter.value) params.set('city_code', cityFilter.value);
     if (genderFilter.value) params.set('gender', genderFilter.value);
     if (zodiacFilter.value) params.set('zodiac_sign', zodiacFilter.value);

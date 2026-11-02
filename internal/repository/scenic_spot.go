@@ -7,12 +7,14 @@ import (
 )
 
 type ScenicSpotListFilter struct {
-	Query       string
-	Status      string
-	Cursor      string
-	Limit       int
-	Missing     string
-	VisibleOnly bool
+	CityCodes          []string
+	RelatedCitySpotIDs []string
+	Query              string
+	Status             string
+	Cursor             string
+	Limit              int
+	Missing            string
+	VisibleOnly        bool
 }
 
 type ScenicSpotRepository interface {

@@ -404,12 +404,17 @@ table.data.table .btn { white-space: nowrap; }
 .companion-type-menu li { padding: 6px 8px; border-radius: var(--tblr-border-radius); cursor: pointer; white-space: nowrap; }
 .companion-type-menu li:hover { background: var(--tblr-bg-surface-secondary); }
 .companion-type-menu li[aria-selected="true"] { background: var(--tblr-primary-lt, rgba(32, 107, 196, .08)); }
-.track-import-form { display: flex; flex-direction: column; gap: 12px; margin-bottom: 14px; }
-.track-import-field { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 0; }
-.track-import-label { font-weight: 500; }
-.track-import-field .form-select { width: auto; min-width: 200px; }
+.track-import-panel { border: 1px solid var(--tblr-border-color); border-radius: 10px; padding: 18px; margin-bottom: 20px; background: var(--tblr-bg-surface); }
+.track-import-heading { margin-bottom: 14px; }
+.track-import-heading h2 { margin: 0 0 6px; font-size: 18px; }
+.track-import-form { display: grid; grid-template-columns: minmax(170px,1fr) minmax(110px,.6fr) minmax(210px,1fr) minmax(220px,1.4fr) auto; gap: 12px; align-items: start; margin-bottom: 14px; }
+.track-import-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; margin: 0; font-size: 12px; font-weight: 500; }
+.track-import-field .form-select, .track-import-field .form-control { width: 100%; min-width: 0; height: 38px; }
+.track-import-form > div:last-child { padding-top: 24px; }
 .track-import-owner { position: relative; }
-.track-import-owner-toggle { display: inline-flex; align-items: center; min-width: 220px; }
+.track-import-owner-toggle { display: inline-flex; align-items: center; width: 100%; min-height: 38px; }
+@media (max-width: 1200px) { .track-import-form { grid-template-columns: repeat(3,minmax(0,1fr)); } .track-import-files { grid-column: span 2; } }
+@media (max-width: 767px) { .track-import-panel { padding: 14px; } .track-import-form { grid-template-columns: minmax(0,1fr); } .track-import-files { grid-column: auto; } .track-import-form > div:last-child { padding-top: 0; } }
 .track-import-owner-current, .track-import-owner-option { display: inline-flex; align-items: center; gap: 8px; }
 .track-import-owner-option .companion-avatar, .track-import-owner-current .companion-avatar { width: 24px; height: 24px; }
 .track-import-owner-menu { max-height: 280px; overflow-y: auto; min-width: 240px; }

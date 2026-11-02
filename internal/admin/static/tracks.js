@@ -168,7 +168,7 @@
       if (!resp.ok) throw new Error(String(resp.status));
       var data = ((await resp.json()).data) || [];
       cityOptions = data;
-      data.forEach(function (item) { if (item.level === 'city') cityNameByCode[item.code] = item.name; });
+      data.forEach(function (item) { cityNameByCode[item.code] = item.name; });
       data.filter(function (item) { return item.level === 'province'; })
         .forEach(function (item) { provinceFilter.add(new Option(item.name, item.code)); });
       populateCityOptions(data, '');
@@ -220,8 +220,7 @@
 
   // ── 批量导入 ────────────────────────────────────────────────
   (function setupTrackImport() {
-    var modal = document.getElementById('trackImportModal');
-    if (!modal) return;
+    if (!document.getElementById('trackImportPanel')) return;
     var ownerToggle = document.getElementById('trackImportOwnerToggle');
     var ownerCurrent = document.getElementById('trackImportOwnerCurrent');
     var ownerMenu = document.getElementById('trackImportOwnerMenu');
@@ -251,7 +250,7 @@
       if (ownersLoaded) return Promise.resolve();
       ownerMenu.innerHTML = '<li class="hint">正在加载内部人员…</li>';
       return fetch('/admin/api/users?is_internal=true&limit=100')
-        .then(function (resp) { return resp.json(); })
+        .then(function (resp) { if (!resp.ok) throw new Error(String(resp.status)); return resp.json(); })
         .then(function (payload) {
           ownersLoaded = true;
           var items = (payload.data && payload.data.items) || [];
@@ -290,13 +289,6 @@
       if (!ownerMenu.hidden && !document.getElementById('trackImportOwner').contains(event.target)) closeOwnerMenu();
     });
 
-    document.getElementById('importBtn').addEventListener('click', function () {
-      errorNode.hidden = true;
-      resultsNode.hidden = true;
-      if (!modal.open) modal.showModal();
-    });
-    document.getElementById('closeTrackImport').addEventListener('click', function () { modal.close(); });
-    modal.addEventListener('click', function (event) { if (event.target === modal) modal.close(); });
     fileInput.addEventListener('change', function () {
       var count = fileInput.files.length;
       fileHint.textContent = count ? '已选择 ' + count + ' 个文件' : '未选择文件';

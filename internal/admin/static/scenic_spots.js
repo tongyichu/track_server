@@ -24,6 +24,8 @@
     $('missingFilter').value = key;
     $('searchInput').value = '';
     $('statusFilter').value = '';
+    $('provinceFilter').value = '';
+    updateCityOptions();
     $('cityFilter').value = '';
     loadList();
     document.querySelector('.scenic-filter-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -81,8 +83,8 @@
   });
 
   function renderList() {
-    const mode=$('statusFilter').value,city=$('cityFilter').value,query=$('searchInput').value.trim().toLocaleLowerCase();
-    const spots=state.list.filter(spot=>(!mode||(mode==='manual')===isManual(spot))&&(!city||spotCities(spot).includes(city))&&(!query||(spot.name||'').toLocaleLowerCase().includes(query)));
+    const mode=$('statusFilter').value,query=$('searchInput').value.trim().toLocaleLowerCase();
+    const spots=state.list.filter(spot=>(!mode||(mode==='manual')===isManual(spot))&&(!query||(spot.name||'').toLocaleLowerCase().includes(query)));
     $('spotCount').textContent='当前显示 '+spots.length+' 处'+(state.listHasMore?' · 已加载 '+state.list.length+' / '+state.listTotal+' 处':'');const host=$('spotRows');host.replaceChildren();
     if(!spots.length){const empty=document.createElement('tr');empty.innerHTML='<td colspan="6" class="p-3 scenic-hint">没有匹配的目的地</td>';host.appendChild(empty);return;}
     spots.forEach(spot=>{const row=document.createElement('tr');row.dataset.spotId=spot.id;
@@ -95,7 +97,20 @@
       row.append(cityCell,nameCell,categoryCell,modeCell,imageCell,actionCell);host.appendChild(row);
     });
   }
-  function updateCityOptions() { const select=$('cityFilter'),current=select.value,cities=[...new Set(state.list.flatMap(spotCities))].sort((a,b)=>a.localeCompare(b,'zh-CN'));select.replaceChildren(new Option('全部城市',''));cities.forEach(city=>select.add(new Option(city,city)));if(cities.includes(current))select.value=current; }
+  function updateCityOptions() {
+    const select = $('cityFilter'), current = select.value, province = $('provinceFilter').value;
+    const regions = (state.regions || []).filter(item => !province || item.province_code === province || item.code === province);
+    select.replaceChildren(new Option('全部城市', ''));
+    regions.forEach(item => select.add(new Option(item.name, item.code)));
+    if (regions.some(item => item.code === current)) select.value = current;
+  }
+  async function loadFilterRegions() {
+    try {
+      const regions = await loadRegions();
+      regions.filter(item => item.level === 'province').forEach(item => $('provinceFilter').add(new Option(item.name, item.code)));
+      updateCityOptions();
+    } catch (error) { toast('省市选项加载失败：' + error.message, 'danger'); }
+  }
   async function loadList(append) {
     append = append === true;
     const request = ++listRequest, button = $('loadMoreSpotsBtn');
@@ -110,6 +125,8 @@
     }
     try {
       const params = new URLSearchParams({ q: $('searchInput').value.trim(), limit: '100' });
+      if ($('provinceFilter').value) params.set('province_code', $('provinceFilter').value);
+      if ($('cityFilter').value) params.set('city_code', $('cityFilter').value);
       if ($('missingFilter').value) params.set('missing', $('missingFilter').value);
       if (append && state.listCursor) params.set('cursor', state.listCursor);
       const data = await api('/scenic-spots?' + params);
@@ -274,12 +291,13 @@
     catch(error){toast('复制失败，请手动复制：'+id,'danger');}
   }
 
-  $('searchBtn').addEventListener('click',()=>loadList());$('missingFilter').addEventListener('change',()=>loadList());$('showIncompleteBtn').addEventListener('click',()=>filterMissing('any'));$('loadMoreSpotsBtn').addEventListener('click',()=>loadList(true));$('searchInput').addEventListener('keydown',event=>{if(event.key==='Enter')loadList();});$('statusFilter').addEventListener('change',renderList);$('cityFilter').addEventListener('change',renderList);$('refreshStatsBtn').addEventListener('click',loadStats);
+  $('searchBtn').addEventListener('click',()=>loadList());$('missingFilter').addEventListener('change',()=>loadList());$('showIncompleteBtn').addEventListener('click',()=>filterMissing('any'));$('loadMoreSpotsBtn').addEventListener('click',()=>loadList(true));$('searchInput').addEventListener('keydown',event=>{if(event.key==='Enter')loadList();});$('statusFilter').addEventListener('change',renderList);$('cityFilter').addEventListener('change',()=>loadList());$('provinceFilter').addEventListener('change',()=>{$('cityFilter').value='';updateCityOptions();loadList();});$('refreshStatsBtn').addEventListener('click',loadStats);
   $('newProvinceSelect').addEventListener('change',()=>{const code=$('newProvinceSelect').value;populateCityOptions(code);const province=(state.regions||[]).find(item=>item.code===code);updateCurrentCity(province);focusRegion(code);});$('newCitySelect').addEventListener('change',()=>{const region=selectedRegion();updateCurrentCity(region);focusRegion(region&&region.code);});$('useClickedLocationBtn').addEventListener('click',useClickedMapLocation);$('applyPoiDraftBtn').addEventListener('click',applyPOIDraft);
   $('newBtn').addEventListener('click',()=>{state.newSpot=true;fillForm({status:'draft',manual_edited:true});});$('closeDetailBtn').addEventListener('click',()=>$('detailModal').close());$('detailModal').addEventListener('click',event=>{if(event.target===$('detailModal'))$('detailModal').close();});
   $('saveBtn').addEventListener('click',save);$('generateDescriptionBtn').addEventListener('click',event=>{event.preventDefault();if(event.currentTarget.getAttribute('aria-disabled')!=='true')generateScenicDescription();});$('photoFile').addEventListener('change',updateUploadPhotoPreview);$('copySpotIdBtn').addEventListener('click',copySpotId);$('chooseMapLocationBtn').addEventListener('click',()=>{if(state.map)setMapSelectionMode(!state.selectingMapLocation);});$('resetMapLocationBtn').addEventListener('click',resetMapLocation);
   ['nameInput','categoryInput','addressInput','descriptionInput'].forEach(id=>$(id).addEventListener('input',updateSaveButton));
   $('closeRelatedTracksBtn').addEventListener('click',()=>$('relatedTracksModal').close());$('relatedTracksModal').addEventListener('click',event=>{if(event.target===$('relatedTracksModal'))$('relatedTracksModal').close();});$('loadMoreRelatedTracksBtn').addEventListener('click',()=>loadRelatedTracks(true));
+  loadFilterRegions();
   Promise.all([loadList(),loadStats()]).then(syncProviderContent);
   const deepLinkSpotID=(new URLSearchParams(window.location.search).get('spot_id')||'').trim();
   if(deepLinkSpotID)loadSpot(deepLinkSpotID);

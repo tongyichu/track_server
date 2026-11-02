@@ -1059,16 +1059,17 @@ func (h *Handler) ListUsers(ctx context.Context, c *app.RequestContext) {
 	}
 	limit := parseAdminListLimit(string(c.Query("limit")))
 	filter := repository.AdminUserListFilter{
-		Title:      strings.TrimSpace(string(c.Query("title"))),
-		CityCode:   strings.TrimSpace(string(c.Query("city_code"))),
-		Gender:     strings.TrimSpace(string(c.Query("gender"))),
-		ZodiacSign: strings.TrimSpace(string(c.Query("zodiac_sign"))),
+		Title:        strings.TrimSpace(string(c.Query("title"))),
+		ProvinceCode: strings.TrimSpace(string(c.Query("province_code"))),
+		CityCode:     strings.TrimSpace(string(c.Query("city_code"))),
+		Gender:       strings.TrimSpace(string(c.Query("gender"))),
+		ZodiacSign:   strings.TrimSpace(string(c.Query("zodiac_sign"))),
 	}
 	if utf8.RuneCountInString(filter.Title) > 128 {
 		c.JSON(http.StatusBadRequest, utils.H{"error": "title exceeds 128 characters"})
 		return
 	}
-	if len(filter.CityCode) > 32 {
+	if len(filter.CityCode) > 32 || len(filter.ProvinceCode) > 32 {
 		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid city_code"})
 		return
 	}
