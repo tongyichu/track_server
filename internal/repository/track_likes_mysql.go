@@ -67,6 +67,31 @@ func (r *MySQLTrackLikeRepository) CountReceived(ctx context.Context, ownerID in
 	return count, err
 }
 
+func (r *MySQLTrackLikeRepository) ListLikedByUser(ctx context.Context, userID int64, cursor *models.TrackLikeCursor, limit int) ([]*models.TrackLike, error) {
+	query := `SELECT user_id, track_id, created_at FROM track_likes WHERE user_id=?`
+	args := []interface{}{userID}
+	if cursor != nil {
+		query += ` AND (created_at < ? OR (created_at = ? AND track_id < ?))`
+		args = append(args, cursor.CreatedAt, cursor.CreatedAt, cursor.TrackID)
+	}
+	query += ` ORDER BY created_at DESC, track_id DESC LIMIT ?`
+	args = append(args, limit)
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := make([]*models.TrackLike, 0, limit)
+	for rows.Next() {
+		var item models.TrackLike
+		if err := rows.Scan(&item.UserID, &item.TrackID, &item.CreatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, &item)
+	}
+	return items, rows.Err()
+}
+
 func ensureMySQLTrackLikeIndex(ctx context.Context, db *sql.DB) error {
 	var count int
 	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='track_likes' AND INDEX_NAME='idx_track_likes_track_time'`).Scan(&count); err != nil {

@@ -26,6 +26,7 @@
 | 点赞轨迹 | POST | `/track/:track_id/like` | 是 | [track-likes.md](track-likes.md) |
 | 取消点赞 | DELETE | `/track/:track_id/like` | 是 | [track-likes.md](track-likes.md) |
 | 轨迹点赞状态 | GET | `/track/:track_id/like/status` | 是 | [track-likes.md](track-likes.md) |
+| 当前用户点赞过的轨迹列表（与收藏列表同构） | GET | `/track/liked/list` | 是 | [track-likes.md](track-likes.md) |
 | 收藏轨迹（返回收藏状态及总数） | POST | `/track_collect` | 是 | [collect-navigation.md](collect-navigation.md#5-收藏轨迹) |
 | 取消收藏轨迹（返回收藏状态及总数） | DELETE | `/track_collect` | 是 | [collect-navigation.md](collect-navigation.md#6-取消收藏轨迹) |
 | 轨迹搜索列表（支持 `city_code` / `track_type` 筛选） | GET | `/track/search/list` | 是 | [track.md](track.md#7-轨迹搜索列表) |

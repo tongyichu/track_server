@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -14,6 +15,8 @@ type TrackLikeRepository interface {
 	SetLike(context.Context, int64, string, bool) error
 	Stats(context.Context, int64, []string) (map[string]models.TrackLikeStats, error)
 	CountReceived(context.Context, int64) (int64, error)
+	// ListLikedByUser 按 created_at desc, track_id desc 返回用户点赞记录，cursor 之后的严格更小项，最多 limit 条。
+	ListLikedByUser(ctx context.Context, userID int64, cursor *models.TrackLikeCursor, limit int) ([]*models.TrackLike, error)
 }
 
 type InMemoryTrackLikeRepository struct {
@@ -50,6 +53,39 @@ func (r *InMemoryTrackLikeRepository) Stats(_ context.Context, userID int64, ids
 		result[id] = models.TrackLikeStats{Liked: r.likes[id][userID] != nil, LikeCount: int64(len(r.likes[id]))}
 	}
 	return result, nil
+}
+
+func (r *InMemoryTrackLikeRepository) ListLikedByUser(_ context.Context, userID int64, cursor *models.TrackLikeCursor, limit int) ([]*models.TrackLike, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	items := make([]*models.TrackLike, 0)
+	for trackID, users := range r.likes {
+		like, ok := users[userID]
+		if !ok || like == nil {
+			continue
+		}
+		if cursor != nil {
+			if like.CreatedAt.After(cursor.CreatedAt) {
+				continue
+			}
+			if like.CreatedAt.Equal(cursor.CreatedAt) && trackID >= cursor.TrackID {
+				continue
+			}
+		}
+		copied := *like
+		copied.TrackID = trackID
+		items = append(items, &copied)
+	}
+	sort.Slice(items, func(i, j int) bool {
+		if !items[i].CreatedAt.Equal(items[j].CreatedAt) {
+			return items[i].CreatedAt.After(items[j].CreatedAt)
+		}
+		return items[i].TrackID > items[j].TrackID
+	})
+	if limit > 0 && len(items) > limit {
+		items = items[:limit]
+	}
+	return items, nil
 }
 
 func (r *InMemoryTrackLikeRepository) CountReceived(ctx context.Context, ownerID int64) (int64, error) {

@@ -125,7 +125,7 @@ track_server/
 
 - 评论入口为 `CommentService` / `CommentRepository`，协议见 `docs/api/track-comments.md`。沿用点赞的轨迹可见范围；主评论和回复按创建时间、ID 倒序游标分页，回复以 root_id 平铺、reply_to_id 引用直接目标。轨迹详情/列表直接下发 comment_count/can_comment，列表按当前页批量读取计数；发布/删除响应带回总数，不另设评论状态接口。评论页只附最新作者回复摘要；总数、回复数、赞踩数随事务维护，发布以 user_id + client_comment_id 幂等。删除主评论保留有回复的占位，删除引用目标不得下发其原文。评论图片先预约 ID 再 OSS 直传并校验归属，私有缓存不挂通用 static。MySQL/Mongo/内存三实现保持一致，Mongo 评论写入要求副本集。账号限制在 CommentService 中覆盖发布、图片预约和非零评价，允许本人删除与取消评价。
 
-- 轨迹点赞独立于收藏，`track_likes` 以用户与轨迹唯一关系保证 POST/DELETE 幂等。个人获赞总数只统计其他用户对正常公开、已结束、raw_track_url 非空轨迹的现存点赞，排除作者自赞。个人主页仅展示获赞数；获赞逐条列表、聚合轨迹列表和点赞人名单接口已移除，不保留旧列表兼容入口。有效点赞关系长期保留，用于轨迹点赞状态、轨迹点赞数和个人获赞总数；允许自赞并计入轨迹点赞数，受限账号不能新增点赞但可取消。修改时同步三种仓储、用户详情计数、详情/列表的浏览者状态及 `docs/api/track-likes.md`。
+- 轨迹点赞独立于收藏，`track_likes` 以用户与轨迹唯一关系保证 POST/DELETE 幂等。个人获赞总数只统计其他用户对正常公开、已结束、raw_track_url 非空轨迹的现存点赞，排除作者自赞。个人主页展示获赞数并提供「喜欢」tab：当前用户点赞过的轨迹列表经 `GET /track/liked/list` 下发，协议与收藏列表完全同构（`TrackService.ListLikedTracks` 按点赞 created_at desc, track_id desc 游标翻页，剔除删除/私密/进行中，响应复用 `CollectedTrackSummaryPage`）；获赞逐条列表和点赞人名单接口不提供。有效点赞关系长期保留，用于轨迹点赞状态、轨迹点赞数、个人获赞总数和喜欢列表；允许自赞并计入轨迹点赞数，受限账号不能新增点赞但可取消。修改时同步三种仓储、用户详情计数、详情/列表的浏览者状态及 `docs/api/track-likes.md`。
 
 - 客态个人主页的 `GET /user/:user_id/tracks` 和 `GET /user/:user_id/collections` 使用路径用户作为列表所属用户、JWT 用户作为浏览者；`collected` 必须按浏览者计算。已传轨迹在仓储分页前过滤私密、删除、进行中和原始轨迹地址为空的记录；收藏列表跳过失效及不可公开查看的记录后继续补页。`total_count` 只统计接口可见记录，不复用包含私密轨迹的用户详情统计。主态继续使用原有本人列表接口。三种仓储实现与协议入口见 `internal/repository/profile_tracks.go`、`internal/service/profile_tracks.go`、`docs/api/user.md`。
 

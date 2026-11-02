@@ -86,6 +86,32 @@ func receivedLikesPipeline(ownerID int64) mongo.Pipeline {
 		bson.D{{Key: "$match", Value: bson.M{"user_id": bson.M{"$ne": ownerID}, "track.user_id": ownerID, "track.status": models.TrackStatusNormal, "track.is_running": false, "track.raw_track_url": bson.M{"$type": "string", "$regex": `\S`}}}},
 	}
 }
+func (r *MongoTrackLikeRepository) ListLikedByUser(ctx context.Context, userID int64, cursor *models.TrackLikeCursor, limit int) ([]*models.TrackLike, error) {
+	filter := bson.M{"user_id": userID}
+	if cursor != nil {
+		filter["$or"] = bson.A{
+			bson.M{"created_at": bson.M{"$lt": cursor.CreatedAt}},
+			bson.M{"created_at": cursor.CreatedAt, "track_id": bson.M{"$lt": cursor.TrackID}},
+		}
+	}
+	findOptions := options.Find().
+		SetSort(bson.D{{Key: "created_at", Value: -1}, {Key: "track_id", Value: -1}}).
+		SetLimit(int64(limit))
+	cur, err := r.collection.Find(ctx, filter, findOptions)
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+	items := make([]*models.TrackLike, 0, limit)
+	for cur.Next(ctx) {
+		var item models.TrackLike
+		if err := cur.Decode(&item); err != nil {
+			return nil, err
+		}
+		items = append(items, &item)
+	}
+	return items, cur.Err()
+}
 func (r *MongoTrackLikeRepository) CountReceived(ctx context.Context, ownerID int64) (int64, error) {
 	pipeline := append(receivedLikesPipeline(ownerID), bson.D{{Key: "$count", Value: "count"}})
 	cur, err := r.collection.Aggregate(ctx, pipeline)

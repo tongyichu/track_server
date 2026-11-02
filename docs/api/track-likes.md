@@ -27,7 +27,17 @@
 
 用户详情继续返回 `received_like_count`：只统计其他用户对该用户正常公开、已结束且 `raw_track_url` 非空轨迹的现存点赞，排除作者自赞。私密、已删除、进行中、未上传轨迹不计入；恢复公开后其仍存在的点赞关系恢复计数。
 
-个人主页仅展示获赞数，不提供列表入口。获赞逐条列表、聚合轨迹列表及单条轨迹点赞人名单接口均已移除，不再兼容旧列表入口；原路径返回 404。
+获赞逐条列表及单条轨迹点赞人名单接口不提供，原路径返回 404。
+
+## 我喜欢的轨迹列表
+
+`GET /track/liked/list?cursor=<cursor>&limit=<limit>`（业务 JWT）
+
+返回**当前登录用户点赞过的轨迹列表**，协议与 `GET /track/collected/list` 完全同构：
+
+- 按点赞记录的 `created_at` 倒序（`created_at desc, track_id desc`）游标翻页，`cursor` 原样透传 `next_cursor`；`has_more`、`total_count` 语义与收藏列表一致。
+- 列表剔除删除/私密/进行中轨迹；`total_count` 只统计当前可见记录。
+- items 字段与收藏列表摘要一致，包含浏览者视角的 `liked` / `like_count` / `collected` / `collect_count` / `comment_count` / `can_comment` / `is_featured` / `primary_scenic_spot` 等。
 
 ## 现有响应新增字段
 
