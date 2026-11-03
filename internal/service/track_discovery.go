@@ -15,6 +15,7 @@ import (
 type DiscoverSpot struct {
 	ID          string                        `json:"id"`
 	Name        string                        `json:"name"`
+	ScenicGrade string                        `json:"scenic_grade,omitempty"`
 	Description string                        `json:"description,omitempty"`
 	CoverURL    string                        `json:"cover_url"`
 	SourceURL   string                        `json:"source_url,omitempty"`
@@ -208,7 +209,7 @@ func (s *TrackService) DiscoverSpots(ctx context.Context, cityCode, cursor strin
 				AuthorURL: photo.AttributionURL, SourceURL: photo.SourceURL,
 			})
 		}
-		page.Items = append(page.Items, DiscoverSpot{ID: spot.ID, Name: spot.Name, Description: spot.Description, CoverURL: cover, SourceURL: source, Photos: photos})
+		page.Items = append(page.Items, DiscoverSpot{ID: spot.ID, Name: spot.Name, ScenicGrade: spot.ScenicGrade, Description: spot.Description, CoverURL: cover, SourceURL: source, Photos: photos})
 	}
 	page.HasMore = end < len(ranked)
 	if page.HasMore {

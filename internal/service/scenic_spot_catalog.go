@@ -61,6 +61,14 @@ func validateScenicSpot(v *models.ScenicSpot) error {
 	v.Description = strings.TrimSpace(v.Description)
 	v.Address = strings.TrimSpace(v.Address)
 	v.Category = strings.TrimSpace(v.Category)
+	if strings.TrimSpace(v.ScenicGrade) != "" {
+		v.ScenicGrade = normalizeScenicGrade(v.ScenicGrade)
+		if v.ScenicGrade == "" {
+			return invalidScenicSpot("scenic_grade must be 1A, 2A, 3A, 4A or 5A")
+		}
+	} else {
+		v.ScenicGrade = ""
+	}
 	v.CityCode = strings.TrimSpace(v.CityCode)
 	v.CityName = strings.TrimSpace(v.CityName)
 	if utf8.RuneCountInString(v.Name) > 160 || utf8.RuneCountInString(v.Description) > 8000 || utf8.RuneCountInString(v.Address) > 500 || utf8.RuneCountInString(v.Category) > 100 || len(v.Aliases) > 40 || len(v.Photos) > 30 || len(v.Sources) > 8 {
@@ -129,6 +137,7 @@ type ScenicSpotProviderContentBackfillResult struct {
 	Scanned     int    `json:"scanned"`
 	Synced      int    `json:"synced"`
 	Coordinates int    `json:"coordinates"`
+	Grades      int    `json:"grades"`
 	NoSource    int    `json:"no_source"`
 	Skipped     int    `json:"skipped"`
 	Failed      int    `json:"failed"`
@@ -163,6 +172,21 @@ func (s *ScenicSpotCatalogService) BackfillProviderContent(ctx context.Context, 
 		out.NextCursor = spots[len(spots)-1].ID
 	}
 	for _, spot := range spots {
+		if spot != nil && spot.Status == models.ScenicSpotActive {
+			collected, err := s.syncScenicGrade(ctx, spot, operator)
+			if err != nil {
+				out.Failed++
+				// A grade API failure must not prevent the existing text/photo sync.
+				latest, reloadErr := s.spots.GetScenicSpot(ctx, spot.ID)
+				if reloadErr != nil {
+					continue
+				}
+				spot = latest
+			}
+			if collected {
+				out.Grades++
+			}
+		}
 		if spot == nil || spot.Status == models.ScenicSpotMerged || spot.ProviderDataStatus == "no_source" {
 			out.Skipped++
 			continue
@@ -351,6 +375,11 @@ func (s *ScenicSpotCatalogService) Create(ctx context.Context, operator string, 
 	v.UpdatedAt = v.CreatedAt
 	v.CreatedBy = operator
 	v.UpdatedBy = operator
+	v.ScenicGradeSource, v.ScenicGradeStatus, v.ScenicGradeCheckedAt = "", "", nil
+	if v.ScenicGrade != "" {
+		now := time.Now()
+		v.ScenicGradeSource, v.ScenicGradeStatus, v.ScenicGradeCheckedAt = "manual", "manual", &now
+	}
 	for _, source := range v.Sources {
 		if old, err := s.spots.FindScenicSpotBySource(ctx, source.Provider, source.ProviderID); err == nil && old.ID != "" {
 			return nil, repository.ErrAlreadyExists
@@ -364,13 +393,16 @@ func (s *ScenicSpotCatalogService) Create(ctx context.Context, operator string, 
 			v.Description = description
 		}
 	}
+	if err := s.collectScenicGrade(ctx, v); err != nil {
+		log.Printf("scenic grade lookup failed: spot=%s err=%v", v.ID, err)
+	}
 	if err := s.spots.CreateScenicSpot(ctx, v); err != nil {
 		return nil, err
 	}
 	s.audit(ctx, v.ID, "create", operator, "active spot created", nil, v)
 	return v, nil
 }
-func (s *ScenicSpotCatalogService) Update(ctx context.Context, operator, id string, expected int64, v *models.ScenicSpot) (*models.ScenicSpot, error) {
+func (s *ScenicSpotCatalogService) Update(ctx context.Context, operator, id string, expected int64, v *models.ScenicSpot, gradeProvided ...bool) (*models.ScenicSpot, error) {
 	old, err := s.spots.GetScenicSpot(ctx, id)
 	if err != nil {
 		return nil, err
@@ -390,14 +422,28 @@ func (s *ScenicSpotCatalogService) Update(ctx context.Context, operator, id stri
 	v.Version = expected + 1
 	v.UpdatedAt = time.Now()
 	v.UpdatedBy = operator
+	// Grade provenance is server-owned. Older admin callers can omit the new field.
+	v.ScenicGradeSource, v.ScenicGradeStatus, v.ScenicGradeCheckedAt = old.ScenicGradeSource, old.ScenicGradeStatus, old.ScenicGradeCheckedAt
+	if len(gradeProvided) > 0 && !gradeProvided[0] {
+		v.ScenicGrade = old.ScenicGrade
+	}
 	if err := validateScenicSpot(v); err != nil {
 		return nil, err
+	}
+	if v.ScenicGrade != old.ScenicGrade {
+		now := time.Now()
+		v.ScenicGradeSource, v.ScenicGradeStatus, v.ScenicGradeCheckedAt = "manual", "manual", &now
+	} else if scenicGradeAMapSource(v) != scenicGradeAMapSource(old) {
+		resetCollectedScenicGrade(v)
 	}
 	for _, source := range v.Sources {
 		found, e := s.spots.FindScenicSpotBySource(ctx, source.Provider, source.ProviderID)
 		if e == nil && found.ID != id {
 			return nil, repository.ErrAlreadyExists
 		}
+	}
+	if err := s.collectScenicGrade(ctx, v); err != nil {
+		log.Printf("scenic grade lookup failed: spot=%s err=%v", v.ID, err)
 	}
 	if err := s.spots.UpdateScenicSpot(ctx, v, expected); err != nil {
 		return nil, err
@@ -522,6 +568,10 @@ func (s *ScenicSpotCatalogService) VerifySource(ctx context.Context, operator, s
 	}
 	spot.ProviderDataStatus = ""
 	spot.ProviderDataFetchedAt = nil
+	resetCollectedScenicGrade(spot)
+	if err := s.collectScenicGrade(ctx, spot); err != nil {
+		log.Printf("scenic grade lookup failed: spot=%s err=%v", spot.ID, err)
+	}
 	expected := spot.Version
 	spot.Version++
 	spot.UpdatedAt = now
@@ -564,6 +614,7 @@ func (s *ScenicSpotCatalogService) Merge(ctx context.Context, operator, targetID
 		return nil, repository.ErrConflict
 	}
 	sourcesChanged := false
+	previousGradeSource := scenicGradeAMapSource(target)
 	for _, candidate := range source.Sources {
 		found := false
 		for _, current := range target.Sources {
@@ -581,6 +632,12 @@ func (s *ScenicSpotCatalogService) Merge(ctx context.Context, operator, targetID
 		return nil, errors.New("merge would exceed maximum provider sources")
 	}
 	if sourcesChanged {
+		if scenicGradeAMapSource(target) != previousGradeSource {
+			resetCollectedScenicGrade(target)
+		}
+		if err := s.collectScenicGrade(ctx, target); err != nil {
+			log.Printf("scenic grade lookup failed: spot=%s err=%v", target.ID, err)
+		}
 		expectedTarget := target.Version
 		target.Version++
 		target.UpdatedAt = time.Now()
@@ -987,6 +1044,7 @@ func (s *ScenicSpotCatalogService) syncTrackPlaceMatch(ctx context.Context, trac
 	}
 	s.audit(ctx, spot.ID, action, operator, details, nil, link)
 	if created {
+		go s.autoCollectScenicGrade(spot.ID)
 		// 新户外目的地异步生成简介，不阻塞识别任务；失败保留空简介，可由后台手动补齐。
 		go s.autoGenerateSpotDescription(spot.ID)
 	}
@@ -1103,7 +1161,7 @@ func (s *ScenicSpotCatalogService) PrimarySpots(ctx context.Context, trackIDs []
 		if !scenicSpotClientVisible(spot) {
 			continue
 		}
-		item := &models.TrackPrimaryScenicSpot{ID: spot.ID, Name: spot.Name, Category: spot.Category, Description: spot.Description, Address: spot.Address, Sources: spot.Sources}
+		item := &models.TrackPrimaryScenicSpot{ID: spot.ID, Name: spot.Name, ScenicGrade: spot.ScenicGrade, Category: spot.Category, Description: spot.Description, Address: spot.Address, Sources: spot.Sources}
 		for _, photo := range spot.Photos {
 			item.Photos = append(item.Photos, models.TrackScenicSpotPhoto{URL: photo.URL, Title: photo.Caption, Author: photo.Attribution, AuthorURL: photo.AttributionURL, SourceURL: photo.SourceURL})
 		}

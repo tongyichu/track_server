@@ -371,10 +371,15 @@ GET /admin/api/users
 ```
 
 **主景点目录**：
+
+景点详情底部提供红色“删除景点”按钮，仅已有 active 景点且具备 `scenic_spots` 写权限时显示。删除复用 `POST /scenic-spots/:spot_id/status`，提交 `status=archived` 与详情 `expected_version`；成功后从默认目录和客户端隐藏，保留轨迹、图片、内部关联和历史记录，不做物理删除。复用 `AdminUI.confirm` 二次确认；原生详情 dialog 需先关闭以免遮住 Bootstrap 确认框，取消后恢复原表单。409 不自动重试或覆盖草稿，提示重新打开详情；成功后关闭详情、清理对应深链并刷新目录与统计。
+
+景区等级：详情表单提供“暂无等级 / 1A / 2A / 3A / 4A / 5A”选择，沿用 scenic_spots 写权限和 expected_version CAS；清空用 scenic_grade=""，省略保留，null/非法等级拒绝。服务端托管 scenic_grade_source/status/checked_at，前端不得设置采集来源。新建及来源变更在本次保存内尝试采集，保证返回版本仍能用于紧接着上传图片；自动识别新建则异步采集。存量资料同步同时独立补等级，进度累计 grades；无等级不反复请求，失败后续重试，人工维护不覆盖。仅接入高德 v5 detail 的 business.keytag，Google 不提供 A 级；未知不等于未评级。完整契约见 docs/track-place-discovery.md 的“景区等级采集与下发”。
+
 ```
 [admin UI] /admin/scenic_spots.html
   → GET /admin/api/scenic-spots/statistics 汇总有效景点数、覆盖城市数、关联有效轨迹数、待完善景点数、空间分布和新增入库趋势；days=1|7|30，默认 30
-  → POST /admin/api/scenic-spots/provider-content/backfill 首次加载时游标分批同步供应商文字和图片；已同步的存量景点仅用轻量地点详情补缺失坐标，provider_coordinates_status 防止重复查询
+  → POST /admin/api/scenic-spots/provider-content/backfill 首次加载时游标分批同步供应商文字、图片和独立的 scenic_grade；文字图片已同步也补采等级。坐标缺失用轻量地点详情补齐，坐标与等级各自的同步状态防止重复查询
   → POST /admin/api/scenic-spots/description/generate 使用详情弹窗当前表单内容查询 Kimi，将结果返回并填入简介编辑框；存量记录须由管理员逐条点击，保存按钮负责入库
   → GET /admin/api/scenic-spots/:spot_id/map 通过后台鉴权代理返回高德静态地图图片，供应商密钥不下发浏览器
   → GET /admin/api/scenic-spots/map-config 向已登录管理员下发高德 Web Key；AMAP_SECURITY_JS_CODE 仅由同源地图服务代理使用，不下发浏览器

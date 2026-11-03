@@ -27,7 +27,11 @@ func buildTrackLabels(shape, sport string, spot *models.TrackPrimaryScenicSpot, 
 		labels = append(labels, label)
 	}
 	if spot != nil && strings.TrimSpace(spot.ID) != "" && strings.TrimSpace(spot.Name) != "" {
-		labels = append(labels, models.TrackLabel{Type: "scenic_spot", Value: true, Code: spot.ID, Name: strings.TrimSpace(spot.Name), ThemeColor: config.TrackScenicLabelColor, ThemeColorDark: config.TrackScenicLabelColorDark})
+		name := strings.TrimSpace(spot.Name)
+		if grade := normalizeScenicGrade(spot.ScenicGrade); grade != "" {
+			name += "·" + grade
+		}
+		labels = append(labels, models.TrackLabel{Type: "scenic_spot", Value: true, Code: spot.ID, Name: name, ThemeColor: config.TrackScenicLabelColor, ThemeColorDark: config.TrackScenicLabelColorDark})
 	}
 	if shape = strings.TrimSpace(shape); shape != "" {
 		labels = append(labels, models.TrackLabel{Type: "shape", Value: true, Code: shape, Name: shape, ThemeColor: config.TrackShapeLabelColor, ThemeColorDark: config.TrackShapeLabelColorDark})
