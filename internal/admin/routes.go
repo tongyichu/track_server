@@ -111,6 +111,7 @@ func (m *Module) Close() {
 // - GET  /admin/api/tracks                 轨迹列表（鉴权，cursor 翻页）
 // - GET  /admin/api/cities                 城市 Code 与名称选项（鉴权）
 // - GET  /admin/api/tracks/:track_id       轨迹详情（鉴权）
+// - GET  /admin/api/tracks/:track_id/assets/:asset 轨迹图片/原始文件下载（轨迹查看权限）
 // - PUT  /admin/api/tracks/:track_id       更新轨迹业务字段（鉴权）
 // - DELETE /admin/api/tracks/:track_id     删除轨迹（鉴权，软删除并清理关联索引/收藏）
 // - POST /admin/api/tracks/:track_id/restore 恢复已删除轨迹（鉴权，还原公开并重新排队地图索引）
@@ -239,6 +240,7 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	api.POST("/regions/research", m.Handler.ResearchRegion)
 	api.POST("/regions/images/import", m.Handler.ImportRegionImage)
 	api.GET("/tracks/:track_id", m.Handler.GetTrack)
+	api.GET("/tracks/:track_id/assets/:asset", m.Handler.GetTrackAsset)
 	api.GET("/tracks/:track_id/map-preview", m.Handler.GetTrackMapPreview)
 	api.POST("/tracks/:track_id/labels/generate", m.Handler.GenerateTrackShape)
 	api.POST("/tracks/:track_id/place-refresh", m.Handler.RefreshTrackPlaceCandidate)

@@ -48,7 +48,7 @@ func requestPermission(c *app.RequestContext) (string, bool) {
 		return "accounts", write
 	case "users":
 		return "users", write
-	// AI label previews also require write permission because they consume quota.
+	// Asset GETs use tracks read permission; AI label POSTs require write permission and consume quota.
 	case "tracks", "place-candidates":
 		return "tracks", write
 	case "scenic-spots":

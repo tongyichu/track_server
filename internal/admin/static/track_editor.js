@@ -1,6 +1,75 @@
 (function () {
   'use strict';
 
+  function trackAssets(trackID, track) {
+    const section = document.createElement('section');
+    section.className = 'admin-track-assets';
+    const fileRow = document.createElement('div');
+    fileRow.className = 'admin-track-file';
+    const assetURL = asset => '/admin/api/tracks/' + encodeURIComponent(trackID) + '/assets/' + asset;
+    const label = document.createElement('strong');
+    label.textContent = '原始轨迹文件';
+    if (String(track.raw_track_url || '').trim()) {
+      const download = document.createElement('a');
+      download.className = 'btn btn-sm btn-outline-primary admin-track-download';
+      download.href = assetURL('raw');
+      download.download = '';
+      download.title = '下载原始轨迹文件';
+      download.setAttribute('aria-label', '下载原始轨迹文件');
+      download.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 16v4h14v-4"/></svg>';
+      fileRow.append(download, label);
+    } else {
+      const missing = document.createElement('span');
+      missing.className = 'text-secondary';
+      missing.textContent = '缺失';
+      fileRow.append(label, missing);
+    }
+    section.appendChild(fileRow);
+    const grid = document.createElement('div');
+    grid.className = 'admin-track-preview-grid';
+    const previews = track.preview_images || {};
+    [
+      ['square_day', '方形日间', previews.square_day_url],
+      ['square_night', '方形夜间', previews.square_night_url],
+      ['landscape_day', '横版日间', previews.landscape_day_url],
+      ['landscape_night', '横版夜间', previews.landscape_night_url],
+      ['legacy', '旧版截图', track.track_screenshot_url],
+      ['no_map', '无地图截图', track.track_no_map_bg_screenshot_url]
+    ].forEach(function (asset) {
+      const figure = document.createElement('figure');
+      const caption = document.createElement('figcaption');
+      caption.textContent = asset[1];
+      const stage = document.createElement('div');
+      stage.className = 'admin-track-preview-image';
+      if (String(asset[2] || '').trim()) {
+        const image = document.createElement('img');
+        image.src = assetURL(asset[0]);
+        image.alt = asset[1] + '预览图';
+        image.loading = 'lazy';
+        image.tabIndex = 0;
+        image.setAttribute('role', 'button');
+        image.addEventListener('keydown', function (event) {
+          if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); image.click(); }
+        });
+        image.addEventListener('error', function () {
+          const error = document.createElement('span');
+          error.textContent = '加载失败';
+          const retry = document.createElement('button');
+          retry.type = 'button'; retry.className = 'btn btn-sm btn-outline-secondary'; retry.textContent = '重试';
+          retry.addEventListener('click', function () { stage.replaceChildren(image); image.src = assetURL(asset[0]); });
+          stage.replaceChildren(error, retry);
+        });
+        stage.appendChild(image);
+      } else {
+        stage.textContent = '无';
+      }
+      figure.append(caption, stage);
+      grid.appendChild(figure);
+    });
+    section.appendChild(grid);
+    return section;
+  }
+
   async function openTrackEditor(trackID, options) {
     options = options || {};
     if (!trackID) return false;
@@ -36,7 +105,6 @@
       const pad = number => String(number).padStart(2, '0');
       return date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate()) + 'T' + pad(date.getHours()) + ':' + pad(date.getMinutes());
     }
-    const preview = track.preview_images || {};
     const isDeleted = track.status === 0;
     const mapPreview = window.AdminTrackMapPreview ? window.AdminTrackMapPreview.create(trackPayload.geo, { trackID: trackID, coordinateSystem: track.coordinate_system }) : null;
     const labelAbort = new AbortController();
@@ -74,6 +142,8 @@
         return 'deleted';
       },
       wide: true,
+      className: 'admin-track-editor',
+      afterFields: trackAssets(trackID, track),
       beforeFields: (function () {
         const wrapper = document.createElement('div');
         wrapper.className = 'admin-track-detail-side';
@@ -157,9 +227,9 @@
         return wrapper;
       })(),
       fields: [
-        { name: 'user_id', label: '用户 ID（不可修改）', value: trackPayload.user_id_text || '', readOnly: true },
+        { name: 'user_id', label: '归属用户 ID', value: trackPayload.user_id_text || '', readOnly: true },
         { name: 'session_id', label: '同行会话 ID', value: track.session_id },
-        { name: 'shape_label', label: '形象标签（留空表示无；仅使用明确且适宜的形象）', value: track.shape_label || '', maxLength: 32 },
+        { name: 'shape_label', label: '形象标签', placeholder: '明确且适宜的形象，留空表示无', value: track.shape_label || '', maxLength: 32 },
         { name: 'title', label: '轨迹标题', value: track.title, maxLength: 128 },
         { name: 'city_code', label: '城市', type: 'select', value: track.city_code, options: cityFields },
         { name: 'locate_addr', label: '位置描述', value: track.locate_addr, maxLength: 512 },
@@ -177,14 +247,7 @@
         { name: 'elevation_gain', label: '累计爬升（米）', type: 'number', value: track.elevation_gain },
         { name: 'avg_speed_kmh', label: '平均速度（公里/小时）', type: 'number', value: track.avg_speed_kmh, min: 0, step: 'any' },
         { name: 'is_running', label: '轨迹进行状态', type: 'select', value: track.is_running, options: [{ value: 'false', label: '已结束' }, { value: 'true', label: '进行中' }] },
-        { name: 'status', label: '可见状态', type: 'select', value: track.status, options: [{ value: 1, label: '正常' }, { value: 2, label: '私密' }] },
-        { name: 'raw_track_url', label: '原始轨迹文件 URL', value: track.raw_track_url, maxLength: 255, full: true },
-        { name: 'track_screenshot_url', label: '旧版截图 URL', value: track.track_screenshot_url, maxLength: 255, full: true },
-        { name: 'track_no_map_bg_screenshot_url', label: '无地图截图 URL', value: track.track_no_map_bg_screenshot_url, maxLength: 255, full: true },
-        { name: 'preview_square_day', label: '方形日间预览图 URL', value: preview.square_day_url, maxLength: 2048, full: true },
-        { name: 'preview_square_night', label: '方形夜间预览图 URL', value: preview.square_night_url, maxLength: 2048, full: true },
-        { name: 'preview_landscape_day', label: '横版日间 4:3 预览图 URL', value: preview.landscape_day_url, maxLength: 2048, full: true },
-        { name: 'preview_landscape_night', label: '横版夜间 4:3 预览图 URL', value: preview.landscape_night_url, maxLength: 2048, full: true }
+        { name: 'status', label: '可见状态', type: 'select', value: track.status, options: [{ value: 1, label: '正常' }, { value: 2, label: '私密' }] }
       ]
     });
     if (!values) return false;
@@ -228,10 +291,7 @@
       description_rule_version: Number(values.description_rule_version || 0), start_time: values.start_time,
       end_time: values.end_time, distance: Number(values.distance || 0), duration: Number(values.duration || 0),
       calories_burned: Number(values.calories_burned || 0), elevation_gain: Number(values.elevation_gain || 0),
-      avg_speed_kmh: Number(values.avg_speed_kmh || 0), is_running: values.is_running === 'true', status: Number(values.status),
-      raw_track_url: values.raw_track_url, track_screenshot_url: values.track_screenshot_url,
-      track_no_map_bg_screenshot_url: values.track_no_map_bg_screenshot_url,
-      preview_images: { square_day_url: values.preview_square_day, square_night_url: values.preview_square_night, landscape_day_url: values.preview_landscape_day, landscape_night_url: values.preview_landscape_night }
+      avg_speed_kmh: Number(values.avg_speed_kmh || 0), is_running: values.is_running === 'true', status: Number(values.status)
     };
     try {
       const response = await fetch('/admin/api/tracks/' + encodeURIComponent(trackID), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });

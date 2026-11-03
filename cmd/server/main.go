@@ -669,6 +669,7 @@ func main() {
 			feedbackRepo, trackMapRepo, trackSubmissionRepo, likeRepo, commentRepo,
 		))
 		adminModule.Handler.SetScreenshotCache(screenshotCache)
+		adminModule.Handler.SetTrackAssetCaches(rawTrackCache, previewCache)
 		adminModule.Handler.SetTrackSubmissionService(trackSubmissionSvc)
 		adminModule.Handler.SetScenicSpotCatalogService(scenicSpotCatalogSvc)
 		adminModule.Handler.SetTrackPlaceService(trackPlaceSvc)
