@@ -1053,33 +1053,34 @@ Authorization: Bearer <token>
 
 ## 统一轨迹标签 labels
 
-详情及推荐、搜索、我的轨迹、收藏、喜欢、地图关联列表的轨迹摘要均返回只读 `labels` 数组。先支持三类，固定按 shape → scenic_spot → sport 排列，每类最多一项；缺失数据省略对应项，完全无数据时返回 `[]`。
+详情及推荐、搜索、我的轨迹、收藏、喜欢、地图关联列表的轨迹摘要均返回只读 `labels` 数组。固定按 featured → sport → scenic_spot → shape 排列，每类最多一项；缺失数据省略，完全无数据时返回 `[]`。
 
-| type | value 来源 | name 来源 |
+`value` 为布尔值：true 表示成立，false 或缺失默认不显示。当前服务端只输出成立的标签。具体运动代码、景区 ID、形象名移至 `code`，显示内容仍为 `name`/`name_en`。旧版字符串 value 的客户端缓存由 Android 兼容读取。
+
+| type | code 来源 | name 来源 |
 | --- | --- | --- |
-| `shape` | 持久化 `shape_label`，如“玫瑰花” | 同 value |
-| `scenic_spot` | 已解析主景区 `primary_scenic_spot.id` | 主景区 name |
-| `sport` | 标准化 `track_type` code，如 running | 现有运动类型配置的中文名称；未知类型保留原名 |
+| featured | 固定 featured，投稿审核通过时出现；撤回/待审/驳回/失效不出现 | 精品 / Featured |
+| sport | 标准化 track_type | 运动配置中文/英文名称 |
+| scenic_spot | primary_scenic_spot.id | 主景区名称 |
+| shape | shape_label | 具象名称 |
 
 ```json
-{
-  "labels": [
-    {"type": "shape", "value": "玫瑰花", "name": "玫瑰花", "theme_color": "#B43F83", "theme_color_dark": "#F39ACB"},
-    {"type": "scenic_spot", "value": "SCP-example", "name": "北京奥林匹克公园", "theme_color": "#087F8C", "theme_color_dark": "#69D2DD"},
-    {"type": "sport", "value": "running", "name": "跑步", "name_en": "Running", "theme_color": "#F26A4B", "theme_color_dark": "#FF947A"}
-  ]
-}
+{"labels":[
+  {"type":"featured","value":true,"code":"featured","name":"精品","name_en":"Featured","theme_color":"#9C6500","theme_color_dark":"#F3C969"},
+  {"type":"sport","value":true,"code":"running","name":"跑步","name_en":"Running","theme_color":"#F26A4B","theme_color_dark":"#FF947A"},
+  {"type":"scenic_spot","value":true,"code":"SCP-example","name":"北京奥林匹克公园","theme_color":"#087F8C","theme_color_dark":"#69D2DD"},
+  {"type":"shape","value":true,"code":"玫瑰花","name":"玫瑰花","theme_color":"#B43F83","theme_color_dark":"#F39ACB"}
+]}
 ```
 
-此示例仅说明格式，不代表已给历史轨迹写入形象。`name_en` 当前仅内置运动类型提供；英文环境有英文名时优先使用，否则使用 name。客户端应允许未知 type，不能把数组位置当类型。
-
-`labels` 不重复持久化，也不接受独立标签写入；修改仍通过各自权威来源（shape_label、景区关联、track_type）。生成标签复用已有批量景区读取和本地运动配置，不新增逐条查询、供应商请求、AI 调用或 KMZ 解析。景区缺失或已清除时不保留陈旧标签，附近候选不作为景区标签。旧 shape_label、primary_scenic_spot、track_type 字段继续保留兼容。当前 Android 只接收模型，标签 UI 后续实现。
+示例只说明格式，不代表历史轨迹已赋形象。labels 不重复持久化，不接受独立写入；权威来源为投稿审核状态、运动类型、主景区、shape_label。不增加供应商或 AI 调用。旧字段保留兼容。Android 详情标题上方统一消费 labels，按上述顺序展示，未知类型排在后面；英文环境优先 name_en，否则 name。labels 为 [] 时不按旧字段补标签，缺失时兼容旧服务端和本地轨迹。
 
 
 标签配色使用与运动类型接口一致的 `theme_color`（日间）及 `theme_color_dark`（夜间），格式为 `#RRGGBB`，语义为标签强调色，不指定背景填充或文字反色。
 
 | 标签类型 | 日间 | 夜间 | 来源 |
 | --- | --- | --- | --- |
+| featured | #9C6500 | #F3C969 | `internal/config/track_label_colors.go`，金色系 |
 | shape | #B43F83 | #F39ACB | `internal/config/track_label_colors.go`，玫紫色系 |
 | scenic_spot | #087F8C | #69D2DD | 同上，青色系 |
 | sport | 对应运动类型 ThemeColor | 对应运动类型 ThemeColorDark | 复用 `DefaultTrackTypeConfigs`，例如跑步为 #F26A4B / #FF947A |

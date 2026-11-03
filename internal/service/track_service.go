@@ -748,7 +748,7 @@ func (s *TrackService) GetTrackDetail(ctx context.Context, trackID string) (*mod
 	if s.places != nil {
 		s.places.ScenicSpotDetails(ctx, track.PrimaryScenicSpot)
 	}
-	track.Labels = buildTrackLabels(track.ShapeLabel, track.TrackType, track.PrimaryScenicSpot)
+	track.Labels = buildTrackLabels(track.ShapeLabel, track.TrackType, track.PrimaryScenicSpot, track.Submission != nil && track.Submission.Status == models.TrackSubmissionStatusApproved)
 	track.PreviewImages = trackPreviewURLs(track.ID, track.PreviewImages)
 	return track, nil
 }
@@ -1345,6 +1345,7 @@ func (s *TrackService) ListCollectedTracks(ctx context.Context, userID int64, in
 		}
 		for _, summary := range summaries {
 			summary.IsFeatured = approved[summary.ID]
+			summary.Labels = buildTrackLabels(summary.ShapeLabel, summary.TrackType, summary.PrimaryScenicSpot, summary.IsFeatured)
 		}
 	}
 	for _, s := range summaries {
@@ -1863,7 +1864,7 @@ func (s *TrackService) fillMyTrackSummaryExtras(ctx context.Context, userID int6
 	for _, summary := range summaries {
 		summary.Collected = collectedByTrack[summary.ID]
 		summary.PrimaryScenicSpot = primaryScenicSpots[summary.ID]
-		summary.Labels = buildTrackLabels(summary.ShapeLabel, summary.TrackType, summary.PrimaryScenicSpot)
+		summary.Labels = buildTrackLabels(summary.ShapeLabel, summary.TrackType, summary.PrimaryScenicSpot, summary.IsFeatured)
 		summary.Liked = likeStats[summary.ID].Liked
 		summary.LikeCount = likeStats[summary.ID].LikeCount
 		if summary.CanComment {
@@ -1986,7 +1987,7 @@ func (s *TrackService) fillTrackSummaryExtras(ctx context.Context, userID int64,
 	// 3) 最后一轮遍历：把准备好的扩展字段写回到每个 summary。
 	for _, summary := range summaries {
 		summary.PrimaryScenicSpot = primaryScenicSpots[summary.ID]
-		summary.Labels = buildTrackLabels(summary.ShapeLabel, summary.TrackType, summary.PrimaryScenicSpot)
+		summary.Labels = buildTrackLabels(summary.ShapeLabel, summary.TrackType, summary.PrimaryScenicSpot, summary.IsFeatured)
 		summary.Liked = likeStats[summary.ID].Liked
 		summary.LikeCount = likeStats[summary.ID].LikeCount
 		if summary.CanComment {

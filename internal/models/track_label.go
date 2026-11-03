@@ -3,7 +3,8 @@ package models
 // TrackLabel is a display projection of existing track metadata, never a second persisted source.
 type TrackLabel struct {
 	Type           string `json:"type"`
-	Value          string `json:"value"`
+	Value          bool   `json:"value"`
+	Code           string `json:"code,omitempty"`
 	Name           string `json:"name"`
 	NameEN         string `json:"name_en,omitempty"`
 	ThemeColor     string `json:"theme_color,omitempty"`

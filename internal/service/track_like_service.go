@@ -184,6 +184,7 @@ func (s *TrackService) ListLikedTracks(ctx context.Context, userID int64, input 
 		}
 		for _, summary := range summaries {
 			summary.IsFeatured = approved[summary.ID]
+			summary.Labels = buildTrackLabels(summary.ShapeLabel, summary.TrackType, summary.PrimaryScenicSpot, summary.IsFeatured)
 		}
 	}
 	for _, s := range summaries {

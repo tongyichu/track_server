@@ -102,7 +102,7 @@ track_server/
 
 ### 稳定默认值
 
-- 标签日夜强调色通过 theme_color/theme_color_dark 下发；sport 直接继承现有运动类型配置，shape/scenic_spot 配色集中在 `internal/config/track_label_colors.go`，未知运动类型不伪造颜色。统一轨迹标签 `labels` 是只读响应投影，按 shape/scenic_spot/sport 组装，类型为 `models.TrackLabel`，入口 `internal/service/track_labels.go`；来自已有 shape_label、主景区、track_type，不再建标签表，不触发额外供应商/AI 请求。详情及各种列表统一填充，缺项省略、空列表返回 []；旧字段保留兼容。
+- 标签日夜强调色通过 theme_color/theme_color_dark 下发；sport 直接继承现有运动类型配置，featured/shape/scenic_spot 配色集中在 `internal/config/track_label_colors.go`，未知运动类型不伪造颜色。统一轨迹标签 `labels` 是只读响应投影，按 featured/sport/scenic_spot/shape 组装，value 为布尔值，code 保存具体内容；精品来自已通过投稿，类型为 `models.TrackLabel`，入口 `internal/service/track_labels.go`；来自已有 shape_label、主景区、track_type，不再建标签表，不触发额外供应商/AI 请求。详情及各种列表统一填充，缺项省略、空列表返回 []；旧字段保留兼容。
 
 - 轨迹具象形象使用独立 `Track.ShapeLabel` / `shape_label`，MySQL `track_records` 启动补列、Mongo 和内存读写一致；创建/更新沿用所有者权限，空串清空，缺省保留。详情与推荐/搜索/我的/收藏/喜欢摘要传递，32字符及控制字符校验在 `internal/service/track_shape.go`；协议见 `docs/api/track.md`。自动生成入口为 `track_narrative_service.go` / `kimi_track_narrative.go`，定时任务和费用边界见 `docs/track-narrative.md`；生成器必须查看一张实际 1:1 预览图并参考用户 title：标题中的形象仅为候选，必须得到轨迹线的整体轮廓和关键特征支持才赋值；标题没有形象时仍需独立识图；图像不支持标题时不沿用标题，可赋予图像明确支持的另一形象。不明确、图片缺失或遮挡严重时留空，不能把地图背景、图标或文字当成轨迹形象。形象标签仅接受积极或中性、适合公开展示的名称；即使相似度高，低俗色情、侮辱辱骂、歧视仇恨、恶意挑衅或其他负面冒犯性形象也不得赋值，含义不明确时留空，不用正面别名包装不当形象。
 

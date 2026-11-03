@@ -613,3 +613,7 @@ assembleDebug、assembleDebugAndroidTest、CountFormatterTest 三项 JVM 测试�
 go build ./... 通过，未运行自动化测试或生产 AI 调用；未提交、推送、部署。新增 x/image WebP 图片头识别依赖，运动和景区 labels 继续直接派生。
 
 投稿错误语言：新增 handler/track_submission_errors.go，按 X-Client-Language 返回中英文及稳定 submission_* error_code。未知内部异常使用通用错误，Android 兼容旧英文错误并按界面语言展示。go build ./... 通过，未运行自动化测试，未部署。
+
+## 2026-11-03 精品与统一标签布尔协议
+
+labels 新增 featured，固定精品/运动/景区/形象顺序；value 为 bool，原具体内容改为 code，不成立省略。详情使用 approved 投稿、各列表在投稿状态补齐后重建标签，沿用既有批量查询。新增精品金色日夜配色。go build ./... 通过，未运行自动化测试，尚未部署。
