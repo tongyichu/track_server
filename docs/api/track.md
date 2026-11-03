@@ -95,7 +95,7 @@
 2. `GET /api/v1/track/description-backfill/:track_id/data?source_version=<version>`：读取完整原始 GPS 点。轨迹已被补齐时返回 `state=already_complete`；记录不可用返回 404，版本变化返回 409。
 3. `POST /api/v1/track/description-backfill/:track_id/complete`，请求 `{"source_version":"<version>","description":"<客户端生成的说明>","description_rule_version":1}`。服务端限制 1 至 1000 个字符，仅自动来源且说明为空或规则版本落后时更新，并以说明、来源、规则版本及轨迹源数据做条件比较；人工说明不会被覆盖。已有最新说明返回 `state=already_complete`，版本变化返回 409 `description_source_changed`。
 
-`track_records.description_source` 标记 `auto`/`manual`，`description_rule_version` 标记自动生成规则版本。MySQL 存量通过默认值视为 `auto/v0`，Mongo 缺失元数据也按 `auto/v0` 解释；当前客户端规则版本为 1。后续升级生成规则时只需提升当前版本，批处理可重新生成所有自动说明；人工说明始终排除。投稿编辑内容仍独立存于投稿记录。
+`track_records.description_source` 标记 `auto`/`manual`/`ai`（AI 来源不进入客户端补齐），`description_rule_version` 标记自动生成规则版本。MySQL 存量通过默认值视为 `auto/v0`，Mongo 缺失元数据也按 `auto/v0` 解释；当前客户端规则版本为 1。后续升级生成规则时只需提升当前版本，批处理可重新生成所有自动说明；人工说明始终排除。投稿编辑内容仍独立存于投稿记录。
 
 ## 1. 创建轨迹
 
@@ -1025,3 +1025,67 @@ Authorization: Bearer <token>
 轨迹详情及列表摘要下发 `liked` 与 `like_count`，点赞和收藏互相独立。点赞、取消点赞和获赞统计见 [track-likes.md](track-likes.md)。
 
 轨迹详情、创建/更新响应及列表摘要直接下发 `comment_count` 与 `can_comment`；前者为未删除主评论与回复总数，后者沿用点赞的轨迹可见范围。不可评论时返回 false/0。客户端首屏复用轨迹信息，点击入口后才加载评论列表，不额外调用评论状态接口。发布/删除响应带回更新后的总数。协议见 [track-comments.md](track-comments.md)。
+
+
+## 轨迹形象标签
+
+轨迹详情与各轨迹列表摘要共用可选 `shape_label`，例如 `"玫瑰花"`。没有明确形象时为空并省略，客户端缺失时按无标签处理；不从标题自动猜测，不与运动类型、主景点或环线属性混用。
+
+既有创建与更新轨迹接口支持可选 `shape_label`，沿用所有者鉴权。省略或传 null 不修改，传空字符串清空；去除首尾空白后最多32个 Unicode 字符，不允许内部控制字符，非法输入返回400。旧客户端不发送该字段，不影响已有标签。MySQL 启动迁移补齐非空默认空串列，Mongo 与内存仓储保持同样的字段读写语义。
+
+后续 AI 生成流程约定同时产出 `description` 与 `shape_label`，例如：
+
+```json
+{"description":"这条路线把玫瑰的花瓣、花茎和叶子串了起来……","shape_label":"玫瑰花"}
+```
+
+形象识别使用**一张实际 1:1 轨迹预览图 + 用户 title**，遵循以下规则：
+
+- 标题提到形象（如“马”“玫瑰花”）时，将其作为候选，核对轨迹线的整体轮廓及关键特征；图像确实相像才赋予该标签，不能只凭标题。
+- 标题没有提到形象时，仍独立分析图像；有明确可辨识的形象就赋予标签，不要求名称里出现同一个词。
+- 标题与图像不符时，不沿用标题中的形象；若图像明确支持另一形象，可采用另一形象，否则留空。
+- 判断对象是轨迹线，不是地图背景、运动图标、起终点标记或文字；不因局部偶然相似而忽略整体轮廓。图片缺失、不清晰、遮挡严重或无法明确判断时留空，不强行凑标签。
+- 内容适宜性独立于形状相似度：只接受积极或中性、适合公开展示的标签，不要求每个形象都表达正面寓意。低俗色情、侮辱辱骂、歧视仇恨、恶意挑衅或其他负面冒犯性形象，即使轮廓清晰也输出空标签。结合图像与标题判断含义，无法确认适宜性时留空；不得用正面别名包装不当形象，也不将其在路线说明中作为卖点宣传。中性的普通动物、植物或物品不因缺少积极寓意而被排除。
+- 识别用短名称输出，例如“玫瑰花”“兔子”；“闭合环线”属于路线结构，不能代替具象形象。上述规则已用于服务端 Kimi 自动生成器；创建/更新接口直接提交形象标签仍仅校验文本格式，不执行视觉核验。
+
+文本应优先使用可信投稿的路线特色、路况与风险，并剔除 DevMode 测试资料；不把单次运动统计冒充普遍体验。服务端已接通后台自动生成说明与形象标签，触发条件、成本限制见 [自动生成说明](../track-narrative.md)；不自动全量回填历史记录，页面标签组件另行实现。标签独立于默认说明及精品投稿说明，修改它不会覆盖这些文案。
+
+
+## 统一轨迹标签 labels
+
+详情及推荐、搜索、我的轨迹、收藏、喜欢、地图关联列表的轨迹摘要均返回只读 `labels` 数组。先支持三类，固定按 shape → scenic_spot → sport 排列，每类最多一项；缺失数据省略对应项，完全无数据时返回 `[]`。
+
+| type | value 来源 | name 来源 |
+| --- | --- | --- |
+| `shape` | 持久化 `shape_label`，如“玫瑰花” | 同 value |
+| `scenic_spot` | 已解析主景区 `primary_scenic_spot.id` | 主景区 name |
+| `sport` | 标准化 `track_type` code，如 running | 现有运动类型配置的中文名称；未知类型保留原名 |
+
+```json
+{
+  "labels": [
+    {"type": "shape", "value": "玫瑰花", "name": "玫瑰花", "theme_color": "#B43F83", "theme_color_dark": "#F39ACB"},
+    {"type": "scenic_spot", "value": "SCP-example", "name": "北京奥林匹克公园", "theme_color": "#087F8C", "theme_color_dark": "#69D2DD"},
+    {"type": "sport", "value": "running", "name": "跑步", "name_en": "Running", "theme_color": "#F26A4B", "theme_color_dark": "#FF947A"}
+  ]
+}
+```
+
+此示例仅说明格式，不代表已给历史轨迹写入形象。`name_en` 当前仅内置运动类型提供；英文环境有英文名时优先使用，否则使用 name。客户端应允许未知 type，不能把数组位置当类型。
+
+`labels` 不重复持久化，也不接受独立标签写入；修改仍通过各自权威来源（shape_label、景区关联、track_type）。生成标签复用已有批量景区读取和本地运动配置，不新增逐条查询、供应商请求、AI 调用或 KMZ 解析。景区缺失或已清除时不保留陈旧标签，附近候选不作为景区标签。旧 shape_label、primary_scenic_spot、track_type 字段继续保留兼容。当前 Android 只接收模型，标签 UI 后续实现。
+
+
+标签配色使用与运动类型接口一致的 `theme_color`（日间）及 `theme_color_dark`（夜间），格式为 `#RRGGBB`，语义为标签强调色，不指定背景填充或文字反色。
+
+| 标签类型 | 日间 | 夜间 | 来源 |
+| --- | --- | --- | --- |
+| shape | #B43F83 | #F39ACB | `internal/config/track_label_colors.go`，玫紫色系 |
+| scenic_spot | #087F8C | #69D2DD | 同上，青色系 |
+| sport | 对应运动类型 ThemeColor | 对应运动类型 ThemeColorDark | 复用 `DefaultTrackTypeConfigs`，例如跑步为 #F26A4B / #FF947A |
+
+没有已配置颜色的未知运动类型省略颜色字段，不冒用其他运动类型颜色。客户端按当前日夜主题选色；夜间字段缺失时回退日间色，字段缺失/非法时使用当前主题通用标签色。Android 本轮只接收可选字段，标签渲染组件后续实现，不新增页面硬编码配色或数据库列。
+
+### 投稿错误提示语言
+
+投稿 handler 错误响应保留 `error`，新增稳定 `error_code`（`submission_*`）。按已有 `X-Client-Language` 请求头选择文案，zh 前缀为中文，其他或缺省为英文；校验、状态冲突和权限等使用用户可理解的信息，未知内部错误不透出原始异常。例：`submission_description_length` 对应中文“路线说明需要填写 20～500 个字符。”和英文“Route description must be between 20 and 500 characters.”。客户端可按 error_code 本地化，旧客户端仍可读取 error。

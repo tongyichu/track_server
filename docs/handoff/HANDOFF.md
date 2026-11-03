@@ -1,5 +1,38 @@
 # 工作交接：协议 H5 页面（2026-10-13）
 
+## 2026-11-03：形象标签的公开展示适宜性
+
+- 用户要求标签仅接受积极或中性内容，排除负面、低俗、不礼貌或冒犯性形象；相似度高不构成打标理由，不确定时留空。
+- 已同步 AGENTS 与生成规范，明确不要求所有形象有积极寓意，不用正面别名包装不当形象。仅规则文档变更，尚未实现自动识图或内容审核；未修改线上数据，无需业务构建，diff 自查通过。
+
+
+## 2026-11-03：形象标签的标题与图像判定规则
+
+- 用户明确：参考用户标题，但只有一张 1:1 预览图的轨迹轮廓支持时才赋予形象；标题未提及时仍独立识别，有明确形象即可赋值，无法确认就留空。
+- 已同步 AGENTS 与 API 生成规范，排除背景/图标/文字误判；标题不符时可选择图像明确支持的其他形象。仅文档更新，自动识图尚未实现，未调用 AI、写线上数据或部署；无需构建，执行 diff 自查。
+
+
+## 2026-11-03：标签日夜颜色
+
+- 用户要求 labels 补齐日夜颜色。TrackLabel 新增 theme_color/theme_color_dark 强调色；sport 复用运动类型配置，shape 使用 #B43F83/#F39ACB，scenic_spot 使用 #087F8C/#69D2DD，颜色集中在服务端配置。
+- Android 模型接收可选颜色，旧数据兼容；未知运动类型无配置时省略颜色。不新增 UI、数据库列或 AI 调用，未提交推送或部署。
+- `go build ./...`、Android `:app:compileDebugKotlin`、双方 `git diff --check` 通过；按项目约定不新增或运行测试，颜色展示待后续 UI 接入后验证。
+
+
+## 2026-11-03：统一 labels 标签容器
+
+- 用户要求将形象、景区、运动类型统一到 labels，后续可扩展。新增只读标签数组，每项 type/value/name/name_en，固定顺序 shape/scenic_spot/sport；缺项省略，空列表 []。
+- 服务端复用现有权威字段与景区批量读取，不重复持久化，不新增 AI/供应商/原始轨迹请求；详情及各列表填充一致，旧字段兼容。Android 新增 TrackLabel 与 TrackInfo.labels，仅模型接入，UI 后续处理。
+- 本轮与上一轮 shape_label 改动一起保留，未提交推送或部署，无历史数据回填；`go build ./...`、Android 编译及双方 `git diff --check` 通过；Debug 已安装到 emulator-5554。按约定不新增或运行测试，功能待用户验证。
+
+
+## 2026-11-03：轨迹形象标签字段
+
+- 用户要求将预览图可识别的玫瑰花、兔子等形象独立保存，供后续列表和详情标签使用。
+- 服务端新增 shape_label 存储、创建/更新校验及各列表/详情透传；Android TrackInfo/CreateTrackRequest/UpdateTrackRequest 接入可选字段。无标签时省略，不涉及 Room 或 UI。
+- 当前自动路线描述/识图生成仍未接入生产；此改动不批量打标，不部署，不更新线上 NO.00000091。未提交推送。`go build ./...`、`:app:compileDebugKotlin` 及双方 `git diff --check` 通过；Debug 已安装到 emulator-5554。按项目约定不新增或运行测试，功能待用户验证。
+
+
 ## 2026-11-01：双仓同步推送、小米安装与 Server 部署
 
 - 用户授权双仓同步最新、推送、安装小米并部署 Server。先提交保留本地代码，再普通 merge 合入远端；只处理原工作仓库，不修改 backup 副本。
@@ -572,3 +605,11 @@ assembleDebug、assembleDebugAndroidTest、CountFormatterTest 三项 JVM 测试�
 - 新增入口：internal/models/track_preview.go、internal/service/track_preview.go、internal/handler/track_preview_handler.go、internal/repository/track_preview.go；同步 mysql.sql、main.go、相关协议和 AGENTS。此前 MingCute 线性图标及运动日夜色也纳入本次部署提交。
 - go build ./... 已通过，git diff --check 通过；遵循用户约定未新增或运行自动化测试，未启动测试数据库。现有 AGENTS 校验仍报告旧的长文件、元信息和路径告警，未扩大整改范围。
 - 发布遵循 Android 仓库 .agents/skills/android-track-release：先提交推送服务端，再构建推送镜像，用户当次 SSH 登录，部署健康后才发布 App。实际部署、App 版本及远端提交结果以本次会话最终输出为准。
+
+## 2026-11-03 自动生成路线说明与形象标签
+
+用户明确要求自动触发，已接入每分钟巡检、持久水位/游标、输入指纹去重、每日 100 次调用预算、每版本最多三次尝试与条件写回。仅公开已结束且索引/方图齐备的新增或变更轨迹进入；首次不全量回填旧轨迹。使用短摘要、一张方图和可信投稿，不重解析 KMZ，不联网搜索。人工说明与后来人工修改的形象标签受保护；AI 来源排除客户端自动说明补齐。详见 [运行说明](../track-narrative.md)。
+
+go build ./... 通过，未运行自动化测试或生产 AI 调用；未提交、推送、部署。新增 x/image WebP 图片头识别依赖，运动和景区 labels 继续直接派生。
+
+投稿错误语言：新增 handler/track_submission_errors.go，按 X-Client-Language 返回中英文及稳定 submission_* error_code。未知内部异常使用通用错误，Android 兼容旧英文错误并按界面语言展示。go build ./... 通过，未运行自动化测试，未部署。

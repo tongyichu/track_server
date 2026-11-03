@@ -118,6 +118,7 @@ func descriptionSourceIsAuto(source string) bool { return source == "" || source
 
 // CreateTrackInput describes optional fields accepted by track creation.
 type CreateTrackInput struct {
+	ShapeLabel                *string                    `json:"shape_label"`
 	PreviewImages             *models.TrackPreviewImages `json:"preview_images"`
 	Title                     *string                    `json:"title"`
 	Description               *string                    `json:"description"`
@@ -143,6 +144,10 @@ type CreateTrackInput struct {
 }
 
 func (in *CreateTrackInput) normalize() {
+	if in.ShapeLabel != nil {
+		v := strings.TrimSpace(*in.ShapeLabel)
+		in.ShapeLabel = &v
+	}
 	if in.Description != nil {
 		v := strings.TrimSpace(*in.Description)
 		in.Description = &v
@@ -165,6 +170,9 @@ func (in *CreateTrackInput) normalize() {
 }
 
 func (in CreateTrackInput) validate() error {
+	if err := validateTrackShapeLabel(in.ShapeLabel); err != nil {
+		return err
+	}
 	if in.Description != nil && utf8.RuneCountInString(*in.Description) > maxTrackDescriptionLen {
 		return invalidArg("description is too long")
 	}
@@ -221,6 +229,7 @@ func validateTrackSourceTag(sourceTag string) error {
 // TrackInfoPatch describes which track summary fields should be updated.
 // Nil means the field is not provided and should remain unchanged.
 type TrackInfoPatch struct {
+	ShapeLabel                *string                    `json:"shape_label"`
 	Status                    *models.TrackStatus        `json:"status"`
 	Description               *string                    `json:"description"`
 	DescriptionRuleVersion    *int                       `json:"description_rule_version"`
@@ -243,6 +252,10 @@ type TrackInfoPatch struct {
 }
 
 func (p *TrackInfoPatch) normalize() {
+	if p.ShapeLabel != nil {
+		v := strings.TrimSpace(*p.ShapeLabel)
+		p.ShapeLabel = &v
+	}
 	if p == nil {
 		return
 	}
@@ -268,7 +281,7 @@ func (p *TrackInfoPatch) normalize() {
 }
 
 func (p TrackInfoPatch) empty() bool {
-	return p.Status == nil && p.Description == nil && p.PreviewImages == nil && p.SessionID == nil &&
+	return p.ShapeLabel == nil && p.Status == nil && p.Description == nil && p.PreviewImages == nil && p.SessionID == nil &&
 		p.CityCode == nil &&
 		p.LocateAddr == nil &&
 		p.TrackType == nil &&
@@ -529,6 +542,7 @@ func (s *TrackService) CreateTrack(ctx context.Context, userID int64, input Crea
 		if idempotencyRepo, ok := s.tracks.(repository.CompletedTrackSessionRepository); ok {
 			existing, findErr := idempotencyRepo.FindCompletedBySessionID(ctx, userID, *input.SessionID)
 			if findErr == nil {
+				s.fillTrackPrimaryScenicSpot(ctx, existing)
 				return existing, nil
 			}
 			if !errors.Is(findErr, repository.ErrNotFound) {
@@ -569,6 +583,9 @@ func (s *TrackService) CreateTrack(ctx context.Context, userID int64, input Crea
 	}
 	if input.PreviewImages != nil {
 		track.PreviewImages = *input.PreviewImages
+	}
+	if input.ShapeLabel != nil {
+		track.ShapeLabel = *input.ShapeLabel
 	}
 	if input.Title != nil {
 		track.Title = *input.Title
@@ -731,6 +748,7 @@ func (s *TrackService) GetTrackDetail(ctx context.Context, trackID string) (*mod
 	if s.places != nil {
 		s.places.ScenicSpotDetails(ctx, track.PrimaryScenicSpot)
 	}
+	track.Labels = buildTrackLabels(track.ShapeLabel, track.TrackType, track.PrimaryScenicSpot)
 	track.PreviewImages = trackPreviewURLs(track.ID, track.PreviewImages)
 	return track, nil
 }
@@ -1331,6 +1349,8 @@ func (s *TrackService) ListCollectedTracks(ctx context.Context, userID int64, in
 	}
 	for _, s := range summaries {
 		items = append(items, &models.CollectedTrackSummary{
+			Labels:            s.Labels,
+			ShapeLabel:        s.ShapeLabel,
 			PrimaryScenicSpot: s.PrimaryScenicSpot,
 			IsFeatured:        s.IsFeatured,
 			CommentCount:      s.CommentCount, CanComment: s.CanComment,
@@ -1412,6 +1432,9 @@ func (s *TrackService) UpdateTrackInfo(ctx context.Context, userID int64, trackI
 		return nil, invalidArg("trackID is required")
 	}
 	patch.normalize()
+	if err := validateTrackShapeLabel(patch.ShapeLabel); err != nil {
+		return nil, err
+	}
 	if patch.empty() {
 		return nil, invalidArg("no fields to update")
 	}
@@ -1464,6 +1487,10 @@ func (s *TrackService) UpdateTrackInfo(ctx context.Context, userID int64, trackI
 	updatedRaw := false
 	updatedScreenshot := false
 	updatedNoMapBgScreenshot := false
+	if patch.ShapeLabel != nil && track.ShapeLabel != *patch.ShapeLabel {
+		track.ShapeLabel = *patch.ShapeLabel
+		updated = true
+	}
 	if patch.Status != nil && track.Status != *patch.Status {
 		track.Status = *patch.Status
 		updated = true
@@ -1735,6 +1762,8 @@ func toSummaries(tracks []*models.Track) []*models.TrackSummary {
 		// - 若 city_code 为空/未配置，则 city_name 返回空字符串；
 		// - 映射解析失败会被内部吞掉并兜底为空（不影响列表其它字段返回）。
 		res = append(res, &models.TrackSummary{
+			Labels:         buildTrackLabels(t.ShapeLabel, t.TrackType, nil),
+			ShapeLabel:     t.ShapeLabel,
 			CanComment:     likeEligible(t),
 			PreviewImages:  trackPreviewURLs(t.ID, t.PreviewImages),
 			ID:             t.ID,
@@ -1761,6 +1790,8 @@ func toMySummaries(tracks []*models.Track) []*models.MyTrackSummary {
 	res := make([]*models.MyTrackSummary, 0, len(tracks))
 	for _, t := range tracks {
 		res = append(res, &models.MyTrackSummary{
+			Labels:         buildTrackLabels(t.ShapeLabel, t.TrackType, nil),
+			ShapeLabel:     t.ShapeLabel,
 			CanComment:     likeEligible(t),
 			PreviewImages:  trackPreviewURLs(t.ID, t.PreviewImages),
 			ID:             t.ID,
@@ -1832,6 +1863,7 @@ func (s *TrackService) fillMyTrackSummaryExtras(ctx context.Context, userID int6
 	for _, summary := range summaries {
 		summary.Collected = collectedByTrack[summary.ID]
 		summary.PrimaryScenicSpot = primaryScenicSpots[summary.ID]
+		summary.Labels = buildTrackLabels(summary.ShapeLabel, summary.TrackType, summary.PrimaryScenicSpot)
 		summary.Liked = likeStats[summary.ID].Liked
 		summary.LikeCount = likeStats[summary.ID].LikeCount
 		if summary.CanComment {
@@ -1954,6 +1986,7 @@ func (s *TrackService) fillTrackSummaryExtras(ctx context.Context, userID int64,
 	// 3) 最后一轮遍历：把准备好的扩展字段写回到每个 summary。
 	for _, summary := range summaries {
 		summary.PrimaryScenicSpot = primaryScenicSpots[summary.ID]
+		summary.Labels = buildTrackLabels(summary.ShapeLabel, summary.TrackType, summary.PrimaryScenicSpot)
 		summary.Liked = likeStats[summary.ID].Liked
 		summary.LikeCount = likeStats[summary.ID].LikeCount
 		if summary.CanComment {

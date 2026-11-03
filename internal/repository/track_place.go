@@ -259,6 +259,11 @@ func (r *MemoryTrackPlaceRepository) SavePlaceRecord(_ context.Context, v *model
 	copy := *v
 	copy.LeaseOwner = ""
 	copy.LeaseUntil = time.Time{}
+	// Unowned checkpoint writes preserve an active lease, matching SQL and Mongo.
+	if owner == "" && r.records[v.Key] != nil {
+		copy.LeaseOwner = r.records[v.Key].LeaseOwner
+		copy.LeaseUntil = r.records[v.Key].LeaseUntil
+	}
 	r.records[v.Key] = &copy
 	return true, nil
 }

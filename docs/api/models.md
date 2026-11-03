@@ -23,6 +23,8 @@
 | `source_tag` | string | 轨迹来源/运营标签；允许值为空字符串或 `manual_seed`（人工录入冷启动轨迹）；普通列表摘要不返回该字段 |
 | `coordinate_system` | string | 坐标系，例如 `WGS84` / `GCJ02` / `BD09` |
 | `title` | string | 轨迹标题 |
+| `labels` | array | 统一展示标签，固定顺序 shape/scenic_spot/sport；缺项省略，无标签返回 []；元素 `{type,value,name,name_en?,theme_color?,theme_color_dark?}`，详见 [轨迹标签](track.md#统一轨迹标签-labels) |
+| `shape_label` | string | 可选具象形象标签，例如“玫瑰花”“兔子”；详情及推荐、搜索、我的轨迹、收藏、喜欢列表摘要均返回，空值省略；最多32个 Unicode 字符，不代表运动类型或路线难度 |
 | `is_featured` | boolean | 推荐、搜索、我的轨迹及收藏列表摘要中的精品标识；仅投稿当前已审核通过时为 true，false 也明确返回 |
 | `featured_description` | string | 审核通过的投稿简介；非优质投稿省略 |
 | `featured_cover_url` | string | 投稿首图的本地静态缓存地址；无投稿图时回退轨迹截图 |

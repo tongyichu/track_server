@@ -188,6 +188,8 @@ func (s *TrackService) ListLikedTracks(ctx context.Context, userID int64, input 
 	}
 	for _, s := range summaries {
 		items = append(items, &models.CollectedTrackSummary{
+			Labels:            s.Labels,
+			ShapeLabel:        s.ShapeLabel,
 			PrimaryScenicSpot: s.PrimaryScenicSpot,
 			IsFeatured:        s.IsFeatured,
 			CommentCount:      s.CommentCount, CanComment: s.CanComment,

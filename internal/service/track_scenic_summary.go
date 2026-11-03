@@ -105,4 +105,5 @@ func (s *TrackService) primaryScenicSpots(ctx context.Context, ids []string) map
 
 func (s *TrackService) fillTrackPrimaryScenicSpot(ctx context.Context, track *models.Track) {
 	track.PrimaryScenicSpot = s.primaryScenicSpots(ctx, []string{track.ID})[track.ID]
+	track.Labels = buildTrackLabels(track.ShapeLabel, track.TrackType, track.PrimaryScenicSpot)
 }

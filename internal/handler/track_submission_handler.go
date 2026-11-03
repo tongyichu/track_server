@@ -7,7 +7,6 @@ import (
 	"net/http"
 
 	"github.com/cloudwego/hertz/pkg/app"
-	"github.com/cloudwego/hertz/pkg/common/utils"
 	"github.com/tongyichu/track_server/internal/middleware"
 	"github.com/tongyichu/track_server/internal/repository"
 	"github.com/tongyichu/track_server/internal/service"
@@ -24,7 +23,7 @@ func NewTrackSubmissionHandler(svc *service.TrackSubmissionService) *TrackSubmis
 func submissionUserID(c *app.RequestContext) (int64, bool) {
 	meta := middleware.GetRequestMeta(c)
 	if meta == nil || meta.AuthUserID <= 0 {
-		c.JSON(http.StatusUnauthorized, utils.H{"error": "unauthorized"})
+		respondSubmissionError(c, http.StatusUnauthorized, "unauthorized")
 		return 0, false
 	}
 	return meta.AuthUserID, true
@@ -34,21 +33,21 @@ func writeTrackSubmissionError(c *app.RequestContext, err error) {
 	var invalid *service.InvalidArgumentError
 	switch {
 	case errors.As(err, &invalid):
-		c.JSON(http.StatusBadRequest, utils.H{"error": err.Error()})
+		respondSubmissionError(c, http.StatusBadRequest, err.Error())
 	case errors.Is(err, repository.ErrNotFound):
-		c.JSON(http.StatusNotFound, utils.H{"error": "not found"})
+		respondSubmissionError(c, http.StatusNotFound, "not found")
 	case errors.Is(err, repository.ErrForbidden), errors.Is(err, service.ErrForbidden):
-		c.JSON(http.StatusForbidden, utils.H{"error": "forbidden"})
+		respondSubmissionError(c, http.StatusForbidden, "forbidden")
 	case errors.Is(err, repository.ErrAlreadyExists):
-		c.JSON(http.StatusConflict, utils.H{"error": "submission state conflict"})
+		respondSubmissionError(c, http.StatusConflict, "submission state conflict")
 	default:
-		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		respondSubmissionError(c, http.StatusInternalServerError, err.Error())
 	}
 }
 
 func (h *TrackSubmissionHandler) Options(_ context.Context, c *app.RequestContext) {
 	if h == nil || h.service == nil {
-		c.JSON(http.StatusInternalServerError, utils.H{"error": "track submission service not configured"})
+		respondSubmissionError(c, http.StatusInternalServerError, "track submission service not configured")
 		return
 	}
 	c.JSON(http.StatusOK, successResponse(h.service.Options()))
@@ -62,7 +61,7 @@ func (h *TrackSubmissionHandler) save(ctx context.Context, c *app.RequestContext
 	var input service.TrackSubmissionInput
 	body, err := c.Body()
 	if err != nil || json.Unmarshal(body, &input) != nil {
-		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid payload"})
+		respondSubmissionError(c, http.StatusBadRequest, "invalid payload")
 		return
 	}
 	sub, err := h.service.Submit(ctx, userID, c.Param("track_id"), input, editing)

@@ -129,6 +129,7 @@ func (r *MongoTrackRepository) Update(ctx context.Context, t *models.Track) erro
 			"description":                    t.Description,
 			"description_source":             t.DescriptionSource,
 			"description_rule_version":       t.DescriptionRuleVersion,
+			"shape_label":                    t.ShapeLabel,
 			"start_time":                     t.StartTime,
 			"end_time":                       t.EndTime,
 			"distance":                       t.Distance,

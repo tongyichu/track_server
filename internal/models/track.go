@@ -26,6 +26,8 @@ type TrackPoint struct {
 // Track aggregates persisted fields of track_records.
 // Points is transient field kept for existing service logic.
 type Track struct {
+	Labels                    []TrackLabel             `json:"labels" bson:"-"`
+	ShapeLabel                string                   `json:"shape_label,omitempty" bson:"shape_label,omitempty"`
 	PrimaryScenicSpot         *TrackPrimaryScenicSpot  `json:"primary_scenic_spot,omitempty" bson:"-"`
 	PreviewImages             TrackPreviewImages       `json:"preview_images" bson:"preview_images"`
 	Collected                 bool                     `json:"collected" bson:"-"`
@@ -75,6 +77,8 @@ type Track struct {
 // - 若用户信息不存在/查询失败（not found），nickname/avatar_url 将返回空字符串；
 // - collect_count 为该轨迹被收藏的总数；collected 为“当前鉴权用户”是否收藏。
 type TrackSummary struct {
+	Labels                    []TrackLabel                  `json:"labels" bson:"-"`
+	ShapeLabel                string                        `json:"shape_label,omitempty" bson:"shape_label,omitempty"`
 	PrimaryScenicSpot         *TrackPrimaryScenicSpot       `json:"primary_scenic_spot,omitempty"`
 	PreviewImages             TrackPreviewImages            `json:"preview_images"`
 	CommentCount              int64                         `json:"comment_count" bson:"-"`
@@ -115,6 +119,8 @@ type TrackSummary struct {
 // CollectedTrackSummary is used by "user collected tracks list".
 // It includes the current viewer's collected state, like TrackSummary.
 type CollectedTrackSummary struct {
+	Labels                    []TrackLabel            `json:"labels" bson:"-"`
+	ShapeLabel                string                  `json:"shape_label,omitempty" bson:"shape_label,omitempty"`
 	PrimaryScenicSpot         *TrackPrimaryScenicSpot `json:"primary_scenic_spot,omitempty"`
 	IsFeatured                bool                    `json:"is_featured"`
 	PreviewImages             TrackPreviewImages      `json:"preview_images"`
@@ -181,6 +187,8 @@ type CollectedTrackSummaryPage struct {
 // - 不返回 nickname/user_avatar_url。
 // - 返回当前浏览者的 collected 和 collect_count/navigate_count 等统计字段。
 type MyTrackSummary struct {
+	Labels                    []TrackLabel            `json:"labels" bson:"-"`
+	ShapeLabel                string                  `json:"shape_label,omitempty" bson:"shape_label,omitempty"`
 	PrimaryScenicSpot         *TrackPrimaryScenicSpot `json:"primary_scenic_spot,omitempty"`
 	IsFeatured                bool                    `json:"is_featured"`
 	PreviewImages             TrackPreviewImages      `json:"preview_images"`
