@@ -236,6 +236,8 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	api.GET("/regions/catalog", m.Handler.GetRegionCatalog)
 	api.PUT("/regions/catalog", m.Handler.SaveRegionCatalog)
 	api.POST("/regions/images", m.Handler.UploadRegionImage)
+	api.POST("/regions/research", m.Handler.ResearchRegion)
+	api.POST("/regions/images/import", m.Handler.ImportRegionImage)
 	api.GET("/tracks/:track_id", m.Handler.GetTrack)
 	api.GET("/tracks/:track_id/map-preview", m.Handler.GetTrackMapPreview)
 	api.POST("/tracks/:track_id/labels/generate", m.Handler.GenerateTrackShape)
