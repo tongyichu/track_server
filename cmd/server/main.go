@@ -655,6 +655,7 @@ func main() {
 		adminModule.Handler.SetTrackSubmissionService(trackSubmissionSvc)
 		adminModule.Handler.SetScenicSpotCatalogService(scenicSpotCatalogSvc)
 		adminModule.Handler.SetTrackPlaceService(trackPlaceSvc)
+		adminModule.Handler.SetTrackNarrativeService(trackNarrativeSvc)
 		adminModule.Handler.SetPermissionSnapshotService(permissionSnapshotSvc)
 		adminModule.Handler.SetTrackMapIndexService(trackMapIndexSvc)
 		if ossTokenSvc != nil {

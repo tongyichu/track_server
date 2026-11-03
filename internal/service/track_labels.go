@@ -34,3 +34,7 @@ func buildTrackLabels(shape, sport string, spot *models.TrackPrimaryScenicSpot, 
 	}
 	return labels
 }
+
+func TrackDisplayLabels(track *models.Track) []models.TrackLabel {
+	return buildTrackLabels(track.ShapeLabel, track.TrackType, track.PrimaryScenicSpot, track.Submission != nil && track.Submission.Status == models.TrackSubmissionStatusApproved)
+}

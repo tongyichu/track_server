@@ -39,10 +39,11 @@
     const preview = track.preview_images || {};
     const isDeleted = track.status === 0;
     const mapPreview = window.AdminTrackMapPreview ? window.AdminTrackMapPreview.create(trackPayload.geo, { trackID: trackID, coordinateSystem: track.coordinate_system }) : null;
+    const labelAbort = new AbortController();
     const values = await window.AdminUI.form({
       title: (readOnly ? '查看轨迹 ' : '编辑轨迹 ') + trackID,
       readOnly: readOnly,
-      onClosed: function () { if (mapPreview) mapPreview.dispose(); },
+      onClosed: function () { labelAbort.abort(); if (mapPreview) mapPreview.dispose(); },
       waitForHidden: !!options.waitForHidden,
       confirmText: isDeleted ? '彻底删除' : '保存修改',
       cancelText: readOnly ? '关闭' : (isDeleted ? '恢复' : '删除'),
@@ -76,6 +77,51 @@
       beforeFields: (function () {
         const wrapper = document.createElement('div');
         wrapper.className = 'admin-track-detail-side';
+        const panel = document.createElement('section');
+        panel.className = 'card';
+        const content = document.createElement('div');
+        content.className = 'card-body';
+        const heading = document.createElement('h3');
+        heading.className = 'card-title'; heading.textContent = '轨迹标签'; content.appendChild(heading);
+        const badges = document.createElement('div'); badges.className = 'd-flex flex-wrap gap-2 mb-2';
+        (track.labels || []).filter(function (label) { return label.value !== false; }).forEach(function (label) {
+          const badge = document.createElement('span'); badge.className = 'badge bg-secondary-lt';
+          badge.textContent = label.name || label.type; badges.appendChild(badge);
+        });
+        if (!badges.childElementCount) badges.textContent = '暂无标签';
+        content.appendChild(badges);
+        const states = { waiting: '等待自动生成', running: '正在生成', ready: '生成完成，等待写入', complete: '自动生成已完成（无明确形象时不打标）', retry: '等待重试', failed: '自动生成失败', not_queued: '未进入自动任务', unconfigured: 'AI 未配置' };
+        const status = document.createElement('p'); status.className = 'text-secondary mb-2';
+        const generation = trackPayload.label_generation || {};
+        status.textContent = (states[generation.status] || '状态暂不可用') + (generation.attempts ? '，已尝试 ' + generation.attempts + ' 次' : '') + (generation.reason ? '：' + generation.reason : '');
+        content.appendChild(status);
+        const help = document.createElement('p'); help.className = 'text-secondary mb-2';
+        help.textContent = '形象可在下方人工编辑或用 AI 生成。精品随投稿审核生效；运动类型在表单修改，景点在景点关联区域维护。AI 基于已保存资料和一张方图，生成后需保存才生效。';
+        content.appendChild(help);
+        if (!readOnly && !isDeleted) {
+          const button = document.createElement('button'); button.type = 'button'; button.className = 'btn btn-outline-primary'; button.textContent = 'AI 生成形象';
+          button.addEventListener('click', async function () {
+            const modal = wrapper.closest('.modal');
+            const input = modal && modal.querySelector('[name="shape_label"]');
+            if (!input) return;
+            const original = input.value;
+            button.disabled = true; status.textContent = '正在分析已保存的轨迹和方形预览图…';
+            try {
+              const response = await fetch('/admin/api/tracks/' + encodeURIComponent(trackID) + '/labels/generate', { method: 'POST', signal: labelAbort.signal });
+              const result = await response.json();
+              if (!response.ok) throw new Error(result.error || 'AI 生成失败');
+              if (!wrapper.isConnected) return;
+              if (input.value !== original) { status.textContent = '你已修改形象输入，本次结果未覆盖，请重新生成或保存人工内容。'; return; }
+              input.value = result.data.shape_label || '';
+              input.dispatchEvent(new Event('change', { bubbles: true }));
+              status.textContent = input.value ? '建议形象：' + input.value + '。点击保存修改后生效。' : '没有识别到明确且适宜的形象，建议留空。点击保存修改后生效。';
+            } catch (error) {
+              if (error.name !== 'AbortError') { status.textContent = error.message; window.AdminUI.alert(error.message, 'danger'); }
+            } finally { button.disabled = false; }
+          });
+          content.appendChild(button);
+        }
+        panel.appendChild(content); wrapper.appendChild(panel);
         wrapper.appendChild(window.AdminTrackPlaceCandidates.create(trackID, { readOnly: readOnly, onChanged: options.onSaved, cityNames: cityNames, track: track }));
         if (mapPreview) wrapper.appendChild(mapPreview);
         return wrapper;
@@ -83,6 +129,7 @@
       fields: [
         { name: 'user_id', label: '用户 ID（不可修改）', value: trackPayload.user_id_text || '', readOnly: true },
         { name: 'session_id', label: '同行会话 ID', value: track.session_id },
+        { name: 'shape_label', label: '形象标签（留空表示无；仅使用明确且适宜的形象）', value: track.shape_label || '', maxLength: 32 },
         { name: 'title', label: '轨迹标题', value: track.title, maxLength: 128 },
         { name: 'city_code', label: '城市', type: 'select', value: track.city_code, options: cityFields },
         { name: 'locate_addr', label: '位置描述', value: track.locate_addr, maxLength: 512 },
@@ -145,6 +192,7 @@
     const body = {
       source_feedback_id: options.sourceFeedbackID || undefined,
       session_id: values.session_id, title: values.title, city_code: values.city_code,
+      shape_label: values.shape_label !== (track.shape_label || '') ? values.shape_label : undefined,
       locate_addr: values.locate_addr, track_type: values.track_type, source_tag: values.source_tag,
       coordinate_system: values.coordinate_system, description: values.description, description_source: values.description_source,
       description_rule_version: Number(values.description_rule_version || 0), start_time: values.start_time,

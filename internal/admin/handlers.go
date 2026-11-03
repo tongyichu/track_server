@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/cloudwego/hertz/pkg/app"
@@ -50,6 +51,7 @@ type Handler struct {
 	trackSubmissionSvc    *service.TrackSubmissionService
 	scenicSpotSvc         *service.ScenicSpotCatalogService
 	trackPlaceSvc         *service.TrackPlaceService
+	trackNarrativeSvc     *service.TrackNarrativeService
 	trackImportSvc        *service.AdminTrackImportService
 	dashboardStatsRepo    repository.AdminDashboardStatisticsRepository
 	screenshotCache       *service.AssetCacheService
@@ -73,7 +75,8 @@ type trackMapCleanupRepository interface {
 }
 
 type updateTrackBody struct {
-	SourceFeedbackID string `json:"source_feedback_id"`
+	SourceFeedbackID string  `json:"source_feedback_id"`
+	ShapeLabel       *string `json:"shape_label"`
 	// 兼容旧表单回传原归属人，但不允许通过后台修改归属。
 	UserID                    *json.Number               `json:"user_id"`
 	SessionID                 *string                    `json:"session_id"`
@@ -102,6 +105,14 @@ type updateTrackBody struct {
 }
 
 func applyAdminTrackUpdate(track *models.Track, body updateTrackBody) error {
+	if body.ShapeLabel != nil {
+		label := strings.TrimSpace(*body.ShapeLabel)
+		if utf8.RuneCountInString(label) > 32 || strings.IndexFunc(label, unicode.IsControl) >= 0 {
+			return errors.New("形象标签最多 32 个字符且不能包含控制字符")
+		}
+		track.ShapeLabel = label
+	}
+
 	if body.UserID != nil {
 		userID, err := body.UserID.Int64()
 		if err != nil || userID != track.UserID {
@@ -1483,6 +1494,21 @@ func (h *Handler) GetTrack(ctx context.Context, c *app.RequestContext) {
 		}
 	}
 	data := utils.H{"track": track, "user_id_text": strconv.FormatInt(track.UserID, 10)}
+	if h.trackSubmissionSvc != nil {
+		if sub, err := h.trackSubmissionSvc.PublicForTrack(ctx, track.ID); err == nil {
+			track.Submission = sub
+		}
+	}
+	if h.scenicSpotSvc != nil {
+		if spots, err := h.scenicSpotSvc.PrimarySpots(ctx, []string{track.ID}); err == nil && spots[track.ID] != nil {
+			track.PrimaryScenicSpot = spots[track.ID]
+		}
+	}
+	track.Labels = service.TrackDisplayLabels(track)
+	if status, err := h.trackNarrativeSvc.AdminStatus(ctx, track.ID); err == nil {
+		data["label_generation"] = status
+	}
+
 	if h.trackMapRepo != nil {
 		if index, indexErr := h.trackMapRepo.FindTrackGeoIndex(ctx, track.ID); indexErr == nil && index != nil && index.SimplifiedPolylineJSON != "" {
 			data["geo"] = utils.H{

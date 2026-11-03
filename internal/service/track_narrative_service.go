@@ -15,6 +15,9 @@ import (
 
 const narrativeScanKey = "narrative:scan"
 
+// Keep the budget key within the existing MySQL provider VARCHAR(16).
+const narrativeBudgetProvider = "kimi_track_narra"
+
 type narrativeScan struct {
 	ActivatedAt time.Time `json:"activated_at"`
 	Cursor      string    `json:"cursor"`
@@ -152,6 +155,10 @@ func (s *TrackNarrativeService) RunOnce(parent context.Context) (*TrackNarrative
 			break
 		}
 	}
+	if len(indexes) < 200 && scan.Cursor == indexes[len(indexes)-1].TrackID {
+		// A short final page is already exhausted; avoid spending another tick resetting the cursor.
+		scan.Cursor = ""
+	}
 	return out, nil
 }
 
@@ -207,7 +214,7 @@ func (s *TrackNarrativeService) process(ctx context.Context, id string, activate
 			return false, s.fail(ctx, key, &state, err)
 		}
 		day := now.In(time.FixedZone("Asia/Shanghai", 8*3600)).Format("2006-01-02")
-		reserved, err := s.store.ReservePlaceAPICall(ctx, "kimi_track_narrative", day, s.budget)
+		reserved, err := s.store.ReservePlaceAPICall(ctx, narrativeBudgetProvider, day, s.budget)
 		if err != nil {
 			return false, err
 		}

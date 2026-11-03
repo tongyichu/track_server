@@ -29,7 +29,7 @@
 | TRACK_NARRATIVE_CRON | @every1m | 调度间隔 |
 | TRACK_NARRATIVE_DAILY_BUDGET | 100 | 北京时间每日调用次数上限；非正值回退 100 |
 
-复用 track_place_records 的 narrative:scan / narrative:track:<ID> 命名空间保存水位、游标与版本状态，复用 track_place_api_usage 的 kimi_track_narrative 计数，预算与景区调用分开。全局租约十分钟、每轮超时八分钟；单次模型 HTTP 超时 150 秒，max_tokens=4096。每日预算限制调用次数而非精确 token 或金额。
+复用 track_place_records 的 narrative:scan / narrative:track:<ID> 命名空间保存水位、游标与版本状态，复用 track_place_api_usage 的 kimi_track_narra 计数，预算与景区调用分开。全局租约十分钟、每轮超时八分钟；单次模型 HTTP 超时 150 秒，max_tokens=4096。每日预算限制调用次数而非精确 token 或金额。
 
 每个输入版本最多三次尝试，失败退避；下载失败不计模型调用预算。成功结果先缓存再写回，写回冲突可以复用；异常崩溃在供应商成功而结果尚未落库的窗口仍可能重复调用。失败上限后同版本暂停，输入版本变化重新开始。任务不创建历史批量回填入口。
 

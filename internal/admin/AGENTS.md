@@ -433,3 +433,6 @@ Kimi 景点简介使用 `MOONSHOT_API_KEY` 和可选的 `KIMI_SCENIC_DESCRIPTION
 ## 用户设备权限
 
 - `permission_snapshot.go` 提供用户详情的设备快照读取，路由 `/users/:user_id/permission-snapshots` 归属 users 读取权限。`static/user_permissions.js` 独立异步加载，关闭/切用户取消旧请求；按安装实例显示机型、版本、采集和收到时间，非实时状态。已开启绿色、未开启红色、未知/不适用灰色，普通系统权限折叠；未知项用 textContent 安全显示，禁止把无上报视为关闭。
+# 标签管理入口补充
+
+共享 track_editor.js 展示统一 labels 和 label_generation，提供 AI 形象建议及人工 shape_label 输入。POST /admin/api/tracks/:track_id/labels/generate 属 tracks 写权限，复用 TrackNarrativeService 租约和日预算，只填表不落库，保存仍用原 PUT。关闭弹窗取消请求，异步结果不覆盖后来输入。精品、运动、景点沿用原权威来源，不接受独立 labels 写入。实现见 track_labels.go 和 service/track_narrative_admin.go。
