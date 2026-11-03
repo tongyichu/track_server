@@ -1508,6 +1508,12 @@ func (h *Handler) GetTrack(ctx context.Context, c *app.RequestContext) {
 		}
 	}
 	data := utils.H{"track": track, "user_id_text": strconv.FormatInt(track.UserID, 10)}
+	data["user_name"] = "未知用户"
+	if h.userRepo != nil {
+		if owner, err := h.userRepo.FindByID(ctx, track.UserID); err == nil && owner != nil && strings.TrimSpace(owner.Nickname) != "" {
+			data["user_name"] = owner.Nickname
+		}
+	}
 	if h.trackSubmissionSvc != nil {
 		if sub, err := h.trackSubmissionSvc.PublicForTrack(ctx, track.ID); err == nil {
 			track.Submission = sub

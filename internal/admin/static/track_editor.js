@@ -6,7 +6,10 @@
     section.className = 'admin-track-assets';
     const fileRow = document.createElement('div');
     fileRow.className = 'admin-track-file';
-    const assetURL = asset => '/admin/api/tracks/' + encodeURIComponent(trackID) + '/assets/' + asset;
+    let trackType = track.track_type || '';
+    let noMapImage, noMapStage;
+    const assetURL = asset => '/admin/api/tracks/' + encodeURIComponent(trackID) + '/assets/' + asset +
+      (asset === 'no_map' ? '?track_type=' + encodeURIComponent(trackType) : '');
     const label = document.createElement('strong');
     label.textContent = '原始轨迹文件';
     if (String(track.raw_track_url || '').trim()) {
@@ -60,6 +63,7 @@
           stage.replaceChildren(error, retry);
         });
         stage.appendChild(image);
+        if (asset[0] === 'no_map') { noMapImage = image; noMapStage = stage; }
       } else {
         stage.textContent = '无';
       }
@@ -67,6 +71,13 @@
       grid.appendChild(figure);
     });
     section.appendChild(grid);
+    section.setTrackType = function (value) {
+      trackType = value;
+      if (noMapImage) {
+        noMapStage.replaceChildren(noMapImage);
+        noMapImage.src = assetURL('no_map');
+      }
+    };
     return section;
   }
 
@@ -108,6 +119,7 @@
     const isDeleted = track.status === 0;
     const mapPreview = window.AdminTrackMapPreview ? window.AdminTrackMapPreview.create(trackPayload.geo, { trackID: trackID, coordinateSystem: track.coordinate_system }) : null;
     const labelAbort = new AbortController();
+    const assets = trackAssets(trackID, track);
     const values = await window.AdminUI.form({
       title: (readOnly ? '查看轨迹 ' : '编辑轨迹 ') + trackID,
       readOnly: readOnly,
@@ -143,7 +155,7 @@
       },
       wide: true,
       className: 'admin-track-editor',
-      afterFields: trackAssets(trackID, track),
+      afterFields: assets,
       beforeFields: (function () {
         const wrapper = document.createElement('div');
         wrapper.className = 'admin-track-detail-side';
@@ -227,18 +239,16 @@
         return wrapper;
       })(),
       fields: [
-        { name: 'user_id', label: '归属用户 ID', value: trackPayload.user_id_text || '', readOnly: true },
+        { name: 'user_name', label: '归属用户名', value: trackPayload.user_name || '未知用户', readOnly: true },
         { name: 'session_id', label: '同行会话 ID', value: track.session_id },
         { name: 'shape_label', label: '形象标签', placeholder: '明确且适宜的形象，留空表示无', value: track.shape_label || '', maxLength: 32 },
         { name: 'title', label: '轨迹标题', value: track.title, maxLength: 128 },
         { name: 'city_code', label: '城市', type: 'select', value: track.city_code, options: cityFields },
         { name: 'locate_addr', label: '位置描述', value: track.locate_addr, maxLength: 512 },
-        { name: 'track_type', label: '轨迹类型', type: 'select', value: track.track_type, options: typeFields },
+        { name: 'track_type', label: '轨迹类型', type: 'select', value: track.track_type, options: typeFields, onChange: assets.setTrackType },
         { name: 'source_tag', label: '来源标签', type: 'select', value: track.source_tag, options: sourceFields },
         { name: 'coordinate_system', label: '坐标系', type: 'select', value: track.coordinate_system, options: coordinateFields, onChange: function (value) { if (mapPreview) mapPreview.setCoordinateSystem(value); } },
         { name: 'description', label: '轨迹描述', type: 'textarea', value: track.description, maxLength: 4000, full: true },
-        { name: 'description_source', label: '描述来源', value: track.description_source, maxLength: 64 },
-        { name: 'description_rule_version', label: '描述规则版本', type: 'number', value: track.description_rule_version, min: 0 },
         { name: 'start_time', label: '开始时间', type: 'datetime-local', value: timeValue(track.start_time), required: true },
         { name: 'end_time', label: '结束时间', type: 'datetime-local', value: timeValue(track.end_time) },
         { name: 'distance', label: '距离（米）', type: 'number', value: track.distance, min: 0, step: 'any' },
@@ -246,7 +256,6 @@
         { name: 'calories_burned', label: '消耗热量（千卡）', type: 'number', value: track.calories_burned, min: 0, step: 'any' },
         { name: 'elevation_gain', label: '累计爬升（米）', type: 'number', value: track.elevation_gain },
         { name: 'avg_speed_kmh', label: '平均速度（公里/小时）', type: 'number', value: track.avg_speed_kmh, min: 0, step: 'any' },
-        { name: 'is_running', label: '轨迹进行状态', type: 'select', value: track.is_running, options: [{ value: 'false', label: '已结束' }, { value: 'true', label: '进行中' }] },
         { name: 'status', label: '可见状态', type: 'select', value: track.status, options: [{ value: 1, label: '正常' }, { value: 2, label: '私密' }] }
       ]
     });
@@ -287,11 +296,10 @@
       session_id: values.session_id, title: values.title, city_code: values.city_code,
       shape_label: values.shape_label !== (track.shape_label || '') ? values.shape_label : undefined,
       locate_addr: values.locate_addr, track_type: values.track_type, source_tag: values.source_tag,
-      coordinate_system: values.coordinate_system, description: values.description, description_source: values.description_source,
-      description_rule_version: Number(values.description_rule_version || 0), start_time: values.start_time,
+      coordinate_system: values.coordinate_system, description: values.description, start_time: values.start_time,
       end_time: values.end_time, distance: Number(values.distance || 0), duration: Number(values.duration || 0),
       calories_burned: Number(values.calories_burned || 0), elevation_gain: Number(values.elevation_gain || 0),
-      avg_speed_kmh: Number(values.avg_speed_kmh || 0), is_running: values.is_running === 'true', status: Number(values.status)
+      avg_speed_kmh: Number(values.avg_speed_kmh || 0), status: Number(values.status)
     };
     try {
       const response = await fetch('/admin/api/tracks/' + encodeURIComponent(trackID), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
