@@ -59,7 +59,9 @@
 
 省市筛选：用户管理 `GET /admin/api/users` 接收 `province_code`，与 `city_code` 按用户资料取交集；景点管理 `GET /admin/api/scenic-spots` 接收 `province_code` / `city_code`，城市优先，匹配景点自身城市或任一仍存在的关联轨迹城市。`repository.ScenicSpotIDsByTrackCities` 为 MySQL/Mongo/内存提供关联城市匹配，`ScenicSpotListFilter` 将地域条件用于分页前筛选和 total；不得退回仅过滤浏览器已加载记录。省市下拉共用 `/admin/api/cities`，直辖市省级码保留可选。协议见 `docs/api/admin-regions.md`。
 
-共享轨迹编辑器的 `user_id_text` 只读，保存不传 `user_id`，服务端仅兼容回传原 ID 并拒绝更换归属。坐标系和来源标签使用下拉选项，未知历史值保留。`GET /tracks/:track_id/map-preview` 归属轨迹查看权限，由 `TrackMapIndexService.PreviewCoordinateSystems` 读取原始轨迹并返回按 WGS84/GCJ02/BD09 解释的三组 GCJ02 预览线；不得将既有 GCJ02 索引线二次转换。预览独立异步加载，准备后切换立即重绘且保持视野，关闭弹窗释放地图及取消请求。保存坐标系变更纳入旧空间索引清理及重新排队流程；预览自身不写业务数据。`ui.js` 支持字段 `readOnly` / `onChange` 及表单 `onClosed` 生命周期。接口细节见 `docs/api/admin-tracks.md`。
+共享轨迹编辑器只读展示详情接口的 `user_name`，`user_id_text` 仅保留协议兼容，保存不传 `user_id`/`user_name`，服务端仅兼容回传原 ID 并拒绝更换归属。坐标系和来源标签使用下拉选项，未知历史值保留。`GET /tracks/:track_id/map-preview` 归属轨迹查看权限，由 `TrackMapIndexService.PreviewCoordinateSystems` 读取原始轨迹并返回按 WGS84/GCJ02/BD09 解释的三组 GCJ02 预览线；不得将既有 GCJ02 索引线二次转换。预览独立异步加载，准备后切换立即重绘且保持视野，关闭弹窗释放地图及取消请求。保存坐标系变更纳入旧空间索引清理及重新排队流程；预览自身不写业务数据。`ui.js` 支持字段 `readOnly` / `onChange` 及表单 `onClosed` 生命周期。接口细节见 `docs/api/admin-tracks.md`。
+
+描述来源、描述规则版本、轨迹进行状态不展示且不随表单保存；隐藏字段保持原值。无地图 SVG 由 `track_asset_svg.go` 复制安全矢量几何并按服务端运动主题色渲染，切换表单运动类型即时预览，不改写原文件；未知类型与历史位图保留原图。
 
 详情资源由 `track_assets.go` 的 `GET /tracks/:track_id/assets/:asset` 按轨迹查看权限读取，asset 白名单为 raw、square_day/night、landscape_day/night、legacy、no_map。`main` 经 `SetTrackAssetCaches` 注入既有 raw/preview 缓存，截图沿用 `SetScreenshotCache`；按请求异步缓存，不阻塞详情字段，不接受浏览器 URL，不把资源代理地址写回轨迹。原始文件使用 attachment 下载，空字段显示“缺失”；图片只显示缩略图（点击放大），空字段显示“无”，读取失败可重试。共享编辑器保存不提交原文件/截图/preview_images；加载共享编辑器的页面同时引用 `static/track_editor.css`（由嵌入资源机制自动加内容版本）；`ui.js` 的 `className` 与 `afterFields` 将最多四列表单及资源区限定在 `.admin-track-editor`。接口见 [详情资源展示与下载](api/admin-tracks.md#详情资源展示与下载)。
 

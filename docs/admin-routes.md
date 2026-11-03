@@ -52,7 +52,7 @@
 | GET | `/admin/api/tracks` | 鉴权 | 轨迹列表，支持 `title` / `user_name` 模糊搜索、`province_code`（展开为省内城市集合，`city_code` 优先）/ `city_code` / `status`（1 公开、2 私密、0 已删除，默认排除已删除）/ `missing` 筛选及 cursor 翻页 |
 | POST | `/admin/api/tracks/import` | 轨迹操作 | 批量导入轨迹文件归属内部人员，multipart `files`（≤50）+ `owner_user_id` + `track_type` + `coordinate_system`，逐文件返回结果 |
 | GET | `/admin/api/cities` | 鉴权 | 返回内置城市/省份 Code、名称与省市层级，供轨迹和景点选择器使用 |
-| GET | `/admin/api/tracks/:track_id` | 鉴权 | 返回 `{track, user_id_text, geo?}`：轨迹详情、主景点（track.primary_scenic_spot）与地图索引简化轨迹线（GCJ02）；`user_id_text` 是字符串形式的归属人 ID，编辑表单只读显示该字符串且保存不提交 user_id，服务端拒绝变更归属人，避免 int64 经 JS Number 精度丢失 |
+| GET | `/admin/api/tracks/:track_id` | 鉴权 | 返回 `{track, user_name, user_id_text, geo?}`：轨迹详情、只读归属用户名、主景点与 GCJ02 简化线；`user_id_text` 保留字符串兼容，新表单不展示或提交 ID/用户名，服务端拒绝变更归属人 |
 | GET | `/admin/api/tracks/:track_id/assets/:asset` | 轨迹查看 | 只读图片与原始文件资源，raw 按附件下载；asset 白名单与错误码见 [资源协议](api/admin-tracks.md#详情资源展示与下载) |
 | POST | `/admin/api/tracks/:track_id/place-refresh` | 轨迹操作 | 同步触发单条轨迹重新景点识别；任务忙 409，无索引 404 |
 | GET | `/admin/api/tracks/map-config` | 轨迹查看 | 轨迹详情地图的高德 Web Key 配置（service_host 指向 `/admin/api/tracks/amap-service`） |

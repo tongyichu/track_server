@@ -13,6 +13,7 @@ import (
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/common/utils"
+	"github.com/tongyichu/track_server/internal/models"
 	"github.com/tongyichu/track_server/internal/service"
 )
 
@@ -97,6 +98,24 @@ func (h *Handler) GetTrackAsset(ctx context.Context, c *app.RequestContext) {
 	c.Header("Cache-Control", "no-store")
 	c.Header("X-Content-Type-Options", "nosniff")
 	c.Header("Content-Security-Policy", "sandbox")
+	if asset == "no_map" && strings.EqualFold(filepath.Ext(file), ".svg") {
+		trackType := track.TrackType
+		if previewType := strings.TrimSpace(string(c.Query("track_type"))); previewType != "" {
+			trackType = previewType
+		}
+		for _, label := range service.TrackDisplayLabels(&models.Track{TrackType: trackType}) {
+			if label.Type != "sport" || label.ThemeColor == "" {
+				continue
+			}
+			image, err := colorTrackLineSVG(file, label.ThemeColor)
+			if err != nil {
+				c.JSON(http.StatusUnprocessableEntity, utils.H{"error": "无法渲染无地图轨迹图"})
+				return
+			}
+			c.Data(http.StatusOK, "image/svg+xml; charset=utf-8", image)
+			return
+		}
+	}
 	requestURI := string(c.Request.RequestURI())
 	defer c.Request.SetRequestURI(requestURI)
 	if asset == "raw" {

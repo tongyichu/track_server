@@ -136,7 +136,7 @@
 | 后台轨迹列表（含 missing 缺项筛选） | GET | `/admin/api/tracks` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |
 | 后台轨迹坐标系预览 | GET | `/admin/api/tracks/:track_id/map-preview` | 轨迹查看 | [admin-tracks.md](admin-tracks.md#编辑字段与坐标预览) |
 | 后台批量导入轨迹（逐文件结果含轨迹表格摘要） | POST | `/admin/api/tracks/import` | 轨迹操作 | [admin-tracks.md](admin-tracks.md) |
-| 后台轨迹详情 | GET | `/admin/api/tracks/:track_id` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |
+| 后台轨迹详情（含只读归属用户名） | GET | `/admin/api/tracks/:track_id` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |
 | 后台轨迹图片与原始文件下载 | GET | `/admin/api/tracks/:track_id/assets/:asset` | 轨迹查看 | [admin-tracks.md](admin-tracks.md#详情资源展示与下载) |
 | 单条轨迹重新识别 | POST | `/admin/api/tracks/:track_id/place-refresh` | 轨迹操作 | [admin-tracks.md](admin-tracks.md) |
 | 轨迹地图高德配置 / 服务代理 | GET | `/admin/api/tracks/map-config`、`/admin/api/tracks/amap-service` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |
