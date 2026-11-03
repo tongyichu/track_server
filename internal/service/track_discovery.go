@@ -13,11 +13,12 @@ import (
 )
 
 type DiscoverSpot struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Description string `json:"description,omitempty"`
-	CoverURL    string `json:"cover_url"`
-	SourceURL   string `json:"source_url,omitempty"`
+	ID          string                        `json:"id"`
+	Name        string                        `json:"name"`
+	Description string                        `json:"description,omitempty"`
+	CoverURL    string                        `json:"cover_url"`
+	SourceURL   string                        `json:"source_url,omitempty"`
+	Photos      []models.TrackScenicSpotPhoto `json:"photos"`
 }
 
 type DiscoverSpotsPage struct {
@@ -197,7 +198,17 @@ func (s *TrackService) DiscoverSpots(ctx context.Context, cityCode, cursor strin
 			cover = spot.Photos[0].URL
 			source = spot.Photos[0].SourceURL
 		}
-		page.Items = append(page.Items, DiscoverSpot{ID: spot.ID, Name: spot.Name, Description: spot.Description, CoverURL: cover, SourceURL: source})
+		photos := make([]models.TrackScenicSpotPhoto, 0, len(spot.Photos))
+		for _, photo := range spot.Photos {
+			if strings.TrimSpace(photo.URL) == "" {
+				continue
+			}
+			photos = append(photos, models.TrackScenicSpotPhoto{
+				URL: photo.URL, Title: photo.Caption, Author: photo.Attribution,
+				AuthorURL: photo.AttributionURL, SourceURL: photo.SourceURL,
+			})
+		}
+		page.Items = append(page.Items, DiscoverSpot{ID: spot.ID, Name: spot.Name, Description: spot.Description, CoverURL: cover, SourceURL: source, Photos: photos})
 	}
 	page.HasMore = end < len(ranked)
 	if page.HasMore {
