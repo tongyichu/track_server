@@ -80,3 +80,14 @@
 - 用户要求“部署”，执行 android-track-release 的 server-only 流程，仅提交推送和部署服务端，不发布或提交 Android。
 - 本地景区等级、labels 文案和后台删除入口提交为62fcccd；fetch发现远端新增6个提交（至47aaa10），普通merge合入城市管理、批量导入表格和规则索引拆分。保留远端“景点管理”命名以及本地等级/删除控件。
 - 规则冲突按远端精简结构解决，业务细节补入 docs/server-contracts.md、docs/admin-workflows.md；本地和远端历史交接归档均保留，新功能交接合并到本页。源码合并后重新执行Go构建和修改JS语法检查，部署结果以随后回执为准。
+
+
+## 2026-11-04：服务端部署完成
+
+- 用户要求“部署”，按 android-track-release 的 server-only 流程完成，仅处理 track-server-backup。源码提交62fcccd，合并远端6个更新后的实际镜像源码为 main/38a189fcf37e987771e4008abca8de9c354175b3，已推送并核对 origin/main；镜像构建时工作树干净。Android 未重新发版或提交。
+- 发布景区等级采集/保存/下发、API labels.name 的“景点名·5A”文案和后台景点归档删除按钮，同时包含已合入的城市管理/批量导入更新。合并后 go build ./... 与景点/城市/导入 JS 的 node --check、git diff --check 通过，未新增或运行业务自动化测试。
+- linux/amd64 镜像已推送。manifest digest 为 sha256:0a6c5cdc58d219d4389b1b280136375da925ef28c87a7fb1c5a2d9733d699c55；镜像配置ID为 sha256:4a79d930fb9257061dc8c7f17be850ee4ceb15e9cb4cc64ed36cd4499dbd7a08，revision label 与38a189f一致。
+- 生产/root/update_track_server.sh 当前精确匹配同名容器并自行启动，先预拉取、核对镜像ID/digest/revision和脚本镜像选择结果，再执行原脚本，无第二次重复docker run。仅替换 track_server_go；新容器 b40316c5fe523a3f5067e2dfaa0e7d65f6dbc8c3bbc96295b09740638274ece9，restart_count=0。旧镜像98be969b7c7b保留，生产.env及持久化挂载不变，未修改更新脚本或输出密钥。
+- 内网与公网 GET /api/v1/ping 均200、hello track app；启动确认使用MySQL、无内存降级、载入3个后台账号，无账号存储错误。后台未登录API401、页面302到登录，登录页200；资源版本2da6b5861ef5c46c415d。
+- 部署回执 /private/tmp/track-grade-deploy-20261104.json，镜像元数据 /private/tmp/track-grade-deploy-image-20261104.json，安全日志 /private/tmp/track-grade-deploy-20261104.log。存量等级由打开有写权限的后台景点管理页后自动分批采集，本轮未额外调用业务回填、修改景点或伪造业务数据验收。
+- 合入远端规则精简后，AGENTS校验仅剩10个既有超长源文件问题，无规则文件错误或路径告警，报告 /private/tmp/track-grade-deploy-agents-20261104.json。当前追加为部署结果文档记录，不改变已部署的38a189f源码快照，无需重新构建服务镜像。
