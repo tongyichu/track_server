@@ -249,6 +249,7 @@ GET /admin/api/users
        → 城市/地址由内置行政区目录离线解析；不生成预览四图与路线描述，由客户端 DevMode 后续补齐
        → 源文件无时间戳时按运动类型估算速度沿轨迹合成时间戳（见 docs/api/admin-tracks.md），保证耗时/热量/均速与客户端图表可用
        → 标题默认自动生成；文件名（去扩展名）含汉字时优先用文件名做标题（≤40 字符）
+       → 成功结果附带 track 摘要（id/city_code/title/track_type/status），结果表复用主列表单元格并增加文件名/导入结果；用户名与头像复用本批归属人，不逐文件查详情。成功行直接打开共享编辑器，保存/删除后刷新对应导入行与主列表；失败行保留错误且无编辑入口
        → 展示 preview_images.landscape_day_url（日间横版 4:3），并经后台静态代理访问
        → 用户名通过当前页 user_id 批量读取用户昵称，列表不展示 user_id
   → GET /admin/api/dashboard?period=month 展示本月轨迹类型与城市统计表
