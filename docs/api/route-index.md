@@ -43,6 +43,7 @@
 | 用户已收藏轨迹列表（含精品标识、当前用户收藏状态及总数） | GET | `/track/collected/list` | 是 | [collect-navigation.md](collect-navigation.md#13-用户已收藏轨迹列表) |
 | 更新个人信息（含背景图、性别、生日） | PUT | `/user/profile/update` | 是 | [user.md](user.md#14-更新个人信息) |
 | 更新最近确认所在地 | PUT | `/user/profile/location` | 是 | [user.md](user.md#更新最近确认所在地) |
+| 获取地区目录（支持版本检查） | GET | `/regions/catalog` | 是 | [regions.md](regions.md) |
 | 关注用户 | POST | `/user/:user_id/follow` | 是 | [user.md](user.md#42-关注用户) |
 | 取消关注用户 | DELETE | `/user/:user_id/follow` | 是 | [user.md](user.md#43-取消关注用户) |
 | 查询关注状态 | GET | `/user/:user_id/follow/status` | 是 | [user.md](user.md#44-查询关注状态) |
@@ -112,6 +113,8 @@
 | 接口 | 方法 | 完整路径 | 需要认证 | 文档 |
 | --- | --- | --- | --- | --- |
 | 后台账号列表与页面目录 | GET | `/admin/api/accounts` | 管理员 session | [admin-accounts.md](admin-accounts.md) |
+| 后台读取/保存地区目录 | GET / PUT | `/admin/api/regions/catalog` | 地区查看 / 操作 | [regions.md](regions.md) |
+| 上传地区封面图 | POST | `/admin/api/regions/images` | 地区操作 | [regions.md](regions.md) |
 | 新增后台账号 | POST | `/admin/api/accounts` | 管理员 session | [admin-accounts.md](admin-accounts.md) |
 | 调整身份、状态与页面权限 | PUT | `/admin/api/accounts/:username` | 管理员 session | [admin-accounts.md](admin-accounts.md) |
 | 迁移期应急重置后台密码 | POST | `/admin/api/accounts/:username/reset-password` | 管理员 session，且目标未验证邮箱/旧入口未关闭 | [admin-accounts.md](admin-accounts.md) |

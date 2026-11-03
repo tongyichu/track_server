@@ -19,6 +19,7 @@ import (
 	"github.com/tongyichu/track_server/internal/config"
 	"github.com/tongyichu/track_server/internal/handler"
 	"github.com/tongyichu/track_server/internal/middleware"
+	"github.com/tongyichu/track_server/internal/regions"
 	"github.com/tongyichu/track_server/internal/repository"
 	"github.com/tongyichu/track_server/internal/scheduler"
 	"github.com/tongyichu/track_server/internal/scheduler/jobs"
@@ -65,6 +66,7 @@ func main() {
 	var trackSubmissionRepo repository.TrackSubmissionRepository
 	var recommendationRepo repository.RecommendationRepository
 	var adminAccountStorage admin.AccountStorage
+	var regionStore regions.Store
 
 	if cfg.UseInMemory {
 		trackRepo, userRepo, collectRepo, loginLogRepo, navigationRepo, appReleaseRepo, companionRepo = repository.NewInMemoryRepositories()
@@ -133,6 +135,10 @@ func main() {
 					log.Printf("admin account storage unavailable; admin authentication will be disabled")
 				}
 				trackMapRepo = repository.NewMySQLTrackMapRepository(db)
+				regionStore, err = regions.NewMySQLStore(ctx, db)
+				if err != nil {
+					log.Fatalf("region catalog storage unavailable: %v", err)
+				}
 				trackPlaceRepo = repository.NewMySQLTrackPlaceRepository(db)
 				scenicSpotRepo = repository.NewMySQLScenicSpotRepository(db)
 				followRepo = repository.NewMySQLFollowRepository(db)
@@ -176,6 +182,7 @@ func main() {
 			appClientStatsRepo = repository.NewInMemoryAppClientStatsRepository()
 		} else {
 			db := client.Database(cfg.MongoDBName)
+			regionStore = regions.NewMongoStore(db)
 			adminCtx, adminCancel := context.WithTimeout(ctx, 5*time.Second)
 			adminAccountStorage, err = admin.NewMongoAccountStorage(adminCtx, db)
 			adminCancel()
@@ -231,6 +238,13 @@ func main() {
 			)
 			log.Println("mongo repositories initialized")
 		}
+	}
+	if regionStore == nil {
+		regionStore = regions.NewMemoryStore()
+	}
+	regionSvc, err := regions.NewService(ctx, regionStore)
+	if err != nil {
+		log.Fatalf("region catalog unavailable: %v", err)
 	}
 	if memoryUsers, ok := userRepo.(*repository.InMemoryUserRepository); ok {
 		if memoryRestrictions, ok := accountRestrictionRepo.(*repository.InMemoryAccountRestrictionRepository); ok {
@@ -618,6 +632,7 @@ func main() {
 	defer tokenBlacklist.Close()
 
 	handler.RegisterRoutes(h, handler.Deps{
+		RegionService:              regionSvc,
 		PermissionSnapshotService:  permissionSnapshotSvc,
 		TrackService:               trackSvc,
 		CommentService:             commentSvc,
@@ -647,6 +662,7 @@ func main() {
 		log.Print("admin email recovery unavailable: check account storage and SMTP configuration")
 	}
 	if adminModule != nil && adminModule.Handler != nil {
+		adminModule.Handler.SetRegionService(regionSvc)
 		adminModule.Handler.SetDashboardStatisticsRepository(repository.NewAdminDashboardStatisticsRepository(
 			userRepo, trackRepo, collectRepo, loginLogRepo, navigationRepo, companionRepo,
 			feedbackRepo, trackMapRepo, trackSubmissionRepo, likeRepo, commentRepo,

@@ -53,6 +53,8 @@ func requestPermission(c *app.RequestContext) (string, bool) {
 		return "tracks", write
 	case "scenic-spots":
 		return "scenic_spots", write
+	case "regions":
+		return "regions", write
 	case "route-groups":
 		return "route_groups", write
 	case "track-submissions":
@@ -86,7 +88,7 @@ func (a *Authenticator) authorize(ctx context.Context, c *app.RequestContext, se
 		allowed = true
 	}
 	if route == "/admin/api/cities" {
-		for _, module := range []string{"tracks", "scenic_spots", "users", "route_groups"} {
+		for _, module := range []string{"tracks", "scenic_spots", "users", "route_groups", "regions"} {
 			allowed = allowed || account.allows(module, false)
 		}
 	}
@@ -111,6 +113,8 @@ func (a *Authenticator) authorize(ctx context.Context, c *app.RequestContext, se
 			modules = []string{"tracks"}
 		case "scenic_spots":
 			modules = []string{"scenic_spots"}
+		case "regions":
+			modules = []string{"regions"}
 		case "release":
 			modules = []string{"releases"}
 		}

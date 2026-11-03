@@ -11,7 +11,7 @@
   }
   const modulesByPage = {
     'dashboard.html': 'dashboard', 'track_submissions.html': 'track_submissions', 'tracks.html': 'tracks',
-    'scenic_spots.html': 'scenic_spots', 'users.html': 'users', 'route_groups.html': 'route_groups',
+    'scenic_spots.html': 'scenic_spots', 'regions.html': 'regions', 'users.html': 'users', 'route_groups.html': 'route_groups',
     'companions.html': 'companions', 'companion_detail.html': 'companions', 'feedbacks.html': 'feedbacks',
     'index.html': 'releases', 'analytics.html': 'analytics', 'accounts.html': 'accounts'
   };
@@ -80,6 +80,7 @@
     { href: '/admin/track_submissions.html', label: '投稿审核', icon: 'clipboard-check', primary: true },
     { href: '/admin/tracks.html', label: '轨迹管理', icon: 'route', primary: true },
     { href: '/admin/scenic_spots.html', label: '户外目的地', icon: 'map-2' },
+    { href: '/admin/regions.html', label: '地区管理', icon: 'map-2' },
     { href: '/admin/users.html', label: '用户管理', icon: 'users' },
     { href: '/admin/route_groups.html', label: '地图模式', icon: 'map-2' },
     { href: '/admin/companions.html', label: '与友同行', icon: 'friends' },
