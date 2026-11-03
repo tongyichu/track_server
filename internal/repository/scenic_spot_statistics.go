@@ -17,15 +17,20 @@ type ScenicSpotTrackStatistics struct {
 
 // CountCompletedScenicSpotTracks joins scenic links to valid completed tracks in the active backend.
 func CountCompletedScenicSpotTracks(ctx context.Context, spots ScenicSpotRepository, tracks TrackRepository, spotIDs []string) (map[string]*ScenicSpotTrackStatistics, error) {
-	return scenicSpotTrackStatistics(ctx, spots, tracks, spotIDs, true)
+	return scenicSpotTrackStatistics(ctx, spots, tracks, spotIDs, true, false)
+}
+
+// CountPublicScenicSpotTracks matches the tracks visible in DiscoverSpotTracks.
+func CountPublicScenicSpotTracks(ctx context.Context, spots ScenicSpotRepository, tracks TrackRepository, spotIDs []string) (map[string]*ScenicSpotTrackStatistics, error) {
+	return scenicSpotTrackStatistics(ctx, spots, tracks, spotIDs, true, true)
 }
 
 // CountScenicSpotTracks counts existing related tracks, matching the admin detail list.
 func CountScenicSpotTracks(ctx context.Context, spots ScenicSpotRepository, tracks TrackRepository, spotIDs []string) (map[string]*ScenicSpotTrackStatistics, error) {
-	return scenicSpotTrackStatistics(ctx, spots, tracks, spotIDs, false)
+	return scenicSpotTrackStatistics(ctx, spots, tracks, spotIDs, false, false)
 }
 
-func scenicSpotTrackStatistics(ctx context.Context, spots ScenicSpotRepository, tracks TrackRepository, spotIDs []string, completedOnly bool) (map[string]*ScenicSpotTrackStatistics, error) {
+func scenicSpotTrackStatistics(ctx context.Context, spots ScenicSpotRepository, tracks TrackRepository, spotIDs []string, completedOnly, publicOnly bool) (map[string]*ScenicSpotTrackStatistics, error) {
 	ids := uniqueNonEmptyStrings(spotIDs)
 	out := make(map[string]*ScenicSpotTrackStatistics, len(ids))
 	add := func(id, city string, count int64) {
@@ -51,6 +56,10 @@ func scenicSpotTrackStatistics(ctx context.Context, spots ScenicSpotRepository, 
 		if completedOnly {
 			completedFilter = " AND " + completedTrackAliasSQL
 		}
+		if publicOnly {
+			completedFilter += " AND t.status=?"
+			args = append(args, models.TrackStatusNormal)
+		}
 		rows, err := repo.db.QueryContext(ctx, `SELECT l.spot_id,COALESCE(t.city_code,''),COUNT(*) FROM track_scenic_spot_links l
 			INNER JOIN track_records t ON t.id=l.track_id
 			WHERE l.spot_id IN (`+placeholders+`)`+completedFilter+` GROUP BY l.spot_id,t.city_code`, args...)
@@ -74,8 +83,12 @@ func scenicSpotTrackStatistics(ctx context.Context, spots ScenicSpotRepository, 
 			{{Key: "$unwind", Value: "$track"}},
 		}
 		if completedOnly {
+			statusFilter := any(bson.M{"$ne": models.TrackStatusDeleted})
+			if publicOnly {
+				statusFilter = models.TrackStatusNormal
+			}
 			pipeline = append(pipeline, bson.D{{Key: "$match", Value: bson.M{
-				"track.status": bson.M{"$ne": models.TrackStatusDeleted}, "track.is_running": false,
+				"track.status": statusFilter, "track.is_running": false,
 				"track.raw_track_url": bson.M{"$nin": bson.A{nil, ""}},
 				"track.deleted_at":    bson.M{"$in": bson.A{nil, time.Time{}}},
 			}}})
@@ -125,6 +138,9 @@ func scenicSpotTrackStatistics(ctx context.Context, spots ScenicSpotRepository, 
 				continue
 			}
 			if completedOnly && (track.Status == models.TrackStatusDeleted || !track.DeletedAt.IsZero() || track.IsRunning || track.RawTrackURL == "") {
+				continue
+			}
+			if publicOnly && track.Status != models.TrackStatusNormal {
 				continue
 			}
 			add(spotID, track.CityCode, 1)

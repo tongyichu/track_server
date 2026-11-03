@@ -2,6 +2,9 @@ package service
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
+	"sort"
 	"strings"
 	"time"
 
@@ -20,6 +23,31 @@ type DiscoverSpotsPage struct {
 	Items      []DiscoverSpot `json:"items"`
 	NextCursor string         `json:"next_cursor,omitempty"`
 	HasMore    bool           `json:"has_more"`
+}
+
+type discoverSpotCursor struct {
+	TrackCount int64  `json:"track_count"`
+	ID         string `json:"id"`
+}
+
+func decodeDiscoverSpotCursor(raw string) (*discoverSpotCursor, error) {
+	if strings.TrimSpace(raw) == "" {
+		return nil, nil
+	}
+	data, err := base64.RawURLEncoding.DecodeString(raw)
+	if err != nil {
+		return nil, invalidArg("invalid cursor")
+	}
+	var cursor discoverSpotCursor
+	if json.Unmarshal(data, &cursor) != nil || cursor.ID == "" || cursor.TrackCount < 0 {
+		return nil, invalidArg("invalid cursor")
+	}
+	return &cursor, nil
+}
+
+func encodeDiscoverSpotCursor(count int64, id string) string {
+	data, _ := json.Marshal(discoverSpotCursor{TrackCount: count, ID: id})
+	return base64.RawURLEncoding.EncodeToString(data)
 }
 
 func (s *TrackService) DiscoverSpotTracks(ctx context.Context, userID int64, spotID, rawCursor string, limit int) (*models.TrackSummaryPage, error) {
@@ -100,20 +128,68 @@ func (s *TrackService) DiscoverSpots(ctx context.Context, cityCode, cursor strin
 	if s.scenicCatalog == nil || !s.scenicCatalog.Enabled() {
 		return page, nil
 	}
-	limit = normalizeTrackPageLimit(limit)
-	filter := repository.ScenicSpotListFilter{VisibleOnly: true, Cursor: cursor, Limit: limit + 1}
-	if code := strings.TrimSpace(cityCode); code != "" {
-		filter.CityCodes = []string{code}
-	}
-	spots, _, err := s.scenicCatalog.List(ctx, filter)
+	anchor, err := decodeDiscoverSpotCursor(cursor)
 	if err != nil {
 		return nil, err
 	}
-	page.HasMore = len(spots) > limit
-	if page.HasMore {
-		spots = spots[:limit]
+	limit = normalizeTrackPageLimit(limit)
+	filter := repository.ScenicSpotListFilter{VisibleOnly: true, Limit: 100}
+	if code := strings.TrimSpace(cityCode); code != "" {
+		filter.CityCodes = []string{code}
+		filter.RelatedCitySpotIDs, err = repository.ScenicSpotIDsByTrackCities(ctx, s.scenicCatalog.spots, s.tracks, filter.CityCodes)
+		if err != nil {
+			return nil, err
+		}
 	}
-	for _, spot := range spots {
+	type rankedSpot struct {
+		spot  *models.ScenicSpot
+		count int64
+	}
+	ranked := make([]rankedSpot, 0)
+	for {
+		spots, _, err := s.scenicCatalog.spots.ListScenicSpots(ctx, filter)
+		if err != nil {
+			return nil, err
+		}
+		if len(spots) == 0 {
+			break
+		}
+		ids := make([]string, 0, len(spots))
+		for _, spot := range spots {
+			ids = append(ids, spot.ID)
+		}
+		counts, err := repository.CountPublicScenicSpotTracks(ctx, s.scenicCatalog.spots, s.tracks, ids)
+		if err != nil {
+			return nil, err
+		}
+		for _, spot := range spots {
+			count := int64(0)
+			if stats := counts[spot.ID]; stats != nil {
+				count = stats.TrackCount
+			}
+			ranked = append(ranked, rankedSpot{spot: spot, count: count})
+		}
+		if len(spots) < filter.Limit {
+			break
+		}
+		filter.Cursor = spots[len(spots)-1].ID
+	}
+	sort.Slice(ranked, func(i, j int) bool {
+		if ranked[i].count != ranked[j].count {
+			return ranked[i].count > ranked[j].count
+		}
+		return ranked[i].spot.ID < ranked[j].spot.ID
+	})
+	start := 0
+	if anchor != nil {
+		start = sort.Search(len(ranked), func(i int) bool {
+			return ranked[i].count < anchor.TrackCount ||
+				(ranked[i].count == anchor.TrackCount && ranked[i].spot.ID > anchor.ID)
+		})
+	}
+	end := min(start+limit, len(ranked))
+	for _, item := range ranked[start:end] {
+		spot := item.spot
 		cover := spot.CoverURL
 		source := ""
 		if len(spot.Photos) > 0 && strings.TrimSpace(spot.Photos[0].URL) != "" {
@@ -122,8 +198,10 @@ func (s *TrackService) DiscoverSpots(ctx context.Context, cityCode, cursor strin
 		}
 		page.Items = append(page.Items, DiscoverSpot{ID: spot.ID, Name: spot.Name, CoverURL: cover, SourceURL: source})
 	}
-	if page.HasMore && len(spots) > 0 {
-		page.NextCursor = spots[len(spots)-1].ID
+	page.HasMore = end < len(ranked)
+	if page.HasMore {
+		last := ranked[end-1]
+		page.NextCursor = encodeDiscoverSpotCursor(last.count, last.spot.ID)
 	}
 	return page, nil
 }
