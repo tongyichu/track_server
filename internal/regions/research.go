@@ -67,7 +67,7 @@ func NewResearcher(key, model string) *Researcher {
 	if model == "" {
 		model = "kimi-k2.6"
 	}
-	return &Researcher{key: strings.TrimSpace(key), model: strings.TrimSpace(model), client: &http.Client{Timeout: 45 * time.Second}}
+	return &Researcher{key: strings.TrimSpace(key), model: strings.TrimSpace(model), client: &http.Client{Timeout: 90 * time.Second}}
 }
 
 func (r *Researcher) Ready() bool { return r != nil && r.key != "" }
@@ -90,14 +90,14 @@ func (r *Researcher) Research(ctx context.Context, node Node, hierarchy []string
 			continue
 		}
 		draft.Sources = append(draft.Sources, ResearchSource{Title: strings.TrimSpace(result.Title), URL: link})
-		fmt.Fprintf(&evidence, "来源：%s\n链接：%s\n摘要：%s\n", result.Title, link, clampRunes(result.Snippet, 700))
+		fmt.Fprintf(&evidence, "来源：%s\n链接：%s\n摘要：%s\n", result.Title, link, clampRunes(result.Snippet, 500))
 		for _, chunk := range result.Chunks {
-			fmt.Fprintf(&evidence, "资料：%s\n", clampRunes(chunk.Text, 900))
-			if evidence.Len() > 16000 {
+			fmt.Fprintf(&evidence, "资料：%s\n", clampRunes(chunk.Text, 500))
+			if evidence.Len() > 8000 {
 				break
 			}
 		}
-		if evidence.Len() > 16000 {
+		if evidence.Len() > 8000 {
 			break
 		}
 	}
@@ -122,8 +122,8 @@ func (r *Researcher) Research(ctx context.Context, node Node, hierarchy []string
 			}
 			sloganSources[link] = sourceText.String()
 			draft.Sources = append(draft.Sources, ResearchSource{Title: strings.TrimSpace(result.Title), URL: link})
-			fmt.Fprintf(&sloganEvidence, "来源：%s\n链接：%s\n资料：%s\n", result.Title, link, clampRunes(sourceText.String(), 1500))
-			if sloganEvidence.Len() > 18000 {
+			fmt.Fprintf(&sloganEvidence, "来源：%s\n链接：%s\n资料：%s\n", result.Title, link, clampRunes(sourceText.String(), 900))
+			if sloganEvidence.Len() > 9000 {
 				break
 			}
 		}
@@ -136,10 +136,15 @@ func (r *Researcher) Research(ctx context.Context, node Node, hierarchy []string
 			} `json:"message"`
 		} `json:"choices"`
 	}
-	if err := r.moonshotJSON(ctx, "/chat/completions", map[string]any{
+	completionInput := map[string]any{
 		"model": r.model, "temperature": 1, "max_tokens": 32768,
 		"messages": []map[string]string{{"role": "system", "content": "你是严谨的地区资料编辑，只依据提供的来源写作，不猜测。"}, {"role": "user", "content": prompt}},
-	}, &completion); err != nil {
+	}
+	if r.model == "kimi-k2.6" || r.model == "kimi-k2.5" {
+		completionInput["thinking"] = map[string]string{"type": "disabled"}
+		completionInput["max_tokens"] = 4096
+	}
+	if err := r.moonshotJSON(ctx, "/chat/completions", completionInput, &completion); err != nil {
 		return nil, fmt.Errorf("城市资料整理失败: %w", err)
 	}
 	if len(completion.Choices) == 0 {
