@@ -1175,7 +1175,16 @@ func (s *TrackService) SearchTracks(ctx context.Context, userID int64, input Sea
 			return nil, err
 		}
 	}
-	return buildTrackSummaryPage(summaries, hasMore)
+	page, err := buildTrackSummaryPage(summaries, hasMore)
+	if err != nil {
+		return nil, err
+	}
+	totalCount, err := s.tracks.CountSearch(ctx, input.Keyword, cityCode, trackType)
+	if err != nil {
+		return nil, err
+	}
+	page.TotalCount = &totalCount
+	return page, nil
 }
 
 // listTracksWithNonEmptyRawTrackURL scans pages from repository and only keeps tracks with non-empty RawTrackURL.

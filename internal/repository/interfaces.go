@@ -63,6 +63,8 @@ type TrackRepository interface {
 	ListRecommend(ctx context.Context, userID int64, cityCode string, cursor *models.TrackListCursor, limit int) ([]*models.Track, error)
 	// Search 返回标题匹配的公开轨迹；cityCode、trackType 非空时分别按城市和运动类型精确筛选。
 	Search(ctx context.Context, keyword, cityCode, trackType string, cursor *models.TrackListCursor, limit int) ([]*models.Track, error)
+	// CountSearch 统计同一搜索条件下可展示的全部轨迹，不受分页游标影响。
+	CountSearch(ctx context.Context, keyword, cityCode, trackType string) (int64, error)
 	// ListAll 返回全量轨迹列表（按 start_time desc, id desc）。
 	//
 	// 约定：

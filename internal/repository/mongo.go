@@ -430,6 +430,20 @@ func (r *MongoTrackRepository) Search(ctx context.Context, keyword, cityCode, tr
 	)
 }
 
+func (r *MongoTrackRepository) CountSearch(ctx context.Context, keyword, cityCode, trackType string) (int64, error) {
+	filter := bson.M{"status": models.TrackStatusNormal, "raw_track_url": bson.M{"$exists": true, "$nin": bson.A{"", nil}}}
+	if cityCode != "" {
+		filter["city_code"] = cityCode
+	}
+	if trackType != "" {
+		filter["track_type"] = trackType
+	}
+	if keyword != "" {
+		filter["title"] = primitive.Regex{Pattern: regexp.QuoteMeta(keyword), Options: "i"}
+	}
+	return r.collection.CountDocuments(ctx, filter)
+}
+
 // ListAll 返回全量未删除轨迹（按 start_time desc, id desc）。仅供管理后台使用。
 func (r *MongoTrackRepository) ListAll(ctx context.Context, cursor *models.TrackListCursor, limit int) ([]*models.Track, error) {
 	if limit <= 0 {

@@ -492,6 +492,7 @@ curl -X GET "http://<host>:<port>/api/v1/track/trk-detail/detail" \
 - `city_code` 使用精确匹配；没有匹配轨迹或传入未知 Code 时返回空列表，不返回参数错误。
 - `track_type` 非空时仅返回该运动类型的轨迹，使用 `/track/types` 返回的 `type`；不传、空字符串或仅包含空白字符时不过滤运动类型。
 - `track_type` 使用存储值精确匹配，不对历史中文值做转换；无匹配结果时返回空列表。与 `city_code` 同时传入时，结果必须同时满足两个条件。
+- 响应中的 `total_count` 为当前 `keyword`、`city_code`、`track_type` 条件下可展示轨迹的总数，不受 `cursor` 和 `limit` 影响；仅统计正常状态且 `raw_track_url` 非空的轨迹。
 - 首次请求不传 `cursor`；继续翻页时透传上一次返回的 `next_cursor`。
 - 翻页时应保持相同的 `keyword`、`city_code` 和 `track_type` 筛选条件。
 - `limit` 为可选参数，默认 `20`，最大 `50`；超出最大值时服务端会自动截断到 `50`。
@@ -552,6 +553,7 @@ Authorization: Bearer <token>
       }
     ],
     "next_cursor": "eyJzdGFydF90aW1lIjoiMjAyNi0wNC0yMFQxMjowMDowMFoiLCJpZCI6InRyazEifQ",
+    "total_count": 42,
     "has_more": true
   }
 }
@@ -562,6 +564,7 @@ Authorization: Bearer <token>
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `data.items` | `TrackSummary[]` | 当前页轨迹列表。 |
+| `data.total_count` | int64 | 当前搜索条件下的结果总数，不受分页游标影响。 |
 | `data.next_cursor` | string | 下一页游标；当 `has_more=false` 时为空或不返回。 |
 | `data.has_more` | bool | 是否还有下一页数据。 |
 

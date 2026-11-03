@@ -2173,6 +2173,22 @@ func (r *MySQLTrackRepository) Search(ctx context.Context, keyword, cityCode, tr
 	return res, nil
 }
 
+func (r *MySQLTrackRepository) CountSearch(ctx context.Context, keyword, cityCode, trackType string) (int64, error) {
+	query := `SELECT COUNT(*) FROM track_records WHERE status=? AND raw_track_url IS NOT NULL AND raw_track_url <> '' AND (? = '' OR title LIKE ?)`
+	args := []interface{}{models.TrackStatusNormal, keyword, "%" + keyword + "%"}
+	if cityCode != "" {
+		query += ` AND city_code=?`
+		args = append(args, cityCode)
+	}
+	if trackType != "" {
+		query += ` AND track_type=?`
+		args = append(args, trackType)
+	}
+	var count int64
+	err := r.db.QueryRowContext(ctx, query, args...).Scan(&count)
+	return count, err
+}
+
 // ListAll 返回全量未删除轨迹（按 start_time desc, id desc）。仅供管理后台使用。
 func (r *MySQLTrackRepository) ListAll(ctx context.Context, cursor *models.TrackListCursor, limit int) ([]*models.Track, error) {
 	if limit <= 0 {

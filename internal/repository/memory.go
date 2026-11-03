@@ -422,6 +422,25 @@ func (r *InMemoryTrackRepository) Search(_ context.Context, keyword, cityCode, t
 	return res, nil
 }
 
+// CountSearch 统计与搜索列表相同过滤条件下的全部可展示轨迹。
+func (r *InMemoryTrackRepository) CountSearch(_ context.Context, keyword, cityCode, trackType string) (int64, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var count int64
+	for _, t := range r.tracks {
+		if t == nil || t.Status != models.TrackStatusNormal || t.RawTrackURL == "" {
+			continue
+		}
+		if (cityCode != "" && t.CityCode != cityCode) || (trackType != "" && t.TrackType != trackType) {
+			continue
+		}
+		if keyword == "" || containsIgnoreCase(t.Title, keyword) {
+			count++
+		}
+	}
+	return count, nil
+}
+
 // ListAll 返回全量未删除轨迹（按 start_time desc, id desc）。仅供管理后台使用。
 func (r *InMemoryTrackRepository) ListAll(_ context.Context, cursor *models.TrackListCursor, limit int) ([]*models.Track, error) {
 	if limit <= 0 {
