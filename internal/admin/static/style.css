@@ -418,10 +418,9 @@ table.data.table .btn { white-space: nowrap; }
 .track-import-owner-current, .track-import-owner-option { display: inline-flex; align-items: center; gap: 8px; }
 .track-import-owner-option .companion-avatar, .track-import-owner-current .companion-avatar { width: 24px; height: 24px; }
 .track-import-owner-menu { max-height: 280px; overflow-y: auto; min-width: 240px; }
-.track-import-results { border-top: 1px solid var(--tblr-border-color); padding-top: 10px; max-height: 320px; overflow-y: auto; }
-.track-import-result-list { margin: 0; padding-left: 4px; list-style: none; }
-.track-import-result-list li { padding: 3px 0; overflow-wrap: anywhere; }
-.track-import-result-ok { color: var(--tblr-green, #2fb344); }
+.track-import-results { border-top: 1px solid var(--tblr-border-color); padding-top: 10px; min-width: 0; }
+.track-import-results > .table-responsive { max-height: 480px; overflow: auto; }
+.track-import-file-name { min-width: 160px; max-width: 240px; overflow-wrap: anywhere; }
 .track-import-result-fail { color: var(--tblr-danger, #d63939); }
 .admin-track-detail-side { display: flex; flex-direction: column; gap: 16px; margin-bottom: 14px; }
 .admin-track-map-body { min-height: 0; }

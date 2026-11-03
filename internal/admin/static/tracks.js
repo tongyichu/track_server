@@ -29,6 +29,25 @@
     return '';
   }
 
+  function trackCells(it) {
+    var type = typeVisuals[it.track_type] || { color: '#64748b', icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v8m-4-4h8"/></svg>' };
+    var screenshotURL = safeImageURL(it.preview_images && it.preview_images.landscape_day_url);
+    var screenshotCell = screenshotURL
+        ? '<a class="track-shot" href="' + esc(screenshotURL) + '" target="_blank" rel="noopener"><img src="' + esc(screenshotURL) + '" alt="轨迹图" loading="lazy"></a>'
+        : '<span class="hint">无</span>';
+    var avatarURL = safeImageURL(it.avatar_url);
+    var avatar = avatarURL ? '<img class="track-avatar" src="' + esc(avatarURL) + '" alt="" loading="lazy">' : '<span class="track-avatar-fallback">' + esc((it.user_name || '用').slice(0, 1)) + '</span>';
+    var statusClass = it.status === 1 ? 'bg-green-lt' : it.status === 0 ? 'bg-red-lt' : 'bg-secondary-lt';
+    return '<td class="track-id">' + esc(it.id) + '</td>' +
+        '<td title="' + esc(it.city_code || '') + '">' + esc(cityNameByCode[it.city_code] || '未知城市') + '</td>' +
+        '<td class="track-title-cell">' + esc(it.title || '') + '</td>' +
+        '<td><span class="track-type-badge" style="--track-type-color:' + type.color + '">' + type.icon + '<span>' + esc(typeNameByCode[it.track_type] || it.track_type || '未知') + '</span></span></td>' +
+        '<td><span class="track-user">' + avatar + '<span>' + esc(it.user_name || '未知用户') + '</span></span></td>' +
+        '<td>' + screenshotCell + '</td>' +
+        '<td><span class="badge ' + statusClass + '">' + esc(statusText(it.status)) + '</span></td>' +
+        '<td><button class="btn btn-sm btn-outline-primary js-edit-track" data-track-id="' + esc(it.id) + '">' + (AdminAccess.can('tracks', true) ? '编辑' : '查看') + '</button></td>';
+  }
+
   var pageSize = 20;
   var cursorStack = [null];
   var pageIndex = 0;
@@ -113,22 +132,7 @@
     tbody.innerHTML = '';
     items.forEach(function (it) {
       var tr = document.createElement('tr');
-      var type = typeVisuals[it.track_type] || { color: '#64748b', icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v8m-4-4h8"/></svg>' };
-      var screenshotURL = safeImageURL(it.preview_images && it.preview_images.landscape_day_url);
-      var screenshotCell = screenshotURL
-        ? '<a class="track-shot" href="' + esc(screenshotURL) + '" target="_blank" rel="noopener"><img src="' + esc(screenshotURL) + '" alt="轨迹图" loading="lazy"></a>'
-        : '<span class="hint">无</span>';
-      var avatarURL = safeImageURL(it.avatar_url);
-      var avatar = avatarURL ? '<img class="track-avatar" src="' + esc(avatarURL) + '" alt="" loading="lazy">' : '<span class="track-avatar-fallback">' + esc((it.user_name || '用').slice(0, 1)) + '</span>';
-      var statusClass = it.status === 1 ? 'bg-green-lt' : it.status === 0 ? 'bg-red-lt' : 'bg-secondary-lt';
-      tr.innerHTML = '<td class="track-id">' + esc(it.id) + '</td>' +
-        '<td title="' + esc(it.city_code || '') + '">' + esc(cityNameByCode[it.city_code] || '未知城市') + '</td>' +
-        '<td class="track-title-cell">' + esc(it.title || '') + '</td>' +
-        '<td><span class="track-type-badge" style="--track-type-color:' + type.color + '">' + type.icon + '<span>' + esc(typeNameByCode[it.track_type] || it.track_type || '未知') + '</span></span></td>' +
-        '<td><span class="track-user">' + avatar + '<span>' + esc(it.user_name || '未知用户') + '</span></span></td>' +
-        '<td>' + screenshotCell + '</td>' +
-        '<td><span class="badge ' + statusClass + '">' + esc(statusText(it.status)) + '</span></td>' +
-        '<td><button class="btn btn-sm btn-outline-primary js-edit-track" data-track-id="' + esc(it.id) + '">' + (AdminAccess.can('tracks', true) ? '编辑' : '查看') + '</button></td>';
+      tr.innerHTML = trackCells(it);
       tbody.appendChild(tr);
     });
 
@@ -140,18 +144,64 @@
       : '共 ' + totalCount + ' 条轨迹（不含已下架）';
   }
 
-  tbody.addEventListener('click', async function (ev) {
+  async function handleTrackEdit(ev) {
     var editBtn = ev.target && ev.target.closest ? ev.target.closest('.js-edit-track') : null;
     if (editBtn) {
       try {
-        await editTrack(editBtn.getAttribute('data-track-id'), editBtn);
+        await editTrack(editBtn.getAttribute('data-track-id'));
       } catch (err) {
         AdminUI.alert('读取轨迹失败: ' + (err.message || err), 'danger');
       }
     }
-  });
+  }
+  tbody.addEventListener('click', handleTrackEdit);
+  document.getElementById('trackImportResults').addEventListener('click', handleTrackEdit);
 
-  async function editTrack(trackID, btn) { return window.AdminTrackEditor.open(trackID, { onSaved: loadPage, onDeleted: loadPage }); }
+  var importResults = [];
+  function renderImportResults() {
+    var node = document.getElementById('trackImportResults');
+    var okCount = importResults.filter(function (r) { return !r.error; }).length;
+    node.innerHTML = '<p class="hint">共 ' + importResults.length + ' 个文件，成功 ' + okCount + ' 个，失败 ' + (importResults.length - okCount) + ' 个。</p>' +
+      '<div class="table-responsive"><table class="data table track-import-result-table"><thead><tr>' +
+      '<th>文件名</th><th>ID</th><th>城市</th><th>标题</th><th>类型</th><th>用户名</th><th>轨迹图</th><th>状态</th><th>操作</th><th>导入结果</th>' +
+      '</tr></thead><tbody>' + importResults.map(function (r) {
+        var cells = r.error
+          ? '<td colspan="8" data-label="错误原因" class="track-import-result-fail">' + esc(r.error) + '</td>'
+          : r.removed ? '<td colspan="8" data-label="轨迹" class="hint">轨迹已彻底删除</td>' : trackCells(r.track);
+        return '<tr><td class="track-import-file-name">' + esc(r.file_name) + '</td>' + cells +
+          '<td data-label="导入结果"><span class="badge ' + (r.error ? 'bg-red-lt' : 'bg-green-lt') + '">' + (r.error ? '失败' : '成功') + '</span></td></tr>';
+      }).join('') + '</tbody></table></div>';
+    node.hidden = false;
+  }
+
+  async function refreshImportedTrack(trackID) {
+    var result = importResults.find(function (r) { return !r.error && r.track_id === trackID; });
+    if (!result) return;
+    try {
+      var response = await fetch('/admin/api/tracks/' + encodeURIComponent(trackID));
+      if (importResults.indexOf(result) < 0) return;
+      if (response.status === 404) {
+        result.removed = true;
+      } else {
+        if (!response.ok) throw new Error(String(response.status));
+        var data = ((await response.json()).data) || {};
+        if (importResults.indexOf(result) < 0) return;
+        result.track = Object.assign({}, result.track, data.track);
+        var previews = result.track.preview_images || {};
+        result.track.preview_images = Object.assign({}, previews, {
+          landscape_day_url: (previews.landscape_day_url || '').replace(/^\/api\/v1\/static\//, '/admin/api/static/')
+        });
+      }
+      renderImportResults();
+    } catch (error) {
+      AdminUI.alert('导入结果刷新失败，请重新打开轨迹核实: ' + (error.message || error), 'warning');
+    }
+  }
+
+  async function editTrack(trackID) {
+    function refreshLists() { return Promise.all([loadPage(), refreshImportedTrack(trackID)]); }
+    return window.AdminTrackEditor.open(trackID, { onSaved: refreshLists, onDeleted: refreshLists });
+  }
 
   function populateCityOptions(regions, provinceCode) {
     cityFilter.replaceChildren(new Option('全部城市', ''));
@@ -306,10 +356,13 @@
       submitBtn.textContent = '正在导入…';
       errorNode.hidden = true;
       resultsNode.hidden = true;
+      importResults = [];
+      var importOwner = selectedOwner;
+      var importType = typeSelect.value;
       var form = new FormData();
       Array.from(fileInput.files).forEach(function (file) { form.append('files', file, file.name); });
-      form.append('owner_user_id', String(selectedOwner.id));
-      form.append('track_type', typeSelect.value);
+      form.append('owner_user_id', String(importOwner.id));
+      form.append('track_type', importType);
       form.append('coordinate_system', coordSelect.value);
       fetch('/admin/api/tracks/import', { method: 'POST', body: form })
         .then(function (resp) {
@@ -321,13 +374,15 @@
         .then(function (payload) {
           var results = (payload.data && payload.data.results) || [];
           var okCount = results.filter(function (r) { return !r.error; }).length;
-          resultsNode.innerHTML = '<p class="hint">共 ' + results.length + ' 个文件，成功 ' + okCount + ' 个。</p>' +
-            '<ul class="track-import-result-list">' + results.map(function (r) {
-              return r.error
-                ? '<li class="track-import-result-fail">✕ ' + esc(r.file_name) + '：' + esc(r.error) + '</li>'
-                : '<li class="track-import-result-ok">✓ ' + esc(r.file_name) + ' → ' + esc(r.title || '') + '（' + esc(r.track_id || '') + '）</li>';
-            }).join('') + '</ul>';
-          resultsNode.hidden = false;
+          importResults = results.map(function (r) {
+            if (!r.error) {
+              r.track = Object.assign({ id: r.track_id, title: r.title, track_type: importType }, r.track, {
+                user_name: importOwner.nickname || '未知用户', avatar_url: importOwner.avatar_url
+              });
+            }
+            return r;
+          });
+          renderImportResults();
           if (okCount) {
             cursorStack = [null];
             pageIndex = 0;

@@ -1608,7 +1608,7 @@ func (h *Handler) GetTrackMapConfig(_ context.Context, c *app.RequestContext) {
 //   - track_type:        运动类型 code（默认 hiking）；
 //   - coordinate_system: 原始文件坐标系 WGS84/GCJ02/BD09（默认 WGS84）。
 //
-// 返回 results: [{file_name, track_id?, title?, error?}]，单条失败不影响其他文件。
+// 返回 results: [{file_name, track_id?, title?, track?, error?}]，单条失败不影响其他文件。
 func (h *Handler) ImportTracks(ctx context.Context, c *app.RequestContext) {
 	if h == nil || h.trackImportSvc == nil {
 		c.JSON(http.StatusInternalServerError, utils.H{"error": "track import service not configured"})
