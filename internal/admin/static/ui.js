@@ -4,7 +4,6 @@
     '/admin/users.html': ['用户管理', '查看用户资料并管理账号限制'],
     '/admin/tracks.html': ['轨迹管理', '查看、修正或删除用户轨迹'],
     '/admin/scenic_spots.html': ['景点管理', '维护自有景点资料、地图来源与轨迹归属'],
-    '/admin/regions.html': ['城市管理', '维护国家、省份与城市目录'],
     '/admin/track_submissions.html': ['投稿审核', '审核用户提交的结构化路线资料'],
     '/admin/route_groups.html': ['地图模式', '维护地图模式中的路线组、代表轨迹和路线介绍'],
     '/admin/companions.html': ['与友同行', '查看同行房间、成员与活动记录'],
@@ -256,6 +255,7 @@
 
   function enhanceButton(button) {
     if (button.hasAttribute('data-period') || button.classList.contains('btn-close') || button.matches('.dropdown-item, [data-bs-toggle="dropdown"]')) return;
+    if (button.closest('.region-country-bar, .region-tree')) return;
     button.classList.add('btn');
     if (Array.from(button.classList).some(function (name) { return /^btn-(primary|secondary|success|danger|warning|info|light|dark|outline)/.test(name); })) return;
     const id = button.id || '';

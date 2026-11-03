@@ -104,7 +104,7 @@
           const toggle = document.createElement('button');
           toggle.type = 'button';
           toggle.className = 'region-tree-toggle';
-          toggle.textContent = expanded ? '▾' : '▸';
+          toggle.textContent = expanded ? '−' : '+';
           toggle.setAttribute('aria-label', (expanded ? '折叠' : '展开') + node.name);
           toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
           toggle.disabled = !!query;
@@ -127,9 +127,7 @@
         if (childNodes.length) button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
         const label = document.createElement('span');
         label.textContent = node.name;
-        const code = document.createElement('small');
-        code.textContent = node.code || node.level;
-        button.append(label, code);
+        button.appendChild(label);
         button.addEventListener('click', () => select(node.id));
         row.appendChild(button);
         item.appendChild(row);
