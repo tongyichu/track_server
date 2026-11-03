@@ -39,10 +39,20 @@ type ImportTrackFile struct {
 
 // ImportTrackResult 是单个文件的导入结果。
 type ImportTrackResult struct {
-	FileName string `json:"file_name"`
-	TrackID  string `json:"track_id,omitempty"`
-	Title    string `json:"title,omitempty"`
-	Error    string `json:"error,omitempty"`
+	FileName string              `json:"file_name"`
+	TrackID  string              `json:"track_id,omitempty"`
+	Title    string              `json:"title,omitempty"`
+	Error    string              `json:"error,omitempty"`
+	Track    *ImportTrackSummary `json:"track,omitempty"`
+}
+
+// ImportTrackSummary 提供导入结果表格所需字段，不包含用户数值 ID 或原始文件地址。
+type ImportTrackSummary struct {
+	ID        string             `json:"id"`
+	CityCode  string             `json:"city_code"`
+	Title     string             `json:"title"`
+	TrackType string             `json:"track_type"`
+	Status    models.TrackStatus `json:"status"`
 }
 
 // ImportTracks 逐文件导入，单条失败不影响其他文件。
@@ -132,6 +142,10 @@ func (s *AdminTrackImportService) importOne(ctx context.Context, ownerUserID int
 	}
 	result.TrackID = track.ID
 	result.Title = track.Title
+	result.Track = &ImportTrackSummary{
+		ID: track.ID, CityCode: track.CityCode, Title: track.Title,
+		TrackType: track.TrackType, Status: track.Status,
+	}
 	return result
 }
 

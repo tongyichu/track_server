@@ -13,6 +13,10 @@ type ScenicSpot struct {
 	Name                      string             `json:"name" bson:"name"`
 	Aliases                   []string           `json:"aliases,omitempty" bson:"aliases,omitempty"`
 	Category                  string             `json:"category,omitempty" bson:"category,omitempty"`
+	ScenicGrade               string             `json:"scenic_grade,omitempty" bson:"scenic_grade,omitempty"`
+	ScenicGradeSource         string             `json:"scenic_grade_source,omitempty" bson:"scenic_grade_source,omitempty"`
+	ScenicGradeStatus         string             `json:"scenic_grade_status,omitempty" bson:"scenic_grade_status,omitempty"`
+	ScenicGradeCheckedAt      *time.Time         `json:"scenic_grade_checked_at,omitempty" bson:"scenic_grade_checked_at,omitempty"`
 	CityCode                  string             `json:"city_code,omitempty" bson:"city_code,omitempty"`
 	CityName                  string             `json:"city_name,omitempty" bson:"city_name,omitempty"`
 	Latitude                  float64            `json:"latitude,omitempty" bson:"latitude,omitempty"`

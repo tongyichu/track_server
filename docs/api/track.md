@@ -8,6 +8,7 @@
 
 - `GET /api/v1/track/discover/scenic-spots?city_code=CN000118&limit=30&cursor=<next_cursor>`：返回当前城市状态为 `active` 的景点，包含轨迹关联到该城市的景点；不传城市时返回全部。按关联的公开、已完成且有原始文件的轨迹数降序排列，同数时按景点 ID 升序排列。`items` 每项含 `id`、`name`、`cover_url`，可选 `description`、`source_url`；景点详情页用这些字段展示封面和介绍。`cover_url` 优先采用景点 `photos[0].url`，缺失时回退景点封面。`limit` 默认 20、最大 50；`has_more` 与不透明的 `next_cursor` 供横向列表继续加载，游标包含排序锚点。
 - 景点列表新增可选 `photos` 数组，按目录原顺序返回全部非空图片：`[{"url":"/api/v1/static/scenic_spots/<id>/photo.jpg","title":"照片说明","author":"作者","author_url":"https://example.com/author","source_url":"https://example.com/source"}]`；无图返回 `[]`。字段投影与 `primary_scenic_spot.photos` 一致，自有图片携带业务 JWT，外部图片沿用 source_url 作为 Referer。只读取现有目录，不调用地图供应商，不改变封面选择及分页。Android 详情取前 3 张每 3 秒叠化，相册每行 3 张展示全部；旧服务端未提供 photos 或空数组时回退 cover_url。
+- 景点列表每项及轨迹详情/摘要的 `primary_scenic_spot` 可选返回 `scenic_grade`，值为 `"1A"`、`"2A"`、`"3A"`、`"4A"`、`"5A"`。未知或人工清空时省略，客户端应隐藏等级，不能将其解释为“未评级”。等级读取已保存目录，不增加供应商请求；旧客户端可忽略，旧数据无需迁移。
 - `GET /api/v1/track/discover/scenic-spots/:spot_id/tracks?limit=20&cursor=<next_cursor>`：返回状态为 `active` 的景点真实关联的公开、已完成且有原始文件的轨迹摘要；归档、合并或不存在返回 404。按关联轨迹 ID 排序，`next_cursor` 是已消费的关联轨迹 ID。
 - `GET /api/v1/track/discover/shapes?city_code=CN000118&limit=20&cursor=<next_cursor>`：按开始时间倒序返回公开、已结束、有原始轨迹文件且 `shape_label` 非空的轨迹摘要；`city_code` 可选。沿用推荐轨迹的摘要字段和游标分页，响应 `items`、`has_more`、`next_cursor`。
 - `GET /api/v1/track/activity/calendar?timezone=Asia%2FShanghai`：返回当前用户最近 375 个当地自然日（含 10 天缓冲）的已完成轨迹数量，供客户端从连续 12 个月的首月第一个周日起展示。只计正常或私有、已结束且有原始轨迹文件的远端轨迹，以轨迹 `start_time` 对应的当地日期归组。`timezone` 为 IANA 时区，省略时默认 `Asia/Shanghai`，非法值返回 400。响应包含 `start_date`、`end_date`、缓冲区内的 `total_count` 和按日期升序的非零 `days: [{"date":"YYYY-MM-DD","count":1}]`；未列出的日期为 0。客户端仅对实际展示日期求和，并叠加本机未上传的已完成轨迹，避免重复计算远端已上传记录。
@@ -1076,17 +1077,19 @@ Authorization: Bearer <token>
 | --- | --- | --- |
 | featured | 固定 featured，投稿审核通过时出现；撤回/待审/驳回/失效不出现 | 精品 / Featured |
 | sport | 标准化 track_type | 运动配置中文/英文名称 |
-| scenic_spot | primary_scenic_spot.id | 主景区名称 |
+| scenic_spot | primary_scenic_spot.id | 有等级为“主景区名称·5A”，无等级为原名称 |
 | shape | shape_label | 具象名称 |
 
 ```json
 {"labels":[
   {"type":"featured","value":true,"code":"featured","name":"精品","name_en":"Featured","theme_color":"#9C6500","theme_color_dark":"#F3C969"},
   {"type":"sport","value":true,"code":"running","name":"跑步","name_en":"Running","theme_color":"#F26A4B","theme_color_dark":"#FF947A"},
-  {"type":"scenic_spot","value":true,"code":"SCP-example","name":"北京奥林匹克公园","theme_color":"#087F8C","theme_color_dark":"#69D2DD"},
+  {"type":"scenic_spot","value":true,"code":"SCP-example","name":"故宫·5A","theme_color":"#087F8C","theme_color_dark":"#69D2DD"},
   {"type":"shape","value":true,"code":"玫瑰花","name":"玫瑰花","theme_color":"#B43F83","theme_color_dark":"#F39ACB"}
 ]}
 ```
+
+景区标签的等级文案由 API 在 `labels[type=scenic_spot].name` 中完整组装，例如 `故宫·5A`，分隔符是居中点 `·`（U+00B7），不是句号。没有等级时仅返回景点名称，客户端不得再次拼接等级；`code` 保持景点 ID，`primary_scenic_spot.name` 仍是原始景点名，`scenic_grade` 独立保留。景区详情页在标题旁展示该等级标记。
 
 示例只说明格式，不代表历史轨迹已赋形象。labels 不重复持久化，不接受独立写入；权威来源为投稿审核状态、运动类型、主景区、shape_label。不增加供应商或 AI 调用。旧字段保留兼容。Android 详情标题上方统一消费 labels，按上述顺序展示，未知类型排在后面；英文环境优先 name_en，否则 name。labels 为 [] 时不按旧字段补标签，缺失时兼容旧服务端和本地轨迹。
 
