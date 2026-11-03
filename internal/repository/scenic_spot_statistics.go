@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tongyichu/track_server/internal/config"
 	"github.com/tongyichu/track_server/internal/models"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -38,7 +39,7 @@ func scenicSpotTrackStatistics(ctx context.Context, spots ScenicSpotRepository, 
 			out[id] = &ScenicSpotTrackStatistics{CityCodes: make(map[string]struct{})}
 		}
 		out[id].TrackCount += count
-		if city = strings.TrimSpace(city); city != "" {
+		if city = config.CanonicalCityCode(strings.TrimSpace(city)); city != "" {
 			out[id].CityCodes[city] = struct{}{}
 		}
 	}

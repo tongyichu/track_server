@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tongyichu/track_server/internal/config"
 	"github.com/tongyichu/track_server/internal/models"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -389,7 +390,7 @@ func (r *MongoTrackRepository) ListRecommend(ctx context.Context, _ int64, cityC
 	}
 	filter := bson.M{"status": models.TrackStatusNormal, "is_running": false}
 	if cityCode != "" {
-		filter["city_code"] = cityCode
+		filter["city_code"] = bson.M{"$in": config.CityCodeCandidates(cityCode)}
 	}
 	if cursor != nil {
 		filter["$or"] = []bson.M{
@@ -410,7 +411,7 @@ func (r *MongoTrackRepository) Search(ctx context.Context, keyword, cityCode, tr
 	}
 	filter := bson.M{"status": models.TrackStatusNormal}
 	if cityCode != "" {
-		filter["city_code"] = cityCode
+		filter["city_code"] = bson.M{"$in": config.CityCodeCandidates(cityCode)}
 	}
 	if trackType != "" {
 		filter["track_type"] = trackType
@@ -433,7 +434,7 @@ func (r *MongoTrackRepository) Search(ctx context.Context, keyword, cityCode, tr
 func (r *MongoTrackRepository) CountSearch(ctx context.Context, keyword, cityCode, trackType string) (int64, error) {
 	filter := bson.M{"status": models.TrackStatusNormal, "raw_track_url": bson.M{"$exists": true, "$nin": bson.A{"", nil}}}
 	if cityCode != "" {
-		filter["city_code"] = cityCode
+		filter["city_code"] = bson.M{"$in": config.CityCodeCandidates(cityCode)}
 	}
 	if trackType != "" {
 		filter["track_type"] = trackType
@@ -497,9 +498,9 @@ func (r *MongoTrackRepository) ListAdminTracks(ctx context.Context, filter Admin
 		query["title"] = primitive.Regex{Pattern: regexp.QuoteMeta(filter.Title), Options: "i"}
 	}
 	if filter.CityCode != "" {
-		query["city_code"] = filter.CityCode
+		query["city_code"] = bson.M{"$in": config.CityCodeCandidates(filter.CityCode)}
 	} else if len(filter.CityCodes) > 0 {
-		query["city_code"] = bson.M{"$in": filter.CityCodes}
+		query["city_code"] = bson.M{"$in": regionCodeCandidates(filter.CityCodes)}
 	}
 	if filter.Status != nil && *filter.Status != models.TrackStatusDeleted {
 		query["status"] = *filter.Status
@@ -814,10 +815,10 @@ func (r *MongoUserRepository) ListAdminUsers(ctx context.Context, filter AdminUs
 		}
 	}
 	if filter.CityCode != "" {
-		query["city_code"] = filter.CityCode
+		query["city_code"] = bson.M{"$in": config.CityCodeCandidates(filter.CityCode)}
 	}
 	if filter.ProvinceCode != "" {
-		query["province_code"] = filter.ProvinceCode
+		query["province_code"] = bson.M{"$in": config.CityCodeCandidates(filter.ProvinceCode)}
 	}
 	switch filter.Gender {
 	case "male", "female":

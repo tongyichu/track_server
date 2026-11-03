@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -446,10 +447,22 @@ func splitByAny(s, seps string) []string {
 }
 
 var (
-	cityCatalogMu sync.RWMutex
-	cityNameMap   map[string]string
-	cityOptions   []CityOption
+	cityCatalogMu      sync.RWMutex
+	cityNameMap        map[string]string
+	cityOptions        []CityOption
+	cityAliases        map[string]string
+	cityCodeCandidates map[string][]string
+	externalCityIDs    map[string]string
+	selectableCityIDs  map[string]bool
 )
+
+// ExternalCityID links a provider's region identifier to our stable region ID.
+type ExternalCityID struct {
+	Provider string
+	Type     string
+	Value    string
+	RegionID string
+}
 
 // CityOption is a human-readable city or province selector entry.
 type CityOption struct {
@@ -457,14 +470,119 @@ type CityOption struct {
 	Name         string `json:"name"`
 	Level        string `json:"level"`
 	ProvinceCode string `json:"province_code,omitempty"`
+	Selectable   bool   `json:"-"`
 }
 
 // SetCityCatalog replaces the in-process lookup from the persisted region catalog.
-func SetCityCatalog(options []CityOption, names map[string]string) {
+func SetCityCatalog(options []CityOption, names, aliases map[string]string, external []ExternalCityID) {
 	cityCatalogMu.Lock()
 	cityNameMap = names
 	cityOptions = append([]CityOption(nil), options...)
+	selectableCityIDs = make(map[string]bool, len(options))
+	for _, option := range options {
+		if option.Selectable {
+			selectableCityIDs[option.Code] = true
+		}
+	}
+	cityAliases = aliases
+	candidates := make(map[string][]string, len(aliases))
+	for alias, canonical := range aliases {
+		if alias != "" && canonical != "" {
+			candidates[canonical] = append(candidates[canonical], alias)
+		}
+	}
+	for code := range candidates {
+		sort.Strings(candidates[code])
+	}
+	cityCodeCandidates = candidates
+	externalCityIDs = make(map[string]string, len(external))
+	for _, entry := range external {
+		externalCityIDs[externalCityKey(entry.Provider, entry.Type, entry.Value)] = entry.RegionID
+	}
 	cityCatalogMu.Unlock()
+}
+
+func externalCityKey(provider, kind, value string) string {
+	return provider + "\x00" + kind + "\x00" + value
+}
+
+// ResolveExternalCityID never treats identifiers from different providers as interchangeable.
+func ResolveExternalCityID(provider, kind, value string) (string, bool) {
+	provider = strings.ToLower(strings.TrimSpace(provider))
+	kind = strings.ToLower(strings.TrimSpace(kind))
+	value = strings.TrimSpace(value)
+	if provider == "" || kind == "" || value == "" {
+		return "", false
+	}
+	cityCatalogMu.RLock()
+	regionID := externalCityIDs[externalCityKey(provider, kind, value)]
+	cityCatalogMu.RUnlock()
+	return regionID, regionID != ""
+}
+
+func ResolveExternalSelectableCityID(provider, kind, value string) (string, bool) {
+	regionID, ok := ResolveExternalCityID(provider, kind, value)
+	if !ok {
+		return "", false
+	}
+	cityCatalogMu.RLock()
+	selectable := selectableCityIDs[regionID]
+	cityCatalogMu.RUnlock()
+	return regionID, selectable
+}
+
+// CanonicalCityCode resolves legacy catalog IDs and domestic adcodes to the
+// stable internal region ID. Unknown codes are left unchanged for compatibility.
+func CanonicalCityCode(code string) string {
+	code = strings.TrimSpace(code)
+	if canonical, ok := ResolveCityCode(code); ok {
+		return canonical
+	}
+	return code
+}
+
+// ResolveCityCode maps a known catalog ID or domestic district adcode to the
+// city/province node. Callers handling provider data can reject unknown codes.
+func ResolveCityCode(code string) (string, bool) {
+	code = strings.TrimSpace(code)
+	cityCatalogMu.RLock()
+	canonical := cityAliases[code]
+	if canonical == "" && len(code) == 6 {
+		allDigits := true
+		for _, ch := range code {
+			if ch < '0' || ch > '9' {
+				allDigits = false
+				break
+			}
+		}
+		if allDigits {
+			canonical = cityAliases[code[:4]+"00"]
+			if canonical == "" {
+				canonical = cityAliases[code[:2]+"0000"]
+			}
+		}
+	}
+	cityCatalogMu.RUnlock()
+	if canonical != "" {
+		return canonical, true
+	}
+	return "", false
+}
+
+// CityCodeCandidates covers existing records that still contain a legacy
+// adcode or catalog ID while new writes use the stable internal ID.
+func CityCodeCandidates(code string) []string {
+	code = CanonicalCityCode(code)
+	if code == "" {
+		return nil
+	}
+	cityCatalogMu.RLock()
+	values := append([]string(nil), cityCodeCandidates[code]...)
+	cityCatalogMu.RUnlock()
+	if len(values) == 0 {
+		return []string{code}
+	}
+	return values
 }
 
 // CityNameByCode resolves names from the persisted region catalog snapshot.

@@ -81,6 +81,7 @@ func (r *MemoryScenicSpotRepository) FindScenicSpotBySource(_ context.Context, p
 	return nil, ErrNotFound
 }
 func (r *MemoryScenicSpotRepository) ListScenicSpots(_ context.Context, f ScenicSpotListFilter) ([]*models.ScenicSpot, int64, error) {
+	f.CityCodes = regionCodeCandidates(f.CityCodes)
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	all := make([]*models.ScenicSpot, 0)

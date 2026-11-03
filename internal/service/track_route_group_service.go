@@ -174,7 +174,7 @@ func (s *TrackRouteGroupService) adminRouteGroupArea(ctx context.Context, areaID
 		ID:       area.ID,
 		Name:     area.Name(),
 		Type:     area.Type,
-		CityCode: area.CityCode,
+		CityCode: config.CanonicalCityCode(area.CityCode),
 		CityName: config.CityNameByCode(area.CityCode),
 	}
 	if area.HasIntroduction() {
@@ -812,7 +812,7 @@ func compactCityCodes(codes []string) []string {
 	seen := make(map[string]struct{}, len(codes))
 	out := make([]string, 0, len(codes))
 	for _, code := range codes {
-		code = strings.TrimSpace(code)
+		code = config.CanonicalCityCode(strings.TrimSpace(code))
 		if code == "" {
 			continue
 		}

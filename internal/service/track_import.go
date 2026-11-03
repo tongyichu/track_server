@@ -257,14 +257,15 @@ func importTrackLocation(points []models.TrackPoint, coordinateSystem string) (s
 		return "", ""
 	}
 	cityName := config.CityNameByCode(district.CityCode)
+	internalCityID := config.CanonicalCityCode(district.CityCode)
 	districtName := district.Name()
 	switch {
 	case cityName != "" && districtName != "" && cityName != districtName:
-		return district.CityCode, cityName + districtName
+		return internalCityID, cityName + districtName
 	case districtName != "":
-		return district.CityCode, districtName
+		return internalCityID, districtName
 	default:
-		return district.CityCode, cityName
+		return internalCityID, cityName
 	}
 }
 

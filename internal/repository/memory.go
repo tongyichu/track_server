@@ -353,7 +353,7 @@ func (r *InMemoryTrackRepository) ListRecommend(_ context.Context, _ int64, city
 		if t.Status != models.TrackStatusNormal {
 			continue
 		}
-		if cityCode != "" && t.CityCode != cityCode {
+		if cityCode != "" && !sameRegionCode(t.CityCode, cityCode) {
 			continue
 		}
 		if cursor != nil {
@@ -391,7 +391,7 @@ func (r *InMemoryTrackRepository) Search(_ context.Context, keyword, cityCode, t
 		if t.Status != models.TrackStatusNormal {
 			continue
 		}
-		if cityCode != "" && t.CityCode != cityCode {
+		if cityCode != "" && !sameRegionCode(t.CityCode, cityCode) {
 			continue
 		}
 		if trackType != "" && t.TrackType != trackType {
@@ -431,7 +431,7 @@ func (r *InMemoryTrackRepository) CountSearch(_ context.Context, keyword, cityCo
 		if t == nil || t.Status != models.TrackStatusNormal || t.RawTrackURL == "" {
 			continue
 		}
-		if (cityCode != "" && t.CityCode != cityCode) || (trackType != "" && t.TrackType != trackType) {
+		if (cityCode != "" && !sameRegionCode(t.CityCode, cityCode)) || (trackType != "" && t.TrackType != trackType) {
 			continue
 		}
 		if keyword == "" || containsIgnoreCase(t.Title, keyword) {
@@ -2443,7 +2443,7 @@ func routeGroupMatchesFilter(group *models.TrackRouteGroup, filter models.TrackM
 
 func routeGroupHasCity(group *models.TrackRouteGroup, cityCode string) bool {
 	for _, code := range group.CityCodes {
-		if strings.TrimSpace(code) == cityCode {
+		if sameRegionCode(strings.TrimSpace(code), cityCode) {
 			return true
 		}
 	}
@@ -2464,7 +2464,7 @@ func trackGeoIndexMatchesFilter(index *models.TrackGeoIndex, filter models.Track
 	if filter.TrackType != "" && index.TrackType != filter.TrackType {
 		return false
 	}
-	if filter.CityCode != "" && index.CityCode != filter.CityCode {
+	if filter.CityCode != "" && !sameRegionCode(index.CityCode, filter.CityCode) {
 		return false
 	}
 	if filter.BBox != nil && !geoIndexIntersectsBBox(index, *filter.BBox) {

@@ -8,10 +8,20 @@
   let persistedIds = new Set();
   let expandedIds = new Set();
   const fieldMap = {
-    regionName: 'name', regionNameEn: 'name_en', regionLevel: 'level', regionParent: 'parent_id',
-    regionCode: 'code', regionCodeSystem: 'code_system', regionCountryCode: 'country_code',
-    regionContinent: 'continent', regionSlogan: 'slogan', regionDescription: 'description', regionCover: 'cover_url'
+    regionName: 'name', regionNameEn: 'name_en',
+    regionCountryCode: 'country_code', regionSlogan: 'slogan', regionDescription: 'description'
   };
+
+  function externalValue(node, provider, type) {
+    return (node.external_ids || []).find(item => item.provider === provider && item.type === type)?.value || '';
+  }
+
+  function setExternalValue(node, provider, type, value) {
+    node.external_ids = (node.external_ids || []).filter(item => item.provider !== provider || item.type !== type);
+    if (value && !(provider === 'amap' && type === 'adcode' && node.code_system === 'cn_adcode' && node.code === value)) {
+      node.external_ids.push({ provider, type, value });
+    }
+  }
 
   function status(message, error) {
     $('regionStatus').textContent = message;
@@ -85,7 +95,8 @@
     const visible = new Set();
     if (query) catalog.nodes.forEach(node => {
       if (countryOf(node)?.id === activeCountryId &&
-          (node.name + ' ' + (node.name_en || '') + ' ' + (node.code || '')).toLowerCase().includes(query)) {
+          (node.name + ' ' + (node.name_en || '') + ' ' + (node.code || '') + ' ' +
+            (node.external_ids || []).map(item => item.value).join(' ')).toLowerCase().includes(query)) {
         visible.add(node.id);
         ancestors(node.id).forEach(id => visible.add(id));
       }
@@ -148,21 +159,6 @@
     else root.textContent = query ? '没有匹配的地区' : '当前国家还没有下级地区';
   }
 
-  function parentOptions(node) {
-    const select = $('regionParent');
-    select.replaceChildren();
-    const excluded = new Set([node.id]);
-    catalog.nodes.forEach(item => {
-      if (ancestors(item.id).has(node.id)) excluded.add(item.id);
-    });
-    const root = new Option('无（国家根节点）', '');
-    select.add(root);
-    catalog.nodes.filter(item => !excluded.has(item.id) && item.active).forEach(item => {
-      select.add(new Option(item.name + (item.code ? ' · ' + item.code : ''), item.id));
-    });
-    select.value = node.parent_id || '';
-  }
-
   function preview(url) {
     const image = $('regionCoverPreview');
     if (!url) { image.hidden = true; image.removeAttribute('src'); return; }
@@ -182,23 +178,22 @@
     renderCountryTabs();
     $('regionEmpty').hidden = !!node;
     $('regionForm').hidden = !node;
-    $('regionAddChild').disabled = !node || !(window.AdminAccess && AdminAccess.can('regions', true));
+    $('regionAddChild').disabled = !node || !node.active || !(window.AdminAccess && AdminAccess.can('regions', true));
     if (!node) { renderTree(); return; }
     $('regionEditorTitle').textContent = node.name || '新增地区';
-    $('regionId').textContent = '内部 ID：' + node.id;
-    parentOptions(node);
+    $('regionId').textContent = '内部 ID：' + (node.region_id || '保存后分配');
     Object.entries(fieldMap).forEach(([id, key]) => { $(id).value = node[key] || ''; });
-    const writable = !!(window.AdminAccess && AdminAccess.can('regions', true));
+    $('regionAmapAdcode').value = externalValue(node, 'amap', 'adcode') || (node.code_system === 'cn_adcode' ? node.code || '' : '');
+    $('regionGooglePlaceId').value = externalValue(node, 'google', 'place_id');
     const countryRoot = node.level === 'country' && !node.parent_id;
-    $('regionLevel').disabled = !writable || countryRoot;
-    $('regionParent').disabled = !writable || countryRoot;
+    $('regionCountryCodeLabel').textContent = countryRoot ? '国家缩写（两位）' : '所属国家代码';
+    $('regionCountryCode').required = countryRoot && node.active;
+    $('regionCountryCode').disabled = !countryRoot || persistedIds.has(node.id);
+    $('regionContinentField').hidden = node.level !== 'country';
+    $('regionContinent').value = node.continent || '';
     $('regionLatitude').value = node.latitude == null ? '' : String(node.latitude);
     $('regionLongitude').value = node.longitude == null ? '' : String(node.longitude);
-    $('regionSort').value = node.sort_order == null ? '0' : String(node.sort_order);
-    $('regionPostalCodes').value = (node.postal_codes || []).join(', ');
     $('regionSelectable').checked = !!node.selectable;
-    $('regionActive').checked = !!node.active;
-    $('regionArchive').textContent = node.active ? '归档节点' : '恢复节点';
     $('regionDeleteDraft').hidden = persistedIds.has(node.id);
     preview(node.cover_url);
     renderTree();
@@ -208,14 +203,21 @@
     const node = current();
     if (!node) return;
     Object.entries(fieldMap).forEach(([id, key]) => { node[key] = $(id).value.trim(); });
+    setExternalValue(node, 'amap', 'adcode', $('regionAmapAdcode').value.trim());
+    setExternalValue(node, 'google', 'place_id', $('regionGooglePlaceId').value.trim());
+    node.country_code = node.country_code.toUpperCase();
+    if (node.level === 'country' && !persistedIds.has(node.id)) {
+      node.code = node.country_code;
+    }
+    if (node.level === 'country') node.continent = $('regionContinent').value;
+    if (node.code && !node.code_system) {
+      const countryCode = node.country_code.toUpperCase();
+      node.code_system = node.level === 'country' ? 'iso3166-1' : countryCode === 'CN' && /^\d{6}$/.test(node.code) ? 'cn_adcode' : 'local:' + (countryCode || countryOf(node)?.id || 'unknown');
+    }
     node.latitude = $('regionLatitude').value === '' ? null : Number($('regionLatitude').value);
     node.longitude = $('regionLongitude').value === '' ? null : Number($('regionLongitude').value);
-    node.sort_order = Number($('regionSort').value || 0);
-    node.postal_codes = $('regionPostalCodes').value.split(/[,，\n]/).map(value => value.trim()).filter(Boolean);
     node.selectable = $('regionSelectable').checked;
-    node.active = $('regionActive').checked;
     $('regionEditorTitle').textContent = node.name || '新增地区';
-    $('regionArchive').textContent = node.active ? '归档节点' : '恢复节点';
     dirty = true;
     status('有未保存修改');
     preview(node.cover_url);
@@ -233,12 +235,14 @@
       const values = crypto.getRandomValues(new Uint8Array(5));
       id = 'R' + Array.from(values, value => (value % 36).toString(36).toUpperCase()).join('');
     } while (catalog.nodes.some(node => node.id === id));
+    const siblings = children(parent ? parent.id : '');
+    const china = parent && (parent.country_code === 'CN' || parent.id === 'country:CN');
     const node = {
       id, parent_id: parent ? parent.id : '', name: country ? '新国家' : '新地区',
-      level: country ? 'country' : 'city', code: '', code_system: '',
+      level: country ? 'country' : china && parent.level === 'country' ? 'province' : china && parent.level === 'city' ? 'district' : 'city',
+      code: '', code_system: '',
       country_code: parent ? parent.country_code || '' : '', continent: parent ? parent.continent || '' : '',
-      selectable: false, active: true, sort_order: children(parent ? parent.id : '').length,
-      postal_codes: []
+      selectable: false, active: true, sort_order: siblings.reduce((max, item) => Math.max(max, item.sort_order || 0), -1) + 1
     };
     catalog.nodes.push(node);
     if (parent) expandedIds.add(parent.id);
@@ -266,16 +270,6 @@
   $('regionForm').addEventListener('change', syncForm);
   $('regionAddCountry').addEventListener('click', () => addNode(null));
   $('regionAddChild').addEventListener('click', () => addNode(current()));
-  $('regionArchive').addEventListener('click', () => {
-    const node = current();
-    if (!node) return;
-    const active = !node.active;
-    node.active = active;
-    if (!active) catalog.nodes.forEach(item => { if (ancestors(item.id).has(node.id)) item.active = false; });
-    dirty = true;
-    select(node.id);
-    status(active ? '节点已恢复，尚未保存' : '节点及下级已归档，尚未保存');
-  });
   $('regionDeleteDraft').addEventListener('click', () => {
     const node = current();
     if (!node || persistedIds.has(node.id)) return;
@@ -313,7 +307,7 @@
       const result = await api('images', { method: 'POST', body: form });
       const node = catalog.nodes.find(item => item.id === nodeId);
       if (node) node.cover_url = result.cover_url;
-      if (selectedId === nodeId) { $('regionCover').value = result.cover_url; preview(result.cover_url); }
+      if (selectedId === nodeId) preview(result.cover_url);
       dirty = true;
       status('图片已上传，请保存地区资料');
     } catch (error) { status(error.message, true); }

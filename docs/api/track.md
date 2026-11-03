@@ -1,13 +1,15 @@
 # 轨迹接口
 
+所有 `city_code` 业务字段统一使用[地区目录](regions.md)的 `region_id`（如杭州 `CN000118`）。服务端在写入轨迹、景点及地图索引时把已知旧 adcode/目录键归一化；筛选时同时匹配尚未回写的旧记录，响应中的轨迹城市编号按新编号输出。未知旧编码保留原值，不自动猜测所属城市。
+
 ## 发现页与年度活动图表
 
 以下接口均需业务 JWT，使用标准 `{ "code": 0, "data": ... }` 响应。
 
-- `GET /api/v1/track/discover/scenic-spots?city_code=330100&limit=30&cursor=<next_cursor>`：返回当前城市状态为 `active` 的景点，包含轨迹关联到该城市的景点；不传城市时返回全部。按关联的公开、已完成且有原始文件的轨迹数降序排列，同数时按景点 ID 升序排列。`items` 每项含 `id`、`name`、`cover_url`，可选 `description`、`source_url`；景点详情页用这些字段展示封面和介绍。`cover_url` 优先采用景点 `photos[0].url`，缺失时回退景点封面。`limit` 默认 20、最大 50；`has_more` 与不透明的 `next_cursor` 供横向列表继续加载，游标包含排序锚点。
+- `GET /api/v1/track/discover/scenic-spots?city_code=CN000118&limit=30&cursor=<next_cursor>`：返回当前城市状态为 `active` 的景点，包含轨迹关联到该城市的景点；不传城市时返回全部。按关联的公开、已完成且有原始文件的轨迹数降序排列，同数时按景点 ID 升序排列。`items` 每项含 `id`、`name`、`cover_url`，可选 `description`、`source_url`；景点详情页用这些字段展示封面和介绍。`cover_url` 优先采用景点 `photos[0].url`，缺失时回退景点封面。`limit` 默认 20、最大 50；`has_more` 与不透明的 `next_cursor` 供横向列表继续加载，游标包含排序锚点。
 - 景点列表新增可选 `photos` 数组，按目录原顺序返回全部非空图片：`[{"url":"/api/v1/static/scenic_spots/<id>/photo.jpg","title":"照片说明","author":"作者","author_url":"https://example.com/author","source_url":"https://example.com/source"}]`；无图返回 `[]`。字段投影与 `primary_scenic_spot.photos` 一致，自有图片携带业务 JWT，外部图片沿用 source_url 作为 Referer。只读取现有目录，不调用地图供应商，不改变封面选择及分页。Android 详情取前 3 张每 3 秒叠化，相册每行 3 张展示全部；旧服务端未提供 photos 或空数组时回退 cover_url。
 - `GET /api/v1/track/discover/scenic-spots/:spot_id/tracks?limit=20&cursor=<next_cursor>`：返回状态为 `active` 的景点真实关联的公开、已完成且有原始文件的轨迹摘要；归档、合并或不存在返回 404。按关联轨迹 ID 排序，`next_cursor` 是已消费的关联轨迹 ID。
-- `GET /api/v1/track/discover/shapes?city_code=330100&limit=20&cursor=<next_cursor>`：按开始时间倒序返回公开、已结束、有原始轨迹文件且 `shape_label` 非空的轨迹摘要；`city_code` 可选。沿用推荐轨迹的摘要字段和游标分页，响应 `items`、`has_more`、`next_cursor`。
+- `GET /api/v1/track/discover/shapes?city_code=CN000118&limit=20&cursor=<next_cursor>`：按开始时间倒序返回公开、已结束、有原始轨迹文件且 `shape_label` 非空的轨迹摘要；`city_code` 可选。沿用推荐轨迹的摘要字段和游标分页，响应 `items`、`has_more`、`next_cursor`。
 - `GET /api/v1/track/activity/calendar?timezone=Asia%2FShanghai`：返回当前用户最近 375 个当地自然日（含 10 天缓冲）的已完成轨迹数量，供客户端从连续 12 个月的首月第一个周日起展示。只计正常或私有、已结束且有原始轨迹文件的远端轨迹，以轨迹 `start_time` 对应的当地日期归组。`timezone` 为 IANA 时区，省略时默认 `Asia/Shanghai`，非法值返回 400。响应包含 `start_date`、`end_date`、缓冲区内的 `total_count` 和按日期升序的非零 `days: [{"date":"YYYY-MM-DD","count":1}]`；未列出的日期为 0。客户端仅对实际展示日期求和，并叠加本机未上传的已完成轨迹，避免重复计算远端已上传记录。
 
 > 公共请求、认证和错误响应见 [common.md](common.md)；通用对象字段见 [models.md](models.md)。
@@ -128,7 +130,7 @@ Authorization: Bearer <token>
   "title": "傍晚夜跑",
   "description": "从起点附近出发，沿本次记录路线完成约 1.2 公里。",
   "session_id": "sess_xxx",
-  "city_code": "330100",
+  "city_code": "CN000118",
   "locate_addr": "杭州市西湖区",
   "track_type": "running",
   "source_tag": "manual_seed",
@@ -183,7 +185,7 @@ Authorization: Bearer <token>
     "id": "No.1713520800123456789",
     "user_id": 1001,
     "session_id": "sess_xxx",
-    "city_code": "330100",
+    "city_code": "CN000118",
     "locate_addr": "杭州市西湖区",
     "track_type": "running",
     "coordinate_system": "GCJ02",
@@ -255,7 +257,7 @@ curl -X POST "http://<host>:<port>/api/v1/track/create" \
   -d '{
     "title": "傍晚夜跑",
     "session_id": "sess_xxx",
-    "city_code": "330100",
+    "city_code": "CN000118",
     "locate_addr": "杭州市西湖区",
     "track_type": "running",
     "start_time": "2026-04-20T12:00:00Z",
@@ -306,7 +308,7 @@ curl -X POST "http://<host>:<port>/api/v1/track/create" \
 ### 请求
 
 ```
-GET /api/v1/track/recommend/list?city_code=330100&limit=20&cursor=<next_cursor>
+GET /api/v1/track/recommend/list?city_code=CN000118&limit=20&cursor=<next_cursor>
 Authorization: Bearer <token>
 ```
 
@@ -333,7 +335,7 @@ Authorization: Bearer <token>
         "id": "trk1",
         "user_id": 1001,
         "session_id": "sess_xxx",
-        "city_code": "330100",
+        "city_code": "CN000118",
         "locate_addr": "杭州市西湖区",
         "track_type": "hiking",
         "start_time": "2026-04-20T12:00:00Z",
@@ -393,7 +395,7 @@ Feed Session 固定 60 分钟、最多 200 条。Session 内轨迹删除或转�
 ### 示例（curl）
 
 ```bash
-curl -X GET "http://<host>:<port>/api/v1/track/recommend/list?city_code=330100&limit=20" \
+curl -X GET "http://<host>:<port>/api/v1/track/recommend/list?city_code=CN000118&limit=20" \
   -H "Authorization: Bearer <token>" \
   -H "X-User-ID: 1001"
 ```
@@ -401,7 +403,7 @@ curl -X GET "http://<host>:<port>/api/v1/track/recommend/list?city_code=330100&l
 翻下一页：
 
 ```bash
-curl -X GET "http://<host>:<port>/api/v1/track/recommend/list?city_code=330100&limit=20&cursor=<next_cursor>" \
+curl -X GET "http://<host>:<port>/api/v1/track/recommend/list?city_code=CN000118&limit=20&cursor=<next_cursor>" \
   -H "Authorization: Bearer <token>" \
   -H "X-User-ID: 1001"
 ```
@@ -511,7 +513,7 @@ curl -X GET "http://<host>:<port>/api/v1/track/trk-detail/detail" \
 ### 请求
 
 ```
-GET /api/v1/track/search/list?keyword=:keyword&city_code=330100&track_type=hiking&limit=20&cursor=<next_cursor>
+GET /api/v1/track/search/list?keyword=:keyword&city_code=CN000118&track_type=hiking&limit=20&cursor=<next_cursor>
 Authorization: Bearer <token>
 ```
 
@@ -540,7 +542,7 @@ Authorization: Bearer <token>
         "id": "trk1",
         "user_id": 1001,
         "session_id": "sess_xxx",
-        "city_code": "330100",
+        "city_code": "CN000118",
         "locate_addr": "杭州市西湖区",
         "track_type": "hiking",
         "start_time": "2026-04-20T12:00:00Z",
@@ -581,7 +583,7 @@ Authorization: Bearer <token>
 ### 示例（curl）
 
 ```bash
-curl -X GET "http://<host>:<port>/api/v1/track/search/list?keyword=西湖&city_code=330100&track_type=hiking&limit=20" \
+curl -X GET "http://<host>:<port>/api/v1/track/search/list?keyword=西湖&city_code=CN000118&track_type=hiking&limit=20" \
   -H "Authorization: Bearer <token>" \
   -H "X-User-ID: 1001"
 ```
@@ -589,7 +591,7 @@ curl -X GET "http://<host>:<port>/api/v1/track/search/list?keyword=西湖&city_c
 翻下一页：
 
 ```bash
-curl -X GET "http://<host>:<port>/api/v1/track/search/list?keyword=西湖&city_code=330100&track_type=hiking&limit=20&cursor=<next_cursor>" \
+curl -X GET "http://<host>:<port>/api/v1/track/search/list?keyword=西湖&city_code=CN000118&track_type=hiking&limit=20&cursor=<next_cursor>" \
   -H "Authorization: Bearer <token>" \
   -H "X-User-ID: 1001"
 ```
@@ -660,7 +662,7 @@ Authorization: Bearer <token>
         "id": "trk1",
         "user_id": 1001,
         "session_id": "sess_xxx",
-        "city_code": "330100",
+        "city_code": "CN000118",
         "locate_addr": "杭州市西湖区",
         "track_type": "hiking",
         "start_time": "2026-04-20T12:00:00Z",
@@ -785,7 +787,7 @@ Authorization: Bearer <token>
   "status": 2,
   "description": "从起点附近出发，沿本次记录路线完成约 1.2 公里。",
   "session_id": "sess_xxx",
-  "city_code": "330100",
+  "city_code": "CN000118",
   "locate_addr": "杭州市西湖区",
   "track_type": "running",
   "source_tag": "manual_seed",
@@ -835,7 +837,7 @@ curl -X PUT "http://<host>:<port>/api/v1/track/trk1/update" \
   -H "Content-Type: application/json" \
   -d '{
     "session_id": "sess_xxx",
-    "city_code": "330100",
+    "city_code": "CN000118",
     "locate_addr": "杭州市西湖区",
     "track_no_map_bg_screenshot_url": "https://<bucket>.oss-<region>.aliyuncs.com/prod/track/.../xxx_no_map_bg.jpg"
   }'

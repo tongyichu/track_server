@@ -14,6 +14,7 @@ func ScenicSpotIDsByTrackCities(ctx context.Context, spots ScenicSpotRepository,
 	if len(codes) == 0 {
 		return ids, nil
 	}
+	codes = regionCodeCandidates(codes)
 	switch repo := spots.(type) {
 	case *MySQLScenicSpotRepository:
 		args := make([]any, len(codes))

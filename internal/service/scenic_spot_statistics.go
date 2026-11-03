@@ -152,7 +152,7 @@ func (s *ScenicSpotCatalogService) Statistics(ctx context.Context, days int) (*S
 		for _, spot := range batch {
 			out.TotalSpots++
 			cityNames := make(map[string]struct{})
-			code := strings.TrimSpace(spot.CityCode)
+			code := config.CanonicalCityCode(strings.TrimSpace(spot.CityCode))
 			city := config.CityNameByCode(code)
 			if city != "" {
 				cities[code] = struct{}{}
@@ -162,6 +162,7 @@ func (s *ScenicSpotCatalogService) Statistics(ctx context.Context, days int) (*S
 			if stats := counts[spot.ID]; stats != nil {
 				count = stats.TrackCount
 				for code := range stats.CityCodes {
+					code = config.CanonicalCityCode(code)
 					if name := config.CityNameByCode(code); name != "" {
 						cities[code] = struct{}{}
 						cityNames[name] = struct{}{}
