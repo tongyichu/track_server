@@ -35,18 +35,32 @@ type PhotoCandidate struct {
 }
 
 type ResearchDraft struct {
-	RegionID    string           `json:"region_id"`
-	NameEN      string           `json:"name_en,omitempty"`
-	Slogan      string           `json:"slogan,omitempty"`
-	Description string           `json:"description,omitempty"`
-	Sources     []ResearchSource `json:"sources"`
-	Photos      []PhotoCandidate `json:"photos"`
+	RegionID        string           `json:"region_id"`
+	NameEN          string           `json:"name_en,omitempty"`
+	Slogan          string           `json:"slogan,omitempty"`
+	SloganSourceURL string           `json:"slogan_source_url,omitempty"`
+	Description     string           `json:"description,omitempty"`
+	Sources         []ResearchSource `json:"sources"`
+	Photos          []PhotoCandidate `json:"photos"`
 }
 
 type Researcher struct {
 	key    string
 	model  string
 	client *http.Client
+}
+
+type researchSearchResult struct {
+	Title   string `json:"title"`
+	URL     string `json:"url"`
+	Snippet string `json:"snippet"`
+	Chunks  []struct {
+		Text string `json:"text"`
+	} `json:"chunks"`
+}
+
+type researchSearchResponse struct {
+	SearchResults []researchSearchResult `json:"search_results"`
 }
 
 func NewResearcher(key, model string) *Researcher {
@@ -64,16 +78,7 @@ func (r *Researcher) Research(ctx context.Context, node Node, hierarchy []string
 	}
 	path := strings.Join(hierarchy, "、")
 	query := path + " 地区 地标 旅游 官方 简介 英文名称"
-	var search struct {
-		SearchResults []struct {
-			Title   string `json:"title"`
-			URL     string `json:"url"`
-			Snippet string `json:"snippet"`
-			Chunks  []struct {
-				Text string `json:"text"`
-			} `json:"chunks"`
-		} `json:"search_results"`
-	}
+	var search researchSearchResponse
 	if err := r.moonshotJSON(ctx, "/tools/search_pro", map[string]any{"text_query": query, "limit": 6, "timeout_seconds": 30}, &search); err != nil {
 		return nil, fmt.Errorf("城市资料检索失败: %w", err)
 	}
@@ -99,7 +104,31 @@ func (r *Researcher) Research(ctx context.Context, node Node, hierarchy []string
 	if len(draft.Sources) == 0 {
 		return nil, errors.New("没有查到可核对的城市资料来源")
 	}
-	prompt := fmt.Sprintf("地区层级：%s\n内部编号：%s\n现有英文名：%s\n现有宣传口号：%s\n现有简介：%s\n\n联网资料：\n%s\n请只依据资料生成适合户外目的地客户端的地区资料。英文名用通行官方译名；宣传口号为简短中文文案，不杜撰事实；简介用中文 100-250 字，突出地理位置、自然与人文地标，避开价格、开放时间等易变信息。资料不能确定时对应字段输出空字符串。只输出 JSON 对象，键固定为 name_en、slogan、description。不要引用整段原文。", path, node.RegionID, node.NameEN, node.Slogan, node.Description, evidence.String())
+	sloganSources := make(map[string]string)
+	var sloganEvidence strings.Builder
+	var sloganSearch researchSearchResponse
+	sloganQuery := path + " 文旅 旅游 宣传口号 旅游形象口号 旅游宣传语"
+	if err := r.moonshotJSON(ctx, "/tools/search_pro", map[string]any{"text_query": sloganQuery, "limit": 8, "timeout_seconds": 30}, &sloganSearch); err == nil {
+		for _, result := range sloganSearch.SearchResults {
+			link := strings.TrimSpace(result.URL)
+			if !strings.HasPrefix(link, "https://") || strings.TrimSpace(result.Title) == "" {
+				continue
+			}
+			var sourceText strings.Builder
+			sourceText.WriteString(result.Snippet)
+			for _, chunk := range result.Chunks {
+				sourceText.WriteString("\n")
+				sourceText.WriteString(chunk.Text)
+			}
+			sloganSources[link] = sourceText.String()
+			draft.Sources = append(draft.Sources, ResearchSource{Title: strings.TrimSpace(result.Title), URL: link})
+			fmt.Fprintf(&sloganEvidence, "来源：%s\n链接：%s\n资料：%s\n", result.Title, link, clampRunes(sourceText.String(), 1500))
+			if sloganEvidence.Len() > 18000 {
+				break
+			}
+		}
+	}
+	prompt := fmt.Sprintf("地区层级：%s\n内部编号：%s\n现有英文名：%s\n现有口号（仅供辨别，不是证据）：%s\n现有简介：%s\n\n地区资料：\n%s\n\n文旅口号专项检索资料：\n%s\n请只依据资料生成适合户外目的地客户端的地区资料。英文名用通行官方译名；简介用中文 100-250 字，突出地理位置、自然与人文地标，避开价格、开放时间等易变信息。slogan 只能填写该地区文旅部门或旅游推广中实际使用、有来源明确记载的旅游宣传口号/旅游形象口号，须照来源原文摘录，不创作、不改写。城市精神、文明创建、招商引资、政务施政、体育赛事、品牌商品等其他口号一律不能用；不能确认是文旅口号或没有可核对来源时填空字符串。slogan_source_url 填写文旅口号专项检索资料中明确载有该口号的原始链接，slogan 为空时也留空。其他字段资料不能确定时填空字符串。只输出 JSON 对象，键固定为 name_en、slogan、slogan_source_url、description。简介不要引用整段原文。", path, node.RegionID, node.NameEN, node.Slogan, node.Description, evidence.String(), sloganEvidence.String())
 	var completion struct {
 		Choices []struct {
 			Message struct {
@@ -122,15 +151,19 @@ func (r *Researcher) Research(ctx context.Context, node Node, hierarchy []string
 		return nil, errors.New("城市 AI 返回格式无效")
 	}
 	var fields struct {
-		NameEN      string `json:"name_en"`
-		Slogan      string `json:"slogan"`
-		Description string `json:"description"`
+		NameEN          string `json:"name_en"`
+		Slogan          string `json:"slogan"`
+		SloganSourceURL string `json:"slogan_source_url"`
+		Description     string `json:"description"`
 	}
 	if err := json.Unmarshal([]byte(content[start:end+1]), &fields); err != nil {
 		return nil, errors.New("城市 AI 返回格式无效")
 	}
 	draft.NameEN = strings.TrimSpace(fields.NameEN)
-	draft.Slogan = strings.TrimSpace(fields.Slogan)
+	if sourceText, ok := sloganSources[strings.TrimSpace(fields.SloganSourceURL)]; ok && sourcedTourismSlogan(sourceText, fields.Slogan) {
+		draft.Slogan = strings.TrimSpace(fields.Slogan)
+		draft.SloganSourceURL = strings.TrimSpace(fields.SloganSourceURL)
+	}
 	draft.Description = strings.TrimSpace(fields.Description)
 	if utf8.RuneCountInString(draft.NameEN) > 200 || utf8.RuneCountInString(draft.Slogan) > 500 || utf8.RuneCountInString(draft.Description) > 8000 {
 		return nil, errors.New("城市 AI 返回的资料过长")
@@ -314,6 +347,35 @@ func normalizeHTTPSURL(raw string) string {
 		return ""
 	}
 	return raw
+}
+
+func sourcedTourismSlogan(sourceText, slogan string) bool {
+	slogan = strings.TrimSpace(slogan)
+	if utf8.RuneCountInString(slogan) < 4 || utf8.RuneCountInString(slogan) > 80 {
+		return false
+	}
+	text := strings.Join(strings.Fields(sourceText), "")
+	value := strings.Join(strings.Fields(slogan), "")
+	index := strings.Index(text, value)
+	if index < 0 {
+		return false
+	}
+	runes := []rune(text)
+	start := utf8.RuneCountInString(text[:index]) - 100
+	if start < 0 {
+		start = 0
+	}
+	end := start + utf8.RuneCountInString(value) + 200
+	if end > len(runes) {
+		end = len(runes)
+	}
+	nearby := string(runes[start:end])
+	for _, keyword := range []string{"文旅宣传", "文旅口号", "文旅形象", "文旅品牌", "旅游宣传", "旅游口号", "旅游形象", "旅游品牌"} {
+		if strings.Contains(nearby, keyword) {
+			return true
+		}
+	}
+	return false
 }
 
 func clampRunes(value string, max int) string {

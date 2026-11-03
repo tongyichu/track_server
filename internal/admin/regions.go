@@ -53,6 +53,36 @@ func (h *Handler) SaveRegionCatalog(ctx context.Context, c *app.RequestContext) 
 	c.JSON(http.StatusOK, utils.H{"code": 0, "data": catalog})
 }
 
+func (h *Handler) SaveRegionNode(ctx context.Context, c *app.RequestContext) {
+	if h.regionSvc == nil {
+		c.JSON(http.StatusServiceUnavailable, utils.H{"error": "地区目录暂不可用"})
+		return
+	}
+	var input struct {
+		BaseNode *regions.Node `json:"base_node"`
+		Node     regions.Node  `json:"node"`
+	}
+	body, err := c.Body()
+	if err != nil || len(body) > 128<<10 || json.Unmarshal(body, &input) != nil || input.Node.ID == "" {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "地区节点格式无效"})
+		return
+	}
+	catalog, err := h.regionSvc.SaveNode(ctx, input.BaseNode, input.Node)
+	if errors.Is(err, regions.ErrNodeConflict) {
+		c.JSON(http.StatusConflict, utils.H{"error": "该地区已被其他管理员修改，请刷新页面后核对"})
+		return
+	}
+	if errors.Is(err, regions.ErrVersionConflict) {
+		c.JSON(http.StatusConflict, utils.H{"error": "地区目录正在更新，请重试保存"})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": catalog})
+}
+
 func (h *Handler) UploadRegionImage(_ context.Context, c *app.RequestContext) {
 	if h.staticRoot == "" {
 		c.JSON(http.StatusServiceUnavailable, utils.H{"error": "图片存储暂不可用"})

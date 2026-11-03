@@ -17,6 +17,7 @@ import (
 var initialNodes []byte
 
 var ErrVersionConflict = errors.New("region catalog version conflict")
+var ErrNodeConflict = errors.New("region node changed since it was loaded")
 
 type Node struct {
 	ID               string       `json:"id"`
@@ -178,6 +179,49 @@ func (s *Service) Save(ctx context.Context, expectedVersion int64, nodes []Node)
 	}
 	config.SetCityCatalog(projectCityOptions(nodes), projectCityNames(nodes), projectCityAliases(nodes), projectExternalCityIDs(nodes))
 	return &Catalog{Version: expectedVersion + 1, Nodes: nodes}, nil
+}
+
+// SaveNode applies only one editor's node, keeping unrelated regions from the
+// latest catalog. The baseline protects against concurrent edits to that node.
+func (s *Service) SaveNode(ctx context.Context, base *Node, node Node) (*Catalog, error) {
+	if node.ID == "" || base != nil && base.ID != node.ID {
+		return nil, errors.New("invalid region node")
+	}
+	for attempt := 0; attempt < 4; attempt++ {
+		current, err := s.Read(ctx)
+		if err != nil {
+			return nil, err
+		}
+		index := -1
+		for i := range current.Nodes {
+			if current.Nodes[i].ID == node.ID {
+				index = i
+				break
+			}
+		}
+		if base == nil && index >= 0 || base != nil && index < 0 {
+			return nil, ErrNodeConflict
+		}
+		if base != nil {
+			stored, _ := json.Marshal(current.Nodes[index])
+			baseline, _ := json.Marshal(base)
+			if string(stored) != string(baseline) {
+				return nil, ErrNodeConflict
+			}
+		}
+		nodes := append([]Node(nil), current.Nodes...)
+		if index >= 0 {
+			nodes[index] = node
+		} else {
+			nodes = append(nodes, node)
+		}
+		saved, err := s.Save(ctx, current.Version, nodes)
+		if errors.Is(err, ErrVersionConflict) {
+			continue
+		}
+		return saved, err
+	}
+	return nil, ErrVersionConflict
 }
 
 func projectCityOptions(nodes []Node) []config.CityOption {

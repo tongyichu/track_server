@@ -117,6 +117,7 @@
 | --- | --- | --- | --- | --- |
 | 后台账号列表与页面目录 | GET | `/admin/api/accounts` | 管理员 session | [admin-accounts.md](admin-accounts.md) |
 | 后台读取/保存地区目录 | GET / PUT | `/admin/api/regions/catalog` | 地区查看 / 操作 | [regions.md](regions.md) |
+| 后台保存单个地区节点 | PUT | `/admin/api/regions/node` | 地区操作 | [regions.md](regions.md) |
 | 上传地区图片 | POST | `/admin/api/regions/images` | 地区操作 | [regions.md](regions.md) |
 | 联网查询单个地区资料 | POST | `/admin/api/regions/research` | 地区操作 | [regions.md](regions.md) |
 | 导入地区图片候选 | POST | `/admin/api/regions/images/import` | 地区操作 | [regions.md](regions.md) |

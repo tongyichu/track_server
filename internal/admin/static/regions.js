@@ -4,11 +4,15 @@
   let catalog = null;
   let selectedId = '';
   let activeCountryId = '';
-  let dirty = false;
+  let dirtyIds = new Set();
   let persistedIds = new Set();
+  let persistedNodes = new Map();
   let expandedIds = new Set();
+  let saving = false;
+  let uploadsInFlight = 0;
   let researchDraft = null;
   let researchNodeId = '';
+  let researchingNodeId = '';
   const fieldMap = {
     regionName: 'name', regionNameEn: 'name_en',
     regionCountryCode: 'country_code', regionSlogan: 'slogan', regionDescription: 'description'
@@ -28,6 +32,23 @@
   function status(message, error) {
     $('regionStatus').textContent = message;
     $('regionStatus').className = error ? 'text-danger' : 'text-secondary';
+  }
+
+  function researchStatus(message, loading, error) {
+    $('regionResearchStatusText').textContent = message;
+    $('regionResearchStatus').hidden = !message;
+    $('regionResearchStatus').classList.toggle('text-danger', !!error);
+    $('regionResearchDots').hidden = !loading;
+  }
+
+  function updateSaveState() {
+    $('regionSaveNode').disabled = !editable() || saving || uploadsInFlight > 0 || !dirtyIds.has(selectedId);
+  }
+
+  function markDirty(node, message) {
+    dirtyIds.add(node.id);
+    updateSaveState();
+    status(message || '当前节点有未保存修改');
   }
 
   async function api(path, options) {
@@ -201,13 +222,13 @@
         button.type = 'button'; button.className = 'btn btn-sm btn-outline-secondary';
         button.textContent = symbol; button.title = title;
         button.disabled = !editable() || index + offset < 0 || index + offset >= photos.length;
-        button.addEventListener('click', () => { [photos[index], photos[index + offset]] = [photos[index + offset], photos[index]]; updateCover(node); dirty = true; renderPhotos(); status('图片顺序已调整，请保存全部修改'); });
+        button.addEventListener('click', () => { [photos[index], photos[index + offset]] = [photos[index + offset], photos[index]]; updateCover(node); markDirty(node, '图片顺序已调整，请保存当前节点'); renderPhotos(); });
         actions.appendChild(button);
       });
       const remove = document.createElement('button');
       remove.type = 'button'; remove.className = 'btn btn-sm btn-outline-danger'; remove.textContent = '移除';
       remove.disabled = !editable();
-      remove.addEventListener('click', () => { photos.splice(index, 1); updateCover(node); dirty = true; renderPhotos(); renderCandidates(); status('图片已从城市资料移除，请保存全部修改'); });
+      remove.addEventListener('click', () => { photos.splice(index, 1); updateCover(node); markDirty(node, '图片已从城市资料移除，请保存当前节点'); renderPhotos(); renderCandidates(); });
       actions.appendChild(remove);
       line.appendChild(actions);
       card.append(image, line);
@@ -227,7 +248,7 @@
         if (rawIndex === '') return;
         if (!Number.isInteger(from) || from < 0 || from >= photos.length || from === index) return;
         photos.splice(index, 0, photos.splice(from, 1)[0]);
-        updateCover(node); dirty = true; renderPhotos(); status('图片顺序已调整，请保存全部修改');
+        updateCover(node); markDirty(node, '图片顺序已调整，请保存当前节点'); renderPhotos();
       });
       root.appendChild(card);
     });
@@ -254,15 +275,15 @@
       button.addEventListener('click', async () => {
         const target = current(); const targetCatalog = catalog;
         if (!target || photosOf(target).length >= 3 || photosOf(target).some(photo => photo.provider === 'wikimedia_commons' && photo.title === candidate.file_title)) return;
-        button.disabled = true; status('正在下载并压缩图片…');
+        button.disabled = true; uploadsInFlight++; updateSaveState(); status('正在下载并压缩图片…');
         try {
           const result = await api('images/import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ file_title: candidate.file_title }) });
           if (catalog !== targetCatalog) { status('目录已重新加载，请重新核对图片'); return; }
           if (photosOf(target).length >= 3 || photosOf(target).some(photo => photo.provider === 'wikimedia_commons' && photo.title === candidate.file_title)) { status('图片已满或已添加，请先核对现有图片', true); return; }
-          photosOf(target).push(result.photo); updateCover(target); dirty = true;
+          photosOf(target).push(result.photo); updateCover(target); markDirty(target, '图片已添加，请保存当前节点');
           if (current() === target) { renderPhotos(); renderCandidates(); }
-          status('图片已添加，请保存全部修改');
         } catch (error) { button.disabled = false; status(error.message, true); }
+        finally { uploadsInFlight--; updateSaveState(); }
       });
       card.append(image, caption, credit, button);
       root.appendChild(card);
@@ -275,12 +296,17 @@
     if (!available) return;
     const fields = $('regionDraftFields');
     fields.replaceChildren();
-    [['英文名称', researchDraft.name_en], ['宣传口号', researchDraft.slogan], ['简介', researchDraft.description]].forEach(([label, value]) => {
+    [['英文名称', researchDraft.name_en], ['文旅宣传口号', researchDraft.slogan], ['简介', researchDraft.description]].forEach(([label, value]) => {
       const row = document.createElement('p');
       const strong = document.createElement('strong'); strong.textContent = label + '：';
       const content = document.createElement('span'); content.textContent = value || '未查到可靠资料';
       row.append(strong, content); fields.appendChild(row);
     });
+    if (researchDraft.slogan_source_url) {
+      const link = document.createElement('a');
+      link.href = researchDraft.slogan_source_url; link.target = '_blank'; link.rel = 'noopener noreferrer';
+      link.textContent = '核对文旅口号来源'; fields.appendChild(link);
+    }
     const sources = $('regionResearchSources');
     sources.replaceChildren();
     const title = document.createElement('h4'); title.textContent = '资料来源'; sources.appendChild(title);
@@ -292,6 +318,7 @@
   }
 
   function select(id) {
+    if (saving && id !== selectedId) return;
     if (researchNodeId !== id) { researchDraft = null; researchNodeId = ''; }
     selectedId = id;
     const node = current();
@@ -303,10 +330,10 @@
     renderCountryTabs();
     $('regionEmpty').hidden = !!node;
     $('regionForm').hidden = !node;
-    $('regionAddChild').disabled = !node || !node.active || !(window.AdminAccess && AdminAccess.can('regions', true));
+    $('regionAddChild').disabled = !node || !node.active || !persistedIds.has(node.id) || !editable();
     if (!node) { renderTree(); return; }
     $('regionEditorTitle').textContent = node.name || '新增地区';
-    $('regionId').textContent = '内部 ID：' + (node.region_id || '保存后分配');
+    $('regionId').textContent = node.region_id || '';
     Object.entries(fieldMap).forEach(([id, key]) => { $(id).value = node[key] || ''; });
     $('regionAmapAdcode').value = externalValue(node, 'amap', 'adcode') || (node.code_system === 'cn_adcode' ? node.code || '' : '');
     $('regionGooglePlaceId').value = externalValue(node, 'google', 'place_id');
@@ -320,10 +347,15 @@
     $('regionLongitude').value = node.longitude == null ? '' : String(node.longitude);
     $('regionSelectable').checked = !!node.selectable;
     $('regionDeleteDraft').hidden = persistedIds.has(node.id);
-    $('regionResearch').disabled = !editable() || !persistedIds.has(node.id);
+    $('regionResearch').disabled = !editable() || !persistedIds.has(node.id) || !!researchingNodeId;
+    if (researchingNodeId === node.id) researchStatus('正在联网查询城市资料和图片', true);
+    else if (researchDraft && researchNodeId === node.id) researchStatus('联网草稿已就绪，请核对后代入');
+    else researchStatus('');
+    updateSaveState();
     renderResearch();
     renderPhotos();
     renderTree();
+    if (dirtyIds.has(id)) status('当前节点有未保存修改');
   }
 
   function syncForm() {
@@ -345,8 +377,7 @@
     node.longitude = $('regionLongitude').value === '' ? null : Number($('regionLongitude').value);
     node.selectable = $('regionSelectable').checked;
     $('regionEditorTitle').textContent = node.name || '新增地区';
-    dirty = true;
-    status('有未保存修改');
+    markDirty(node);
     updateCover(node);
     const country = countryOf(node);
     if (country) activeCountryId = country.id;
@@ -355,7 +386,7 @@
   }
 
   function addNode(parent) {
-    if (!catalog) return;
+    if (!catalog || saving || parent && !persistedIds.has(parent.id)) return;
     const country = !parent;
     let id;
     do {
@@ -373,10 +404,9 @@
     };
     catalog.nodes.push(node);
     if (parent) expandedIds.add(parent.id);
-    dirty = true;
+    markDirty(node, '已新增节点，请填写资料并保存当前节点');
     select(id);
     $('regionName').focus();
-    status('已新增节点，请填写资料并保存');
   }
 
   async function load() {
@@ -386,9 +416,9 @@
       researchDraft = null;
       researchNodeId = '';
       persistedIds = new Set(catalog.nodes.map(node => node.id));
+      persistedNodes = new Map(catalog.nodes.map(node => [node.id, structuredClone(node)]));
       expandedIds = new Set();
-      dirty = false;
-      $('regionVersion').textContent = '目录版本 ' + catalog.version + ' · ' + catalog.nodes.length + ' 个节点';
+      dirtyIds = new Set();
       select(catalog.nodes.some(node => node.id === selectedId) ? selectedId : children('').find(node => node.level === 'country')?.id || '');
       status('地区目录已加载');
     } catch (error) { status(error.message, true); }
@@ -401,28 +431,31 @@
   $('regionAddChild').addEventListener('click', () => addNode(current()));
   $('regionDeleteDraft').addEventListener('click', () => {
     const node = current();
-    if (!node || persistedIds.has(node.id)) return;
+    if (!node || persistedIds.has(node.id) || saving) return;
     const removed = new Set([node.id]);
     catalog.nodes.forEach(item => { if (ancestors(item.id).has(node.id)) removed.add(item.id); });
     catalog.nodes = catalog.nodes.filter(item => !removed.has(item.id));
-    dirty = true;
+    removed.forEach(id => dirtyIds.delete(id));
     select(catalog.nodes.some(item => item.id === activeCountryId) ? activeCountryId : children('').find(item => item.level === 'country')?.id || '');
     status('未保存节点及下级已删除');
   });
-  $('regionReload').addEventListener('click', load);
   $('regionResearch').addEventListener('click', async () => {
     const node = current();
-    if (!node || !persistedIds.has(node.id)) return;
+    if (!node || !persistedIds.has(node.id) || researchingNodeId) return;
     const nodeId = node.id, targetCatalog = catalog;
+    researchingNodeId = nodeId;
     $('regionResearch').disabled = true;
-    status('正在联网查询城市资料和图片…');
+    researchStatus('正在联网查询城市资料和图片', true);
     try {
       const draft = await api('research', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: nodeId }) });
       if (catalog !== targetCatalog || selectedId !== nodeId) return;
       researchDraft = draft; researchNodeId = nodeId;
-      renderResearch(); status('联网草稿已就绪，请核对后代入');
-    } catch (error) { if (selectedId === nodeId) status(error.message, true); }
-    finally { if (selectedId === nodeId) $('regionResearch').disabled = false; }
+      renderResearch(); researchStatus('联网草稿已就绪，请核对后代入');
+    } catch (error) { if (selectedId === nodeId) researchStatus(error.message, false, true); }
+    finally {
+      researchingNodeId = '';
+      $('regionResearch').disabled = !editable() || !persistedIds.has(selectedId);
+    }
   });
   function applyDraft(overwrite) {
     if (!researchDraft || researchNodeId !== selectedId || !editable()) return;
@@ -430,23 +463,36 @@
       if (researchDraft[key] && (overwrite || !$(id).value.trim())) $(id).value = researchDraft[key];
     });
     syncForm();
-    status('文字已代入，请核对并保存全部修改');
+    status('文字已代入，请核对并保存当前节点');
   }
   $('regionApplyEmpty').addEventListener('click', () => applyDraft(false));
   $('regionApplyAll').addEventListener('click', () => applyDraft(true));
-  $('regionSave').addEventListener('click', async () => {
-    if (!catalog || !dirty) return;
-    $('regionSave').disabled = true;
-    status('正在保存…');
+  $('regionSaveNode').addEventListener('click', async () => {
+    const node = current();
+    if (!node || !dirtyIds.has(node.id) || saving || uploadsInFlight > 0 || !editable()) return;
+    if (!$('regionForm').reportValidity()) return;
+    const savedId = node.id;
+    const previousBases = persistedNodes;
+    saving = true; $('regionForm').inert = true; updateSaveState();
+    status('正在保存当前节点…');
     try {
-      catalog = await api('catalog', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(catalog) });
-      persistedIds = new Set(catalog.nodes.map(node => node.id));
-      dirty = false;
-      $('regionVersion').textContent = '目录版本 ' + catalog.version + ' · ' + catalog.nodes.length + ' 个节点';
-      select(selectedId);
-      status('保存成功，客户端下次刷新目录时会读取新版本');
+      const updated = await api('node', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ node, base_node: previousBases.get(savedId) || null }) });
+      const pending = new Map(catalog.nodes.filter(item => item.id !== savedId && dirtyIds.has(item.id)).map(item => [item.id, item]));
+      catalog = updated;
+      persistedIds = new Set(updated.nodes.map(item => item.id));
+      persistedNodes = new Map(updated.nodes.map(item => [item.id, structuredClone(item)]));
+      pending.forEach((draft, id) => {
+        const index = catalog.nodes.findIndex(item => item.id === id);
+        if (index < 0) catalog.nodes.push(draft);
+        else catalog.nodes[index] = draft;
+        if (previousBases.has(id)) persistedNodes.set(id, previousBases.get(id));
+        else persistedNodes.delete(id);
+      });
+      dirtyIds.delete(savedId);
+      select(savedId);
+      status('当前节点已保存，客户端下次刷新目录时会读取新版本');
     } catch (error) { status(error.message, true); }
-    finally { $('regionSave').disabled = false; }
+    finally { saving = false; $('regionForm').inert = false; updateSaveState(); }
   });
   $('regionImageFile').addEventListener('change', async () => {
     const file = $('regionImageFile').files[0];
@@ -456,7 +502,7 @@
     if (!node || photosOf(node).length >= 3) { status('图片已满，请先移除一张', true); return; }
     const form = new FormData();
     form.append('image', file);
-    status('正在上传图片…');
+    uploadsInFlight++; updateSaveState(); status('正在上传图片…');
     try {
       const result = await api('images', { method: 'POST', body: form });
       if (catalog !== targetCatalog) { status('目录已重新加载，请重新核对图片'); return; }
@@ -464,11 +510,11 @@
       photosOf(node).push(result.photo);
       updateCover(node);
       if (current() === node) { renderPhotos(); renderCandidates(); }
-      dirty = true;
-      status('图片已上传，请保存地区资料');
+      markDirty(node, '图片已上传，请保存当前节点');
     } catch (error) { status(error.message, true); }
+    finally { uploadsInFlight--; updateSaveState(); }
     $('regionImageFile').value = '';
   });
-  window.addEventListener('beforeunload', event => { if (dirty) { event.preventDefault(); event.returnValue = ''; } });
+  window.addEventListener('beforeunload', event => { if (dirtyIds.size || uploadsInFlight || saving) { event.preventDefault(); event.returnValue = ''; } });
   load();
 })();
