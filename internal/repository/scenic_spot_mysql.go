@@ -96,6 +96,7 @@ func (r *MySQLScenicSpotRepository) FindScenicSpotBySource(ctx context.Context, 
 	return nil, ErrNotFound
 }
 func (r *MySQLScenicSpotRepository) ListScenicSpots(ctx context.Context, f ScenicSpotListFilter) ([]*models.ScenicSpot, int64, error) {
+	f.CityCodes = regionCodeCandidates(f.CityCodes)
 	where := ` WHERE 1=1`
 	args := []any{}
 	if len(f.CityCodes) > 0 {

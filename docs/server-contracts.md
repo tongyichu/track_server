@@ -26,7 +26,7 @@
 - **搜索结果总数**：`GET /track/search/list` 返回 `total_count`，由三种 TrackRepository 的 `CountSearch` 按关键词、城市、运动类型统计正常且有原始轨迹文件的记录，不受分页游标影响；客户端据此显示搜索总数。
 - **发现与活动日历**：`internal/repository/track_discovery.go` 的三种 TrackRepository 实现负责象形轨迹筛选和用户轨迹开始时间查询；`internal/service/track_discovery.go` 提供景点、景点关联轨迹、象形轨迹与近 375 天日历（365 天加 10 天缓冲）。发现景点沿用轨迹详情的客户端可见规则，只展示 active 目录，封面优先首张图片，并返回景点描述及完整目录图片 `photos`（url/title/author/author_url/source_url）供详情页轮播与相册展示；图片沿用目录顺序，过滤空 URL，不为此新增供应商请求；按该景点关联的公开、已完成且有原始文件的轨迹数降序、同数按景点 ID 升序分页，游标携带计数和 ID。两个轨迹列表只含公开已完成且有原始文件的记录。日历按请求的 IANA 时区归日，客户端按连续 12 个月的首月第一个周日裁剪并另加本地未上传记录。协议见 `docs/api/track.md`。
 - **反馈图片私有落盘**：意见反馈图片由服务端直接接收，保存到 `<LogDir>/feedback/images/`，必须通过 `/feedback/:feedback_id/images/:image_id` 或 `/ops/feedback/:feedback_id/images/:image_id` 走鉴权 handler 读取；不要放进 `/api/v1/static/*` 公开静态目录。
-- **地区目录唯一来源**：`internal/regions/seed.json` 只在存储没有目录时首次导入，此后省市及海外地区均以 `region_catalog_state` 为准；后台在 `/admin/regions.html` 编辑，Android 首次下载并保存本地文件，后续按版本更新。国内现有编码、层级与父级保持稳定。协议见 `docs/api/regions.md`。
+- **地区目录唯一来源**：`internal/regions/seed.json` 只在存储没有目录时首次导入，此后省市及海外地区均以 `region_catalog_state` 为准；后台在 `/admin/regions.html` 编辑，Android 首次下载并保存本地文件，后续按版本更新。国内现有外部编码、层级与父级保持稳定；业务城市编号统一使用不可变 `region_id`，旧编码经目录别名兼容，`external_ids` 按来源保存高德 adcode 与 Google 地区 Place ID。协议见 `docs/api/regions.md`。
 
 ## 权威数据源
 后台专用形象识别入口 `internal/service/kimi_track_shape.go`，复用 Kimi 图像传输但关闭思考模式，与自动说明生成方法分开；共享契约在 skill 的 `references/shape-only-output.txt`。最近诊断以 `narrative:shape-preview:<ID>` 存于现有记录表，按输入版本展示，POST 不写轨迹标签。接口与验收边界见 `docs/api/admin-tracks.md`。

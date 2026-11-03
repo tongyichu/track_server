@@ -118,7 +118,10 @@
 | --- | --- | --- | --- | --- |
 | 后台账号列表与页面目录 | GET | `/admin/api/accounts` | 管理员 session | [admin-accounts.md](admin-accounts.md) |
 | 后台读取/保存地区目录 | GET / PUT | `/admin/api/regions/catalog` | 地区查看 / 操作 | [regions.md](regions.md) |
-| 上传地区封面图 | POST | `/admin/api/regions/images` | 地区操作 | [regions.md](regions.md) |
+| 后台保存单个地区节点 | PUT | `/admin/api/regions/node` | 地区操作 | [regions.md](regions.md) |
+| 上传地区图片 | POST | `/admin/api/regions/images` | 地区操作 | [regions.md](regions.md) |
+| 联网查询单个地区资料 | POST | `/admin/api/regions/research` | 地区操作 | [regions.md](regions.md) |
+| 导入地区图片候选 | POST | `/admin/api/regions/images/import` | 地区操作 | [regions.md](regions.md) |
 | 新增后台账号 | POST | `/admin/api/accounts` | 管理员 session | [admin-accounts.md](admin-accounts.md) |
 | 调整身份、状态与页面权限 | PUT | `/admin/api/accounts/:username` | 管理员 session | [admin-accounts.md](admin-accounts.md) |
 | 迁移期应急重置后台密码 | POST | `/admin/api/accounts/:username/reset-password` | 管理员 session，且目标未验证邮箱/旧入口未关闭 | [admin-accounts.md](admin-accounts.md) |
@@ -134,7 +137,8 @@
 | 后台轨迹列表（含 missing 缺项筛选） | GET | `/admin/api/tracks` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |
 | 后台轨迹坐标系预览 | GET | `/admin/api/tracks/:track_id/map-preview` | 轨迹查看 | [admin-tracks.md](admin-tracks.md#编辑字段与坐标预览) |
 | 后台批量导入轨迹（逐文件结果含轨迹表格摘要） | POST | `/admin/api/tracks/import` | 轨迹操作 | [admin-tracks.md](admin-tracks.md) |
-| 后台轨迹详情 | GET | `/admin/api/tracks/:track_id` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |
+| 后台轨迹详情（含只读归属用户名） | GET | `/admin/api/tracks/:track_id` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |
+| 后台轨迹图片与原始文件下载 | GET | `/admin/api/tracks/:track_id/assets/:asset` | 轨迹查看 | [admin-tracks.md](admin-tracks.md#详情资源展示与下载) |
 | 单条轨迹重新识别 | POST | `/admin/api/tracks/:track_id/place-refresh` | 轨迹操作 | [admin-tracks.md](admin-tracks.md) |
 | 轨迹地图高德配置 / 服务代理 | GET | `/admin/api/tracks/map-config`、`/admin/api/tracks/amap-service` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |
 | 单条轨迹景点候选 | GET | `/admin/api/tracks/:track_id/place-candidates` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |

@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tongyichu/track_server/internal/config"
 	"github.com/tongyichu/track_server/internal/models"
 )
 
@@ -224,6 +225,7 @@ func (s *TrackPlaceService) amapLookup(ctx context.Context, p models.TrackPoint)
 	}
 	return out, nil
 }
+
 // 户外目的地内部分类：供应商 POI 分类归一为景区/公园/山系/湖泊四类。
 const (
 	placeKindScenic   = "scenic_spot"
@@ -337,10 +339,26 @@ func (s *TrackPlaceService) googleLookup(ctx context.Context, p models.TrackPoin
 			continue
 		}
 		parent := ""
+		cityID := ""
+		ambiguousCity := false
 		if len(p.ContainingPlaces) > 0 {
 			parent = p.ContainingPlaces[0].ID
 		}
-		out = append(out, placeEvidence{Place: models.TrackPlace{ID: placeID("google", p.ID), Provider: "google", ProviderID: p.ID, Name: p.DisplayName.Text, Category: p.PrimaryType, ParentID: parent, Latitude: p.Location.Latitude, Longitude: p.Location.Longitude, CoordinateSystem: "WGS84", ExpiresAt: time.Now().Add(s.providerTTL("google"))}, Inside: false})
+		for _, containing := range p.ContainingPlaces {
+			matched, ok := config.ResolveExternalSelectableCityID("google", "place_id", containing.ID)
+			if !ok {
+				continue
+			}
+			if cityID != "" && cityID != matched {
+				ambiguousCity = true
+				break
+			}
+			cityID = matched
+		}
+		if ambiguousCity {
+			cityID = ""
+		}
+		out = append(out, placeEvidence{Place: models.TrackPlace{ID: placeID("google", p.ID), Provider: "google", ProviderID: p.ID, Name: p.DisplayName.Text, Category: p.PrimaryType, ParentID: parent, CityCode: cityID, Latitude: p.Location.Latitude, Longitude: p.Location.Longitude, CoordinateSystem: "WGS84", ExpiresAt: time.Now().Add(s.providerTTL("google"))}, Inside: false})
 	}
 	return out, nil
 }

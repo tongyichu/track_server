@@ -663,11 +663,13 @@ func main() {
 	}
 	if adminModule != nil && adminModule.Handler != nil {
 		adminModule.Handler.SetRegionService(regionSvc)
+		adminModule.Handler.SetRegionResearcher(regions.NewResearcher(cfg.MoonshotAPIKey, cfg.KimiScenicDescriptionModel))
 		adminModule.Handler.SetDashboardStatisticsRepository(repository.NewAdminDashboardStatisticsRepository(
 			userRepo, trackRepo, collectRepo, loginLogRepo, navigationRepo, companionRepo,
 			feedbackRepo, trackMapRepo, trackSubmissionRepo, likeRepo, commentRepo,
 		))
 		adminModule.Handler.SetScreenshotCache(screenshotCache)
+		adminModule.Handler.SetTrackAssetCaches(rawTrackCache, previewCache)
 		adminModule.Handler.SetTrackSubmissionService(trackSubmissionSvc)
 		adminModule.Handler.SetScenicSpotCatalogService(scenicSpotCatalogSvc)
 		adminModule.Handler.SetTrackPlaceService(trackPlaceSvc)

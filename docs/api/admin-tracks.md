@@ -83,9 +83,11 @@
 
 ## 轨迹详情、重新识别与人工候选放宽
 
-`GET /admin/api/tracks/:track_id` 返回 `{code:0,data:{track, geo?}}`：
+`GET /admin/api/tracks/:track_id` 返回 `{code:0,data:{track, user_name, user_id_text, geo?}}`：
 
 - `track`：轨迹持久化字段；`track.primary_scenic_spot={id,name}` 为当前主景点（自动归属或人工确认），无则省略。
+- `user_name`：按持久化归属人查询的用户名（昵称），找不到或昵称为空时为“未知用户”；仅展示，不允许修改归属。
+- `user_id_text`：字符串用户 ID，保留兼容；新版表单不展示或提交。
 - `geo`：地图索引简化轨迹线 `{simplified_polyline, coordinate_system, start_lat/lng, end_lat/lng}`，坐标为 GCJ02，可直接在高德地图绘制；无索引时省略。
 
 `POST /admin/api/tracks/:track_id/place-refresh`（轨迹操作权限）：同步对单条轨迹重新执行景点识别，复用后台识别任务同一互斥锁与供应商配额；任务忙返回 409，识别未启用 503，无可用地图索引 404。成功后前端重新读取候选。
@@ -98,11 +100,30 @@
 
 ### user_id 精度约定
 
-`GET /admin/api/tracks/:track_id` 额外返回 `user_id_text`（归属人 ID 的字符串形式）。轨迹归属人 ID 为 18 位 int64，经 JavaScript `Number` 往返会被精度截断（如 `…288` 变 `…300`），编辑弹窗使用 `user_id_text` 展示并原样字符串回传；`PUT /admin/api/tracks/:track_id` 的 `user_id` 按 `json.Number` 解析，接受字符串或数字字面量。轨迹地图视野在弹窗可见后校准并限制最大缩放。
+`GET /admin/api/tracks/:track_id` 额外返回 `user_id_text`（归属人 ID 的字符串形式）。轨迹归属人 ID 为 18 位 int64，经 JavaScript `Number` 往返会被精度截断（如 `…288` 变 `…300`），新版编辑弹窗只读展示 `user_name`，不展示或提交用户 ID；`PUT /admin/api/tracks/:track_id` 的 `user_id` 按 `json.Number` 解析，接受字符串或数字字面量。轨迹地图视野在弹窗可见后校准并限制最大缩放。
 
 ## 编辑字段与坐标预览
 
-共享轨迹编辑表单的用户 ID 只读显示 `user_id_text`，保存请求不提交 `user_id`。`PUT /admin/api/tracks/:track_id` 仅兼容旧页面回传原归属人；不同 ID 或非法 ID 返回 400，不允许通过后台转移归属。
+### 详情资源展示与下载
+
+共享详情弹窗的预览资源只展示图片，可点击放大；图片字段为空显示“无”，请求失败显示“加载失败”并允许重试。原始轨迹文件展示下载图标，不展示 URL，字段为空显示“缺失”。URL 输入框从表单移除，保存资料不提交原始文件、截图或 `preview_images`，避免把展示用代理地址写回数据或覆盖并发补图。原 PUT 接口仍兼容资源字段。
+
+`GET /admin/api/tracks/:track_id/assets/:asset` 使用后台 session 和轨迹查看权限，读取指定轨迹当前持久化资源；私密及已下架记录也可由有权限的后台账号查看。`asset` 仅接受：
+
+| asset | 资源与响应 |
+| --- | --- |
+| `raw` | 原始轨迹文件，以 `Content-Disposition: attachment` 直接下载，文件名为轨迹 ID 加文件扩展名 |
+| `square_day` / `square_night` | 方形日间 / 夜间预览图 |
+| `landscape_day` / `landscape_night` | 横版日间 / 夜间预览图 |
+| `legacy` / `no_map` | 旧版截图 / 无地图轨迹线；无地图 SVG 按运动类型主题色渲染 |
+
+浏览器不传资源 URL。响应为文件内容，使用 `no-store`；不重定向到 OSS 或业务 JWT 路由。图片与原文件按请求异步读取，详情基础字段不等待缓存下载。服务端复用既有原文件、私有预览图及截图缓存和 OSS 内网下载器，缓存 key 包含来源摘要，预览四图沿用业务侧版本 key；读取不修改轨迹资源地址。资源字段为空/本地文件不存在返回 404，未知 asset 返回 400，历史本地路径无效返回 422，缓存未配置返回 503，远端读取失败返回 502。
+
+无地图轨迹的客户端生成格式为透明背景 SVG（`TrackLineSvgGenerator`，原文件使用固定浅绿色）。后台 `no_map` 读取 SVG 时只复制安全的矢量几何与布局属性，用 `TrackDisplayLabels` 的 sport.theme_color（权威来源 `DefaultTrackTypeConfigs`）渲染线条，不修改原文件或源缓存。可选 `track_type` 参数仅用于预览：切换表单轨迹类型后即时换色，保存才修改类型；不传时按已存类型着色。未知运动类型无主题色时保留原图，历史位图仍按原图展示。SVG 限 8 MiB，移除脚本、样式及外部资源，无法解析返回 422；空资源仍显示“无”。
+
+普通字段按弹窗宽度最多四列、逐级减少至单列；轨迹描述保留整行。标签/景点识别与地图在宽屏并排，窄屏顺排，样式限定 `.admin-track-editor`，不改变其他后台表单的密度。
+
+共享轨迹编辑表单只读显示归属用户名 `user_name`，保存不提交 `user_id` 或 `user_name`。描述来源 `description_source`、描述规则版本 `description_rule_version`、轨迹进行状态 `is_running` 不展示且不随表单提交，原值保留。`PUT /admin/api/tracks/:track_id` 仅兼容旧页面回传原归属人；不同 ID 或非法 ID 返回 400，不允许通过后台转移归属。
 
 坐标系使用下拉选项：未设置、WGS84、GCJ02、BD09；来源标签使用下拉选项：空值（用户录制/默认）、`manual_seed`（人工导入）。未知历史值保留在当前记录的选项中，避免保存其他字段时被静默替换。
 

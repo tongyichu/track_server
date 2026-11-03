@@ -13,7 +13,6 @@
   <main class="container">
     <section class="region-heading">
       <div><h1>城市管理</h1><p class="text-secondary">这里是客户端城市目录的唯一数据源。国内编码保持稳定，国外可按国家、州和城市等层级组织。</p></div>
-      <div class="region-heading-actions"><span id="regionVersion" class="text-secondary"></span><button id="regionReload" class="btn btn-outline-secondary">重新加载</button><button id="regionSave" data-admin-write="regions" class="btn btn-primary">保存全部修改</button></div>
     </section>
     <p id="regionStatus" class="text-secondary" role="status"></p>
     <div class="region-country-bar"><div id="regionCountryTabs" class="region-country-tabs" role="tablist" aria-label="国家"></div><button id="regionAddCountry" type="button" data-admin-write="regions" class="region-country-add" aria-label="新增国家" title="新增国家">+</button></div>
@@ -26,30 +25,23 @@
       </section>
       <section class="card region-editor-panel">
         <div class="card-body">
-          <p id="regionEmpty" class="text-secondary">选择左侧地区后编辑。新增节点也会先保留在本页，点击“保存全部修改”后才生效。</p>
+          <p id="regionEmpty" class="text-secondary">选择左侧地区后编辑。新增节点先保留在本页，点击该节点的“保存”后生效。</p>
           <form id="regionForm" data-admin-fields="regions" hidden>
-            <div class="region-editor-title"><h2 id="regionEditorTitle">地区资料</h2><div><button id="regionDeleteDraft" type="button" data-admin-write="regions" class="btn btn-outline-danger" hidden>删除未保存节点</button><button id="regionArchive" type="button" data-admin-write="regions" class="btn btn-outline-danger">归档节点</button></div></div>
-            <p id="regionId" class="text-secondary"></p>
+            <div class="region-editor-title"><div class="region-editor-identity"><h2 id="regionEditorTitle">地区资料</h2><span id="regionId" class="region-editor-id"></span></div><div class="region-editor-actions"><div class="region-ai-action"><button id="regionResearch" type="button" data-admin-write="regions" class="btn btn-outline-primary">AI 联网填写</button><span id="regionResearchStatus" class="region-research-status" role="status" hidden><span id="regionResearchStatusText"></span><span id="regionResearchDots" class="region-loading-dots" aria-hidden="true" hidden><span>.</span><span>.</span><span>.</span></span></span></div><button id="regionDeleteDraft" type="button" data-admin-write="regions" class="btn btn-outline-danger" hidden>删除未保存节点</button><button id="regionSaveNode" type="button" data-admin-write="regions" class="btn btn-primary">保存当前节点</button></div></div>
+            <section id="regionResearchPanel" class="region-research-panel" hidden aria-label="AI 联网查询结果"><h3>联网资料草稿</h3><p class="form-hint">请核对文字与图片来源；点击代入后仍需保存当前节点。</p><div id="regionDraftFields"></div><div class="region-research-actions"><button id="regionApplyEmpty" type="button" data-admin-write="regions" class="btn btn-outline-primary">仅填写空白字段</button><button id="regionApplyAll" type="button" data-admin-write="regions" class="btn btn-outline-secondary">代入全部文字</button></div><div id="regionResearchSources"></div><h4>风景图片候选</h4><p id="regionCandidateCount" class="form-hint"></p><div id="regionCandidatePhotos" class="region-photo-grid"></div></section>
             <div class="region-form-grid">
               <label>名称<input id="regionName" class="form-control" maxlength="64" required /></label>
               <label>英文名称<input id="regionNameEn" class="form-control" maxlength="200" /></label>
-              <label>层级<select id="regionLevel" class="form-select"><option value="country">国家</option><option value="province">省份</option><option value="state">州</option><option value="city">城市</option><option value="district">区县</option><option value="other">其他</option></select></label>
-              <label>上级地区<select id="regionParent" class="form-select"></select></label>
-              <label>地区编码<input id="regionCode" class="form-control" maxlength="64" /></label>
-              <label>编码体系<input id="regionCodeSystem" class="form-control" maxlength="64" placeholder="如 cn_adcode、iso3166-1" /></label>
-              <label>所属国家代码<input id="regionCountryCode" class="form-control" maxlength="8" placeholder="如 CN、US" /></label>
-              <label>所属洲<select id="regionContinent" class="form-select"><option value="">未设置</option><option value="AS">亚洲</option><option value="EU">欧洲</option><option value="AF">非洲</option><option value="NA">北美洲</option><option value="SA">南美洲</option><option value="OC">大洋洲</option><option value="AN">南极洲</option></select></label>
+              <label>高德 adcode<input id="regionAmapAdcode" class="form-control" inputmode="numeric" maxlength="6" placeholder="六位行政区编码" /></label>
+              <label>Google 地区 Place ID<input id="regionGooglePlaceId" class="form-control" maxlength="2048" placeholder="地区的 Place ID，非景点 ID" /></label>
+              <label><span id="regionCountryCodeLabel">所属国家代码</span><input id="regionCountryCode" class="form-control" maxlength="2" placeholder="如 CN、US" /></label>
+              <label id="regionContinentField">所属洲<select id="regionContinent" class="form-select"><option value="">未设置</option><option value="AS">亚洲</option><option value="EU">欧洲</option><option value="AF">非洲</option><option value="NA">北美洲</option><option value="SA">南美洲</option><option value="OC">大洋洲</option><option value="AN">南极洲</option></select></label>
               <label>纬度<input id="regionLatitude" class="form-control" type="number" step="any" min="-90" max="90" /></label>
               <label>经度<input id="regionLongitude" class="form-control" type="number" step="any" min="-180" max="180" /></label>
-              <label>排序值<input id="regionSort" class="form-control" type="number" step="1" /></label>
-              <label>邮编（多个用逗号分隔）<input id="regionPostalCodes" class="form-control" placeholder="可选" /></label>
-              <label class="region-full">宣传口号<input id="regionSlogan" class="form-control" maxlength="500" /></label>
+              <label class="region-full">文旅宣传口号<input id="regionSlogan" class="form-control" maxlength="500" /><span class="form-hint">填写当地文旅推广中实际使用的旅游宣传语，不使用城市精神或招商等其他口号。</span></label>
               <label class="region-full">简介<textarea id="regionDescription" class="form-control" rows="5" maxlength="8000"></textarea></label>
-              <label class="region-full">地标风景照<input id="regionImageFile" class="form-control" type="file" accept="image/jpeg,image/png" /><span class="form-hint">上传 JPEG 或 PNG，最多 8 MiB；上传完成后仍需保存地区资料。</span></label>
-              <label class="region-full">图片地址<input id="regionCover" class="form-control" placeholder="上传后自动填入，也可输入 HTTPS 图片地址" /></label>
-              <div class="region-full"><img id="regionCoverPreview" class="region-cover-preview" alt="地标风景照预览" hidden /></div>
-              <label class="form-check"><input id="regionSelectable" class="form-check-input" type="checkbox" /><span class="form-check-label">可在客户端选为城市</span></label>
-              <label class="form-check"><input id="regionActive" class="form-check-input" type="checkbox" /><span class="form-check-label">启用</span></label>
+              <div class="region-full"><div class="region-photo-heading"><strong>地标风景照（最多 3 张）</strong><span class="form-hint">第一张作为客户端封面；可调整顺序或移除。</span></div><div id="regionPhotos" class="region-photo-grid"></div><label class="region-upload-label">添加本地图片<input id="regionImageFile" class="form-control" type="file" accept="image/jpeg,image/png" /><span class="form-hint">JPEG 或 PNG，最多 8 MiB；压缩上传后仍需保存当前节点。</span></label></div>
+              <label class="form-check region-selectable"><input id="regionSelectable" class="form-check-input" type="checkbox" /><span class="form-check-label">可在客户端选为城市</span></label>
             </div>
           </form>
         </div>

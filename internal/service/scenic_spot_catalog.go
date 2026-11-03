@@ -13,6 +13,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/tongyichu/track_server/internal/config"
 	"github.com/tongyichu/track_server/internal/models"
 	"github.com/tongyichu/track_server/internal/repository"
 )
@@ -69,7 +70,7 @@ func validateScenicSpot(v *models.ScenicSpot) error {
 	} else {
 		v.ScenicGrade = ""
 	}
-	v.CityCode = strings.TrimSpace(v.CityCode)
+	v.CityCode = config.CanonicalCityCode(v.CityCode)
 	v.CityName = strings.TrimSpace(v.CityName)
 	if utf8.RuneCountInString(v.Name) > 160 || utf8.RuneCountInString(v.Description) > 8000 || utf8.RuneCountInString(v.Address) > 500 || utf8.RuneCountInString(v.Category) > 100 || len(v.Aliases) > 40 || len(v.Photos) > 30 || len(v.Sources) > 8 {
 		return invalidScenicSpot("scenic spot fields exceed limits")

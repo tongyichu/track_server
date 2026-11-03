@@ -80,6 +80,7 @@ func (r *MongoScenicSpotRepository) FindScenicSpotBySource(ctx context.Context, 
 	return v, err
 }
 func (r *MongoScenicSpotRepository) ListScenicSpots(ctx context.Context, f ScenicSpotListFilter) ([]*models.ScenicSpot, int64, error) {
+	f.CityCodes = regionCodeCandidates(f.CityCodes)
 	filter := bson.M{}
 	if f.VisibleOnly {
 		filter["$and"] = bson.A{bson.M{"status": models.ScenicSpotActive}}

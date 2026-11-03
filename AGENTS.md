@@ -16,7 +16,7 @@ Go/Hertz 轨迹服务，调用链为 middleware → handler → service → repo
 - 静态资源用 StaticFS + PathRewrite，禁止直接 Static。反馈/评论/预览等私有资源保留各自归属、可见性与源版本鉴权，不混入通用静态目录。
 - 环境变量只在 internal/config/config.go 读取后注入；全链路传 context.Context。日志复用 log/hlog；仓储错误使用已有 ErrNotFound/ErrAlreadyExists/ErrForbidden，由上层翻译 HTTP 状态。
 - 原始 GPS 声明、索引 GCJ02 与地图坐标分清，复用 maparea 转换；不改原始文件。自动空间索引/景点识别由后台任务执行，业务地图/列表查询不调用供应商；后台人工同步刷新、来源预览与核验沿用专用接口及其锁/配额规则。后台 raw track 与埋点 OSS 同步必须用内网 Endpoint，不回退公网。
-- 地区目录以 region_catalog_state 为权威，seed 仅首次导入；运动类型以 DefaultTrackTypeConfigs 和稳定英文 code 为权威。all 仅为地图查询哨兵，不写存储或跨类型合并路线组。
+- 地区目录以 region_catalog_state 为权威，seed 仅首次导入；业务城市编号使用稳定 `region_id`，旧树键/高德 adcode 按目录兼容，外部标识按来源和类型映射，不当作通用编号，细节见 docs/api/regions.md。运动类型以 DefaultTrackTypeConfigs 和稳定英文 code 为权威。all 仅为地图查询哨兵，不写存储或跨类型合并路线组。
 - 保持 RouteGroup 历史 ID、人工名称/代表及路线介绍 anchor_track_id；重聚合不得覆盖人工资料。labels 是既有权威字段的只读投影，不新建标签表或触发 AI/供应商请求。景区等级仅取明确 A 级来源，scenic_spot.name 由 API 组装“景点名·5A”，客户端不得重复拼接；采集边界见景点识别文档。
 - 自动说明/形象写回须保护人工内容，复用去重、租约和预算。埋点脱敏、事件发生时身份与整批确认语义不可改变；导航非幂等上报不得自动重试。
 - 敏感配置/密钥不入库；地区边界、词库按既有生成/维护流程更新，不逐条手改；mysql.sql 随正式表结构变化同步。
@@ -47,7 +47,7 @@ Go/Hertz 轨迹服务，调用链为 middleware → handler → service → repo
 
 ## 发布与授权
 
-- 发布 App/部署 Server 通过同级 Android 仓库 [android-track-release](../android-track-bakcup3/.agents/skills/android-track-release/SKILL.md)：可同步、提交、推送实际发布仓库，Server 先推送再构建镜像和生产更新；仅部署 Server 不提交客户端。
+- 发布 App/部署 Server 通过同级 Android 仓库 [android-track-release](../android-track/.agents/skills/android-track-release/SKILL.md)：可同步、提交、推送实际发布仓库，Server 先推送再构建镜像和生产更新；仅部署 Server 不提交客户端。
 - 仅修改技能不触发发布、部署或 Git 写操作。敏感配置、签名、产物和缓存不入库；分别核对 Git 和生产结果，不把已推送等同部署成功。
 - 发布范围外的 Git 写操作及不可逆破坏性操作需要当前明确授权，已授权步骤不重复询问。
 
