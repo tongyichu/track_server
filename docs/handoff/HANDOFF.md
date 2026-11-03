@@ -114,3 +114,12 @@
 - Android同轮新增运动类型分布卡片及repository合并未上传本地记录，按时长显示占比，同时展示时长/公里数/次数；从现有运动元数据读取名称图标和日夜色。服务端结果与本机isUploaded=0记录合并后算比例，已上传本地副本不叠加。云端失败明确当前仅有本机未上传记录，并可重试。
 - 根AGENTS更新入口，server-contracts、track API分册及路由索引同步。gofmt、go build ./...与git diff --check通过；Android最终assembleDebug通过并安装小米。默认未新增/运行单元、集成、UI或接口自动化，功能待用户手动验收。
 - 规则校验剩10个既有超长Go源文件问题，无路径告警，报告/private/tmp/track-type-distribution-server-agents-20261104.json。未提交推送或部署；线上仍是38a189f，本接口部署后才返回完整云端历史，未为验收写生产数据。
+
+
+## 2026-11-04：运动类型分布接口部署完成
+
+- 用户明确要求部署，运动类型统计源码提交989401f，合入远端13个更新（至962bd75）后实际部署main/1008464b93ef006ee3a03eb551954784f5d58321，代码已推送。合并后go build ./...、相关regions/track_editor/ui的node --check、git diff --check通过。
+- linux/amd64镜像manifest sha256:60cabd66ed85b204db0cacebfd94781771a872220af6bbfb6366c0eca5339cf4，配置ID sha256:a51459e69d07a35e787e8f30f1b60331d381a465913feea3152d203ffd3cce2d。核对revision、镜像摘要和脚本选取结果后运行原生产update_track_server.sh，仅替换精确同名容器并由脚本启动。
+- 当前容器fddc45739df5c8047cd47c24f05c0ce071aa768e0ee397063a695e9fe3c74aa3，running、restarts=0，MySQL仓储正常、无内存降级、3个后台账号加载正常；.env与持久化挂载未变，旧镜像保留。内外ping均200，新分布接口未登录401，后台API401/页面302/登录200，资源版本0bfa611dcbe21190d0a7。
+- 回执/private/tmp/track-type-distribution-deploy-20261104.json；构建元数据和日志为同前缀image-20261104.json、20261104.log。未创建业务测试数据或调用私有统计接口自动化。AGENTS仍有10个既有超长源码问题，无路径告警。
+- 用户随后要求发布App并追加数据页标题调整，客户端发布继续；本文档回执不改变已部署1008464源码快照。
