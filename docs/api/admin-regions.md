@@ -8,7 +8,7 @@
 
 `GET /admin/api/users` 增加可选 `province_code`，按用户资料省份精确筛选，与现有 `city_code` 取交集。其他筛选、游标及响应字段不变。
 
-## 户外目的地
+## 景点管理
 
 `GET /admin/api/scenic-spots` 支持可选 `province_code` 和 `city_code`。城市非空时优先按城市筛选，否则将省份展开为省内城市编码及省级编码本身。
 

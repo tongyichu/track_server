@@ -3,22 +3,24 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>地区管理 - Track</title>
+  <title>城市管理 - Track</title>
   <link rel="stylesheet" href="/admin/static/vendor/tabler.min.css" />
   <link rel="stylesheet" href="/admin/static/style.css" />
+  <link rel="stylesheet" href="/admin/static/regions.css" />
 </head>
 <body>
   <header class="topbar"></header>
   <main class="container">
     <section class="region-heading">
-      <div><h1>地区管理</h1><p class="text-secondary">这里是客户端城市目录的唯一数据源。国内编码保持稳定，国外可按国家、州和城市等层级组织。</p></div>
+      <div><h1>城市管理</h1><p class="text-secondary">这里是客户端城市目录的唯一数据源。国内编码保持稳定，国外可按国家、州和城市等层级组织。</p></div>
       <div class="region-heading-actions"><span id="regionVersion" class="text-secondary"></span><button id="regionReload" class="btn btn-outline-secondary">重新加载</button><button id="regionSave" data-admin-write="regions" class="btn btn-primary">保存全部修改</button></div>
     </section>
     <p id="regionStatus" class="text-secondary" role="status"></p>
+    <div class="region-country-bar"><div id="regionCountryTabs" class="region-country-tabs" role="tablist" aria-label="国家"></div><button id="regionAddCountry" type="button" data-admin-write="regions" class="region-country-add" aria-label="新增国家" title="新增国家">+</button></div>
     <div class="region-layout">
       <section class="card region-tree-panel">
         <div class="card-body">
-          <div class="region-tree-actions"><input id="regionSearch" class="form-control" placeholder="搜索名称或编码" aria-label="搜索地区" /><button id="regionAddCountry" data-admin-write="regions" class="btn btn-outline-primary">新增国家</button><button id="regionAddChild" data-admin-write="regions" class="btn btn-outline-primary" disabled>新增下级</button></div>
+          <div class="region-tree-actions"><input id="regionSearch" class="form-control" placeholder="搜索当前国家内的地区" aria-label="搜索当前国家内的地区" /><button id="regionAddChild" data-admin-write="regions" class="btn btn-outline-primary" disabled>新增下级</button></div>
           <div id="regionTree" class="region-tree" role="tree"></div>
         </div>
       </section>

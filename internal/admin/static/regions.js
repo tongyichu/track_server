@@ -3,8 +3,10 @@
   const $ = id => document.getElementById(id);
   let catalog = null;
   let selectedId = '';
+  let activeCountryId = '';
   let dirty = false;
   let persistedIds = new Set();
+  let expandedIds = new Set();
   const fieldMap = {
     regionName: 'name', regionNameEn: 'name_en', regionLevel: 'level', regionParent: 'parent_id',
     regionCode: 'code', regionCodeSystem: 'code_system', regionCountryCode: 'country_code',
@@ -40,39 +42,110 @@
     return result;
   }
 
+  function countryOf(node) {
+    const seen = new Set();
+    while (node && !seen.has(node.id)) {
+      if (!node.parent_id) return node.level === 'country' ? node : null;
+      seen.add(node.id);
+      node = catalog.nodes.find(item => item.id === node.parent_id);
+    }
+    return null;
+  }
+
+  function renderCountryTabs() {
+    const root = $('regionCountryTabs');
+    root.replaceChildren();
+    if (!catalog) return;
+    children('').filter(node => node.level === 'country').forEach(node => {
+      const tab = document.createElement('button');
+      tab.type = 'button';
+      tab.className = 'region-country-tab' + (node.id === activeCountryId ? ' active' : '') + (!node.active ? ' archived' : '');
+      tab.setAttribute('role', 'tab');
+      tab.setAttribute('aria-selected', node.id === activeCountryId ? 'true' : 'false');
+      tab.setAttribute('aria-controls', 'regionTree');
+      const title = document.createElement('span');
+      title.textContent = node.name;
+      const code = document.createElement('small');
+      code.textContent = node.country_code || node.code || '';
+      tab.append(title, code);
+      tab.addEventListener('click', () => {
+        $('regionSearch').value = '';
+        select(node.id);
+        root.querySelector('[aria-selected="true"]')?.focus();
+      });
+      root.appendChild(tab);
+    });
+  }
+
   function renderTree() {
     const root = $('regionTree');
     root.replaceChildren();
-    if (!catalog) return;
+    if (!catalog || !activeCountryId) return;
     const query = $('regionSearch').value.trim().toLowerCase();
     const visible = new Set();
     if (query) catalog.nodes.forEach(node => {
-      if ((node.name + ' ' + (node.name_en || '') + ' ' + (node.code || '')).toLowerCase().includes(query)) {
+      if (countryOf(node)?.id === activeCountryId &&
+          (node.name + ' ' + (node.name_en || '') + ' ' + (node.code || '')).toLowerCase().includes(query)) {
         visible.add(node.id);
         ancestors(node.id).forEach(id => visible.add(id));
       }
     });
-    function add(parentId, depth) {
+    function add(parentId, list) {
       children(parentId).forEach(node => {
         if (query && !visible.has(node.id)) return;
+        const childNodes = children(node.id).filter(item => !query || visible.has(item.id));
+        const expanded = childNodes.length > 0 && (query ? true : expandedIds.has(node.id));
+        const item = document.createElement('li');
+        item.className = 'region-tree-node' + (!node.active ? ' archived' : '');
+        item.setAttribute('role', 'none');
+        const row = document.createElement('div');
+        row.className = 'region-tree-row';
+        if (childNodes.length) {
+          const toggle = document.createElement('button');
+          toggle.type = 'button';
+          toggle.className = 'region-tree-toggle';
+          toggle.textContent = expanded ? '−' : '+';
+          toggle.setAttribute('aria-label', (expanded ? '折叠' : '展开') + node.name);
+          toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+          toggle.disabled = !!query;
+          toggle.addEventListener('click', () => {
+            if (expandedIds.has(node.id)) expandedIds.delete(node.id);
+            else expandedIds.add(node.id);
+            renderTree();
+          });
+          row.appendChild(toggle);
+        } else {
+          const spacer = document.createElement('span');
+          spacer.className = 'region-tree-toggle-spacer';
+          row.appendChild(spacer);
+        }
         const button = document.createElement('button');
         button.type = 'button';
-        button.className = 'region-tree-item' + (node.id === selectedId ? ' selected' : '') + (!node.active ? ' archived' : '');
-        button.style.paddingLeft = (12 + depth * 16) + 'px';
+        button.className = 'region-tree-item' + (node.id === selectedId ? ' selected' : '');
         button.setAttribute('role', 'treeitem');
         button.setAttribute('aria-selected', node.id === selectedId ? 'true' : 'false');
+        if (childNodes.length) button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
         const label = document.createElement('span');
         label.textContent = node.name;
-        const code = document.createElement('small');
-        code.textContent = node.code || node.level;
-        button.append(label, code);
+        button.appendChild(label);
         button.addEventListener('click', () => select(node.id));
-        root.appendChild(button);
-        add(node.id, depth + 1);
+        row.appendChild(button);
+        item.appendChild(row);
+        if (expanded) {
+          const nested = document.createElement('ul');
+          nested.className = 'region-tree-children';
+          nested.setAttribute('role', 'group');
+          add(node.id, nested);
+          item.appendChild(nested);
+        }
+        list.appendChild(item);
       });
     }
-    add('', 0);
-    if (!root.childElementCount) root.textContent = '没有匹配的地区';
+    const tree = document.createElement('ul');
+    tree.className = 'region-tree-list';
+    add(activeCountryId, tree);
+    if (tree.childElementCount) root.appendChild(tree);
+    else root.textContent = query ? '没有匹配的地区' : '当前国家还没有下级地区';
   }
 
   function parentOptions(node) {
@@ -101,6 +174,12 @@
   function select(id) {
     selectedId = id;
     const node = current();
+    if (node) {
+      const country = countryOf(node);
+      if (country) activeCountryId = country.id;
+      ancestors(node.id).forEach(parentId => { if (parentId !== activeCountryId) expandedIds.add(parentId); });
+    }
+    renderCountryTabs();
     $('regionEmpty').hidden = !!node;
     $('regionForm').hidden = !node;
     $('regionAddChild').disabled = !node || !(window.AdminAccess && AdminAccess.can('regions', true));
@@ -109,6 +188,10 @@
     $('regionId').textContent = '内部 ID：' + node.id;
     parentOptions(node);
     Object.entries(fieldMap).forEach(([id, key]) => { $(id).value = node[key] || ''; });
+    const writable = !!(window.AdminAccess && AdminAccess.can('regions', true));
+    const countryRoot = node.level === 'country' && !node.parent_id;
+    $('regionLevel').disabled = !writable || countryRoot;
+    $('regionParent').disabled = !writable || countryRoot;
     $('regionLatitude').value = node.latitude == null ? '' : String(node.latitude);
     $('regionLongitude').value = node.longitude == null ? '' : String(node.longitude);
     $('regionSort').value = node.sort_order == null ? '0' : String(node.sort_order);
@@ -136,6 +219,9 @@
     dirty = true;
     status('有未保存修改');
     preview(node.cover_url);
+    const country = countryOf(node);
+    if (country) activeCountryId = country.id;
+    renderCountryTabs();
     renderTree();
   }
 
@@ -155,8 +241,10 @@
       postal_codes: []
     };
     catalog.nodes.push(node);
+    if (parent) expandedIds.add(parent.id);
     dirty = true;
     select(id);
+    $('regionName').focus();
     status('已新增节点，请填写资料并保存');
   }
 
@@ -165,9 +253,10 @@
     try {
       catalog = await api('catalog');
       persistedIds = new Set(catalog.nodes.map(node => node.id));
+      expandedIds = new Set();
       dirty = false;
       $('regionVersion').textContent = '目录版本 ' + catalog.version + ' · ' + catalog.nodes.length + ' 个节点';
-      select(catalog.nodes.some(node => node.id === selectedId) ? selectedId : '');
+      select(catalog.nodes.some(node => node.id === selectedId) ? selectedId : children('').find(node => node.level === 'country')?.id || '');
       status('地区目录已加载');
     } catch (error) { status(error.message, true); }
   }
@@ -194,7 +283,7 @@
     catalog.nodes.forEach(item => { if (ancestors(item.id).has(node.id)) removed.add(item.id); });
     catalog.nodes = catalog.nodes.filter(item => !removed.has(item.id));
     dirty = true;
-    select('');
+    select(catalog.nodes.some(item => item.id === activeCountryId) ? activeCountryId : children('').find(item => item.level === 'country')?.id || '');
     status('未保存节点及下级已删除');
   });
   $('regionReload').addEventListener('click', load);
