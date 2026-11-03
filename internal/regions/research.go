@@ -143,6 +143,8 @@ func (r *Researcher) Research(ctx context.Context, node Node, hierarchy []string
 	if r.model == "kimi-k2.6" || r.model == "kimi-k2.5" {
 		completionInput["thinking"] = map[string]string{"type": "disabled"}
 		completionInput["max_tokens"] = 4096
+		completionInput["temperature"] = 0.6
+		completionInput["top_p"] = 0.95
 	}
 	if err := r.moonshotJSON(ctx, "/chat/completions", completionInput, &completion); err != nil {
 		return nil, fmt.Errorf("城市资料整理失败: %w", err)
@@ -222,6 +224,22 @@ func (r *Researcher) doJSON(req *http.Request, output any) error {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
+		var providerError struct {
+			Error struct {
+				Message string `json:"message"`
+			} `json:"error"`
+			Message string `json:"message"`
+		}
+		if raw, err := io.ReadAll(io.LimitReader(resp.Body, 4096)); err == nil && json.Unmarshal(raw, &providerError) == nil {
+			message := providerError.Error.Message
+			if message == "" {
+				message = providerError.Message
+			}
+			message = strings.Join(strings.Fields(message), " ")
+			if message != "" {
+				return fmt.Errorf("HTTP %d: %s", resp.StatusCode, clampRunes(message, 240))
+			}
+		}
 		return fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
 	return json.NewDecoder(io.LimitReader(resp.Body, 2<<20)).Decode(output)
