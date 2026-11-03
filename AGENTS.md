@@ -28,6 +28,7 @@ Go/Hertz 轨迹服务，调用链为 middleware → handler → service → repo
 | 范围 | 权威入口与开发参考 |
 |---|---|
 | 路由、配置、接口、表结构 | internal/handler/router.go、internal/config/config.go、internal/repository/interfaces.go、mysql.sql；[API 索引](docs/api/README.md)、[路由索引](docs/api/route-index.md) |
+| 本人运动类型分布统计 | internal/service/track_activity.go、internal/repository/track_activity.go（三实现数据库聚合）；[运动类型分布](docs/api/track.md#运动类型分布) |
 | 轨迹/用户/发现/日历/互动、元数据、各业务默认值和数据边界 | [服务端契约](docs/server-contracts.md)，再查 docs/api/ 对应业务分册 |
 | 登录、成就、投稿、同行、限制、反馈、静态资源、四图补齐、H5、纠错及后台导入调用链 | [服务端流程](docs/server-flows.md) |
 | 地图索引/路线组/景点/坐标 | [契约](docs/server-contracts.md)、[索引流程](docs/server-flows.md#首页地图索引流程)、[地图方案](track_map.md)、[景点识别](docs/track-place-discovery.md)、[边界维护](internal/maparea/README.md) |

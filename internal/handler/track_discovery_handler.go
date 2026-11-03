@@ -121,3 +121,17 @@ func (h *TrackHandler) ActivityCalendar(ctx context.Context, c *app.RequestConte
 	}
 	c.JSON(http.StatusOK, successResponse(result))
 }
+
+func (h *TrackHandler) ActivityTypeDistribution(ctx context.Context, c *app.RequestContext) {
+	userID, ok := discoveryUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, utils.H{"error": "unauthorized"})
+		return
+	}
+	result, err := h.trackSvc.ActivityTypeDistribution(ctx, userID)
+	if err != nil {
+		discoveryError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, successResponse(result))
+}

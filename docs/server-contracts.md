@@ -161,3 +161,10 @@
 景区 A 级采集入口 `internal/service/scenic_spot_grade.go`，仅接受同一有效高德 POI ID 的 v5 detail business.keytag 中明确的 A 级标识，统一为 1A..5A，未知留空；不把评分、酒店星级、名称/简介或 AI 推断当等级。等级独立于文字图片补采，复用既有日配额和调用统计，无新表、环境变量或定时器。状态、来源、采集时间随 JSON/BSON 保存；无等级缓存 unavailable，失败后续重试，人工修改/清空记 manual 且不被覆盖。旧编辑请求省略 scenic_grade 保留原值。
 
 发现景点及轨迹 primary_scenic_spot 下发可选 scenic_grade，读取不调用供应商；未知不能解释为官方未评级。统一 labels 的 scenic_spot.name 由 API 组装为“景点名·5A”（U+00B7 居中点），无等级保留原名，code 仍为稳定景点 ID，primary_scenic_spot.name 保持纯名称。客户端直接消费 labels，不重复拼接。完整同步与字段契约见 [景区等级采集与下发](track-place-discovery.md#景区等级采集与下发)。
+
+
+## 本人运动类型分布
+
+`GET /track/activity/type-distribution` 只取当前JWT用户，返回全部历史已完成、正常/私密且raw_track_url非空的记录按类型聚合的次数、时长秒数、距离米数。删除、进行中与自动创建的未上传原始文件占位记录排除；负数/缺失指标归零，空集合返回items=[]。权限不支持指定其他用户。入口 internal/service/track_activity.go，复用类型归一函数、合并已知别名，未知类型保留，空类型为other；按时长降序、同值按type code排序。
+
+独立 `repository.ActivityTypeStatisticsRepository` 的MySQL GROUP BY、Mongo聚合与内存实现提供相同口径，不逐条加载轨迹、GPS、图片或供应商内容；三种实现有编译期断言。不新建表、列、索引、缓存或后台任务，不改写业务数据。协议见 [运动类型分布](api/track.md#运动类型分布)。客户端合并本机未上传记录后计算比例，统计范围与近12个月日历分开标注。

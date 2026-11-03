@@ -4,6 +4,7 @@
 
 | 接口 | 方法 | 路径 | 需要认证 | 文档 |
 | --- | --- | --- | --- | --- |
+| 本人全部历史运动类型分布 | GET | `/track/activity/type-distribution` | 是 | [运动类型分布](track.md#运动类型分布) |
 | 后台景点状态调整（详情删除按 archived 归档） | POST | `/admin/api/scenic-spots/:spot_id/status` | 后台景点写权限 | [track-place-discovery.md](../track-place-discovery.md#后台景点删除归档) |
 | 后台景点等级编辑与详情 | GET / PUT | `/admin/api/scenic-spots/:spot_id` | 后台景点读/写权限 | [景区等级采集与下发](../track-place-discovery.md#景区等级采集与下发) |
 | 存量景点资料及等级补采 | POST | `/admin/api/scenic-spots/provider-content/backfill` | 后台景点写权限 | [景区等级采集与下发](../track-place-discovery.md#景区等级采集与下发) |

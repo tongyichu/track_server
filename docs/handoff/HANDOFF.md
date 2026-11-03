@@ -91,3 +91,13 @@
 - 内网与公网 GET /api/v1/ping 均200、hello track app；启动确认使用MySQL、无内存降级、载入3个后台账号，无账号存储错误。后台未登录API401、页面302到登录，登录页200；资源版本2da6b5861ef5c46c415d。
 - 部署回执 /private/tmp/track-grade-deploy-20261104.json，镜像元数据 /private/tmp/track-grade-deploy-image-20261104.json，安全日志 /private/tmp/track-grade-deploy-20261104.log。存量等级由打开有写权限的后台景点管理页后自动分批采集，本轮未额外调用业务回填、修改景点或伪造业务数据验收。
 - 合入远端规则精简后，AGENTS校验仅剩10个既有超长源文件问题，无规则文件错误或路径告警，报告 /private/tmp/track-grade-deploy-agents-20261104.json。当前追加为部署结果文档记录，不改变已部署的38a189f源码快照，无需重新构建服务镜像。
+
+
+## 2026-11-04：本人运动类型分布统计接口
+
+- 用户要求在客户端数据tab先增加运动类型分布。新增业务JWT GET /api/v1/track/activity/type-distribution，只取当前JWT用户，无外部user_id/日期参数。
+- internal/models/track_activity.go提供track_type/track_count/duration_seconds/distance_meters，internal/repository/track_activity.go定义独立ActivityTypeStatisticsRepository，MySQL GROUP BY、Mongo聚合和memory三实现及编译期断言；不改变原TrackRepository接口、不扩大全仓mock测试修改。
+- 仅全部历史status正常/私密、非进行中、raw_track_url非空记录入统计。排除自动创建但未上传文件的云端占位，距离和时长负值归0，service归一已知别名并合并、未知code保留、空code归other；按时长降序、同值按code排序，无记录items=[]。不返回GPS/私有明细，不下载原始文件或逐条读取轨迹，无新表/列/索引、缓存、配置或后台任务。
+- Android同轮新增运动类型分布卡片及repository合并未上传本地记录，按时长显示占比，同时展示时长/公里数/次数；从现有运动元数据读取名称图标和日夜色。服务端结果与本机isUploaded=0记录合并后算比例，已上传本地副本不叠加。云端失败明确当前仅有本机未上传记录，并可重试。
+- 根AGENTS更新入口，server-contracts、track API分册及路由索引同步。gofmt、go build ./...与git diff --check通过；Android最终assembleDebug通过并安装小米。默认未新增/运行单元、集成、UI或接口自动化，功能待用户手动验收。
+- 规则校验剩10个既有超长Go源文件问题，无路径告警，报告/private/tmp/track-type-distribution-server-agents-20261104.json。未提交推送或部署；线上仍是38a189f，本接口部署后才返回完整云端历史，未为验收写生产数据。
