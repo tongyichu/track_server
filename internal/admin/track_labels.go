@@ -24,5 +24,5 @@ func (h *Handler) GenerateTrackShape(ctx context.Context, c *app.RequestContext)
 		c.JSON(http.StatusConflict, utils.H{"error": err.Error()})
 		return
 	}
-	c.JSON(200, utils.H{"code": 0, "data": utils.H{"shape_label": result.ShapeLabel, "saved": false}})
+	c.JSON(200, utils.H{"code": 0, "data": utils.H{"shape_label": result.ShapeLabel, "saved": false, "diagnosis": result}})
 }

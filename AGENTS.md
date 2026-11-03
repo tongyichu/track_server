@@ -87,6 +87,8 @@ track_server/
 ```
 
 ### 权威数据源
+后台专用形象识别入口 `internal/service/kimi_track_shape.go`，复用 Kimi 图像传输但关闭思考模式，与自动说明生成方法分开；共享契约在 skill 的 `references/shape-only-output.txt`。最近诊断以 `narrative:shape-preview:<ID>` 存于现有记录表，按输入版本展示，POST 不写轨迹标签。接口与验收边界见 `docs/api/admin-tracks.md`。
+
 人工形象反馈入口 `internal/service/track_shape_learning.go`：后台保存实际形象变化后记录最新反馈，索引巡检每轮最多复核一条，共享 narrative 日预算与扫描租约。复用 `track_place_records`，最多引用4条有效案例，管理员清空同样保护；不改模型权重或生产源码。规则及边界见形象 skill 与 `docs/track-narrative.md`。
 
 形象标签识别与提示词维护使用仓库技能 [track-shape-label](skills/track-shape-label/SKILL.md)。其 `references/shape-rules.txt` 为共享正文，由同目录 `rules.go` 嵌入服务端；调整识别语义时维护 `trackNarrativeRuleVersion`。按一笔画/简笔画整体及关键部位判断，候选包含动物、花草、建筑、数字、地图轮廓和人物头像；不凭头像猜身份，不从地图形象推断实际覆盖区域。

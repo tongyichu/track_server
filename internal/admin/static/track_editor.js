@@ -95,6 +95,27 @@
         const generation = trackPayload.label_generation || {};
         status.textContent = (states[generation.status] || '状态暂不可用') + (generation.attempts ? '，已尝试 ' + generation.attempts + ' 次' : '') + (generation.reason ? '：' + generation.reason : '');
         content.appendChild(status);
+        const diagnosis = document.createElement('div'); diagnosis.className = 'mb-2'; content.appendChild(diagnosis);
+        function showDiagnosis(value) {
+          diagnosis.replaceChildren();
+          if (!value) return;
+          const summary = document.createElement('p'); summary.className = 'text-secondary mb-1';
+          const outcome = { recognized: '识别到候选形象', ambiguous: '形象存在歧义', no_candidate: '未找到明确候选' };
+          const suitability = { appropriate: '适宜展示', inappropriate: '不适宜展示', undetermined: '适宜性未确定' };
+          summary.textContent = (outcome[value.recognition_status] || '') + '；' + (suitability[value.appropriateness] || '') + '。' + (value.decision_summary || '');
+          diagnosis.appendChild(summary);
+          const details = document.createElement('details');
+          const title = document.createElement('summary'); title.textContent = '查看分类检查与候选依据'; details.appendChild(title);
+          const list = document.createElement('ul'); list.className = 'mt-2';
+          (value.category_checks || []).forEach(function (check) {
+            const item = document.createElement('li'); item.textContent = check.category + (check.candidate ? '（' + check.candidate + '）' : '') + '：' + check.visual_basis; list.appendChild(item);
+          });
+          (value.candidates || []).forEach(function (candidate) {
+            const item = document.createElement('li'); item.textContent = '候选 ' + candidate.label + '：' + candidate.support + (candidate.conflict ? '；限制：' + candidate.conflict : ''); list.appendChild(item);
+          });
+          details.appendChild(list); diagnosis.appendChild(details);
+        }
+        showDiagnosis(generation.shape_preview && generation.shape_preview.result);
         if (generation.learning) {
           const learning = generation.learning;
           const names = { pending: '等待复核', running: '正在复核', retry: '等待重试', reviewed: '已复核，等待保存经验', learned: '已纳入识别经验', disputed: '图像依据不足，未采纳为经验', stale: '资料已变化，样例已失效', failed: '复核失败', unavailable: '状态读取失败' };
@@ -112,12 +133,14 @@
             const input = modal && modal.querySelector('[name="shape_label"]');
             if (!input) return;
             const original = input.value;
+            showDiagnosis(null);
             button.disabled = true; status.textContent = '正在分析已保存的轨迹和方形预览图…';
             try {
               const response = await fetch('/admin/api/tracks/' + encodeURIComponent(trackID) + '/labels/generate', { method: 'POST', signal: labelAbort.signal });
               const result = await response.json();
               if (!response.ok) throw new Error(result.error || 'AI 生成失败');
               if (!wrapper.isConnected) return;
+              showDiagnosis(result.data.diagnosis);
               if (input.value !== original) { status.textContent = '你已修改形象输入，本次结果未覆盖，请重新生成或保存人工内容。'; return; }
               input.value = result.data.shape_label || '';
               input.dispatchEvent(new Event('change', { bubbles: true }));

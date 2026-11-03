@@ -1,5 +1,7 @@
 # 后台轨迹资料与景点候选
 
+`POST /admin/api/tracks/:track_id/labels/generate` 返回 `data.shape_label`、`saved:false` 和 `diagnosis`。diagnosis 包含 category_checks（category/candidate/visual_basis，8类）、candidates（label/support/conflict，最多3项）、shape_label、recognition_status（recognized/ambiguous/no_candidate）、appropriateness（appropriate/inappropriate/undetermined）、decision_summary。只识别形象，不生成路线说明。GET 详情 `label_generation.shape_preview` 为 null 或最近同源成功结果 `{version,model,created_at,result}`，result 同 diagnosis；输入资料变化后不显示旧结果。只有点击保存才修改轨迹标签；失败不清空表单原值。
+
 人工形象学习：PUT 保存 `shape_label` 实际变化（含清空）后记录最新反馈并由后台复核；保存成功但反馈记录失败或 AI 未配置时返回 `learning_warning`，不能按保存失败重复提交。GET 详情的 `label_generation.learning` 可为空，存在时含 status、attempts、label、review（supported/evidence/lesson）；状态为 pending/running/retry/reviewed/learned/disputed/stale/failed/unavailable。重新打开详情可查看进度。经验仅作后续识别参考，复核不改人工标签。协议未新增路由。
 
 以下接口属于独立 `/admin/api`，使用后台 session。查看需轨迹管理页面 read/write 权限，确认、忽略和修改需轨迹管理 write 权限，不复用 App 用户 JWT。

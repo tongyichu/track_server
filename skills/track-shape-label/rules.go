@@ -12,3 +12,8 @@ var Prompt string
 //
 //go:embed references/learning-rules.txt
 var LearningPrompt string
+
+// ShapeOnlyOutput specifies the admin shape-only response.
+//
+//go:embed references/shape-only-output.txt
+var ShapeOnlyOutput string

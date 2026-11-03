@@ -31,6 +31,10 @@ description: 识别运动轨迹一笔画或简笔画形象并维护 Kimi 形象�
 
 ## 服务端维护
 
+后台按钮必须走 `PreviewShape → TrackShapeGenerator.GenerateShape`，使用共享识别规则与 [专用形象输出契约](references/shape-only-output.txt)，不生成路线说明。调用参数为 `thinking.type=disabled`、temperature=0.6、max_tokens=8192。输入只含标题、基础统计、一张方图及最多4条有效经验，不带投稿或景区长文。服务端验证8类检查、候选及结论枚举，返回诊断依据并保存同源版本最近结果。自动路线说明与反馈复核仍走 Generate，不将二者的调用效果混为一谈。
+
+验收后台按钮时应使用真实 `POST /admin/api/tracks/:track_id/labels/generate`，同时核对响应 diagnosis 与界面展示；独立 Python 提示词试跑仅为探索，不能称后台接口已验证。未部署时明确区分编译/静态检查与真实接口验收，不把单条轨迹识别成功推广为稳定准确率。
+
 `references/shape-rules.txt` 与 `references/learning-rules.txt` 分别是识别与复核规则的唯一正文来源，由本目录 `rules.go` 嵌入，`internal/service/kimi_track_narrative.go` 拼入请求。只发送规则正文，不把本技能说明全文发送给 Kimi。
 
 修改识别语义时同步递增 `internal/service/track_narrative_input.go` 的规则版本，并更新 `docs/track-narrative.md`。同一尚未部署版本内的连续调整可以保持版本号。保留一张图、一次调用及既有预算，不为枚举候选增加请求，不解析全部 KMZ 点。
