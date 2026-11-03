@@ -33,7 +33,7 @@ var permissionModules = []PermissionModule{
 	{"track_submissions", "投稿审核", "/admin/track_submissions.html"},
 	{"tracks", "轨迹管理", "/admin/tracks.html"},
 	{"scenic_spots", "景点管理", "/admin/scenic_spots.html"},
-	{"regions", "地区管理", "/admin/regions.html"},
+	{"regions", "城市管理", "/admin/regions.html"},
 	{"users", "用户管理", "/admin/users.html"},
 	{"route_groups", "地图模式", "/admin/route_groups.html"},
 	{"companions", "与友同行", "/admin/companions.html"},

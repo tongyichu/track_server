@@ -1,0 +1,29 @@
+.region-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin:24px 0 12px}.region-heading h1{margin:0 0 6px}.region-heading p{margin:0}.region-heading-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.region-layout{display:grid;grid-template-columns:minmax(280px,34%) minmax(0,1fr);gap:16px;align-items:start}.region-tree-panel,.region-editor-panel{min-width:0}.region-tree-panel .card-body{padding:16px}.region-tree-actions{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}.region-tree-actions input{flex:1 1 180px}.region-tree{max-height:70vh;overflow:auto;border:1px solid var(--tblr-border-color);border-radius:8px;padding:4px}.region-tree-item{display:flex;align-items:center;justify-content:space-between;width:100%;padding:7px 10px;border:0;border-radius:5px;background:transparent;color:var(--tblr-body-color);text-align:left;cursor:pointer;gap:8px}.region-tree-item:hover{background:var(--tblr-bg-surface-secondary)}.region-tree-item.selected{background:var(--tblr-primary-lt);color:var(--tblr-primary)}.region-tree-item.archived{opacity:.52}.region-tree-item small{color:var(--tblr-secondary-color);white-space:nowrap}.region-editor-panel .card-body{padding:20px}.region-editor-title{display:flex;justify-content:space-between;align-items:center;gap:12px}.region-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.region-form-grid label{display:grid;gap:6px;min-width:0}.region-form-grid .region-full{grid-column:1/-1}.region-cover-preview{display:block;width:min(100%,420px);aspect-ratio:2/1;object-fit:cover;border-radius:8px}.region-cover-preview[hidden]{display:none}@media(max-width:900px){.region-layout{grid-template-columns:1fr}.region-tree{max-height:38vh}.region-form-grid{grid-template-columns:1fr}}
+
+/* 城市管理：国家在页面标签，地区以文字和连接线呈现。 */
+.region-country-bar{display:flex;align-items:flex-end;gap:8px;border-bottom:1px solid var(--tblr-border-color);margin:8px 0 16px;min-width:0}
+.region-country-tabs{display:flex;align-items:flex-end;gap:4px;flex:1;min-width:0;overflow-x:auto;scrollbar-width:thin}
+.region-country-tab{display:inline-flex;align-items:center;gap:8px;flex:none;min-height:38px;padding:8px 15px;border:1px solid var(--tblr-border-color);border-bottom:0;border-radius:8px 8px 0 0;background:var(--tblr-bg-surface-secondary);color:var(--tblr-secondary-color);cursor:pointer;white-space:nowrap;position:relative}
+.region-country-tab:hover{color:var(--tblr-body-color)}
+.region-country-tab.active{background:var(--tblr-bg-surface);color:var(--tblr-body-color);font-weight:650}
+.region-country-tab.active::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--tblr-bg-surface)}
+.region-country-tab.archived{opacity:.55}
+.region-country-tab small{font-size:11px;font-weight:400;color:var(--tblr-secondary-color)}
+.region-country-add{flex:none;width:32px;height:32px;margin-bottom:4px;border:0;border-radius:6px;background:transparent;color:var(--tblr-primary);font-size:24px;line-height:1;cursor:pointer}
+.region-country-add:hover{background:var(--tblr-bg-surface-secondary)}
+.region-tree{border:0;border-radius:0;padding:0}
+.region-tree-list,.region-tree-children{list-style:none;margin:0;padding:0}
+.region-tree-node{position:relative}
+.region-tree-node.archived{opacity:.52}
+.region-tree-row{display:flex;align-items:center;min-height:32px}
+.region-tree-toggle,.region-tree-toggle-spacer{display:inline-flex;align-items:center;justify-content:center;flex:none;width:24px;height:30px}
+.region-tree-toggle{border:0;background:transparent;color:var(--tblr-secondary-color);font-size:15px;cursor:pointer}
+.region-tree-toggle:hover{color:var(--tblr-primary)}
+.region-tree-toggle:disabled{cursor:default;opacity:.6}
+.region-tree-item{justify-content:flex-start;width:auto;max-width:calc(100% - 24px);padding:4px 6px;border-radius:0;gap:8px}
+.region-tree-item:hover{background:transparent;text-decoration:underline}
+.region-tree-item.selected{background:transparent;color:var(--tblr-primary);font-weight:650}
+.region-tree-item span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.region-tree-children{margin-left:11px;padding-left:18px;border-left:1px solid var(--tblr-border-color)}
+.region-tree-children>.region-tree-node::before{content:"";position:absolute;left:-18px;top:16px;width:18px;border-top:1px solid var(--tblr-border-color)}
+.region-tree-children>.region-tree-node:last-child::after{content:"";position:absolute;left:-19px;top:17px;bottom:0;width:2px;background:var(--tblr-bg-surface)}

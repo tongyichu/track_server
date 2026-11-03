@@ -19,7 +19,7 @@
 | OSS 直传临时凭证 | [oss.md](oss.md) |
 | 按设备上报和查看应用权限状态 | [permission-snapshots.md](permission-snapshots.md) |
 | 用户详情、个人信息更新、关注/粉丝关系 | [user.md](user.md) |
-| 地区目录、客户端本地缓存、后台地区管理 | [regions.md](regions.md) |
+| 地区目录、客户端本地缓存、后台城市管理 | [regions.md](regions.md) |
 | 账号限制拦截与运维管理 | [account-restriction.md](account-restriction.md) |
 | 管理后台账号、身份、权限与邮箱找回（独立 `/admin` 路由） | [admin-accounts.md](admin-accounts.md)，[SMTP 配置说明](../admin-email-recovery.md) |
 | 后台轨迹缺项筛选与景点候选确认（独立 `/admin` 路由） | [admin-tracks.md](admin-tracks.md) |
