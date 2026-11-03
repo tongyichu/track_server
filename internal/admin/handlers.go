@@ -57,6 +57,8 @@ type Handler struct {
 	trackImportSvc        *service.AdminTrackImportService
 	dashboardStatsRepo    repository.AdminDashboardStatisticsRepository
 	screenshotCache       *service.AssetCacheService
+	rawTrackCache         *service.AssetCacheService
+	trackPreviewCache     *service.AssetCacheService
 	// staticRoot 是服务端本地静态资源根目录（通常为 <LogDir>/static）。
 	// 管理后台上传的安装包会落到 <staticRoot>/release/<platform>/ 下，
 	// 并通过 /api/v1/static/release/<platform>/<file> 对外下发。

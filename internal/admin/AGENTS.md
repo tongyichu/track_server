@@ -38,6 +38,8 @@
 
 共享轨迹编辑器的 `user_id_text` 只读，保存不传 `user_id`，服务端仅兼容回传原 ID 并拒绝更换归属。坐标系和来源标签使用下拉选项，未知历史值保留。`GET /tracks/:track_id/map-preview` 归属轨迹查看权限，由 `TrackMapIndexService.PreviewCoordinateSystems` 读取原始轨迹并返回按 WGS84/GCJ02/BD09 解释的三组 GCJ02 预览线；不得将既有 GCJ02 索引线二次转换。预览独立异步加载，准备后切换立即重绘且保持视野，关闭弹窗释放地图及取消请求。保存坐标系变更纳入旧空间索引清理及重新排队流程；预览自身不写业务数据。`ui.js` 支持字段 `readOnly` / `onChange` 及表单 `onClosed` 生命周期。接口细节见 `docs/api/admin-tracks.md`。
 
+详情资源由 `track_assets.go` 的 `GET /tracks/:track_id/assets/:asset` 按轨迹查看权限读取，asset 白名单为 raw、square_day/night、landscape_day/night、legacy、no_map。`main` 经 `SetTrackAssetCaches` 注入既有 raw/preview 缓存，截图沿用 `SetScreenshotCache`；按请求异步缓存，不阻塞详情字段，不接受浏览器 URL，不把资源代理地址写回轨迹。原始文件使用 attachment 下载，空字段显示“缺失”；图片只显示缩略图（点击放大），空字段显示“无”，读取失败可重试。共享编辑器保存不提交原文件/截图/preview_images；加载共享编辑器的页面同时引用 `static/track_editor.css`（由嵌入资源机制自动加内容版本）；`ui.js` 的 `className` 与 `afterFields` 将最多四列表单及资源区限定在 `.admin-track-editor`。
+
 ## 页面性能约束
 
 修改后台页面、共享脚本或列表接口时，必须检查以下边界；不能仅靠隐藏加载提示改善体感。
