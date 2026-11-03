@@ -53,7 +53,7 @@
 - **鉴权分组**：所有业务接口都在 `api := h.Group("/api/v1")` 下的 `auth` 子组中；公开接口只有 `/ping`、`/captcha`、`/sms/send`、`/login/*`、`/upgrade/check`、`/achievement/level-rules.html`、`/legal/privacy-policy.html`、`/legal/terms-of-service.html`、`/track-map/areas/:area_id/introduction.html`、安装包静态下载。`/internal/*` 与 `/ops/*` 是内部/运维接口，不走业务 JWT，必须使用内部 token 鉴权。新增业务接口默认加到 `auth` 组，除非有明确登录豁免需求。
 - **Repository 降级链约束**：MySQL / Mongo / in-memory 三种实现都必须实现 `internal/repository/interfaces.go` 里的 interface 全集；新增接口方法时，三份实现都要补齐，否则启动会编译失败或运行时 panic。
 - **搜索结果总数**：`GET /track/search/list` 返回 `total_count`，由三种 TrackRepository 的 `CountSearch` 按关键词、城市、运动类型统计正常且有原始轨迹文件的记录，不受分页游标影响；客户端据此显示搜索总数。
-- **发现与活动日历**：`internal/repository/track_discovery.go` 的三种 TrackRepository 实现负责象形轨迹筛选和用户轨迹开始时间查询；`internal/service/track_discovery.go` 提供景点、景点关联轨迹、象形轨迹与近 365 天日历。景点取已发布目录的首张图片，两个轨迹列表只含公开已完成且有原始文件的记录；日历按请求的 IANA 时区归日，客户端另加本地未上传记录。协议见 `docs/api/track.md`。
+- **发现与活动日历**：`internal/repository/track_discovery.go` 的三种 TrackRepository 实现负责象形轨迹筛选和用户轨迹开始时间查询；`internal/service/track_discovery.go` 提供景点、景点关联轨迹、象形轨迹与近 375 天日历（365 天加 10 天缓冲）。发现景点沿用轨迹详情的客户端可见规则，展示未归档、未合并的草稿和已发布目录，封面优先首张图片；两个轨迹列表只含公开已完成且有原始文件的记录。日历按请求的 IANA 时区归日，客户端按连续 12 个月的首月第一个周日裁剪并另加本地未上传记录。协议见 `docs/api/track.md`。
 - **反馈图片私有落盘**：意见反馈图片由服务端直接接收，保存到 `<LogDir>/feedback/images/`，必须通过 `/feedback/:feedback_id/images/:image_id` 或 `/ops/feedback/:feedback_id/images/:image_id` 走鉴权 handler 读取；不要放进 `/api/v1/static/*` 公开静态目录。
 - **生成文件不手改**：`internal/config/china_city_raw.json`、`internal/config/china_province_raw.json` 为外部数据，不要逐行手工编辑。
 

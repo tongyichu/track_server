@@ -30,7 +30,7 @@ func (s *TrackService) DiscoverSpotTracks(ctx context.Context, userID int64, spo
 	if err != nil {
 		return nil, err
 	}
-	if spot == nil || spot.Status != models.ScenicSpotPublished {
+	if !scenicSpotClientVisible(spot) {
 		return nil, repository.ErrNotFound
 	}
 	limit = normalizeTrackPageLimit(limit)
@@ -101,7 +101,7 @@ func (s *TrackService) DiscoverSpots(ctx context.Context, cityCode, cursor strin
 		return page, nil
 	}
 	limit = normalizeTrackPageLimit(limit)
-	filter := repository.ScenicSpotListFilter{Status: models.ScenicSpotPublished, Cursor: cursor, Limit: limit + 1}
+	filter := repository.ScenicSpotListFilter{VisibleOnly: true, Cursor: cursor, Limit: limit + 1}
 	if code := strings.TrimSpace(cityCode); code != "" {
 		filter.CityCodes = []string{code}
 	}
@@ -167,7 +167,8 @@ func (s *TrackService) ActivityCalendar(ctx context.Context, userID int64, timez
 	}
 	now := time.Now().In(loc)
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
-	from := today.AddDate(0, 0, -364)
+	// 为客户端连续 12 个月的首月完整周保留缓冲。
+	from := today.AddDate(0, 0, -374)
 	until := today.AddDate(0, 0, 1)
 	starts, err := s.tracks.ListActivityStartTimes(ctx, userID, from, until)
 	if err != nil {
