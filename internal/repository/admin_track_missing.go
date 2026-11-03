@@ -64,7 +64,7 @@ func (r *InMemoryTrackRepository) adminLinkedScenicTracks(missing string) map[st
 		if link == nil {
 			continue
 		}
-		if spot := spots.spots[link.SpotID]; spot != nil && (spot.Status == models.ScenicSpotDraft || spot.Status == models.ScenicSpotPublished) {
+		if spot := spots.spots[link.SpotID]; spot != nil && spot.Status == models.ScenicSpotActive {
 			linked[id] = true
 		}
 	}
@@ -78,7 +78,7 @@ func adminTrackMissingSQL(filter AdminTrackListFilter) (string, []any) {
 	conditions := map[string]string{
 		"description":     "COALESCE(description,'') REGEXP '^[[:space:]]*$'",
 		"city":            "COALESCE(city_code,'') REGEXP '^[[:space:]]*$'",
-		"scenic_spot":     `NOT EXISTS (SELECT 1 FROM track_scenic_spot_links l JOIN scenic_spots s ON s.spot_id=l.spot_id WHERE l.track_id=track_records.id AND s.status IN ('draft','published'))`,
+		"scenic_spot":     `NOT EXISTS (SELECT 1 FROM track_scenic_spot_links l JOIN scenic_spots s ON s.spot_id=l.spot_id WHERE l.track_id=track_records.id AND s.status='active')`,
 		"place_candidate": "FALSE",
 	}
 	previews := make([]string, 0, 4)
@@ -130,7 +130,7 @@ func (r *MongoTrackRepository) listAdminTracksWithMissing(ctx context.Context, b
 		"city":            adminMongoEmptyTrackField("city_code"),
 		"previews":        {"$or": previewConditions},
 		"place_candidate": {"_id": bson.M{"$in": ids}},
-		"scenic_spot":     {"_admin_spots": bson.M{"$not": bson.M{"$elemMatch": bson.M{"status": bson.M{"$in": bson.A{models.ScenicSpotDraft, models.ScenicSpotPublished}}}}}},
+		"scenic_spot":     {"_admin_spots": bson.M{"$not": bson.M{"$elemMatch": bson.M{"status": models.ScenicSpotActive}}}},
 	}
 	condition := conditions[filter.Missing]
 	if filter.Missing == "any" {

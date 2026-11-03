@@ -16,6 +16,11 @@ func NewMongoScenicSpotRepository(db *mongo.Database) *MongoScenicSpotRepository
 	return &MongoScenicSpotRepository{spots: db.Collection("scenic_spots"), links: db.Collection("track_scenic_spot_links"), audits: db.Collection("scenic_spot_audit_logs"), usage: db.Collection("scenic_spot_provider_usage")}
 }
 func (r *MongoScenicSpotRepository) EnsureIndexes(ctx context.Context) error {
+	if _, err := r.spots.UpdateMany(ctx,
+		bson.M{"status": bson.M{"$in": bson.A{"draft", "published"}}},
+		bson.M{"$set": bson.M{"status": models.ScenicSpotActive}, "$unset": bson.M{"published_at": ""}}); err != nil {
+		return err
+	}
 	for _, item := range []struct {
 		collection *mongo.Collection
 		model      mongo.IndexModel
@@ -77,7 +82,7 @@ func (r *MongoScenicSpotRepository) FindScenicSpotBySource(ctx context.Context, 
 func (r *MongoScenicSpotRepository) ListScenicSpots(ctx context.Context, f ScenicSpotListFilter) ([]*models.ScenicSpot, int64, error) {
 	filter := bson.M{}
 	if f.VisibleOnly {
-		filter["$and"] = bson.A{bson.M{"status": bson.M{"$nin": bson.A{models.ScenicSpotArchived, models.ScenicSpotMerged}}}}
+		filter["$and"] = bson.A{bson.M{"status": models.ScenicSpotActive}}
 	}
 	if f.Missing != "" {
 		clauses, _ := filter["$and"].(bson.A)
@@ -100,7 +105,7 @@ func (r *MongoScenicSpotRepository) ListScenicSpots(ctx context.Context, f Sceni
 		base["$or"] = filter["$or"]
 	}
 	if f.VisibleOnly {
-		base["$and"] = bson.A{bson.M{"status": bson.M{"$nin": bson.A{models.ScenicSpotArchived, models.ScenicSpotMerged}}}}
+		base["$and"] = bson.A{bson.M{"status": models.ScenicSpotActive}}
 	}
 	if f.Missing != "" {
 		clauses, _ := base["$and"].(bson.A)

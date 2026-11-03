@@ -58,7 +58,7 @@ CREATE TABLE `track_place_api_usage` (
 CREATE TABLE `scenic_spots` (
     `spot_id` varchar(64) NOT NULL,
     `name` varchar(255) NOT NULL,
-    `status` varchar(16) NOT NULL,
+    `status` varchar(16) NOT NULL COMMENT 'active/archived/merged',
     `merged_into` varchar(64) NOT NULL DEFAULT '',
     `version` bigint NOT NULL DEFAULT 1,
     `data_json` json NOT NULL,

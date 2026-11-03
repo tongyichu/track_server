@@ -3,10 +3,9 @@ package models
 import "time"
 
 const (
-	ScenicSpotDraft     = "draft"
-	ScenicSpotPublished = "published"
-	ScenicSpotArchived  = "archived"
-	ScenicSpotMerged    = "merged"
+	ScenicSpotActive   = "active"
+	ScenicSpotArchived = "archived"
+	ScenicSpotMerged   = "merged"
 )
 
 type ScenicSpot struct {
@@ -34,7 +33,6 @@ type ScenicSpot struct {
 	Version                   int64              `json:"version" bson:"version"`
 	CreatedAt                 time.Time          `json:"created_at" bson:"created_at"`
 	UpdatedAt                 time.Time          `json:"updated_at" bson:"updated_at"`
-	PublishedAt               *time.Time         `json:"published_at,omitempty" bson:"published_at,omitempty"`
 	CreatedBy                 string             `json:"created_by" bson:"created_by"`
 	UpdatedBy                 string             `json:"updated_by" bson:"updated_by"`
 }

@@ -61,6 +61,12 @@ func (h *Handler) ListScenicSpots(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 	f := repository.ScenicSpotListFilter{Query: strings.TrimSpace(string(c.Query("q"))), Status: strings.TrimSpace(string(c.Query("status"))), Cursor: strings.TrimSpace(string(c.Query("cursor"))), Limit: parseAdminListLimit(string(c.Query("limit")))}
+	switch f.Status {
+	case "", models.ScenicSpotActive, models.ScenicSpotArchived, models.ScenicSpotMerged:
+	default:
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid scenic spot status"})
+		return
+	}
 	cityCode := strings.TrimSpace(string(c.Query("city_code")))
 	provinceCode := strings.TrimSpace(string(c.Query("province_code")))
 	if len(cityCode) > 32 || len(provinceCode) > 32 {
@@ -79,7 +85,7 @@ func (h *Handler) ListScenicSpots(ctx context.Context, c *app.RequestContext) {
 		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid missing field filter"})
 		return
 	}
-	f.VisibleOnly = f.Status == "" || f.Missing != ""
+	f.VisibleOnly = f.Status == ""
 	items, total, err := h.scenicSpotSvc.List(ctx, f)
 	if err != nil {
 		h.scenicSpotServiceError(c, err)

@@ -344,7 +344,7 @@ func (s *ScenicSpotCatalogService) Create(ctx context.Context, operator string, 
 		return nil, err
 	}
 	v.ID = newScenicID("SCP-")
-	v.Status = models.ScenicSpotDraft
+	v.Status = models.ScenicSpotActive
 	v.ManualEdited = true
 	v.Version = 1
 	v.CreatedAt = time.Now()
@@ -367,7 +367,7 @@ func (s *ScenicSpotCatalogService) Create(ctx context.Context, operator string, 
 	if err := s.spots.CreateScenicSpot(ctx, v); err != nil {
 		return nil, err
 	}
-	s.audit(ctx, v.ID, "create", operator, "draft created", nil, v)
+	s.audit(ctx, v.ID, "create", operator, "active spot created", nil, v)
 	return v, nil
 }
 func (s *ScenicSpotCatalogService) Update(ctx context.Context, operator, id string, expected int64, v *models.ScenicSpot) (*models.ScenicSpot, error) {
@@ -387,7 +387,6 @@ func (s *ScenicSpotCatalogService) Update(ctx context.Context, operator, id stri
 	v.MergedInto = old.MergedInto
 	v.CreatedAt = old.CreatedAt
 	v.CreatedBy = old.CreatedBy
-	v.PublishedAt = old.PublishedAt
 	v.Version = expected + 1
 	v.UpdatedAt = time.Now()
 	v.UpdatedBy = operator
@@ -407,7 +406,7 @@ func (s *ScenicSpotCatalogService) Update(ctx context.Context, operator, id stri
 	return v, nil
 }
 func (s *ScenicSpotCatalogService) SetStatus(ctx context.Context, operator, id, status string, expected int64) (*models.ScenicSpot, error) {
-	if status != models.ScenicSpotPublished && status != models.ScenicSpotArchived && status != models.ScenicSpotDraft {
+	if status != models.ScenicSpotActive && status != models.ScenicSpotArchived {
 		return nil, invalidScenicSpot("invalid scenic spot status")
 	}
 	old, err := s.spots.GetScenicSpot(ctx, id)
@@ -420,17 +419,10 @@ func (s *ScenicSpotCatalogService) SetStatus(ctx context.Context, operator, id, 
 	if old.Version != expected {
 		return nil, repository.ErrConflict
 	}
-	if status == models.ScenicSpotPublished && old.Name == "" {
-		return nil, invalidScenicSpot("name is required before publishing")
-	}
 	old.Status = status
 	old.Version++
 	old.UpdatedAt = time.Now()
 	old.UpdatedBy = operator
-	if status == models.ScenicSpotPublished {
-		now := old.UpdatedAt
-		old.PublishedAt = &now
-	}
 	if err := s.spots.UpdateScenicSpot(ctx, old, expected); err != nil {
 		return nil, err
 	}
@@ -793,7 +785,7 @@ func (s *ScenicSpotCatalogService) BackfillLegacy(ctx context.Context, cursor *m
 				expired := time.Now().Add(-time.Second)
 				source.RefreshAfter = &expired
 			}
-			spot = &models.ScenicSpot{ID: newScenicID("SCP-"), Name: strings.TrimSpace(place.Name), Sources: []models.ScenicSpotSource{source}, Status: models.ScenicSpotDraft, Version: 1, CreatedAt: time.Now(), UpdatedAt: time.Now(), CreatedBy: "backfill", UpdatedBy: "backfill"}
+			spot = &models.ScenicSpot{ID: newScenicID("SCP-"), Name: strings.TrimSpace(place.Name), Sources: []models.ScenicSpotSource{source}, Status: models.ScenicSpotActive, Version: 1, CreatedAt: time.Now(), UpdatedAt: time.Now(), CreatedBy: "backfill", UpdatedBy: "backfill"}
 			if e = s.spots.CreateScenicSpot(ctx, spot); e != nil {
 				if !errors.Is(e, repository.ErrAlreadyExists) {
 					return nil, e
@@ -970,7 +962,7 @@ func (s *ScenicSpotCatalogService) syncTrackPlaceMatch(ctx context.Context, trac
 			source.RefreshAfter = &expired
 		}
 		now := time.Now()
-		spot = &models.ScenicSpot{ID: newScenicID("SCP-"), Sources: []models.ScenicSpotSource{source}, Status: models.ScenicSpotDraft, Version: 1, CreatedAt: now, UpdatedAt: now, CreatedBy: operator, UpdatedBy: operator}
+		spot = &models.ScenicSpot{ID: newScenicID("SCP-"), Sources: []models.ScenicSpotSource{source}, Status: models.ScenicSpotActive, Version: 1, CreatedAt: now, UpdatedAt: now, CreatedBy: operator, UpdatedBy: operator}
 		// 初始名称直接取供应商识别结果，客户端名称标签不等待后台资料回填。
 		spot.Name = strings.TrimSpace(place.Name)
 		if err = s.spots.CreateScenicSpot(ctx, spot); err != nil {
@@ -1052,16 +1044,15 @@ func (s *ScenicSpotCatalogService) PublicSpotForTrack(ctx context.Context, track
 			return nil, err
 		}
 	}
-	if spot.Status != models.ScenicSpotPublished {
+	if !scenicSpotClientVisible(spot) {
 		return nil, repository.ErrNotFound
 	}
 	return spot, nil
 }
 
-// The catalog's automatic/manual type does not gate client delivery. Only archived
-// and merged entries are hidden; draft/published are legacy workflow states.
+// Active entries are visible to clients.
 func scenicSpotClientVisible(spot *models.ScenicSpot) bool {
-	return spot != nil && spot.Status != models.ScenicSpotArchived && spot.Status != models.ScenicSpotMerged
+	return spot != nil && spot.Status == models.ScenicSpotActive
 }
 
 func (s *ScenicSpotCatalogService) RefreshExpiredSources(ctx context.Context, trackID string) error {
@@ -1073,7 +1064,7 @@ func (s *ScenicSpotCatalogService) RefreshExpiredSources(ctx context.Context, tr
 		return nil
 	}
 	spot, err := s.spots.GetScenicSpot(ctx, link.SpotID)
-	if err != nil || spot.Status != models.ScenicSpotPublished {
+	if err != nil || !scenicSpotClientVisible(spot) {
 		return nil
 	}
 	for _, source := range spot.Sources {

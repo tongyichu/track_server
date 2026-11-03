@@ -20,7 +20,7 @@
     ['POST', 'scenic-spots', '创建景点', '新景点'],
     ['POST', 'scenic-spots/backfill', '回填景点目录', '景点目录', '批量处理的具体结果请查看景点页。'],
     ['PUT', 'scenic-spots/:spot', '修改景点资料', '景点 {spot}'],
-    ['POST', 'scenic-spots/:spot/status', '调整景点发布状态', '景点 {spot}', '历史记录未保存本次发布、下线或归档的具体状态。'],
+    ['POST', 'scenic-spots/:spot/status', '调整景点状态', '景点 {spot}', '历史记录未保存本次调整的具体状态。'],
     ['POST', 'scenic-spots/:spot/provider-sources/verify', '验证景点供应商来源', '景点 {spot}'],
     ['POST', 'scenic-spots/:spot/provider-sources/preview', '预览景点供应商资料', '景点 {spot}', '预览不代表资料已经保存。'],
     ['POST', 'scenic-spots/:spot/photos', '上传景点图片', '景点 {spot}'],

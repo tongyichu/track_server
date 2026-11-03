@@ -96,7 +96,7 @@ func (r *MemoryScenicSpotRepository) ListScenicSpots(_ context.Context, f Scenic
 		if len(f.CityCodes) > 0 && !wantedCities[v.CityCode] && !relatedSpots[v.ID] {
 			continue
 		}
-		if f.VisibleOnly && (v.Status == models.ScenicSpotArchived || v.Status == models.ScenicSpotMerged) {
+		if f.VisibleOnly && v.Status != models.ScenicSpotActive {
 			continue
 		}
 		if !matchesScenicSpotMissingField(v, f.Missing) {

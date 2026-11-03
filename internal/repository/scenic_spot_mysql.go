@@ -112,7 +112,7 @@ func (r *MySQLScenicSpotRepository) ListScenicSpots(ctx context.Context, f Sceni
 		where += `)`
 	}
 	if f.VisibleOnly {
-		where += ` AND status NOT IN ('archived','merged')`
+		where += ` AND status='active'`
 	}
 	if f.Missing != "" {
 		where += ` AND (` + scenicSpotMissingSQL(f.Missing) + `)`
@@ -383,7 +383,7 @@ func mapMySQLConflict(err error) error {
 const scenicSpotSchema = `CREATE TABLE IF NOT EXISTS scenic_spots (
 	spot_id VARCHAR(64) NOT NULL PRIMARY KEY,
 	name VARCHAR(255) NOT NULL,
-	status VARCHAR(16) NOT NULL,
+	status VARCHAR(16) NOT NULL COMMENT 'active/archived/merged',
 	merged_into VARCHAR(64) NOT NULL DEFAULT '',
 	version BIGINT NOT NULL DEFAULT 1,
 	data_json JSON NOT NULL,

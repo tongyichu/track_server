@@ -630,6 +630,11 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 	if err := ensureMySQLFeedbackCorrectionSchema(ctx, db); err != nil {
 		return err
 	}
+	if _, err := db.ExecContext(ctx, `UPDATE scenic_spots
+		SET status='active', data_json=JSON_REMOVE(JSON_SET(data_json, '$.status', 'active'), '$.published_at')
+		WHERE status IN ('draft','published')`); err != nil {
+		return err
+	}
 	return nil
 }
 
