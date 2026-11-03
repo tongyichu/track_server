@@ -665,6 +665,13 @@ CREATE TABLE IF NOT EXISTS admin_account_state (
     payload JSON NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
+-- 地区目录唯一持久化源；服务启动时仅在无记录时导入内置初始目录，后续由后台编辑并递增版本。
+CREATE TABLE IF NOT EXISTS region_catalog_state (
+    id TINYINT UNSIGNED NOT NULL PRIMARY KEY,
+    version BIGINT NOT NULL,
+    payload JSON NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
 -- 后台写操作只记录操作人、方法、对象与结果，不记录请求正文、密码或密码哈希。
 CREATE TABLE IF NOT EXISTS admin_audit_logs (
     id VARCHAR(64) NOT NULL PRIMARY KEY,

@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>地区管理 - Track</title>
+  <link rel="stylesheet" href="/admin/static/vendor/tabler.min.css" />
+  <link rel="stylesheet" href="/admin/static/style.css" />
+</head>
+<body>
+  <header class="topbar"></header>
+  <main class="container">
+    <section class="region-heading">
+      <div><h1>地区管理</h1><p class="text-secondary">这里是客户端城市目录的唯一数据源。国内编码保持稳定，国外可按国家、州和城市等层级组织。</p></div>
+      <div class="region-heading-actions"><span id="regionVersion" class="text-secondary"></span><button id="regionReload" class="btn btn-outline-secondary">重新加载</button><button id="regionSave" data-admin-write="regions" class="btn btn-primary">保存全部修改</button></div>
+    </section>
+    <p id="regionStatus" class="text-secondary" role="status"></p>
+    <div class="region-layout">
+      <section class="card region-tree-panel">
+        <div class="card-body">
+          <div class="region-tree-actions"><input id="regionSearch" class="form-control" placeholder="搜索名称或编码" aria-label="搜索地区" /><button id="regionAddCountry" data-admin-write="regions" class="btn btn-outline-primary">新增国家</button><button id="regionAddChild" data-admin-write="regions" class="btn btn-outline-primary" disabled>新增下级</button></div>
+          <div id="regionTree" class="region-tree" role="tree"></div>
+        </div>
+      </section>
+      <section class="card region-editor-panel">
+        <div class="card-body">
+          <p id="regionEmpty" class="text-secondary">选择左侧地区后编辑。新增节点也会先保留在本页，点击“保存全部修改”后才生效。</p>
+          <form id="regionForm" data-admin-fields="regions" hidden>
+            <div class="region-editor-title"><h2 id="regionEditorTitle">地区资料</h2><div><button id="regionDeleteDraft" type="button" data-admin-write="regions" class="btn btn-outline-danger" hidden>删除未保存节点</button><button id="regionArchive" type="button" data-admin-write="regions" class="btn btn-outline-danger">归档节点</button></div></div>
+            <p id="regionId" class="text-secondary"></p>
+            <div class="region-form-grid">
+              <label>名称<input id="regionName" class="form-control" maxlength="64" required /></label>
+              <label>英文名称<input id="regionNameEn" class="form-control" maxlength="200" /></label>
+              <label>层级<select id="regionLevel" class="form-select"><option value="country">国家</option><option value="province">省份</option><option value="state">州</option><option value="city">城市</option><option value="district">区县</option><option value="other">其他</option></select></label>
+              <label>上级地区<select id="regionParent" class="form-select"></select></label>
+              <label>地区编码<input id="regionCode" class="form-control" maxlength="64" /></label>
+              <label>编码体系<input id="regionCodeSystem" class="form-control" maxlength="64" placeholder="如 cn_adcode、iso3166-1" /></label>
+              <label>所属国家代码<input id="regionCountryCode" class="form-control" maxlength="8" placeholder="如 CN、US" /></label>
+              <label>所属洲<select id="regionContinent" class="form-select"><option value="">未设置</option><option value="AS">亚洲</option><option value="EU">欧洲</option><option value="AF">非洲</option><option value="NA">北美洲</option><option value="SA">南美洲</option><option value="OC">大洋洲</option><option value="AN">南极洲</option></select></label>
+              <label>纬度<input id="regionLatitude" class="form-control" type="number" step="any" min="-90" max="90" /></label>
+              <label>经度<input id="regionLongitude" class="form-control" type="number" step="any" min="-180" max="180" /></label>
+              <label>排序值<input id="regionSort" class="form-control" type="number" step="1" /></label>
+              <label>邮编（多个用逗号分隔）<input id="regionPostalCodes" class="form-control" placeholder="可选" /></label>
+              <label class="region-full">宣传口号<input id="regionSlogan" class="form-control" maxlength="500" /></label>
+              <label class="region-full">简介<textarea id="regionDescription" class="form-control" rows="5" maxlength="8000"></textarea></label>
+              <label class="region-full">地标风景照<input id="regionImageFile" class="form-control" type="file" accept="image/jpeg,image/png" /><span class="form-hint">上传 JPEG 或 PNG，最多 8 MiB；上传完成后仍需保存地区资料。</span></label>
+              <label class="region-full">图片地址<input id="regionCover" class="form-control" placeholder="上传后自动填入，也可输入 HTTPS 图片地址" /></label>
+              <div class="region-full"><img id="regionCoverPreview" class="region-cover-preview" alt="地标风景照预览" hidden /></div>
+              <label class="form-check"><input id="regionSelectable" class="form-check-input" type="checkbox" /><span class="form-check-label">可在客户端选为城市</span></label>
+              <label class="form-check"><input id="regionActive" class="form-check-input" type="checkbox" /><span class="form-check-label">启用</span></label>
+            </div>
+          </form>
+        </div>
+      </section>
+    </div>
+  </main>
+  <script src="/admin/static/vendor/tabler.min.js"></script>
+  <script src="/admin/static/shell.js"></script>
+  <script src="/admin/static/ui.js"></script>
+  <script src="/admin/static/regions.js"></script>
+</body>
+</html>

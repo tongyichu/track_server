@@ -6,6 +6,7 @@ import (
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/tongyichu/track_server/internal/maparea"
 	"github.com/tongyichu/track_server/internal/middleware"
+	"github.com/tongyichu/track_server/internal/regions"
 	"github.com/tongyichu/track_server/internal/service"
 
 	"github.com/cloudwego/hertz/pkg/app/server"
@@ -13,6 +14,7 @@ import (
 
 // Deps groups all handler dependencies.
 type Deps struct {
+	RegionService              *regions.Service
 	PermissionSnapshotService  *service.PermissionSnapshotService
 	CommentService             *service.CommentService
 	TrackLikeService           *service.TrackLikeService
@@ -126,6 +128,7 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 
 	// authenticated routes
 	auth := api.Group("", middleware.JWTAuthMiddleware(deps.LoginService, deps.TokenBlacklist), middleware.AccountRestrictionMiddleware(deps.AccountRestrictionService))
+	auth.GET("/regions/catalog", NewRegionHandler(deps.RegionService).GetCatalog)
 
 	// 静态资源下载（需要登录）
 	if deps.StaticRoot != "" {

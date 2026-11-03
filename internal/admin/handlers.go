@@ -27,12 +27,14 @@ import (
 
 	"github.com/tongyichu/track_server/internal/config"
 	"github.com/tongyichu/track_server/internal/models"
+	"github.com/tongyichu/track_server/internal/regions"
 	"github.com/tongyichu/track_server/internal/repository"
 	"github.com/tongyichu/track_server/internal/service"
 )
 
 // Handler 聚合管理后台需要的业务依赖。
 type Handler struct {
+	regionSvc             *regions.Service
 	permissionSnapshotSvc *service.PermissionSnapshotService
 	releaseSvc            *service.AppReleaseService
 	stsSvc                *service.OSSTokenService
@@ -1465,9 +1467,16 @@ func (h *Handler) ListTracks(ctx context.Context, c *app.RequestContext) {
 	c.JSON(http.StatusOK, utils.H{"code": 0, "data": resp})
 }
 
-// ListAdminCities returns the built-in city names used by the track editor.
+// ListAdminCities returns city names from the persisted region catalog.
 func (h *Handler) ListAdminCities(ctx context.Context, c *app.RequestContext) {
-	_ = ctx
+	if h.regionSvc == nil {
+		c.JSON(http.StatusServiceUnavailable, utils.H{"error": "region catalog unavailable"})
+		return
+	}
+	if _, err := h.regionSvc.Read(ctx); err != nil {
+		c.JSON(http.StatusServiceUnavailable, utils.H{"error": "region catalog unavailable"})
+		return
+	}
 	c.JSON(http.StatusOK, utils.H{"code": 0, "data": config.CityOptions()})
 }
 

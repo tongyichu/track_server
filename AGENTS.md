@@ -55,7 +55,7 @@
 - **搜索结果总数**：`GET /track/search/list` 返回 `total_count`，由三种 TrackRepository 的 `CountSearch` 按关键词、城市、运动类型统计正常且有原始轨迹文件的记录，不受分页游标影响；客户端据此显示搜索总数。
 - **发现与活动日历**：`internal/repository/track_discovery.go` 的三种 TrackRepository 实现负责象形轨迹筛选和用户轨迹开始时间查询；`internal/service/track_discovery.go` 提供景点、景点关联轨迹、象形轨迹与近 375 天日历（365 天加 10 天缓冲）。发现景点沿用轨迹详情的客户端可见规则，只展示 active 目录，封面优先首张图片，并返回景点描述供详情页展示；按该景点关联的公开、已完成且有原始文件的轨迹数降序、同数按景点 ID 升序分页，游标携带计数和 ID。两个轨迹列表只含公开已完成且有原始文件的记录。日历按请求的 IANA 时区归日，客户端按连续 12 个月的首月第一个周日裁剪并另加本地未上传记录。协议见 `docs/api/track.md`。
 - **反馈图片私有落盘**：意见反馈图片由服务端直接接收，保存到 `<LogDir>/feedback/images/`，必须通过 `/feedback/:feedback_id/images/:image_id` 或 `/ops/feedback/:feedback_id/images/:image_id` 走鉴权 handler 读取；不要放进 `/api/v1/static/*` 公开静态目录。
-- **生成文件不手改**：`internal/config/china_city_raw.json`、`internal/config/china_province_raw.json` 为外部数据，不要逐行手工编辑。
+- **地区目录唯一来源**：`internal/regions/seed.json` 只在存储没有目录时首次导入，此后省市及海外地区均以 `region_catalog_state` 为准；后台在 `/admin/regions.html` 编辑，Android 首次下载并保存本地文件，后续按版本更新。国内现有编码、层级与父级保持稳定。协议见 `docs/api/regions.md`。
 
 ### 目录总览
 ```
@@ -143,7 +143,7 @@ track_server/
 
 - 个人资料的 `background_url` 用于主页顶部，数据库保存原始 OSS 地址，响应经独立 `profile_backgrounds` 缓存并使用源地址摘要区分版本；`gender` 只允许空串、`male`、`female`，详情仅本人可读。改字段时同步 MySQL 建表及幂等列迁移、Mongo/内存仓储、用户详情/更新协议与缓存注入，参见 `docs/api/user.md`。
 
-- 最近确认所在地通过 `PUT /user/profile/location` 只提交归一化 `city_code`，服务端由内置行政区数据生成 `province_code/province_name/city_code/city_name`，四字段仅本人详情返回。该接口只局部更新省市列，相同值直接成功且不写库或刷新 `updated_at`；普通资料整行更新不得覆盖省市字段。Android 按账号持久化已同步/待同步状态，运动会话首个有效地址立即检查，普通前台定位每 7 天检查一次，只有城市变化才请求，失败退避重试，不新增后台定位。协议见 `docs/api/user.md`。
+- 最近确认所在地通过 `PUT /user/profile/location` 只提交目录中的可选 `city_code`，服务端由持久化地区目录生成 `province_code/province_name/city_code/city_name`，四字段仅本人详情返回。该接口只局部更新省市列，相同值直接成功且不写库或刷新 `updated_at`；普通资料整行更新不得覆盖省市字段。Android 按账号持久化已同步/待同步状态，运动会话首个有效地址立即检查，普通前台定位每 7 天检查一次，只有城市变化才请求，失败退避重试，不新增后台定位。协议见 `docs/api/user.md`。
 
 - `users.is_internal` 是后台内部人员标识，模型 `json:"-"` 保证业务用户 API 和登录/资料响应不下发；MySQL 使用 `TINYINT(1) NOT NULL DEFAULT 0` 并启动幂等补列，Mongo/内存字段同名。仅后台用户列表和详情接口读取/修改，详情保存可更新该字段，普通资料更新必须保留其当前值。
 
@@ -338,7 +338,7 @@ HTTP Request
 ### 不要轻易改动的文件
 | 文件 | 原因 |
 | --- | --- |
-| `internal/config/china_city_raw.json` / `china_province_raw.json` | 外部数据源，批量导入 |
+| `internal/regions/seed.json` | 首次建库地区底稿，来自客户端原省市 JSON；持久化后不再覆盖后台目录 |
 | `internal/maparea/districts.json` | 全国行政区末级节点 Polygon/MultiPolygon 与边界框基线；按 `internal/maparea/README.md` 使用 `cmd/update-map-districts` 批量更新，核对 manifest，不逐条手改 |
 | `internal/config/nickname.go` | 昵称词库，顺序与索引参与随机分配 |
 | `internal/config/sensitive_words.json` | 同行弹幕敏感词词库，由 `go:embed` 加载，运维维护，不要逐行手改 |
