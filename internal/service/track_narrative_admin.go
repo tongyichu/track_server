@@ -63,6 +63,10 @@ func (s *TrackNarrativeService) PreviewShape(ctx context.Context, id string) (*T
 	if !reserved {
 		return nil, errors.New("今日 AI 调用额度已用完，请明天重试")
 	}
+	snap.Input.LearnedShapeExamples, err = s.learnedShapeExamples(ctx)
+	if err != nil {
+		return nil, err
+	}
 	raw, err := json.Marshal(snap.Input)
 	if err != nil {
 		return nil, err
@@ -102,5 +106,5 @@ func (s *TrackNarrativeService) AdminStatus(ctx context.Context, id string) (int
 			reason = "等待后台轮转或可用调用额度"
 		}
 	}
-	return map[string]interface{}{"status": status, "reason": reason, "attempts": state.Attempts, "first_seen": state.FirstSeen, "next_attempt": state.NextAttempt}, nil
+	return map[string]interface{}{"status": status, "reason": reason, "attempts": state.Attempts, "first_seen": state.FirstSeen, "next_attempt": state.NextAttempt, "learning": s.shapeLearningStatus(ctx, id)}, nil
 }

@@ -95,6 +95,13 @@
         const generation = trackPayload.label_generation || {};
         status.textContent = (states[generation.status] || '状态暂不可用') + (generation.attempts ? '，已尝试 ' + generation.attempts + ' 次' : '') + (generation.reason ? '：' + generation.reason : '');
         content.appendChild(status);
+        if (generation.learning) {
+          const learning = generation.learning;
+          const names = { pending: '等待复核', running: '正在复核', retry: '等待重试', reviewed: '已复核，等待保存经验', learned: '已纳入识别经验', disputed: '图像依据不足，未采纳为经验', stale: '资料已变化，样例已失效', failed: '复核失败', unavailable: '状态读取失败' };
+          const note = document.createElement('p'); note.className = 'text-secondary mb-2';
+          note.textContent = '人工标注学习：' + (names[learning.status] || learning.status) + (learning.review ? '。依据：' + learning.review.evidence + '。经验：' + learning.review.lesson : '');
+          content.appendChild(note);
+        }
         const help = document.createElement('p'); help.className = 'text-secondary mb-2';
         help.textContent = '形象可在下方人工编辑或用 AI 生成。精品随投稿审核生效；运动类型在表单修改，景点在景点关联区域维护。AI 基于已保存资料和一张方图，生成后需保存才生效。';
         content.appendChild(help);
@@ -212,7 +219,7 @@
         return false;
       }
       const saved = await response.json();
-      if (saved.correction_warning) window.AdminUI.alert(saved.correction_warning, 'warning');
+      if (saved.learning_warning || saved.correction_warning) window.AdminUI.alert([saved.learning_warning, saved.correction_warning].filter(Boolean).join('；'), 'warning');
       else window.AdminUI.alert('轨迹已保存', 'success');
       if (typeof options.onSaved === 'function') await options.onSaved();
       return true;

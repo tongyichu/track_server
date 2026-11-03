@@ -1761,6 +1761,14 @@ func (h *Handler) UpdateTrack(ctx context.Context, c *app.RequestContext) {
 		handleAdminRepoError(c, err)
 		return
 	}
+	learningWarning := ""
+	if body.ShapeLabel != nil && beforeCorrectionEdit.ShapeLabel != track.ShapeLabel {
+		if h.trackNarrativeSvc == nil {
+			learningWarning = "轨迹已保存，AI 学习服务未配置，未记录学习反馈"
+		} else if err := h.trackNarrativeSvc.RecordShapeCorrection(ctx, &beforeCorrectionEdit, track, h.adminOperator(c)); err != nil {
+			learningWarning = "轨迹已保存，但学习反馈记录失败，请重新打开核实"
+		}
+	}
 	mapEligibilityChanged := oldStatus != track.Status || oldRunning != track.IsRunning || oldRawURL != track.RawTrackURL || oldCoordinate != track.CoordinateSystem
 	if h.trackMapRepo != nil && mapEligibilityChanged {
 		if cleaner, ok := h.trackMapRepo.(trackMapCleanupRepository); ok {
@@ -1792,11 +1800,11 @@ func (h *Handler) UpdateTrack(ctx context.Context, c *app.RequestContext) {
 	if body.SourceFeedbackID != "" {
 		fields := correctionChangedFields(&beforeCorrectionEdit, track)
 		if err := h.feedbackSvc.RecordCorrectionTrackChange(ctx, body.SourceFeedbackID, trackID, h.adminOperator(c), fields); err != nil {
-			c.JSON(http.StatusOK, utils.H{"code": 0, "data": track, "correction_warning": "轨迹已保存，但关联纠错记录失败，请重新打开核实后处理反馈"})
+			c.JSON(http.StatusOK, utils.H{"code": 0, "data": track, "learning_warning": learningWarning, "correction_warning": "轨迹已保存，但关联纠错记录失败，请重新打开核实后处理反馈"})
 			return
 		}
 	}
-	c.JSON(http.StatusOK, utils.H{"code": 0, "data": track})
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": track, "learning_warning": learningWarning})
 }
 
 // RestoreTrack 处理 POST /admin/api/tracks/:track_id/restore

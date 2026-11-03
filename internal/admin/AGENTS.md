@@ -4,6 +4,8 @@
 > 通用约束、目录总览、降级链等见仓库根目录 `AGENTS.md`，本文不重复。
 
 ## 模块定位
+轨迹形象保存成功且值变化时调用 `RecordShapeCorrection`，复核在后台执行；反馈失败或 AI 未配置返回 `learning_warning`，前端明确“轨迹已保存”。详情 `label_generation.learning` 展示状态、依据和经验；不在 HTTP 保存请求内等待模型。入口 `service/track_shape_learning.go`。
+
 
 `internal/admin` 是 **track_server 的内置管理后台**，提供：
 

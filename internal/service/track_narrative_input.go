@@ -14,15 +14,16 @@ import (
 	"github.com/tongyichu/track_server/internal/repository"
 )
 
-const trackNarrativeRuleVersion = 1
+const trackNarrativeRuleVersion = 2
 
 type trackNarrativeInput struct {
-	Title           string  `json:"title"`
-	Location        string  `json:"location,omitempty"`
-	Sport           string  `json:"sport"`
-	DistanceKM      float64 `json:"distance_km"`
-	DurationMinutes int     `json:"recorded_duration_minutes"`
-	Gain            int     `json:"recorded_gain_m"`
+	LearnedShapeExamples []map[string]string `json:"learned_shape_examples,omitempty"`
+	Title                string              `json:"title"`
+	Location             string              `json:"location,omitempty"`
+	Sport                string              `json:"sport"`
+	DistanceKM           float64             `json:"distance_km"`
+	DurationMinutes      int                 `json:"recorded_duration_minutes"`
+	Gain                 int                 `json:"recorded_gain_m"`
 	// These are samples, not maxima or a distance-resampled elevation profile.
 	ElevationSamples  []int                     `json:"sampled_elevation_m,omitempty"`
 	ScenicName        string                    `json:"scenic_name,omitempty"`

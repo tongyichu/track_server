@@ -136,11 +136,25 @@ func (s *TrackNarrativeService) RunOnce(parent context.Context) (*TrackNarrative
 		return out, nil
 	}
 	calls := 0
+	learningCalled := false
 	for _, index := range indexes {
 		if ctx.Err() != nil {
 			return out, ctx.Err()
 		}
 		out.Scanned++
+		if !learningCalled {
+			learned, learnErr := s.learnShapeCorrection(ctx, index.TrackID)
+			if learnErr != nil {
+				log.Printf("[TrackNarrative] shape_learning track_id=%s failed: %v", index.TrackID, learnErr)
+			}
+			if learned {
+				learningCalled = true
+				calls++
+			}
+		}
+		if calls >= 3 {
+			break
+		}
 		called, err := s.process(ctx, index.TrackID, scan.ActivatedAt, out)
 		if err != nil {
 			out.Failed++
@@ -197,6 +211,11 @@ func (s *TrackNarrativeService) process(ctx context.Context, id string, activate
 	t := snap.Track
 	writeDescription := t.DescriptionSource == "" || t.DescriptionSource == "auto" || t.DescriptionSource == "ai"
 	writeShape := (state.OwnsShape && t.ShapeLabel == state.LastShape) || (!state.OwnsShape && t.ShapeLabel == "")
+	manualShape, err := s.adminOwnsShape(ctx, t)
+	if err != nil {
+		return false, err
+	}
+	writeShape = writeShape && !manualShape
 	if !writeDescription && !writeShape {
 		state.Status = "complete"
 		out.Skipped++
@@ -228,6 +247,10 @@ func (s *TrackNarrativeService) process(ctx context.Context, id string, activate
 		if err = s.saveState(ctx, key, state, ""); err != nil {
 			return false, err
 		}
+		snap.Input.LearnedShapeExamples, err = s.learnedShapeExamples(ctx)
+		if err != nil {
+			return false, err
+		}
 		raw, _ := json.Marshal(snap.Input)
 		called = true
 		state.Result, err = s.generator.Generate(ctx, string(raw), imagePath)
@@ -251,6 +274,11 @@ func (s *TrackNarrativeService) process(ctx context.Context, id string, activate
 	t = current.Track
 	writeDescription = t.DescriptionSource == "" || t.DescriptionSource == "auto" || t.DescriptionSource == "ai"
 	writeShape = (state.OwnsShape && t.ShapeLabel == state.LastShape) || (!state.OwnsShape && t.ShapeLabel == "")
+	manualShape, err = s.adminOwnsShape(ctx, t)
+	if err != nil {
+		return called, err
+	}
+	writeShape = writeShape && !manualShape
 	applied, err := s.writer.ApplyTrackNarrative(ctx, t, state.Result.Description, state.Result.ShapeLabel, writeDescription, writeShape)
 	if err != nil {
 		return called, err
