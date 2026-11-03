@@ -151,6 +151,9 @@ func applyAdminTrackUpdate(track *models.Track, body updateTrackBody) error {
 			return err
 		}
 	}
+	if body.CityCode != nil {
+		track.CityCode = config.CanonicalCityCode(track.CityCode)
+	}
 	if body.CityCode != nil && track.CityCode != "" && config.CityNameByCode(track.CityCode) == "" {
 		return errors.New("city_code is not in the city list")
 	}

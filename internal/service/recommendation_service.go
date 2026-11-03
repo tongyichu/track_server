@@ -86,6 +86,7 @@ func NewRecommendationService(cfg RecommendationConfig, repo repository.Recommen
 }
 
 func (s *RecommendationService) ListRecommend(ctx context.Context, userID int64, input ListRecommendInput) (*models.TrackSummaryPage, error) {
+	input.CityCode = config.CanonicalCityCode(input.CityCode)
 	if !s.config.Enabled || s.repo == nil || userID <= 0 {
 		return s.trackSvc.ListRecommend(ctx, userID, input)
 	}
@@ -135,7 +136,7 @@ func (s *RecommendationService) listSessionPage(ctx context.Context, userID int6
 	if session.UserID != userID || !session.ExpiresAt.After(time.Now()) {
 		return nil, ErrRecommendCursorExpired
 	}
-	if strings.TrimSpace(input.CityCode) != session.CityCode {
+	if config.CanonicalCityCode(input.CityCode) != config.CanonicalCityCode(session.CityCode) {
 		return nil, invalidArg("recommend cursor does not match city_code")
 	}
 	if cursor.Offset < 0 || cursor.Offset > len(session.Items) {
@@ -687,7 +688,7 @@ func newRecommendationSession(userID int64, cityCode string, strategy models.Rec
 }
 
 func isRecommendationTrackVisible(track *models.Track, userID int64, cityCode string) bool {
-	return track != nil && track.UserID != userID && !track.IsRunning && track.Status == models.TrackStatusNormal && strings.TrimSpace(track.RawTrackURL) != "" && (cityCode == "" || track.CityCode == cityCode)
+	return track != nil && track.UserID != userID && !track.IsRunning && track.Status == models.TrackStatusNormal && strings.TrimSpace(track.RawTrackURL) != "" && (cityCode == "" || config.CanonicalCityCode(track.CityCode) == config.CanonicalCityCode(cityCode))
 }
 
 func diversifyCandidates(sorted []*recommendationCandidate, limit int) []*recommendationCandidate {

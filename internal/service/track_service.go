@@ -603,7 +603,7 @@ func (s *TrackService) CreateTrack(ctx context.Context, userID int64, input Crea
 		track.SessionID = *input.SessionID
 	}
 	if input.CityCode != nil {
-		track.CityCode = *input.CityCode
+		track.CityCode = config.CanonicalCityCode(*input.CityCode)
 	}
 	if input.LocateAddr != nil {
 		track.LocateAddr = *input.LocateAddr
@@ -724,6 +724,7 @@ func (s *TrackService) GetTrackDetail(ctx context.Context, trackID string) (*mod
 	if err != nil {
 		return nil, err
 	}
+	track.CityCode = config.CanonicalCityCode(track.CityCode)
 	// Recompute summary metrics from points if available.
 	updateTrackMetrics(track)
 	if err := s.fillTrackCommentState(ctx, track); err != nil {
@@ -1525,7 +1526,7 @@ func (s *TrackService) UpdateTrackInfo(ctx context.Context, userID int64, trackI
 		updated = true
 	}
 	if patch.CityCode != nil && track.CityCode == "" {
-		track.CityCode = *patch.CityCode
+		track.CityCode = config.CanonicalCityCode(*patch.CityCode)
 		updated = true
 	}
 	if patch.LocateAddr != nil && track.LocateAddr == "" {
@@ -1779,7 +1780,7 @@ func toSummaries(tracks []*models.Track) []*models.TrackSummary {
 			ID:             t.ID,
 			UserID:         t.UserID,
 			SessionID:      t.SessionID,
-			CityCode:       t.CityCode,
+			CityCode:       config.CanonicalCityCode(t.CityCode),
 			LocateAddr:     t.LocateAddr,
 			TrackType:      t.TrackType,
 			StartTime:      t.StartTime,
@@ -1807,7 +1808,7 @@ func toMySummaries(tracks []*models.Track) []*models.MyTrackSummary {
 			ID:             t.ID,
 			UserID:         t.UserID,
 			SessionID:      t.SessionID,
-			CityCode:       t.CityCode,
+			CityCode:       config.CanonicalCityCode(t.CityCode),
 			LocateAddr:     t.LocateAddr,
 			TrackType:      t.TrackType,
 			StartTime:      t.StartTime,

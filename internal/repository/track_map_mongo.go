@@ -405,7 +405,7 @@ func mongoTrackGeoIndexFilter(filter models.TrackMapQueryFilter) bson.M {
 		conds = append(conds, bson.M{"track_type": filter.TrackType})
 	}
 	if filter.CityCode != "" {
-		conds = append(conds, bson.M{"city_code": filter.CityCode})
+		conds = append(conds, bson.M{"city_code": bson.M{"$in": regionCodeCandidates([]string{filter.CityCode})}})
 	}
 	if filter.BBox != nil {
 		conds = append(conds, bson.M{
@@ -884,15 +884,10 @@ func mongoTrackRouteGroupFilter(filter models.TrackMapQueryFilter) bson.M {
 		conds = append(conds, bson.M{"track_type": filter.TrackType})
 	}
 	if filter.CityCode != "" {
-		conds = append(conds, bson.M{"city_codes": filter.CityCode})
+		conds = append(conds, bson.M{"city_codes": bson.M{"$in": regionCodeCandidates([]string{filter.CityCode})}})
 	}
 	if len(filter.CityCodes) > 0 {
-		codes := make([]string, 0, len(filter.CityCodes))
-		for _, code := range filter.CityCodes {
-			if code = strings.TrimSpace(code); code != "" {
-				codes = append(codes, code)
-			}
-		}
+		codes := regionCodeCandidates(filter.CityCodes)
 		if len(codes) > 0 {
 			conds = append(conds, bson.M{"city_codes": bson.M{"$in": codes}})
 		}

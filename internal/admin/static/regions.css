@@ -27,3 +27,4 @@
 .region-tree-item span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .region-tree-list>.region-tree-node::before,.region-tree-children>.region-tree-node::before{content:"";position:absolute;left:-18px;top:16px;width:18px;border-top:1px solid var(--tblr-border-color)}
 .region-tree-list>.region-tree-node:last-child::after,.region-tree-children>.region-tree-node:last-child::after{content:"";position:absolute;left:-19px;top:17px;bottom:0;width:2px;background:var(--tblr-bg-surface)}
+.region-form-grid #regionContinentField[hidden]{display:none}

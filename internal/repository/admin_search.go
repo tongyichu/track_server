@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tongyichu/track_server/internal/config"
 	"github.com/tongyichu/track_server/internal/models"
 )
 
@@ -26,7 +27,7 @@ func (r *InMemoryTrackRepository) ListAdminTracks(_ context.Context, filter Admi
 	}
 	cityCodes := make(map[string]struct{}, len(filter.CityCodes))
 	for _, code := range filter.CityCodes {
-		cityCodes[code] = struct{}{}
+		cityCodes[config.CanonicalCityCode(code)] = struct{}{}
 	}
 	wantDeleted := filter.Status != nil && *filter.Status == models.TrackStatusDeleted
 	items := make([]*models.Track, 0)
@@ -41,11 +42,11 @@ func (r *InMemoryTrackRepository) ListAdminTracks(_ context.Context, filter Admi
 		if filter.Title != "" && !strings.Contains(strings.ToLower(track.Title), strings.ToLower(filter.Title)) {
 			continue
 		}
-		if filter.CityCode != "" && track.CityCode != filter.CityCode {
+		if filter.CityCode != "" && !sameRegionCode(track.CityCode, filter.CityCode) {
 			continue
 		}
 		if filter.CityCode == "" && len(cityCodes) > 0 {
-			if _, ok := cityCodes[track.CityCode]; !ok {
+			if _, ok := cityCodes[config.CanonicalCityCode(track.CityCode)]; !ok {
 				continue
 			}
 		}
@@ -218,10 +219,10 @@ func (r *InMemoryUserRepository) ListAdminUsers(_ context.Context, filter AdminU
 		if filter.IsInternal != nil && user.IsInternal != *filter.IsInternal {
 			continue
 		}
-		if filter.CityCode != "" && user.CityCode != filter.CityCode {
+		if filter.CityCode != "" && !sameRegionCode(user.CityCode, filter.CityCode) {
 			continue
 		}
-		if filter.ProvinceCode != "" && user.ProvinceCode != filter.ProvinceCode {
+		if filter.ProvinceCode != "" && !sameRegionCode(user.ProvinceCode, filter.ProvinceCode) {
 			continue
 		}
 		if (filter.Gender == "male" || filter.Gender == "female") && user.Gender != filter.Gender {

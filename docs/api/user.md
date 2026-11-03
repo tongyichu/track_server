@@ -106,9 +106,9 @@ Authorization: Bearer <token>
 | `data.gender` | string | 仅本人详情返回；空串未设置，`male` 男，`female` 女。 |
 | `data.birthday` | string | 仅本人详情返回；`YYYY-MM-DD` 日期字符串，空串表示未设置。查看他人时省略，不自动填入默认生日。 |
 | `data.zodiac_sign` | string | 仅本人详情返回；根据生日计算的只读英文 code，未设置/无效生日为空串，查看他人时省略。客户端按 code 本地化显示，空串/缺失/未知值隐藏；规则见下方“星座派生规则”。 |
-| `data.province_code` | string | 仅本人详情返回；最近确认所在地的省级行政区编码，未设置为空串。 |
+| `data.province_code` | string | 仅本人详情返回；最近确认所在地的直接上级内部地区编号（国内为省级），未设置为空串；存量记录可能仍是旧 adcode。 |
 | `data.province_name` | string | 仅本人详情返回；服务端根据行政区编码生成的省份名称，未设置为空串。 |
-| `data.city_code` | string | 仅本人详情返回；最近确认所在地的归一化城市编码，未设置为空串。 |
+| `data.city_code` | string | 仅本人详情返回；最近确认所在地的内部地区编号，未设置为空串；存量记录可能仍是旧 adcode。 |
 | `data.city_name` | string | 仅本人详情返回；服务端根据行政区编码生成的城市名称，未设置为空串。 |
 | `data.phone` | string | 手机号（可能为空）；仅查看自己时返回。 |
 | `data.client_language` | string | 客户端语言；仅查看自己时返回。 |
@@ -426,13 +426,13 @@ Content-Type: application/json
 
 ```json
 {
-  "city_code": "330100"
+  "city_code": "CN000118"
 }
 ```
 
 | 字段 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
-| `city_code` | string | 是 | 国内使用六位 AdCode，直辖市使用 `110000`、`120000`、`310000` 或 `500000`；国外使用目录中六位可选节点 ID。未知或不可选编码返回 400。 |
+| `city_code` | string | 是 | 提交地区目录可选节点的 `region_id`，如 `CN000118`；过渡期兼容旧国内 adcode 和旧目录键，并按目录转为内部编号后保存。未知或不可选编码返回 400。 |
 
 ### 响应
 
@@ -451,7 +451,7 @@ Content-Type: application/json
 
 ### 错误响应
 
-- `400 Bad Request`：请求体不是合法 JSON，或 `city_code` 不是受支持的国内城市编码。
+- `400 Bad Request`：请求体不是合法 JSON，或 `city_code` 无法对应可选地区。
 - `401 Unauthorized`：缺少、无效或过期的 Token。
 - `403 Forbidden`：账号当前被限制修改个人资料。
 - `404 Not Found`：当前用户不存在。
@@ -461,7 +461,7 @@ Content-Type: application/json
 
 Android 只消费已有定位结果中的有效省市，不为该功能新增后台定位或逐轨迹点逆地理编码。每次运动会话首个有效地址立即检查一次；普通前台定位每 7 天检查一次。已同步、待同步、检查时间和失败退避状态按账号隔离，只有城市编码变化才调用本接口，失败保留待同步值并退避重试。
 
-MySQL 启动时幂等补充 `users.province_code VARCHAR(6)`、`users.province_name VARCHAR(64)`、`users.city_code VARCHAR(6)`、`users.city_name VARCHAR(64)`，均为 `NOT NULL DEFAULT ''`。Mongo 和内存仓储缺失字段按空值处理。先部署服务端，再发布调用本接口的客户端。
+MySQL 启动时幂等补充并扩宽 `users.province_code VARCHAR(16)`、`users.province_name VARCHAR(64)`、`users.city_code VARCHAR(16)`、`users.city_name VARCHAR(64)`，均为 `NOT NULL DEFAULT ''`。Mongo 和内存仓储缺失字段按空值处理。先部署服务端，再发布调用本接口的客户端。
 
 ---
 

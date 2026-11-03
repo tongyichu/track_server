@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tongyichu/track_server/internal/config"
 	"github.com/tongyichu/track_server/internal/models"
 )
 
@@ -31,7 +32,11 @@ func parseAMapTrackPlace(a amapPlace, expires time.Time) (models.TrackPlace, boo
 	if e1 != nil || e2 != nil || !validMapLatLng(lat, lng) {
 		return models.TrackPlace{}, false
 	}
-	return models.TrackPlace{ID: placeID("amap", id), Provider: "amap", ProviderID: id, Name: name, Category: category, ParentID: string(a.Parent), DistrictCode: string(a.Adcode), Latitude: lat, Longitude: lng, CoordinateSystem: "GCJ02", ExpiresAt: expires}, true
+	cityID, ok := config.ResolveExternalSelectableCityID("amap", "adcode", string(a.Adcode))
+	if !ok {
+		cityID, _ = config.ResolveCityCode(string(a.Adcode))
+	}
+	return models.TrackPlace{ID: placeID("amap", id), Provider: "amap", ProviderID: id, Name: name, Category: category, ParentID: string(a.Parent), CityCode: cityID, DistrictCode: string(a.Adcode), Latitude: lat, Longitude: lng, CoordinateSystem: "GCJ02", ExpiresAt: expires}, true
 }
 
 func (s *TrackPlaceService) enclosedPlaces(ctx context.Context, index *models.TrackGeoIndex, ring *trackPlaceRing) ([]*models.TrackPlace, error) {

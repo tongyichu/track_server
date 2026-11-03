@@ -436,8 +436,11 @@ func buildTrackGeoIndexWhere(filter models.TrackMapQueryFilter) (string, []inter
 		args = append(args, filter.TrackType)
 	}
 	if filter.CityCode != "" {
-		conds = append(conds, "city_code = ?")
-		args = append(args, filter.CityCode)
+		codes := regionCodeCandidates([]string{filter.CityCode})
+		conds = append(conds, "city_code IN ("+strings.TrimRight(strings.Repeat("?,", len(codes)), ",")+")")
+		for _, code := range codes {
+			args = append(args, code)
+		}
 	}
 	if filter.BBox != nil {
 		conds = append(conds, "max_lat >= ? AND min_lat <= ? AND max_lng >= ? AND min_lng <= ?")
@@ -1099,12 +1102,16 @@ func buildTrackRouteGroupWhere(filter models.TrackMapQueryFilter) (string, []int
 		args = append(args, filter.TrackType)
 	}
 	if filter.CityCode != "" {
-		conds = append(conds, "city_codes_json LIKE ?")
-		args = append(args, "%\""+filter.CityCode+"\"%")
+		orConds := make([]string, 0)
+		for _, code := range regionCodeCandidates([]string{filter.CityCode}) {
+			orConds = append(orConds, "city_codes_json LIKE ?")
+			args = append(args, "%\""+code+"\"%")
+		}
+		conds = append(conds, "("+strings.Join(orConds, " OR ")+")")
 	}
 	if len(filter.CityCodes) > 0 {
 		orConds := make([]string, 0, len(filter.CityCodes))
-		for _, code := range filter.CityCodes {
+		for _, code := range regionCodeCandidates(filter.CityCodes) {
 			code = strings.TrimSpace(code)
 			if code == "" {
 				continue

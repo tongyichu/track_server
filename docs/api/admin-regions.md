@@ -6,7 +6,7 @@
 
 ## 用户管理
 
-`GET /admin/api/users` 增加可选 `province_code`，按用户资料省份精确筛选，与现有 `city_code` 取交集。其他筛选、游标及响应字段不变。
+`GET /admin/api/users` 增加可选 `province_code`，按用户资料省份精确筛选，与现有 `city_code` 取交集。两字段优先传地区目录 `region_id`；服务端兼容旧 adcode 存量记录。其他筛选、游标及响应字段不变。
 
 ## 景点管理
 
