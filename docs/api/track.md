@@ -9,7 +9,7 @@
 - `GET /api/v1/track/discover/scenic-spots?city_code=CN000118&limit=30&cursor=<next_cursor>`：返回当前城市状态为 `active` 的景点，包含轨迹关联到该城市的景点；不传城市时返回全部。按关联的公开、已完成且有原始文件的轨迹数降序排列，同数时按景点 ID 升序排列。`items` 每项含 `id`、`name`、`cover_url`，可选 `description`、`source_url`；景点详情页用这些字段展示封面和介绍。`cover_url` 优先采用景点 `photos[0].url`，缺失时回退景点封面。`limit` 默认 20、最大 50；`has_more` 与不透明的 `next_cursor` 供横向列表继续加载，游标包含排序锚点。
 - 景点列表新增可选 `photos` 数组，按目录原顺序返回全部非空图片：`[{"url":"/api/v1/static/scenic_spots/<id>/photo.jpg","title":"照片说明","author":"作者","author_url":"https://example.com/author","source_url":"https://example.com/source"}]`；无图返回 `[]`。字段投影与 `primary_scenic_spot.photos` 一致，自有图片携带业务 JWT，外部图片沿用 source_url 作为 Referer。只读取现有目录，不调用地图供应商，不改变封面选择及分页。Android 详情取前 3 张每 3 秒叠化，相册每行 3 张展示全部；旧服务端未提供 photos 或空数组时回退 cover_url。
 - 景点列表每项及轨迹详情/摘要的 `primary_scenic_spot` 可选返回 `scenic_grade`，值为 `"1A"`、`"2A"`、`"3A"`、`"4A"`、`"5A"`。未知或人工清空时省略，客户端应隐藏等级，不能将其解释为“未评级”。等级读取已保存目录，不增加供应商请求；旧客户端可忽略，旧数据无需迁移。
-- `GET /api/v1/track/discover/scenic-spots/:spot_id/tracks?limit=20&cursor=<next_cursor>`：返回状态为 `active` 的景点真实关联的公开、已完成且有原始文件的轨迹摘要；归档、合并或不存在返回 404。按关联轨迹 ID 排序，`next_cursor` 是已消费的关联轨迹 ID。
+- `GET /api/v1/track/discover/scenic-spots/:spot_id/tracks?limit=20&cursor=<next_cursor>`：返回状态为 `active` 的景点真实关联的公开、已完成且有原始文件的轨迹摘要；归档、合并或不存在返回 404。按关联轨迹 ID 排序，`next_cursor` 是已消费的关联轨迹 ID。首页（无 `cursor`）返回 `total_count`，为该景点公开可见轨迹总数，供详情页“相关轨迹(N)”标题展示；翻页响应不再重复返回。
 - `GET /api/v1/track/discover/shapes?city_code=CN000118&limit=20&cursor=<next_cursor>`：按开始时间倒序返回公开、已结束、有原始轨迹文件且 `shape_label` 非空的轨迹摘要；`city_code` 可选。沿用推荐轨迹的摘要字段和游标分页，响应 `items`、`has_more`、`next_cursor`。
 - `GET /api/v1/track/activity/calendar?timezone=Asia%2FShanghai`：返回当前用户最近 375 个当地自然日（含 10 天缓冲）的已完成轨迹数量，供客户端从连续 12 个月的首月第一个周日起展示。只计正常或私有、已结束且有原始轨迹文件的远端轨迹，以轨迹 `start_time` 对应的当地日期归组。`timezone` 为 IANA 时区，省略时默认 `Asia/Shanghai`，非法值返回 400。响应包含 `start_date`、`end_date`、缓冲区内的 `total_count` 和按日期升序的非零 `days: [{"date":"YYYY-MM-DD","count":1}]`；未列出的日期为 0。客户端仅对实际展示日期求和，并叠加本机未上传的已完成轨迹，避免重复计算远端已上传记录。
 
@@ -1182,12 +1182,14 @@ Authorization: Bearer <token>
 
 ## 个人纪录
 
+客户端纪录数字按各获纪录轨迹的运动类型日夜色展示，全部运动下逐项取色，单位保留次要文字色；复用已有类型元数据，无接口变化。
+
 GET /track/activity/records?track_type=hiking，业务JWT、仅本人、响应no-store；省略track_type表示全部类型，不允许指定其他用户。统计全部历史正常/私密、非进行中且有原始文件的已上传轨迹，归一旧别名后按稳定类型code分别比较。
 
-响应结构：data.groups=[{track_type,records:[{metric,value,track}]}]。metric为distance（米）、elevation（累计爬升米）、duration（秒）、steps（实际步数），每类型最多四项，按distance/elevation/duration/steps顺序。track复用现有TrackSummary字段，包含id/user_id/title/start_time/track_type/distance/duration/elevation_gain/preview_images，预览为现有鉴权路由，例如/api/v1/track/NO.00000001/previews/landscape_day?v=...，不返回GPS。
+响应结构：data.groups=[{track_type,records:[{metric,value,track}]}]。metric为distance（米）、elevation（累计爬升米）、duration（秒）、steps（实际步数），每类型最多四项，按distance/elevation/duration/steps顺序。track复用现有TrackSummary字段，包含id/user_id/title/start_time/track_type/distance/duration/elevation_gain/city_code/city_name/locate_addr/preview_images，预览为现有鉴权路由，例如/api/v1/track/NO.00000001/previews/landscape_day?v=...，不返回GPS。
 
 只选有限正数，缺失/0/非法值不生成纪录。自驾仅距离/时长，骑行不生成步数纪录；步数只读取已保存真实值。并列取开始时间较新、再按轨迹ID较大的一条。同一轨迹可创造多个纪录，groups按code升序，无纪录返回[]。
 
 MySQL/Mongo/memory同步实现PersonalRecordsRepository，每指标在存储侧选各原始类型最大值及最新并列项，再一次FindByIDs批量取少量获纪录轨迹，service归一类型后比较。复用toSummaries和trackPreviewURLs构造鉴权预览路由，不调用BuildTrackSummaries中的旧资源缓存下载，不拉取GPS、不生成地图、不逐项补详情，无新表字段。
 
-Android将云端纪录与当前账号已完成且未上传本机轨迹按同一类型/指标/并列规则比较，已上传本地副本不重复参与。页面类型筛选统一作用于纪录卡；全部类型只展开一类，其余通过紧凑菜单查看，最多两行两列。首次失败或旧服务端404明确仅有本机未上传纪录，已有成功结果时保留并提示刷新失败，不使用示例数据伪装完整历史。
+Android将云端纪录与当前账号已完成且未上传本机轨迹按同一类型/指标/并列规则比较，已上传本地副本不重复参与。客户端仅展示distance/elevation/duration，忽略steps纪录；格子图同样移除运动步数，采集、存储、详情及接口兼容字段保持不变。页面类型筛选统一作用于纪录卡，全部类型跨组取各指标最高纪录，不另加筛选。纪录纵向每行一项，左侧指标和大数值/小单位，中间轨迹title（最多两行）及日期，右侧4:3静态轨迹预览；不展示城市或运动类型，不设单项背景框，行间细分隔线、末项无分隔线。空title回退未命名路线，不新增地区目录读取或定位请求。复用日夜预览和本机截图，不读取GPS或生成地图，缺图用占位图。时长按小时/分钟（不足一分钟按秒）显示。适用但缺失指标显示“—”且不可点击，不适用指标隐藏，整张无纪录时显示空态；真实纪录整行进入详情。接口和其余指标统计规则不变。首次失败或旧服务端404明确仅有本机未上传纪录，已有成功结果时保留并提示刷新失败，不使用示例数据伪装完整历史。
