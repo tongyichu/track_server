@@ -300,23 +300,38 @@ func (r *Researcher) moonshotJSON(ctx context.Context, endpoint string, input, o
 			return ctx.Err()
 		}
 	}
-	for attempt := 0; ; attempt++ {
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, moonshotAPI+endpoint, bytes.NewReader(body))
+	concurrencyRetries := 0
+	timeoutRetries := 0
+	for {
+		requestCtx := ctx
+		cancel := func() {}
+		if endpoint == "/chat/completions" {
+			requestCtx, cancel = context.WithTimeout(ctx, 45*time.Second)
+		}
+		req, err := http.NewRequestWithContext(requestCtx, http.MethodPost, moonshotAPI+endpoint, bytes.NewReader(body))
 		if err != nil {
+			cancel()
 			return err
 		}
 		req.Header.Set("Authorization", "Bearer "+r.key)
 		req.Header.Set("Content-Type", "application/json")
 		err = r.doJSON(req, output)
+		cancel()
 		if err == nil {
 			return nil
 		}
+		if endpoint == "/chat/completions" && errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil && timeoutRetries < 1 {
+			timeoutRetries++
+			log.Printf("[RegionResearch] moonshot_timeout_retry endpoint=%s attempt=%d", endpoint, timeoutRetries)
+			continue
+		}
 		var statusErr *researchHTTPError
-		if !errors.As(err, &statusErr) || statusErr.code != http.StatusTooManyRequests || !strings.Contains(strings.ToLower(statusErr.message), "concurrency") || attempt == 3 {
+		if !errors.As(err, &statusErr) || statusErr.code != http.StatusTooManyRequests || !strings.Contains(strings.ToLower(statusErr.message), "concurrency") || concurrencyRetries == 3 {
 			return err
 		}
-		wait := time.Duration(1<<attempt) * time.Second
-		log.Printf("[RegionResearch] moonshot_concurrency_retry endpoint=%s attempt=%d wait_ms=%d", endpoint, attempt+1, wait.Milliseconds())
+		wait := time.Duration(1<<concurrencyRetries) * time.Second
+		concurrencyRetries++
+		log.Printf("[RegionResearch] moonshot_concurrency_retry endpoint=%s attempt=%d wait_ms=%d", endpoint, concurrencyRetries, wait.Milliseconds())
 		timer := time.NewTimer(wait)
 		select {
 		case <-timer.C:
