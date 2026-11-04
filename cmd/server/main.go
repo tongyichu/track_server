@@ -284,6 +284,7 @@ func main() {
 	}
 
 	trackSvc := service.NewTrackService(trackRepo, collectRepo)
+	trackSvc.SetFootprintRegionService(regionSvc)
 	scenicSpotCatalogSvc := service.NewScenicSpotCatalogService(scenicSpotRepo, trackRepo, trackPlaceRepo)
 	if cfg.MoonshotAPIKey != "" {
 		if _, memoryFallback := scenicSpotRepo.(*repository.MemoryScenicSpotRepository); !memoryFallback {

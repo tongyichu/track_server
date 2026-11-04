@@ -69,3 +69,13 @@
 - 第二次预检发现旧更新脚本按docker images首项选镜像，会选到旧版本，在停止服务前安全中止。后续备份生产/root/update_track_server.sh（before-exact-image时间戳.bak，0600），仅将IMAGE_ID选择改为docker image inspect "$IMAGE"的精确ID；其余停止/删除确切容器、拉取和启动逻辑不变。镜像revision、manifest及config ID重新核对后部署成功。
 - 最终manifest sha256:362a9fd464825d94e2ddd06888ad2ab257fc2f89b59241c909341d3365ac3aa0，配置ID sha256:2e567cb79b01f062f28df0921aae1f3914f365ddf5b40566a76213330da37271，容器90f5e6409d6e2a8616b0558ceeb005aa0858676aaf6c1386c2301c76322419cd，running/重启0。内外ping200；MySQL、3个后台账号、鉴权守卫及登录检查正常；资源版本75f2c587ceee30c15378，环境/挂载及前版镜像保留。
 - 最终回执/private/tmp/track-personal-records-final-deploy-20261104.json，元数据track-personal-records-final-image-20261104.json，日志track-personal-records-final-deploy-fixed-20261104.log，runner为track-personal-records-final-deploy-20261104.py。最终运行源码461efef，后续纯回执提交不改生产快照。
+
+
+## 2026-11-04：本人全国探索足迹接口（开发完成，尚未部署）
+
+- 用户确认全国足迹图方案并要求实现。新增JWT/no-store GET /track/activity/footprint及/track/activity/footprint/tracks，全部历史本人正常/私密、完成且有原始文件的轨迹，支持可选track_type，省略为全部；不使用all哨兵、不允许指定其他用户。
+- ActivityFootprintRepository在MySQL/Mongo/memory三实现仅读取ID/城市/类型/距离/开始时间轻量投影；service按类型/地区筛选后统计或分页，目录由持久化regions.Service注入，旧目录键/adcode按明确别名兼容，父省/坐标/省界对应码从目录取，不猜测途经城市或修改轨迹。返回国内全量启用目录节点（含真实零值）供本机记录合并，城市/省份运动次数、里程、城市数与明确关联active景区去重数；无归属与境外次数单列，不错误落点。
+- 景区关联与目录每批最多200批量读取，按景区内部ID在城市/省份/全国去重，不统计附近候选或归档/合并景区，不调用供应商/AI、不读取GPS或下载资源。地区轨迹先按本人/类型/地区筛选，再按start_time/id降序游标分页，当前页FindByIDs一次批量取摘要并复核归属/状态/地区，直接投影鉴权静态预览。无新表/迁移/配置项。
+- Android配套本地矢量地图、260dp卡片、类型全局筛选、未上传记录合并、失败保留与地区轨迹下钻，详见客户端功能参考。API索引/路由索引/track-footprint.md与AGENTS入口已同步。
+- gofmt、go build ./...与git diff --check通过；Android最终assembleDebug通过（3s），已安装小米并启动MainActivity。按项目约定未新增或运行单元/集成/业务接口自动化，无生产业务数据或环境变更。规则报告/private/tmp/track-footprint-server-agents-20261104.json，仅既有10处超长源码，无路径告警，freshness stale=false。
+- 本轮仅开发，未提交推送或部署；当前生产仍为前轮461efef，尚不包含探索足迹。后续用户要求部署时先同步两侧发布范围，Server按既有流程推送后构建镜像，生产脚本已使用精确latest镜像ID，不再依docker images列表首项。

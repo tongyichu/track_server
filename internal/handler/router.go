@@ -228,6 +228,8 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 	auth.GET("/track/activity/calendar", trackHandler.ActivityCalendar)
 	auth.GET("/track/activity/type-distribution", trackHandler.ActivityTypeDistribution)
 	auth.GET("/track/activity/records", trackHandler.PersonalRecords)
+	auth.GET("/track/activity/footprint", trackHandler.ActivityFootprint)
+	auth.GET("/track/activity/footprint/tracks", trackHandler.FootprintTracks)
 	auth.POST("/track/:track_id/upload_cloud", trackHandler.UploadTrackCloud)
 	auth.GET("/track/running", trackHandler.GetRunningTrack)
 	auth.GET("/track/:track_id/map", trackHandler.GetTrackMap)

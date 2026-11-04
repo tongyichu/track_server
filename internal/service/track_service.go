@@ -17,6 +17,7 @@ import (
 
 	"github.com/tongyichu/track_server/internal/config"
 	"github.com/tongyichu/track_server/internal/models"
+	"github.com/tongyichu/track_server/internal/regions"
 	"github.com/tongyichu/track_server/internal/repository"
 )
 
@@ -40,6 +41,7 @@ type TrackService struct {
 	submissions     *TrackSubmissionService
 	places          *TrackPlaceService
 	scenicCatalog   *ScenicSpotCatalogService
+	footprintGeo    *regions.Service
 }
 
 const (
