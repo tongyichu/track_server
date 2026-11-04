@@ -28,7 +28,6 @@
   };
   var ageLabels = { under_18: '18 岁以下', '18_24': '18–24 岁', '25_34': '25–34 岁', '35_44': '35–44 岁', '45_54': '45–54 岁', '55_plus': '≥55 岁', unknown: '未填写 / 无效' };
   var trackOutputLabels = { zero: '0 条', one: '1 条', '2_5': '2–5 条', '6_20': '6–20 条', '21_plus': '≥21 条' };
-  var pieColors = ['#206bc4', '#2fb344', '#f59f00', '#ae3ec9', '#d63939', '#17a2b8', '#6f42c1', '#74b816', '#f76707', '#0ca678', '#4263eb', '#e64980', '#868e96'];
   var provinceNameMap = {
     '北京市': '北京', '天津市': '天津', '上海市': '上海', '重庆市': '重庆',
     '内蒙古自治区': '内蒙古', '广西壮族自治区': '广西', '西藏自治区': '西藏',
@@ -53,17 +52,10 @@
     if (!chartRoot || !legendRoot) return;
     var rows = (items || []).map(function (item) { return { key: item.key, name: item.label || distributionLabels[item.key] || item.key || '未知', value: number(item.count) }; });
     var totalValue = number(total);
-    legendRoot.innerHTML = rows.map(function (item, index) {
-      return '<div class="admin-user-legend-row"><span class="admin-user-legend-label"><i style="background:' + pieColors[index % pieColors.length] + '"></i>' + esc(item.name) + '</span><strong>' + item.value.toLocaleString() + '</strong></div>';
-    }).join('') + (chartID === 'userGenderChart' ? '<div class="admin-user-legend-row admin-user-legend-total"><span>全部用户</span><strong>' + totalValue.toLocaleString() + '</strong></div>' : '');
+    AdminChartStyle.legend(legendRoot, rows, chartID === 'userGenderChart' ? '全部用户' : '', totalValue);
     if (!window.echarts) return;
     if (!userCharts[chartID]) userCharts[chartID] = echarts.init(chartRoot);
-    userCharts[chartID].setOption({
-      color: pieColors,
-      tooltip: { trigger: 'item', formatter: function (item) { return esc(item.name) + '<br>' + number(item.value).toLocaleString() + ' 人（' + item.percent + '%）'; } },
-      series: [{ type: 'pie', radius: ['57%', '82%'], center: ['50%', '50%'], avoidLabelOverlap: true, itemStyle: { borderColor: '#fff', borderWidth: 2 }, label: { show: false }, emphasis: { scale: true, scaleSize: 6 }, data: rows }],
-      graphic: [{ type: 'text', left: 'center', top: '41%', style: { text: totalValue.toLocaleString(), fill: '#182433', fontSize: 22, fontWeight: 700, textAlign: 'center' } }, { type: 'text', left: 'center', top: '55%', style: { text: chartID === 'userGenderChart' ? '全部用户' : '用户数', fill: '#667085', fontSize: 11, textAlign: 'center' } }]
-    }, true);
+    userCharts[chartID].setOption(AdminChartStyle.ring(rows, totalValue, chartID === 'userGenderChart' ? '全部用户' : '用户数', '人'), true);
   }
   function renderUserBars(chartID, items, labels, total) {
     var root = document.getElementById(chartID);
@@ -71,16 +63,8 @@
     var rows = (items || []).map(function (item) {
       return { name: labels[item.key] || item.key, value: number(item.count), itemStyle: { color: item.key === 'unknown' || item.key === 'zero' ? '#94a3b8' : '#206bc4' } };
     });
-    function percent(value) { return number(total) > 0 ? (value * 100 / number(total)).toFixed(1) : '0.0'; }
     if (!userCharts[chartID]) userCharts[chartID] = echarts.init(root);
-    userCharts[chartID].setOption({
-      aria: { enabled: true },
-      grid: { left: 0, right: 82, top: 12, bottom: 8, containLabel: true },
-      tooltip: { trigger: 'item', formatter: function (item) { return esc(item.name) + '<br>' + number(item.value).toLocaleString() + ' 人 · ' + percent(item.value) + '%'; } },
-      xAxis: { type: 'value', show: false, max: function (value) { return Math.max(1, value.max); } },
-      yAxis: { type: 'category', inverse: true, data: rows.map(function (item) { return item.name; }), axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: '#667085', fontSize: 11 } },
-      series: [{ type: 'bar', data: rows, barMaxWidth: 12, showBackground: true, backgroundStyle: { color: '#f1f5f9', borderRadius: 4 }, itemStyle: { borderRadius: 4 }, label: { show: true, position: 'right', color: '#475569', fontSize: 10, formatter: function (item) { return compactNumber(item.value) + ' · ' + percent(item.value) + '%'; } } }]
-    }, true);
+    userCharts[chartID].setOption(AdminChartStyle.bars(rows, total, { unit: '人', showPercent: true }), true);
   }
   function domesticProvinceCode(cityCode) {
     var code = String(cityCode || '');

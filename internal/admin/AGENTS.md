@@ -20,6 +20,7 @@
 - 前端文件放 internal/admin/static/，复用现有 go:embed，不加第二套；路由和 fetch 固定 /admin，变更必须两端同步。业务静态资源由后台 session 代理，不用 App JWT 地址或暴露原始投稿 OSS URL。
 - APK 经后台 upload-package 本机上传并解析包版本，发布表单固定 Android；不改回浏览器 OSS 直传。发布记录删除不删除独立 changelog。
 - 组件使用内置 Tabler/ECharts、shell.js/ui.js/style.css；不新增 CDN 或复制导航/组件外观。新增页面加载 vendor/tabler.min.css → style.css，脚本按 vendor/tabler.min.js → shell.js → ui.js → 页面脚本。
+- 用户约定（2026-11-04）：后台同类图表统一沿用用户管理页的配色、环形图/图例、细柱底轨、字体与留白，复用 static/admin_chart_style.js 和既有统计卡片样式，不在页面另写一套视觉配置；统计区默认紧凑，具体规范见 [图表统一规范](../../docs/admin-ui.md#图表统一规范)。
 - 主列表/筛选/详情基础信息不得等待图表、地图或外部回填；图表用 AdminAssets.loadCharts() 异步加载。动态资源用 AdminAssets.url()，保留内容版本、ETag、公共静态缓存与私有 no-store 隔离。
 - 列表批量/去重查询，资源 I/O 限并发、超时和取消；不逐行无限 goroutine。MutationObserver 只处理受影响子树且避免递归；只读锁在新增/更新控件时恢复。快筛选忽略旧响应、失败保留上次数据。
 - Card 默认桌面 18px/窄屏 14px 内容留白，同时覆盖子节点 card-body 和同节点 panel.card.card-body；p-0 仅用于明确满宽区域。工具栏响应式换行，宽表格局部滚动；展开详情不重分配列宽。

@@ -1,7 +1,5 @@
 (function () {
   'use strict';
-  const colors = ['#16a34a', '#2563eb', '#ea580c', '#9333ea', '#0f766e', '#64748b'];
-  const typeColors = { hiking: colors[0], running: colors[1], climbing: colors[2], riding: colors[3], driving: colors[4] };
   const periodNames = { day: '今天', week: '本周', month: '本月' };
   const pending = new Map(), cards = [];
   function number(value) { return Number(value || 0).toLocaleString('zh-CN'); }
@@ -23,37 +21,17 @@
     return pending.get(period).promise;
   }
   function option(kind, items) {
-    const base = {
-      color: colors, aria: { enabled: true },
-      tooltip: { trigger: 'item', confine: true, renderMode: 'richText' },
-      graphic: items.length ? [] : [{ type: 'text', left: 'center', top: 'middle', style: { text: '当前周期暂无数据', fill: '#667085', fontSize: 14 } }]
-    };
     if (kind === 'types') {
-      base.tooltip.formatter = item => item.name + '\n' + number(item.value) + ' 条 · ' + item.percent + '%';
-      base.legend = { type: 'scroll', bottom: 4, left: 'center', textStyle: { color: '#667085' } };
-      base.series = [{ type: 'pie', radius: ['0%', '66%'], center: ['50%', '44%'],
-        label: { show: false }, emphasis: { label: { show: true, formatter: '{b}\n{d}%', fontWeight: 600 } },
-        data: items.map(item => ({ name: item.label || item.key || '未知类型', value: item.count, itemStyle: { color: typeColors[item.key] || colors[5] } }))
-      }];
-    } else {
-      base.tooltip.formatter = item => {
-        const user = items[item.dataIndex];
-        return (user.nickname || '未命名用户') + '\n用户 ID：' + user.user_id + '\n贡献轨迹：' + number(user.count) + ' 条';
-      };
-      base.grid = { left: 12, right: 52, top: 12, bottom: 28, containLabel: true };
-      base.xAxis = { type: 'value', min: 0, minInterval: 1, axisLabel: { color: '#667085' }, splitLine: { lineStyle: { color: '#eef1f5' } } };
-      base.yAxis = { type: 'category', inverse: true,
-        data: items.map((item, index) => (index + 1) + '. ' + (item.nickname || '未命名用户')),
-        axisTick: { show: false }, axisLine: { show: false },
-        axisLabel: { color: '#475467', width: 100, overflow: 'truncate' }
-      };
-      base.series = [{ type: 'bar', barMaxWidth: 20,
-        itemStyle: { color: '#2563eb', borderRadius: [0, 4, 4, 0] },
-        label: { show: true, position: 'right', color: '#475467', formatter: item => number(item.value) },
-        data: items.map(item => item.count)
-      }];
+      const rows = items.map(item => ({ name: item.label || item.key || '未知类型', value: Number(item.count || 0) }));
+      const total = rows.reduce((sum, item) => sum + item.value, 0);
+      AdminChartStyle.legend(document.getElementById('trackTypeLegend'), rows, '', total);
+      return AdminChartStyle.ring(rows, total, '轨迹数', '条');
     }
-    return base;
+    const rows = items.map((item, index) => ({ name: (index + 1) + '. ' + (item.nickname || '未命名用户'), value: Number(item.count || 0) }));
+    return AdminChartStyle.bars(rows, 0, { unit: '条', labelWidth: 90, tooltip: item => {
+      const user = items[item.dataIndex];
+      return (user.nickname || '未命名用户') + '\n用户 ID：' + user.user_id + '\n贡献轨迹：' + number(user.count) + ' 条';
+    } });
   }
   document.querySelectorAll('[data-track-stat]').forEach(element => {
     const kind = element.dataset.trackStat, buttons = Array.from(element.querySelectorAll('[data-stat-period]'));
