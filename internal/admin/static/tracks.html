@@ -30,13 +30,33 @@
 
   <main class="container wide">
     <div class="track-stat-grid">
-      <section class="panel">
-        <h2>本月轨迹类型</h2>
-        <div class="table-responsive"><table class="data"><thead><tr><th>类型</th><th>轨迹数</th></tr></thead><tbody id="typeStats"><tr><td colspan="2" class="hint">加载中</td></tr></tbody></table></div>
+      <section class="panel track-stat-card" data-track-stat="types" aria-labelledby="trackTypeStatsTitle">
+        <div class="track-stat-heading">
+          <h2 id="trackTypeStatsTitle">轨迹类型</h2>
+          <div class="period-tabs" role="group" aria-label="轨迹类型统计周期">
+            <button type="button" data-stat-period="day" aria-pressed="false">天</button>
+            <button type="button" data-stat-period="week" aria-pressed="false">周</button>
+            <button type="button" data-stat-period="month" class="active" aria-pressed="true">月</button>
+          </div>
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-stat-refresh>刷新</button>
+        </div>
+        <p class="hint track-stat-status" data-stat-status role="status">加载中…</p>
+        <div class="error" data-stat-error role="alert" hidden></div>
+        <div id="trackTypeChart" class="track-stat-chart" role="img" aria-label="轨迹类型分布饼图"></div>
       </section>
-      <section class="panel">
-        <h2>本月城市分布</h2>
-        <div class="table-responsive"><table class="data"><thead><tr><th>城市</th><th>轨迹数</th></tr></thead><tbody id="cityStats"><tr><td colspan="2" class="hint">加载中</td></tr></tbody></table></div>
+      <section class="panel track-stat-card" data-track-stat="contributors" aria-labelledby="trackContributorStatsTitle">
+        <div class="track-stat-heading">
+          <h2 id="trackContributorStatsTitle">用户贡献轨迹量 Top 10</h2>
+          <div class="period-tabs" role="group" aria-label="用户贡献轨迹量统计周期">
+            <button type="button" data-stat-period="day" aria-pressed="false">天</button>
+            <button type="button" data-stat-period="week" aria-pressed="false">周</button>
+            <button type="button" data-stat-period="month" class="active" aria-pressed="true">月</button>
+          </div>
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-stat-refresh>刷新</button>
+        </div>
+        <p class="hint track-stat-status" data-stat-status role="status">加载中…</p>
+        <div class="error" data-stat-error role="alert" hidden></div>
+        <div id="trackContributorChart" class="track-stat-chart" role="img" aria-label="前十用户贡献轨迹量横向柱状图"></div>
       </section>
     </div>
     <section id="trackImportPanel" class="track-import-panel" data-admin-write="tracks" aria-labelledby="trackImportTitle">
@@ -109,5 +129,6 @@
   <script src="/admin/static/track_map_preview.js"></script>
   <script src="/admin/static/track_editor.js"></script>
   <script src="/admin/static/tracks.js"></script>
+  <script src="/admin/static/track_statistics.js"></script>
 </body>
 </html>
