@@ -228,7 +228,7 @@
       const remove = document.createElement('button');
       remove.type = 'button'; remove.className = 'btn btn-sm btn-outline-danger'; remove.textContent = '移除';
       remove.disabled = !editable();
-      remove.addEventListener('click', () => { photos.splice(index, 1); updateCover(node); markDirty(node, '图片已从城市资料移除，请保存当前节点'); renderPhotos(); renderCandidates(); });
+      remove.addEventListener('click', () => { photos.splice(index, 1); updateCover(node); markDirty(node, '图片已从城市资料移除，请保存当前节点'); renderPhotos(); });
       actions.appendChild(remove);
       line.appendChild(actions);
       card.append(image, line);
@@ -255,41 +255,6 @@
     $('regionImageFile').disabled = !editable() || photos.length >= 3;
   }
 
-  function renderCandidates() {
-    const root = $('regionCandidatePhotos');
-    root.replaceChildren();
-    if (!researchDraft || researchNodeId !== selectedId) return;
-    $('regionCandidateCount').textContent = researchDraft.photos.length === 3 ? '已找到 3 张候选；请逐张核对后添加。' : '只找到 ' + researchDraft.photos.length + ' 张符合条件的候选，请按需手动补图。';
-    researchDraft.photos.forEach(candidate => {
-      const card = document.createElement('div');
-      card.className = 'region-photo-card';
-      const image = document.createElement('img');
-      image.src = candidate.preview_url; image.alt = candidate.file_title;
-      const caption = document.createElement('p'); caption.textContent = candidate.file_title;
-      const credit = document.createElement('a');
-      credit.href = candidate.source_url; credit.target = '_blank'; credit.rel = 'noopener noreferrer';
-      credit.textContent = [candidate.attribution, candidate.license].filter(Boolean).join(' · ') || '查看来源与许可';
-      const button = document.createElement('button');
-      button.type = 'button'; button.className = 'btn btn-sm btn-outline-primary'; button.textContent = '添加这张';
-      button.disabled = !editable() || photosOf(current()).length >= 3 || photosOf(current()).some(photo => photo.provider === 'wikimedia_commons' && photo.title === candidate.file_title);
-      button.addEventListener('click', async () => {
-        const target = current(); const targetCatalog = catalog;
-        if (!target || photosOf(target).length >= 3 || photosOf(target).some(photo => photo.provider === 'wikimedia_commons' && photo.title === candidate.file_title)) return;
-        button.disabled = true; uploadsInFlight++; updateSaveState(); status('正在下载并压缩图片…');
-        try {
-          const result = await api('images/import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ file_title: candidate.file_title }) });
-          if (catalog !== targetCatalog) { status('目录已重新加载，请重新核对图片'); return; }
-          if (photosOf(target).length >= 3 || photosOf(target).some(photo => photo.provider === 'wikimedia_commons' && photo.title === candidate.file_title)) { status('图片已满或已添加，请先核对现有图片', true); return; }
-          photosOf(target).push(result.photo); updateCover(target); markDirty(target, '图片已添加，请保存当前节点');
-          if (current() === target) { renderPhotos(); renderCandidates(); }
-        } catch (error) { button.disabled = false; status(error.message, true); }
-        finally { uploadsInFlight--; updateSaveState(); }
-      });
-      card.append(image, caption, credit, button);
-      root.appendChild(card);
-    });
-  }
-
   function renderResearch() {
     const available = researchDraft && researchNodeId === selectedId;
     $('regionResearchPanel').hidden = !available;
@@ -314,7 +279,6 @@
       const link = document.createElement('a'); link.href = source.url; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.textContent = source.title;
       sources.appendChild(link);
     });
-    renderCandidates();
   }
 
   function select(id) {
@@ -348,7 +312,7 @@
     $('regionSelectable').checked = !!node.selectable;
     $('regionDeleteDraft').hidden = persistedIds.has(node.id);
     $('regionResearch').disabled = !editable() || !persistedIds.has(node.id) || !!researchingNodeId;
-    if (researchingNodeId === node.id) researchStatus('正在联网查询城市资料和图片', true);
+    if (researchingNodeId === node.id) researchStatus('正在联网查询城市资料', true);
     else if (researchDraft && researchNodeId === node.id) researchStatus('联网草稿已就绪，请核对后代入');
     else researchStatus('');
     updateSaveState();
@@ -445,7 +409,7 @@
     const nodeId = node.id, targetCatalog = catalog;
     researchingNodeId = nodeId;
     $('regionResearch').disabled = true;
-    researchStatus('正在联网查询城市资料和图片', true);
+    researchStatus('正在联网查询城市资料', true);
     try {
       const draft = await api('research', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: nodeId }) });
       if (catalog !== targetCatalog || selectedId !== nodeId) return;
@@ -509,7 +473,7 @@
       if (photosOf(node).length >= 3) { status('图片已满，请先移除一张', true); return; }
       photosOf(node).push(result.photo);
       updateCover(node);
-      if (current() === node) { renderPhotos(); renderCandidates(); }
+      if (current() === node) { renderPhotos(); }
       markDirty(node, '图片已上传，请保存当前节点');
     } catch (error) { status(error.message, true); }
     finally { uploadsInFlight--; updateSaveState(); }

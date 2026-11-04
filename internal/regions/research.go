@@ -14,7 +14,6 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 	"unicode/utf8"
 )
@@ -47,12 +46,10 @@ type ResearchDraft struct {
 }
 
 type Researcher struct {
-	key                     string
-	model                   string
-	client                  *http.Client
-	moonshotGate            chan struct{}
-	commonsMu               sync.Mutex
-	commonsUnavailableUntil time.Time
+	key          string
+	model        string
+	client       *http.Client
+	moonshotGate chan struct{}
 }
 
 type researchSearchResult struct {
@@ -79,14 +76,14 @@ func (r *Researcher) Ready() bool { return r != nil && r.key != "" }
 
 func (r *Researcher) Research(ctx context.Context, node Node, hierarchy []string) (draft *ResearchDraft, researchErr error) {
 	started := time.Now()
-	var generalTime, sloganTime, completionTime, photoTime time.Duration
+	var generalTime, sloganTime, completionTime time.Duration
 	stage := "configuration"
 	defer func() {
 		status := "ok"
 		if researchErr != nil {
 			status = "error"
 		}
-		log.Printf("[RegionResearch] region_id=%s status=%s stage=%s total_ms=%d general_ms=%d slogan_ms=%d completion_ms=%d photos_ms=%d", node.RegionID, status, stage, time.Since(started).Milliseconds(), generalTime.Milliseconds(), sloganTime.Milliseconds(), completionTime.Milliseconds(), photoTime.Milliseconds())
+		log.Printf("[RegionResearch] region_id=%s status=%s stage=%s total_ms=%d general_ms=%d slogan_ms=%d completion_ms=%d", node.RegionID, status, stage, time.Since(started).Milliseconds(), generalTime.Milliseconds(), sloganTime.Milliseconds(), completionTime.Milliseconds())
 	}()
 	if !r.Ready() {
 		return nil, errors.New("城市 AI 联网查询未配置")
@@ -211,84 +208,8 @@ func (r *Researcher) Research(ctx context.Context, node Node, hierarchy []string
 	if utf8.RuneCountInString(draft.NameEN) > 200 || utf8.RuneCountInString(draft.Slogan) > 500 || utf8.RuneCountInString(draft.Description) > 8000 {
 		return nil, errors.New("城市 AI 返回的资料过长")
 	}
-	photoQueries := []string{}
-	if draft.NameEN != "" {
-		photoQueries = append(photoQueries, draft.NameEN+" skyline", draft.NameEN+" landscape", draft.NameEN+" landmark")
-	}
-	photoQueries = append(photoQueries, node.Name+" 风景", node.Name+" 地标", node.Name+" 城市")
-	stage = "photos"
-	step = time.Now()
-	draft.Photos = r.findResearchPhotos(ctx, node.RegionID, photoQueries)
-	photoTime = time.Since(step)
 	stage = "done"
 	return draft, nil
-}
-
-func (r *Researcher) findResearchPhotos(ctx context.Context, regionID string, queries []string) []PhotoCandidate {
-	photos := make([]PhotoCandidate, 0, 3)
-	r.commonsMu.Lock()
-	unavailableUntil := r.commonsUnavailableUntil
-	r.commonsMu.Unlock()
-	if time.Now().Before(unavailableUntil) {
-		log.Printf("[RegionResearch] region_id=%s photos_skipped=commons_cooldown", regionID)
-		return photos
-	}
-	seen := make(map[string]bool)
-	for start := 0; start < len(queries) && len(photos) < 3; start += 3 {
-		end := start + 3
-		if end > len(queries) {
-			end = len(queries)
-		}
-		results := make([][]PhotoCandidate, end-start)
-		queryErrors := make([]error, end-start)
-		var wg sync.WaitGroup
-		for index := start; index < end; index++ {
-			wg.Add(1)
-			go func(index int) {
-				defer wg.Done()
-				step := time.Now()
-				searchCtx, cancel := context.WithTimeout(ctx, 6*time.Second)
-				defer cancel()
-				candidates, err := r.searchCommons(searchCtx, queries[index])
-				results[index-start] = candidates
-				queryErrors[index-start] = err
-				status := "ok"
-				if err != nil {
-					status = "error"
-				}
-				log.Printf("[RegionResearch] region_id=%s photo_query=%d status=%s duration_ms=%d candidates=%d", regionID, index+1, status, time.Since(step).Milliseconds(), len(candidates))
-			}(index)
-		}
-		wg.Wait()
-		allFailed := true
-		for _, err := range queryErrors {
-			if err == nil {
-				allFailed = false
-				break
-			}
-		}
-		if allFailed && ctx.Err() == nil {
-			r.commonsMu.Lock()
-			r.commonsUnavailableUntil = time.Now().Add(5 * time.Minute)
-			r.commonsMu.Unlock()
-			log.Printf("[RegionResearch] region_id=%s photos_skipped=commons_unavailable", regionID)
-			return photos
-		}
-		for _, candidates := range results {
-			for _, candidate := range candidates {
-				if seen[candidate.FileTitle] {
-					continue
-				}
-				seen[candidate.FileTitle] = true
-				photos = append(photos, candidate)
-				break
-			}
-			if len(photos) == 3 {
-				return photos
-			}
-		}
-	}
-	return photos
 }
 
 func (r *Researcher) moonshotJSON(ctx context.Context, endpoint string, input, output any) error {
@@ -411,15 +332,6 @@ func (r *Researcher) commonsQuery(ctx context.Context, params url.Values) ([]com
 	}
 	sort.Slice(pages, func(i, j int) bool { return pages[i].Index < pages[j].Index })
 	return pages, nil
-}
-
-func (r *Researcher) searchCommons(ctx context.Context, term string) ([]PhotoCandidate, error) {
-	params := url.Values{"generator": {"search"}, "gsrnamespace": {"6"}, "gsrlimit": {"25"}, "gsrsearch": {term}}
-	pages, err := r.commonsQuery(ctx, params)
-	if err != nil {
-		return nil, err
-	}
-	return commonsCandidates(pages), nil
 }
 
 func (r *Researcher) CommonsPhoto(ctx context.Context, title string) (PhotoCandidate, error) {
