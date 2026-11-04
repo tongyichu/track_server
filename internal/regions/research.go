@@ -47,9 +47,12 @@ type ResearchDraft struct {
 }
 
 type Researcher struct {
-	key    string
-	model  string
-	client *http.Client
+	key                     string
+	model                   string
+	client                  *http.Client
+	moonshotGate            chan struct{}
+	commonsMu               sync.Mutex
+	commonsUnavailableUntil time.Time
 }
 
 type researchSearchResult struct {
@@ -69,7 +72,7 @@ func NewResearcher(key, model string) *Researcher {
 	if model == "" {
 		model = "kimi-k2.6"
 	}
-	return &Researcher{key: strings.TrimSpace(key), model: strings.TrimSpace(model), client: &http.Client{Timeout: 90 * time.Second}}
+	return &Researcher{key: strings.TrimSpace(key), model: strings.TrimSpace(model), client: &http.Client{Timeout: 90 * time.Second}, moonshotGate: make(chan struct{}, 1)}
 }
 
 func (r *Researcher) Ready() bool { return r != nil && r.key != "" }
@@ -92,26 +95,11 @@ func (r *Researcher) Research(ctx context.Context, node Node, hierarchy []string
 	query := path + " 地区 地标 旅游 官方 简介 英文名称"
 	var search researchSearchResponse
 	var sloganSearch researchSearchResponse
-	var searchErr, sloganErr error
-	var wg sync.WaitGroup
-	wg.Add(2)
-	stage = "search"
-	go func() {
-		defer wg.Done()
-		step := time.Now()
-		searchErr = r.moonshotJSON(ctx, "/tools/search_pro", map[string]any{"text_query": query, "limit": 6, "timeout_seconds": 30}, &search)
-		generalTime = time.Since(step)
-	}()
-	go func() {
-		defer wg.Done()
-		step := time.Now()
-		sloganQuery := path + " 文旅 旅游 宣传口号 旅游形象口号 旅游宣传语"
-		sloganErr = r.moonshotJSON(ctx, "/tools/search_pro", map[string]any{"text_query": sloganQuery, "limit": 8, "timeout_seconds": 30}, &sloganSearch)
-		sloganTime = time.Since(step)
-	}()
-	wg.Wait()
+	stage = "general_search"
+	step := time.Now()
+	searchErr := r.moonshotJSON(ctx, "/tools/search_pro", map[string]any{"text_query": query, "limit": 6, "timeout_seconds": 30}, &search)
+	generalTime = time.Since(step)
 	if searchErr != nil {
-		stage = "general_search"
 		return nil, fmt.Errorf("城市资料检索失败: %w", searchErr)
 	}
 	draft = &ResearchDraft{RegionID: node.RegionID, Sources: []ResearchSource{}, Photos: []PhotoCandidate{}}
@@ -139,6 +127,11 @@ func (r *Researcher) Research(ctx context.Context, node Node, hierarchy []string
 	}
 	sloganSources := make(map[string]string)
 	var sloganEvidence strings.Builder
+	stage = "slogan_search"
+	step = time.Now()
+	sloganQuery := path + " 文旅 旅游 宣传口号 旅游形象口号 旅游宣传语"
+	sloganErr := r.moonshotJSON(ctx, "/tools/search_pro", map[string]any{"text_query": sloganQuery, "limit": 8, "timeout_seconds": 30}, &sloganSearch)
+	sloganTime = time.Since(step)
 	if sloganErr == nil {
 		for _, result := range sloganSearch.SearchResults {
 			link := strings.TrimSpace(result.URL)
@@ -182,7 +175,7 @@ func (r *Researcher) Research(ctx context.Context, node Node, hierarchy []string
 		completionInput["top_p"] = 0.95
 	}
 	stage = "completion"
-	step := time.Now()
+	step = time.Now()
 	if err := r.moonshotJSON(ctx, "/chat/completions", completionInput, &completion); err != nil {
 		completionTime = time.Since(step)
 		return nil, fmt.Errorf("城市资料整理失败: %w", err)
@@ -233,6 +226,13 @@ func (r *Researcher) Research(ctx context.Context, node Node, hierarchy []string
 
 func (r *Researcher) findResearchPhotos(ctx context.Context, regionID string, queries []string) []PhotoCandidate {
 	photos := make([]PhotoCandidate, 0, 3)
+	r.commonsMu.Lock()
+	unavailableUntil := r.commonsUnavailableUntil
+	r.commonsMu.Unlock()
+	if time.Now().Before(unavailableUntil) {
+		log.Printf("[RegionResearch] region_id=%s photos_skipped=commons_cooldown", regionID)
+		return photos
+	}
 	seen := make(map[string]bool)
 	for start := 0; start < len(queries) && len(photos) < 3; start += 3 {
 		end := start + 3
@@ -240,16 +240,18 @@ func (r *Researcher) findResearchPhotos(ctx context.Context, regionID string, qu
 			end = len(queries)
 		}
 		results := make([][]PhotoCandidate, end-start)
+		queryErrors := make([]error, end-start)
 		var wg sync.WaitGroup
 		for index := start; index < end; index++ {
 			wg.Add(1)
 			go func(index int) {
 				defer wg.Done()
 				step := time.Now()
-				searchCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+				searchCtx, cancel := context.WithTimeout(ctx, 6*time.Second)
 				defer cancel()
 				candidates, err := r.searchCommons(searchCtx, queries[index])
 				results[index-start] = candidates
+				queryErrors[index-start] = err
 				status := "ok"
 				if err != nil {
 					status = "error"
@@ -258,6 +260,20 @@ func (r *Researcher) findResearchPhotos(ctx context.Context, regionID string, qu
 			}(index)
 		}
 		wg.Wait()
+		allFailed := true
+		for _, err := range queryErrors {
+			if err == nil {
+				allFailed = false
+				break
+			}
+		}
+		if allFailed && ctx.Err() == nil {
+			r.commonsMu.Lock()
+			r.commonsUnavailableUntil = time.Now().Add(5 * time.Minute)
+			r.commonsMu.Unlock()
+			log.Printf("[RegionResearch] region_id=%s photos_skipped=commons_unavailable", regionID)
+			return photos
+		}
 		for _, candidates := range results {
 			for _, candidate := range candidates {
 				if seen[candidate.FileTitle] {
@@ -280,13 +296,51 @@ func (r *Researcher) moonshotJSON(ctx context.Context, endpoint string, input, o
 	if err != nil {
 		return err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, moonshotAPI+endpoint, bytes.NewReader(body))
-	if err != nil {
-		return err
+	if r.moonshotGate != nil {
+		select {
+		case r.moonshotGate <- struct{}{}:
+			defer func() { <-r.moonshotGate }()
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
-	req.Header.Set("Authorization", "Bearer "+r.key)
-	req.Header.Set("Content-Type", "application/json")
-	return r.doJSON(req, output)
+	for attempt := 0; ; attempt++ {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, moonshotAPI+endpoint, bytes.NewReader(body))
+		if err != nil {
+			return err
+		}
+		req.Header.Set("Authorization", "Bearer "+r.key)
+		req.Header.Set("Content-Type", "application/json")
+		err = r.doJSON(req, output)
+		if err == nil {
+			return nil
+		}
+		var statusErr *researchHTTPError
+		if !errors.As(err, &statusErr) || statusErr.code != http.StatusTooManyRequests || !strings.Contains(strings.ToLower(statusErr.message), "concurrency") || attempt == 3 {
+			return err
+		}
+		wait := time.Duration(1<<attempt) * time.Second
+		log.Printf("[RegionResearch] moonshot_concurrency_retry endpoint=%s attempt=%d wait_ms=%d", endpoint, attempt+1, wait.Milliseconds())
+		timer := time.NewTimer(wait)
+		select {
+		case <-timer.C:
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		}
+	}
+}
+
+type researchHTTPError struct {
+	code    int
+	message string
+}
+
+func (e *researchHTTPError) Error() string {
+	if e.message == "" {
+		return fmt.Sprintf("HTTP %d", e.code)
+	}
+	return fmt.Sprintf("HTTP %d: %s", e.code, e.message)
 }
 
 func (r *Researcher) doJSON(req *http.Request, output any) error {
@@ -308,11 +362,9 @@ func (r *Researcher) doJSON(req *http.Request, output any) error {
 				message = providerError.Message
 			}
 			message = strings.Join(strings.Fields(message), " ")
-			if message != "" {
-				return fmt.Errorf("HTTP %d: %s", resp.StatusCode, clampRunes(message, 240))
-			}
+			return &researchHTTPError{code: resp.StatusCode, message: clampRunes(message, 240)}
 		}
-		return fmt.Errorf("HTTP %d", resp.StatusCode)
+		return &researchHTTPError{code: resp.StatusCode}
 	}
 	return json.NewDecoder(io.LimitReader(resp.Body, 2<<20)).Decode(output)
 }
