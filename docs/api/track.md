@@ -1143,12 +1143,14 @@ Authorization: Bearer <token>
 
 ## 个人纪录
 
+客户端纪录数字按各获纪录轨迹的运动类型日夜色展示，全部运动下逐项取色，单位保留次要文字色；复用已有类型元数据，无接口变化。
+
 GET /track/activity/records?track_type=hiking，业务JWT、仅本人、响应no-store；省略track_type表示全部类型，不允许指定其他用户。统计全部历史正常/私密、非进行中且有原始文件的已上传轨迹，归一旧别名后按稳定类型code分别比较。
 
-响应结构：data.groups=[{track_type,records:[{metric,value,track}]}]。metric为distance（米）、elevation（累计爬升米）、duration（秒）、steps（实际步数），每类型最多四项，按distance/elevation/duration/steps顺序。track复用现有TrackSummary字段，包含id/user_id/title/start_time/track_type/distance/duration/elevation_gain/preview_images，预览为现有鉴权路由，例如/api/v1/track/NO.00000001/previews/landscape_day?v=...，不返回GPS。
+响应结构：data.groups=[{track_type,records:[{metric,value,track}]}]。metric为distance（米）、elevation（累计爬升米）、duration（秒）、steps（实际步数），每类型最多四项，按distance/elevation/duration/steps顺序。track复用现有TrackSummary字段，包含id/user_id/title/start_time/track_type/distance/duration/elevation_gain/city_code/city_name/locate_addr/preview_images，预览为现有鉴权路由，例如/api/v1/track/NO.00000001/previews/landscape_day?v=...，不返回GPS。
 
 只选有限正数，缺失/0/非法值不生成纪录。自驾仅距离/时长，骑行不生成步数纪录；步数只读取已保存真实值。并列取开始时间较新、再按轨迹ID较大的一条。同一轨迹可创造多个纪录，groups按code升序，无纪录返回[]。
 
 MySQL/Mongo/memory同步实现PersonalRecordsRepository，每指标在存储侧选各原始类型最大值及最新并列项，再一次FindByIDs批量取少量获纪录轨迹，service归一类型后比较。复用toSummaries和trackPreviewURLs构造鉴权预览路由，不调用BuildTrackSummaries中的旧资源缓存下载，不拉取GPS、不生成地图、不逐项补详情，无新表字段。
 
-Android将云端纪录与当前账号已完成且未上传本机轨迹按同一类型/指标/并列规则比较，已上传本地副本不重复参与。页面类型筛选统一作用于纪录卡；全部类型只展开一类，其余通过紧凑菜单查看，最多两行两列。首次失败或旧服务端404明确仅有本机未上传纪录，已有成功结果时保留并提示刷新失败，不使用示例数据伪装完整历史。
+Android将云端纪录与当前账号已完成且未上传本机轨迹按同一类型/指标/并列规则比较，已上传本地副本不重复参与。客户端仅展示distance/elevation/duration，忽略steps纪录；格子图同样移除运动步数，采集、存储、详情及接口兼容字段保持不变。页面类型筛选统一作用于纪录卡，全部类型跨组取各指标最高纪录，不另加筛选。纪录纵向每行一项，左侧指标和大数值/小单位，中间轨迹title（最多两行）及日期，右侧4:3静态轨迹预览；不展示城市或运动类型，不设单项背景框，行间细分隔线、末项无分隔线。空title回退未命名路线，不新增地区目录读取或定位请求。复用日夜预览和本机截图，不读取GPS或生成地图，缺图用占位图。时长按小时/分钟（不足一分钟按秒）显示。适用但缺失指标显示“—”且不可点击，不适用指标隐藏，整张无纪录时显示空态；真实纪录整行进入详情。接口和其余指标统计规则不变。首次失败或旧服务端404明确仅有本机未上传纪录，已有成功结果时保留并提示刷新失败，不使用示例数据伪装完整历史。
