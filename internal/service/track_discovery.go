@@ -115,6 +115,17 @@ func (s *TrackService) DiscoverSpotTracks(ctx context.Context, userID int64, spo
 		return nil, err
 	}
 	page := &models.TrackSummaryPage{Items: summaries, HasMore: hasMore}
+	if strings.TrimSpace(rawCursor) == "" {
+		counts, err := repository.CountPublicScenicSpotTracks(ctx, s.scenicCatalog.spots, s.tracks, []string{spot.ID})
+		if err != nil {
+			return nil, err
+		}
+		var total int64
+		if stats := counts[spot.ID]; stats != nil {
+			total = stats.TrackCount
+		}
+		page.TotalCount = &total
+	}
 	if hasMore {
 		if len(anchors) >= limit {
 			page.NextCursor = anchors[limit-1]
