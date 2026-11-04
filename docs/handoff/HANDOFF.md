@@ -51,4 +51,13 @@
 - PersonalRecordsRepository在MySQL/Mongo/memory三实现分别选各原始类型/指标候选ID，再一次FindByIDs取少量获纪录轨迹，service归一类型后比较。SQL使用分组MAX与日期+ID并列选择，兼容没有窗口函数的MySQL；Mongo排序分组，memory同规则。无新表/字段，不取GPS、不逐项详情、不拉取资源；toSummaries直接投影现有静态预览路由，避开BuildTrackSummaries的旧资源缓存下载。
 - Android会将云端纪录与当前账号已完成且未上传本机轨迹合并比较；全局类型筛选生效，最多四格、带56×42dp预览，缺图占位，点item进入详情。未部署新接口时明确只有本机未上传纪录，不用假数据。
 - gofmt、go build ./...、git diff --check通过，Android最终assembleDebug通过（8s）；未新增或运行单元/UI/接口自动化。API分册、路由索引和AGENTS入口已同步，规则仅剩既有10处超长源码，报告/private/tmp/track-personal-records-server-agents-20261104.json。
-- 本轮未提交推送或部署生产；先前已部署的统计接口不因本轮本地改动而自动上线个人纪录。用户后续明确部署时按server-only流程同步远端、提交推送、构建镜像并健康复核。
+- 开发阶段尚未提交推送或部署；随后用户明确要求同步并部署Server，最终状态见以下部署回执。
+
+
+## 2026-11-04：同步最新Server并部署个人纪录
+
+- 用户明确要求“同步server代码，部署server”。提交个人纪录接口9e4da89，普通merge合入origin/main至5abfe3e的后台图表、轨迹城市与城市AI检索修复，发布源码main/289dfb369f0f170513410f20663a0f28195b36a2已成功推送，从干净工作树构建linux/amd64镜像。
+- 合并后go build ./...通过；后台admin_chart_style.js、track_statistics.js、tracks.js、users.js的node --check及git diff --check通过。按仓库约定未运行业务自动化测试，个人纪录展示及交互待用户手动验收。
+- 镜像manifest sha256:5d7c6a9fab9b7dd19e62629b84b779eb7441e438dcfbb0ece4df930ea1d6aa76，配置ID sha256:2d4fdf4f203a11ebf89c8aa713ac90df9208b45679225847cc4c681597a202fe，revision核对为上述源码。生产既有update_track_server.sh更新容器a97c3959a9dce9a290d1162780928af36c7e4b71383f48e42f0ade9d86e176f5，running、重启0。
+- 2026-11-04 15:40:52+08:00生产内网ping及随后公网ping均200/hello track app。MySQL仓储正常、无内存降级，3个后台账号正常加载，个人纪录/日历/运动类型接口未登录401，后台API401/页面302/登录200，资源版本d215cb9a84c6b6804a0f。环境、持久化挂载保留，旧aa813b6e镜像保留。
+- 完整回执/private/tmp/track-personal-records-deploy-20261104.json；对应镜像元数据track-personal-records-deploy-image-20261104.json和部署日志track-personal-records-deploy-20261104.log。此文档收尾不改变生产源码289dfb3。本轮仅部署Server，未改动、构建或发布客户端。
