@@ -36,9 +36,9 @@ func (s *TrackService) SearchOptions() models.TrackSearchOptions {
 		return out
 	}
 	out := models.TrackSearchOptions{DistanceFilterVersion: 1, DefaultRanges: ranges(presets[""]), RangesByType: map[string][]models.TrackDistanceRange{}}
-	for _, code := range s.ListTrackTypes() {
-		if edges, ok := presets[code]; ok {
-			out.RangesByType[code] = ranges(edges)
+	for _, option := range s.ListTrackTypeOptions() {
+		if edges, ok := presets[option.Type]; ok {
+			out.RangesByType[option.Type] = ranges(edges)
 		}
 	}
 	return out
