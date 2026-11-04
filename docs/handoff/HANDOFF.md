@@ -61,3 +61,11 @@
 - 镜像manifest sha256:5d7c6a9fab9b7dd19e62629b84b779eb7441e438dcfbb0ece4df930ea1d6aa76，配置ID sha256:2d4fdf4f203a11ebf89c8aa713ac90df9208b45679225847cc4c681597a202fe，revision核对为上述源码。生产既有update_track_server.sh更新容器a97c3959a9dce9a290d1162780928af36c7e4b71383f48e42f0ade9d86e176f5，running、重启0。
 - 2026-11-04 15:40:52+08:00生产内网ping及随后公网ping均200/hello track app。MySQL仓储正常、无内存降级，3个后台账号正常加载，个人纪录/日历/运动类型接口未登录401，后台API401/页面302/登录200，资源版本d215cb9a84c6b6804a0f。环境、持久化挂载保留，旧aa813b6e镜像保留。
 - 完整回执/private/tmp/track-personal-records-deploy-20261104.json；对应镜像元数据track-personal-records-deploy-image-20261104.json和部署日志track-personal-records-deploy-20261104.log。此文档收尾不改变生产源码289dfb3。本轮仅部署Server，未改动、构建或发布客户端。
+
+
+## 最终增量同步与部署（2026-11-04 15:44+08:00）
+
+- 首次部署期间origin/main新增ac157bf“城市AI填写只检索文字资料”；回执推送拒绝后fetch并普通merge，发布源码461efef36cb76ffb74a0f3bf356a1815c10d9bf3已推送。合并后go build ./...及regions.js的node --check通过，再次构建并部署，最终生产含个人纪录与这项最新优化。
+- 第二次预检发现旧更新脚本按docker images首项选镜像，会选到旧版本，在停止服务前安全中止。后续备份生产/root/update_track_server.sh（before-exact-image时间戳.bak，0600），仅将IMAGE_ID选择改为docker image inspect "$IMAGE"的精确ID；其余停止/删除确切容器、拉取和启动逻辑不变。镜像revision、manifest及config ID重新核对后部署成功。
+- 最终manifest sha256:362a9fd464825d94e2ddd06888ad2ab257fc2f89b59241c909341d3365ac3aa0，配置ID sha256:2e567cb79b01f062f28df0921aae1f3914f365ddf5b40566a76213330da37271，容器90f5e6409d6e2a8616b0558ceeb005aa0858676aaf6c1386c2301c76322419cd，running/重启0。内外ping200；MySQL、3个后台账号、鉴权守卫及登录检查正常；资源版本75f2c587ceee30c15378，环境/挂载及前版镜像保留。
+- 最终回执/private/tmp/track-personal-records-final-deploy-20261104.json，元数据track-personal-records-final-image-20261104.json，日志track-personal-records-final-deploy-fixed-20261104.log，runner为track-personal-records-final-deploy-20261104.py。最终运行源码461efef，后续纯回执提交不改生产快照。
