@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 
+	"github.com/tongyichu/track_server/internal/config"
 	"github.com/tongyichu/track_server/internal/models"
 )
 
@@ -50,9 +51,9 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
  background_url VARCHAR(2048) NULL,
  gender VARCHAR(16) NOT NULL DEFAULT '',
  birthday VARCHAR(10) NOT NULL DEFAULT '',
- province_code VARCHAR(6) NOT NULL DEFAULT '',
+ province_code VARCHAR(16) NOT NULL DEFAULT '',
  province_name VARCHAR(64) NOT NULL DEFAULT '',
- city_code VARCHAR(6) NOT NULL DEFAULT '',
+ city_code VARCHAR(16) NOT NULL DEFAULT '',
  city_name VARCHAR(64) NOT NULL DEFAULT '',
  is_internal TINYINT(1) NOT NULL DEFAULT 0,
 			phone VARCHAR(32) NOT NULL DEFAULT '',
@@ -96,6 +97,7 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 			duration INT UNSIGNED DEFAULT 0,
 			calories_burned DECIMAL(10,2) DEFAULT 0.00 COMMENT '热量消耗(千卡)',
 			elevation_gain INT DEFAULT 0,
+			step_count BIGINT NULL DEFAULT NULL,
 			raw_track_url VARCHAR(255),
 			track_screenshot_url VARCHAR(255),
 			track_no_map_bg_screenshot_url VARCHAR(255) COMMENT '没有地图背景的轨迹路线截图URI',
@@ -547,6 +549,9 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 	if err := ensureMySQLTrackCaloriesBurnedColumn(ctx, db); err != nil {
+		return err
+	}
+	if err := ensureMySQLTrackStepCountColumn(ctx, db); err != nil {
 		return err
 	}
 	if err := ensureMySQLTrackCityCodeColumn(ctx, db); err != nil {
@@ -1475,11 +1480,11 @@ func (r *MySQLTrackRepository) Create(ctx context.Context, t *models.Track) erro
 	_, err := r.db.ExecContext(ctx,
 		`INSERT INTO track_records (
 			id, user_id, session_id, city_code, locate_addr, track_type, source_tag, coordinate_system, title, route_description, description_source, description_rule_version, shape_label, start_time, end_time,
-			distance, duration, calories_burned, elevation_gain, raw_track_url, track_screenshot_url, track_no_map_bg_screenshot_url, preview_images, is_running, status, avg_speed_kmh,
+			distance, duration, calories_burned, elevation_gain, step_count, raw_track_url, track_screenshot_url, track_no_map_bg_screenshot_url, preview_images, is_running, status, avg_speed_kmh,
 			created_at, updated_at, deleted_at
-		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		t.ID, t.UserID, t.SessionID, t.CityCode, t.LocateAddr, t.TrackType, t.SourceTag, t.CoordinateSystem, t.Title, nullableStringValue(t.Description), descriptionSourceValue(t.DescriptionSource), t.DescriptionRuleVersion, t.ShapeLabel, t.StartTime, nullableTimeValue(t.EndTime),
-		t.Distance, t.Duration, t.CaloriesBurned, t.ElevationGain, nullableStringValue(t.RawTrackURL), nullableStringValue(t.TrackScreenshotURL), nullableStringValue(t.TrackNoMapBgScreenshotURL), encodeTrackPreviewImages(t.PreviewImages), t.IsRunning, t.Status, t.AvgSpeedKmh,
+		t.Distance, t.Duration, t.CaloriesBurned, t.ElevationGain, t.StepCount, nullableStringValue(t.RawTrackURL), nullableStringValue(t.TrackScreenshotURL), nullableStringValue(t.TrackNoMapBgScreenshotURL), encodeTrackPreviewImages(t.PreviewImages), t.IsRunning, t.Status, t.AvgSpeedKmh,
 		t.CreatedAt, t.UpdatedAt, nullableTimeValue(t.DeletedAt),
 	)
 	if err != nil {
@@ -1498,10 +1503,10 @@ func (r *MySQLTrackRepository) Update(ctx context.Context, t *models.Track) erro
 	res, err := r.db.ExecContext(ctx,
 		`UPDATE track_records SET
 			user_id=?, session_id=?, city_code=?, locate_addr=?, track_type=?, source_tag=?, coordinate_system=?, title=?, route_description=?, description_source=?, description_rule_version=?, shape_label=?, start_time=?, end_time=?,
-			distance=?, duration=?, calories_burned=?, elevation_gain=?, raw_track_url=?, track_screenshot_url=?, track_no_map_bg_screenshot_url=?, preview_images=?, is_running=?, status=?, avg_speed_kmh=?, updated_at=?, deleted_at=?
+			distance=?, duration=?, calories_burned=?, elevation_gain=?, step_count=?, raw_track_url=?, track_screenshot_url=?, track_no_map_bg_screenshot_url=?, preview_images=?, is_running=?, status=?, avg_speed_kmh=?, updated_at=?, deleted_at=?
 		WHERE id=?`,
 		t.UserID, t.SessionID, t.CityCode, t.LocateAddr, t.TrackType, t.SourceTag, t.CoordinateSystem, t.Title, nullableStringValue(t.Description), descriptionSourceValue(t.DescriptionSource), t.DescriptionRuleVersion, t.ShapeLabel, t.StartTime, nullableTimeValue(t.EndTime),
-		t.Distance, t.Duration, t.CaloriesBurned, t.ElevationGain, nullableStringValue(t.RawTrackURL), nullableStringValue(t.TrackScreenshotURL), nullableStringValue(t.TrackNoMapBgScreenshotURL), encodeTrackPreviewImages(t.PreviewImages), t.IsRunning, t.Status, t.AvgSpeedKmh, t.UpdatedAt,
+		t.Distance, t.Duration, t.CaloriesBurned, t.ElevationGain, t.StepCount, nullableStringValue(t.RawTrackURL), nullableStringValue(t.TrackScreenshotURL), nullableStringValue(t.TrackNoMapBgScreenshotURL), encodeTrackPreviewImages(t.PreviewImages), t.IsRunning, t.Status, t.AvgSpeedKmh, t.UpdatedAt,
 		nullableTimeValue(t.DeletedAt),
 		t.ID,
 	)
@@ -1796,7 +1801,7 @@ func mysqlCleanupRouteGroupsAfterTrackDeleteTx(ctx context.Context, tx *sql.Tx, 
 func (r *MySQLTrackRepository) FindByID(ctx context.Context, id string) (*models.Track, error) {
 	row := r.db.QueryRowContext(ctx,
 		`SELECT id, user_id, session_id, city_code, locate_addr, track_type, source_tag, coordinate_system, title, route_description, description_source, description_rule_version, shape_label, start_time, end_time,
-			distance, duration, calories_burned, elevation_gain, raw_track_url, track_screenshot_url, track_no_map_bg_screenshot_url, preview_images, is_running, status, avg_speed_kmh,
+			distance, duration, calories_burned, elevation_gain, step_count, raw_track_url, track_screenshot_url, track_no_map_bg_screenshot_url, preview_images, is_running, status, avg_speed_kmh,
 			created_at, updated_at, deleted_at
 		FROM track_records WHERE id=?`, id)
 
@@ -1817,7 +1822,7 @@ func (r *MySQLTrackRepository) FindByID(ctx context.Context, id string) (*models
 	)
 	if err := row.Scan(
 		&t.ID, &t.UserID, &t.SessionID, &t.CityCode, &t.LocateAddr, &t.TrackType, &t.SourceTag, &coordinateSys, &t.Title, &routeDescription, &t.DescriptionSource, &t.DescriptionRuleVersion, &t.ShapeLabel, &t.StartTime, &endTime,
-		&distance, &duration, &caloriesBurned, &elevationGain, &rawTrackURL, &trackScreenshot, &noMapBgShot, &previewJSON, &t.IsRunning, &t.Status, &t.AvgSpeedKmh,
+		&distance, &duration, &caloriesBurned, &elevationGain, &t.StepCount, &rawTrackURL, &trackScreenshot, &noMapBgShot, &previewJSON, &t.IsRunning, &t.Status, &t.AvgSpeedKmh,
 		&t.CreatedAt, &t.UpdatedAt, &deletedAt,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -1887,7 +1892,7 @@ func (r *MySQLTrackRepository) FindByIDs(ctx context.Context, ids []string) (map
 	}
 	placeholders := strings.TrimRight(strings.Repeat("?,", len(ids)), ",")
 	query := fmt.Sprintf(`SELECT id, user_id, session_id, city_code, locate_addr, track_type, source_tag, coordinate_system, title, route_description, description_source, description_rule_version, shape_label, start_time, end_time,
-		distance, duration, calories_burned, elevation_gain, raw_track_url, track_screenshot_url, track_no_map_bg_screenshot_url, preview_images, is_running, status, avg_speed_kmh,
+		distance, duration, calories_burned, elevation_gain, step_count, raw_track_url, track_screenshot_url, track_no_map_bg_screenshot_url, preview_images, is_running, status, avg_speed_kmh,
 		created_at, updated_at, deleted_at FROM track_records WHERE id IN (%s)`, placeholders)
 	args := make([]any, 0, len(ids))
 	for _, id := range ids {
@@ -1916,7 +1921,7 @@ func scanMySQLTrack(scanner mysqlRowScanner) (*models.Track, error) {
 	var distance, caloriesBurned sql.NullFloat64
 	var duration, elevationGain sql.NullInt64
 	var rawTrackURL, trackScreenshot, noMapBgShot, coordinateSys, previewJSON, routeDescription sql.NullString
-	if err := scanner.Scan(&t.ID, &t.UserID, &t.SessionID, &t.CityCode, &t.LocateAddr, &t.TrackType, &t.SourceTag, &coordinateSys, &t.Title, &routeDescription, &t.DescriptionSource, &t.DescriptionRuleVersion, &t.ShapeLabel, &t.StartTime, &endTime, &distance, &duration, &caloriesBurned, &elevationGain, &rawTrackURL, &trackScreenshot, &noMapBgShot, &previewJSON, &t.IsRunning, &t.Status, &t.AvgSpeedKmh, &t.CreatedAt, &t.UpdatedAt, &deletedAt); err != nil {
+	if err := scanner.Scan(&t.ID, &t.UserID, &t.SessionID, &t.CityCode, &t.LocateAddr, &t.TrackType, &t.SourceTag, &coordinateSys, &t.Title, &routeDescription, &t.DescriptionSource, &t.DescriptionRuleVersion, &t.ShapeLabel, &t.StartTime, &endTime, &distance, &duration, &caloriesBurned, &elevationGain, &t.StepCount, &rawTrackURL, &trackScreenshot, &noMapBgShot, &previewJSON, &t.IsRunning, &t.Status, &t.AvgSpeedKmh, &t.CreatedAt, &t.UpdatedAt, &deletedAt); err != nil {
 		return nil, err
 	}
 	t.DescriptionSource = descriptionSourceValue(t.DescriptionSource)
@@ -2084,8 +2089,11 @@ func (r *MySQLTrackRepository) ListRecommend(ctx context.Context, _ int64, cityC
 	args := make([]interface{}, 0, 5)
 	args = append(args, models.TrackStatusNormal)
 	if cityCode != "" {
-		query += ` AND city_code=?`
-		args = append(args, cityCode)
+		codes := config.CityCodeCandidates(cityCode)
+		query += ` AND city_code IN (` + strings.TrimRight(strings.Repeat("?,", len(codes)), ",") + `)`
+		for _, code := range codes {
+			args = append(args, code)
+		}
 	}
 	if cursor != nil {
 		query += ` AND (start_time < ? OR (start_time = ? AND id < ?))`
@@ -2133,8 +2141,11 @@ func (r *MySQLTrackRepository) Search(ctx context.Context, keyword, cityCode, tr
 	args := make([]interface{}, 0, 8)
 	args = append(args, models.TrackStatusNormal, keyword, like)
 	if cityCode != "" {
-		query += ` AND city_code=?`
-		args = append(args, cityCode)
+		codes := config.CityCodeCandidates(cityCode)
+		query += ` AND city_code IN (` + strings.TrimRight(strings.Repeat("?,", len(codes)), ",") + `)`
+		for _, code := range codes {
+			args = append(args, code)
+		}
 	}
 	if trackType != "" {
 		query += ` AND track_type=?`
@@ -2182,8 +2193,11 @@ func (r *MySQLTrackRepository) CountSearch(ctx context.Context, keyword, cityCod
 	query := `SELECT COUNT(*) FROM track_records WHERE status=? AND raw_track_url IS NOT NULL AND raw_track_url <> '' AND (? = '' OR title LIKE ?)`
 	args := []interface{}{models.TrackStatusNormal, keyword, "%" + keyword + "%"}
 	if cityCode != "" {
-		query += ` AND city_code=?`
-		args = append(args, cityCode)
+		codes := config.CityCodeCandidates(cityCode)
+		query += ` AND city_code IN (` + strings.TrimRight(strings.Repeat("?,", len(codes)), ",") + `)`
+		for _, code := range codes {
+			args = append(args, code)
+		}
 	}
 	if trackType != "" {
 		query += ` AND track_type=?`
@@ -2319,12 +2333,16 @@ func (r *MySQLTrackRepository) ListAdminTracks(ctx context.Context, filter Admin
 		args = append(args, "%"+escapeAdminLike(filter.Title)+"%")
 	}
 	if filter.CityCode != "" {
-		base += ` AND city_code = ?`
-		args = append(args, filter.CityCode)
+		codes := config.CityCodeCandidates(filter.CityCode)
+		base += ` AND city_code IN (` + strings.TrimRight(strings.Repeat("?,", len(codes)), ",") + `)`
+		for _, code := range codes {
+			args = append(args, code)
+		}
 	} else if len(filter.CityCodes) > 0 {
-		placeholders := strings.TrimRight(strings.Repeat("?,", len(filter.CityCodes)), ",")
+		codes := regionCodeCandidates(filter.CityCodes)
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(codes)), ",")
 		base += ` AND city_code IN (` + placeholders + `)`
-		for _, code := range filter.CityCodes {
+		for _, code := range codes {
 			args = append(args, code)
 		}
 	}
@@ -2778,12 +2796,18 @@ func (r *MySQLUserRepository) ListAdminUsers(ctx context.Context, filter AdminUs
 		args = append(args, *filter.IsInternal)
 	}
 	if filter.CityCode != "" {
-		conditions = append(conditions, "city_code = ?")
-		args = append(args, filter.CityCode)
+		codes := config.CityCodeCandidates(filter.CityCode)
+		conditions = append(conditions, "city_code IN ("+strings.TrimRight(strings.Repeat("?,", len(codes)), ",")+")")
+		for _, code := range codes {
+			args = append(args, code)
+		}
 	}
 	if filter.ProvinceCode != "" {
-		conditions = append(conditions, "province_code = ?")
-		args = append(args, filter.ProvinceCode)
+		codes := config.CityCodeCandidates(filter.ProvinceCode)
+		conditions = append(conditions, "province_code IN ("+strings.TrimRight(strings.Repeat("?,", len(codes)), ",")+")")
+		for _, code := range codes {
+			args = append(args, code)
+		}
 	}
 	switch filter.Gender {
 	case "male", "female":
@@ -3966,9 +3990,9 @@ func ensureMySQLUserProfileColumns(ctx context.Context, db *sql.DB) error {
 		{"background_url", "background_url VARCHAR(2048) NULL"},
 		{"gender", "gender VARCHAR(16) NOT NULL DEFAULT ''"},
 		{"birthday", "birthday VARCHAR(10) NOT NULL DEFAULT ''"},
-		{"province_code", "province_code VARCHAR(6) NOT NULL DEFAULT ''"},
+		{"province_code", "province_code VARCHAR(16) NOT NULL DEFAULT ''"},
 		{"province_name", "province_name VARCHAR(64) NOT NULL DEFAULT ''"},
-		{"city_code", "city_code VARCHAR(6) NOT NULL DEFAULT ''"},
+		{"city_code", "city_code VARCHAR(16) NOT NULL DEFAULT ''"},
 		{"city_name", "city_name VARCHAR(64) NOT NULL DEFAULT ''"},
 		{"is_internal", "is_internal TINYINT(1) NOT NULL DEFAULT 0"},
 	} {
@@ -3978,6 +4002,17 @@ func ensureMySQLUserProfileColumns(ctx context.Context, db *sql.DB) error {
 		}
 		if count == 0 {
 			if _, err := db.ExecContext(ctx, "ALTER TABLE users ADD COLUMN "+column.definition); err != nil {
+				return err
+			}
+		}
+	}
+	for _, column := range []string{"province_code", "city_code"} {
+		var length sql.NullInt64
+		if err := db.QueryRowContext(ctx, `SELECT CHARACTER_MAXIMUM_LENGTH FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='users' AND COLUMN_NAME=?`, column).Scan(&length); err != nil {
+			return err
+		}
+		if length.Valid && length.Int64 < 16 {
+			if _, err := db.ExecContext(ctx, "ALTER TABLE users MODIFY COLUMN "+column+" VARCHAR(16) NOT NULL DEFAULT ''"); err != nil {
 				return err
 			}
 		}

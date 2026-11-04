@@ -59,7 +59,11 @@
 
 省市筛选：用户管理 `GET /admin/api/users` 接收 `province_code`，与 `city_code` 按用户资料取交集；景点管理 `GET /admin/api/scenic-spots` 接收 `province_code` / `city_code`，城市优先，匹配景点自身城市或任一仍存在的关联轨迹城市。`repository.ScenicSpotIDsByTrackCities` 为 MySQL/Mongo/内存提供关联城市匹配，`ScenicSpotListFilter` 将地域条件用于分页前筛选和 total；不得退回仅过滤浏览器已加载记录。省市下拉共用 `/admin/api/cities`，直辖市省级码保留可选。协议见 `docs/api/admin-regions.md`。
 
-共享轨迹编辑器的 `user_id_text` 只读，保存不传 `user_id`，服务端仅兼容回传原 ID 并拒绝更换归属。坐标系和来源标签使用下拉选项，未知历史值保留。`GET /tracks/:track_id/map-preview` 归属轨迹查看权限，由 `TrackMapIndexService.PreviewCoordinateSystems` 读取原始轨迹并返回按 WGS84/GCJ02/BD09 解释的三组 GCJ02 预览线；不得将既有 GCJ02 索引线二次转换。预览独立异步加载，准备后切换立即重绘且保持视野，关闭弹窗释放地图及取消请求。保存坐标系变更纳入旧空间索引清理及重新排队流程；预览自身不写业务数据。`ui.js` 支持字段 `readOnly` / `onChange` 及表单 `onClosed` 生命周期。接口细节见 `docs/api/admin-tracks.md`。
+共享轨迹编辑器只读展示详情接口的 `user_name`，`user_id_text` 仅保留协议兼容，保存不传 `user_id`/`user_name`，服务端仅兼容回传原 ID 并拒绝更换归属。坐标系和来源标签使用下拉选项，未知历史值保留。`GET /tracks/:track_id/map-preview` 归属轨迹查看权限，由 `TrackMapIndexService.PreviewCoordinateSystems` 读取原始轨迹并返回按 WGS84/GCJ02/BD09 解释的三组 GCJ02 预览线；不得将既有 GCJ02 索引线二次转换。预览独立异步加载，准备后切换立即重绘且保持视野，关闭弹窗释放地图及取消请求。保存坐标系变更纳入旧空间索引清理及重新排队流程；预览自身不写业务数据。`ui.js` 支持字段 `readOnly` / `onChange` 及表单 `onClosed` 生命周期。接口细节见 `docs/api/admin-tracks.md`。
+
+描述来源、描述规则版本、轨迹进行状态不展示且不随表单保存；隐藏字段保持原值。无地图 SVG 由 `track_asset_svg.go` 复制安全矢量几何并按服务端运动主题色渲染，切换表单运动类型即时预览，不改写原文件；未知类型与历史位图保留原图。
+
+详情资源由 `track_assets.go` 的 `GET /tracks/:track_id/assets/:asset` 按轨迹查看权限读取，asset 白名单为 raw、square_day/night、landscape_day/night、legacy、no_map。`main` 经 `SetTrackAssetCaches` 注入既有 raw/preview 缓存，截图沿用 `SetScreenshotCache`；按请求异步缓存，不阻塞详情字段，不接受浏览器 URL，不把资源代理地址写回轨迹。原始文件使用 attachment 下载，空字段显示“缺失”；图片只显示缩略图（点击放大），空字段显示“无”，读取失败可重试。共享编辑器保存不提交原文件/截图/preview_images；加载共享编辑器的页面同时引用 `static/track_editor.css`（由嵌入资源机制自动加内容版本）；`ui.js` 的 `className` 与 `afterFields` 将最多四列表单及资源区限定在 `.admin-track-editor`。接口见 [详情资源展示与下载](api/admin-tracks.md#详情资源展示与下载)。
 
 ## 目录与权威文件
 
@@ -309,3 +313,10 @@ Kimi 景点简介使用 `MOONSHOT_API_KEY` 和可选的 `KIMI_SCENIC_DESCRIPTION
 ## 标签管理入口补充
 
 共享 track_editor.js 展示统一 labels 和 label_generation，提供 AI 形象建议及人工 shape_label 输入。POST /admin/api/tracks/:track_id/labels/generate 属 tracks 写权限，复用 TrackNarrativeService 租约和日预算，只填表不落库，保存仍用原 PUT。关闭弹窗取消请求，异步结果不覆盖后来输入。精品、运动、景点沿用原权威来源，不接受独立 labels 写入。实现见 track_labels.go 和 service/track_narrative_admin.go。
+
+
+### 景点详情删除与景区等级
+
+详情底部“删除景点”仅已有 active 景点且具有 scenic_spots 写权限时展示。复用 POST /admin/api/scenic-spots/:spot_id/status，status=archived、expected_version CAS 与审计；从默认目录和客户端隐藏，保留轨迹、图片、来源与历史记录，不物理删除。共享 AdminUI.confirm 前关闭原生 dialog，取消后恢复原草稿；409 不自动重试，成功清理深链并刷新目录与统计。
+
+等级表单可选“暂无等级/1A/2A/3A/4A/5A”，来源/状态/时间服务端托管，人工改值或清空不被自动覆盖；旧 PUT 省略保留，空串清空，null/非法值400。新建或来源变更在相同保存内尝试采集，以保持返回版本供后续图片上传使用；自动识别新建异步采集。provider-content/backfill 在原文字图片已同步时也独立补采等级，grades 为本批补齐数；查询失败不阻止原有资料同步。完整协议见 [景点等级](track-place-discovery.md#景区等级采集与下发) 和 [删除归档](track-place-discovery.md#后台景点删除归档)。

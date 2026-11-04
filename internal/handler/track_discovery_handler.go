@@ -114,7 +114,21 @@ func (h *TrackHandler) ActivityCalendar(ctx context.Context, c *app.RequestConte
 		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid timezone"})
 		return
 	}
-	result, err := h.trackSvc.ActivityCalendar(ctx, userID, timezone)
+	result, err := h.trackSvc.ActivityCalendar(ctx, userID, timezone, string(c.Query("track_type")))
+	if err != nil {
+		discoveryError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, successResponse(result))
+}
+
+func (h *TrackHandler) ActivityTypeDistribution(ctx context.Context, c *app.RequestContext) {
+	userID, ok := discoveryUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, utils.H{"error": "unauthorized"})
+		return
+	}
+	result, err := h.trackSvc.ActivityTypeDistribution(ctx, userID)
 	if err != nil {
 		discoveryError(c, err)
 		return

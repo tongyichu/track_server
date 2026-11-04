@@ -1,19 +1,38 @@
 # 轨迹接口
 
+所有 `city_code` 业务字段统一使用[地区目录](regions.md)的 `region_id`（如杭州 `CN000118`）。服务端在写入轨迹、景点及地图索引时把已知旧 adcode/目录键归一化；筛选时同时匹配尚未回写的旧记录，响应中的轨迹城市编号按新编号输出。未知旧编码保留原值，不自动猜测所属城市。
+
 ## 发现页与年度活动图表
 
 以下接口均需业务 JWT，使用标准 `{ "code": 0, "data": ... }` 响应。
 
-- `GET /api/v1/track/discover/scenic-spots?city_code=330100&limit=30&cursor=<next_cursor>`：返回当前城市状态为 `active` 的景点，包含轨迹关联到该城市的景点；不传城市时返回全部。按关联的公开、已完成且有原始文件的轨迹数降序排列，同数时按景点 ID 升序排列。`items` 每项含 `id`、`name`、`cover_url`，可选 `description`、`source_url`；景点详情页用这些字段展示封面和介绍。`cover_url` 优先采用景点 `photos[0].url`，缺失时回退景点封面。`limit` 默认 20、最大 50；`has_more` 与不透明的 `next_cursor` 供横向列表继续加载，游标包含排序锚点。
+- `GET /api/v1/track/discover/scenic-spots?city_code=CN000118&limit=30&cursor=<next_cursor>`：返回当前城市状态为 `active` 的景点，包含轨迹关联到该城市的景点；不传城市时返回全部。按关联的公开、已完成且有原始文件的轨迹数降序排列，同数时按景点 ID 升序排列。`items` 每项含 `id`、`name`、`cover_url`，可选 `description`、`source_url`；景点详情页用这些字段展示封面和介绍。`cover_url` 优先采用景点 `photos[0].url`，缺失时回退景点封面。`limit` 默认 20、最大 50；`has_more` 与不透明的 `next_cursor` 供横向列表继续加载，游标包含排序锚点。
 - 景点列表新增可选 `photos` 数组，按目录原顺序返回全部非空图片：`[{"url":"/api/v1/static/scenic_spots/<id>/photo.jpg","title":"照片说明","author":"作者","author_url":"https://example.com/author","source_url":"https://example.com/source"}]`；无图返回 `[]`。字段投影与 `primary_scenic_spot.photos` 一致，自有图片携带业务 JWT，外部图片沿用 source_url 作为 Referer。只读取现有目录，不调用地图供应商，不改变封面选择及分页。Android 详情取前 3 张每 3 秒叠化，相册每行 3 张展示全部；旧服务端未提供 photos 或空数组时回退 cover_url。
+- 景点列表每项及轨迹详情/摘要的 `primary_scenic_spot` 可选返回 `scenic_grade`，值为 `"1A"`、`"2A"`、`"3A"`、`"4A"`、`"5A"`。未知或人工清空时省略，客户端应隐藏等级，不能将其解释为“未评级”。等级读取已保存目录，不增加供应商请求；旧客户端可忽略，旧数据无需迁移。
 - `GET /api/v1/track/discover/scenic-spots/:spot_id/tracks?limit=20&cursor=<next_cursor>`：返回状态为 `active` 的景点真实关联的公开、已完成且有原始文件的轨迹摘要；归档、合并或不存在返回 404。按关联轨迹 ID 排序，`next_cursor` 是已消费的关联轨迹 ID。
-- `GET /api/v1/track/discover/shapes?city_code=330100&limit=20&cursor=<next_cursor>`：按开始时间倒序返回公开、已结束、有原始轨迹文件且 `shape_label` 非空的轨迹摘要；`city_code` 可选。沿用推荐轨迹的摘要字段和游标分页，响应 `items`、`has_more`、`next_cursor`。
+- `GET /api/v1/track/discover/shapes?city_code=CN000118&limit=20&cursor=<next_cursor>`：按开始时间倒序返回公开、已结束、有原始轨迹文件且 `shape_label` 非空的轨迹摘要；`city_code` 可选。沿用推荐轨迹的摘要字段和游标分页，响应 `items`、`has_more`、`next_cursor`。
 - `GET /api/v1/track/activity/calendar?timezone=Asia%2FShanghai`：返回当前用户最近 375 个当地自然日（含 10 天缓冲）的已完成轨迹数量，供客户端从连续 12 个月的首月第一个周日起展示。只计正常或私有、已结束且有原始轨迹文件的远端轨迹，以轨迹 `start_time` 对应的当地日期归组。`timezone` 为 IANA 时区，省略时默认 `Asia/Shanghai`，非法值返回 400。响应包含 `start_date`、`end_date`、缓冲区内的 `total_count` 和按日期升序的非零 `days: [{"date":"YYYY-MM-DD","count":1}]`；未列出的日期为 0。客户端仅对实际展示日期求和，并叠加本机未上传的已完成轨迹，避免重复计算远端已上传记录。
 
 > 公共请求、认证和错误响应见 [common.md](common.md)；通用对象字段见 [models.md](models.md)。
 
 轨迹投稿、审核状态和优质投稿展示字段见 [track-submission.md](track-submission.md)。审核通过的推荐/搜索摘要会返回 `is_featured`、`featured_description`、`featured_cover_url`，并用投稿标题覆盖响应中的 `title`；`track_records.title` 不会被修改。
 
+
+## 年度活动指标
+
+`GET /track/activity/calendar?timezone=Asia%2FShanghai&track_type=hiking`需要业务JWT，仅查询当前用户。`track_type`可省略表示全部类型，不传`all`，有值时按稳定code筛选；归一已知别名后统计，保留历史未知类型。时间范围仍为最近375个当地自然日，客户端从连续12个月的首月第一个周日起展示。默认时区、非法时区400、公开/私密/已完成/有原始文件等边界与原日历一致。
+
+响应新增`metrics_version:1`和回显`track_type`（全部为`""`）。`days`每项为：
+
+```json
+{"date":"2026-11-04","count":2,"distance_meters":12800.5,"duration_seconds":7200,"elevation_gain_meters":600,"step_count":15000,"step_track_count":1}
+```
+
+里程单位米、时长秒、爬升米；非法/负数指标不参与累计。步数为真实记录的非负值之和，未采集为`null`，`step_track_count`是有步数的活动数；自驾和骑行不计步数。仅有部分活动记录步数时，客户端明确只统计有记录的运动。无活动日期不列出；日期按当地开始时间归组、升序返回。旧`count`和`total_count`兼容保留。MySQL/Mongo/memory单次读取限定时段的指标投影后聚合，不加载GPS或逐项补详情；数据库错误正常返回错误。
+
+创建轨迹及所有者补全更新新增可选`step_count`非负64位整数，省略或null表示未知，不覆盖已保存的步数；更新仅填原值缺失。详情可返回该字段，旧客户端可忽略。MySQL新增可空BIGINT列并通过启动schema检查补建，`mysql.sql`同步；Mongo保存同名可选字段，memory保持同一语义。Android上传本机已记录的正步数，0且无法确认采集状态的历史记录保留未知；不从距离估算，也不伪造历史步数。
+
+Android左上指标菜单提供次数/里程/时长/累计爬升/步数，右上页面级类型筛选同时作用于格子图和全部历史类型分布。三种模式均保持近12个月；每天按所选值分级着色（次数沿用原阈值，其他指标相对最大日值分4档），每周按所选指标最大周值归一7格，累计按所选指标总值归一7格。旧服务端无`metrics_version`时，仅全部类型的次数继续使用云端数据，其他组合明确提示仅本机未上传记录，不把全部类型结果冒充筛选结果。
 
 ## 主景区标签
 
@@ -38,6 +57,21 @@
 - `sources` 只包含来源、POI/Place ID、核验时间及 ID 刷新时间；Google Place ID 超过 12 个月后在详情路径触发 ID-only 核验。运营自有名称、简介和图片没有供应商数据过期时间，不会被外部刷新覆盖。
 - Android 详情顶部标签行在“精品 / 运动类型”后追加景区名称，普通和精品轨迹一致；直接显示名称，不加“主景区：”前缀。缺失或空名称时隐藏，长名称可换行；本次不增加点击跳转。
 - 列表字段用于详情首屏透传，已有详情请求可更新/清除标签；未上传的本地轨迹不自行推测景区，也不新增独立景区状态请求。
+
+## 运动类型分布
+
+`GET /api/v1/track/activity/type-distribution`，需要业务JWT，只统计当前用户，无user_id或日期参数。返回全部历史的正常/私密、已完成且有原始轨迹文件的记录；排除已删除、进行中及只有云端占位记录的未上传轨迹。
+
+```json
+{"code":0,"data":{"items":[
+  {"track_type":"running","track_count":12,"duration_seconds":36000,"distance_meters":80000},
+  {"track_type":"hiking","track_count":4,"duration_seconds":18000,"distance_meters":24000}
+]}}
+```
+
+`track_count`、`duration_seconds`为64位整数，距离为米。无数据时items=[]；合法正常数据非负，历史负值/空指标按0累计；类型归一已知别名后合并，未知code保留，空code为other。按时长降序、同值按code升序。接口只返回聚合，不返回用户私有明细、轨迹点或供应商数据，不允许指定其他用户；存储异常返回标准错误，不返回伪造的空统计。
+
+Android数据页将结果与当前账号isUploaded=0且已完成的本地记录按相同类型合并，再计算时长占比；已上传本地副本不叠加。无总时长时显示暂无时长和—占比；云端失败明确仅显示本机未上传记录并可重试。名称/图标/日夜颜色沿用track/types元数据，类型统计不重复保存元数据或比例。
 
 ## 静态轨迹预览图
 
@@ -128,7 +162,7 @@ Authorization: Bearer <token>
   "title": "傍晚夜跑",
   "description": "从起点附近出发，沿本次记录路线完成约 1.2 公里。",
   "session_id": "sess_xxx",
-  "city_code": "330100",
+  "city_code": "CN000118",
   "locate_addr": "杭州市西湖区",
   "track_type": "running",
   "source_tag": "manual_seed",
@@ -183,7 +217,7 @@ Authorization: Bearer <token>
     "id": "No.1713520800123456789",
     "user_id": 1001,
     "session_id": "sess_xxx",
-    "city_code": "330100",
+    "city_code": "CN000118",
     "locate_addr": "杭州市西湖区",
     "track_type": "running",
     "coordinate_system": "GCJ02",
@@ -255,7 +289,7 @@ curl -X POST "http://<host>:<port>/api/v1/track/create" \
   -d '{
     "title": "傍晚夜跑",
     "session_id": "sess_xxx",
-    "city_code": "330100",
+    "city_code": "CN000118",
     "locate_addr": "杭州市西湖区",
     "track_type": "running",
     "start_time": "2026-04-20T12:00:00Z",
@@ -306,7 +340,7 @@ curl -X POST "http://<host>:<port>/api/v1/track/create" \
 ### 请求
 
 ```
-GET /api/v1/track/recommend/list?city_code=330100&limit=20&cursor=<next_cursor>
+GET /api/v1/track/recommend/list?city_code=CN000118&limit=20&cursor=<next_cursor>
 Authorization: Bearer <token>
 ```
 
@@ -333,7 +367,7 @@ Authorization: Bearer <token>
         "id": "trk1",
         "user_id": 1001,
         "session_id": "sess_xxx",
-        "city_code": "330100",
+        "city_code": "CN000118",
         "locate_addr": "杭州市西湖区",
         "track_type": "hiking",
         "start_time": "2026-04-20T12:00:00Z",
@@ -393,7 +427,7 @@ Feed Session 固定 60 分钟、最多 200 条。Session 内轨迹删除或转�
 ### 示例（curl）
 
 ```bash
-curl -X GET "http://<host>:<port>/api/v1/track/recommend/list?city_code=330100&limit=20" \
+curl -X GET "http://<host>:<port>/api/v1/track/recommend/list?city_code=CN000118&limit=20" \
   -H "Authorization: Bearer <token>" \
   -H "X-User-ID: 1001"
 ```
@@ -401,7 +435,7 @@ curl -X GET "http://<host>:<port>/api/v1/track/recommend/list?city_code=330100&l
 翻下一页：
 
 ```bash
-curl -X GET "http://<host>:<port>/api/v1/track/recommend/list?city_code=330100&limit=20&cursor=<next_cursor>" \
+curl -X GET "http://<host>:<port>/api/v1/track/recommend/list?city_code=CN000118&limit=20&cursor=<next_cursor>" \
   -H "Authorization: Bearer <token>" \
   -H "X-User-ID: 1001"
 ```
@@ -511,7 +545,7 @@ curl -X GET "http://<host>:<port>/api/v1/track/trk-detail/detail" \
 ### 请求
 
 ```
-GET /api/v1/track/search/list?keyword=:keyword&city_code=330100&track_type=hiking&limit=20&cursor=<next_cursor>
+GET /api/v1/track/search/list?keyword=:keyword&city_code=CN000118&track_type=hiking&limit=20&cursor=<next_cursor>
 Authorization: Bearer <token>
 ```
 
@@ -540,7 +574,7 @@ Authorization: Bearer <token>
         "id": "trk1",
         "user_id": 1001,
         "session_id": "sess_xxx",
-        "city_code": "330100",
+        "city_code": "CN000118",
         "locate_addr": "杭州市西湖区",
         "track_type": "hiking",
         "start_time": "2026-04-20T12:00:00Z",
@@ -581,7 +615,7 @@ Authorization: Bearer <token>
 ### 示例（curl）
 
 ```bash
-curl -X GET "http://<host>:<port>/api/v1/track/search/list?keyword=西湖&city_code=330100&track_type=hiking&limit=20" \
+curl -X GET "http://<host>:<port>/api/v1/track/search/list?keyword=西湖&city_code=CN000118&track_type=hiking&limit=20" \
   -H "Authorization: Bearer <token>" \
   -H "X-User-ID: 1001"
 ```
@@ -589,7 +623,7 @@ curl -X GET "http://<host>:<port>/api/v1/track/search/list?keyword=西湖&city_c
 翻下一页：
 
 ```bash
-curl -X GET "http://<host>:<port>/api/v1/track/search/list?keyword=西湖&city_code=330100&track_type=hiking&limit=20&cursor=<next_cursor>" \
+curl -X GET "http://<host>:<port>/api/v1/track/search/list?keyword=西湖&city_code=CN000118&track_type=hiking&limit=20&cursor=<next_cursor>" \
   -H "Authorization: Bearer <token>" \
   -H "X-User-ID: 1001"
 ```
@@ -660,7 +694,7 @@ Authorization: Bearer <token>
         "id": "trk1",
         "user_id": 1001,
         "session_id": "sess_xxx",
-        "city_code": "330100",
+        "city_code": "CN000118",
         "locate_addr": "杭州市西湖区",
         "track_type": "hiking",
         "start_time": "2026-04-20T12:00:00Z",
@@ -785,7 +819,7 @@ Authorization: Bearer <token>
   "status": 2,
   "description": "从起点附近出发，沿本次记录路线完成约 1.2 公里。",
   "session_id": "sess_xxx",
-  "city_code": "330100",
+  "city_code": "CN000118",
   "locate_addr": "杭州市西湖区",
   "track_type": "running",
   "source_tag": "manual_seed",
@@ -835,7 +869,7 @@ curl -X PUT "http://<host>:<port>/api/v1/track/trk1/update" \
   -H "Content-Type: application/json" \
   -d '{
     "session_id": "sess_xxx",
-    "city_code": "330100",
+    "city_code": "CN000118",
     "locate_addr": "杭州市西湖区",
     "track_no_map_bg_screenshot_url": "https://<bucket>.oss-<region>.aliyuncs.com/prod/track/.../xxx_no_map_bg.jpg"
   }'
@@ -1074,17 +1108,19 @@ Authorization: Bearer <token>
 | --- | --- | --- |
 | featured | 固定 featured，投稿审核通过时出现；撤回/待审/驳回/失效不出现 | 精品 / Featured |
 | sport | 标准化 track_type | 运动配置中文/英文名称 |
-| scenic_spot | primary_scenic_spot.id | 主景区名称 |
+| scenic_spot | primary_scenic_spot.id | 有等级为“主景区名称·5A”，无等级为原名称 |
 | shape | shape_label | 具象名称 |
 
 ```json
 {"labels":[
   {"type":"featured","value":true,"code":"featured","name":"精品","name_en":"Featured","theme_color":"#9C6500","theme_color_dark":"#F3C969"},
   {"type":"sport","value":true,"code":"running","name":"跑步","name_en":"Running","theme_color":"#F26A4B","theme_color_dark":"#FF947A"},
-  {"type":"scenic_spot","value":true,"code":"SCP-example","name":"北京奥林匹克公园","theme_color":"#087F8C","theme_color_dark":"#69D2DD"},
+  {"type":"scenic_spot","value":true,"code":"SCP-example","name":"故宫·5A","theme_color":"#087F8C","theme_color_dark":"#69D2DD"},
   {"type":"shape","value":true,"code":"玫瑰花","name":"玫瑰花","theme_color":"#B43F83","theme_color_dark":"#F39ACB"}
 ]}
 ```
+
+景区标签的等级文案由 API 在 `labels[type=scenic_spot].name` 中完整组装，例如 `故宫·5A`，分隔符是居中点 `·`（U+00B7），不是句号。没有等级时仅返回景点名称，客户端不得再次拼接等级；`code` 保持景点 ID，`primary_scenic_spot.name` 仍是原始景点名，`scenic_grade` 独立保留。景区详情页在标题旁展示该等级标记。
 
 示例只说明格式，不代表历史轨迹已赋形象。labels 不重复持久化，不接受独立写入；权威来源为投稿审核状态、运动类型、主景区、shape_label。不增加供应商或 AI 调用。旧字段保留兼容。Android 详情标题上方统一消费 labels，按上述顺序展示，未知类型排在后面；英文环境优先 name_en，否则 name。labels 为 [] 时不按旧字段补标签，缺失时兼容旧服务端和本地轨迹。
 

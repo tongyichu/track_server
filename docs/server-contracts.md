@@ -26,7 +26,7 @@
 - **搜索结果总数**：`GET /track/search/list` 返回 `total_count`，由三种 TrackRepository 的 `CountSearch` 按关键词、城市、运动类型统计正常且有原始轨迹文件的记录，不受分页游标影响；客户端据此显示搜索总数。
 - **发现与活动日历**：`internal/repository/track_discovery.go` 的三种 TrackRepository 实现负责象形轨迹筛选和用户轨迹开始时间查询；`internal/service/track_discovery.go` 提供景点、景点关联轨迹、象形轨迹与近 375 天日历（365 天加 10 天缓冲）。发现景点沿用轨迹详情的客户端可见规则，只展示 active 目录，封面优先首张图片，并返回景点描述及完整目录图片 `photos`（url/title/author/author_url/source_url）供详情页轮播与相册展示；图片沿用目录顺序，过滤空 URL，不为此新增供应商请求；按该景点关联的公开、已完成且有原始文件的轨迹数降序、同数按景点 ID 升序分页，游标携带计数和 ID。两个轨迹列表只含公开已完成且有原始文件的记录。日历按请求的 IANA 时区归日，客户端按连续 12 个月的首月第一个周日裁剪并另加本地未上传记录。协议见 `docs/api/track.md`。
 - **反馈图片私有落盘**：意见反馈图片由服务端直接接收，保存到 `<LogDir>/feedback/images/`，必须通过 `/feedback/:feedback_id/images/:image_id` 或 `/ops/feedback/:feedback_id/images/:image_id` 走鉴权 handler 读取；不要放进 `/api/v1/static/*` 公开静态目录。
-- **地区目录唯一来源**：`internal/regions/seed.json` 只在存储没有目录时首次导入，此后省市及海外地区均以 `region_catalog_state` 为准；后台在 `/admin/regions.html` 编辑，Android 首次下载并保存本地文件，后续按版本更新。国内现有编码、层级与父级保持稳定。协议见 `docs/api/regions.md`。
+- **地区目录唯一来源**：`internal/regions/seed.json` 只在存储没有目录时首次导入，此后省市及海外地区均以 `region_catalog_state` 为准；后台在 `/admin/regions.html` 编辑，Android 首次下载并保存本地文件，后续按版本更新。国内现有外部编码、层级与父级保持稳定；业务城市编号统一使用不可变 `region_id`，旧编码经目录别名兼容，`external_ids` 按来源保存高德 adcode 与 Google 地区 Place ID。协议见 `docs/api/regions.md`。
 
 ## 权威数据源
 后台专用形象识别入口 `internal/service/kimi_track_shape.go`，复用 Kimi 图像传输但关闭思考模式，与自动说明生成方法分开；共享契约在 skill 的 `references/shape-only-output.txt`。最近诊断以 `narrative:shape-preview:<ID>` 存于现有记录表，按输入版本展示，POST 不写轨迹标签。接口与验收边界见 `docs/api/admin-tracks.md`。
@@ -154,3 +154,17 @@
 - `internal/{models,repository,service,handler}/permission_snapshot.go` 负责 JWT 账号 + 安装实例全量快照；启动时按用户仓储选择 MySQL/Mongo/内存，初始化失败只禁用快照接口，不静默转内存。表/集合为 `user_permission_snapshots`，按 sequence 单调替换，收到时间由服务端生成；未知权限键、分类、状态必须兼容。协议见 `docs/api/permission-snapshots.md`。
 
 - AI 路线说明自动任务仅在持久仓储、预览缓存、Moonshot key 与 scheduler 就绪时启用；首次水位排除未变更历史记录。复用现有索引和一张方图，不重复解析 KMZ；输入摘要去重、持久缓存、分布式租约和每日预算，条件更新保护人工说明/形象。`description_source=ai` 不进入客户端 auto 补齐。
+
+
+## 景区 A 级与标签文案
+
+景区 A 级采集入口 `internal/service/scenic_spot_grade.go`，仅接受同一有效高德 POI ID 的 v5 detail business.keytag 中明确的 A 级标识，统一为 1A..5A，未知留空；不把评分、酒店星级、名称/简介或 AI 推断当等级。等级独立于文字图片补采，复用既有日配额和调用统计，无新表、环境变量或定时器。状态、来源、采集时间随 JSON/BSON 保存；无等级缓存 unavailable，失败后续重试，人工修改/清空记 manual 且不被覆盖。旧编辑请求省略 scenic_grade 保留原值。
+
+发现景点及轨迹 primary_scenic_spot 下发可选 scenic_grade，读取不调用供应商；未知不能解释为官方未评级。统一 labels 的 scenic_spot.name 由 API 组装为“景点名·5A”（U+00B7 居中点），无等级保留原名，code 仍为稳定景点 ID，primary_scenic_spot.name 保持纯名称。客户端直接消费 labels，不重复拼接。完整同步与字段契约见 [景区等级采集与下发](track-place-discovery.md#景区等级采集与下发)。
+
+
+## 本人运动类型分布
+
+`GET /track/activity/type-distribution` 只取当前JWT用户，返回全部历史已完成、正常/私密且raw_track_url非空的记录按类型聚合的次数、时长秒数、距离米数。删除、进行中与自动创建的未上传原始文件占位记录排除；负数/缺失指标归零，空集合返回items=[]。权限不支持指定其他用户。入口 internal/service/track_activity.go，复用类型归一函数、合并已知别名，未知类型保留，空类型为other；按时长降序、同值按type code排序。
+
+独立 `repository.ActivityTypeStatisticsRepository` 的MySQL GROUP BY、Mongo聚合与内存实现提供相同口径，不逐条加载轨迹、GPS、图片或供应商内容；三种实现有编译期断言。不新建表、列、索引、缓存或后台任务，不改写业务数据。协议见 [运动类型分布](api/track.md#运动类型分布)。客户端合并本机未上传记录后计算比例，统计范围与近12个月日历分开标注。

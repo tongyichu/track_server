@@ -238,7 +238,7 @@ func (s *TrackMapService) routeGroupItem(ctx context.Context, group *models.Trac
 	}
 	cityCode := ""
 	if len(group.CityCodes) > 0 {
-		cityCode = group.CityCodes[0]
+		cityCode = config.CanonicalCityCode(group.CityCodes[0])
 	}
 	item := &models.TrackMapRouteGroupItem{
 		Type:             "route_group",
@@ -306,7 +306,7 @@ func routeGroupDisplayName(group *models.TrackRouteGroup) string {
 	}
 	cityCode := ""
 	if len(group.CityCodes) > 0 {
-		cityCode = group.CityCodes[0]
+		cityCode = config.CanonicalCityCode(group.CityCodes[0])
 	}
 	cityName := config.CityNameByCode(cityCode)
 	trackTypeName := trackTypeDisplayName(group.TrackType)
@@ -328,7 +328,7 @@ func (s *TrackMapService) legacyRouteGroupItem(ctx context.Context, index *model
 		Type:             "route_group",
 		GroupID:          index.TrackID,
 		Name:             trackMapRouteName(track, index),
-		CityCode:         index.CityCode,
+		CityCode:         config.CanonicalCityCode(index.CityCode),
 		CityName:         config.CityNameByCode(index.CityCode),
 		TrackType:        index.TrackType,
 		CoordinateSystem: mapCoordinateSystem(index.CoordinateSystem),
@@ -372,7 +372,7 @@ func (s *TrackMapService) buildFilter(input TrackMapViewInput) (models.TrackMapQ
 	}
 	filter := models.TrackMapQueryFilter{
 		TrackType: trackType,
-		CityCode:  strings.TrimSpace(input.CityCode),
+		CityCode:  config.CanonicalCityCode(input.CityCode),
 		Limit:     limit,
 	}
 	if input.BBox != "" {
@@ -510,7 +510,7 @@ func (s *TrackMapService) decorateAreaClusters(items []*models.TrackMapClusterIt
 		}
 		item.Name = area.Name()
 		item.AreaType = area.Type
-		item.CityCode = area.CityCode
+		item.CityCode = config.CanonicalCityCode(area.CityCode)
 		item.CityName = config.CityNameByCode(area.CityCode)
 		// Directly administered cities may be absent from the city picker table.
 		if item.CityName == "" && area.ID == "district-"+area.CityCode {

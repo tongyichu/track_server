@@ -7,11 +7,12 @@
 
 - 使用 Authenticator + 内存 SessionStore（admin_session），不复用业务 JWT/RequestMeta，不把会话持久化；cookie 保持 HttpOnly，TTL 与 store 一致，重启需重新登录。
 - 账号独立持久化于 admin_account_state，日志位于 admin_audit_logs；账号/权限以数据库为权威，环境变量只首次导入，故障拒绝鉴权，不回退内存或环境变量账号。保留最后管理员保护及 version/revision/security_version CAS。
-- permissions.go 是 HTML/API/资源与跨模块权限权威，新增路由同步映射，未知模块拒绝；只隐藏导航不足以授权。每个受保护请求实时查状态/权限，不缓存鉴权；只读页面不得触发外部回填或写操作。
+- permissions.go 是 HTML/API/资源与跨模块权限权威，新增路由同步映射，未知模块拒绝；只隐藏导航不足以授权。每个受保护请求实时查状态/权限，不缓存鉴权；只读页面不得触发外部回填或写操作。景点删除按 archived 归档，等级采集保护人工值，具体见 docs/track-place-discovery.md 与功能流程参考。
 - 写请求校验同源、从 session 取操作者、先审计再写；审计不可用拒绝发起，结果审计失败不得误报业务失败或声称跨库原子。响应 no-store，不通过公共 static 暴露受保护 HTML。
 - int64 用户 ID 等用 JSON 字符串往返，禁止 JS Number；轨迹归属人只读、不提交，服务端拒绝变更归属。
 - 本人邮箱/改密只认 session，验证码/配额持久化 CAS；已验证邮箱禁止管理员重置，旧重置入口永久关闭后不重开。公开找回防枚举、限流、TLS 邮件、审计和迁移策略必须按安全参考执行；无 SMTP 不伪造成功，不复用 OSS 密钥或擅自发测试邮件。
 - 轨迹编辑、候选处理、地图/反馈联动使用共享 track_editor；跨模块读取/保存同时验证相关权限。候选确认、AI 填表和实际保存分清，不自动提交草稿；异步旧结果不得覆盖后来输入。
+- 共享轨迹详情展示只读用户名，隐藏元数据不随保存提交；图片/下载入口使用 track_assets.go 与轨迹查看权限，无地图 SVG 由 track_asset_svg.go 按服务端运动主题色渲染，保存不提交资源 URL；使用共享编辑器的页面同时加载 track_editor.css。细节见 [详情资源协议](../../docs/api/admin-tracks.md#详情资源展示与下载)。
 - 软删除/恢复/彻底删除保持各自前置条件和关联清理；purge 仅 status=0、双重确认，OSS 清理失败仅返回 warning。轨迹已保存但反馈关联/学习失败时明确已保存，不误报整项失败。
 
 ## 页面与资源边界
@@ -23,6 +24,7 @@
 - 列表批量/去重查询，资源 I/O 限并发、超时和取消；不逐行无限 goroutine。MutationObserver 只处理受影响子树且避免递归；只读锁在新增/更新控件时恢复。快筛选忽略旧响应、失败保留上次数据。
 - Card 默认桌面 18px/窄屏 14px 内容留白，同时覆盖子节点 card-body 和同节点 panel.card.card-body；p-0 仅用于明确满宽区域。工具栏响应式换行，宽表格局部滚动；展开详情不重分配列宽。
 - 未可信内容用 textContent；设备快照非实时，未知/未上报不视为关闭。所有异步弹窗工作在关闭/切换时取消并释放资源。
+- 城市管理页只读显示内部 `region_id`，高德 adcode 与 Google 地区 Place ID 写入目录节点的 `external_ids`；旧国内 `code` 保留供兼容，详见 docs/api/regions.md。
 
 ## 修改前查阅
 

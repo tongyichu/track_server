@@ -19,7 +19,7 @@ func (r *InMemoryTrackRepository) ListShaped(_ context.Context, cityCode string,
 		if track == nil || track.Status != models.TrackStatusNormal || track.IsRunning || track.RawTrackURL == "" || strings.TrimSpace(track.ShapeLabel) == "" {
 			continue
 		}
-		if cityCode != "" && track.CityCode != cityCode {
+		if cityCode != "" && !sameRegionCode(track.CityCode, cityCode) {
 			continue
 		}
 		if cursor != nil && (track.StartTime.After(cursor.StartTime) || (track.StartTime.Equal(cursor.StartTime) && track.ID >= cursor.ID)) {
@@ -46,8 +46,11 @@ func (r *MySQLTrackRepository) ListShaped(ctx context.Context, cityCode string, 
 	query := `SELECT id FROM track_records WHERE status=? AND is_running=0 AND raw_track_url IS NOT NULL AND raw_track_url <> '' AND TRIM(COALESCE(shape_label,'')) <> ''`
 	args := []any{models.TrackStatusNormal}
 	if cityCode != "" {
-		query += ` AND city_code=?`
-		args = append(args, cityCode)
+		codes := regionCodeCandidates([]string{cityCode})
+		query += ` AND city_code IN (` + strings.TrimRight(strings.Repeat("?,", len(codes)), ",") + `)`
+		for _, code := range codes {
+			args = append(args, code)
+		}
 	}
 	if cursor != nil {
 		query += ` AND (start_time < ? OR (start_time = ? AND id < ?))`
@@ -97,7 +100,7 @@ func (r *MongoTrackRepository) ListShaped(ctx context.Context, cityCode string, 
 		"shape_label":   bson.M{"$type": "string", "$regex": `\S`},
 	}
 	if cityCode != "" {
-		filter["city_code"] = cityCode
+		filter["city_code"] = bson.M{"$in": regionCodeCandidates([]string{cityCode})}
 	}
 	if cursor != nil {
 		filter["$or"] = bson.A{

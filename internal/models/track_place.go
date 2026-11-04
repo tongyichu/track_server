@@ -10,6 +10,7 @@ type TrackPrimaryScenicSpot struct {
 	ProviderID       string                 `json:"provider_id,omitempty"`
 	Sources          []ScenicSpotSource     `json:"sources,omitempty"`
 	Category         string                 `json:"category,omitempty"`
+	ScenicGrade      string                 `json:"scenic_grade,omitempty"`
 	Description      string                 `json:"description,omitempty"`
 	Address          string                 `json:"address,omitempty"`
 	Latitude         float64                `json:"latitude,omitempty"`

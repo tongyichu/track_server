@@ -282,14 +282,25 @@ func (h *Handler) UpdateScenicSpot(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 	var body struct {
-		ExpectedVersion int64             `json:"expected_version"`
-		Spot            models.ScenicSpot `json:"spot"`
+		ExpectedVersion int64           `json:"expected_version"`
+		Spot            json.RawMessage `json:"spot"`
 	}
 	if err := json.Unmarshal(c.Request.Body(), &body); err != nil || body.ExpectedVersion <= 0 {
 		c.JSON(http.StatusBadRequest, utils.H{"error": "expected_version and spot are required"})
 		return
 	}
-	v, err := h.scenicSpotSvc.Update(ctx, h.adminOperator(c), c.Param("spot_id"), body.ExpectedVersion, &body.Spot)
+	var spot models.ScenicSpot
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(body.Spot, &spot) != nil || json.Unmarshal(body.Spot, &fields) != nil || fields == nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid spot"})
+		return
+	}
+	grade, gradeProvided := fields["scenic_grade"]
+	if gradeProvided && string(grade) == "null" {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "scenic_grade must be a string"})
+		return
+	}
+	v, err := h.scenicSpotSvc.Update(ctx, h.adminOperator(c), c.Param("spot_id"), body.ExpectedVersion, &spot, gradeProvided)
 	if err != nil {
 		h.scenicSpotServiceError(c, err)
 		return

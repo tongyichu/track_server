@@ -35,6 +35,7 @@ import (
 // Handler 聚合管理后台需要的业务依赖。
 type Handler struct {
 	regionSvc             *regions.Service
+	regionResearcher      *regions.Researcher
 	permissionSnapshotSvc *service.PermissionSnapshotService
 	releaseSvc            *service.AppReleaseService
 	stsSvc                *service.OSSTokenService
@@ -57,6 +58,8 @@ type Handler struct {
 	trackImportSvc        *service.AdminTrackImportService
 	dashboardStatsRepo    repository.AdminDashboardStatisticsRepository
 	screenshotCache       *service.AssetCacheService
+	rawTrackCache         *service.AssetCacheService
+	trackPreviewCache     *service.AssetCacheService
 	// staticRoot 是服务端本地静态资源根目录（通常为 <LogDir>/static）。
 	// 管理后台上传的安装包会落到 <staticRoot>/release/<platform>/ 下，
 	// 并通过 /api/v1/static/release/<platform>/<file> 对外下发。
@@ -148,6 +151,9 @@ func applyAdminTrackUpdate(track *models.Track, body updateTrackBody) error {
 		if err := setString(field.dst, field.src, field.max, field.name); err != nil {
 			return err
 		}
+	}
+	if body.CityCode != nil {
+		track.CityCode = config.CanonicalCityCode(track.CityCode)
 	}
 	if body.CityCode != nil && track.CityCode != "" && config.CityNameByCode(track.CityCode) == "" {
 		return errors.New("city_code is not in the city list")
@@ -1503,6 +1509,12 @@ func (h *Handler) GetTrack(ctx context.Context, c *app.RequestContext) {
 		}
 	}
 	data := utils.H{"track": track, "user_id_text": strconv.FormatInt(track.UserID, 10)}
+	data["user_name"] = "未知用户"
+	if h.userRepo != nil {
+		if owner, err := h.userRepo.FindByID(ctx, track.UserID); err == nil && owner != nil && strings.TrimSpace(owner.Nickname) != "" {
+			data["user_name"] = owner.Nickname
+		}
+	}
 	if h.trackSubmissionSvc != nil {
 		if sub, err := h.trackSubmissionSvc.PublicForTrack(ctx, track.ID); err == nil {
 			track.Submission = sub

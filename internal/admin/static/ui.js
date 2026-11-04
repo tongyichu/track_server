@@ -85,6 +85,7 @@
     return new Promise(function (resolve) {
       const root = createModal(options);
       const form = document.createElement('form');
+      if (options.className) root.classList.add(options.className);
       form.className = 'admin-dialog-form';
       if (options.beforeFields) root.querySelector('.modal-body').appendChild(options.beforeFields);
       (options.fields || []).forEach(function (field) {
@@ -117,6 +118,7 @@
         form.appendChild(group);
       });
       root.querySelector('.modal-body').appendChild(form);
+      if (options.afterFields) root.querySelector('.modal-body').appendChild(options.afterFields);
       const footer = root.querySelector('.modal-footer');
       const cancel = document.createElement('button');
       cancel.type = 'button';

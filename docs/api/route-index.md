@@ -1,10 +1,15 @@
 # API 路由索引
 
-> 只用于快速定位接口文档；完整请求/响应以对应分册为准。
+> 只用于快速定位接口文档；完整请求/响应以对应分册为准。轨迹详情及摘要的 `labels` 景区文案包含可选等级，见 [统一轨迹标签](track.md#统一轨迹标签-labels)。
 
 | 接口 | 方法 | 路径 | 需要认证 | 文档 |
 | --- | --- | --- | --- | --- |
-| 发现景点列表（含完整 photos 相册） | GET | `/track/discover/scenic-spots` | 是 | [track.md](track.md#发现页与活动日历) |
+| 本人全部历史运动类型分布 | GET | `/track/activity/type-distribution` | 是 | [运动类型分布](track.md#运动类型分布) |
+| 本人年度活动指标（可按运动类型筛选） | GET | `/track/activity/calendar` | 是 | [年度活动指标](track.md#年度活动指标) |
+| 后台景点状态调整（详情删除按 archived 归档） | POST | `/admin/api/scenic-spots/:spot_id/status` | 后台景点写权限 | [track-place-discovery.md](../track-place-discovery.md#后台景点删除归档) |
+| 后台景点等级编辑与详情 | GET / PUT | `/admin/api/scenic-spots/:spot_id` | 后台景点读/写权限 | [景区等级采集与下发](../track-place-discovery.md#景区等级采集与下发) |
+| 存量景点资料及等级补采 | POST | `/admin/api/scenic-spots/provider-content/backfill` | 后台景点写权限 | [景区等级采集与下发](../track-place-discovery.md#景区等级采集与下发) |
+| 发现景点列表（含 photos 相册、scenic_grade） | GET | `/track/discover/scenic-spots` | 是 | [track.md](track.md#发现页与年度活动图表) |
 | 上报设备权限快照 | PUT | `/user/permission-snapshot` | 是 | [permission-snapshots.md](permission-snapshots.md) |
 | 后台查看用户设备权限 | GET | `/admin/api/users/:user_id/permission-snapshots` | 后台 users 读取权限 | [permission-snapshots.md](permission-snapshots.md) |
 | 创建轨迹（含可选默认路线说明） | POST | `/track/create` | 是 | [track.md](track.md#1-创建轨迹) |
@@ -114,7 +119,10 @@
 | --- | --- | --- | --- | --- |
 | 后台账号列表与页面目录 | GET | `/admin/api/accounts` | 管理员 session | [admin-accounts.md](admin-accounts.md) |
 | 后台读取/保存地区目录 | GET / PUT | `/admin/api/regions/catalog` | 地区查看 / 操作 | [regions.md](regions.md) |
-| 上传地区封面图 | POST | `/admin/api/regions/images` | 地区操作 | [regions.md](regions.md) |
+| 后台保存单个地区节点 | PUT | `/admin/api/regions/node` | 地区操作 | [regions.md](regions.md) |
+| 上传地区图片 | POST | `/admin/api/regions/images` | 地区操作 | [regions.md](regions.md) |
+| 联网查询单个地区资料 | POST | `/admin/api/regions/research` | 地区操作 | [regions.md](regions.md) |
+| 导入地区图片候选 | POST | `/admin/api/regions/images/import` | 地区操作 | [regions.md](regions.md) |
 | 新增后台账号 | POST | `/admin/api/accounts` | 管理员 session | [admin-accounts.md](admin-accounts.md) |
 | 调整身份、状态与页面权限 | PUT | `/admin/api/accounts/:username` | 管理员 session | [admin-accounts.md](admin-accounts.md) |
 | 迁移期应急重置后台密码 | POST | `/admin/api/accounts/:username/reset-password` | 管理员 session，且目标未验证邮箱/旧入口未关闭 | [admin-accounts.md](admin-accounts.md) |
@@ -131,7 +139,8 @@
 | 后台轨迹类型与贡献用户前十（天/周/月） | GET | `/admin/api/tracks/statistics` | 轨迹查看 | [admin-tracks.md](admin-tracks.md#轨迹类型与用户贡献统计) |
 | 后台轨迹坐标系预览 | GET | `/admin/api/tracks/:track_id/map-preview` | 轨迹查看 | [admin-tracks.md](admin-tracks.md#编辑字段与坐标预览) |
 | 后台批量导入轨迹（逐文件结果含轨迹表格摘要） | POST | `/admin/api/tracks/import` | 轨迹操作 | [admin-tracks.md](admin-tracks.md) |
-| 后台轨迹详情 | GET | `/admin/api/tracks/:track_id` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |
+| 后台轨迹详情（含只读归属用户名） | GET | `/admin/api/tracks/:track_id` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |
+| 后台轨迹图片与原始文件下载 | GET | `/admin/api/tracks/:track_id/assets/:asset` | 轨迹查看 | [admin-tracks.md](admin-tracks.md#详情资源展示与下载) |
 | 单条轨迹重新识别 | POST | `/admin/api/tracks/:track_id/place-refresh` | 轨迹操作 | [admin-tracks.md](admin-tracks.md) |
 | 轨迹地图高德配置 / 服务代理 | GET | `/admin/api/tracks/map-config`、`/admin/api/tracks/amap-service` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |
 | 单条轨迹景点候选 | GET | `/admin/api/tracks/:track_id/place-candidates` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |
