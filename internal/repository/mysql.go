@@ -2132,7 +2132,7 @@ func (r *MySQLTrackRepository) ListRecommend(ctx context.Context, _ int64, cityC
 	return res, nil
 }
 
-func (r *MySQLTrackRepository) Search(ctx context.Context, keyword, cityCode, trackType string, cursor *models.TrackListCursor, limit int) ([]*models.Track, error) {
+func (r *MySQLTrackRepository) Search(ctx context.Context, keyword, cityCode, trackType string, cursor *models.TrackListCursor, limit int, distance ...models.TrackDistanceRange) ([]*models.Track, error) {
 	if limit <= 0 {
 		limit = 20
 	}
@@ -2151,6 +2151,7 @@ func (r *MySQLTrackRepository) Search(ctx context.Context, keyword, cityCode, tr
 		query += ` AND track_type=?`
 		args = append(args, trackType)
 	}
+	query, args = searchDistanceSQL(query, args, distance)
 	if cursor != nil {
 		query += ` AND (start_time < ? OR (start_time = ? AND id < ?))`
 		args = append(args, cursor.StartTime, cursor.StartTime, cursor.ID)
@@ -2175,21 +2176,23 @@ func (r *MySQLTrackRepository) Search(ctx context.Context, keyword, cityCode, tr
 		return nil, err
 	}
 
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	byID, err := r.FindByIDs(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
 	res := make([]*models.Track, 0, len(ids))
 	for _, id := range ids {
-		t, err := r.FindByID(ctx, id)
-		if err != nil {
-			if errors.Is(err, ErrNotFound) {
-				continue
-			}
-			return nil, err
+		if track := byID[id]; track != nil {
+			res = append(res, track)
 		}
-		res = append(res, t)
 	}
 	return res, nil
 }
 
-func (r *MySQLTrackRepository) CountSearch(ctx context.Context, keyword, cityCode, trackType string) (int64, error) {
+func (r *MySQLTrackRepository) CountSearch(ctx context.Context, keyword, cityCode, trackType string, distance ...models.TrackDistanceRange) (int64, error) {
 	query := `SELECT COUNT(*) FROM track_records WHERE status=? AND raw_track_url IS NOT NULL AND raw_track_url <> '' AND (? = '' OR title LIKE ?)`
 	args := []interface{}{models.TrackStatusNormal, keyword, "%" + keyword + "%"}
 	if cityCode != "" {
@@ -2203,6 +2206,7 @@ func (r *MySQLTrackRepository) CountSearch(ctx context.Context, keyword, cityCod
 		query += ` AND track_type=?`
 		args = append(args, trackType)
 	}
+	query, args = searchDistanceSQL(query, args, distance)
 	var count int64
 	err := r.db.QueryRowContext(ctx, query, args...).Scan(&count)
 	return count, err

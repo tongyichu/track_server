@@ -75,6 +75,7 @@ type ListMyTracksInput struct {
 }
 
 type SearchTracksInput struct {
+	Distance  models.TrackDistanceRange
 	Keyword   string
 	CityCode  string
 	TrackType string
@@ -1149,6 +1150,9 @@ func (s *TrackService) countVisibleCollectedTotalCount(ctx context.Context, user
 
 // SearchTracks searches tracks globally by keyword.
 func (s *TrackService) SearchTracks(ctx context.Context, userID int64, input SearchTracksInput) (*models.TrackSummaryPage, error) {
+	if err := validateSearchDistance(input.Distance); err != nil {
+		return nil, err
+	}
 	limit := normalizeTrackPageLimit(input.Limit)
 	cityCode := strings.TrimSpace(input.CityCode)
 	trackType := strings.TrimSpace(input.TrackType)
@@ -1157,7 +1161,7 @@ func (s *TrackService) SearchTracks(ctx context.Context, userID int64, input Sea
 		return nil, err
 	}
 	tracks, hasMore, err := s.listTracksWithNonEmptyRawTrackURL(ctx, cursor, limit, func(cur *models.TrackListCursor, n int) ([]*models.Track, error) {
-		return s.tracks.Search(ctx, input.Keyword, cityCode, trackType, cur, n)
+		return s.tracks.Search(ctx, input.Keyword, cityCode, trackType, cur, n, input.Distance)
 	})
 	if err != nil {
 		return nil, err
@@ -1191,7 +1195,7 @@ func (s *TrackService) SearchTracks(ctx context.Context, userID int64, input Sea
 	if err != nil {
 		return nil, err
 	}
-	totalCount, err := s.tracks.CountSearch(ctx, input.Keyword, cityCode, trackType)
+	totalCount, err := s.tracks.CountSearch(ctx, input.Keyword, cityCode, trackType, input.Distance)
 	if err != nil {
 		return nil, err
 	}

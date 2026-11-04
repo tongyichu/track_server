@@ -406,7 +406,7 @@ func (r *MongoTrackRepository) ListRecommend(ctx context.Context, _ int64, cityC
 }
 
 // Search performs case-insensitive title search on normal-status tracks.
-func (r *MongoTrackRepository) Search(ctx context.Context, keyword, cityCode, trackType string, cursor *models.TrackListCursor, limit int) ([]*models.Track, error) {
+func (r *MongoTrackRepository) Search(ctx context.Context, keyword, cityCode, trackType string, cursor *models.TrackListCursor, limit int, distance ...models.TrackDistanceRange) ([]*models.Track, error) {
 	if limit <= 0 {
 		limit = 20
 	}
@@ -420,6 +420,7 @@ func (r *MongoTrackRepository) Search(ctx context.Context, keyword, cityCode, tr
 	if keyword != "" {
 		filter["title"] = primitive.Regex{Pattern: regexp.QuoteMeta(keyword), Options: "i"}
 	}
+	applySearchDistanceMongo(filter, distance)
 	if cursor != nil {
 		filter["$or"] = []bson.M{
 			{"start_time": bson.M{"$lt": cursor.StartTime}},
@@ -432,7 +433,7 @@ func (r *MongoTrackRepository) Search(ctx context.Context, keyword, cityCode, tr
 	)
 }
 
-func (r *MongoTrackRepository) CountSearch(ctx context.Context, keyword, cityCode, trackType string) (int64, error) {
+func (r *MongoTrackRepository) CountSearch(ctx context.Context, keyword, cityCode, trackType string, distance ...models.TrackDistanceRange) (int64, error) {
 	filter := bson.M{"status": models.TrackStatusNormal, "raw_track_url": bson.M{"$exists": true, "$nin": bson.A{"", nil}}}
 	if cityCode != "" {
 		filter["city_code"] = bson.M{"$in": config.CityCodeCandidates(cityCode)}
@@ -443,6 +444,7 @@ func (r *MongoTrackRepository) CountSearch(ctx context.Context, keyword, cityCod
 	if keyword != "" {
 		filter["title"] = primitive.Regex{Pattern: regexp.QuoteMeta(keyword), Options: "i"}
 	}
+	applySearchDistanceMongo(filter, distance)
 	return r.collection.CountDocuments(ctx, filter)
 }
 

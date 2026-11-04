@@ -23,7 +23,7 @@
 - **静态文件路由不能直接用 `Static`**：必须用 `StaticFS + PathRewrite`，否则静态资源会 404（原因见 `internal/handler/router.go:57-91`）。
 - **鉴权分组**：所有业务接口都在 `api := h.Group("/api/v1")` 下的 `auth` 子组中；公开接口只有 `/ping`、`/captcha`、`/sms/send`、`/login/*`、`/upgrade/check`、`/achievement/level-rules.html`、`/legal/privacy-policy.html`、`/legal/terms-of-service.html`、`/track-map/areas/:area_id/introduction.html`、安装包静态下载。`/internal/*` 与 `/ops/*` 是内部/运维接口，不走业务 JWT，必须使用内部 token 鉴权。新增业务接口默认加到 `auth` 组，除非有明确登录豁免需求。
 - **Repository 降级链约束**：MySQL / Mongo / in-memory 三种实现都必须实现 `internal/repository/interfaces.go` 里的 interface 全集；新增接口方法时，三份实现都要补齐，否则启动会编译失败或运行时 panic。
-- **搜索结果总数**：`GET /track/search/list` 返回 `total_count`，由三种 TrackRepository 的 `CountSearch` 按关键词、城市、运动类型统计正常且有原始轨迹文件的记录，不受分页游标影响；客户端据此显示搜索总数。
+- **搜索结果总数**：`GET /track/search/list` 返回 `total_count`，由三种 TrackRepository 的 `CountSearch` 按关键词、城市、运动类型和可选路线里程范围统计正常且有原始轨迹文件的记录，不受分页游标影响；客户端据此显示搜索总数。
 - **发现与活动日历**：`internal/repository/track_discovery.go` 的三种 TrackRepository 实现负责象形轨迹筛选和用户轨迹开始时间查询；`internal/service/track_discovery.go` 提供景点、景点关联轨迹、象形轨迹与近 375 天日历（365 天加 10 天缓冲）。发现景点沿用轨迹详情的客户端可见规则，只展示 active 目录，封面优先首张图片，并返回景点描述及完整目录图片 `photos`（url/title/author/author_url/source_url）供详情页轮播与相册展示；图片沿用目录顺序，过滤空 URL，不为此新增供应商请求；按该景点关联的公开、已完成且有原始文件的轨迹数降序、同数按景点 ID 升序分页，游标携带计数和 ID。两个轨迹列表只含公开已完成且有原始文件的记录。日历按请求的 IANA 时区归日，客户端按连续 12 个月的首月第一个周日裁剪并另加本地未上传记录。协议见 `docs/api/track.md`。
 - **反馈图片私有落盘**：意见反馈图片由服务端直接接收，保存到 `<LogDir>/feedback/images/`，必须通过 `/feedback/:feedback_id/images/:image_id` 或 `/ops/feedback/:feedback_id/images/:image_id` 走鉴权 handler 读取；不要放进 `/api/v1/static/*` 公开静态目录。
 - **地区目录唯一来源**：`internal/regions/seed.json` 只在存储没有目录时首次导入，此后省市及海外地区均以 `region_catalog_state` 为准；后台在 `/admin/regions.html` 编辑，Android 首次下载并保存本地文件，后续按版本更新。国内现有外部编码、层级与父级保持稳定；业务城市编号统一使用不可变 `region_id`，旧编码经目录别名兼容，`external_ids` 按来源保存高德 adcode 与 Google 地区 Place ID。协议见 `docs/api/regions.md`。
@@ -168,3 +168,7 @@
 `GET /track/activity/type-distribution` 只取当前JWT用户，返回全部历史已完成、正常/私密且raw_track_url非空的记录按类型聚合的次数、时长秒数、距离米数。删除、进行中与自动创建的未上传原始文件占位记录排除；负数/缺失指标归零，空集合返回items=[]。权限不支持指定其他用户。入口 internal/service/track_activity.go，复用类型归一函数、合并已知别名，未知类型保留，空类型为other；按时长降序、同值按type code排序。
 
 独立 `repository.ActivityTypeStatisticsRepository` 的MySQL GROUP BY、Mongo聚合与内存实现提供相同口径，不逐条加载轨迹、GPS、图片或供应商内容；三种实现有编译期断言。不新建表、列、索引、缓存或后台任务，不改写业务数据。协议见 [运动类型分布](api/track.md#运动类型分布)。客户端合并本机未上传记录后计算比例，统计范围与近12个月日历分开标注。
+
+## 搜索路线里程
+
+搜索列表的min_distance_m（含）/max_distance_m（不含）由handler解析、service验证，在MySQL/Mongo/memory搜索和总数统计前使用相同过滤，保持原游标排序。启用范围时排除未知或非正/非有限里程，未传时保持旧行为。GET /track/search/options属于业务JWT只读接口，返回version=1与服务端维护的各类型分段；客户端不在旧接口上伪造筛选。不新增schema，不改变发现页/象形轨迹/地图查询，完整协议见docs/api/track.md搜索章节。

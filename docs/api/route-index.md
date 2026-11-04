@@ -40,7 +40,8 @@
 | 当前用户点赞过的轨迹列表（与收藏列表同构） | GET | `/track/liked/list` | 是 | [track-likes.md](track-likes.md) |
 | 收藏轨迹（返回收藏状态及总数） | POST | `/track_collect` | 是 | [collect-navigation.md](collect-navigation.md#5-收藏轨迹) |
 | 取消收藏轨迹（返回收藏状态及总数） | DELETE | `/track_collect` | 是 | [collect-navigation.md](collect-navigation.md#6-取消收藏轨迹) |
-| 轨迹搜索列表（支持 `city_code` / `track_type` 筛选） | GET | `/track/search/list` | 是 | [track.md](track.md#7-轨迹搜索列表) |
+| 轨迹搜索列表（支持城市 / 运动类型 / 路线里程筛选） | GET | `/track/search/list` | 是 | [track.md](track.md#7-轨迹搜索列表) |
+| 搜索筛选能力及按运动类型的里程分段 | GET | `/track/search/options` | 是 | [搜索筛选配置](track.md#搜索筛选配置) |
 | 导航使用上报 | POST | `/track/:track_id/navigation/report` | 是 | [collect-navigation.md](collect-navigation.md#8-导航使用上报) |
 | 我的轨迹列表（含精品标识、当前用户收藏状态及总数） | GET | `/track/my/list` | 是 | [track.md](track.md#9-我的轨迹列表) |
 | 用户主页已传轨迹 | GET | `/user/:user_id/tracks` | 是 | [user.md](user.md#个人主页轨迹列表) |

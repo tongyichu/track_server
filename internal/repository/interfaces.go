@@ -62,9 +62,9 @@ type TrackRepository interface {
 	// ListRecommend 返回公开、已完成的推荐轨迹；cityCode 非空时仅返回对应城市的轨迹。
 	ListRecommend(ctx context.Context, userID int64, cityCode string, cursor *models.TrackListCursor, limit int) ([]*models.Track, error)
 	// Search 返回标题匹配的公开轨迹；cityCode、trackType 非空时分别按城市和运动类型精确筛选。
-	Search(ctx context.Context, keyword, cityCode, trackType string, cursor *models.TrackListCursor, limit int) ([]*models.Track, error)
+	Search(ctx context.Context, keyword, cityCode, trackType string, cursor *models.TrackListCursor, limit int, distance ...models.TrackDistanceRange) ([]*models.Track, error)
 	// CountSearch 统计同一搜索条件下可展示的全部轨迹，不受分页游标影响。
-	CountSearch(ctx context.Context, keyword, cityCode, trackType string) (int64, error)
+	CountSearch(ctx context.Context, keyword, cityCode, trackType string, distance ...models.TrackDistanceRange) (int64, error)
 	// ListShaped 返回带象形标签的公开已上传轨迹，按开始时间倒序游标分页。
 	ListShaped(ctx context.Context, cityCode string, cursor *models.TrackListCursor, limit int) ([]*models.Track, error)
 	// ListActivityStartTimes 返回用户一年区间内已完成、已上传轨迹的开始时间。

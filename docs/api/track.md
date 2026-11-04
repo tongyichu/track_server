@@ -512,7 +512,7 @@ curl -X GET "http://<host>:<port>/api/v1/track/trk-detail/detail" \
 
 ## 7. 轨迹搜索列表
 
-按关键字搜索轨迹列表，并可按城市、运动类型精确筛选。
+按关键字搜索轨迹列表，并可按城市、运动类型与路线总里程组合筛选。
 
 **需要认证**
 
@@ -536,9 +536,9 @@ curl -X GET "http://<host>:<port>/api/v1/track/trk-detail/detail" \
 - `city_code` 使用精确匹配；没有匹配轨迹或传入未知 Code 时返回空列表，不返回参数错误。
 - `track_type` 非空时仅返回该运动类型的轨迹，使用 `/track/types` 返回的 `type`；不传、空字符串或仅包含空白字符时不过滤运动类型。
 - `track_type` 使用存储值精确匹配，不对历史中文值做转换；无匹配结果时返回空列表。与 `city_code` 同时传入时，结果必须同时满足两个条件。
-- 响应中的 `total_count` 为当前 `keyword`、`city_code`、`track_type` 条件下可展示轨迹的总数，不受 `cursor` 和 `limit` 影响；仅统计正常状态且 `raw_track_url` 非空的轨迹。
+- 响应中的 `total_count` 为当前 `keyword`、`city_code`、`track_type`、`min_distance_m`、`max_distance_m` 条件下可展示轨迹的总数，不受 `cursor` 和 `limit` 影响；仅统计正常状态且 `raw_track_url` 非空的轨迹。
 - 首次请求不传 `cursor`；继续翻页时透传上一次返回的 `next_cursor`。
-- 翻页时应保持相同的 `keyword`、`city_code` 和 `track_type` 筛选条件。
+- 翻页时应保持相同的关键词、城市、运动类型和里程筛选条件。
 - `limit` 为可选参数，默认 `20`，最大 `50`；超出最大值时服务端会自动截断到 `50`。
 - 响应中的 `has_more` 表示是否还有下一页；仅当 `has_more=true` 时才会返回 `next_cursor`。
 
@@ -556,6 +556,8 @@ Authorization: Bearer <token>
 | `keyword` | string | 否 | 搜索关键字；为空时返回最近轨迹列表。 |
 | `city_code` | string | 否 | 城市 Code。非空时精确筛选对应城市；为空时返回全城市搜索结果。 |
 | `track_type` | string | 否 | 运动类型，使用 `/track/types` 返回的 `type`；非空时精确筛选，空值不过滤。 |
+| `min_distance_m` | number | 否 | 路线总里程下限，米，包含下限。 |
+| `max_distance_m` | number | 否 | 路线总里程上限，米，不包含上限。 |
 | `limit` | int | 否 | 每页返回条数，默认 `20`，最大 `50`。 |
 | `cursor` | string | 否 | 分页游标。首屏不传，翻页时透传上一次响应里的 `next_cursor`。 |
 
@@ -629,6 +631,43 @@ curl -X GET "http://<host>:<port>/api/v1/track/search/list?keyword=西湖&city_c
 ```
 
 ---
+
+### 路线里程筛选
+
+`GET /track/search/list` 新增可选 `min_distance_m`（含下限）和 `max_distance_m`（不含上限），单位米。例如 `track_type=climbing&min_distance_m=5000&max_distance_m=10000` 查询满5公里、不足10公里的爬山路线。单侧允许省略或空值；有值时必须为有限非负数，max必须大于0，双侧存在时min必须小于max，否则400。
+
+距离读取原始 `distance`，不使用卡片四舍五入后的公里数，表示整条路线总里程，与用户到起点的距离无关。启用任一距离边界时排除缺失、非正或非有限距离；两个边界均省略时保持旧行为。城市、关键词、类型、距离取交集，MySQL/Mongo/memory均在排序与分页前过滤，CountSearch使用相同距离条件。翻页必须保持全部条件，改条件清空cursor重新取首屏。不自动扩大范围，不新增表或读取GPS文件。
+
+### 搜索筛选配置
+
+`GET /api/v1/track/search/options`，需要业务JWT。标准响应data示例：
+
+```json
+{
+  "distance_filter_version": 1,
+  "default_ranges": [
+    {"max_distance_m": 5000},
+    {"min_distance_m": 5000, "max_distance_m": 10000},
+    {"min_distance_m": 10000, "max_distance_m": 20000},
+    {"min_distance_m": 20000, "max_distance_m": 50000},
+    {"min_distance_m": 50000}
+  ],
+  "ranges_by_type": {
+    "climbing": [
+      {"max_distance_m": 3000},
+      {"min_distance_m": 3000, "max_distance_m": 5000},
+      {"min_distance_m": 5000, "max_distance_m": 10000},
+      {"min_distance_m": 10000, "max_distance_m": 15000},
+      {"min_distance_m": 15000}
+    ]
+  }
+}
+```
+
+示例仅列出climbing，实际返回当前启用且配置了专属分段的类型。全部/新类型回退default_ranges，客户端自行提供“不限”与自定义输入，按当前语言和公里单位格式化标签，不硬编码类型分段。预设在internal/config/track_search.go维护，当前断点（公里）：徒步5/10/20、爬山3/5/10/15、跑步3/5/10/21、骑行10/30/60/100、自驾50/100/300。
+
+Android仅确认version=1后显示入口；配置失败、旧服务端404或未知版本时隐藏入口，恢复的距离条件清除并提示，不将距离参数发送给未确认支持的服务端。此轮只在搜索页接入，发现页、象形轨迹及地图不增加里程筛选。
+
 
 ## 9. 我的轨迹列表
 

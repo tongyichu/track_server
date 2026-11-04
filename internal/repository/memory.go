@@ -379,7 +379,7 @@ func (r *InMemoryTrackRepository) ListRecommend(_ context.Context, _ int64, city
 }
 
 // Search performs a naive keyword search based on track name.
-func (r *InMemoryTrackRepository) Search(_ context.Context, keyword, cityCode, trackType string, cursor *models.TrackListCursor, limit int) ([]*models.Track, error) {
+func (r *InMemoryTrackRepository) Search(_ context.Context, keyword, cityCode, trackType string, cursor *models.TrackListCursor, limit int, distance ...models.TrackDistanceRange) ([]*models.Track, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -398,6 +398,9 @@ func (r *InMemoryTrackRepository) Search(_ context.Context, keyword, cityCode, t
 			continue
 		}
 		if keyword != "" && !containsIgnoreCase(t.Title, keyword) {
+			continue
+		}
+		if !matchesSearchDistance(t.Distance, distance) {
 			continue
 		}
 		if cursor != nil {
@@ -423,7 +426,7 @@ func (r *InMemoryTrackRepository) Search(_ context.Context, keyword, cityCode, t
 }
 
 // CountSearch 统计与搜索列表相同过滤条件下的全部可展示轨迹。
-func (r *InMemoryTrackRepository) CountSearch(_ context.Context, keyword, cityCode, trackType string) (int64, error) {
+func (r *InMemoryTrackRepository) CountSearch(_ context.Context, keyword, cityCode, trackType string, distance ...models.TrackDistanceRange) (int64, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	var count int64
@@ -432,6 +435,9 @@ func (r *InMemoryTrackRepository) CountSearch(_ context.Context, keyword, cityCo
 			continue
 		}
 		if (cityCode != "" && !sameRegionCode(t.CityCode, cityCode)) || (trackType != "" && t.TrackType != trackType) {
+			continue
+		}
+		if !matchesSearchDistance(t.Distance, distance) {
 			continue
 		}
 		if keyword == "" || containsIgnoreCase(t.Title, keyword) {

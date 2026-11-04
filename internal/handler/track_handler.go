@@ -344,7 +344,12 @@ func (h *TrackHandler) SearchTracks(ctx context.Context, c *app.RequestContext) 
 		}
 		limit = parsed
 	}
+	distance, ok := searchDistanceQuery(c)
+	if !ok {
+		return
+	}
 	page, err := h.trackSvc.SearchTracks(ctx, userID, service.SearchTracksInput{
+		Distance:  distance,
 		Keyword:   keyword,
 		CityCode:  string(c.Query("city_code")),
 		TrackType: string(c.Query("track_type")),
