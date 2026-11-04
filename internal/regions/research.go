@@ -8,11 +8,13 @@ import (
 	"fmt"
 	"html"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 )
@@ -72,17 +74,47 @@ func NewResearcher(key, model string) *Researcher {
 
 func (r *Researcher) Ready() bool { return r != nil && r.key != "" }
 
-func (r *Researcher) Research(ctx context.Context, node Node, hierarchy []string) (*ResearchDraft, error) {
+func (r *Researcher) Research(ctx context.Context, node Node, hierarchy []string) (draft *ResearchDraft, researchErr error) {
+	started := time.Now()
+	var generalTime, sloganTime, completionTime, photoTime time.Duration
+	stage := "configuration"
+	defer func() {
+		status := "ok"
+		if researchErr != nil {
+			status = "error"
+		}
+		log.Printf("[RegionResearch] region_id=%s status=%s stage=%s total_ms=%d general_ms=%d slogan_ms=%d completion_ms=%d photos_ms=%d", node.RegionID, status, stage, time.Since(started).Milliseconds(), generalTime.Milliseconds(), sloganTime.Milliseconds(), completionTime.Milliseconds(), photoTime.Milliseconds())
+	}()
 	if !r.Ready() {
 		return nil, errors.New("城市 AI 联网查询未配置")
 	}
 	path := strings.Join(hierarchy, "、")
 	query := path + " 地区 地标 旅游 官方 简介 英文名称"
 	var search researchSearchResponse
-	if err := r.moonshotJSON(ctx, "/tools/search_pro", map[string]any{"text_query": query, "limit": 6, "timeout_seconds": 30}, &search); err != nil {
-		return nil, fmt.Errorf("城市资料检索失败: %w", err)
+	var sloganSearch researchSearchResponse
+	var searchErr, sloganErr error
+	var wg sync.WaitGroup
+	wg.Add(2)
+	stage = "search"
+	go func() {
+		defer wg.Done()
+		step := time.Now()
+		searchErr = r.moonshotJSON(ctx, "/tools/search_pro", map[string]any{"text_query": query, "limit": 6, "timeout_seconds": 30}, &search)
+		generalTime = time.Since(step)
+	}()
+	go func() {
+		defer wg.Done()
+		step := time.Now()
+		sloganQuery := path + " 文旅 旅游 宣传口号 旅游形象口号 旅游宣传语"
+		sloganErr = r.moonshotJSON(ctx, "/tools/search_pro", map[string]any{"text_query": sloganQuery, "limit": 8, "timeout_seconds": 30}, &sloganSearch)
+		sloganTime = time.Since(step)
+	}()
+	wg.Wait()
+	if searchErr != nil {
+		stage = "general_search"
+		return nil, fmt.Errorf("城市资料检索失败: %w", searchErr)
 	}
-	draft := &ResearchDraft{RegionID: node.RegionID, Sources: []ResearchSource{}, Photos: []PhotoCandidate{}}
+	draft = &ResearchDraft{RegionID: node.RegionID, Sources: []ResearchSource{}, Photos: []PhotoCandidate{}}
 	var evidence strings.Builder
 	for _, result := range search.SearchResults {
 		link := strings.TrimSpace(result.URL)
@@ -102,13 +134,12 @@ func (r *Researcher) Research(ctx context.Context, node Node, hierarchy []string
 		}
 	}
 	if len(draft.Sources) == 0 {
+		stage = "source_validation"
 		return nil, errors.New("没有查到可核对的城市资料来源")
 	}
 	sloganSources := make(map[string]string)
 	var sloganEvidence strings.Builder
-	var sloganSearch researchSearchResponse
-	sloganQuery := path + " 文旅 旅游 宣传口号 旅游形象口号 旅游宣传语"
-	if err := r.moonshotJSON(ctx, "/tools/search_pro", map[string]any{"text_query": sloganQuery, "limit": 8, "timeout_seconds": 30}, &sloganSearch); err == nil {
+	if sloganErr == nil {
 		for _, result := range sloganSearch.SearchResults {
 			link := strings.TrimSpace(result.URL)
 			if !strings.HasPrefix(link, "https://") || strings.TrimSpace(result.Title) == "" {
@@ -127,18 +158,22 @@ func (r *Researcher) Research(ctx context.Context, node Node, hierarchy []string
 				break
 			}
 		}
+	} else {
+		log.Printf("[RegionResearch] region_id=%s slogan_search_failed: %v", node.RegionID, sloganErr)
 	}
 	prompt := fmt.Sprintf("地区层级：%s\n内部编号：%s\n现有英文名：%s\n现有口号（仅供辨别，不是证据）：%s\n现有简介：%s\n\n地区资料：\n%s\n\n文旅口号专项检索资料：\n%s\n请只依据资料生成适合户外目的地客户端的地区资料。英文名用通行官方译名；简介用中文 100-250 字，突出地理位置、自然与人文地标，避开价格、开放时间等易变信息。slogan 只能填写该地区文旅部门或旅游推广中实际使用、有来源明确记载的旅游宣传口号/旅游形象口号，须照来源原文摘录，不创作、不改写。城市精神、文明创建、招商引资、政务施政、体育赛事、品牌商品等其他口号一律不能用；不能确认是文旅口号或没有可核对来源时填空字符串。slogan_source_url 填写文旅口号专项检索资料中明确载有该口号的原始链接，slogan 为空时也留空。其他字段资料不能确定时填空字符串。只输出 JSON 对象，键固定为 name_en、slogan、slogan_source_url、description。简介不要引用整段原文。", path, node.RegionID, node.NameEN, node.Slogan, node.Description, evidence.String(), sloganEvidence.String())
 	var completion struct {
 		Choices []struct {
-			Message struct {
+			FinishReason string `json:"finish_reason"`
+			Message      struct {
 				Content string `json:"content"`
 			} `json:"message"`
 		} `json:"choices"`
 	}
 	completionInput := map[string]any{
 		"model": r.model, "temperature": 1, "max_tokens": 32768,
-		"messages": []map[string]string{{"role": "system", "content": "你是严谨的地区资料编辑，只依据提供的来源写作，不猜测。"}, {"role": "user", "content": prompt}},
+		"response_format": map[string]string{"type": "json_object"},
+		"messages":        []map[string]string{{"role": "system", "content": "你是严谨的地区资料编辑，只依据提供的来源写作，不猜测。"}, {"role": "user", "content": prompt}},
 	}
 	if r.model == "kimi-k2.6" || r.model == "kimi-k2.5" {
 		completionInput["thinking"] = map[string]string{"type": "disabled"}
@@ -146,16 +181,22 @@ func (r *Researcher) Research(ctx context.Context, node Node, hierarchy []string
 		completionInput["temperature"] = 0.6
 		completionInput["top_p"] = 0.95
 	}
+	stage = "completion"
+	step := time.Now()
 	if err := r.moonshotJSON(ctx, "/chat/completions", completionInput, &completion); err != nil {
+		completionTime = time.Since(step)
 		return nil, fmt.Errorf("城市资料整理失败: %w", err)
 	}
+	completionTime = time.Since(step)
 	if len(completion.Choices) == 0 {
 		return nil, errors.New("城市 AI 未返回资料")
 	}
-	content := completion.Choices[0].Message.Content
-	start, end := strings.IndexByte(content, '{'), strings.LastIndexByte(content, '}')
-	if start < 0 || end <= start {
-		return nil, errors.New("城市 AI 返回格式无效")
+	choice := completion.Choices[0]
+	content := strings.TrimSpace(choice.Message.Content)
+	if choice.FinishReason == "length" {
+		log.Printf("[RegionResearch] region_id=%s truncated_completion content_bytes=%d", node.RegionID, len(content))
+		stage = "completion_format"
+		return nil, errors.New("城市 AI 输出被截断，请重试")
 	}
 	var fields struct {
 		NameEN          string `json:"name_en"`
@@ -163,7 +204,9 @@ func (r *Researcher) Research(ctx context.Context, node Node, hierarchy []string
 		SloganSourceURL string `json:"slogan_source_url"`
 		Description     string `json:"description"`
 	}
-	if err := json.Unmarshal([]byte(content[start:end+1]), &fields); err != nil {
+	if err := json.Unmarshal([]byte(content), &fields); err != nil || !strings.HasPrefix(content, "{") {
+		log.Printf("[RegionResearch] region_id=%s invalid_completion finish_reason=%q content_bytes=%d decode_error=%v", node.RegionID, choice.FinishReason, len(content), err)
+		stage = "completion_format"
 		return nil, errors.New("城市 AI 返回格式无效")
 	}
 	draft.NameEN = strings.TrimSpace(fields.NameEN)
@@ -180,27 +223,56 @@ func (r *Researcher) Research(ctx context.Context, node Node, hierarchy []string
 		photoQueries = append(photoQueries, draft.NameEN+" skyline", draft.NameEN+" landscape", draft.NameEN+" landmark")
 	}
 	photoQueries = append(photoQueries, node.Name+" 风景", node.Name+" 地标", node.Name+" 城市")
+	stage = "photos"
+	step = time.Now()
+	draft.Photos = r.findResearchPhotos(ctx, node.RegionID, photoQueries)
+	photoTime = time.Since(step)
+	stage = "done"
+	return draft, nil
+}
+
+func (r *Researcher) findResearchPhotos(ctx context.Context, regionID string, queries []string) []PhotoCandidate {
+	photos := make([]PhotoCandidate, 0, 3)
 	seen := make(map[string]bool)
-	for _, term := range photoQueries {
-		if len(draft.Photos) == 3 {
-			break
+	for start := 0; start < len(queries) && len(photos) < 3; start += 3 {
+		end := start + 3
+		if end > len(queries) {
+			end = len(queries)
 		}
-		searchCtx, cancel := context.WithTimeout(ctx, 12*time.Second)
-		candidates, err := r.searchCommons(searchCtx, term)
-		cancel()
-		if err != nil {
-			continue // Text research remains usable when Commons is unavailable.
+		results := make([][]PhotoCandidate, end-start)
+		var wg sync.WaitGroup
+		for index := start; index < end; index++ {
+			wg.Add(1)
+			go func(index int) {
+				defer wg.Done()
+				step := time.Now()
+				searchCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+				defer cancel()
+				candidates, err := r.searchCommons(searchCtx, queries[index])
+				results[index-start] = candidates
+				status := "ok"
+				if err != nil {
+					status = "error"
+				}
+				log.Printf("[RegionResearch] region_id=%s photo_query=%d status=%s duration_ms=%d candidates=%d", regionID, index+1, status, time.Since(step).Milliseconds(), len(candidates))
+			}(index)
 		}
-		for _, candidate := range candidates {
-			if seen[candidate.FileTitle] {
-				continue
+		wg.Wait()
+		for _, candidates := range results {
+			for _, candidate := range candidates {
+				if seen[candidate.FileTitle] {
+					continue
+				}
+				seen[candidate.FileTitle] = true
+				photos = append(photos, candidate)
+				break
 			}
-			seen[candidate.FileTitle] = true
-			draft.Photos = append(draft.Photos, candidate)
-			break
+			if len(photos) == 3 {
+				return photos
+			}
 		}
 	}
-	return draft, nil
+	return photos
 }
 
 func (r *Researcher) moonshotJSON(ctx context.Context, endpoint string, input, output any) error {
