@@ -118,6 +118,7 @@ func descriptionSourceIsAuto(source string) bool { return source == "" || source
 
 // CreateTrackInput describes optional fields accepted by track creation.
 type CreateTrackInput struct {
+	StepCount                 *int64                     `json:"step_count"`
 	ShapeLabel                *string                    `json:"shape_label"`
 	PreviewImages             *models.TrackPreviewImages `json:"preview_images"`
 	Title                     *string                    `json:"title"`
@@ -204,6 +205,9 @@ func (in CreateTrackInput) validate() error {
 	if in.ElevationGain != nil && *in.ElevationGain < 0 {
 		return invalidArg("elevation_gain must be >= 0")
 	}
+	if in.StepCount != nil && *in.StepCount < 0 {
+		return invalidArg("step_count must be >= 0")
+	}
 	if in.AvgSpeedKmh != nil && *in.AvgSpeedKmh < 0 {
 		return invalidArg("avg_speed_kmh must be >= 0")
 	}
@@ -229,6 +233,7 @@ func validateTrackSourceTag(sourceTag string) error {
 // TrackInfoPatch describes which track summary fields should be updated.
 // Nil means the field is not provided and should remain unchanged.
 type TrackInfoPatch struct {
+	StepCount                 *int64                     `json:"step_count"`
 	ShapeLabel                *string                    `json:"shape_label"`
 	Status                    *models.TrackStatus        `json:"status"`
 	Description               *string                    `json:"description"`
@@ -281,7 +286,7 @@ func (p *TrackInfoPatch) normalize() {
 }
 
 func (p TrackInfoPatch) empty() bool {
-	return p.ShapeLabel == nil && p.Status == nil && p.Description == nil && p.PreviewImages == nil && p.SessionID == nil &&
+	return p.StepCount == nil && p.ShapeLabel == nil && p.Status == nil && p.Description == nil && p.PreviewImages == nil && p.SessionID == nil &&
 		p.CityCode == nil &&
 		p.LocateAddr == nil &&
 		p.TrackType == nil &&
@@ -359,9 +364,9 @@ func normalizeTrackTypeCode(trackType string) string {
 		return "running"
 	case "hiking", "hike", "walk", "walking":
 		return "hiking"
-	case "climbing", "mountain", "mountaineering":
+	case "climbing", "climb", "mountain", "mountaineering":
 		return "climbing"
-	case "riding", "cycling", "bike", "biking":
+	case "riding", "ride", "cycling", "cycle", "bike", "biking":
 		return "riding"
 	case "driving", "drive":
 		return "driving"
@@ -631,6 +636,10 @@ func (s *TrackService) CreateTrack(ctx context.Context, userID int64, input Crea
 	}
 	if input.ElevationGain != nil {
 		track.ElevationGain = *input.ElevationGain
+	}
+	if input.StepCount != nil {
+		steps := *input.StepCount
+		track.StepCount = &steps
 	}
 	if input.RawTrackURL != nil {
 		track.RawTrackURL = *input.RawTrackURL
@@ -1472,6 +1481,9 @@ func (s *TrackService) UpdateTrackInfo(ctx context.Context, userID int64, trackI
 	if patch.ElevationGain != nil && *patch.ElevationGain < 0 {
 		return nil, invalidArg("elevation_gain must be >= 0")
 	}
+	if patch.StepCount != nil && *patch.StepCount < 0 {
+		return nil, invalidArg("step_count must be >= 0")
+	}
 	if patch.AvgSpeedKmh != nil && *patch.AvgSpeedKmh < 0 {
 		return nil, invalidArg("avg_speed_kmh must be >= 0")
 	}
@@ -1560,6 +1572,11 @@ func (s *TrackService) UpdateTrackInfo(ctx context.Context, userID int64, trackI
 	}
 	if patch.ElevationGain != nil && track.ElevationGain == 0 {
 		track.ElevationGain = *patch.ElevationGain
+		updated = true
+	}
+	if patch.StepCount != nil && track.StepCount == nil {
+		steps := *patch.StepCount
+		track.StepCount = &steps
 		updated = true
 	}
 	if patch.AvgSpeedKmh != nil && track.AvgSpeedKmh == 0 {

@@ -114,7 +114,7 @@ func (h *TrackHandler) ActivityCalendar(ctx context.Context, c *app.RequestConte
 		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid timezone"})
 		return
 	}
-	result, err := h.trackSvc.ActivityCalendar(ctx, userID, timezone)
+	result, err := h.trackSvc.ActivityCalendar(ctx, userID, timezone, string(c.Query("track_type")))
 	if err != nil {
 		discoveryError(c, err)
 		return

@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/tongyichu/track_server/internal/models"
 	"github.com/tongyichu/track_server/internal/repository"
@@ -238,43 +237,4 @@ func (s *TrackService) DiscoverShapes(ctx context.Context, userID int64, cityCod
 		return nil, err
 	}
 	return buildTrackSummaryPage(summaries, hasMore)
-}
-
-type ActivityDay struct {
-	Date  string `json:"date"`
-	Count int    `json:"count"`
-}
-type ActivityCalendar struct {
-	StartDate  string        `json:"start_date"`
-	EndDate    string        `json:"end_date"`
-	TotalCount int           `json:"total_count"`
-	Days       []ActivityDay `json:"days"`
-}
-
-func (s *TrackService) ActivityCalendar(ctx context.Context, userID int64, timezone string) (*ActivityCalendar, error) {
-	loc, err := time.LoadLocation(timezone)
-	if err != nil {
-		return nil, invalidArg("invalid timezone")
-	}
-	now := time.Now().In(loc)
-	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
-	// 为客户端连续 12 个月的首月完整周保留缓冲。
-	from := today.AddDate(0, 0, -374)
-	until := today.AddDate(0, 0, 1)
-	starts, err := s.tracks.ListActivityStartTimes(ctx, userID, from, until)
-	if err != nil {
-		return nil, err
-	}
-	counts := make(map[string]int)
-	for _, start := range starts {
-		counts[start.In(loc).Format("2006-01-02")]++
-	}
-	result := &ActivityCalendar{StartDate: from.Format("2006-01-02"), EndDate: today.Format("2006-01-02"), TotalCount: len(starts), Days: make([]ActivityDay, 0, len(counts))}
-	for day := from; !day.After(today); day = day.AddDate(0, 0, 1) {
-		date := day.Format("2006-01-02")
-		if count := counts[date]; count > 0 {
-			result.Days = append(result.Days, ActivityDay{Date: date, Count: count})
-		}
-	}
-	return result, nil
 }

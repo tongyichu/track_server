@@ -26,6 +26,7 @@ type TrackPoint struct {
 // Track aggregates persisted fields of track_records.
 // Points is transient field kept for existing service logic.
 type Track struct {
+	StepCount                 *int64                   `json:"step_count,omitempty" bson:"step_count,omitempty"`
 	Labels                    []TrackLabel             `json:"labels" bson:"-"`
 	ShapeLabel                string                   `json:"shape_label,omitempty" bson:"shape_label,omitempty"`
 	PrimaryScenicSpot         *TrackPrimaryScenicSpot  `json:"primary_scenic_spot,omitempty" bson:"-"`

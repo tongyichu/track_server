@@ -123,3 +123,11 @@
 - 当前容器fddc45739df5c8047cd47c24f05c0ce071aa768e0ee397063a695e9fe3c74aa3，running、restarts=0，MySQL仓储正常、无内存降级、3个后台账号加载正常；.env与持久化挂载未变，旧镜像保留。内外ping均200，新分布接口未登录401，后台API401/页面302/登录200，资源版本0bfa611dcbe21190d0a7。
 - 回执/private/tmp/track-type-distribution-deploy-20261104.json；构建元数据和日志为同前缀image-20261104.json、20261104.log。未创建业务测试数据或调用私有统计接口自动化。AGENTS仍有10个既有超长源码问题，无路径告警。
 - 用户随后要求发布App并追加数据页标题调整，客户端发布继续；本文档回执不改变已部署1008464源码快照。
+
+## 2026-11-04：年度活动多指标、运动类型筛选和步数保存
+
+- 用户同意数据页格子图指标切换和页面右上运动类型筛选。扩展原GET /track/activity/calendar，增加可选track_type、metrics_version=1和筛选回显，日指标包含count/distance_meters/duration_seconds/elevation_gain_meters/step_count/step_track_count。近375天IANA时区缓冲、仅本人正常/私密/已完成/有raw文件等边界保持，旧客户端count字段兼容；Android仍展示最近12个月。
+- 新ActivityCalendarRepository在MySQL/Mongo/memory一次读取限时段指标投影、不读GPS，service归一类型后汇总当地日期，过滤发生在统计前，无逐项详情请求。新增climb/ride/cycle旧别名归一，与客户端一致；未知类型保留，空类型other。
+- Track/CreateTrackInput/TrackInfoPatch新增可空非负step_count；未知不写0，补全更新仅填缺失。MySQL nullable BIGINT、新建schema/启动检查/mysql.sql、两种完整读取scan、INSERT/UPDATE同步；Mongo Insert/Update和内存同步保存。步数聚合排除自驾/骑行，未采集null，部分有值按step_track_count解释；Android只上传真实采集正值，不按距离估算、不补假历史数据。
+- API分册、模型、路由索引、AGENTS统计入口已更新。go build ./...、gofmt与git diff --check通过；Android最终assembleDebug通过并安装小米，按约定没有业务自动化/测试数据。规则校验剩既有10处超长源码，无路径告警，报告/private/tmp/track-data-metrics-server-agents-20261104.json。
+- 本轮仅实现，未提交推送、部署服务端或发布App。生产仍是1008464镜像；完整云端多指标/类型筛选须部署本轮代码，新增步数字段迁移随启动schema检查执行。

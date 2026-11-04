@@ -138,6 +138,7 @@ func (r *MongoTrackRepository) Update(ctx context.Context, t *models.Track) erro
 			"calories_burned":                t.CaloriesBurned,
 			"avg_speed_kmh":                  t.AvgSpeedKmh,
 			"elevation_gain":                 t.ElevationGain,
+			"step_count":                     t.StepCount,
 			"raw_track_url":                  t.RawTrackURL,
 			"track_screenshot_url":           t.TrackScreenshotURL,
 			"track_no_map_bg_screenshot_url": t.TrackNoMapBgScreenshotURL,

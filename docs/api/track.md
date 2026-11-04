@@ -18,6 +18,22 @@
 轨迹投稿、审核状态和优质投稿展示字段见 [track-submission.md](track-submission.md)。审核通过的推荐/搜索摘要会返回 `is_featured`、`featured_description`、`featured_cover_url`，并用投稿标题覆盖响应中的 `title`；`track_records.title` 不会被修改。
 
 
+## 年度活动指标
+
+`GET /track/activity/calendar?timezone=Asia%2FShanghai&track_type=hiking`需要业务JWT，仅查询当前用户。`track_type`可省略表示全部类型，不传`all`，有值时按稳定code筛选；归一已知别名后统计，保留历史未知类型。时间范围仍为最近375个当地自然日，客户端从连续12个月的首月第一个周日起展示。默认时区、非法时区400、公开/私密/已完成/有原始文件等边界与原日历一致。
+
+响应新增`metrics_version:1`和回显`track_type`（全部为`""`）。`days`每项为：
+
+```json
+{"date":"2026-11-04","count":2,"distance_meters":12800.5,"duration_seconds":7200,"elevation_gain_meters":600,"step_count":15000,"step_track_count":1}
+```
+
+里程单位米、时长秒、爬升米；非法/负数指标不参与累计。步数为真实记录的非负值之和，未采集为`null`，`step_track_count`是有步数的活动数；自驾和骑行不计步数。仅有部分活动记录步数时，客户端明确只统计有记录的运动。无活动日期不列出；日期按当地开始时间归组、升序返回。旧`count`和`total_count`兼容保留。MySQL/Mongo/memory单次读取限定时段的指标投影后聚合，不加载GPS或逐项补详情；数据库错误正常返回错误。
+
+创建轨迹及所有者补全更新新增可选`step_count`非负64位整数，省略或null表示未知，不覆盖已保存的步数；更新仅填原值缺失。详情可返回该字段，旧客户端可忽略。MySQL新增可空BIGINT列并通过启动schema检查补建，`mysql.sql`同步；Mongo保存同名可选字段，memory保持同一语义。Android上传本机已记录的正步数，0且无法确认采集状态的历史记录保留未知；不从距离估算，也不伪造历史步数。
+
+Android左上指标菜单提供次数/里程/时长/累计爬升/步数，右上页面级类型筛选同时作用于格子图和全部历史类型分布。三种模式均保持近12个月；每天按所选值分级着色（次数沿用原阈值，其他指标相对最大日值分4档），每周按所选指标最大周值归一7格，累计按所选指标总值归一7格。旧服务端无`metrics_version`时，仅全部类型的次数继续使用云端数据，其他组合明确提示仅本机未上传记录，不把全部类型结果冒充筛选结果。
+
 ## 主景区标签
 
 轨迹详情及推荐、搜索、我的轨迹、本人收藏、客态主页的轨迹摘要可选返回 `primary_scenic_spot`：
