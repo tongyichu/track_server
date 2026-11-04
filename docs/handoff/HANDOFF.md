@@ -25,3 +25,21 @@
 ## 历史
 
 - [上一轮交接](history_handoff/HANDOFF-20261104-150953.md) 保留图表统计接口及部署前同步信息。
+
+## 本次部署前同步
+
+- 合入origin/main 1251e27，远端两项新增仅为历史部署回执，未改变本次已通过编译的业务源码。以下保留上游部署记录。
+
+## 2026-11-04：年度多指标接口部署与两端推送
+
+- 用户先要求部署Server，随后追加推送两端代码；继续完成部署。服务端main/86acba4e9227f327b9754089213d01b76cbd08ea已推送，远端无额外更新；go build ./...与git diff --check通过，从该干净源码构建linux/amd64镜像。
+- 镜像manifest sha256:8539cc17a149651eb8b492d036131ce376c3bb7fd39f516a6b6276fe4d0baf3f，配置ID sha256:f32e3ec94d61d35d4bc16db2fcd3c100fdb4e9e619825982463c57dfe508885e。核对registry清单、revision和架构后运行生产既有update_track_server.sh，容器d6abffafd1f72062e89e164daa0eb0f3ced9bf3140c8d0a74566381385c2fd15使用预期配置镜像。
+- 内外ping均200/hello track app，容器running且重启0，MySQL正常、无内存降级，3个后台账号加载正常，无step_count未知列错误；日历及类型分布未登录401、后台API401/页面302/登录200。环境文件及持久化挂载保留，旧a51459e6镜像保留，未创建测试业务数据或调用私有指标接口自动化。
+- 回执/private/tmp/track-data-metrics-deploy-20261104.json；镜像元数据与部署日志为同前缀image-20261104.json、20261104.log。本文档回执不改变已部署86acba4源码快照。
+- Android合入远端至72cda62，保留数据页整页刷新、横滑锁定与失败保留缓存，合并后assembleDebug通过（9s）；两端最终Git提交/推送及Debug安装以会话回复为准。本轮不递增App版本或上传Release。
+
+
+## 2026-11-04：部署回执Git同步
+
+- 补推部署回执时远端新增814d29e/4629622后台轨迹统计提交，普通merge保留新后台代码及本次部署回执，前序完整交接沿用113807历史归档。此合并用于Git收尾，不重建或覆盖本轮已部署的86acba4镜像；新后台功能的部署状态由对应部署回执记录。
+- 客户端main/676bc213c10e7c4cb692037b3ad9bf066d11a4a8已推送并再次fetch确认同步；合并后的Debug1.0.18（19）已安装小米3e7cd913，前台MainActivity确认。
