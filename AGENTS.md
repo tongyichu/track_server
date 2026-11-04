@@ -1,7 +1,7 @@
 # AGENTS.md — track_server
 
 <!-- Last updated: 2026-11-04T00:36:06+08:00 -->
-<!-- Last verified: 2026-11-04T11:21:53+08:00 -->
+<!-- Last verified: 2026-11-04T15:20:13+08:00 -->
 
 **Precedence:** 用户当前明确指令 > 最近的 AGENTS.md > 父级 AGENTS.md > README/参考文档。
 默认中文回复。用本文件定位约束与入口，实现细节以源码为准；发现文档与代码不一致时指出并校正。
@@ -30,6 +30,7 @@ Go/Hertz 轨迹服务，调用链为 middleware → handler → service → repo
 |---|---|
 | 路由、配置、接口、表结构 | internal/handler/router.go、internal/config/config.go、internal/repository/interfaces.go、mysql.sql；[API 索引](docs/api/README.md)、[路由索引](docs/api/route-index.md) |
 | 本人运动指标、类型分布及步数保存 | [日历实现](internal/service/track_activity_calendar.go)、[指标仓储](internal/repository/track_activity_calendar.go)、[步数schema](internal/repository/track_step_count.go)；[年度活动指标](docs/api/track.md#年度活动指标)、[运动类型分布](docs/api/track.md#运动类型分布) |
+| 本人全部历史个人纪录 | [纪录实现](internal/service/track_personal_records.go)、[三种仓储](internal/repository/track_personal_records.go)；[个人纪录协议](docs/api/track.md#个人纪录) |
 | 轨迹/用户/发现/日历/互动、元数据、各业务默认值和数据边界 | [服务端契约](docs/server-contracts.md)，再查 docs/api/ 对应业务分册 |
 | 登录、成就、投稿、同行、限制、反馈、静态资源、四图补齐、H5、纠错及后台导入调用链 | [服务端流程](docs/server-flows.md) |
 | 地图索引/路线组/景点/坐标 | [契约](docs/server-contracts.md)、[索引流程](docs/server-flows.md#首页地图索引流程)、[地图方案](track_map.md)、[景点识别](docs/track-place-discovery.md)、[边界维护](internal/maparea/README.md) |

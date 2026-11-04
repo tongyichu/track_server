@@ -39,3 +39,12 @@
 
 - 补推部署回执时远端新增814d29e/4629622后台轨迹统计提交，普通merge保留新后台代码及本次部署回执，前序完整交接沿用113807历史归档。此合并用于Git收尾，不重建或覆盖本轮已部署的86acba4镜像；新后台功能的部署状态由对应部署回执记录。
 - 客户端main/676bc213c10e7c4cb692037b3ad9bf066d11a4a8已推送并再次fetch确认同步；合并后的Debug1.0.18（19）已安装小米3e7cd913，前台MainActivity确认。
+
+
+## 2026-11-04：本人全部历史个人纪录接口
+
+- 配合用户要求的紧凑纪录卡，新增JWT GET /track/activity/records，可选track_type、仅本人、no-store，返回按类型分组的distance/elevation/duration/steps纪录及获纪录轨迹摘要/鉴权预览地址。只统计正常/私密、已完成且有原始文件的全部历史；有限正数才产生纪录，按值、开始日期、ID比较，并列取较新。自驾仅距离/时长，骑行不含步数，真实步数缺失保持无纪录。
+- PersonalRecordsRepository在MySQL/Mongo/memory三实现分别选各原始类型/指标候选ID，再一次FindByIDs取少量获纪录轨迹，service归一类型后比较。SQL使用分组MAX与日期+ID并列选择，兼容没有窗口函数的MySQL；Mongo排序分组，memory同规则。无新表/字段，不取GPS、不逐项详情、不拉取资源；toSummaries直接投影现有静态预览路由，避开BuildTrackSummaries的旧资源缓存下载。
+- Android会将云端纪录与当前账号已完成且未上传本机轨迹合并比较；全局类型筛选生效，最多四格、带56×42dp预览，缺图占位，点item进入详情。未部署新接口时明确只有本机未上传纪录，不用假数据。
+- gofmt、go build ./...、git diff --check通过，Android最终assembleDebug通过（8s）；未新增或运行单元/UI/接口自动化。API分册、路由索引和AGENTS入口已同步，规则仅剩既有10处超长源码，报告/private/tmp/track-personal-records-server-agents-20261104.json。
+- 本轮未提交推送或部署生产；先前已部署的统计接口不因本轮本地改动而自动上线个人纪录。用户后续明确部署时按server-only流程同步远端、提交推送、构建镜像并健康复核。
