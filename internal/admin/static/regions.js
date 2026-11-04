@@ -9,7 +9,6 @@
   let persistedNodes = new Map();
   let expandedIds = new Set();
   let saving = false;
-  let uploadsInFlight = 0;
   let researchDraft = null;
   let researchNodeId = '';
   let researchingNodeId = '';
@@ -42,7 +41,7 @@
   }
 
   function updateSaveState() {
-    $('regionSaveNode').disabled = !editable() || saving || uploadsInFlight > 0 || !dirtyIds.has(selectedId);
+    $('regionSaveNode').disabled = !editable() || saving || !dirtyIds.has(selectedId);
   }
 
   function markDirty(node, message) {
@@ -182,78 +181,7 @@
     else root.textContent = query ? '没有匹配的地区' : '当前国家还没有下级地区';
   }
 
-  function imageURL(url) {
-    return url?.startsWith('/api/v1/static/regions/')
-      ? '/admin/api/static/regions/' + url.split('/').pop() : url;
-  }
-
   function editable() { return !!(window.AdminAccess && AdminAccess.can('regions', true)); }
-
-  function photosOf(node) {
-    if (!Array.isArray(node.photos)) node.photos = node.cover_url ? [{ id: 'legacy-' + node.id, url: node.cover_url }] : [];
-    return node.photos;
-  }
-
-  function updateCover(node) { node.cover_url = photosOf(node)[0]?.url || ''; }
-
-  function renderPhotos() {
-    const node = current();
-    const root = $('regionPhotos');
-    root.replaceChildren();
-    if (!node) return;
-    const photos = photosOf(node);
-    photos.forEach((photo, index) => {
-      const card = document.createElement('div');
-      card.className = 'region-photo-card';
-      card.draggable = editable();
-      card.dataset.index = String(index);
-      const image = document.createElement('img');
-      image.src = imageURL(photo.url);
-      image.alt = photo.title || node.name + '风景照';
-      const line = document.createElement('div');
-      line.className = 'region-photo-card-line';
-      const label = document.createElement('span');
-      label.textContent = index === 0 ? '封面 · 第 1 张' : '第 ' + (index + 1) + ' 张';
-      line.appendChild(label);
-      const actions = document.createElement('div');
-      actions.className = 'region-photo-actions';
-      [['↑', -1, '前移'], ['↓', 1, '后移']].forEach(([symbol, offset, title]) => {
-        const button = document.createElement('button');
-        button.type = 'button'; button.className = 'btn btn-sm btn-outline-secondary';
-        button.textContent = symbol; button.title = title;
-        button.disabled = !editable() || index + offset < 0 || index + offset >= photos.length;
-        button.addEventListener('click', () => { [photos[index], photos[index + offset]] = [photos[index + offset], photos[index]]; updateCover(node); markDirty(node, '图片顺序已调整，请保存当前节点'); renderPhotos(); });
-        actions.appendChild(button);
-      });
-      const remove = document.createElement('button');
-      remove.type = 'button'; remove.className = 'btn btn-sm btn-outline-danger'; remove.textContent = '移除';
-      remove.disabled = !editable();
-      remove.addEventListener('click', () => { photos.splice(index, 1); updateCover(node); markDirty(node, '图片已从城市资料移除，请保存当前节点'); renderPhotos(); });
-      actions.appendChild(remove);
-      line.appendChild(actions);
-      card.append(image, line);
-      if (photo.source_url) {
-        const credit = document.createElement('a');
-        credit.href = photo.source_url; credit.target = '_blank'; credit.rel = 'noopener noreferrer';
-        credit.textContent = [photo.attribution, photo.license].filter(Boolean).join(' · ') || '查看图片来源';
-        card.appendChild(credit);
-      }
-      card.addEventListener('dragstart', event => event.dataTransfer.setData('application/x-region-photo-index', String(index)));
-      card.addEventListener('dragover', event => { if (editable()) event.preventDefault(); });
-      card.addEventListener('drop', event => {
-        if (!editable()) return;
-        event.preventDefault();
-        const rawIndex = event.dataTransfer.getData('application/x-region-photo-index');
-        const from = Number(rawIndex);
-        if (rawIndex === '') return;
-        if (!Number.isInteger(from) || from < 0 || from >= photos.length || from === index) return;
-        photos.splice(index, 0, photos.splice(from, 1)[0]);
-        updateCover(node); markDirty(node, '图片顺序已调整，请保存当前节点'); renderPhotos();
-      });
-      root.appendChild(card);
-    });
-    $('regionImageFile').disabled = !editable() || photos.length >= 3;
-  }
 
   function renderResearch() {
     const available = researchDraft && researchNodeId === selectedId;
@@ -261,7 +189,7 @@
     if (!available) return;
     const fields = $('regionDraftFields');
     fields.replaceChildren();
-    [['英文名称', researchDraft.name_en], ['文旅宣传口号', researchDraft.slogan], ['简介', researchDraft.description]].forEach(([label, value]) => {
+    [['英文名称', researchDraft.name_en], ['城市宣传口号', researchDraft.slogan], ['简介', researchDraft.description]].forEach(([label, value]) => {
       const row = document.createElement('p');
       const strong = document.createElement('strong'); strong.textContent = label + '：';
       const content = document.createElement('span'); content.textContent = value || '未查到可靠资料';
@@ -270,7 +198,7 @@
     if (researchDraft.slogan_source_url) {
       const link = document.createElement('a');
       link.href = researchDraft.slogan_source_url; link.target = '_blank'; link.rel = 'noopener noreferrer';
-      link.textContent = '核对文旅口号来源'; fields.appendChild(link);
+      link.textContent = '核对宣传口号来源'; fields.appendChild(link);
     }
     const sources = $('regionResearchSources');
     sources.replaceChildren();
@@ -317,7 +245,6 @@
     else researchStatus('');
     updateSaveState();
     renderResearch();
-    renderPhotos();
     renderTree();
     if (dirtyIds.has(id)) status('当前节点有未保存修改');
   }
@@ -342,7 +269,6 @@
     node.selectable = $('regionSelectable').checked;
     $('regionEditorTitle').textContent = node.name || '新增地区';
     markDirty(node);
-    updateCover(node);
     const country = countryOf(node);
     if (country) activeCountryId = country.id;
     renderCountryTabs();
@@ -433,7 +359,7 @@
   $('regionApplyAll').addEventListener('click', () => applyDraft(true));
   $('regionSaveNode').addEventListener('click', async () => {
     const node = current();
-    if (!node || !dirtyIds.has(node.id) || saving || uploadsInFlight > 0 || !editable()) return;
+    if (!node || !dirtyIds.has(node.id) || saving || !editable()) return;
     if (!$('regionForm').reportValidity()) return;
     const savedId = node.id;
     const previousBases = persistedNodes;
@@ -458,27 +384,6 @@
     } catch (error) { status(error.message, true); }
     finally { saving = false; $('regionForm').inert = false; updateSaveState(); }
   });
-  $('regionImageFile').addEventListener('change', async () => {
-    const file = $('regionImageFile').files[0];
-    if (!file) return;
-    if (file.size > 8 * 1024 * 1024) { status('图片不能超过 8 MiB', true); return; }
-    const node = current(), targetCatalog = catalog;
-    if (!node || photosOf(node).length >= 3) { status('图片已满，请先移除一张', true); return; }
-    const form = new FormData();
-    form.append('image', file);
-    uploadsInFlight++; updateSaveState(); status('正在上传图片…');
-    try {
-      const result = await api('images', { method: 'POST', body: form });
-      if (catalog !== targetCatalog) { status('目录已重新加载，请重新核对图片'); return; }
-      if (photosOf(node).length >= 3) { status('图片已满，请先移除一张', true); return; }
-      photosOf(node).push(result.photo);
-      updateCover(node);
-      if (current() === node) { renderPhotos(); }
-      markDirty(node, '图片已上传，请保存当前节点');
-    } catch (error) { status(error.message, true); }
-    finally { uploadsInFlight--; updateSaveState(); }
-    $('regionImageFile').value = '';
-  });
-  window.addEventListener('beforeunload', event => { if (dirtyIds.size || uploadsInFlight || saving) { event.preventDefault(); event.returnValue = ''; } });
+  window.addEventListener('beforeunload', event => { if (dirtyIds.size || saving) { event.preventDefault(); event.returnValue = ''; } });
   load();
 })();

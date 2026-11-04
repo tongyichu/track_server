@@ -6,33 +6,19 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"html"
 	"io"
 	"log"
 	"net/http"
-	"net/url"
-	"regexp"
-	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
 )
 
-const commonsAPI = "https://commons.wikimedia.org/w/api.php"
 const moonshotAPI = "https://api.moonshot.cn/v1"
 
 type ResearchSource struct {
 	Title string `json:"title"`
 	URL   string `json:"url"`
-}
-
-type PhotoCandidate struct {
-	FileTitle   string `json:"file_title"`
-	PreviewURL  string `json:"preview_url"`
-	SourceURL   string `json:"source_url"`
-	Attribution string `json:"attribution,omitempty"`
-	License     string `json:"license"`
-	LicenseURL  string `json:"license_url,omitempty"`
 }
 
 type ResearchDraft struct {
@@ -42,7 +28,6 @@ type ResearchDraft struct {
 	SloganSourceURL string           `json:"slogan_source_url,omitempty"`
 	Description     string           `json:"description,omitempty"`
 	Sources         []ResearchSource `json:"sources"`
-	Photos          []PhotoCandidate `json:"photos"`
 }
 
 type Researcher struct {
@@ -99,14 +84,16 @@ func (r *Researcher) Research(ctx context.Context, node Node, hierarchy []string
 	if searchErr != nil {
 		return nil, fmt.Errorf("城市资料检索失败: %w", searchErr)
 	}
-	draft = &ResearchDraft{RegionID: node.RegionID, Sources: []ResearchSource{}, Photos: []PhotoCandidate{}}
+	draft = &ResearchDraft{RegionID: node.RegionID, Sources: []ResearchSource{}}
 	var evidence strings.Builder
+	sloganSources := make(map[string]string)
 	for _, result := range search.SearchResults {
 		link := strings.TrimSpace(result.URL)
 		if !strings.HasPrefix(link, "https://") || strings.TrimSpace(result.Title) == "" {
 			continue
 		}
 		draft.Sources = append(draft.Sources, ResearchSource{Title: strings.TrimSpace(result.Title), URL: link})
+		sloganSources[link] = researchSourceText(result)
 		fmt.Fprintf(&evidence, "来源：%s\n链接：%s\n摘要：%s\n", result.Title, link, clampRunes(result.Snippet, 500))
 		for _, chunk := range result.Chunks {
 			fmt.Fprintf(&evidence, "资料：%s\n", clampRunes(chunk.Text, 500))
@@ -122,12 +109,11 @@ func (r *Researcher) Research(ctx context.Context, node Node, hierarchy []string
 		stage = "source_validation"
 		return nil, errors.New("没有查到可核对的城市资料来源")
 	}
-	sloganSources := make(map[string]string)
 	var sloganEvidence strings.Builder
 	stage = "slogan_search"
 	step = time.Now()
-	sloganQuery := path + " 文旅 旅游 宣传口号 旅游形象口号 旅游宣传语"
-	sloganErr := r.moonshotJSON(ctx, "/tools/search_pro", map[string]any{"text_query": sloganQuery, "limit": 8, "timeout_seconds": 30}, &sloganSearch)
+	sloganQuery := path + " 文旅宣传口号 旅游形象宣传语 城市宣传语 经典旅游广告语"
+	sloganErr := r.moonshotJSON(ctx, "/tools/search_pro", map[string]any{"text_query": sloganQuery, "limit": 10, "timeout_seconds": 30}, &sloganSearch)
 	sloganTime = time.Since(step)
 	if sloganErr == nil {
 		for _, result := range sloganSearch.SearchResults {
@@ -135,15 +121,10 @@ func (r *Researcher) Research(ctx context.Context, node Node, hierarchy []string
 			if !strings.HasPrefix(link, "https://") || strings.TrimSpace(result.Title) == "" {
 				continue
 			}
-			var sourceText strings.Builder
-			sourceText.WriteString(result.Snippet)
-			for _, chunk := range result.Chunks {
-				sourceText.WriteString("\n")
-				sourceText.WriteString(chunk.Text)
-			}
-			sloganSources[link] = sourceText.String()
+			sourceText := researchSourceText(result)
+			sloganSources[link] = sourceText
 			draft.Sources = append(draft.Sources, ResearchSource{Title: strings.TrimSpace(result.Title), URL: link})
-			fmt.Fprintf(&sloganEvidence, "来源：%s\n链接：%s\n资料：%s\n", result.Title, link, clampRunes(sourceText.String(), 900))
+			fmt.Fprintf(&sloganEvidence, "来源：%s\n链接：%s\n资料：%s\n", result.Title, link, clampRunes(sourceText, 900))
 			if sloganEvidence.Len() > 9000 {
 				break
 			}
@@ -151,7 +132,21 @@ func (r *Researcher) Research(ctx context.Context, node Node, hierarchy []string
 	} else {
 		log.Printf("[RegionResearch] region_id=%s slogan_search_failed: %v", node.RegionID, sloganErr)
 	}
-	prompt := fmt.Sprintf("地区层级：%s\n内部编号：%s\n现有英文名：%s\n现有口号（仅供辨别，不是证据）：%s\n现有简介：%s\n\n地区资料：\n%s\n\n文旅口号专项检索资料：\n%s\n请只依据资料生成适合户外目的地客户端的地区资料。英文名用通行官方译名；简介用中文 100-250 字，突出地理位置、自然与人文地标，避开价格、开放时间等易变信息。slogan 只能填写该地区文旅部门或旅游推广中实际使用、有来源明确记载的旅游宣传口号/旅游形象口号，须照来源原文摘录，不创作、不改写。城市精神、文明创建、招商引资、政务施政、体育赛事、品牌商品等其他口号一律不能用；不能确认是文旅口号或没有可核对来源时填空字符串。slogan_source_url 填写文旅口号专项检索资料中明确载有该口号的原始链接，slogan 为空时也留空。其他字段资料不能确定时填空字符串。只输出 JSON 对象，键固定为 name_en、slogan、slogan_source_url、description。简介不要引用整段原文。", path, node.RegionID, node.NameEN, node.Slogan, node.Description, evidence.String(), sloganEvidence.String())
+	prompt := fmt.Sprintf(`地区层级：%s
+内部编号：%s
+现有英文名：%s
+现有口号（仅供辨别，不是证据）：%s
+现有简介：%s
+
+地区资料：
+%s
+
+宣传口号专项检索资料：
+%s
+
+请只依据上述资料整理地区信息。英文名用通行译名；简介用中文 100-250 字，突出地理位置、自然与人文地标，避开价格和开放时间等易变信息，不照搬来源段落。
+slogan 选择这个地区真实存在、最流行或最经典、最有地域辨识度的一句旅游或城市形象宣传语。官方文旅口号、长期使用的城市品牌语、广泛传播的经典名句和民间旅游宣传语都可选择；官方发布不是必要条件。优先比较多个独立来源中的传播广度、地域辨识度、持续使用情况和现实影响，官方认可度作为辅助。不要只按搜索排名、文案是否好听或一次性活动时间的新旧选择。不能从少量资料推断全国热度，也不能把历史口号冒充现行官方口号。
+口号必须在提供的来源标题或正文中逐字可核对，照原文摘录；不得创作、改写或编造来源。排除与当地旅游或城市形象无关的招商、政务、体育、商品广告。slogan_source_url 填写明确载有该口号的来源原始链接，缺少可核对原文才将 slogan 和来源留空。其他字段无法确定时留空。只输出 JSON 对象，键固定为 name_en、slogan、slogan_source_url、description。`, path, node.RegionID, node.NameEN, node.Slogan, node.Description, evidence.String(), sloganEvidence.String())
 	var completion struct {
 		Choices []struct {
 			FinishReason string `json:"finish_reason"`
@@ -200,16 +195,96 @@ func (r *Researcher) Research(ctx context.Context, node Node, hierarchy []string
 		return nil, errors.New("城市 AI 返回格式无效")
 	}
 	draft.NameEN = strings.TrimSpace(fields.NameEN)
-	if sourceText, ok := sloganSources[strings.TrimSpace(fields.SloganSourceURL)]; ok && sourcedTourismSlogan(sourceText, fields.Slogan) {
+	if sourceText, ok := sloganSources[strings.TrimSpace(fields.SloganSourceURL)]; ok && sourcedRegionSlogan(sourceText, fields.Slogan) {
 		draft.Slogan = strings.TrimSpace(fields.Slogan)
 		draft.SloganSourceURL = strings.TrimSpace(fields.SloganSourceURL)
 	}
 	draft.Description = strings.TrimSpace(fields.Description)
+	if draft.Slogan == "" {
+		stage = "slogan_fallback"
+		step = time.Now()
+		fallback, fallbackErr := r.researchSloganFallback(ctx, path, sloganSources)
+		sloganTime += time.Since(step)
+		if fallbackErr != nil {
+			log.Printf("[RegionResearch] region_id=%s slogan_fallback_failed: %v", node.RegionID, fallbackErr)
+		} else if fallback != nil {
+			draft.Sources = append(draft.Sources, fallback.Sources...)
+			if sourceText, ok := sloganSources[fallback.SourceURL]; ok && sourcedRegionSlogan(sourceText, fallback.Slogan) {
+				draft.Slogan = fallback.Slogan
+				draft.SloganSourceURL = fallback.SourceURL
+			}
+		}
+	}
 	if utf8.RuneCountInString(draft.NameEN) > 200 || utf8.RuneCountInString(draft.Slogan) > 500 || utf8.RuneCountInString(draft.Description) > 8000 {
 		return nil, errors.New("城市 AI 返回的资料过长")
 	}
 	stage = "done"
 	return draft, nil
+}
+
+type fallbackSlogan struct {
+	Slogan    string           `json:"slogan"`
+	SourceURL string           `json:"slogan_source_url"`
+	Sources   []ResearchSource `json:"-"`
+}
+
+func (r *Researcher) researchSloganFallback(ctx context.Context, path string, sourceTexts map[string]string) (*fallbackSlogan, error) {
+	var search researchSearchResponse
+	query := path + " 最火 城市品牌口号 经典旅游广告语 文旅推介 旅游节 城市形象片"
+	if err := r.moonshotJSON(ctx, "/tools/search_pro", map[string]any{"text_query": query, "limit": 10, "timeout_seconds": 30}, &search); err != nil {
+		return nil, err
+	}
+	var evidence strings.Builder
+	result := &fallbackSlogan{}
+	for _, item := range search.SearchResults {
+		link := strings.TrimSpace(item.URL)
+		if !strings.HasPrefix(link, "https://") || strings.TrimSpace(item.Title) == "" {
+			continue
+		}
+		content := researchSourceText(item)
+		sourceTexts[link] = content
+		result.Sources = append(result.Sources, ResearchSource{Title: strings.TrimSpace(item.Title), URL: link})
+		fmt.Fprintf(&evidence, "来源：%s\n链接：%s\n资料：%s\n", item.Title, link, clampRunes(content, 900))
+		if evidence.Len() > 9000 {
+			break
+		}
+	}
+	if len(result.Sources) == 0 {
+		return result, nil
+	}
+	prompt := fmt.Sprintf(`地区：%s
+首轮没有找到可核对的代表性宣传语，请根据以下补充资料再查一次。
+%s
+选择当地真实存在、最有传播度和地域辨识度的一句旅游或城市形象宣传语。官方、媒体长期使用、民间经典说法都可以；不要偏爱一次性活动主题，不要编造流行程度或官方身份。只从来源标题或正文逐字摘录，slogan_source_url 必须是明确载有该句的上述链接。确实没有可核对原文时留空。只输出 JSON 对象，键为 slogan、slogan_source_url。`, path, evidence.String())
+	input := map[string]any{
+		"model": r.model, "temperature": 0.6, "max_tokens": 1024,
+		"response_format": map[string]string{"type": "json_object"},
+		"messages":        []map[string]string{{"role": "system", "content": "你是严谨的地区资料编辑，只依据给出的来源摘录，不猜测。"}, {"role": "user", "content": prompt}},
+	}
+	if r.model == "kimi-k2.6" || r.model == "kimi-k2.5" {
+		input["thinking"] = map[string]string{"type": "disabled"}
+	}
+	var completion struct {
+		Choices []struct {
+			FinishReason string `json:"finish_reason"`
+			Message      struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+	if err := r.moonshotJSON(ctx, "/chat/completions", input, &completion); err != nil {
+		return result, err
+	}
+	if len(completion.Choices) == 0 || completion.Choices[0].FinishReason == "length" {
+		return result, errors.New("补充检索的口号整理未完成")
+	}
+	content := strings.TrimSpace(completion.Choices[0].Message.Content)
+	if !strings.HasPrefix(content, "{") || json.Unmarshal([]byte(content), result) != nil {
+		return result, errors.New("补充检索的口号格式无效")
+	}
+	result.Slogan = strings.TrimSpace(result.Slogan)
+	result.SourceURL = strings.TrimSpace(result.SourceURL)
+	return result, nil
 }
 
 func (r *Researcher) moonshotJSON(ctx context.Context, endpoint string, input, output any) error {
@@ -225,23 +300,38 @@ func (r *Researcher) moonshotJSON(ctx context.Context, endpoint string, input, o
 			return ctx.Err()
 		}
 	}
-	for attempt := 0; ; attempt++ {
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, moonshotAPI+endpoint, bytes.NewReader(body))
+	concurrencyRetries := 0
+	timeoutRetries := 0
+	for {
+		requestCtx := ctx
+		cancel := func() {}
+		if endpoint == "/chat/completions" {
+			requestCtx, cancel = context.WithTimeout(ctx, 45*time.Second)
+		}
+		req, err := http.NewRequestWithContext(requestCtx, http.MethodPost, moonshotAPI+endpoint, bytes.NewReader(body))
 		if err != nil {
+			cancel()
 			return err
 		}
 		req.Header.Set("Authorization", "Bearer "+r.key)
 		req.Header.Set("Content-Type", "application/json")
 		err = r.doJSON(req, output)
+		cancel()
 		if err == nil {
 			return nil
 		}
+		if endpoint == "/chat/completions" && errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil && timeoutRetries < 1 {
+			timeoutRetries++
+			log.Printf("[RegionResearch] moonshot_timeout_retry endpoint=%s attempt=%d", endpoint, timeoutRetries)
+			continue
+		}
 		var statusErr *researchHTTPError
-		if !errors.As(err, &statusErr) || statusErr.code != http.StatusTooManyRequests || !strings.Contains(strings.ToLower(statusErr.message), "concurrency") || attempt == 3 {
+		if !errors.As(err, &statusErr) || statusErr.code != http.StatusTooManyRequests || !strings.Contains(strings.ToLower(statusErr.message), "concurrency") || concurrencyRetries == 3 {
 			return err
 		}
-		wait := time.Duration(1<<attempt) * time.Second
-		log.Printf("[RegionResearch] moonshot_concurrency_retry endpoint=%s attempt=%d wait_ms=%d", endpoint, attempt+1, wait.Milliseconds())
+		wait := time.Duration(1<<concurrencyRetries) * time.Second
+		concurrencyRetries++
+		log.Printf("[RegionResearch] moonshot_concurrency_retry endpoint=%s attempt=%d wait_ms=%d", endpoint, concurrencyRetries, wait.Milliseconds())
 		timer := time.NewTimer(wait)
 		select {
 		case <-timer.C:
@@ -290,151 +380,26 @@ func (r *Researcher) doJSON(req *http.Request, output any) error {
 	return json.NewDecoder(io.LimitReader(resp.Body, 2<<20)).Decode(output)
 }
 
-type commonsPage struct {
-	Title     string `json:"title"`
-	Index     int    `json:"index"`
-	ImageInfo []struct {
-		URL            string `json:"url"`
-		ThumbURL       string `json:"thumburl"`
-		DescriptionURL string `json:"descriptionurl"`
-		Mime           string `json:"mime"`
-		Width          int    `json:"width"`
-		Height         int    `json:"height"`
-		ExtMetadata    map[string]struct {
-			Value string `json:"value"`
-		} `json:"extmetadata"`
-	} `json:"imageinfo"`
+func researchSourceText(result researchSearchResult) string {
+	var text strings.Builder
+	text.WriteString(result.Title)
+	text.WriteString("\n")
+	text.WriteString(result.Snippet)
+	for _, chunk := range result.Chunks {
+		text.WriteString("\n")
+		text.WriteString(chunk.Text)
+	}
+	return text.String()
 }
 
-func (r *Researcher) commonsQuery(ctx context.Context, params url.Values) ([]commonsPage, error) {
-	params.Set("action", "query")
-	params.Set("format", "json")
-	params.Set("prop", "imageinfo")
-	params.Set("iiprop", "url|size|mime|extmetadata")
-	params.Set("iiurlwidth", "1600")
-	params.Set("iiextmetadatafilter", "LicenseShortName|LicenseUrl|Artist|Credit")
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, commonsAPI+"?"+params.Encode(), nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("User-Agent", "TrackServer/1.0 (https://github.com/tongyichu/track_server; admin city photo research)")
-	var response struct {
-		Query struct {
-			Pages map[string]commonsPage `json:"pages"`
-		} `json:"query"`
-	}
-	if err := r.doJSON(req, &response); err != nil {
-		return nil, err
-	}
-	pages := make([]commonsPage, 0, len(response.Query.Pages))
-	for _, page := range response.Query.Pages {
-		pages = append(pages, page)
-	}
-	sort.Slice(pages, func(i, j int) bool { return pages[i].Index < pages[j].Index })
-	return pages, nil
-}
-
-func (r *Researcher) CommonsPhoto(ctx context.Context, title string) (PhotoCandidate, error) {
-	if !strings.HasPrefix(title, "File:") || len(title) > 300 {
-		return PhotoCandidate{}, errors.New("图片来源标识无效")
-	}
-	pages, err := r.commonsQuery(ctx, url.Values{"titles": {title}})
-	if err != nil {
-		return PhotoCandidate{}, err
-	}
-	for _, candidate := range commonsCandidates(pages) {
-		if candidate.FileTitle == title {
-			return candidate, nil
-		}
-	}
-	return PhotoCandidate{}, errors.New("图片已不可用或缺少可核对的许可信息")
-}
-
-var htmlTag = regexp.MustCompile(`<[^>]*>`)
-var freePhotoLicense = regexp.MustCompile(`^(?:CC BY(?:-SA)?(?: [0-9.]+)?|CC0(?: 1\.0)?)$`)
-
-func plainMetadata(value string) string {
-	return strings.Join(strings.Fields(html.UnescapeString(htmlTag.ReplaceAllString(value, ""))), " ")
-}
-
-func commonsCandidates(pages []commonsPage) []PhotoCandidate {
-	out := make([]PhotoCandidate, 0, len(pages))
-	for _, page := range pages {
-		if len(page.ImageInfo) == 0 || !strings.HasPrefix(page.Title, "File:") {
-			continue
-		}
-		info := page.ImageInfo[0]
-		if (info.Mime != "image/jpeg" && info.Mime != "image/png") || info.Width < 1000 || info.Height < 500 || float64(info.Width)/float64(info.Height) < 1.25 {
-			continue
-		}
-		lower := strings.ToLower(page.Title)
-		if strings.Contains(lower, "logo") || strings.Contains(lower, "flag") || strings.Contains(lower, "map") || strings.Contains(lower, "poster") || strings.Contains(lower, "diagram") {
-			continue
-		}
-		license := plainMetadata(info.ExtMetadata["LicenseShortName"].Value)
-		if !freePhotoLicense.MatchString(license) && !strings.HasPrefix(strings.ToLower(license), "public domain") && license != "PD" {
-			continue
-		}
-		preview := info.ThumbURL
-		if preview == "" {
-			preview = info.URL
-		}
-		if !isCommonsImageURL(preview) || !strings.HasPrefix(info.DescriptionURL, "https://commons.wikimedia.org/") {
-			continue
-		}
-		attribution := plainMetadata(info.ExtMetadata["Artist"].Value)
-		if attribution == "" {
-			attribution = plainMetadata(info.ExtMetadata["Credit"].Value)
-		}
-		out = append(out, PhotoCandidate{FileTitle: page.Title, PreviewURL: preview, SourceURL: info.DescriptionURL, Attribution: clampRunes(attribution, 300), License: license, LicenseURL: normalizeHTTPSURL(plainMetadata(info.ExtMetadata["LicenseUrl"].Value))})
-	}
-	return out
-}
-
-func isCommonsImageURL(raw string) bool {
-	u, err := url.Parse(raw)
-	return err == nil && u.Scheme == "https" && u.Hostname() == "upload.wikimedia.org" && u.User == nil && strings.HasPrefix(u.Path, "/wikipedia/commons/")
-}
-
-func normalizeHTTPSURL(raw string) string {
-	if strings.HasPrefix(raw, "//") {
-		raw = "https:" + raw
-	} else if strings.HasPrefix(raw, "http://") {
-		raw = "https://" + strings.TrimPrefix(raw, "http://")
-	}
-	if !strings.HasPrefix(raw, "https://") {
-		return ""
-	}
-	return raw
-}
-
-func sourcedTourismSlogan(sourceText, slogan string) bool {
+func sourcedRegionSlogan(sourceText, slogan string) bool {
 	slogan = strings.TrimSpace(slogan)
 	if utf8.RuneCountInString(slogan) < 4 || utf8.RuneCountInString(slogan) > 80 {
 		return false
 	}
 	text := strings.Join(strings.Fields(sourceText), "")
 	value := strings.Join(strings.Fields(slogan), "")
-	index := strings.Index(text, value)
-	if index < 0 {
-		return false
-	}
-	runes := []rune(text)
-	start := utf8.RuneCountInString(text[:index]) - 100
-	if start < 0 {
-		start = 0
-	}
-	end := start + utf8.RuneCountInString(value) + 200
-	if end > len(runes) {
-		end = len(runes)
-	}
-	nearby := string(runes[start:end])
-	for _, keyword := range []string{"文旅宣传", "文旅口号", "文旅形象", "文旅品牌", "旅游宣传", "旅游口号", "旅游形象", "旅游品牌"} {
-		if strings.Contains(nearby, keyword) {
-			return true
-		}
-	}
-	return false
+	return strings.Contains(text, value)
 }
 
 func clampRunes(value string, max int) string {

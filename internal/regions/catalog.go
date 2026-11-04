@@ -34,8 +34,6 @@ type Node struct {
 	PostalCodes      []string     `json:"postal_codes,omitempty"`
 	Slogan           string       `json:"slogan,omitempty"`
 	Description      string       `json:"description,omitempty"`
-	CoverURL         string       `json:"cover_url,omitempty"`
-	Photos           []Photo      `json:"photos,omitempty"`
 	Latitude         *float64     `json:"latitude,omitempty"`
 	Longitude        *float64     `json:"longitude,omitempty"`
 	CoordinateStatus string       `json:"coordinate_status,omitempty"`
@@ -48,17 +46,6 @@ type ExternalID struct {
 	Provider string `json:"provider"`
 	Type     string `json:"type"`
 	Value    string `json:"value"`
-}
-
-type Photo struct {
-	ID          string `json:"id"`
-	URL         string `json:"url"`
-	Title       string `json:"title,omitempty"`
-	Attribution string `json:"attribution,omitempty"`
-	SourceURL   string `json:"source_url,omitempty"`
-	License     string `json:"license,omitempty"`
-	LicenseURL  string `json:"license_url,omitempty"`
-	Provider    string `json:"provider,omitempty"`
 }
 
 type Catalog struct {
@@ -124,7 +111,7 @@ func (s *Service) Read(ctx context.Context) (*Catalog, error) {
 		if err != nil {
 			return nil, err
 		}
-		if normalizeRegionPhotos(nodes) {
+		if hasLegacyRegionImageFields(payload) {
 			changed = true
 		}
 		if changed {
@@ -162,7 +149,6 @@ func (s *Service) Save(ctx context.Context, expectedVersion int64, nodes []Node)
 	if err != nil {
 		return nil, err
 	}
-	normalizeRegionPhotos(nodes)
 	if err := validate(nodes, current.Nodes); err != nil {
 		return nil, err
 	}
@@ -377,19 +363,6 @@ func validate(nodes, previous []Node) error {
 		if n.Latitude != nil && (*n.Latitude < -90 || *n.Latitude > 90) ||
 			n.Longitude != nil && (*n.Longitude < -180 || *n.Longitude > 180) {
 			return fmt.Errorf("invalid coordinates for %s", n.ID)
-		}
-		if len(n.Photos) > 3 {
-			return fmt.Errorf("region %s supports at most 3 photos", n.ID)
-		}
-		photoIDs := make(map[string]bool, len(n.Photos))
-		for _, photo := range n.Photos {
-			if photo.ID == "" || len(photo.ID) > 64 || photoIDs[photo.ID] ||
-				(!strings.HasPrefix(photo.URL, "/api/v1/static/regions/") && !strings.HasPrefix(photo.URL, "https://") && !(photo.Provider == "legacy" && strings.TrimSpace(photo.URL) != "")) || len(photo.URL) > 2048 ||
-				len(photo.Title) > 300 || len(photo.Attribution) > 500 || len(photo.SourceURL) > 2048 || len(photo.License) > 100 || len(photo.LicenseURL) > 2048 ||
-				(photo.SourceURL != "" && !strings.HasPrefix(photo.SourceURL, "https://")) || (photo.LicenseURL != "" && !strings.HasPrefix(photo.LicenseURL, "https://")) {
-				return fmt.Errorf("invalid region photo for %s", n.ID)
-			}
-			photoIDs[photo.ID] = true
 		}
 	}
 	for _, n := range nodes {
