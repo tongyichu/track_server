@@ -79,3 +79,12 @@
 - Android配套本地矢量地图、260dp卡片、类型全局筛选、未上传记录合并、失败保留与地区轨迹下钻，详见客户端功能参考。API索引/路由索引/track-footprint.md与AGENTS入口已同步。
 - gofmt、go build ./...与git diff --check通过；Android最终assembleDebug通过（3s），已安装小米并启动MainActivity。按项目约定未新增或运行单元/集成/业务接口自动化，无生产业务数据或环境变更。规则报告/private/tmp/track-footprint-server-agents-20261104.json，仅既有10处超长源码，无路径告警，freshness stale=false。
 - 本轮仅开发，未提交推送或部署；当前生产仍为前轮461efef，尚不包含探索足迹。后续用户要求部署时先同步两侧发布范围，Server按既有流程推送后构建镜像，生产脚本已使用精确latest镜像ID，不再依docker images列表首项。
+
+
+## 2026-11-04：探索足迹生产部署
+
+- 用户明确要求部署。提交bbdf9bd探索足迹接口，普通merge合入origin/main至5a7ec98的城市资料/AI超时重试修复，发布源码main/241ece40a036e97122a3fa23cfc70226c81cd41d已推送。从干净工作树构建linux/amd64镜像；合并后go build ./...、regions.js的node --check和git diff --check通过，未运行业务自动化测试。
+- manifest sha256:225413a367a61ea64db3799b8c3ed5ea2c3e64fe0da640ddcaa9ef47656fdc04，配置ID sha256:c7e5608dc1d8a101413902706e31387edb526ea323cda6eff56a1df25e4d7282。生产先pull并核对摘要、revision和架构，再运行既有精确latest镜像ID选择的update_track_server.sh，无脚本改动；容器e8fb0935315eb67d26b326889f69602cdafde979b092d529c1650fa106c85099 running、重启0。
+- 2026-11-04 16:39:41+08:00本机ping200，随后公网ping200，均hello track app；MySQL正常、无内存降级，3个后台账号，后台API401/页面302/登录200，静态资源版本b0d73504518c49676677。足迹及地区轨迹、个人纪录、日历、类型分布未登录均401；环境文件/持久化挂载保留，前版镜像保留。
+- 完整回执/private/tmp/track-footprint-deploy-20261104.json；镜像元数据track-footprint-deploy-image-20261104.json，日志track-footprint-deploy-20261104.log，runner为track-footprint-deploy-20261104.py。后续纯文档收尾不改变生产源码241ece4。
+- 部署期间用户追加客户端隐藏南海附属图形、放大主体；统计归属不变，仅更新客户端显示与对应协议说明。客户端构建/安装在另一仓进行，不在本次Server部署中提交客户端或发布App。
