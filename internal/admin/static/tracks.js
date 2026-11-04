@@ -229,34 +229,8 @@
     }
   }
 
-  function renderDistribution(target, items, cityLabels) {
-    var body = document.getElementById(target);
-    if (!items || !items.length) { body.innerHTML = '<tr><td colspan="2" class="hint">本月暂无数据</td></tr>'; return; }
-    body.innerHTML = items.map(function (item) {
-      var label = item.label || (cityLabels ? (cityNameByCode[item.key] || '未知城市') : (typeNameByCode[item.key] || item.key || '未知'));
-      return '<tr><td>' + esc(label) + '</td><td>' + Number(item.count || 0).toLocaleString() + '</td></tr>';
-    }).join('');
-  }
-
-  async function loadStats(citiesLoaded) {
-    var typeBody = document.getElementById('typeStats');
-    var cityBody = document.getElementById('cityStats');
-    try {
-      var resp = await fetch('/admin/api/dashboard?period=month&scope=tracks');
-      if (!resp.ok) throw new Error(String(resp.status));
-      var data = ((await resp.json()).data) || {};
-      if (citiesLoaded) await citiesLoaded;
-      var content = data.content || {};
-      renderDistribution('typeStats', content.types || [], false);
-      renderDistribution('cityStats', content.cities || [], true);
-    } catch (err) {
-      typeBody.innerHTML = cityBody.innerHTML = '<tr><td colspan="2">统计加载失败</td></tr>';
-    }
-  }
-
   var citiesLoaded = loadCities();
   citiesLoaded.then(loadPage);
-  loadStats(citiesLoaded);
   var linkedTrackID = new URLSearchParams(window.location.search).get('track_id');
   if (linkedTrackID) {
     if (/^NO\.[0-9A-Z]{8}$/.test(linkedTrackID)) {

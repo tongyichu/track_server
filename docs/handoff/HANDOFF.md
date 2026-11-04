@@ -1,40 +1,23 @@
-# 开发交接：AGENTS 精简（2026-11-04）
+# 开发交接：轨迹管理统计图表（2026-11-04）
 
-## 请求与范围
+## 请求与完成范围
 
-- 用户在克隆 android-track-bakcup3 和 track-server-bakcup3 后，确认将偏大的 AGENTS 精简为关键规则与按需文档索引。
-- 仅修改这两个副本的 Markdown 规则/参考文档；未改业务源码，未提交、推送、部署、构建或运行功能测试。
-- 原交接完整归档为 [历史交接](history_handoff/HANDOFF-20261104-003606.md)，需恢复旧业务任务时读取。
+- 用户要求将轨迹管理页“本月轨迹类型”改为天/周/月可切换饼图，将“本月城市分布”替换为同期贡献轨迹量前十用户横向柱状图，最多者位于顶部。
+- 工作副本为 track-server-bakcup3。新增 track_statistics.js，由两卡片各自控制周期、默认 month，初始同周期请求合并；图表异步加载，不阻塞列表，移除旧月度表格及整份 dashboard 请求。
+- 新增 GET /admin/api/tracks/statistics?period=day|week|month，默认 month，非法周期 400。已注册在后台鉴权 API 组；permissions.go 现有 tracks 前缀映射直接覆盖该 GET 读取权限，不扩大模块权限。
+- 统计按北京时间今天/本周一/本月一日零点到请求时刻，created_at 入库时间为口径，包含公开/私密的未下架、未软删除、已完成且有原始文件的轨迹，不跟随列表筛选。
+- MySQL/Mongo/内存分别实现独立类型聚合与贡献用户榜，不读取整份工作台统计、不逐用户查询；用户榜排除不存在账号，按数量降序、数值 ID 升序取十人，ID 字符串输出，空昵称展示未命名用户。
+- 图表支持空态、刷新、加载失败保留旧图与恢复原周期、快速切换忽略旧响应；宽度变化 resize，离页取消请求/释放图表。共享 ui.js 跳过周期按钮增强，避免普通按钮样式盖掉切换样式。
+- 已同步 docs/api/admin-tracks.md、route-index.md、docs/admin-routes.md 和 admin-workflows.md。既有 scoped AGENTS 已指向统计/API/页面参考，无需新增重复规则或扩大 AGENTS。
 
-## 已完成
+## 验证
 
-- 根与 scoped AGENTS 保留默认验证、授权、风险边界与常用入口；详细业务/接口/UI 说明迁到 docs 参考文件，相关改动前按主题读取。
-- 本仓 AGENTS 总体积 139,701 → 11,860 字节，减少 91.5%。
-- 新增参考：docs/admin-routes.md, docs/admin-security.md, docs/admin-ui.md, docs/admin-workflows.md, docs/server-contracts.md, docs/server-flows.md。
-- 修正迁移后的形象技能相对链接、陈旧的 Android uploader 路径；明确业务私有字段限制不影响后台授权查询，业务查询不外呼也不禁止后台人工专用接口。
-- 按 agents-md-generator 技能进行了独立只读审查，审查指出的链接与范围问题已修正；采用 internal-docs 的中文、目录和代码围栏规范。
+- go build ./... 通过。最终构建首次受沙箱缓存写入权限阻止后，按权限流程重新执行并通过；不是业务编译错误。
+- node --check：track_statistics.js、tracks.js、ui.js 均通过；gofmt -l 无输出，git diff --check 通过。
+- 按项目约定未新增或运行单元/UI/集成测试，未启动测试服务或数据库；未浏览页面，不声称视觉验收通过，图表交互与布局待用户手动验证。
+- 功能改动完成后用户明确要求部署：按 android-track-release 流程同步、提交、推送服务端并构建镜像更新生产。此前未部署的说明仅对应开发阶段；最终状态以本轮部署回执为准。Android 不参与此次发布。
 
-## 验证与剩余问题
+## 历史与后续
 
-- git diff --check、所有新增/修改规则与参考文档的本地 Markdown 链接/锚点和代码围栏检查通过；四份 AGENTS 均小于 16 KB。
-- verify_agents.py 已执行：AGENTS 本身无错误或路径告警；全仓校验仍有 10 个既有超 1000 行源码文件问题，本次未修改业务源码。
-- 全局 ~/.codex/AGENTS.md 为空，全局入口规则未落盘；这是已有环境状态，不属于本次两个仓库的精简范围。修复命令为 python ~/.codex/skills/agents-md-generator/scripts/manage_docs.py sync-global-codex-agents . --write，本次未执行。
-- 纯规则和文档维护无需构建；未新增或运行单元/UI/集成测试，未操作设备或生产。
-
-## 后续维护
-
-- 继续保持根文件精简；新增详细功能说明写对应参考/API 文档，仅在 AGENTS 更新入口或不变量。
-- 用户随后明确授权“两个都推送代码”：将本次规则精简、参考文档和交接提交推送到本仓 origin/main；不发布 App、不部署 Server。最终提交与远端核验结果见本次会话回复及 Git 历史。
-
-
-## 推送前同步远端
-
-- 用户授权两仓提交推送后 fetch，Android 无新增提交，Server 合入 origin/main 的 a75e52d。保留远端业务改动，将新增导入结果约束并入 docs/admin-workflows.md，AGENTS 继续保持精简。未额外构建或运行测试。
-
-## 2026-11-04：批量导入结果表格与编辑入口
-
-- 用户要求新克隆的 backup2 工作副本中，后台批量导入结果按下方轨迹列表展示表格，并可直接编辑。
-- `tracks.js` 提取共用轨迹单元格，导入结果增加文件名、逐文件成功/失败状态及错误原因；成功行打开共享编辑器，编辑、下架、恢复或彻底删除后刷新对应导入行及主列表。保留本批归属人快照，刷新结果忽略已被新批次替换的记录。
-- `ImportTrackResult.track` 增量返回 id/city_code/title/track_type/status，直接使用创建结果，不逐文件查详情，不传数值用户 ID；初次导入无预览图。接口文档与后台 AGENTS 已同步，Android 无需改动。
-- `go build ./...`、`node --check internal/admin/static/tracks.js`、`git diff --check` 通过。未运行自动化测试，界面及功能待用户手动验证；未提交、推送或部署。
-- AGENTS 校验发现原有根文件超过 16KB、缺少优先级声明和多份源码超长；全局入口规则为空。仅记录已有问题，本次未扩展治理范围。
+- [上一轮交接](history_handoff/HANDOFF-20261104-113631.md) 包含 AGENTS 精简、双仓推送及合入远端批量导入更新的记录。
+- 若后续要求提交/部署，先检查当前工作树及远端；发布使用同级 Android 仓库的 android-track-release 技能。

@@ -290,6 +290,7 @@ type AdminUserStatisticsRepository interface {
 // across business repositories. It is intentionally separate from the write
 // contracts so dashboard evolution cannot affect client business flows.
 type AdminDashboardStatisticsRepository interface {
+	GetAdminTrackStatistics(ctx context.Context, start, end time.Time) (*models.AdminTrackStatistics, error)
 	GetAdminDashboardStatistics(ctx context.Context, query models.AdminDashboardQuery) (*models.AdminDashboardStatistics, error)
 	GetAdminUserDistributionStatistics(ctx context.Context) (*models.AdminUserDistributionStats, error)
 	GetAdminUserLastLoginTimes(ctx context.Context, userIDs []int64) (map[int64]time.Time, error)

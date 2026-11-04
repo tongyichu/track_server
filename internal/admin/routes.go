@@ -111,6 +111,7 @@ func (m *Module) Close() {
 // - GET  /admin/api/tracks                 轨迹列表（鉴权，cursor 翻页）
 // - GET  /admin/api/cities                 城市 Code 与名称选项（鉴权）
 // - GET  /admin/api/tracks/:track_id       轨迹详情（鉴权）
+// - GET  /admin/api/tracks/statistics      天/周/月轨迹类型与贡献用户前十（轨迹读取权限）
 // - PUT  /admin/api/tracks/:track_id       更新轨迹业务字段（鉴权）
 // - DELETE /admin/api/tracks/:track_id     删除轨迹（鉴权，软删除并清理关联索引/收藏）
 // - POST /admin/api/tracks/:track_id/restore 恢复已删除轨迹（鉴权，还原公开并重新排队地图索引）
@@ -229,6 +230,7 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	api.POST("/users/:user_id/restrictions", m.Handler.CreateAccountRestriction)
 	api.DELETE("/users/:user_id/restrictions/current", m.Handler.RevokeCurrentAccountRestriction)
 	api.GET("/tracks", m.Handler.ListTracks)
+	api.GET("/tracks/statistics", m.Handler.GetAdminTrackStatistics)
 	api.POST("/tracks/import", m.Handler.ImportTracks)
 	api.GET("/tracks/map-config", m.Handler.GetTrackMapConfig)
 	api.GET("/tracks/amap-service", m.Handler.ProxyScenicSpotMapService)
