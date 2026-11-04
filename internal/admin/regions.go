@@ -82,27 +82,3 @@ func (h *Handler) SaveRegionNode(ctx context.Context, c *app.RequestContext) {
 	}
 	c.JSON(http.StatusOK, utils.H{"code": 0, "data": catalog})
 }
-
-func (h *Handler) UploadRegionImage(_ context.Context, c *app.RequestContext) {
-	if h.staticRoot == "" {
-		c.JSON(http.StatusServiceUnavailable, utils.H{"error": "图片存储暂不可用"})
-		return
-	}
-	file, err := c.FormFile("image")
-	if err != nil || file.Size <= 0 || file.Size > 8<<20 {
-		c.JSON(http.StatusBadRequest, utils.H{"error": "请选择不超过 8 MiB 的图片"})
-		return
-	}
-	src, err := file.Open()
-	if err != nil {
-		c.JSON(http.StatusBadRequest, utils.H{"error": "无法读取图片"})
-		return
-	}
-	defer src.Close()
-	photo, err := h.saveRegionPhoto(src, regions.Photo{Title: file.Filename, Provider: "manual"})
-	if err != nil {
-		c.JSON(http.StatusBadRequest, utils.H{"error": err.Error()})
-		return
-	}
-	c.JSON(http.StatusCreated, utils.H{"code": 0, "data": utils.H{"photo": photo, "cover_url": photo.URL}})
-}
