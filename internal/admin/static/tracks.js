@@ -39,13 +39,20 @@
     var avatar = avatarURL ? '<img class="track-avatar" src="' + esc(avatarURL) + '" alt="" loading="lazy">' : '<span class="track-avatar-fallback">' + esc((it.user_name || '用').slice(0, 1)) + '</span>';
     var statusClass = it.status === 1 ? 'bg-green-lt' : it.status === 0 ? 'bg-red-lt' : 'bg-secondary-lt';
     return '<td class="track-id">' + esc(it.id) + '</td>' +
-        '<td title="' + esc(it.city_code || '') + '">' + esc(cityNameByCode[it.city_code] || '未知城市') + '</td>' +
+        '<td title="' + esc(it.city_code || '') + '">' + esc(trackCityName(it)) + '</td>' +
         '<td class="track-title-cell">' + esc(it.title || '') + '</td>' +
         '<td><span class="track-type-badge" style="--track-type-color:' + type.color + '">' + type.icon + '<span>' + esc(typeNameByCode[it.track_type] || it.track_type || '未知') + '</span></span></td>' +
         '<td><span class="track-user">' + avatar + '<span>' + esc(it.user_name || '未知用户') + '</span></span></td>' +
         '<td>' + screenshotCell + '</td>' +
         '<td><span class="badge ' + statusClass + '">' + esc(statusText(it.status)) + '</span></td>' +
         '<td><button class="btn btn-sm btn-outline-primary js-edit-track" data-track-id="' + esc(it.id) + '">' + (AdminAccess.can('tracks', true) ? '编辑' : '查看') + '</button></td>';
+  }
+
+  function trackCityName(track) {
+    var code = String(track.city_code || '').trim();
+    var name = String(track.city_name || '').trim() || cityNameByCode[code];
+    if (name) return name;
+    return code ? '未匹配城市（' + code + '）' : '未填写城市';
   }
 
   var pageSize = 20;
@@ -187,6 +194,7 @@
         var data = ((await response.json()).data) || {};
         if (importResults.indexOf(result) < 0) return;
         result.track = Object.assign({}, result.track, data.track);
+        result.track.city_name = data.city_name || '';
         var previews = result.track.preview_images || {};
         result.track.preview_images = Object.assign({}, previews, {
           landscape_day_url: (previews.landscape_day_url || '').replace(/^\/api\/v1\/static\//, '/admin/api/static/')

@@ -134,13 +134,18 @@ table.release-detail-table th { width: 130px; white-space: nowrap; }
 .thumbs img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .track-shot { display: block; width: 72px; height: 54px; border: 1px solid #e5e6eb; border-radius: 4px; overflow: hidden; background: #f7f8fa; }
 .track-shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.track-stat-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.track-stat-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .track-stat-grid .panel { min-width: 0; }
-.track-stat-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
-.track-stat-heading h2 { margin: 0; flex: 1 1 180px; }
+.track-stat-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.track-stat-card .track-stat-heading h3 { margin: 0; flex: 1 1 130px; font-size: 14px; }
 .track-stat-heading .period-tabs { flex-shrink: 0; }
-.track-stat-status { margin: 10px 0 0; min-height: 20px; }
-.track-stat-chart { width: 100%; height: 360px; min-width: 0; }
+.track-stat-heading .period-tabs button { min-width: 32px; padding: 3px 7px; font-size: 12px; }
+.track-stat-status { margin: 5px 0 0; min-height: 16px; font-size: 11px; }
+.track-stat-card.panel.card.card-body { padding: 12px 14px; }
+.track-stat-chart { width: 100%; height: 220px; min-width: 0; }
+.track-stat-card .track-type-chart-layout { grid-template-columns: minmax(100px, .9fr) minmax(100px, 1.1fr); min-height: 220px; }
+.track-stat-card .track-type-chart-layout .admin-user-pie { height: 170px; }
+.track-stat-card .admin-user-legend { max-height: 210px; overflow-y: auto; padding-right: 4px; }
 .admin-dialog-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .admin-dialog-form .form-label.full { grid-column: 1 / -1; }
 .admin-dialog-form textarea.form-control { min-height: 88px; }

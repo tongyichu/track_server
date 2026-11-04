@@ -1437,6 +1437,7 @@ func (h *Handler) ListTracks(ctx context.Context, c *app.RequestContext) {
 		*models.Track
 		UserName  string `json:"user_name"`
 		AvatarURL string `json:"avatar_url"`
+		CityName  string `json:"city_name"`
 	}
 	authors := make([]*models.User, 0, len(users))
 	for _, userID := range userIDs {
@@ -1456,7 +1457,8 @@ func (h *Handler) ListTracks(ctx context.Context, c *app.RequestContext) {
 			}
 			avatarURL = rewriteAdminStaticURL(user.AvatarURL)
 		}
-		listItems = append(listItems, adminTrackListItem{Track: item, UserName: userName, AvatarURL: avatarURL})
+		listItems = append(listItems, adminTrackListItem{Track: item, UserName: userName, AvatarURL: avatarURL,
+			CityName: config.CityNameByCode(config.CanonicalCityCode(item.CityCode))})
 	}
 	resp := utils.H{
 		"items":    listItems,
@@ -1509,6 +1511,7 @@ func (h *Handler) GetTrack(ctx context.Context, c *app.RequestContext) {
 		}
 	}
 	data := utils.H{"track": track, "user_id_text": strconv.FormatInt(track.UserID, 10)}
+	data["city_name"] = config.CityNameByCode(config.CanonicalCityCode(track.CityCode))
 	data["user_name"] = "未知用户"
 	if h.userRepo != nil {
 		if owner, err := h.userRepo.FindByID(ctx, track.UserID); err == nil && owner != nil && strings.TrimSpace(owner.Nickname) != "" {

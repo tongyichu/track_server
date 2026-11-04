@@ -50,6 +50,7 @@ type ImportTrackResult struct {
 type ImportTrackSummary struct {
 	ID        string             `json:"id"`
 	CityCode  string             `json:"city_code"`
+	CityName  string             `json:"city_name"`
 	Title     string             `json:"title"`
 	TrackType string             `json:"track_type"`
 	Status    models.TrackStatus `json:"status"`
@@ -144,6 +145,7 @@ func (s *AdminTrackImportService) importOne(ctx context.Context, ownerUserID int
 	result.Title = track.Title
 	result.Track = &ImportTrackSummary{
 		ID: track.ID, CityCode: track.CityCode, Title: track.Title,
+		CityName:  config.CityNameByCode(config.CanonicalCityCode(track.CityCode)),
 		TrackType: track.TrackType, Status: track.Status,
 	}
 	return result

@@ -30,9 +30,9 @@
 
   <main class="container wide">
     <div class="track-stat-grid">
-      <section class="panel track-stat-card" data-track-stat="types" aria-labelledby="trackTypeStatsTitle">
+      <section class="panel track-stat-card admin-stat-panel" data-track-stat="types" aria-labelledby="trackTypeStatsTitle">
         <div class="track-stat-heading">
-          <h2 id="trackTypeStatsTitle">轨迹类型</h2>
+          <h3 id="trackTypeStatsTitle">轨迹类型</h3>
           <div class="period-tabs" role="group" aria-label="轨迹类型统计周期">
             <button type="button" data-stat-period="day" aria-pressed="false">天</button>
             <button type="button" data-stat-period="week" aria-pressed="false">周</button>
@@ -42,11 +42,14 @@
         </div>
         <p class="hint track-stat-status" data-stat-status role="status">加载中…</p>
         <div class="error" data-stat-error role="alert" hidden></div>
-        <div id="trackTypeChart" class="track-stat-chart" role="img" aria-label="轨迹类型分布饼图"></div>
+        <div class="admin-user-chart-layout track-type-chart-layout">
+          <div id="trackTypeChart" class="track-stat-chart admin-user-pie" role="img" aria-label="轨迹类型分布环形图"></div>
+          <div id="trackTypeLegend" class="admin-user-legend"></div>
+        </div>
       </section>
-      <section class="panel track-stat-card" data-track-stat="contributors" aria-labelledby="trackContributorStatsTitle">
+      <section class="panel track-stat-card admin-stat-panel" data-track-stat="contributors" aria-labelledby="trackContributorStatsTitle">
         <div class="track-stat-heading">
-          <h2 id="trackContributorStatsTitle">用户贡献轨迹量 Top 10</h2>
+          <h3 id="trackContributorStatsTitle">用户贡献轨迹量 Top 10</h3>
           <div class="period-tabs" role="group" aria-label="用户贡献轨迹量统计周期">
             <button type="button" data-stat-period="day" aria-pressed="false">天</button>
             <button type="button" data-stat-period="week" aria-pressed="false">周</button>
@@ -129,6 +132,7 @@
   <script src="/admin/static/track_map_preview.js"></script>
   <script src="/admin/static/track_editor.js"></script>
   <script src="/admin/static/tracks.js"></script>
+  <script src="/admin/static/admin_chart_style.js"></script>
   <script src="/admin/static/track_statistics.js"></script>
 </body>
 </html>

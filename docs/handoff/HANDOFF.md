@@ -1,30 +1,34 @@
-# 开发交接：轨迹管理统计图表（2026-11-04）
+# 开发交接：后台图表统一、压缩及城市显示修复（2026-11-04）
 
-## 请求与完成范围
+## 用户要求
 
-- 用户要求将轨迹管理页“本月轨迹类型”改为天/周/月可切换饼图，将“本月城市分布”替换为同期贡献轨迹量前十用户横向柱状图，最多者位于顶部。
-- 工作副本为 track-server-bakcup3。新增 track_statistics.js，由两卡片各自控制周期、默认 month，初始同周期请求合并；图表异步加载，不阻塞列表，移除旧月度表格及整份 dashboard 请求。
-- 新增 GET /admin/api/tracks/statistics?period=day|week|month，默认 month，非法周期 400。已注册在后台鉴权 API 组；permissions.go 现有 tracks 前缀映射直接覆盖该 GET 读取权限，不扩大模块权限。
-- 统计按北京时间今天/本周一/本月一日零点到请求时刻，created_at 入库时间为口径，包含公开/私密的未下架、未软删除、已完成且有原始文件的轨迹，不跟随列表筛选。
-- MySQL/Mongo/内存分别实现独立类型聚合与贡献用户榜，不读取整份工作台统计、不逐用户查询；用户榜排除不存在账号，按数量降序、数值 ID 升序取十人，ID 字符串输出，空昵称展示未命名用户。
-- 图表支持空态、刷新、加载失败保留旧图与恢复原周期、快速切换忽略旧响应；宽度变化 resize，离页取消请求/释放图表。共享 ui.js 跳过周期按钮增强，避免普通按钮样式盖掉切换样式。
-- 已同步 docs/api/admin-tracks.md、route-index.md、docs/admin-routes.md 和 admin-workflows.md。既有 scoped AGENTS 已指向统计/API/页面参考，无需新增重复规则或扩大 AGENTS。
+- 轨迹管理图表与用户管理统一风格，长期约定记入 AGENTS。
+- 随后补充：整体缩小，减少统计区高度；轨迹列表大量未知城市也一并修复。
+- 工作副本 track-server-bakcup3；Android 未改动。用户随后明确要求部署，已授权服务端同步、提交、推送、构建镜像及更新生产；最终结果见 /private/tmp/track-style-city-deploy-1H8gFP/receipt.md 与会话回复。
 
-## 验证
+## 实现
 
-- go build ./... 通过。最终构建首次受沙箱缓存写入权限阻止后，按权限流程重新执行并通过；不是业务编译错误。
-- node --check：track_statistics.js、tracks.js、ui.js 均通过；gofmt -l 无输出，git diff --check 通过。
-- 按项目约定未新增或运行单元/UI/集成测试，未启动测试服务或数据库；未浏览页面，不声称视觉验收通过，图表交互与布局待用户手动验证。
-- 功能改动完成后用户明确要求部署：按 android-track-release 流程同步、提交、推送服务端并构建镜像更新生产。此前未部署的说明仅对应开发阶段；最终状态以本轮部署回执为准。Android 不参与此次发布。
+- 新增 static/admin_chart_style.js，提供共用环形图、横向柱状图和安全 DOM 图例。users.js 保留原统计和生命周期，改为调用共享样式；track_statistics.js 同样复用。两页 HTML 在业务脚本前加载共享文件。
+- 沿用用户画像的 Tabler 色板、57%–82% 环形半径、白色分隔、中心总数、侧边图例、12px 细柱、浅色底轨、圆角和字体。用户管理原百分比/总数/灰色空值语义保留，贡献榜显示条数，不伪造百分比。
+- 轨迹图表内容区 360px → 220px，环形图 170px，标题14px，缩减控件/卡片留白；两卡片独立天/周/月切换保持。窄屏上下卡片、环形与图例保持两列，长图例内部滚动。
+- 城市问题的代码证据：ListAdminCities 只返回新 region_id 选择项，轨迹可能仍存旧 adcode/目录键；tracks.js 原先仅在该选项数组按 code 查名称。改由服务端 CanonicalCityCode + CityNameByCode 解析增量 city_name，列表项、详情响应同级与导入摘要一致返回；编辑后的导入刷新同步该字段。没有改写存量轨迹或发起供应商请求。
+- 前端优先 city_name，其次选择项映射；空城市显示未填写城市，非空无法解析显示未匹配城市（原编号），不假造地名。
+- scoped internal/admin/AGENTS.md 已记录用户明确的同类图表统一/紧凑约定，细节放 docs/admin-ui.md。同步 admin-workflows 和 admin-tracks 协议说明，根 AGENTS 保持精简。
 
-## 历史与后续
+## 验证与边界
 
-- [上一轮交接](history_handoff/HANDOFF-20261104-113631.md) 包含 AGENTS 精简、双仓推送及合入远端批量导入更新的记录。
-- 若后续要求提交/部署，先检查当前工作树及远端；发布使用同级 Android 仓库的 android-track-release 技能。
+- go build ./...、相关四份 JS 的 node --check、git diff --check 通过。
+- verify_agents.py 的 AGENTS 本身无错误/路径告警；仍有十份既有超1000行源码文件问题，本次未扩展无关拆分。
+- 按项目约定未新增或运行单元/UI/集成测试，未浏览页面或操作生产；实际视觉、交互及真实记录显示待用户手动验证。
+- 开发阶段尚未上线，后续用户已明确要求部署。上一轮已部署源码为4629622，镜像e8ee826e…，旧回执位于 /private/tmp/track-stats-deploy-XWXXNe/receipt.md；本轮最终运行版本以新的部署回执为准。
 
-## 部署前同步
+## 历史
 
-- 用户授权部署后，合入 origin/main 的 86acba4（含此前 20 个提交），保留最新详情资源、地区管理、景区等级及年度运动指标/步数改动。路由注释合并保留统计与资源两项；上游交接完整保存至 [同步前上游交接](history_handoff/HANDOFF-20261104-113807.md)。本次最终部署提交、镜像和健康结果以部署回执为准。
+- [上一轮交接](history_handoff/HANDOFF-20261104-150953.md) 保留图表统计接口及部署前同步信息。
+
+## 本次部署前同步
+
+- 合入origin/main 1251e27，远端两项新增仅为历史部署回执，未改变本次已通过编译的业务源码。以下保留上游部署记录。
 
 ## 2026-11-04：年度多指标接口部署与两端推送
 

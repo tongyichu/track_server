@@ -26,6 +26,8 @@
 
 ## 列表与资料缺项
 
+列表项增量返回 `city_name`，由服务端使用当前持久化地区目录与旧编号兼容映射解析，支持新 `region_id`、旧行政区码及旧目录键；不依赖城市选择器仅包含的新编号，不修改轨迹存储值或发起地图供应商请求。详情响应同级 `data.city_name` 与批量导入结果的 `track.city_name` 使用相同解析规则，编辑/删除后刷新导入结果仍保留正确城市显示。无法匹配时名称为空，前端区分“未填写城市”和“未匹配城市（原编号）”，不猜测或伪造地名。
+
 `GET /admin/api/tracks` 保留 `title`、`user_name`、`city_code`、`status`、`limit`、`cursor_start_time`、`cursor_id`，新增可选 `province_code` 与 `missing`：
 
 - `province_code`：省级 Code，服务端展开为该省全部城市 Code 后按 `city_code IN (...)` 筛选；与 `city_code` 同时传时 `city_code` 优先。
