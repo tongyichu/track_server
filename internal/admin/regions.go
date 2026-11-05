@@ -82,3 +82,28 @@ func (h *Handler) SaveRegionNode(ctx context.Context, c *app.RequestContext) {
 	}
 	c.JSON(http.StatusOK, utils.H{"code": 0, "data": catalog})
 }
+
+func (h *Handler) DeleteRegionCountry(ctx context.Context, c *app.RequestContext) {
+	if h.regionSvc == nil {
+		c.JSON(http.StatusServiceUnavailable, utils.H{"error": "地区目录暂不可用"})
+		return
+	}
+	var input struct {
+		ExpectedVersion int64 `json:"expected_version"`
+	}
+	body, err := c.Body()
+	if err != nil || len(body) > 1024 || json.Unmarshal(body, &input) != nil || input.ExpectedVersion <= 0 {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "删除请求格式无效"})
+		return
+	}
+	catalog, err := h.regionSvc.DeleteCountry(ctx, c.Param("node_id"), input.ExpectedVersion)
+	if errors.Is(err, regions.ErrVersionConflict) || errors.Is(err, regions.ErrNodeConflict) {
+		c.JSON(http.StatusConflict, utils.H{"error": "地区目录已更新，请刷新页面后核对再删除"})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": catalog})
+}

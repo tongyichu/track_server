@@ -62,6 +62,8 @@
   function updateSaveState() {
     $('regionSaveNode').disabled = !editable() || saving || photoEditor.busy || !dirtyIds.has(selectedId);
     $('regionSaveNode').textContent = '保存当前节点';
+    $('regionDeleteCountry').hidden = !canDeleteCountry(current());
+    $('regionDeleteCountry').disabled = !editable() || saving || photoEditor.busy;
     photoEditor.sessions.get(selectedId)?.picker.refresh();
   }
 
@@ -80,6 +82,14 @@
   }
 
   function current() { return catalog && catalog.nodes.find(node => node.id === selectedId); }
+  function canDeleteCountry(node) {
+    const saved = node && persistedNodes.get(node.id);
+    return !!saved && saved.level === 'country' && !saved.parent_id && saved.active &&
+      saved.id !== 'country:CN' && saved.region_id !== 'CN' && (saved.country_code || '').toUpperCase() !== 'CN';
+  }
+  function firstCountryId() {
+    return children('').find(node => node.level === 'country' && node.active)?.id || '';
+  }
   function children(parentId) {
     return catalog.nodes.filter(node => node.parent_id === parentId)
       .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0) || a.name.localeCompare(b.name, 'zh-CN'));
@@ -109,7 +119,7 @@
     const root = $('regionCountryTabs');
     root.replaceChildren();
     if (!catalog) return;
-    children('').filter(node => node.level === 'country').forEach(node => {
+    children('').filter(node => node.level === 'country' && node.active).forEach(node => {
       const tab = document.createElement('button');
       tab.type = 'button';
       tab.className = 'region-country-tab' + (node.id === activeCountryId ? ' active' : '') + (!node.active ? ' archived' : '');
@@ -239,7 +249,7 @@
       const country = countryOf(node);
       if (country) activeCountryId = country.id;
       ancestors(node.id).forEach(parentId => { if (parentId !== activeCountryId) expandedIds.add(parentId); });
-    }
+    } else activeCountryId = '';
     renderCountryTabs();
     $('regionEmpty').hidden = !!node;
     $('regionForm').hidden = !node;
@@ -334,7 +344,8 @@
       persistedNodes = new Map(catalog.nodes.map(node => [node.id, structuredClone(node)]));
       expandedIds = new Set();
       dirtyIds = new Set();
-      select(catalog.nodes.some(node => node.id === selectedId) ? selectedId : children('').find(node => node.level === 'country')?.id || '');
+      const selected = current();
+      select(selected && countryOf(selected)?.active ? selectedId : firstCountryId());
       status('地区目录已加载');
     } catch (error) { status(error.message, true); }
   }
@@ -345,6 +356,53 @@
   }));
   $('regionAddCountry').addEventListener('click', () => addNode(null));
   $('regionAddChild').addEventListener('click', () => addNode(current()));
+  $('regionDeleteCountry').addEventListener('click', async () => {
+    const node = current();
+    if (!editable() || saving || photoEditor.busy || !canDeleteCountry(node)) return;
+    const removed = new Set(catalog.nodes.filter(item => countryOf(item)?.id === node.id).map(item => item.id));
+    const expectedVersion = catalog.version;
+    const name = persistedNodes.get(node.id).name;
+    saving = true;
+    $('regionForm').inert = true;
+    updateSaveState();
+    try {
+      const confirmed = await AdminUI.confirm({
+        title: '删除国家',
+        message: '确认删除“' + name + '”及其 ' + (removed.size - 1) + ' 个下级地区？删除后将从城市管理和客户端目录移除，历史轨迹和图片文件保留。该国未保存的修改将被丢弃。',
+        confirmText: '删除国家', danger: true
+      });
+      if (!confirmed) return;
+      status('正在删除国家…');
+      const updated = await api(encodeURIComponent(node.id), {
+        method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ expected_version: expectedVersion })
+      });
+      const previousBases = persistedNodes;
+      const pending = catalog.nodes.filter(item => !removed.has(item.id) && dirtyIds.has(item.id));
+      catalog = updated;
+      persistedIds = new Set(updated.nodes.map(item => item.id));
+      persistedNodes = new Map(updated.nodes.map(item => [item.id, structuredClone(item)]));
+      pending.forEach(draft => {
+        const index = catalog.nodes.findIndex(item => item.id === draft.id);
+        if (index < 0) catalog.nodes.push(draft);
+        else catalog.nodes[index] = draft;
+        if (previousBases.has(draft.id)) persistedNodes.set(draft.id, previousBases.get(draft.id));
+        else persistedNodes.delete(draft.id);
+      });
+      removed.forEach(id => { dirtyIds.delete(id); expandedIds.delete(id); });
+      photoEditor.remove(removed);
+      researchDraft = null; researchNodeId = '';
+      $('regionSearch').value = '';
+      saving = false;
+      select(firstCountryId());
+      status('已删除“' + name + '”及其下级地区');
+    } catch (error) { status(error.message, true); }
+    finally {
+      saving = false;
+      $('regionForm').inert = false;
+      updateSaveState();
+    }
+  });
   $('regionDeleteDraft').addEventListener('click', () => {
     const node = current();
     if (!node || persistedIds.has(node.id) || saving || photoEditor.busy) return;
@@ -352,7 +410,7 @@
     catalog.nodes.forEach(item => { if (ancestors(item.id).has(node.id)) removed.add(item.id); });
     catalog.nodes = catalog.nodes.filter(item => !removed.has(item.id));
     removed.forEach(id => dirtyIds.delete(id));
-    select(catalog.nodes.some(item => item.id === activeCountryId) ? activeCountryId : children('').find(item => item.level === 'country')?.id || '');
+    select(catalog.nodes.some(item => item.id === activeCountryId && item.active) ? activeCountryId : firstCountryId());
     status('未保存节点及下级已删除');
   });
   $('regionResearch').addEventListener('click', async () => {

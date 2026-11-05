@@ -14,6 +14,16 @@
     get pending() { return Array.from(this.sessions.values()).some(session => session.editor.pending); }
     settle() { return this.editor?.settle() || Promise.resolve(); }
 
+    remove(ids) {
+      ids.forEach(id => {
+        const session = this.sessions.get(id);
+        if (!session) return;
+        session.picker.pause();
+        session.editor.dispose();
+        this.sessions.delete(id);
+      });
+    }
+
     bind(node) {
       this.sessions.get(this.node?.id)?.picker.pause();
       this.sessions.get(this.node?.id)?.editor.pauseInfo();

@@ -104,7 +104,7 @@
   const logoutIcon = accountIcon('<path d="M9 5H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4M12 12h9m-4-4 4 4-4 4"/>');
 
   topbar.innerHTML = [
-    '<a class="brand" href="/admin/dashboard.html"><span class="brand-mark">T</span><span><b>Track</b><small>管理中心</small></span></a>',
+    '<a class="brand" href="/admin/dashboard.html"><img class="brand-mark" src="' + AdminAssets.url('/admin/static/favicon.png') + '" width="32" height="32" alt="" data-no-preview /><span><b>时光轨迹</b><small>控制台</small></span></a>',
     '<nav class="nav" aria-label="管理后台导航">',
     items.map(function (item) {
       const classes = [item.primary ? 'nav-primary' : 'nav-secondary', item.mobileOnly ? 'mobile-only' : '', isActive(item) ? 'active' : ''].filter(Boolean).join(' ');

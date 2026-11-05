@@ -91,6 +91,10 @@
 
 省市/景点本站图片资源可传 `?photo_info=1`，返回 `{code:0,data:{width,height,size_bytes}}`。沿用原静态资源会话和模块查看权限、路径校验及no-store，仅允许`regions`/`scenic_spots`下的JPG/PNG/WebP；只读本地文件头和实际文件长度，不访问第三方URL。缺文件404，信息不可用不会阻止图片区其他操作。普通资源请求仍返回图片字节。
 
+### 国家删除
+
+`DELETE /admin/api/regions/:node_id` 使用城市管理操作权限、同源校验与先审计后写，JSON为`{expected_version}`。仅非中国国家根节点可删除，实际将整棵国家子树归档并返回完整目录，保持历史编码与资源；中国和单个省市拒绝。目录版本不符409，详情见[地区后台管理](api/regions.md#后台管理)。
+
 ### 后台账号新增路由
 
 | 方法 | 路径 | 权限 | 说明 |

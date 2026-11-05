@@ -54,7 +54,7 @@ func requestPermission(c *app.RequestContext) (string, bool) {
 	case "scenic-spots":
 		return "scenic_spots", write
 	case "regions":
-		// Pixabay searches use POST: external requests/imports require write permission and audit.
+		// Country DELETE and Pixabay POSTs require region write permission and audit.
 		return "regions", write
 	case "route-groups":
 		return "route_groups", write

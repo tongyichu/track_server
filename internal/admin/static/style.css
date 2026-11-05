@@ -162,7 +162,7 @@ table.release-detail-table th { width: 130px; white-space: nowrap; }
 
 /* Responsive management shell */
 .topbar .brand { display: flex; align-items: center; gap: 10px; color: #172033; text-decoration: none; }
-.brand-mark { display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; background: linear-gradient(145deg, #2563eb, #0ea5e9); color: #fff; font-weight: 800; }
+.brand-mark { display: block; flex: none; width: 32px; height: 32px; border-radius: 9px; object-fit: contain; }
 .topbar .brand b, .topbar .brand small { display: block; }
 .topbar .brand small { margin-top: 1px; color: #8a94a6; font-size: 11px; font-weight: 500; }
 .nav-icon { display: inline-grid; width: 22px; text-align: center; font-weight: 700; }
