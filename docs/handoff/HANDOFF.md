@@ -88,3 +88,11 @@
 - 2026-11-04 16:39:41+08:00本机ping200，随后公网ping200，均hello track app；MySQL正常、无内存降级，3个后台账号，后台API401/页面302/登录200，静态资源版本b0d73504518c49676677。足迹及地区轨迹、个人纪录、日历、类型分布未登录均401；环境文件/持久化挂载保留，前版镜像保留。
 - 完整回执/private/tmp/track-footprint-deploy-20261104.json；镜像元数据track-footprint-deploy-image-20261104.json，日志track-footprint-deploy-20261104.log，runner为track-footprint-deploy-20261104.py。后续纯文档收尾不改变生产源码241ece4。
 - 部署期间用户追加客户端隐藏南海附属图形、放大主体；统计归属不变，仅更新客户端显示与对应协议说明。客户端构建/安装在另一仓进行，不在本次Server部署中提交客户端或发布App。
+
+## 2026-11-05：控制台标题、城市缺项与图片操作部署
+
+- 用户明确要求部署这三轮后台改动。发布源码main/af79620c1a9c331073b7ec590fd56a8d3d329bad已推送，正式track_server仓库快进同步后从干净工作树构建linux/amd64镜像；go build ./...、regions.js/photo_upload_editor.js/ui.js语法及git diff --check通过。未新增或运行自动化业务/UI测试。
+- 后台18个页面标签统一为“时光轨迹 - 控制台”；城市树按已保存资料显示缺口号/缺简介/缺图片，保存后更新；城市和景点图片右下角增加下载原图，灰圈叉移到整张卡片右上角。沿用现有后台会话鉴权、上传及图片自动保存，无新API、表或权限规则；现有AGENTS边界继续适用。
+- 镜像manifest为sha256:7af6d3e83ac0b647317892cc7e54782a09c090170698d40145bf3603dec6e965，配置ID为sha256:375abdbd6c74dc25ed2ddc5efcab26bfd16b0ce8ee4719292e59ecac2b777fd6。生产预拉取并核对摘要、revision和架构后运行既有精确镜像选择脚本，未修改部署脚本；容器b9697408f2f77398698cd6ef764faa689cac5e7e30244df84b2d8b76ba67e7b0，running、重启0。
+- 2026-11-05 21:08:25+08:00内网及随后公网ping均200/hello track app。MySQL正常、无内存降级，3个后台账号正常加载，后台API未登录401、受保护页面302、登录页200。新标题已核对，资源版本533a1f73925303ed02a6，5份相关JS/CSS内外网SHA256均与发布源码一致。环境、持久化挂载和前版镜像保留；实际页面视觉、图片下载及保存交互由用户手动验收。
+- 完整回执/private/tmp/track-console-deploy-20261105.json，镜像元数据track-console-deploy-image-20261105.json，日志track-console-deploy-20261105.log，runner为track-console-deploy-20261105.py。本文档收尾不改变已部署af79620快照；本轮不提交或发布客户端，Feed图标修改仍在客户端工作副本中。
