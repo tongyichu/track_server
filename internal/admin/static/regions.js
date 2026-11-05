@@ -8,6 +8,7 @@
   let persistedIds = new Set();
   let persistedNodes = new Map();
   let expandedIds = new Set();
+  const treeMissingElements = new Map();
   let saving = false;
   let researchDraft = null;
   let researchNodeId = '';
@@ -28,6 +29,7 @@
       const base = persistedNodes.get(node.id);
       if (base) base.photos = structuredClone(photos);
       catalog.version = Math.max(catalog.version, result.version);
+      updateTreeMissing(node);
     },
     busyChanged: updateSaveState
   });
@@ -140,9 +142,27 @@
     });
   }
 
+  function updateTreeMissing(node) {
+    const root = treeMissingElements.get(node.id);
+    if (!root) return;
+    const saved = persistedNodes.get(node.id);
+    const missing = [];
+    if (!saved?.slogan?.trim()) missing.push('缺口号');
+    if (!saved?.description?.trim()) missing.push('缺简介');
+    if (['province', 'city'].includes(node.level) &&
+        !(saved?.photos || []).some(photo => photo.url?.trim())) missing.push('缺图片');
+    root.replaceChildren(...missing.map(text => {
+      const badge = document.createElement('span');
+      badge.className = 'badge bg-orange-lt';
+      badge.textContent = text;
+      return badge;
+    }));
+  }
+
   function renderTree() {
     const root = $('regionTree');
     root.replaceChildren();
+    treeMissingElements.clear();
     if (!catalog || !activeCountryId) return;
     const query = $('regionSearch').value.trim().toLowerCase();
     const visible = new Set();
@@ -190,8 +210,14 @@
         button.setAttribute('aria-selected', node.id === selectedId ? 'true' : 'false');
         if (childNodes.length) button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
         const label = document.createElement('span');
+        label.className = 'region-tree-name';
         label.textContent = node.name;
         button.appendChild(label);
+        const missing = document.createElement('span');
+        missing.className = 'region-tree-missing';
+        button.appendChild(missing);
+        treeMissingElements.set(node.id, missing);
+        updateTreeMissing(node);
         button.addEventListener('click', () => select(node.id));
         row.appendChild(button);
         item.appendChild(row);

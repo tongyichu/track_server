@@ -56,7 +56,7 @@
       const old = this.items;
       this.items = [];
       this.active = 0;
-      old.forEach(item => { item.xhr?.abort(); if (item.preview) URL.revokeObjectURL(item.preview); });
+      old.forEach(item => { item.xhr?.abort(); item.downloadController?.abort(); if (item.preview) URL.revokeObjectURL(item.preview); });
       this.resolveWaiters();
     }
 
@@ -152,6 +152,7 @@
       if (!this.options.editable()) return;
       this.items = this.items.filter(value => value !== item);
       item.xhr?.abort();
+      item.downloadController?.abort();
       item.infoController?.abort();
       if (item.preview) URL.revokeObjectURL(item.preview);
       this.render();
@@ -176,6 +177,44 @@
       button.textContent = text;
       button.addEventListener('click', action);
       return button;
+    }
+
+    async downloadPhoto(item) {
+      if (item.state !== 'done' || !item.photo.url || item.downloadController || !this.items.includes(item)) return;
+      const generation = this.generation, controller = new AbortController();
+      item.downloadController = controller;
+      this.updateDownload(item);
+      let timedOut = false;
+      const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, 30000);
+      try {
+        const source = new URL(this.options.photoURL(item.photo.url), window.location.href);
+        if (!['http:', 'https:'].includes(source.protocol)) throw new Error('图片地址无效');
+        const response = await fetch(source.href, { signal: controller.signal, credentials: 'same-origin' });
+        if (!response.ok || !/^image\//i.test(response.headers.get('Content-Type') || '')) throw new Error('图片下载失败，请重试');
+        const image = await response.blob();
+        if (!image.size) throw new Error('图片内容为空');
+        if (generation !== this.generation || !this.items.includes(item) || controller.signal.aborted) return;
+        const link = document.createElement('a');
+        let name = source.pathname.split('/').pop() || 'image';
+        try { name = decodeURIComponent(name); } catch (_) { /* Keep the encoded filename if decoding fails. */ }
+        link.download = name.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_');
+        link.href = URL.createObjectURL(image);
+        setTimeout(() => URL.revokeObjectURL(link.href), 60000);
+        link.hidden = true;
+        document.body.appendChild(link);
+        link.click(); link.remove();
+      } catch (error) {
+        if (generation === this.generation && this.items.includes(item) && item.view?.card.isConnected &&
+            (!controller.signal.aborted || timedOut)) {
+          this.message.textContent = error.name === 'AbortError' ? '图片下载超时，请重试' : '下载失败：' + error.message;
+        }
+      } finally {
+        clearTimeout(timeout);
+        if (item.downloadController === controller) {
+          item.downloadController = null;
+          if (generation === this.generation && this.items.includes(item)) this.updateDownload(item);
+        }
+      }
     }
 
     render() {
@@ -209,10 +248,16 @@
         }, 'btn btn-sm btn-light');
         overlay.append(status, progress, retry);
         media.append(image, overlay);
+        const download = document.createElement('button');
+        download.type = 'button'; download.className = 'admin-photo-download'; download.hidden = true;
+        download.title = '下载原图'; download.setAttribute('aria-label', '下载第' + (index + 1) + '张图片');
+        download.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 17v3h16v-3M12 3v12m-4-4 4 4 4-4"/></svg>';
+        download.addEventListener('click', event => { event.stopPropagation(); this.downloadPhoto(item); });
+        media.appendChild(download);
         if (writable) {
           const remove = this.button('×', () => this.remove(item), 'admin-photo-remove');
           remove.title = '移除图片'; remove.setAttribute('aria-label', '移除第' + (index + 1) + '张图片');
-          media.appendChild(remove);
+          card.appendChild(remove);
         }
         const caption = document.createElement('input'); caption.className = 'form-control';
         caption.placeholder = '图片说明'; caption.maxLength = this.options.captionMax || 500;
@@ -225,7 +270,10 @@
         card.append(media, info, caption);
         if (writable) {
           card.draggable = true;
-          card.addEventListener('dragstart', event => { this.dragged = item; event.dataTransfer.setData('text/plain', item.key); });
+          card.addEventListener('dragstart', event => {
+            if (event.target instanceof Element && event.target.closest('button, a, input')) { event.preventDefault(); return; }
+            this.dragged = item; event.dataTransfer.setData('text/plain', item.key);
+          });
           card.addEventListener('dragend', () => { this.dragged = null; });
           card.addEventListener('dragover', event => { if (this.dragged) event.preventDefault(); });
           card.addEventListener('drop', event => {
@@ -233,7 +281,7 @@
             if (dragged) this.move(dragged, this.items.indexOf(item) - this.items.indexOf(dragged));
           });
         }
-        item.view = { card, image, overlay, status, progress, retry, caption, info };
+        item.view = { card, image, overlay, status, progress, retry, caption, info, download };
         this.host.appendChild(card); this.update(item);
       });
       if (writable) {
@@ -257,6 +305,14 @@
       }
     }
 
+    updateDownload(item) {
+      const button = item.view?.download;
+      if (!button) return;
+      button.hidden = item.state !== 'done' || !item.photo.url;
+      button.disabled = !!item.downloadController;
+      button.title = item.downloadController ? '正在下载…' : '下载原图';
+    }
+
     update(item) {
       const ui = item.view;
       if (!ui) return;
@@ -265,6 +321,7 @@
       ui.card.dataset.url = item.photo.url || '';
       ui.card.dataset.photoId = item.photo.id || item.key;
       ui.overlay.hidden = item.state === 'done';
+      this.updateDownload(item);
       ui.progress.hidden = item.state !== 'uploading';
       if (item.remote) ui.progress.removeAttribute('value'); else ui.progress.value = item.progress;
       ui.retry.hidden = item.state !== 'failed' || !this.options.editable();
@@ -306,6 +363,7 @@
       this.infoControllers.forEach(controller => controller.abort()); this.infoControllers.clear();
       this.infoQueue = []; this.infoActive = 0;
       this.items.forEach(item => {
+        item.downloadController?.abort();
         if (['queued', 'loading'].includes(item.infoState)) item.infoState = 'idle';
         item.infoController = null;
       });

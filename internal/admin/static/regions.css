@@ -21,10 +21,14 @@
 .region-tree-toggle:hover{color:var(--tblr-primary)}
 .region-tree-toggle:disabled{cursor:default;opacity:.6}
 .region-tree-toggle-spacer{height:1px;border-top:1px solid var(--tblr-border-color)}
-.region-tree-item{justify-content:flex-start;width:auto;max-width:calc(100% - 16px);padding:4px 6px;border-radius:0;gap:8px}
+.region-tree-item{justify-content:flex-start;flex-wrap:wrap;width:auto;min-width:0;max-width:calc(100% - 16px);padding:4px 6px;border-radius:0;column-gap:6px;row-gap:3px}
 .region-tree-item:hover{background:transparent;text-decoration:underline}
 .region-tree-item.selected{background:transparent;color:var(--tblr-primary);font-weight:650}
 .region-tree-item span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.region-tree-name{min-width:0;max-width:100%}
+.region-tree-item .region-tree-missing{display:inline-flex;flex-wrap:wrap;gap:4px;max-width:100%;overflow:visible;white-space:normal}
+.region-tree-item .region-tree-missing:empty{display:none}
+.region-tree-missing .badge{font-size:10px;font-weight:500;line-height:1.2;padding:2px 4px}
 .region-tree-list>.region-tree-node::before,.region-tree-children>.region-tree-node::before{content:"";position:absolute;left:-18px;top:16px;width:18px;border-top:1px solid var(--tblr-border-color)}
 .region-tree-list>.region-tree-node:last-child::after,.region-tree-children>.region-tree-node:last-child::after{content:"";position:absolute;left:-19px;top:17px;bottom:0;width:2px;background:var(--tblr-bg-surface)}
 .region-form-grid #regionContinentField[hidden]{display:none}
