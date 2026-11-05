@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="/admin/static/vendor/tabler.min.css" />
   <link rel="stylesheet" href="/admin/static/style.css" />
   <link rel="stylesheet" href="/admin/static/regions.css" />
+  <link rel="stylesheet" href="/admin/static/photo_upload_editor.css" />
 </head>
 <body>
   <header class="topbar"></header>
@@ -34,13 +35,13 @@
               <label>英文名称<input id="regionNameEn" class="form-control" maxlength="200" /></label>
               <label>高德 adcode<input id="regionAmapAdcode" class="form-control" inputmode="numeric" maxlength="6" placeholder="六位行政区编码" /></label>
               <label>Google 地区 Place ID<input id="regionGooglePlaceId" class="form-control" maxlength="2048" placeholder="地区的 Place ID，非景点 ID" /></label>
-              <label><span id="regionCountryCodeLabel">所属国家代码</span><input id="regionCountryCode" class="form-control" maxlength="2" placeholder="如 CN、US" /></label>
+              <label id="regionCountryCodeField" class="d-none" hidden><span id="regionCountryCodeLabel">所属国家代码</span><input id="regionCountryCode" class="form-control" maxlength="2" placeholder="如 CN、US" /></label>
               <label id="regionContinentField">所属洲<select id="regionContinent" class="form-select"><option value="">未设置</option><option value="AS">亚洲</option><option value="EU">欧洲</option><option value="AF">非洲</option><option value="NA">北美洲</option><option value="SA">南美洲</option><option value="OC">大洋洲</option><option value="AN">南极洲</option></select></label>
               <label>纬度<input id="regionLatitude" class="form-control" type="number" step="any" min="-90" max="90" /></label>
               <label>经度<input id="regionLongitude" class="form-control" type="number" step="any" min="-180" max="180" /></label>
               <label class="region-full">城市宣传口号<input id="regionSlogan" class="form-control" maxlength="500" /><span class="form-hint">优先填写流行、经典且有当地辨识度的旅游或城市形象宣传语；请核对来源。</span></label>
               <label class="region-full">简介<textarea id="regionDescription" class="form-control" rows="5" maxlength="8000"></textarea></label>
-              <label class="form-check region-selectable"><input id="regionSelectable" class="form-check-input" type="checkbox" /><span class="form-check-label">可在客户端选为城市</span></label>
+              <label class="form-check region-selectable d-none" hidden><input id="regionSelectable" class="form-check-input" type="checkbox" /><span class="form-check-label">可在客户端选为城市</span></label>
             </div>
             <section id="regionPhotos" class="region-photos" hidden></section>
           </form>
@@ -51,6 +52,7 @@
   <script src="/admin/static/vendor/tabler.min.js"></script>
   <script src="/admin/static/shell.js"></script>
   <script src="/admin/static/ui.js"></script>
+  <script src="/admin/static/photo_upload_editor.js"></script>
   <script src="/admin/static/region_photos.js"></script>
   <script src="/admin/static/regions.js"></script>
 </body>

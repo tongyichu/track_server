@@ -1,7 +1,7 @@
 (function () {
   'use strict';
   const $ = id => document.getElementById(id);
-  const state = { current: null, list: [], listCursor: "", listTotal: 0, listHasMore: false, newSpot: false, saving: false, providerSyncing: false, pendingCoordinates: null, map: null, mapMarker: null, mapOriginalPosition: null, selectingMapLocation: false, mapSDKPromise: null, amapPluginPromises: {}, regions: null, districtSearch: null, placeSearch: null, poiSearchPoint: null, poiDraft: null, photoPreviewURL: null, relatedSpot: null, relatedCursor: '' };
+  const state = { current: null, list: [], listCursor: "", listTotal: 0, listHasMore: false, newSpot: false, saving: false, providerSyncing: false, pendingCoordinates: null, map: null, mapMarker: null, mapOriginalPosition: null, selectingMapLocation: false, mapSDKPromise: null, amapPluginPromises: {}, regions: null, districtSearch: null, placeSearch: null, poiSearchPoint: null, poiDraft: null, relatedSpot: null, relatedCursor: '' };
   let baselineFormSnapshot = null;
 
   async function api(path, options) {
@@ -225,59 +225,85 @@
   function resetMapLocation(){if(!state.map||!state.mapOriginalPosition)return;const original=state.mapOriginalPosition;state.pendingCoordinates=null;state.poiDraft=null;setMapSelectionMode(false);if(state.placeSearch)state.placeSearch.clear();state.poiSearchPoint=null;$('poiDraftPanel').hidden=true;$('poiCandidatePanel').hidden=true;if(original.hasCoordinates){updateMapMarker(original.mapLat,original.mapLng);state.map.setZoom(original.zoom);state.map.setCenter([original.mapLng,original.mapLat]);$('coordinateInfo').hidden=false;$('coordinateInfo').textContent='坐标（'+(original.coordinateSystem||'未知坐标系')+'）：'+Number(original.latitude).toFixed(6)+'，'+Number(original.longitude).toFixed(6);}else{if(state.mapMarker){state.map.remove(state.mapMarker);state.mapMarker=null;}state.map.setZoom(original.zoom);state.map.setCenter([original.mapLng,original.mapLat]);$('coordinateInfo').hidden=true;$('coordinateInfo').textContent='';}$('resetMapLocationBtn').disabled=true;updateSaveButton();}
   $('coordinateMapImage').addEventListener('error',()=>{$('coordinateMapImage').hidden=true;$('coordinateMapError').hidden=false;});
   async function loadSpot(id) {
-    try{const spot=await api('/scenic-spots/'+encodeURIComponent(id));state.newSpot=false;fillForm(spot);document.querySelectorAll('.scenic-row').forEach(row=>row.classList.toggle('active',row.dataset.spotId===id));renderList();}
+    if (state.saving) return;
+    const owner = state.current;
+    const version = ++detailLoadVersion;
+    try{const spot=await api('/scenic-spots/'+encodeURIComponent(id));if(state.saving||version!==detailLoadVersion||state.current!==owner)return;state.newSpot=false;fillForm(spot);document.querySelectorAll('.scenic-row').forEach(row=>row.classList.toggle('active',row.dataset.spotId===id));renderList();}
     catch(error){toast(error.message,'danger');}
   }
 
-  function clearPhotoPreview(){if(state.photoPreviewURL){URL.revokeObjectURL(state.photoPreviewURL);state.photoPreviewURL=null;}$('photoFile').value='';}
-  function moveDraggedPhoto(target,event){const dragging=$('photosBox').querySelector('.scenic-photo-item.dragging');if(!dragging||dragging===target)return;const rect=target.getBoundingClientRect();const after=event.clientY>rect.top+rect.height/2;const addCard=$('photosBox').querySelector('.scenic-photo-add-card');if(target===addCard){$('photosBox').insertBefore(dragging,addCard);return;}const anchor=after?target.nextElementSibling:target;if(anchor==null||anchor===addCard)$('photosBox').insertBefore(dragging,addCard);else $('photosBox').insertBefore(dragging,anchor);}
-  function bindPhotoDragEvents(card,draggable){
-    draggable=draggable&&AdminAccess.can('scenic_spots',true);card.draggable=draggable;
-    card.addEventListener('dragstart',event=>{if(!draggable)return;card.classList.add('dragging');event.dataTransfer.effectAllowed='move';event.dataTransfer.setData('text/plain',card.dataset.photoId||'photo');});
-    card.addEventListener('dragend',()=>{card.classList.remove('dragging');$('photosBox').querySelectorAll('.drop-target').forEach(item=>item.classList.remove('drop-target'));updateSaveButton();});
-    card.addEventListener('dragover',event=>{if(!$('photosBox').querySelector('.scenic-photo-item.dragging'))return;event.preventDefault();if(!card.classList.contains('dragging')){card.classList.add('drop-target');moveDraggedPhoto(card,event);}});
-    card.addEventListener('dragleave',()=>card.classList.remove('drop-target'));
-    card.addEventListener('drop',event=>{if(!$('photosBox').querySelector('.scenic-photo-item.dragging'))return;event.preventDefault();card.classList.remove('drop-target');moveDraggedPhoto(card,event);});
-  }
-  function addPhotoCard(photo) {
-    const card=document.createElement('div');card.className='scenic-photo scenic-photo-item';const img=document.createElement('img');img.draggable=false;img.src=photoURL(photo.url);img.alt=photo.alt_text||photo.caption||'景点图片';
-    const caption=document.createElement('input');caption.className='form-control';caption.placeholder='图片说明';caption.value=photo.caption||'';
-    const controls=document.createElement('div');controls.className='d-flex gap-2 mt-2';controls.dataset.adminWrite='scenic_spots';const remove=document.createElement('button');remove.type='button';remove.className='btn btn-sm btn-outline-danger ms-auto';remove.textContent='移除';remove.addEventListener('click',()=>{card.remove();renderProviderPhotoCandidates(state.providerPhotoCandidates);updateSaveButton();});controls.appendChild(remove);caption.addEventListener('input',updateSaveButton);
-    card.dataset.photoId=photo.id;card.dataset.url=photo.url;card.dataset.altText=photo.alt_text||'';card.dataset.attribution=photo.attribution||'';card.dataset.provider=photo.provider||'';card.dataset.sourceUrl=photo.source_url||'';card.dataset.attributionUrl=photo.attribution_url||'';
-    card.append(img,caption,controls);const addCard=$('photosBox').querySelector('.scenic-photo-add-card');if(addCard)$('photosBox').insertBefore(card,addCard);else $('photosBox').appendChild(card);bindPhotoDragEvents(card,true);return card;
-  }
-  function addUploadPhotoCard(){
-    if(!AdminAccess.can('scenic_spots',true))return;
-    const card=document.createElement('div');card.className='scenic-photo scenic-photo-add-card';
-    const picker=document.createElement('button');picker.type='button';picker.className='scenic-photo-picker';picker.setAttribute('aria-label','选择景点图片');picker.innerHTML='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>选择图片</span>';
-    const preview=document.createElement('img');preview.hidden=true;picker.appendChild(preview);picker.addEventListener('click',()=>$('photoFile').click());
-    const caption=document.createElement('input');caption.className='form-control scenic-photo-upload-caption';caption.placeholder='图片说明';caption.addEventListener('input',updateSaveButton);
-    const controls=document.createElement('div');controls.className='scenic-photo-upload-controls';const upload=document.createElement('button');upload.type='button';upload.className='btn btn-sm btn-outline-primary';upload.textContent=state.newSpot?'保存并上传':'上传';upload.disabled=true;upload.addEventListener('click',()=>state.newSpot?save():uploadPhoto());controls.appendChild(upload);
-    card.append(picker,caption,controls);$('photosBox').appendChild(card);bindPhotoDragEvents(card,false);
-  }
-  function renderPhotoCards(photos){$('photosBox').replaceChildren();(photos||[]).forEach(addPhotoCard);addUploadPhotoCard();}
-  function updateUploadPhotoPreview(){const card=$('photosBox').querySelector('.scenic-photo-add-card');if(!card)return;const picker=card.querySelector('.scenic-photo-picker'),preview=picker.querySelector('img'),icon=picker.querySelector('svg'),label=picker.querySelector('span'),upload=card.querySelector('button.btn-outline-primary');if(state.photoPreviewURL)URL.revokeObjectURL(state.photoPreviewURL);state.photoPreviewURL=null;const file=$('photoFile').files[0];if(file){state.photoPreviewURL=URL.createObjectURL(file);preview.src=state.photoPreviewURL;preview.hidden=false;icon.hidden=true;label.hidden=true;}else{preview.removeAttribute('src');preview.hidden=true;icon.hidden=false;label.hidden=false;}upload.textContent=state.newSpot?'保存并上传':'上传';upload.disabled=!file;updateSaveButton();}
+  let detailLoadVersion = 0;
+  const photoEditor = new AdminPhotoEditor($('photosBox'), {
+    module: 'scenic_spots', label: '景点图片', max: 30, captionMax: 255,
+    editable: () => AdminAccess.can('scenic_spots', true),
+    uploadURL: () => state.current?.id ? '/admin/api/scenic-spots/' + encodeURIComponent(state.current.id) + '/photos?draft=1' : null,
+    photoURL,
+    changed: updateSaveButton,
+    stateChanged: updateSaveButton
+  });
+  function clearPhotoPreview() { photoEditor.dispose(); }
+  function addPhotoCard(photo) { photoEditor.addPhoto(photo); }
+  function renderPhotoCards(photos) { photoEditor.load(photos); }
   function currentPayload() {
-    const base=state.current||{};const photos=Array.from($('photosBox').querySelectorAll('.scenic-photo-item')).map(card=>{const caption=card.querySelector('input');return{id:card.dataset.photoId,url:card.dataset.url,caption:caption.value.trim(),alt_text:card.dataset.altText||undefined,attribution:card.dataset.attribution||undefined,attribution_url:card.dataset.attributionUrl||undefined,source_url:card.dataset.sourceUrl||undefined,provider:card.dataset.provider||undefined};});
-    return Object.assign({},base,state.pendingCoordinates||{},{name:$('nameInput').value.trim(),category:$('categoryInput').value.trim(),scenic_grade:$('scenicGradeInput').value,address:$('addressInput').value.trim(),description:$('descriptionInput').value.trim(),photos});
+    return Object.assign({}, state.current || {}, state.pendingCoordinates || {}, {
+      name: $('nameInput').value.trim(), category: $('categoryInput').value.trim(),
+      scenic_grade: $('scenicGradeInput').value, address: $('addressInput').value.trim(),
+      description: $('descriptionInput').value.trim(), photos: photoEditor.photos
+    });
   }
-  function formSnapshot(){const payload=currentPayload(),file=state.newSpot?$('photoFile').files[0]:null,uploadCard=$('photosBox').querySelector('.scenic-photo-add-card');return{fields:[payload.name,payload.category,payload.scenic_grade,payload.address,payload.description,payload.city_code||'',payload.latitude==null?null:Number(payload.latitude),payload.longitude==null?null:Number(payload.longitude),payload.coordinate_system||''],sources:(payload.sources||[]).map(source=>[source.provider||'',source.provider_id||'',source.status||'']),photos:payload.photos.map(photo=>[photo.id||'',photo.url||'',photo.caption||'',photo.provider||'']),pendingFile:file?[file.name,file.size,file.lastModified,uploadCard?.querySelector('.scenic-photo-upload-caption')?.value.trim()||'']:null};}
-  function updateSaveButton(){const button=$('saveBtn');if(!button)return;const changed=baselineFormSnapshot!==null&&JSON.stringify(formSnapshot())!==baselineFormSnapshot;button.disabled=state.saving||!changed;const remove=$('deleteSpotBtn');remove.hidden=state.newSpot||!state.current?.id||state.current.status!=='active';remove.disabled=state.saving;}
-  function captureFormBaseline(){baselineFormSnapshot=JSON.stringify(formSnapshot());updateSaveButton();}
-  function updateBaselinePhotos(){if(!baselineFormSnapshot)return;const baseline=JSON.parse(baselineFormSnapshot);baseline.photos=formSnapshot().photos;baselineFormSnapshot=JSON.stringify(baseline);updateSaveButton();}
+  function formSnapshot() {
+    const payload = currentPayload();
+    return {
+      fields: [payload.name, payload.category, payload.scenic_grade, payload.address, payload.description,
+        payload.city_code || '', payload.latitude ?? null, payload.longitude ?? null, payload.coordinate_system || ''],
+      sources: (payload.sources || []).map(source => [source.provider || '', source.provider_id || '', source.status || '']),
+      photos: photoEditor.snapshot
+    };
+  }
+  function updateSaveButton() {
+    const button = $('saveBtn');
+    const changed = baselineFormSnapshot !== null && JSON.stringify(formSnapshot()) !== baselineFormSnapshot;
+    button.disabled = state.saving || photoEditor.busy || photoEditor.failed || !changed;
+    button.textContent = photoEditor.busy ? '图片上传中…' : '保存修改';
+    const remove = $('deleteSpotBtn');
+    remove.hidden = state.newSpot || !state.current?.id || state.current.status !== 'active';
+    remove.disabled = state.saving || photoEditor.busy;
+  }
+  function captureFormBaseline() { baselineFormSnapshot = JSON.stringify(formSnapshot()); updateSaveButton(); }
+
   async function save() {
-    if(state.saving||$('saveBtn').disabled)return;
-    if(state.newSpot&&state.poiDraft){toast('先点击“一键代入资料”，或按此坐标新建。','warning');return;}
-    state.saving=true;updateSaveButton();
-    try{const body=currentPayload(),pendingFile=state.newSpot?$('photoFile').files[0]:null,pendingCaption=state.newSpot?($('photosBox').querySelector('.scenic-photo-upload-caption')||{}).value||'':'';let spot;if(state.newSpot){spot=await api('/scenic-spots',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});state.newSpot=false;state.current=spot;$('newCityFields').hidden=true;const uploadButton=$('photosBox').querySelector('.scenic-photo-add-card button.btn-outline-primary');if(uploadButton)uploadButton.textContent='上传';if(pendingFile)spot=await uploadPhotoToSpot(spot,pendingFile,pendingCaption);}else{spot=await api('/scenic-spots/'+encodeURIComponent(state.current.id),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({expected_version:state.current.version,spot:body})});}
-      state.newSpot=false;state.current=spot;$('detailModal').close();await Promise.all([loadList(),loadStats()]);toast('保存成功','success');
-    }catch(error){toast(error.message,'danger');}
-    finally{state.saving=false;updateSaveButton();}
+    if (state.saving || $('saveBtn').disabled) return;
+    if (state.newSpot && state.poiDraft) { toast('先点击“一键代入资料”，或按此坐标新建。', 'warning'); return; }
+    const owner = state.current;
+    const photoGeneration = photoEditor.generation;
+    state.saving = true; updateSaveButton();
+    try {
+      let spot;
+      if (state.newSpot) {
+        spot = await api('/scenic-spots', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(currentPayload()) });
+        if (state.current !== owner) return;
+        state.current = spot; state.newSpot = false;
+        $('newCityFields').hidden = true; $('detailMeta').textContent = '内部 ID：' + spot.id;
+        photoEditor.start();
+        await photoEditor.settle();
+        if (state.current !== spot || photoEditor.generation !== photoGeneration) return;
+        if (photoEditor.failed) { toast('景点已创建，部分图片上传失败，请重试或移除后保存。', 'warning'); return; }
+      }
+      spot = await api('/scenic-spots/' + encodeURIComponent(state.current.id), {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ expected_version: state.current.version, spot: currentPayload() })
+      });
+      state.current = spot; state.newSpot = false; clearPhotoPreview();
+      $('detailModal').close();
+      await Promise.all([loadList(), loadStats()]);
+      toast('保存成功', 'success');
+    } catch (error) { toast(error.message, 'danger'); }
+    finally { state.saving = false; updateSaveButton(); }
   }
 
   async function deleteSpot() {
     const spot = state.current;
-    if (state.saving || state.newSpot || !spot?.id || spot.status !== 'active' || !AdminAccess.can('scenic_spots', true)) return;
+    if (state.saving || photoEditor.busy || state.newSpot || !spot?.id || spot.status !== 'active' || !AdminAccess.can('scenic_spots', true)) return;
     const modal = $('detailModal'), scrollTop = modal.scrollTop;
     state.saving = true;
     updateSaveButton();
@@ -342,12 +368,6 @@
     finally{button.removeAttribute('aria-disabled');}
   }
   $('applyAiDescriptionBtn').addEventListener('click',()=>{const candidate=$('aiDescriptionCandidateText').textContent.trim();if(!candidate)return;$('descriptionInput').value=candidate;$('aiDescriptionCandidate').hidden=true;$('providerDescriptionHint').textContent='已代入简介，保存后写入景点资料';updateSaveButton();});
-  async function uploadPhotoToSpot(spot,file,caption){const form=new FormData();form.append('file',file);form.append('caption',caption||'');const data=await api('/scenic-spots/'+encodeURIComponent(spot.id)+'/photos',{method:'POST',body:form});return data.spot;}
-  async function uploadPhoto() {
-    if(!state.current)return;const file=$('photoFile').files[0];if(!file){toast('先选择 JPG 或 PNG 图片','danger');return;}const form=new FormData();form.append('file',file);form.append('caption',$('photosBox').querySelector('.scenic-photo-upload-caption').value.trim());
-    try{const data=await api('/scenic-spots/'+encodeURIComponent(state.current.id)+'/photos',{method:'POST',body:form});state.current=data.spot;$('detailMeta').textContent='内部 ID：'+state.current.id;clearPhotoPreview();renderPhotoCards(state.current.photos||[]);updateBaselinePhotos();toast('图片已添加','success');}
-    catch(error){toast(error.message,'danger');}
-  }
   async function copySpotId() {
     const id=state.current&&state.current.id;if(!id)return;
     try{if(navigator.clipboard&&navigator.clipboard.writeText){await navigator.clipboard.writeText(id);}else{const input=document.createElement('textarea');input.value=id;input.style.position='fixed';input.style.opacity='0';document.body.appendChild(input);input.select();const copied=document.execCommand('copy');input.remove();if(!copied)throw new Error('浏览器不支持复制');}toast('ID 复制成功','success');}
@@ -356,9 +376,15 @@
 
   $('searchBtn').addEventListener('click',()=>loadList());$('missingFilter').addEventListener('change',()=>loadList());$('showIncompleteBtn').addEventListener('click',()=>filterMissing('any'));$('loadMoreSpotsBtn').addEventListener('click',()=>loadList(true));$('searchInput').addEventListener('keydown',event=>{if(event.key==='Enter')loadList();});$('statusFilter').addEventListener('change',renderList);$('cityFilter').addEventListener('change',()=>loadList());$('provinceFilter').addEventListener('change',()=>{$('cityFilter').value='';updateCityOptions();loadList();});$('refreshStatsBtn').addEventListener('click',loadStats);
   $('newProvinceSelect').addEventListener('change',()=>{const code=$('newProvinceSelect').value;populateCityOptions(code);const province=(state.regions||[]).find(item=>item.code===code);updateCurrentCity(province);focusRegion(code);});$('newCitySelect').addEventListener('change',()=>{const region=selectedRegion();updateCurrentCity(region);focusRegion(region&&region.code);});$('useClickedLocationBtn').addEventListener('click',useClickedMapLocation);$('applyPoiDraftBtn').addEventListener('click',applyPOIDraft);
-  $('newBtn').addEventListener('click',()=>{state.newSpot=true;fillForm({status:'active',manual_edited:true});});$('closeDetailBtn').addEventListener('click',()=>$('detailModal').close());$('detailModal').addEventListener('click',event=>{if(event.target===$('detailModal'))$('detailModal').close();});
+  $('newBtn').addEventListener('click',()=>{if(state.saving)return;state.newSpot=true;fillForm({status:'active',manual_edited:true});});$('closeDetailBtn').addEventListener('click',()=>{if(!state.saving)$('detailModal').close();});$('detailModal').addEventListener('click',event=>{if(!state.saving&&event.target===$('detailModal'))$('detailModal').close();});
   $('deleteSpotBtn').addEventListener('click',deleteSpot);
-  $('saveBtn').addEventListener('click',save);$('generateDescriptionBtn').addEventListener('click',event=>{event.preventDefault();if(event.currentTarget.getAttribute('aria-disabled')!=='true')generateScenicDescription();});$('photoFile').addEventListener('change',updateUploadPhotoPreview);$('copySpotIdBtn').addEventListener('click',copySpotId);$('chooseMapLocationBtn').addEventListener('click',()=>{if(state.map)setMapSelectionMode(!state.selectingMapLocation);});$('resetMapLocationBtn').addEventListener('click',resetMapLocation);
+  $('detailModal').addEventListener('cancel', event => { if (state.saving) event.preventDefault(); });
+  $('detailModal').addEventListener('close', () => { if (!state.saving) { detailLoadVersion++; clearPhotoPreview(); } });
+  window.addEventListener('pagehide', clearPhotoPreview);
+  window.addEventListener('beforeunload', event => {
+    if (photoEditor.pending || photoEditor.busy || state.saving) { event.preventDefault(); event.returnValue = ''; }
+  });
+  $('saveBtn').addEventListener('click',save);$('generateDescriptionBtn').addEventListener('click',event=>{event.preventDefault();if(event.currentTarget.getAttribute('aria-disabled')!=='true')generateScenicDescription();});$('copySpotIdBtn').addEventListener('click',copySpotId);$('chooseMapLocationBtn').addEventListener('click',()=>{if(state.map)setMapSelectionMode(!state.selectingMapLocation);});$('resetMapLocationBtn').addEventListener('click',resetMapLocation);
   ['nameInput','categoryInput','scenicGradeInput','addressInput','descriptionInput'].forEach(id=>$(id).addEventListener('input',updateSaveButton));
   $('closeRelatedTracksBtn').addEventListener('click',()=>$('relatedTracksModal').close());$('relatedTracksModal').addEventListener('click',event=>{if(event.target===$('relatedTracksModal'))$('relatedTracksModal').close();});$('loadMoreRelatedTracksBtn').addEventListener('click',()=>loadRelatedTracks(true));
   loadFilterRegions();

@@ -585,6 +585,12 @@ func (h *Handler) UploadScenicSpotPhoto(ctx context.Context, c *app.RequestConte
 		h.scenicSpotServiceError(c, err)
 		return
 	}
+	for _, field := range []string{"caption", "alt_text", "attribution"} {
+		if utf8.RuneCountInString(strings.TrimSpace(string(c.FormValue(field)))) > 255 {
+			c.JSON(http.StatusBadRequest, utils.H{"error": "图片说明不能超过255字"})
+			return
+		}
+	}
 	file, err := c.FormFile("file")
 	if err != nil || file == nil {
 		c.JSON(http.StatusBadRequest, utils.H{"error": "file is required"})
@@ -635,6 +641,10 @@ func (h *Handler) UploadScenicSpotPhoto(ctx context.Context, c *app.RequestConte
 		return
 	}
 	photo := models.ScenicSpotPhoto{ID: photoID, URL: "/api/v1/static/" + rel, Caption: strings.TrimSpace(string(c.FormValue("caption"))), AltText: strings.TrimSpace(string(c.FormValue("alt_text"))), Attribution: strings.TrimSpace(string(c.FormValue("attribution")))}
+	if string(c.Query("draft")) == "1" {
+		c.JSON(http.StatusCreated, utils.H{"code": 0, "data": utils.H{"photo": photo, "content_type": mime, "size": len(raw)}})
+		return
+	}
 	spot.Photos = append(spot.Photos, photo)
 	expected := spot.Version
 	updated, err := h.scenicSpotSvc.Update(ctx, h.adminOperator(c), spot.ID, expected, spot)

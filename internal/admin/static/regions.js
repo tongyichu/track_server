@@ -47,7 +47,8 @@
   }
 
   function updateSaveState() {
-    $('regionSaveNode').disabled = !editable() || saving || photoEditor.busy || !dirtyIds.has(selectedId);
+    $('regionSaveNode').disabled = !editable() || saving || photoEditor.busy || photoEditor.failed || !dirtyIds.has(selectedId);
+    $('regionSaveNode').textContent = photoEditor.busy ? '图片上传中…' : '保存当前节点';
   }
 
   function markDirty(node, message) {
@@ -237,6 +238,9 @@
     $('regionAmapAdcode').value = externalValue(node, 'amap', 'adcode') || (node.code_system === 'cn_adcode' ? node.code || '' : '');
     $('regionGooglePlaceId').value = externalValue(node, 'google', 'place_id');
     const countryRoot = node.level === 'country' && !node.parent_id;
+    const showCountryCode = countryRoot && !persistedIds.has(node.id);
+    $('regionCountryCodeField').hidden = !showCountryCode;
+    $('regionCountryCodeField').classList.toggle('d-none', !showCountryCode);
     $('regionCountryCodeLabel').textContent = countryRoot ? '国家缩写（两位）' : '所属国家代码';
     $('regionCountryCode').required = countryRoot && node.active;
     $('regionCountryCode').disabled = !countryRoot || persistedIds.has(node.id);
@@ -367,9 +371,12 @@
   $('regionApplyAll').addEventListener('click', () => applyDraft(true));
   $('regionSaveNode').addEventListener('click', async () => {
     const node = current();
-    if (!node || !dirtyIds.has(node.id) || saving || photoEditor.busy || !editable()) return;
+    if (!node || !dirtyIds.has(node.id) || saving || photoEditor.busy || photoEditor.failed || !editable()) return;
     if (!$('regionForm').reportValidity()) return;
     const savedId = node.id;
+    const creatingWithPhotos = !persistedIds.has(savedId) && photoEditor.pending;
+    const ownerEditor = photoEditor.editor;
+    const ownerGeneration = ownerEditor?.generation;
     const previousBases = persistedNodes;
     saving = true; $('regionForm').inert = true; updateSaveState();
     status('正在保存当前节点…');
@@ -388,10 +395,42 @@
       });
       dirtyIds.delete(savedId);
       select(savedId);
+      if (creatingWithPhotos) {
+        $('regionForm').inert = false;
+        $('regionForm').querySelector('.region-form-grid').inert = true;
+        $('regionForm').querySelector('.region-editor-title').inert = true;
+        $('regionResearchPanel').inert = true;
+        await photoEditor.settle();
+        if (ownerEditor.generation !== ownerGeneration) return;
+        if (photoEditor.failed) {
+          dirtyIds.add(savedId);
+          status('节点已创建，部分图片上传失败，请重试或移除后保存', true);
+          return;
+        }
+        $('regionForm').inert = true;
+        const completed = await api('node', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ node: current(), base_node: persistedNodes.get(savedId) })
+        });
+        const saved = completed.nodes.find(item => item.id === savedId);
+        const index = catalog.nodes.findIndex(item => item.id === savedId);
+        catalog.version = completed.version;
+        catalog.nodes[index] = saved;
+        persistedNodes.set(savedId, structuredClone(saved));
+        dirtyIds.delete(savedId);
+        select(savedId);
+      }
       status('当前节点已保存，客户端下次刷新目录时会读取新版本');
     } catch (error) { status(error.message, true); }
-    finally { saving = false; $('regionForm').inert = false; updateSaveState(); }
+    finally {
+      saving = false;
+      $('regionForm').inert = false;
+      $('regionForm').querySelector('.region-form-grid').inert = false;
+      $('regionForm').querySelector('.region-editor-title').inert = false;
+      $('regionResearchPanel').inert = false;
+      updateSaveState();
+    }
   });
-  window.addEventListener('beforeunload', event => { if (dirtyIds.size || saving || photoEditor.busy) { event.preventDefault(); event.returnValue = ''; } });
+  window.addEventListener('beforeunload', event => { if (dirtyIds.size || saving || photoEditor.pending) { event.preventDefault(); event.returnValue = ''; } });
   load();
 })();

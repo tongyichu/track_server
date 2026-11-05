@@ -54,6 +54,7 @@
 | GET | `/admin/api/tracks/statistics` | 轨迹查看 | period=day/week/month，默认 month；已完成云端轨迹类型分布和贡献用户前十，按北京时间入库时间统计 |
 | GET | `/admin/api/cities` | 鉴权 | 返回内置城市/省份 Code、名称与省市层级，供轨迹和景点选择器使用 |
 | POST | `/admin/api/regions/:node_id/photos` | 地区操作 | 上传已保存省份/城市的图片文件，返回图片元数据；随单节点保存关联，限制见 [地区目录](api/regions.md) |
+| POST | `/admin/api/scenic-spots/:spot_id/photos` | 景点操作 | 图片上传；可选 `draft=1` 仅暂存并返回图片，不更新景点版本；省略时保持追加图片并保存 |
 | GET | `/admin/api/tracks/:track_id` | 鉴权 | 返回 `{track, user_name, user_id_text, geo?}`：轨迹详情、只读归属用户名、主景点与 GCJ02 简化线；`user_id_text` 保留字符串兼容，新表单不展示或提交 ID/用户名，服务端拒绝变更归属人 |
 | GET | `/admin/api/tracks/:track_id/assets/:asset` | 轨迹查看 | 只读图片与原始文件资源，raw 按附件下载；asset 白名单与错误码见 [资源协议](api/admin-tracks.md#详情资源展示与下载) |
 | POST | `/admin/api/tracks/:track_id/place-refresh` | 轨迹操作 | 同步触发单条轨迹重新景点识别；任务忙 409，无索引 404 |

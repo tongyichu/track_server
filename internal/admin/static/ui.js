@@ -256,6 +256,7 @@
   }
 
   function enhanceButton(button) {
+    if (button.matches('.scenic-photo-picker, .region-photo-picker, .admin-photo-picker, .admin-photo-remove')) return;
     if (button.hasAttribute('data-period') || button.hasAttribute('data-stat-period') || button.classList.contains('btn-close') || button.matches('.dropdown-item, [data-bs-toggle="dropdown"]')) return;
     if (button.closest('.region-country-bar, .region-tree')) return;
     button.classList.add('btn');

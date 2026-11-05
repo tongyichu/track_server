@@ -126,6 +126,7 @@
 | 后台保存单个地区节点 | PUT | `/admin/api/regions/node` | 地区操作 | [regions.md](regions.md) |
 | 联网查询单个地区资料 | POST | `/admin/api/regions/research` | 地区操作 | [regions.md](regions.md) |
 | 上传省份/城市图片文件（保存节点时关联） | POST | `/admin/api/regions/:node_id/photos` | 地区操作 | [regions.md](regions.md) |
+| 上传景点图片文件 | POST | `/admin/api/scenic-spots/:spot_id/photos` | 景点操作 | 可选 `draft=1` 仅暂存；省略时追加并保存，见 [后台路由](../admin-routes.md) |
 | 新增后台账号 | POST | `/admin/api/accounts` | 管理员 session | [admin-accounts.md](admin-accounts.md) |
 | 调整身份、状态与页面权限 | PUT | `/admin/api/accounts/:username` | 管理员 session | [admin-accounts.md](admin-accounts.md) |
 | 迁移期应急重置后台密码 | POST | `/admin/api/accounts/:username/reset-password` | 管理员 session，且目标未验证邮箱/旧入口未关闭 | [admin-accounts.md](admin-accounts.md) |
