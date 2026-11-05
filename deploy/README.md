@@ -35,7 +35,8 @@ Docker Compose 部署使用的环境变量模板文件。
 
 使用说明：
 
-- `docker-compose.yml` 通过 `env_file: .env` 读取同目录下的 `.env` 文件，因此不能直接只保留 `.env.example`。
+- Compose 从部署目录 `.env` 解析变量，`docker-compose.yml` 通过显式 `environment` 列表注入容器，因此不能直接只保留 `.env.example`。
+- 省市宣传图片的人工 Pixabay 查询/导入可选配置 `PIXABAY_API_KEY`；只配置服务端，不放前端或提交真实密钥。查询响应私有缓存到 `<LOG_DIR>/pixabay-cache` 24小时，应保留日志目录挂载；未配置不影响手动上传图片。
 - 如果启用 HTTPS，需要同时修改 `BIND_ADDR`、TLS 证书路径，并配合 `docker-compose.yml` 打开证书挂载和 TLS 端口映射。
 
 ### `deploy/Dockerfile`

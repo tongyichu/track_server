@@ -14,6 +14,7 @@
   let researchingNodeId = '';
   const photoEditor = new RegionPhotosEditor($('regionPhotos'), {
     editable,
+    locked: () => saving,
     saved: node => persistedIds.has(node.id),
     changed: node => markDirty(node, '图片有未保存修改，请保存当前节点'),
     busyChanged: updateSaveState
@@ -49,6 +50,7 @@
   function updateSaveState() {
     $('regionSaveNode').disabled = !editable() || saving || photoEditor.busy || photoEditor.failed || !dirtyIds.has(selectedId);
     $('regionSaveNode').textContent = photoEditor.busy ? '图片上传中…' : '保存当前节点';
+    photoEditor.sessions.get(selectedId)?.picker.refresh();
   }
 
   function markDirty(node, message) {

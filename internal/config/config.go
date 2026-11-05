@@ -55,6 +55,7 @@ type Config struct {
 	AMapWebKey         string
 	AMapRESTKey        string
 	AMapSecurityJSCode string
+	PixabayAPIKey      string
 	TLSCertFile        string
 	TLSKeyFile         string
 	EnableTLS          bool
@@ -192,6 +193,7 @@ func Load() *Config {
 		AMapWebKey:                       aMapWebKey,
 		AMapRESTKey:                      aMapRestKey,
 		AMapSecurityJSCode:               aMapSecurityJSCode,
+		PixabayAPIKey:                    strings.TrimSpace(os.Getenv("PIXABAY_API_KEY")),
 		TrackPlaceEnabled:                getEnv("TRACK_PLACE_ENABLED", "true") == "true",
 		TrackPlaceCron:                   getEnv("TRACK_PLACE_CRON", "@every 1m"),
 		TrackPlaceAMapDailyBudget:        int(getEnvInt64("TRACK_PLACE_AMAP_DAILY_BUDGET", 0)),

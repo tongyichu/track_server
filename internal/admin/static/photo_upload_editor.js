@@ -16,7 +16,7 @@
     get failed() { return this.items.some(item => ['failed', 'invalid'].includes(item.state)); }
     get pending() { return this.items.some(item => item.state !== 'done'); }
     get photos() { return this.items.filter(item => item.state === 'done').map(item => ({ ...item.photo, caption: (item.photo.caption || '').trim() })); }
-    get snapshot() { return this.items.map(item => item.state === 'done' ? item.photo : { key: item.key, caption: item.photo.caption, file: item.file.name }); }
+    get snapshot() { return this.items.map(item => item.state === 'done' ? item.photo : { key: item.key, caption: item.photo.caption, file: item.file?.name, remote: item.remote }); }
 
     load(photos) {
       this.dispose();
@@ -47,6 +47,22 @@
       this.items.push(this.item({ ...photo }, null, 'done'));
       this.render();
       this.changed();
+    }
+
+    addRemotePhotos(candidates, query, page) {
+      if (!this.options.editable() || !this.options.importURL) return;
+      let added = 0;
+      candidates.forEach(candidate => {
+        const id = 'pixabay-' + candidate.id;
+        if (this.items.length >= this.options.max || this.items.some(item => item.photo.id === id || item.photo.source_url === candidate.source_url)) return;
+        const item = this.item({ id, caption: '', source_url: candidate.source_url, provider: 'pixabay' }, null, 'waiting');
+        item.remote = { query, page, id: candidate.id };
+        item.preview = candidate.preview_url;
+        this.items.push(item); added++;
+      });
+      this.render(); this.start();
+      if (added) this.changed();
+      return added;
     }
 
     choose(files) {
@@ -111,7 +127,7 @@
         const status = document.createElement('span');
         const progress = document.createElement('progress'); progress.max = 100;
         progress.setAttribute('aria-label', '图片上传进度');
-        const retry = this.button('重新上传', () => {
+        const retry = this.button(item.remote ? '重新导入' : '重新上传', () => {
           if (!this.options.editable() || item.state !== 'failed') return;
           item.error = ''; item.state = 'waiting'; this.start(); this.update(item);
         }, 'btn btn-sm btn-light');
@@ -169,9 +185,9 @@
       ui.card.dataset.photoId = item.photo.id || item.key;
       ui.overlay.hidden = item.state === 'done';
       ui.progress.hidden = item.state !== 'uploading';
-      ui.progress.value = item.progress;
+      if (item.remote) ui.progress.removeAttribute('value'); else ui.progress.value = item.progress;
       ui.retry.hidden = item.state !== 'failed' || !this.options.editable();
-      ui.status.textContent = item.state === 'waiting' ? '保存后上传' : item.state === 'queued' ? '等待上传' : item.state === 'uploading' ? (item.progress === 100 ? '处理中…' : item.progress + '%') : item.error;
+      ui.status.textContent = item.state === 'waiting' ? (item.remote ? '保存后导入' : '保存后上传') : item.state === 'queued' ? (item.remote ? '等待导入' : '等待上传') : item.state === 'uploading' ? (item.remote ? '正在下载并存储…' : item.progress === 100 ? '处理中…' : item.progress + '%') : item.error;
       ui.image.toggleAttribute('data-no-preview', item.state !== 'done');
     }
 
@@ -209,7 +225,7 @@
             let body;
             try { body = JSON.parse(xhr.responseText); } catch (_) { body = {}; }
             if (xhr.status < 200 || xhr.status >= 300 || body.code !== 0 || !body.data?.photo?.url) {
-              item.state = [400, 413, 415].includes(xhr.status) ? 'invalid' : 'failed';
+              item.state = [400, 410, 413, 415].includes(xhr.status) ? 'invalid' : 'failed';
               item.error = body.error || '上传失败，请重试';
             } else {
               item.photo = { ...body.data.photo, caption: item.photo.caption || '' };
@@ -222,16 +238,21 @@
         }
         this.pump();
       };
-      xhr.open('POST', url); xhr.timeout = 120000;
+      xhr.open('POST', item.remote ? this.options.importURL() : url); xhr.timeout = 120000;
       xhr.upload.onprogress = event => {
         if (generation !== this.generation || !this.items.includes(item)) return;
-        if (event.lengthComputable) item.progress = Math.min(100, Math.floor(event.loaded / event.total * 100));
+        if (!item.remote && event.lengthComputable) item.progress = Math.min(100, Math.floor(event.loaded / event.total * 100));
         this.update(item);
       };
       xhr.onload = () => finish(); xhr.onerror = () => finish('网络异常，请重试');
       xhr.ontimeout = () => finish('上传超时，请重试'); xhr.onabort = () => finish('上传已取消');
-      const form = new FormData(); form.append('file', item.file); form.append('caption', item.photo.caption || '');
-      try { xhr.send(form); } catch (_) { finish('上传失败，请重试'); }
+      let body;
+      if (item.remote) {
+        xhr.setRequestHeader('Content-Type', 'application/json'); body = JSON.stringify(item.remote);
+      } else {
+        body = new FormData(); body.append('file', item.file); body.append('caption', item.photo.caption || '');
+      }
+      try { xhr.send(body); } catch (_) { finish(item.remote ? '导入失败，请重试' : '上传失败，请重试'); }
     }
   };
 })();

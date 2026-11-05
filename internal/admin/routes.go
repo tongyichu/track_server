@@ -240,6 +240,8 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	api.PUT("/regions/catalog", m.Handler.SaveRegionCatalog)
 	api.PUT("/regions/node", m.Handler.SaveRegionNode)
 	api.POST("/regions/research", m.Handler.ResearchRegion)
+	api.POST("/regions/photos/pixabay/search", m.Handler.SearchPixabayPhotos)
+	api.POST("/regions/:node_id/photos/pixabay/import", m.Handler.ImportPixabayPhoto)
 	api.POST("/regions/:node_id/photos", m.Handler.UploadRegionPhoto)
 	api.GET("/tracks/:track_id", m.Handler.GetTrack)
 	api.GET("/tracks/:track_id/assets/:asset", m.Handler.GetTrackAsset)

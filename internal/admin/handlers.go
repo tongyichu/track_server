@@ -36,6 +36,7 @@ import (
 type Handler struct {
 	regionSvc             *regions.Service
 	regionResearcher      *regions.Researcher
+	pixabay               *regions.PixabayClient
 	permissionSnapshotSvc *service.PermissionSnapshotService
 	releaseSvc            *service.AppReleaseService
 	stsSvc                *service.OSSTokenService
