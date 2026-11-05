@@ -13,6 +13,7 @@
 | 后台景点等级编辑与详情 | GET / PUT | `/admin/api/scenic-spots/:spot_id` | 后台景点读/写权限 | [景区等级采集与下发](../track-place-discovery.md#景区等级采集与下发) |
 | 存量景点资料及等级补采 | POST | `/admin/api/scenic-spots/provider-content/backfill` | 后台景点写权限 | [景区等级采集与下发](../track-place-discovery.md#景区等级采集与下发) |
 | 发现景点列表（含 photos 相册、scenic_grade） | GET | `/track/discover/scenic-spots` | 是 | [track.md](track.md#发现页与年度活动图表) |
+| 当前城市精品/景区/图形路线（城市、标签、运动类型筛选后分页） | GET | `/track/discover/routes` | 是 | [track.md](track.md#发现页与年度活动图表) |
 | 上报设备权限快照 | PUT | `/user/permission-snapshot` | 是 | [permission-snapshots.md](permission-snapshots.md) |
 | 后台查看用户设备权限 | GET | `/admin/api/users/:user_id/permission-snapshots` | 后台 users 读取权限 | [permission-snapshots.md](permission-snapshots.md) |
 | 创建轨迹（含可选默认路线说明） | POST | `/track/create` | 是 | [track.md](track.md#1-创建轨迹) |

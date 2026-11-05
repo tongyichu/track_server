@@ -457,12 +457,12 @@ App SDK 本地队列
 
 | 事件 | 时机 | 属性 |
 | --- | --- | --- |
-| discover_view | 发现tab实际可见 | source_page=discover、city_code、mode（city_routes/shapes） |
+| discover_view | 发现tab实际可见 | source_page=discover、city_code、mode（featured/scenic_spot/shape；历史city_routes/shapes保留） |
 | discover_entry_click | 点击搜索、地图或全部景点入口 | source_page、city_code、mode、entry（search/map/scenic_directory） |
-| discover_mode_click | 切换本城路线/象形轨迹 | source_page、city_code、mode（切换后） |
-| discover_filter_click | 更改本城路线运动类型 | source_page、city_code、mode、track_type（null表示全部） |
+| discover_mode_click | 切换精品/景区/图形路线 | source_page、city_code、mode（切换后） |
+| discover_filter_click | 更改任一路线Tab的运动类型 | source_page、city_code、mode、track_type（null表示全部） |
 | discover_directory_view | 景点目录首次打开 | source_page=discover、city_code |
 | discover_spot_click | 点击景点卡片 | source_page（discover/scenic_directory）、city_code、spot_id；发现tab附带mode |
 | discover_track_click | 打开路线详情/评论 | source_page（discover/scenic_spot）、track_id；发现tab附带city_code/mode/track_type，景点页附带spot_id |
 
-从发现页进入的轨迹详情在既有 track_collect_click、track_collect_success、track_uncollect_success、track_collect_fail、track_navigation_click 等事件附带 discovery_source：discover_city_routes / discover_shapes / discover_search / discover_scenic。列表直接收藏/取消成功复用 track_collect_success / track_uncollect_success，source_page=discover，携带track_id和discovery_source，身份取动作发生时用户。此属性只表示入口来源，不替代source_page或推荐上下文，也不将导航点击解释为导航完成。未新增逐卡曝光统计，不上报景点搜索词、图片URL或原始位置。
+从发现页进入的轨迹详情在既有 track_collect_click、track_collect_success、track_uncollect_success、track_collect_fail、track_navigation_click 等事件附带 discovery_source：discover_featured / discover_scenic_routes / discover_shapes / discover_search / discover_scenic；历史discover_city_routes继续兼容。列表直接收藏/取消成功复用 track_collect_success / track_uncollect_success，source_page=discover，携带track_id和discovery_source，身份取动作发生时用户。此属性只表示入口来源，不替代source_page或推荐上下文，也不将导航点击解释为导航完成。未新增逐卡曝光统计，不上报景点搜索词、图片URL或原始位置。
