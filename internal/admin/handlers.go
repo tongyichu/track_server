@@ -2313,6 +2313,10 @@ func (h *Handler) GetStaticAsset(ctx context.Context, c *app.RequestContext) {
 		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid path"})
 		return
 	}
+	if string(c.Query("photo_info")) == "1" {
+		servePhotoImageInfo(c, absPath, rel)
+		return
+	}
 	data, err := os.ReadFile(absPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) && isAdminDefaultAvatarPath(rel) {

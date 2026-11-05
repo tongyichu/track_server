@@ -122,7 +122,7 @@ func (h *Handler) UploadRegionPhoto(ctx context.Context, c *app.RequestContext) 
 	}
 	// Uploading an asset does not commit an editor's unfinished node draft.
 	photo := regions.Photo{ID: photoID, URL: photoURL, Caption: caption}
-	c.JSON(http.StatusCreated, utils.H{"code": 0, "data": utils.H{"photo": photo}})
+	c.JSON(http.StatusCreated, utils.H{"code": 0, "data": utils.H{"photo": photo, "image_info": photoImageInfo{Width: config.Width, Height: config.Height, SizeBytes: int64(len(raw))}}})
 }
 
 func (h *Handler) storeRegionPhoto(regionID, photoID, ext string, raw []byte) (string, error) {
@@ -246,5 +246,5 @@ func (h *Handler) ImportPixabayPhoto(ctx context.Context, c *app.RequestContext)
 	}
 	photo := regions.Photo{ID: photoID, URL: photoURL, AltText: candidate.Tags, Attribution: candidate.Author,
 		SourceURL: candidate.SourceURL, Provider: "pixabay", License: "Pixabay Content License", LicenseURL: "https://pixabay.com/service/license-summary/"}
-	c.JSON(http.StatusCreated, utils.H{"code": 0, "data": utils.H{"photo": photo}})
+	c.JSON(http.StatusCreated, utils.H{"code": 0, "data": utils.H{"photo": photo, "image_info": photoInfoFromBytes(raw)}})
 }

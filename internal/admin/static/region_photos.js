@@ -16,6 +16,7 @@
 
     bind(node) {
       this.sessions.get(this.node?.id)?.picker.pause();
+      this.sessions.get(this.node?.id)?.editor.pauseInfo();
       this.node = node;
       this.root.replaceChildren();
       this.root.hidden = !node || !['province', 'city'].includes(node.level);
@@ -23,7 +24,7 @@
       const title = document.createElement('h3'); title.textContent = '宣传图片';
       const heading = document.createElement('div'); heading.className = 'region-photos-heading'; heading.appendChild(title);
       const hint = document.createElement('p'); hint.className = 'form-hint';
-      hint.textContent = '可拖动或使用箭头调整顺序。';
+      hint.textContent = '可拖动调整顺序。';
       let session = this.sessions.get(node.id);
       if (!session) {
         session = { node, host: document.createElement('div'), pickerHost: document.createElement('div') };

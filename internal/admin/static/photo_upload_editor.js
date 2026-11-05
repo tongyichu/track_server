@@ -13,6 +13,10 @@
       this.savingPhotos = false;
       this.saveTimer = null;
       this.saveError = '';
+      this.infoQueue = [];
+      this.infoActive = 0;
+      this.infoControllers = new Set();
+      this.infoGeneration = 0;
       host.classList.add('admin-photo-grid');
     }
 
@@ -40,11 +44,12 @@
     }
 
     item(photo, file, state) {
-      return { key: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random(), photo, committedCaption: (photo.caption ?? photo.title ?? '').trim(), file, state, progress: 0, preview: file ? URL.createObjectURL(file) : '', error: '', xhr: null };
+      return { key: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random(), photo, committedCaption: (photo.caption ?? photo.title ?? '').trim(), file, state, info: { size_bytes: file?.size || 0 }, infoState: 'idle', progress: 0, preview: file ? URL.createObjectURL(file) : '', error: '', xhr: null };
     }
 
     dispose() {
       this.generation++;
+      this.pauseInfo();
       clearTimeout(this.saveTimer); this.saveTimer = null;
       this.saveController?.abort(); this.saveController = null;
       this.savedPhotos = []; this.savingPhotos = false; this.saveError = '';
@@ -147,6 +152,7 @@
       if (!this.options.editable()) return;
       this.items = this.items.filter(value => value !== item);
       item.xhr?.abort();
+      item.infoController?.abort();
       if (item.preview) URL.revokeObjectURL(item.preview);
       this.render();
       this.changed();
@@ -182,6 +188,16 @@
         const media = document.createElement('div'); media.className = 'admin-photo-media';
         const image = document.createElement('img'); image.draggable = false; image.loading = 'lazy';
         image.alt = item.photo.alt_text || item.photo.caption || item.photo.title || this.options.label;
+        image.addEventListener('load', () => {
+          if (!this.items.includes(item) || item.view?.image !== image || item.remote && item.state !== 'done') return;
+          const source = item.preview || this.options.photoURL(item.photo.url || '');
+          try { if (!source || image.currentSrc !== new URL(source, window.location.href).href) return; }
+          catch (_) { return; }
+          if (image.naturalWidth && image.naturalHeight) {
+            item.info.width = image.naturalWidth; item.info.height = image.naturalHeight;
+            this.renderInfo(item);
+          }
+        });
         const overlay = document.createElement('div'); overlay.className = 'admin-photo-overlay';
         overlay.setAttribute('role', 'status');
         const status = document.createElement('span');
@@ -205,14 +221,9 @@
         caption.setAttribute('aria-label', '第' + (index + 1) + '张图片说明');
         caption.addEventListener('input', () => { item.photo.caption = caption.value; delete item.photo.title; this.changed(false); });
         caption.addEventListener('blur', () => { item.committedCaption = caption.value.trim(); this.changed(); });
-        card.append(media, caption);
+        const info = document.createElement('div'); info.className = 'admin-photo-info';
+        card.append(media, info, caption);
         if (writable) {
-          const actions = document.createElement('div'); actions.className = 'admin-photo-order';
-          const left = this.button('←', () => this.move(item, -1));
-          const right = this.button('→', () => this.move(item, 1));
-          left.disabled = index === 0; right.disabled = index === this.items.length - 1;
-          left.setAttribute('aria-label', '图片前移'); right.setAttribute('aria-label', '图片后移');
-          actions.append(left, right); card.appendChild(actions);
           card.draggable = true;
           card.addEventListener('dragstart', event => { this.dragged = item; event.dataTransfer.setData('text/plain', item.key); });
           card.addEventListener('dragend', () => { this.dragged = null; });
@@ -222,7 +233,7 @@
             if (dragged) this.move(dragged, this.items.indexOf(item) - this.items.indexOf(dragged));
           });
         }
-        item.view = { card, image, overlay, status, progress, retry, caption };
+        item.view = { card, image, overlay, status, progress, retry, caption, info };
         this.host.appendChild(card); this.update(item);
       });
       if (writable) {
@@ -259,6 +270,80 @@
       ui.retry.hidden = item.state !== 'failed' || !this.options.editable();
       ui.status.textContent = item.state === 'waiting' ? (item.remote ? '保存后导入' : '保存后上传') : item.state === 'queued' ? (item.remote ? '等待导入' : '等待上传') : item.state === 'uploading' ? (item.remote ? '正在下载并存储…' : item.progress === 100 ? '处理中…' : item.progress + '%') : item.error;
       ui.image.toggleAttribute('data-no-preview', item.state !== 'done');
+      this.queueInfo(item);
+      this.renderInfo(item);
+    }
+
+    renderInfo(item) {
+      if (!item.view) return;
+      if (item.remote && item.state !== 'done') { item.view.info.textContent = '导入后显示尺寸和大小'; return; }
+      const info = item.info;
+      const loading = ['queued', 'loading'].includes(item.infoState) || !!item.preview && item.state !== 'invalid';
+      const dimensions = info.width > 0 && info.height > 0 ? info.width + ' × ' + info.height + ' px' : loading ? '尺寸读取中' : '尺寸未知';
+      const bytes = info.size_bytes;
+      let size = loading ? '大小读取中' : '文件大小未知';
+      if (Number.isSafeInteger(bytes) && bytes > 0) {
+        size = bytes < 1024 ? bytes + ' B' : bytes < 1024 * 1024 ? Number((bytes / 1024).toFixed(1)) + ' KB' : Number((bytes / (1024 * 1024)).toFixed(1)) + ' MB';
+      }
+      item.view.info.textContent = dimensions + ' · ' + size;
+    }
+
+    queueInfo(item) {
+      if (item.state !== 'done' || item.infoState !== 'idle') return;
+      if (item.info.width > 0 && item.info.height > 0 && item.info.size_bytes > 0) { item.infoState = 'done'; return; }
+      let url;
+      try { url = new URL(this.options.photoURL(item.photo.url || ''), window.location.href); }
+      catch (_) { item.infoState = 'done'; return; }
+      if (url.origin !== window.location.origin || !/^\/admin\/api\/static\/(regions|scenic_spots)\//.test(url.pathname)) { item.infoState = 'done'; return; }
+      url.searchParams.set('photo_info', '1');
+      item.infoState = 'queued';
+      this.infoQueue.push({ item, url: url.href, generation: this.infoGeneration });
+      this.pumpInfo();
+    }
+
+    pauseInfo() {
+      this.infoGeneration++;
+      this.infoControllers.forEach(controller => controller.abort()); this.infoControllers.clear();
+      this.infoQueue = []; this.infoActive = 0;
+      this.items.forEach(item => {
+        if (['queued', 'loading'].includes(item.infoState)) item.infoState = 'idle';
+        item.infoController = null;
+      });
+    }
+
+    pumpInfo() {
+      while (this.infoActive < 3 && this.infoQueue.length) {
+        const job = this.infoQueue.shift();
+        if (job.generation !== this.infoGeneration || !this.items.includes(job.item)) continue;
+        const controller = new AbortController();
+        job.item.infoController = controller; job.item.infoState = 'loading';
+        this.infoControllers.add(controller); this.infoActive++;
+        this.readInfo(job, controller);
+      }
+    }
+
+    async readInfo(job, controller) {
+      const timeout = setTimeout(() => controller.abort(), 10000);
+      try {
+        const response = await fetch(job.url, { signal: controller.signal });
+        const body = await response.json();
+        if (job.generation !== this.infoGeneration || !this.items.includes(job.item)) return;
+        if (response.ok && body.code === 0 && body.data) {
+          ['width', 'height', 'size_bytes'].forEach(key => {
+            const value = body.data[key];
+            if (Number.isSafeInteger(value) && value > 0) job.item.info[key] = value;
+          });
+        }
+      } catch (_) { /* Image facts never block uploads or edits. */ }
+      finally {
+        clearTimeout(timeout);
+        if (job.generation === this.infoGeneration) {
+          this.infoControllers.delete(controller); this.infoActive--;
+          job.item.infoController = null; job.item.infoState = 'done';
+          if (this.items.includes(job.item)) this.renderInfo(job.item);
+          this.pumpInfo();
+        }
+      }
     }
 
     start() {
@@ -299,6 +384,8 @@
               item.error = body.error || '上传失败，请重试';
             } else {
               item.photo = { ...body.data.photo, caption: item.photo.caption || '' };
+              item.info = body.data.image_info || { size_bytes: body.data.size || item.file?.size || 0 };
+              item.infoState = 'idle';
               item.state = 'done'; item.file = null;
               if (item.preview) URL.revokeObjectURL(item.preview); item.preview = '';
               this.changed();

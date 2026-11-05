@@ -670,7 +670,7 @@ func (h *Handler) UploadScenicSpotPhoto(ctx context.Context, c *app.RequestConte
 	}
 	photo := models.ScenicSpotPhoto{ID: photoID, URL: "/api/v1/static/" + rel, Caption: strings.TrimSpace(string(c.FormValue("caption"))), AltText: strings.TrimSpace(string(c.FormValue("alt_text"))), Attribution: strings.TrimSpace(string(c.FormValue("attribution")))}
 	if string(c.Query("draft")) == "1" {
-		c.JSON(http.StatusCreated, utils.H{"code": 0, "data": utils.H{"photo": photo, "content_type": mime, "size": len(raw)}})
+		c.JSON(http.StatusCreated, utils.H{"code": 0, "data": utils.H{"photo": photo, "content_type": mime, "size": len(raw), "image_info": photoImageInfo{Width: config.Width, Height: config.Height, SizeBytes: int64(len(raw))}}})
 		return
 	}
 	spot.Photos = append(spot.Photos, photo)
@@ -681,5 +681,5 @@ func (h *Handler) UploadScenicSpotPhoto(ctx context.Context, c *app.RequestConte
 		h.scenicSpotServiceError(c, err)
 		return
 	}
-	c.JSON(http.StatusCreated, utils.H{"code": 0, "data": utils.H{"photo": photo, "spot": updated, "content_type": mime, "size": len(raw)}})
+	c.JSON(http.StatusCreated, utils.H{"code": 0, "data": utils.H{"photo": photo, "spot": updated, "content_type": mime, "size": len(raw), "image_info": photoImageInfo{Width: config.Width, Height: config.Height, SizeBytes: int64(len(raw))}}})
 }

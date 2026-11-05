@@ -8,7 +8,8 @@
 .admin-photo-remove{position:absolute;z-index:2;top:4px;right:4px;width:32px;height:32px;padding:0;border:1px solid rgba(255,255,255,.75);border-radius:50%;background:rgba(24,36,51,.75);color:#fff;font-size:25px;line-height:28px;cursor:pointer}
 .admin-photo-remove:hover{background:var(--tblr-danger)}
 .admin-photo-remove:focus-visible,.admin-photo-picker:focus-visible{outline:2px solid var(--tblr-secondary-color);outline-offset:2px}
-.admin-photo-item>input{margin-top:7px}.admin-photo-order{display:flex;justify-content:flex-end;gap:5px;margin-top:7px}
+.admin-photo-info{margin-top:6px;min-height:17px;color:var(--tblr-secondary-color);font-size:11px;line-height:1.5;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.admin-photo-item>input{margin-top:7px}
 .admin-photo-picker{align-self:start;width:100%;height:131px;padding:8px;border:1px dashed var(--tblr-border-color);border-radius:8px;background:var(--tblr-bg-surface-secondary);color:var(--tblr-primary);cursor:pointer}
 .admin-photo-picker:disabled{opacity:.5;cursor:default}.admin-photo-message{grid-column:1/-1;margin:0}
 .admin-photo-save-status{grid-column:1/-1;display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px}.admin-photo-save-status [hidden]{display:none!important}

@@ -45,6 +45,8 @@ func embeddedPage(name string) ([]byte, error) {
 		return nil, err
 	}
 	version := adminAssetVersion()
+	// Share the application icon across all admin pages, including login/recovery.
+	data = bytes.Replace(data, []byte("</head>"), []byte(`<link rel="icon" type="image/png" sizes="48x48" href="/admin/static/favicon.png"></head>`), 1)
 	// Run the small resource loader before page scripts, preserving their order.
 	data = bytes.Replace(data, []byte(`<script src=`), []byte(`<script src="/admin/static/runtime.js"></script><script src=`), 1)
 	data = adminStaticAttribute.ReplaceAllFunc(data, func(attribute []byte) []byte {

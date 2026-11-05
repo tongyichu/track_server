@@ -417,6 +417,5 @@
       updateSaveState();
     }
   });
-  window.addEventListener('beforeunload', event => { if (dirtyIds.size || saving || photoEditor.pending) { event.preventDefault(); event.returnValue = ''; } });
   load();
 })();

@@ -127,6 +127,7 @@
 | 联网查询单个地区资料 | POST | `/admin/api/regions/research` | 地区操作 | [regions.md](regions.md) |
 | 上传省份/城市图片文件（前端自动PUT关联） | POST | `/admin/api/regions/:node_id/photos` | 地区操作 | [regions.md](regions.md) |
 | 自动保存省份/城市图片关联、说明和顺序 | PUT | `/admin/api/regions/:node_id/photos` | 地区操作 | [regions.md](regions.md#图片自动保存) |
+| 查看省市/景点本站图片尺寸和文件大小 | GET | `/admin/api/static/*filepath?photo_info=1` | 对应模块查看 | [后台资源接口](../admin-routes.md#图片文件信息) |
 | 人工查询3张Pixabay图片候选 | POST | `/admin/api/regions/photos/pixabay/search` | 地区操作 | [regions.md](regions.md#pixabay-人工选图) |
 | 导入Pixabay图片文件（前端自动PUT关联） | POST | `/admin/api/regions/:node_id/photos/pixabay/import` | 地区操作 | [regions.md](regions.md#pixabay-人工选图) |
 | 上传景点图片文件 | POST | `/admin/api/scenic-spots/:spot_id/photos` | 景点操作 | 可选 `draft=1` 仅暂存；省略时追加并保存，见 [后台路由](../admin-routes.md) |

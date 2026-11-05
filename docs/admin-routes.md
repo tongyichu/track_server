@@ -87,6 +87,10 @@
 | GET | `/admin/api/track-submissions/:submission_id` | 鉴权 | 投稿、轨迹和审核流水详情 |
 | POST | `/admin/api/track-submissions/:submission_id/review` | 鉴权 | 按 expected_revision 通过或驳回投稿 |
 
+### 图片文件信息
+
+省市/景点本站图片资源可传 `?photo_info=1`，返回 `{code:0,data:{width,height,size_bytes}}`。沿用原静态资源会话和模块查看权限、路径校验及no-store，仅允许`regions`/`scenic_spots`下的JPG/PNG/WebP；只读本地文件头和实际文件长度，不访问第三方URL。缺文件404，信息不可用不会阻止图片区其他操作。普通资源请求仍返回图片字节。
+
 ### 后台账号新增路由
 
 | 方法 | 路径 | 权限 | 说明 |
