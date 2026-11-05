@@ -637,8 +637,8 @@ func (h *Handler) UploadScenicSpotPhoto(ctx context.Context, c *app.RequestConte
 		return
 	}
 	config, format, err := image.DecodeConfig(bytes.NewReader(raw))
-	if err != nil || config.Width <= 0 || config.Height <= 0 || config.Width > 12000 || config.Height > 12000 || (format != "jpeg" && format != "png") {
-		c.JSON(http.StatusBadRequest, utils.H{"error": "only valid JPEG or PNG images up to 12000x12000 are supported"})
+	if err != nil || config.Width <= 0 || config.Height <= 0 || config.Width > 12000 || config.Height > 12000 || (format != "jpeg" && format != "png" && format != "webp") {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "仅支持12000×12000以内的JPG、PNG或WebP图片"})
 		return
 	}
 	var idbuf [12]byte
@@ -652,6 +652,9 @@ func (h *Handler) UploadScenicSpotPhoto(ctx context.Context, c *app.RequestConte
 	if format == "png" {
 		ext = ".png"
 		mime = "image/png"
+	} else if format == "webp" {
+		ext = ".webp"
+		mime = "image/webp"
 	}
 	name := photoID + ext
 	rel := filepath.ToSlash(filepath.Join("scenic_spots", spot.ID, name))

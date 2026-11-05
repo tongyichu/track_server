@@ -19,6 +19,7 @@ import (
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/common/utils"
 	"github.com/tongyichu/track_server/internal/regions"
+	_ "golang.org/x/image/webp"
 )
 
 func (h *Handler) SaveRegionPhotos(ctx context.Context, c *app.RequestContext) {
@@ -98,8 +99,8 @@ func (h *Handler) UploadRegionPhoto(ctx context.Context, c *app.RequestContext) 
 		return
 	}
 	config, format, err := image.DecodeConfig(bytes.NewReader(raw))
-	if err != nil || config.Width <= 0 || config.Height <= 0 || config.Width > 12000 || config.Height > 12000 || (format != "jpeg" && format != "png") {
-		c.JSON(http.StatusBadRequest, utils.H{"error": "仅支持12000×12000以内的JPG或PNG图片"})
+	if err != nil || config.Width <= 0 || config.Height <= 0 || config.Width > 12000 || config.Height > 12000 || (format != "jpeg" && format != "png" && format != "webp") {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "仅支持12000×12000以内的JPG、PNG或WebP图片"})
 		return
 	}
 	var id [12]byte
@@ -111,6 +112,8 @@ func (h *Handler) UploadRegionPhoto(ctx context.Context, c *app.RequestContext) 
 	ext := ".jpg"
 	if format == "png" {
 		ext = ".png"
+	} else if format == "webp" {
+		ext = ".webp"
 	}
 	photoURL, err := h.storeRegionPhoto(node.RegionID, photoID, ext, raw)
 	if err != nil {

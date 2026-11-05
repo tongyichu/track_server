@@ -129,9 +129,10 @@
       const selected = Array.from(files).slice(0, Math.max(0, room));
       selected.forEach(file => {
         const item = this.item({ caption: '' }, file, 'waiting');
-        if (!['image/jpeg', 'image/png'].includes(file.type) || !file.size || file.size > 8 * 1024 * 1024) {
+        const supported = ['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || !file.type && /\.(jpe?g|png|webp)$/i.test(file.name);
+        if (!supported || !file.size || file.size > 8 * 1024 * 1024) {
           item.state = 'invalid';
-          item.error = '请选择8MiB以内的JPG或PNG图片';
+          item.error = '请选择8MiB以内的JPG、PNG或WebP图片';
           URL.revokeObjectURL(item.preview); item.preview = '';
         }
         this.items.push(item);
@@ -226,14 +227,14 @@
       });
       if (writable) {
         const input = document.createElement('input'); input.type = 'file'; input.multiple = true;
-        input.accept = 'image/jpeg,image/png'; input.hidden = true;
+        input.accept = 'image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp'; input.hidden = true;
         const picker = this.button('＋ 选择图片', () => input.click(), 'admin-photo-picker');
         picker.disabled = this.items.length >= this.options.max;
         input.addEventListener('change', () => { const files = Array.from(input.files); input.value = ''; this.choose(files); });
         this.host.append(input, picker);
       }
       this.message = document.createElement('p'); this.message.className = 'form-hint admin-photo-message';
-      this.message.textContent = '支持多选JPG、PNG，单张不超过8MiB'; this.host.appendChild(this.message);
+      this.message.textContent = '支持多选JPG、PNG、WebP，单张不超过8MiB'; this.host.appendChild(this.message);
       this.saveStatus = null;
       if (this.options.savePhotos) {
         const row = document.createElement('div'); row.className = 'admin-photo-save-status'; row.setAttribute('role', 'status');

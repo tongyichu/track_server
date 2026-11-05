@@ -468,6 +468,8 @@ func contentTypeFor(name string) string {
 		return "image/svg+xml"
 	case ".png":
 		return "image/png"
+	case ".webp":
+		return "image/webp"
 	case ".jpg", ".jpeg":
 		return "image/jpeg"
 	case ".ico":
