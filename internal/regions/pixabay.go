@@ -12,6 +12,7 @@ import (
 	"image/png"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -266,41 +267,88 @@ func (p *PixabayClient) Download(ctx context.Context, query string, page int, id
 	default:
 		return nil, "", candidate, ErrPixabayBusy
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, candidate.downloadURL, nil)
-	if err != nil {
-		return nil, "", candidate, errors.New("图片地址无效")
+	addresses := []string{candidate.downloadURL}
+	if candidate.downloadURL != candidate.PreviewURL {
+		addresses = append(addresses, candidate.PreviewURL)
 	}
-	response, err := p.http.Do(req)
-	if err != nil {
-		log.Printf("[PixabayImport] image_id=%s stage=request result=failed", candidate.ID)
-		return nil, "", candidate, errors.New("图片下载失败，请重试")
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		log.Printf("[PixabayImport] image_id=%s stage=response status=%d", candidate.ID, response.StatusCode)
-	}
-	if response.StatusCode == 400 || response.StatusCode == 403 || response.StatusCode == 404 {
-		return nil, "", candidate, ErrPixabayExpired
-	}
-	if response.StatusCode != http.StatusOK {
-		return nil, "", candidate, errors.New("图片下载失败，请稍后重试")
-	}
-	const maxSize = 8 * 1024 * 1024
-	raw, err := io.ReadAll(io.LimitReader(response.Body, maxSize+1))
-	if err != nil || len(raw) == 0 || len(raw) > maxSize {
-		return nil, "", candidate, errors.New("下载图片大小无效")
-	}
-	config, format, err := image.DecodeConfig(bytes.NewReader(raw))
-	if err != nil || config.Width <= 0 || config.Height <= 0 || config.Width > 1280 || config.Height > 1280 || (format != "jpeg" && format != "png") {
-		return nil, "", candidate, errors.New("下载图片格式或尺寸无效")
-	}
-	if config.Width > 960 || config.Height > 720 {
+	var lastErr error
+	for attempt, address := range addresses {
 		if ctx.Err() != nil {
 			return nil, "", candidate, ctx.Err()
 		}
+		raw, format, err := p.downloadImage(ctx, address, candidate.ID)
+		if err == nil {
+			if attempt > 0 {
+				log.Printf("[PixabayImport] image_id=%s fallback=640 result=success bytes=%d", candidate.ID, len(raw))
+			}
+			return raw, format, candidate, nil
+		}
+		lastErr = err
+		if attempt+1 < len(addresses) && ctx.Err() == nil {
+			log.Printf("[PixabayImport] image_id=%s fallback=640 result=starting", candidate.ID)
+		}
+	}
+	return nil, "", candidate, lastErr
+}
+
+// Each transfer has its own bounded timeout. A failed large transfer may fall
+// back once to the exact 640 URL already present in the same cached response.
+func (p *PixabayClient) downloadImage(ctx context.Context, address, id string) ([]byte, string, error) {
+	started := time.Now()
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, address, nil)
+	if err != nil {
+		return nil, "", errors.New("图片地址无效")
+	}
+	response, err := p.http.Do(req)
+	if err != nil {
+		reason := pixabayTransferReason(err)
+		log.Printf("[PixabayImport] image_id=%s stage=request reason=%s elapsed_ms=%d", id, reason, time.Since(started).Milliseconds())
+		if reason == "timeout" {
+			return nil, "", errors.New("图片下载超时，请重试")
+		}
+		return nil, "", errors.New("图片连接失败，请重试")
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		log.Printf("[PixabayImport] image_id=%s stage=response status=%d", id, response.StatusCode)
+	}
+	if response.StatusCode == 400 || response.StatusCode == 403 || response.StatusCode == 404 {
+		return nil, "", ErrPixabayExpired
+	}
+	if response.StatusCode != http.StatusOK {
+		return nil, "", errors.New("图片下载失败，请稍后重试")
+	}
+	const maxSize = 8 * 1024 * 1024
+	raw, err := io.ReadAll(io.LimitReader(response.Body, maxSize+1))
+	if err != nil {
+		reason := pixabayTransferReason(err)
+		log.Printf("[PixabayImport] image_id=%s stage=read reason=%s error_type=%T received=%d declared=%d elapsed_ms=%d", id, reason, err, len(raw), response.ContentLength, time.Since(started).Milliseconds())
+		if reason == "timeout" {
+			return nil, "", errors.New("图片下载超时，请重试")
+		}
+		return nil, "", errors.New("图片传输中断，请重试")
+	}
+	if len(raw) == 0 {
+		log.Printf("[PixabayImport] image_id=%s stage=read reason=empty", id)
+		return nil, "", errors.New("图片返回内容为空，请重试")
+	}
+	if len(raw) > maxSize {
+		log.Printf("[PixabayImport] image_id=%s stage=read reason=too_large received=%d", id, len(raw))
+		return nil, "", errors.New("图片超过8MiB，请选择其他图片")
+	}
+	config, format, err := image.DecodeConfig(bytes.NewReader(raw))
+	if err != nil || config.Width <= 0 || config.Height <= 0 || config.Width > 1280 || config.Height > 1280 || (format != "jpeg" && format != "png") {
+		return nil, "", errors.New("下载图片格式或尺寸无效")
+	}
+	if config.Width > 960 || config.Height > 720 {
+		if ctx.Err() != nil {
+			return nil, "", ctx.Err()
+		}
 		source, _, err := image.Decode(bytes.NewReader(raw))
 		if err != nil {
-			return nil, "", candidate, errors.New("下载图片内容无效")
+			return nil, "", errors.New("下载图片内容无效")
 		}
 		width, height := config.Width, config.Height
 		if width > 960 {
@@ -320,9 +368,23 @@ func (p *PixabayClient) Download(ctx context.Context, query string, page int, id
 			err = png.Encode(&encoded, scaled)
 		}
 		if err != nil {
-			return nil, "", candidate, errors.New("图片缩放失败")
+			return nil, "", errors.New("图片缩放失败")
 		}
 		raw = encoded.Bytes()
 	}
-	return raw, format, candidate, nil
+	return raw, format, nil
+}
+
+func pixabayTransferReason(err error) string {
+	var networkError net.Error
+	switch {
+	case errors.Is(err, context.DeadlineExceeded) || errors.As(err, &networkError) && networkError.Timeout():
+		return "timeout"
+	case errors.Is(err, context.Canceled):
+		return "canceled"
+	case errors.Is(err, io.ErrUnexpectedEOF):
+		return "unexpected_eof"
+	default:
+		return "transport"
+	}
 }
