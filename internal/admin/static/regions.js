@@ -16,7 +16,19 @@
     editable,
     locked: () => saving,
     saved: node => persistedIds.has(node.id),
-    changed: node => markDirty(node, '图片有未保存修改，请保存当前节点'),
+    savePhotos: (node, photos, base, signal) => api(encodeURIComponent(node.id) + '/photos', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, signal,
+      body: JSON.stringify({ photos, base_photos: base })
+    }),
+    photosSaved: (node, result) => {
+      const photos = structuredClone(result.node.photos || []);
+      node.photos = photos;
+      const currentNode = catalog.nodes.find(item => item.id === node.id);
+      if (currentNode) currentNode.photos = structuredClone(photos);
+      const base = persistedNodes.get(node.id);
+      if (base) base.photos = structuredClone(photos);
+      catalog.version = Math.max(catalog.version, result.version);
+    },
     busyChanged: updateSaveState
   });
   const fieldMap = {
@@ -48,8 +60,8 @@
   }
 
   function updateSaveState() {
-    $('regionSaveNode').disabled = !editable() || saving || photoEditor.busy || photoEditor.failed || !dirtyIds.has(selectedId);
-    $('regionSaveNode').textContent = photoEditor.busy ? '图片上传中…' : '保存当前节点';
+    $('regionSaveNode').disabled = !editable() || saving || photoEditor.busy || !dirtyIds.has(selectedId);
+    $('regionSaveNode').textContent = '保存当前节点';
     photoEditor.sessions.get(selectedId)?.picker.refresh();
   }
 
@@ -373,12 +385,9 @@
   $('regionApplyAll').addEventListener('click', () => applyDraft(true));
   $('regionSaveNode').addEventListener('click', async () => {
     const node = current();
-    if (!node || !dirtyIds.has(node.id) || saving || photoEditor.busy || photoEditor.failed || !editable()) return;
+    if (!node || !dirtyIds.has(node.id) || saving || photoEditor.busy || !editable()) return;
     if (!$('regionForm').reportValidity()) return;
     const savedId = node.id;
-    const creatingWithPhotos = !persistedIds.has(savedId) && photoEditor.pending;
-    const ownerEditor = photoEditor.editor;
-    const ownerGeneration = ownerEditor?.generation;
     const previousBases = persistedNodes;
     saving = true; $('regionForm').inert = true; updateSaveState();
     status('正在保存当前节点…');
@@ -397,31 +406,6 @@
       });
       dirtyIds.delete(savedId);
       select(savedId);
-      if (creatingWithPhotos) {
-        $('regionForm').inert = false;
-        $('regionForm').querySelector('.region-form-grid').inert = true;
-        $('regionForm').querySelector('.region-editor-title').inert = true;
-        $('regionResearchPanel').inert = true;
-        await photoEditor.settle();
-        if (ownerEditor.generation !== ownerGeneration) return;
-        if (photoEditor.failed) {
-          dirtyIds.add(savedId);
-          status('节点已创建，部分图片上传失败，请重试或移除后保存', true);
-          return;
-        }
-        $('regionForm').inert = true;
-        const completed = await api('node', {
-          method: 'PUT', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ node: current(), base_node: persistedNodes.get(savedId) })
-        });
-        const saved = completed.nodes.find(item => item.id === savedId);
-        const index = catalog.nodes.findIndex(item => item.id === savedId);
-        catalog.version = completed.version;
-        catalog.nodes[index] = saved;
-        persistedNodes.set(savedId, structuredClone(saved));
-        dirtyIds.delete(savedId);
-        select(savedId);
-      }
       status('当前节点已保存，客户端下次刷新目录时会读取新版本');
     } catch (error) { status(error.message, true); }
     finally {

@@ -11,7 +11,7 @@
     get editor() { return this.sessions.get(this.node?.id)?.editor; }
     get busy() { return this.editor?.busy || false; }
     get failed() { return this.editor?.failed || false; }
-    get pending() { return this.editor?.pending || false; }
+    get pending() { return Array.from(this.sessions.values()).some(session => session.editor.pending); }
     settle() { return this.editor?.settle() || Promise.resolve(); }
 
     bind(node) {
@@ -23,26 +23,27 @@
       const title = document.createElement('h3'); title.textContent = '宣传图片';
       const heading = document.createElement('div'); heading.className = 'region-photos-heading'; heading.appendChild(title);
       const hint = document.createElement('p'); hint.className = 'form-hint';
-      hint.textContent = '可拖动或使用箭头调整顺序，图片信息随当前节点保存。';
+      hint.textContent = '可拖动或使用箭头调整顺序。';
       let session = this.sessions.get(node.id);
       if (!session) {
         session = { node, host: document.createElement('div'), pickerHost: document.createElement('div') };
         const editor = new AdminPhotoEditor(session.host, {
           module: 'regions', label: '宣传图片', max: 20,
           editable: this.options.editable,
+          ready: () => this.options.saved(session.node),
           uploadURL: () => this.options.saved(session.node) ? '/admin/api/regions/' + encodeURIComponent(session.node.id) + '/photos' : null,
           importURL: () => this.options.saved(session.node) ? '/admin/api/regions/' + encodeURIComponent(session.node.id) + '/photos/pixabay/import' : null,
           photoURL: url => url.startsWith('/api/v1/static/') ? url.replace('/api/v1/static/', '/admin/api/static/') : url,
           changed: () => {
-            session.node.photos = editor.photos;
-            this.options.changed(session.node);
             session.picker?.refresh();
           },
+          savePhotos: (photos, base, signal) => this.options.savePhotos(session.node, photos, base, signal),
+          photosSaved: (result, photos) => this.options.photosSaved(session.node, result, photos),
           stateChanged: () => { this.options.busyChanged(); session.picker?.refresh(); }
         });
         session.editor = editor;
         session.picker = new RegionPixabayPicker(session.pickerHost, {
-          node: () => session.node, editor: () => editor, editable: this.options.editable,
+          node: () => session.node, editor: () => editor, editable: () => this.options.editable() && this.options.saved(session.node),
           locked: this.options.locked
         });
         editor.load(node.photos);

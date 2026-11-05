@@ -24,6 +24,8 @@
     ['POST', 'scenic-spots/:spot/provider-sources/verify', '验证景点供应商来源', '景点 {spot}'],
     ['POST', 'scenic-spots/:spot/provider-sources/preview', '预览景点供应商资料', '景点 {spot}', '预览不代表资料已经保存。'],
     ['POST', 'scenic-spots/:spot/photos', '上传景点图片', '景点 {spot}'],
+    ['PUT', 'scenic-spots/:spot/photos', '自动保存景点图片', '景点 {spot}', '仅保存图片关联、顺序与说明，不提交未保存的文字资料。'],
+    ['PUT', 'regions/:node/photos', '自动保存省市宣传图片', '地区 {node}', '仅保存图片关联、顺序与说明，不提交未保存的文字资料。'],
     ['POST', 'regions/photos/pixabay/search', '查询 Pixabay 候选图片', '省市宣传图片', '人工查询只返回候选图片，不自动下载或修改地区目录。'],
     ['POST', 'regions/:node/photos/pixabay/import', '导入 Pixabay 图片文件', '地区 {node}', '暂存图片资源；仍需保存当前节点才关联到地区目录。'],
     ['POST', 'scenic-spots/:spot/tracks', '为景点关联轨迹', '景点 {spot}', '历史记录未保存关联的轨迹编号。'],

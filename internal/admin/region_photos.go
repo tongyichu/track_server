@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"image"
 	"io"
@@ -19,6 +20,32 @@ import (
 	"github.com/cloudwego/hertz/pkg/common/utils"
 	"github.com/tongyichu/track_server/internal/regions"
 )
+
+func (h *Handler) SaveRegionPhotos(ctx context.Context, c *app.RequestContext) {
+	if h.regionSvc == nil {
+		c.JSON(http.StatusServiceUnavailable, utils.H{"error": "地区图片服务暂不可用"})
+		return
+	}
+	var input struct {
+		Photos     *[]regions.Photo `json:"photos"`
+		BasePhotos *[]regions.Photo `json:"base_photos"`
+	}
+	body := c.Request.Body()
+	if len(body) > 128<<10 || json.Unmarshal(body, &input) != nil || input.Photos == nil || input.BasePhotos == nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "photos和base_photos须为图片数组"})
+		return
+	}
+	node, version, err := h.regionSvc.SavePhotos(ctx, c.Param("node_id"), *input.BasePhotos, *input.Photos)
+	if errors.Is(err, regions.ErrNodeConflict) || errors.Is(err, regions.ErrVersionConflict) {
+		c.JSON(http.StatusConflict, utils.H{"error": "图片已被其他操作修改，请重新打开地区后核对"})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"node": node, "version": version}})
+}
 
 func (h *Handler) UploadRegionPhoto(ctx context.Context, c *app.RequestContext) {
 	if h.regionSvc == nil || strings.TrimSpace(h.staticRoot) == "" {

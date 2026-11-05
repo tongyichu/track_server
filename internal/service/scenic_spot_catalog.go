@@ -82,14 +82,8 @@ func validateScenicSpot(v *models.ScenicSpot) error {
 			return invalidScenicSpot("invalid scenic spot alias")
 		}
 	}
-	for i := range v.Photos {
-		p := &v.Photos[i]
-		if strings.TrimSpace(p.ID) == "" || (!strings.HasPrefix(p.URL, "/api/v1/static/scenic_spots/") && !strings.HasPrefix(p.URL, "https://")) {
-			return invalidScenicSpot("scenic spot photos must use an owned static URL or HTTPS URL")
-		}
-		if utf8.RuneCountInString(p.Caption) > 255 || utf8.RuneCountInString(p.AltText) > 255 || utf8.RuneCountInString(p.Attribution) > 255 {
-			return invalidScenicSpot("scenic spot photo metadata exceeds limits")
-		}
+	if err := validateScenicSpotPhotos(v.Photos); err != nil {
+		return err
 	}
 	for i := range v.Sources {
 		source := &v.Sources[i]
@@ -119,6 +113,45 @@ func validateScenicSpot(v *models.ScenicSpot) error {
 		}
 	}
 	return nil
+}
+
+func validateScenicSpotPhotos(photos []models.ScenicSpotPhoto) error {
+	if len(photos) > 30 {
+		return invalidScenicSpot("每个景点最多30张图片")
+	}
+	for i := range photos {
+		p := &photos[i]
+		if strings.TrimSpace(p.ID) == "" || (!strings.HasPrefix(p.URL, "/api/v1/static/scenic_spots/") && !strings.HasPrefix(p.URL, "https://")) {
+			return invalidScenicSpot("scenic spot photos must use an owned static URL or HTTPS URL")
+		}
+		if utf8.RuneCountInString(p.Caption) > 255 || utf8.RuneCountInString(p.AltText) > 255 || utf8.RuneCountInString(p.Attribution) > 255 {
+			return invalidScenicSpot("scenic spot photo metadata exceeds limits")
+		}
+	}
+	return nil
+}
+
+func (s *ScenicSpotCatalogService) SavePhotos(ctx context.Context, operator, id string, expected int64, photos []models.ScenicSpotPhoto) (*models.ScenicSpot, error) {
+	if err := validateScenicSpotPhotos(photos); err != nil {
+		return nil, err
+	}
+	old, err := s.spots.GetScenicSpot(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if old.Version != expected || old.Status == models.ScenicSpotMerged {
+		return nil, repository.ErrConflict
+	}
+	v := *old
+	v.Photos = append([]models.ScenicSpotPhoto(nil), photos...)
+	v.Version++
+	v.ManualEdited = true
+	v.UpdatedAt, v.UpdatedBy = time.Now(), operator
+	if err := s.spots.UpdateScenicSpot(ctx, &v, expected); err != nil {
+		return nil, err
+	}
+	s.audit(ctx, id, "photos_update", operator, "photos updated independently", old.Photos, v.Photos)
+	return &v, nil
 }
 func (s *ScenicSpotCatalogService) List(ctx context.Context, f repository.ScenicSpotListFilter) ([]*models.ScenicSpot, int64, error) {
 	if !s.Enabled() {

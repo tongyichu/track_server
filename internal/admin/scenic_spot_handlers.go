@@ -307,6 +307,31 @@ func (h *Handler) UpdateScenicSpot(ctx context.Context, c *app.RequestContext) {
 	}
 	c.JSON(http.StatusOK, utils.H{"code": 0, "data": v})
 }
+func (h *Handler) SaveScenicSpotPhotos(ctx context.Context, c *app.RequestContext) {
+	if !h.scenicSpotServiceReady(c) {
+		return
+	}
+	var input struct {
+		ExpectedVersion int64                     `json:"expected_version"`
+		Photos          *[]models.ScenicSpotPhoto `json:"photos"`
+	}
+	body := c.Request.Body()
+	if len(body) > 128<<10 || json.Unmarshal(body, &input) != nil || input.ExpectedVersion <= 0 || input.Photos == nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "expected_version和photos数组为必填项"})
+		return
+	}
+	spot, err := h.scenicSpotSvc.SavePhotos(ctx, h.adminOperator(c), c.Param("spot_id"), input.ExpectedVersion, *input.Photos)
+	if errors.Is(err, repository.ErrConflict) {
+		c.JSON(http.StatusConflict, utils.H{"error": "景点资料已变化，请重新打开详情后核对图片"})
+		return
+	}
+	if err != nil {
+		h.scenicSpotServiceError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": spot})
+}
+
 func (h *Handler) SetScenicSpotStatus(ctx context.Context, c *app.RequestContext) {
 	if !h.scenicSpotServiceReady(c) {
 		return

@@ -123,7 +123,7 @@
       const candidates = this.result.candidates.filter(candidate => (all || this.selected.has(candidate.id)) && this.eligible(candidate));
       const added = this.options.editor().addRemotePhotos(candidates, this.result.query, this.result.page) || 0;
       this.selected.clear(); this.grid.querySelectorAll('input[type=checkbox]').forEach(input => { input.checked = false; });
-      this.message = added ? '已加入' + added + '张图片' + (added < candidates.length ? '，其余超出20张上限' : '') + '，完成后请保存当前节点。' : '未加入新图片，请检查数量或是否重复。';
+      this.message = added ? '已加入' + added + '张图片' + (added < candidates.length ? '，其余超出20张上限' : '') + '，导入完成后自动保存。' : '未加入新图片，请检查数量或是否重复。';
       this.refresh();
     }
   };

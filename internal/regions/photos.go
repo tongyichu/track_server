@@ -1,6 +1,8 @@
 package regions
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"net/url"
 	"path"
@@ -9,6 +11,55 @@ import (
 )
 
 const MaxPhotos = 20
+
+// SavePhotos changes only the photo field and checks its own baseline. Text
+// changes in the latest catalog are preserved, including across CAS retries.
+func (s *Service) SavePhotos(ctx context.Context, id string, base, photos []Photo) (*Node, int64, error) {
+	if err := validatePhotos(photos); err != nil {
+		return nil, 0, err
+	}
+	equal := func(a, b []Photo) bool {
+		left, _ := json.Marshal(append([]Photo{}, a...))
+		right, _ := json.Marshal(append([]Photo{}, b...))
+		return string(left) == string(right)
+	}
+	for attempt := 0; attempt < 4; attempt++ {
+		catalog, err := s.Read(ctx)
+		if err != nil {
+			return nil, 0, err
+		}
+		index := -1
+		for i := range catalog.Nodes {
+			if catalog.Nodes[i].ID == id {
+				index = i
+				break
+			}
+		}
+		if index < 0 {
+			return nil, 0, ErrNodeConflict
+		}
+		node := &catalog.Nodes[index]
+		if node.Level != "province" && node.Level != "city" {
+			return nil, 0, errors.New("仅省份和城市支持图片")
+		}
+		if equal(node.Photos, photos) {
+			return node, catalog.Version, nil
+		}
+		if !equal(node.Photos, base) {
+			return nil, 0, ErrNodeConflict
+		}
+		node.Photos = append([]Photo(nil), photos...)
+		saved, err := s.Save(ctx, catalog.Version, catalog.Nodes)
+		if errors.Is(err, ErrVersionConflict) {
+			continue
+		}
+		if err != nil {
+			return nil, 0, err
+		}
+		return &saved.Nodes[index], saved.Version, nil
+	}
+	return nil, 0, ErrVersionConflict
+}
 
 func validatePhotos(photos []Photo) error {
 	if len(photos) > MaxPhotos {

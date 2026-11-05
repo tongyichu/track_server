@@ -9,27 +9,45 @@
       this.active = 0;
       this.generation = 0;
       this.waiters = [];
+      this.savedPhotos = [];
+      this.savingPhotos = false;
+      this.saveTimer = null;
+      this.saveError = '';
       host.classList.add('admin-photo-grid');
     }
 
-    get busy() { return this.items.some(item => ['queued', 'uploading'].includes(item.state)); }
-    get failed() { return this.items.some(item => ['failed', 'invalid'].includes(item.state)); }
-    get pending() { return this.items.some(item => item.state !== 'done'); }
+    get ready() { return !this.options.ready || this.options.ready(); }
+    get uploading() { return this.items.some(item => ['queued', 'uploading'].includes(item.state)); }
+    get busy() { return this.uploading || this.savingPhotos || this.saveTimer !== null; }
+    get failed() { return !!this.saveError || this.items.some(item => ['failed', 'invalid'].includes(item.state)); }
+    get unsaved() { return !!this.options.savePhotos && (this.fingerprint(this.photosToSave) !== this.fingerprint(this.savedPhotos) || this.items.some(item => (item.photo.caption ?? item.photo.title ?? '').trim() !== item.committedCaption)); }
+    get pending() { return this.unsaved || this.items.some(item => item.state !== 'done'); }
     get photos() { return this.items.filter(item => item.state === 'done').map(item => ({ ...item.photo, caption: (item.photo.caption || '').trim() })); }
+    get photosToSave() { return this.items.filter(item => item.state === 'done').map(item => ({ ...item.photo, caption: item.committedCaption })); }
+    fingerprint(photos) {
+      return JSON.stringify((photos || []).map(photo => {
+        const value = { ...photo, caption: (photo.caption ?? photo.title ?? '').trim() };
+        return Object.fromEntries(Object.keys(value).sort().map(key => [key, value[key]]));
+      }));
+    }
     get snapshot() { return this.items.map(item => item.state === 'done' ? item.photo : { key: item.key, caption: item.photo.caption, file: item.file?.name, remote: item.remote }); }
 
     load(photos) {
       this.dispose();
+      this.savedPhotos = structuredClone(photos || []);
       this.items = (photos || []).map(photo => this.item({ ...photo }, null, 'done'));
       this.render();
     }
 
     item(photo, file, state) {
-      return { key: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random(), photo, file, state, progress: 0, preview: file ? URL.createObjectURL(file) : '', error: '', xhr: null };
+      return { key: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random(), photo, committedCaption: (photo.caption ?? photo.title ?? '').trim(), file, state, progress: 0, preview: file ? URL.createObjectURL(file) : '', error: '', xhr: null };
     }
 
     dispose() {
       this.generation++;
+      clearTimeout(this.saveTimer); this.saveTimer = null;
+      this.saveController?.abort(); this.saveController = null;
+      this.savedPhotos = []; this.savingPhotos = false; this.saveError = '';
       const old = this.items;
       this.items = [];
       this.active = 0;
@@ -37,10 +55,50 @@
       this.resolveWaiters();
     }
 
-    changed() { this.options.changed?.(); }
-    stateChanged() { this.options.stateChanged?.(); this.resolveWaiters(); }
+    changed(commit = true) { this.options.changed?.(); if (commit) this.schedulePhotos(); this.stateChanged(); }
+    stateChanged() { this.renderSaveStatus(); this.options.stateChanged?.(); this.resolveWaiters(); }
     settle() { return this.busy ? new Promise(resolve => this.waiters.push(resolve)) : Promise.resolve(); }
     resolveWaiters() { if (!this.busy) this.waiters.splice(0).forEach(resolve => resolve()); }
+
+    schedulePhotos() {
+      if (!this.options.savePhotos || !this.ready || !this.options.editable()) return;
+      this.saveError = '';
+      if (this.savingPhotos || this.saveTimer !== null || this.fingerprint(this.photosToSave) === this.fingerprint(this.savedPhotos)) return;
+      this.saveTimer = setTimeout(() => { this.saveTimer = null; this.persistPhotos(); }, 0);
+    }
+
+    async persistPhotos() {
+      if (!this.options.savePhotos || !this.ready || !this.options.editable() || this.savingPhotos) { this.stateChanged(); return; }
+      const photos = structuredClone(this.photosToSave);
+      if (this.fingerprint(photos) === this.fingerprint(this.savedPhotos)) { this.stateChanged(); return; }
+      const generation = this.generation, controller = new AbortController();
+      this.saveController = controller; this.savingPhotos = true; this.saveError = ''; this.stateChanged();
+      const timeout = setTimeout(() => controller.abort(), 30000);
+      try {
+        const result = await this.options.savePhotos(photos, structuredClone(this.savedPhotos), controller.signal);
+        if (generation !== this.generation) return;
+        this.savedPhotos = photos;
+        this.options.photosSaved?.(result, photos);
+      } catch (error) {
+        if (generation === this.generation) this.saveError = error.name === 'AbortError' ? '图片保存超时，请重试' : error.message;
+      } finally {
+        clearTimeout(timeout);
+        if (generation === this.generation) {
+          this.savingPhotos = false; this.saveController = null;
+          if (!this.saveError) this.schedulePhotos();
+          this.stateChanged();
+        }
+      }
+    }
+
+    renderSaveStatus() {
+      if (!this.saveStatus) return;
+      const uploadsFailed = this.items.some(item => ['failed', 'invalid'].includes(item.state));
+      this.saveStatus.text.textContent = !this.ready ? '请先保存基本信息，再添加图片' : this.saveError ? '图片保存失败：' + this.saveError : this.savingPhotos || this.saveTimer !== null ? '图片保存中…' : this.uploading ? '图片上传中，完成后自动保存' : uploadsFailed ? '已上传图片已保存，失败项请重试或移除' : this.unsaved ? '图片说明将在离开输入框后自动保存' : '图片已自动保存';
+      this.saveStatus.text.className = this.saveError ? 'text-danger' : 'text-secondary';
+      this.saveStatus.retry.hidden = !this.saveError;
+      this.saveStatus.discard.hidden = !this.saveError || this.busy;
+    }
 
     addPhoto(photo) {
       if (!this.options.editable() || this.items.length >= this.options.max) return;
@@ -50,7 +108,7 @@
     }
 
     addRemotePhotos(candidates, query, page) {
-      if (!this.options.editable() || !this.options.importURL) return;
+      if (!this.options.editable() || !this.ready || !this.options.importURL) return;
       let added = 0;
       candidates.forEach(candidate => {
         const id = 'pixabay-' + candidate.id;
@@ -66,7 +124,7 @@
     }
 
     choose(files) {
-      if (!this.options.editable()) return;
+      if (!this.options.editable() || !this.ready) return;
       const room = this.options.max - this.items.length;
       const selected = Array.from(files).slice(0, Math.max(0, room));
       selected.forEach(file => {
@@ -114,8 +172,9 @@
     }
 
     render() {
+      this.items.forEach(item => { if (item.view?.caption === document.activeElement) item.committedCaption = (item.photo.caption || '').trim(); });
       this.host.replaceChildren();
-      const writable = this.options.editable();
+      const writable = this.options.editable() && this.ready;
       this.items.forEach((item, index) => {
         const card = document.createElement('div'); card.className = 'admin-photo-item scenic-photo-item';
         card.dataset.url = item.photo.url || ''; card.dataset.photoId = item.photo.id || item.key;
@@ -143,7 +202,8 @@
         caption.value = item.photo.caption ?? item.photo.title ?? '';
         caption.disabled = !writable;
         caption.setAttribute('aria-label', '第' + (index + 1) + '张图片说明');
-        caption.addEventListener('input', () => { item.photo.caption = caption.value; delete item.photo.title; this.changed(); });
+        caption.addEventListener('input', () => { item.photo.caption = caption.value; delete item.photo.title; this.changed(false); });
+        caption.addEventListener('blur', () => { item.committedCaption = caption.value.trim(); this.changed(); });
         card.append(media, caption);
         if (writable) {
           const actions = document.createElement('div'); actions.className = 'admin-photo-order';
@@ -161,7 +221,7 @@
             if (dragged) this.move(dragged, this.items.indexOf(item) - this.items.indexOf(dragged));
           });
         }
-        item.view = { card, image, overlay, status, progress, retry };
+        item.view = { card, image, overlay, status, progress, retry, caption };
         this.host.appendChild(card); this.update(item);
       });
       if (writable) {
@@ -174,6 +234,15 @@
       }
       this.message = document.createElement('p'); this.message.className = 'form-hint admin-photo-message';
       this.message.textContent = '支持多选JPG、PNG，单张不超过8MiB'; this.host.appendChild(this.message);
+      this.saveStatus = null;
+      if (this.options.savePhotos) {
+        const row = document.createElement('div'); row.className = 'admin-photo-save-status'; row.setAttribute('role', 'status');
+        const text = document.createElement('span');
+        const retry = this.button('重试保存', () => { this.schedulePhotos(); this.stateChanged(); });
+        const discard = this.button('放弃本地图片修改', () => { if (!this.busy) { const photos = structuredClone(this.savedPhotos); this.load(photos); this.options.changed?.(); this.stateChanged(); } });
+        row.append(text, retry, discard); this.host.appendChild(row);
+        this.saveStatus = { text, retry, discard }; this.renderSaveStatus();
+      }
     }
 
     update(item) {
