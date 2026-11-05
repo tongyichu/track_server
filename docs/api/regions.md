@@ -49,7 +49,7 @@
 | `POST /admin/api/regions/research` | 操作 | JSON `{id}`，已保存的目录树节点 ID；返回文字草稿和资料来源 |
 | `POST /admin/api/regions/:node_id/photos` | 操作 | multipart `file`、可选 `caption`；仅已保存省份/城市，JPG/PNG≤8MiB、尺寸≤12000×12000，返回 `{photo}`，不修改节点或目录版本 |
 | `POST /admin/api/regions/photos/pixabay/search` | 操作 | JSON `{query,page}`；关键词1至100字，页码1至167，每页最多3张真实横版照片，返回 `{query,page,has_more,candidates:[{id,preview_url,source_url,author,tags}]}`；ID为字符串 |
-| `POST /admin/api/regions/:node_id/photos/pixabay/import` | 操作 | JSON `{query,page,id}`；仅接收24小时有效查询缓存中的候选ID，服务端下载960档图片落盘，返回 `{photo}`，不保存节点或改变目录版本 |
+| `POST /admin/api/regions/:node_id/photos/pixabay/import` | 操作 | JSON `{query,page,id}`；仅接收24小时有效查询缓存中的候选ID，服务端下载API原始地址并等比缩至960×720以内落盘，返回 `{photo}`，不保存节点或改变目录版本 |
 
 图片落盘到 `static/regions/<region_id>/<随机ID>.<jpg|png>`，客户端资源地址为需业务JWT的 `/api/v1/static/regions/*`；后台预览改写为 `/admin/api/static/regions/*`，仅允许地区查看权限或管理员读取。上传走地区操作权限与既有同源/审计中间件，不新增图片表，MySQL/Mongo/内存均使用既有目录JSON存储。
 
@@ -61,7 +61,7 @@
 
 同一查询、页码、固定筛选的上游响应在 `<LogDir>/pixabay-cache` 私有文件缓存24小时，重启后复用；最多512份有效缓存，不淘汰有效缓存来重新请求。每进程查询限1并发、限速且受供应商429约束；下载最多2并发、超时30秒、单图≤8MiB，只接受服务端缓存中的ID和受限Pixabay HTTPS域名/重定向，拒绝客户端任意URL。API key和完整供应商请求URL不写日志、不下发前端。查询/导入均走地区写权限、同源及发起/结果审计。没有定时任务或目录读取触发的外部请求。
 
-候选预览临时使用API的640档；导入按官方 `_640`→`_960` 替换取得最大960×720档，不下载原图，不永久使用供应商链接。资源经过JPG/PNG、尺寸/大小校验后原子落盘到 `static/regions/<region_id>/pixabay-<图片ID>.<jpg|png>`。返回Photo保留 `provider=pixabay`、原始页面 `source_url`、作者 `attribution`、许可名及许可链接，原有图片项不显示来源。前端按候选ID/来源去重，确定性图片ID避免重复文件；关联、排序和说明仍通过“保存当前节点”及既有CAS生效，不新增图片表或改变仓储实现。
+候选预览临时使用API的640档；导入保留API返回的签名地址原样，优先 `largeImageURL` 的1280档，旧缓存缺少该字段时使用原始 `webformatURL` 的640档，不因此提前刷新24小时缓存。虽然供应商文档提到替换尺寸后缀，实际 `/get/` 签名地址替换后会返回400无效/过期，因此禁止自行改写后缀。下载后等比缩至960×720以内，不放大小图，JPEG缩图质量80、PNG保留格式和透明度；不下载原图，不永久使用供应商链接。资源经过JPG/PNG、尺寸/大小校验后原子落盘到 `static/regions/<region_id>/pixabay-<图片ID>.<jpg|png>`。返回Photo保留 `provider=pixabay`、原始页面 `source_url`、作者 `attribution`、许可名及许可链接，原有图片项不显示来源。前端按候选ID/来源去重，确定性图片ID避免重复文件；关联、排序和说明仍通过“保存当前节点”及既有CAS生效，不新增图片表或改变仓储实现。下载失败日志只记录图片ID、阶段和HTTP状态，不记录签名地址或密钥。
 
 导入复用现有队列、顺序、移除取消和失败重试，图片遮罩显示不确定进度的“正在下载并存储”，不伪造服务端下载百分比；完成后遮罩消失。新节点可先选择候选，创建节点后自动导入再保存关联；失败保留已创建节点和草稿。缓存过期或图片不可用返回410，需移除该项并重新查询；503表示配置不可用，429提示稍后重试，其余下载/供应商错误返回502。成功仅表示图片文件暂存，不表示已关联到地区。
 

@@ -319,7 +319,7 @@ Kimi 景点简介使用 `MOONSHOT_API_KEY` 和可选的 `KIMI_SCENIC_DESCRIPTION
 
 详情底部“删除景点”仅已有 active 景点且具有 scenic_spots 写权限时展示。复用 POST /admin/api/scenic-spots/:spot_id/status，status=archived、expected_version CAS 与审计；从默认目录和客户端隐藏，保留轨迹、图片、来源与历史记录，不物理删除。共享 AdminUI.confirm 前关闭原生 dialog，取消后恢复原草稿；409 不自动重试，成功清理深链并刷新目录与统计。
 
-省市宣传图片标题旁的“从 Pixabay 查询”由 `static/region_pixabay.js` 提供：管理员点击后用当前英文/中文地名查询3张横版候选，可改关键词、手动换组、勾选导入或全部导入。`internal/regions/pixabay.go` 只由后台人工POST调用，配置 `PIXABAY_API_KEY` 后使用私有磁盘24小时查询缓存，不扫描省市或定时下载。导入由服务端核对缓存候选ID、下载960档并复用地区静态资源存储；`photo_upload_editor.js` 复用队列、取消和重试，用不确定进度遮罩展示服务端处理，不伪造下载百分比。`region_photos.js` 接合现有节点草稿和首次保存，最终仍由单节点CAS关联；来源/作者/许可自动保留。两个接口均为地区操作权限并审计，详见 `docs/api/regions.md#pixabay-人工选图`。
+省市宣传图片标题旁的“从 Pixabay 查询”由 `static/region_pixabay.js` 提供：管理员点击后用当前英文/中文地名查询3张横版候选，可改关键词、手动换组、勾选导入或全部导入。`internal/regions/pixabay.go` 只由后台人工POST调用，配置 `PIXABAY_API_KEY` 后使用私有磁盘24小时查询缓存，不扫描省市或定时下载。导入由服务端核对缓存候选ID、使用API原始1280地址（旧缓存缺失时用原始640地址），再等比缩至960×720以内并复用地区静态资源存储；不改写签名URL后缀。`photo_upload_editor.js` 复用队列、取消和重试，用不确定进度遮罩展示服务端处理，不伪造下载百分比。`region_photos.js` 接合现有节点草稿和首次保存，最终仍由单节点CAS关联；来源/作者/许可自动保留。两个接口均为地区操作权限并审计，详见 `docs/api/regions.md#pixabay-人工选图`。
 
 景点详情弹窗的内容独立滚动，保存与删除操作固定在底部并共同右对齐；删除使用实心危险色按钮。图片卡片隐藏来源文案，保存时仍保留来源和归属元数据。城市管理的省份/城市详情参照景点图片提供上传、说明、移除和拖动/箭头排序；上传只暂存受保护资源，图片信息随保存当前节点提交，沿用目录JSON、单节点基线和版本CAS。协议及上传限制见 `docs/api/regions.md`。
 

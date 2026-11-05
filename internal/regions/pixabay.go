@@ -8,9 +8,10 @@ import (
 	"encoding/json"
 	"errors"
 	"image"
-	_ "image/jpeg"
-	_ "image/png"
+	"image/jpeg"
+	"image/png"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -21,6 +22,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"golang.org/x/image/draw"
 	"golang.org/x/time/rate"
 )
 
@@ -58,11 +60,12 @@ type PixabaySearch struct {
 }
 
 type pixabayHit struct {
-	ID           int64  `json:"id"`
-	PageURL      string `json:"pageURL"`
-	WebformatURL string `json:"webformatURL"`
-	User         string `json:"user"`
-	Tags         string `json:"tags"`
+	ID            int64  `json:"id"`
+	PageURL       string `json:"pageURL"`
+	WebformatURL  string `json:"webformatURL"`
+	LargeImageURL string `json:"largeImageURL,omitempty"`
+	User          string `json:"user"`
+	Tags          string `json:"tags"`
 }
 
 type pixabayCache struct {
@@ -122,9 +125,11 @@ func pixabayResult(query string, page int, cache pixabayCache) PixabaySearch {
 		if hit.ID <= 0 || !pixabayURL(hit.PageURL, true) || !pixabayURL(hit.WebformatURL, false) {
 			continue
 		}
-		// Only the documented webformat substitution is used; never infer original URLs.
-		if !strings.Contains(hit.WebformatURL, "_640") {
-			continue
+		// Signed /get/ URLs must remain unchanged. Old caches lack largeImageURL;
+		// reuse their original 640 image instead of refetching within the cache TTL.
+		downloadURL := hit.WebformatURL
+		if pixabayURL(hit.LargeImageURL, false) {
+			downloadURL = hit.LargeImageURL
 		}
 		tags := []rune(hit.Tags)
 		if len(tags) > 500 {
@@ -132,7 +137,7 @@ func pixabayResult(query string, page int, cache pixabayCache) PixabaySearch {
 		}
 		result.Candidates = append(result.Candidates, PixabayCandidate{
 			ID: strconv.FormatInt(hit.ID, 10), PreviewURL: hit.WebformatURL, SourceURL: hit.PageURL,
-			Author: hit.User, Tags: string(tags), downloadURL: strings.Replace(hit.WebformatURL, "_640", "_960", 1),
+			Author: hit.User, Tags: string(tags), downloadURL: downloadURL,
 		})
 	}
 	return result
@@ -267,10 +272,14 @@ func (p *PixabayClient) Download(ctx context.Context, query string, page int, id
 	}
 	response, err := p.http.Do(req)
 	if err != nil {
+		log.Printf("[PixabayImport] image_id=%s stage=request result=failed", candidate.ID)
 		return nil, "", candidate, errors.New("图片下载失败，请重试")
 	}
 	defer response.Body.Close()
-	if response.StatusCode == 403 || response.StatusCode == 404 {
+	if response.StatusCode != http.StatusOK {
+		log.Printf("[PixabayImport] image_id=%s stage=response status=%d", candidate.ID, response.StatusCode)
+	}
+	if response.StatusCode == 400 || response.StatusCode == 403 || response.StatusCode == 404 {
 		return nil, "", candidate, ErrPixabayExpired
 	}
 	if response.StatusCode != http.StatusOK {
@@ -284,6 +293,36 @@ func (p *PixabayClient) Download(ctx context.Context, query string, page int, id
 	config, format, err := image.DecodeConfig(bytes.NewReader(raw))
 	if err != nil || config.Width <= 0 || config.Height <= 0 || config.Width > 1280 || config.Height > 1280 || (format != "jpeg" && format != "png") {
 		return nil, "", candidate, errors.New("下载图片格式或尺寸无效")
+	}
+	if config.Width > 960 || config.Height > 720 {
+		if ctx.Err() != nil {
+			return nil, "", candidate, ctx.Err()
+		}
+		source, _, err := image.Decode(bytes.NewReader(raw))
+		if err != nil {
+			return nil, "", candidate, errors.New("下载图片内容无效")
+		}
+		width, height := config.Width, config.Height
+		if width > 960 {
+			height = max(1, height*960/width)
+			width = 960
+		}
+		if height > 720 {
+			width = max(1, width*720/height)
+			height = 720
+		}
+		scaled := image.NewNRGBA(image.Rect(0, 0, width, height))
+		draw.CatmullRom.Scale(scaled, scaled.Bounds(), source, source.Bounds(), draw.Src, nil)
+		var encoded bytes.Buffer
+		if format == "jpeg" {
+			err = jpeg.Encode(&encoded, scaled, &jpeg.Options{Quality: 80})
+		} else {
+			err = png.Encode(&encoded, scaled)
+		}
+		if err != nil {
+			return nil, "", candidate, errors.New("图片缩放失败")
+		}
+		raw = encoded.Bytes()
 	}
 	return raw, format, candidate, nil
 }
