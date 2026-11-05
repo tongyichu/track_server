@@ -12,6 +12,12 @@
   let researchDraft = null;
   let researchNodeId = '';
   let researchingNodeId = '';
+  const photoEditor = new RegionPhotosEditor($('regionPhotos'), {
+    editable,
+    saved: node => persistedIds.has(node.id),
+    changed: node => markDirty(node, '图片有未保存修改，请保存当前节点'),
+    busyChanged: updateSaveState
+  });
   const fieldMap = {
     regionName: 'name', regionNameEn: 'name_en',
     regionCountryCode: 'country_code', regionSlogan: 'slogan', regionDescription: 'description'
@@ -41,7 +47,7 @@
   }
 
   function updateSaveState() {
-    $('regionSaveNode').disabled = !editable() || saving || !dirtyIds.has(selectedId);
+    $('regionSaveNode').disabled = !editable() || saving || photoEditor.busy || !dirtyIds.has(selectedId);
   }
 
   function markDirty(node, message) {
@@ -210,7 +216,7 @@
   }
 
   function select(id) {
-    if (saving && id !== selectedId) return;
+    if (photoEditor.busy || saving && id !== selectedId) return;
     if (researchNodeId !== id) { researchDraft = null; researchNodeId = ''; }
     selectedId = id;
     const node = current();
@@ -223,6 +229,7 @@
     $('regionEmpty').hidden = !!node;
     $('regionForm').hidden = !node;
     $('regionAddChild').disabled = !node || !node.active || !persistedIds.has(node.id) || !editable();
+    photoEditor.bind(node);
     if (!node) { renderTree(); return; }
     $('regionEditorTitle').textContent = node.name || '新增地区';
     $('regionId').textContent = node.region_id || '';
@@ -276,7 +283,7 @@
   }
 
   function addNode(parent) {
-    if (!catalog || saving || parent && !persistedIds.has(parent.id)) return;
+    if (!catalog || saving || photoEditor.busy || parent && !persistedIds.has(parent.id)) return;
     const country = !parent;
     let id;
     do {
@@ -315,13 +322,14 @@
   }
 
   $('regionSearch').addEventListener('input', renderTree);
-  $('regionForm').addEventListener('input', syncForm);
-  $('regionForm').addEventListener('change', syncForm);
+  ['input', 'change'].forEach(type => $('regionForm').addEventListener(type, event => {
+    if (!event.target.closest('#regionPhotos')) syncForm();
+  }));
   $('regionAddCountry').addEventListener('click', () => addNode(null));
   $('regionAddChild').addEventListener('click', () => addNode(current()));
   $('regionDeleteDraft').addEventListener('click', () => {
     const node = current();
-    if (!node || persistedIds.has(node.id) || saving) return;
+    if (!node || persistedIds.has(node.id) || saving || photoEditor.busy) return;
     const removed = new Set([node.id]);
     catalog.nodes.forEach(item => { if (ancestors(item.id).has(node.id)) removed.add(item.id); });
     catalog.nodes = catalog.nodes.filter(item => !removed.has(item.id));
@@ -359,7 +367,7 @@
   $('regionApplyAll').addEventListener('click', () => applyDraft(true));
   $('regionSaveNode').addEventListener('click', async () => {
     const node = current();
-    if (!node || !dirtyIds.has(node.id) || saving || !editable()) return;
+    if (!node || !dirtyIds.has(node.id) || saving || photoEditor.busy || !editable()) return;
     if (!$('regionForm').reportValidity()) return;
     const savedId = node.id;
     const previousBases = persistedNodes;
@@ -384,6 +392,6 @@
     } catch (error) { status(error.message, true); }
     finally { saving = false; $('regionForm').inert = false; updateSaveState(); }
   });
-  window.addEventListener('beforeunload', event => { if (dirtyIds.size || saving) { event.preventDefault(); event.returnValue = ''; } });
+  window.addEventListener('beforeunload', event => { if (dirtyIds.size || saving || photoEditor.busy) { event.preventDefault(); event.returnValue = ''; } });
   load();
 })();

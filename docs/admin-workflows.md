@@ -319,4 +319,6 @@ Kimi 景点简介使用 `MOONSHOT_API_KEY` 和可选的 `KIMI_SCENIC_DESCRIPTION
 
 详情底部“删除景点”仅已有 active 景点且具有 scenic_spots 写权限时展示。复用 POST /admin/api/scenic-spots/:spot_id/status，status=archived、expected_version CAS 与审计；从默认目录和客户端隐藏，保留轨迹、图片、来源与历史记录，不物理删除。共享 AdminUI.confirm 前关闭原生 dialog，取消后恢复原草稿；409 不自动重试，成功清理深链并刷新目录与统计。
 
+景点详情弹窗的内容独立滚动，保存与删除操作固定在底部并共同右对齐；删除使用实心危险色按钮。图片卡片隐藏来源文案，保存时仍保留来源和归属元数据。城市管理的省份/城市详情参照景点图片提供上传、说明、移除和拖动/箭头排序；上传只暂存受保护资源，图片信息随保存当前节点提交，沿用目录JSON、单节点基线和版本CAS。协议及上传限制见 `docs/api/regions.md`。
+
 等级表单可选“暂无等级/1A/2A/3A/4A/5A”，来源/状态/时间服务端托管，人工改值或清空不被自动覆盖；旧 PUT 省略保留，空串清空，null/非法值400。新建或来源变更在相同保存内尝试采集，以保持返回版本供后续图片上传使用；自动识别新建异步采集。provider-content/backfill 在原文字图片已同步时也独立补采等级，grades 为本批补齐数；查询失败不阻止原有资料同步。完整协议见 [景点等级](track-place-discovery.md#景区等级采集与下发) 和 [删除归档](track-place-discovery.md#后台景点删除归档)。

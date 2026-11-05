@@ -980,3 +980,7 @@ table.admin-audit-table { width: 100%; min-width: 900px; table-layout: fixed; }
   .admin-client-stats .chart-medium { height: 220px; }
   .admin-client-stats .chart-small { height: 180px; }
 }
+/* 景点详情仅内容区滚动，操作栏保持在弹窗底部。 */
+#detailModal.scenic-modal[open]{display:flex;flex-direction:column;overflow:hidden;max-height:calc(100dvh - 32px)}
+#detailModal.scenic-modal>.scenic-modal-body{flex:1 1 auto;min-height:0;max-height:none;overflow:auto}
+#detailModal .scenic-detail-footer{display:flex;flex:none;justify-content:flex-end;align-items:center;flex-wrap:wrap;gap:8px;padding:14px 20px calc(14px + env(safe-area-inset-bottom));border-top:1px solid var(--tblr-border-color);background:var(--tblr-bg-surface)}

@@ -241,21 +241,19 @@
   }
   function addPhotoCard(photo) {
     const card=document.createElement('div');card.className='scenic-photo scenic-photo-item';const img=document.createElement('img');img.draggable=false;img.src=photoURL(photo.url);img.alt=photo.alt_text||photo.caption||'景点图片';
-    const source=document.createElement('div');source.className='scenic-photo-source';source.textContent='来源：'+(photo.provider==='amap'?'高德':photo.provider==='google'?'谷歌':'人工');
     const caption=document.createElement('input');caption.className='form-control';caption.placeholder='图片说明';caption.value=photo.caption||'';
     const controls=document.createElement('div');controls.className='d-flex gap-2 mt-2';controls.dataset.adminWrite='scenic_spots';const remove=document.createElement('button');remove.type='button';remove.className='btn btn-sm btn-outline-danger ms-auto';remove.textContent='移除';remove.addEventListener('click',()=>{card.remove();renderProviderPhotoCandidates(state.providerPhotoCandidates);updateSaveButton();});controls.appendChild(remove);caption.addEventListener('input',updateSaveButton);
     card.dataset.photoId=photo.id;card.dataset.url=photo.url;card.dataset.altText=photo.alt_text||'';card.dataset.attribution=photo.attribution||'';card.dataset.provider=photo.provider||'';card.dataset.sourceUrl=photo.source_url||'';card.dataset.attributionUrl=photo.attribution_url||'';
-    card.append(source,img,caption,controls);const addCard=$('photosBox').querySelector('.scenic-photo-add-card');if(addCard)$('photosBox').insertBefore(card,addCard);else $('photosBox').appendChild(card);bindPhotoDragEvents(card,true);return card;
+    card.append(img,caption,controls);const addCard=$('photosBox').querySelector('.scenic-photo-add-card');if(addCard)$('photosBox').insertBefore(card,addCard);else $('photosBox').appendChild(card);bindPhotoDragEvents(card,true);return card;
   }
   function addUploadPhotoCard(){
     if(!AdminAccess.can('scenic_spots',true))return;
     const card=document.createElement('div');card.className='scenic-photo scenic-photo-add-card';
-    const source=document.createElement('div');source.className='scenic-photo-source';source.textContent='来源：人工';
     const picker=document.createElement('button');picker.type='button';picker.className='scenic-photo-picker';picker.setAttribute('aria-label','选择景点图片');picker.innerHTML='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>选择图片</span>';
     const preview=document.createElement('img');preview.hidden=true;picker.appendChild(preview);picker.addEventListener('click',()=>$('photoFile').click());
     const caption=document.createElement('input');caption.className='form-control scenic-photo-upload-caption';caption.placeholder='图片说明';caption.addEventListener('input',updateSaveButton);
     const controls=document.createElement('div');controls.className='scenic-photo-upload-controls';const upload=document.createElement('button');upload.type='button';upload.className='btn btn-sm btn-outline-primary';upload.textContent=state.newSpot?'保存并上传':'上传';upload.disabled=true;upload.addEventListener('click',()=>state.newSpot?save():uploadPhoto());controls.appendChild(upload);
-    card.append(source,picker,caption,controls);$('photosBox').appendChild(card);bindPhotoDragEvents(card,false);
+    card.append(picker,caption,controls);$('photosBox').appendChild(card);bindPhotoDragEvents(card,false);
   }
   function renderPhotoCards(photos){$('photosBox').replaceChildren();(photos||[]).forEach(addPhotoCard);addUploadPhotoCard();}
   function updateUploadPhotoPreview(){const card=$('photosBox').querySelector('.scenic-photo-add-card');if(!card)return;const picker=card.querySelector('.scenic-photo-picker'),preview=picker.querySelector('img'),icon=picker.querySelector('svg'),label=picker.querySelector('span'),upload=card.querySelector('button.btn-outline-primary');if(state.photoPreviewURL)URL.revokeObjectURL(state.photoPreviewURL);state.photoPreviewURL=null;const file=$('photoFile').files[0];if(file){state.photoPreviewURL=URL.createObjectURL(file);preview.src=state.photoPreviewURL;preview.hidden=false;icon.hidden=true;label.hidden=true;}else{preview.removeAttribute('src');preview.hidden=true;icon.hidden=false;label.hidden=false;}upload.textContent=state.newSpot?'保存并上传':'上传';upload.disabled=!file;updateSaveButton();}

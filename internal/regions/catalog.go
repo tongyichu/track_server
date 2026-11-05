@@ -34,6 +34,7 @@ type Node struct {
 	PostalCodes      []string     `json:"postal_codes,omitempty"`
 	Slogan           string       `json:"slogan,omitempty"`
 	Description      string       `json:"description,omitempty"`
+	Photos           []Photo      `json:"photos,omitempty"`
 	Latitude         *float64     `json:"latitude,omitempty"`
 	Longitude        *float64     `json:"longitude,omitempty"`
 	CoordinateStatus string       `json:"coordinate_status,omitempty"`
@@ -46,6 +47,19 @@ type ExternalID struct {
 	Provider string `json:"provider"`
 	Type     string `json:"type"`
 	Value    string `json:"value"`
+}
+
+type Photo struct {
+	ID          string `json:"id"`
+	URL         string `json:"url"`
+	Caption     string `json:"caption,omitempty"`
+	AltText     string `json:"alt_text,omitempty"`
+	Title       string `json:"title,omitempty"`
+	Attribution string `json:"attribution,omitempty"`
+	SourceURL   string `json:"source_url,omitempty"`
+	License     string `json:"license,omitempty"`
+	LicenseURL  string `json:"license_url,omitempty"`
+	Provider    string `json:"provider,omitempty"`
 }
 
 type Catalog struct {
@@ -302,6 +316,9 @@ func validate(nodes, previous []Node) error {
 	codes := make(map[string]string, len(nodes))
 	externalOwners := make(map[string]string, len(nodes))
 	for _, n := range nodes {
+		if err := validatePhotos(n.Photos); err != nil {
+			return fmt.Errorf("region %s: %w", n.ID, err)
+		}
 		if n.ID == "" || len(n.ID) > 128 || strings.TrimSpace(n.Name) == "" || utf8.RuneCountInString(n.Name) > 64 {
 			return errors.New("region id and name are required; name must fit 64 characters")
 		}

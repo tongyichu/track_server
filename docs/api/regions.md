@@ -25,7 +25,7 @@
 }
 ```
 
-`nodes` 是完整树。字段包括 `id`、`region_id`、`parent_id`、`name`、`name_en`、`level`、`code`、`code_system`、`external_ids`、`country_code`、`continent`、`postal_codes`（字符串数组）、`slogan`、`description`、`latitude`、`longitude`、`coordinate_status`、`selectable`、`active`、`sort_order`。可选字段可能缺省，未设置的 `external_ids` 可省略。旧目录中的城市图片字段会在服务端首次读取时从持久化 JSON 中移除，并递增目录版本。只有本身和祖先均启用、且 `selectable=true` 的节点进入客户端城市选择器。客户端以 `region_id` 写入用户和轨迹的 `city_code`，旧 adcode 和目录键仅在兼容读写时解析。国外层级由后台按国家下的任意树结构组织。
+`nodes` 是完整树。字段包括 `id`、`region_id`、`parent_id`、`name`、`name_en`、`level`、`code`、`code_system`、`external_ids`、`country_code`、`continent`、`postal_codes`（字符串数组）、`slogan`、`description`、`photos`、`latitude`、`longitude`、`coordinate_status`、`selectable`、`active`、`sort_order`。可选字段可能缺省，未设置的 `external_ids`、`photos` 可省略。`photos` 为有序图片数组，每项包含 `id`、`url`、可选 `caption`、`alt_text`；旧图片的 title、attribution、source_url、license、license_url、provider 元数据保留，后台不展示来源。单节点最多20张，说明最多500字，URL只允许HTTPS或本站地区图片路径。旧独立 `cover_url` 字段仍在首次读取时移除并递增版本，不再删除 `photos`。只有本身和祖先均启用、且 `selectable=true` 的节点进入客户端城市选择器。客户端以 `region_id` 写入用户和轨迹的 `city_code`，旧 adcode 和目录键仅在兼容读写时解析。国外层级由后台按国家下的任意树结构组织。
 
 版本未变化时：
 
@@ -35,7 +35,7 @@
 
 ## 后台管理
 
-`/admin/regions.html` 显示为“城市管理”，使用后台会话和独立的城市管理权限。国家以顶部标签切换，末尾的加号新增国家；每个国家内的下级节点以可折叠连线树呈现，有下级的节点默认折叠。节点的内部 ID 紧随名称，以较小灰字显示。地区资料提供高德 adcode 和 Google 地区 Place ID 输入；老国内节点的原 `code` 保留，修改高德字段可增加新的映射，不会抹掉旧编码。页面不提供邮编、启用状态、归档、层级、上级地区、编码体系和排序值的直接编辑；城市图片功能已移除，所属洲只在国家节点显示。新增下级时固定父节点，国内按父级推断层级，其他地区默认为城市层级；排序值在同级末尾生成。页面按节点单独保存，切换节点时保留其他未保存草稿；未保存的新节点仍可删除。顶部不再显示目录版本、重新加载和保存全部修改按钮。
+`/admin/regions.html` 显示为“城市管理”，使用后台会话和独立的城市管理权限。国家以顶部标签切换，末尾的加号新增国家；每个国家内的下级节点以可折叠连线树呈现，有下级的节点默认折叠。节点的内部 ID 紧随名称，以较小灰字显示。地区资料提供高德 adcode 和 Google 地区 Place ID 输入；老国内节点的原 `code` 保留，修改高德字段可增加新的映射，不会抹掉旧编码。页面不提供邮编、启用状态、归档、层级、上级地区、编码体系和排序值的直接编辑；所属洲只在国家节点显示。省份和城市详情支持上传JPG/PNG、编辑图片说明、拖动或箭头排序、移除图片。新节点先保存再上传；上传仅暂存图片文件，关联、说明和顺序随“保存当前节点”通过既有基线/CAS校验提交，切换节点保留已上传图片的未保存草稿。移除只解除关联，不物理删除文件。新增下级时固定父节点，国内按父级推断层级，其他地区默认为城市层级；排序值在同级末尾生成。页面按节点单独保存，切换节点时保留其他未保存草稿；未保存的新节点仍可删除。顶部不再显示目录版本、重新加载和保存全部修改按钮。
 
 已保存的单个节点可点击“AI 联网填写”：服务端使用 Moonshot 联网资料生成英文名和简介草稿，并单独检索城市宣传口号。首选真实存在、流行或经典且有地域辨识度的旅游或城市形象宣传语；官方发布不是必要条件，长期使用和传播情况优先。仅当检索来源标题或正文中能核对口号原文时返回 `slogan` 和 `slogan_source_url`；首轮未找到可核实口号时换方向补充检索一次。不得创作口号、伪造来源或把历史口号冒充现行官方口号。AI 查询只返回文字草稿和资料来源，不会批量执行或自动写入目录。管理员可只代入空白文字或覆盖文字，仍需点击“保存当前节点”才生效。
 
@@ -47,6 +47,9 @@
 | `PUT /admin/api/regions/catalog` | 操作 | 以 `{version,nodes}` 保存完整目录；版本不匹配返回 409 |
 | `PUT /admin/api/regions/node` | 操作 | 以 `{base_node,node}` 保存单个节点；`base_node=null` 新增，当前节点与基线不一致返回 409，返回最新完整目录 |
 | `POST /admin/api/regions/research` | 操作 | JSON `{id}`，已保存的目录树节点 ID；返回文字草稿和资料来源 |
+| `POST /admin/api/regions/:node_id/photos` | 操作 | multipart `file`、可选 `caption`；仅已保存省份/城市，JPG/PNG≤8MiB、尺寸≤12000×12000，返回 `{photo}`，不修改节点或目录版本 |
+
+图片落盘到 `static/regions/<region_id>/<随机ID>.<jpg|png>`，客户端资源地址为需业务JWT的 `/api/v1/static/regions/*`；后台预览改写为 `/admin/api/static/regions/*`，仅允许地区查看权限或管理员读取。上传走地区操作权限与既有同源/审计中间件，不新增图片表，MySQL/Mongo/内存均使用既有目录JSON存储。
 
 国外可新增国家和任意下级节点。新国家须填写两位国家缩写，保存时由服务端分配不可变 `region_id`；新增节点的目录树 `id` 仍由管理页生成，仅用于父子关联。已保存节点不删除，以保留历史用户和轨迹编码；本次编辑中未保存的新节点可以直接移除。
 
