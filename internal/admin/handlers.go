@@ -1525,6 +1525,9 @@ func (h *Handler) GetTrack(ctx context.Context, c *app.RequestContext) {
 		}
 	}
 	if h.scenicSpotSvc != nil {
+		if spotID, err := h.scenicSpotSvc.AssignedSpotID(ctx, track.ID); err == nil {
+			data["scenic_spot_id"] = spotID
+		}
 		if spots, err := h.scenicSpotSvc.PrimarySpots(ctx, []string{track.ID}); err == nil && spots[track.ID] != nil {
 			track.PrimaryScenicSpot = spots[track.ID]
 		}

@@ -117,13 +117,52 @@
       return date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate()) + 'T' + pad(date.getHours()) + ':' + pad(date.getMinutes());
     }
     const isDeleted = track.status === 0;
-    const mapPreview = window.AdminTrackMapPreview ? window.AdminTrackMapPreview.create(trackPayload.geo, { trackID: trackID, coordinateSystem: track.coordinate_system }) : null;
     const labelAbort = new AbortController();
+    let labelBadges = null, placeCandidates = null, mapPreview = null;
+    function renderLabelBadges() {
+      if (!labelBadges) return;
+      labelBadges.replaceChildren();
+      (track.labels || []).filter(label => label.value !== false).forEach(label => {
+        const badge = document.createElement('span'); badge.className = 'badge bg-secondary-lt';
+        badge.textContent = label.name || label.type; labelBadges.appendChild(badge);
+      });
+      if (!labelBadges.childElementCount) labelBadges.textContent = '暂无标签';
+    }
+    function updateScenicSpot(data) {
+      if (labelAbort.signal.aborted) return;
+      track.primary_scenic_spot = data.primary_scenic_spot || null;
+      trackPayload.scenic_spot_id = data.scenic_spot_id;
+      const labels = (track.labels || []).filter(label => label.type !== 'scenic_spot');
+      const scenic = (data.labels || []).filter(label => label.type === 'scenic_spot');
+      const shapeIndex = labels.findIndex(label => label.type === 'shape');
+      labels.splice(shapeIndex < 0 ? labels.length : shapeIndex, 0, ...scenic);
+      track.labels = labels;
+      renderLabelBadges();
+      if (placeCandidates) placeCandidates.setPrimarySpot(track.primary_scenic_spot);
+      if (mapPreview) mapPreview.setScenicSpot(track.primary_scenic_spot, data.scenic_spot_id);
+    }
+    async function refreshScenicSpot() {
+      const response = await fetch('/admin/api/tracks/' + encodeURIComponent(trackID), { signal: labelAbort.signal });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || '景点标签刷新失败');
+      const data = result.data;
+      updateScenicSpot({ primary_scenic_spot: data.track.primary_scenic_spot, labels: data.track.labels, scenic_spot_id: data.scenic_spot_id });
+    }
+    async function notifyScenicSpotChanged() {
+      if (!labelAbort.signal.aborted && typeof options.onSaved === 'function') await options.onSaved();
+    }
+    mapPreview = window.AdminTrackMapPreview ? window.AdminTrackMapPreview.create(trackPayload.geo, {
+      trackID: trackID, coordinateSystem: track.coordinate_system,
+      scenicSpotID: trackPayload.scenic_spot_id, primaryScenicSpot: track.primary_scenic_spot,
+      canAssignScenicSpot: !readOnly && !isDeleted && window.AdminAccess.can('scenic_spots', true) && typeof trackPayload.scenic_spot_id === 'string',
+      onScenicSpotAssigned: async function (data) { updateScenicSpot(data); await notifyScenicSpotChanged(); },
+      onScenicSpotRefresh: refreshScenicSpot
+    }) : null;
     const assets = trackAssets(trackID, track);
     const values = await window.AdminUI.form({
       title: (readOnly ? '查看轨迹 ' : '编辑轨迹 ') + trackID,
       readOnly: readOnly,
-      onClosed: function () { labelAbort.abort(); if (mapPreview) mapPreview.dispose(); },
+      onClosed: function () { labelAbort.abort(); if (mapPreview) mapPreview.dispose(); if (placeCandidates) placeCandidates.dispose(); },
       waitForHidden: !!options.waitForHidden,
       confirmText: isDeleted ? '彻底删除' : '保存修改',
       cancelText: readOnly ? '关闭' : (isDeleted ? '恢复' : '删除'),
@@ -165,13 +204,9 @@
         content.className = 'card-body';
         const heading = document.createElement('h3');
         heading.className = 'card-title'; heading.textContent = '轨迹标签'; content.appendChild(heading);
-        const badges = document.createElement('div'); badges.className = 'd-flex flex-wrap gap-2 mb-2';
-        (track.labels || []).filter(function (label) { return label.value !== false; }).forEach(function (label) {
-          const badge = document.createElement('span'); badge.className = 'badge bg-secondary-lt';
-          badge.textContent = label.name || label.type; badges.appendChild(badge);
-        });
-        if (!badges.childElementCount) badges.textContent = '暂无标签';
-        content.appendChild(badges);
+        labelBadges = document.createElement('div'); labelBadges.className = 'd-flex flex-wrap gap-2 mb-2';
+        renderLabelBadges();
+        content.appendChild(labelBadges);
         const states = { waiting: '等待自动生成', running: '正在生成', ready: '生成完成，等待写入', complete: '自动生成已完成（无明确形象时不打标）', retry: '等待重试', failed: '自动生成失败', not_queued: '未进入自动任务', unconfigured: 'AI 未配置' };
         const status = document.createElement('p'); status.className = 'text-secondary mb-2';
         const generation = trackPayload.label_generation || {};
@@ -206,7 +241,7 @@
           content.appendChild(note);
         }
         const help = document.createElement('p'); help.className = 'text-secondary mb-2';
-        help.textContent = '形象可在下方人工编辑或用 AI 生成。精品随投稿审核生效；运动类型在表单修改，景点在景点关联区域维护。AI 基于已保存资料和一张方图，生成后需保存才生效。';
+        help.textContent = '形象可在下方人工编辑或用 AI 生成。精品随投稿审核生效；运动类型在表单修改，景点可在地图点选或确认候选后立即关联。AI 基于已保存资料和一张方图，生成后需保存才生效。';
         content.appendChild(help);
         if (!readOnly && !isDeleted) {
           const button = document.createElement('button'); button.type = 'button'; button.className = 'btn btn-outline-primary'; button.textContent = 'AI 生成形象';
@@ -234,7 +269,9 @@
           content.appendChild(button);
         }
         panel.appendChild(content); wrapper.appendChild(panel);
-        wrapper.appendChild(window.AdminTrackPlaceCandidates.create(trackID, { readOnly: readOnly, onChanged: options.onSaved, cityNames: cityNames, track: track }));
+        placeCandidates = window.AdminTrackPlaceCandidates.create(trackID, { readOnly: readOnly || isDeleted,
+          onChanged: async function () { await refreshScenicSpot(); await notifyScenicSpotChanged(); }, cityNames: cityNames, track: track });
+        wrapper.appendChild(placeCandidates);
         if (mapPreview) wrapper.appendChild(mapPreview);
         return wrapper;
       })(),

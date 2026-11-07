@@ -182,8 +182,8 @@ func normalizeSubmissionInput(input TrackSubmissionInput, userID int64) (TrackSu
 	if input.TransportModes, err = normalizeStringSet(input.TransportModes, transportOptions, "transport_modes"); err != nil {
 		return input, err
 	}
-	if n := utf8.RuneCountInString(input.TransportDescription); n < 10 || n > 500 {
-		return input, invalidArg("transport_description length must be between 10 and 500")
+	if n := utf8.RuneCountInString(input.TransportDescription); n > 500 {
+		return input, invalidArg("transport_description length must not exceed 500")
 	}
 	if len(input.Images) > 9 {
 		return input, invalidArg("submission image count must not exceed 9")
@@ -212,6 +212,19 @@ func submissionEvent(sub *models.TrackSubmission, eventType string, from, to mod
 	return &models.TrackSubmissionEvent{SubmissionID: sub.SubmissionID, Revision: sub.Revision, EventType: eventType, FromStatus: from, ToStatus: to, OperatorType: operatorType, Operator: operator, Reason: reason, SnapshotJSON: snapshotSubmission(sub), CreatedAt: now}
 }
 
+func validateSubmissionTrack(track *models.Track) error {
+	switch {
+	case track.IsRunning:
+		return invalidArg("track is still running")
+	case track.Status != models.TrackStatusNormal:
+		return invalidArg("track must be normal and public for submission")
+	case strings.TrimSpace(track.RawTrackURL) == "":
+		return invalidArg("track raw file is required for submission")
+	default:
+		return nil
+	}
+}
+
 func (s *TrackSubmissionService) Submit(ctx context.Context, userID int64, trackID string, input TrackSubmissionInput, editingPending bool) (*models.TrackSubmission, error) {
 	if s == nil || s.repo == nil || s.tracks == nil {
 		return nil, errors.New("track submission service is not configured")
@@ -223,8 +236,8 @@ func (s *TrackSubmissionService) Submit(ctx context.Context, userID int64, track
 	if track.UserID != userID {
 		return nil, ErrForbidden
 	}
-	if track.IsRunning || track.Status != models.TrackStatusNormal || strings.TrimSpace(track.RawTrackURL) == "" || strings.TrimSpace(track.TrackScreenshotURL) == "" {
-		return nil, invalidArg("track is not eligible for submission")
+	if err := validateSubmissionTrack(track); err != nil {
+		return nil, err
 	}
 	input, err = normalizeSubmissionInput(input, userID)
 	if err != nil {
@@ -329,8 +342,8 @@ func (s *TrackSubmissionService) Review(ctx context.Context, submissionID string
 		if trackErr != nil {
 			return nil, trackErr
 		}
-		if track.IsRunning || track.Status != models.TrackStatusNormal || strings.TrimSpace(track.RawTrackURL) == "" || strings.TrimSpace(track.TrackScreenshotURL) == "" {
-			return nil, invalidArg("track is not eligible for submission approval")
+		if err := validateSubmissionTrack(track); err != nil {
+			return nil, err
 		}
 	case "rejected":
 		status = models.TrackSubmissionStatusRejected
@@ -428,13 +441,17 @@ func (s *TrackSubmissionService) DecorateSummaries(ctx context.Context, summarie
 		}
 		item.IsFeatured, item.Title, item.FeaturedDescription = true, sub.Title, sub.Description
 		item.Labels = buildTrackLabels(item.ShapeLabel, item.TrackType, item.PrimaryScenicSpot, true)
-		item.FeaturedCoverURL = item.TrackScreenshotURL
+		defaultCoverURL := item.PreviewImages.LandscapeDayURL
+		if defaultCoverURL == "" {
+			defaultCoverURL = item.TrackScreenshotURL
+		}
+		item.FeaturedCoverURL = defaultCoverURL
 		if len(sub.Images) > 0 && sub.Images[0] != nil && s.imageCache != nil {
 			cacheCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			item.FeaturedCoverURL = s.imageCache.EnsureCached(cacheCtx, sub.UserID, sub.SubmissionID+"_"+sub.Images[0].ImageID, sub.Images[0].OSSURL)
 			cancel()
 			if item.FeaturedCoverURL == "" {
-				item.FeaturedCoverURL = item.TrackScreenshotURL
+				item.FeaturedCoverURL = defaultCoverURL
 			}
 		}
 	}

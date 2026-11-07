@@ -510,6 +510,10 @@ func (s *ScenicSpotCatalogService) SetStatus(ctx context.Context, operator, id, 
 	return old, nil
 }
 func (s *ScenicSpotCatalogService) AssignTrack(ctx context.Context, operator, spotID, trackID, origin string) error {
+	return s.assignTrack(ctx, operator, spotID, trackID, origin, nil)
+}
+
+func (s *ScenicSpotCatalogService) assignTrack(ctx context.Context, operator, spotID, trackID, origin string, expectedSpotID *string) error {
 	spot, err := s.spots.GetScenicSpot(ctx, spotID)
 	if err != nil {
 		return err
@@ -525,6 +529,16 @@ func (s *ScenicSpotCatalogService) AssignTrack(ctx context.Context, operator, sp
 		return repository.ErrNotFound
 	}
 	old, oldErr := s.spots.GetTrackScenicSpotLink(ctx, trackID)
+	if oldErr != nil && !errors.Is(oldErr, repository.ErrNotFound) {
+		return oldErr
+	}
+	currentSpotID := ""
+	if oldErr == nil {
+		currentSpotID = old.SpotID
+	}
+	if expectedSpotID != nil && currentSpotID != *expectedSpotID {
+		return repository.ErrConflict
+	}
 	link := &models.TrackScenicSpotLink{TrackID: trackID, SpotID: spotID, Origin: origin, UpdatedAt: time.Now(), UpdatedBy: operator}
 	if oldErr == nil {
 		if old.SpotID == spotID {
@@ -542,6 +556,17 @@ func (s *ScenicSpotCatalogService) AssignTrack(ctx context.Context, operator, sp
 	}
 	s.audit(ctx, spotID, "track_assign", operator, trackID, old, link)
 	return nil
+}
+
+func (s *ScenicSpotCatalogService) AssignedSpotID(ctx context.Context, trackID string) (string, error) {
+	link, err := s.spots.GetTrackScenicSpotLink(ctx, trackID)
+	if errors.Is(err, repository.ErrNotFound) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return link.SpotID, nil
 }
 func (s *ScenicSpotCatalogService) UnassignTrack(ctx context.Context, operator, trackID string) error {
 	old, err := s.spots.GetTrackScenicSpotLink(ctx, trackID)

@@ -109,6 +109,7 @@
 - `user_name`：按持久化归属人查询的用户名（昵称），找不到或昵称为空时为“未知用户”；仅展示，不允许修改归属。
 - `user_id_text`：字符串用户 ID，保留兼容；新版表单不展示或提交。
 - `geo`：地图索引简化轨迹线 `{simplified_polyline, coordinate_system, start_lat/lng, end_lat/lng}`，坐标为 GCJ02，可直接在高德地图绘制；无索引时省略。
+- `scenic_spot_id`：当前持久化主景点关联的内部 ID，无关联为空字符串；包括已归档景点的历史关联。读取失败时不返回此字段，前端禁用地图设置，不能把旧 `place-*` 标识当作内部关联 ID。
 
 `POST /admin/api/tracks/:track_id/place-refresh`（轨迹操作权限）：同步对单条轨迹重新执行景点识别，复用后台识别任务同一互斥锁与供应商配额；任务忙返回 409，识别未启用 503，无可用地图索引 404。成功后前端重新读取候选。
 
@@ -117,6 +118,30 @@
 确认关联成功后，响应额外返回 `suggested_title`：服务端按客户端标题生成规则（`{景点名}周边{运动}[环线]`，环线判定用地图索引简化轨迹线）以景点名为地名生成的建议标题；与当前标题一致或无法生成时为空串。前端在标题输入框旁展示「代入建议标题」标签，点击仅代入输入框并随表单保存生效，不自动提交。
 
 `GET /admin/api/tracks/map-config`（轨迹查看）：返回高德 Web(JS API) `key` 与 `service_host=/admin/api/tracks/amap-service`，供轨迹详情地图使用；`GET /admin/api/tracks/amap-service` 为同源高德服务代理（安全密钥不下发浏览器）。与景点页 `/scenic-spots/map-config` 同一配置，仅权限归属不同。
+
+### 地图点选景点标签
+
+`POST /admin/api/tracks/:track_id/scenic-spot`：同时要求轨迹与景点操作权限，沿用后台 session、同源检查和写审计。
+
+```json
+{
+  "provider_id": "B000A00000",
+  "name": "示例公园",
+  "category": "风景名胜;公园广场",
+  "address": "示例地址",
+  "latitude": 39.9,
+  "longitude": 116.4,
+  "expected_spot_id": ""
+}
+```
+
+字段来自高德底图 POI 点击后 `PlaceSearch.getDetails` 的结果，坐标固定 GCJ02；POI ID、非空名称、有效坐标、`expected_spot_id` 必填，后者使用详情返回的 `scenic_spot_id`（无关联传空字符串）。仅支持高德 POI，不接收浏览器资源 URL。
+
+优先按 `amap + provider_id` 复用景点目录，不覆盖已有名称、图片或人工内容；未收录时只创建所选 POI 基础资料，再通过既有景点关联仓储设为主景点（origin=manual），不触发 AI、等级采集或重新识别。仅点击 marker 或加载资料不写入；点“设为该轨迹景点标签”后立即生效，可替换已有归属，不提交标题、坐标系等未保存草稿。
+
+返回 `{code:0,data:{scenic_spot_id,primary_scenic_spot,labels}}`；`labels` 只包含统一投影的景点标签。前端仅替换这一类标签并更新主景点和来源列表，保留其他标签、输入及地图视野；当前 POI 按钮显示“当前景点标签”。只读、下架或缺少任一操作权限不提供设置入口，服务端同样拒绝。
+
+实际写关联时比较旧 ID，关联已变更、目录归档/合并或 CAS 冲突返回 409，刷新后重新选择；轨迹不存在/已下架返回 404，字段无效 400，无权限 403。建档与关联不是跨仓储事务，若建档后关联失败，目录保留供重试复用，不误报成功。关闭详情取消请求、忽略迟到结果并销毁地图浮层。
 
 ### user_id 精度约定
 

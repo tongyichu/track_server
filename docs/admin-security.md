@@ -35,6 +35,8 @@
 
 ## 常见误解
 
+轨迹详情地图点选 POI 的写入接口 `/admin/api/tracks/:track_id/scenic-spot` 同时检查轨迹与景点操作权限，不能只凭轨迹查看权限新建景点或改绑。点击热点只展示资料，设置需显式按钮操作，沿用同源校验与发起审计。客户端提交详情里的旧关联 ID，服务端实际关联复用三仓储 CAS，拒绝覆盖已变更关联。协议见 [地图点选景点标签](api/admin-tracks.md#地图点选景点标签)。
+
 - **误解**：管理后台没访问到，往业务 `auth` 组里塞路由。
   **事实**：admin 完全独立挂在 `/admin`，不属于 `/api/v1/auth` 组；登录态也是 cookie，不是 JWT。
 - **误解**：可以用 `OSSTokenService.GetUploadCredential` 上传 APK。

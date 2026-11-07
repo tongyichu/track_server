@@ -67,8 +67,8 @@
 | 获取运动类型（含中英文名称及日间/夜间主题色） | GET | `/track/types` | 是 | [track.md](track.md#16-获取运动类型) |
 | 获取内置 MingCute 运动图标 | GET / HEAD | `/track/types/icons/:icon_file` | 是 | [track.md](track.md#16-获取运动类型) |
 | 获取轨迹投稿选项 | GET | `/track/submission/options` | 是 | [track-submission.md](track-submission.md#1-投稿选项) |
-| 创建或重新投稿 | POST | `/track/:track_id/submission` | 是 | [track-submission.md](track-submission.md#2-创建或重新投稿) |
-| 修改待审核投稿 | PUT | `/track/:track_id/submission` | 是 | [track-submission.md](track-submission.md#3-修改待审核投稿) |
+| 创建或重新投稿（不校验预览图，到达说明选填） | POST | `/track/:track_id/submission` | 是 | [track-submission.md](track-submission.md#2-创建或重新投稿) |
+| 修改待审核投稿（同创建校验） | PUT | `/track/:track_id/submission` | 是 | [track-submission.md](track-submission.md#3-修改待审核投稿) |
 | 查询轨迹投稿 | GET | `/track/:track_id/submission` | 是 | [track-submission.md](track-submission.md#4-查询投稿) |
 | 撤回轨迹投稿 | POST | `/track/:track_id/submission/withdraw` | 是 | [track-submission.md](track-submission.md#5-撤回投稿) |
 | 查询地图视野数据（含离线区域语义，支持 `track_type=all`） | GET | `/track-map/view` | 是 | [track-map.md](track-map.md#48-查询地图视野数据) |
@@ -153,6 +153,7 @@
 | 后台轨迹详情（含只读归属用户名） | GET | `/admin/api/tracks/:track_id` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |
 | 后台轨迹图片与原始文件下载 | GET | `/admin/api/tracks/:track_id/assets/:asset` | 轨迹查看 | [admin-tracks.md](admin-tracks.md#详情资源展示与下载) |
 | 单条轨迹重新识别 | POST | `/admin/api/tracks/:track_id/place-refresh` | 轨迹操作 | [admin-tracks.md](admin-tracks.md) |
+| 地图 POI 设置轨迹景点标签 | POST | `/admin/api/tracks/:track_id/scenic-spot` | 轨迹及景点操作 | [admin-tracks.md](admin-tracks.md#地图点选景点标签) |
 | 轨迹地图高德配置 / 服务代理 | GET | `/admin/api/tracks/map-config`、`/admin/api/tracks/amap-service` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |
 | 单条轨迹景点候选 | GET | `/admin/api/tracks/:track_id/place-candidates` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |
 | 轨迹景点候选队列（兼容） | GET | `/admin/api/place-candidates` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |

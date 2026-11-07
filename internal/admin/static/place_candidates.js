@@ -33,9 +33,14 @@
     const body = document.createElement('div'); body.className = 'admin-track-candidates-body'; body.setAttribute('aria-live', 'polite');
     root.append(heading, body);
     let busy = false, sequence = 0;
+    const controller = new AbortController();
+    let disposed = false;
+    function fetchData(path, options) { return request(path, Object.assign({}, options, { signal: controller.signal })); }
 
-    const spot = track.primary_scenic_spot;
-    if (spot && spot.id) {
+    function setPrimarySpot(spot) {
+      const old = body.querySelector('.admin-track-primary-spot');
+      if (old) old.remove();
+      if (!spot || !spot.id) return;
       const primary = document.createElement('p'); primary.className = 'admin-track-primary-spot';
       const label = document.createElement('span'); label.textContent = '当前主景点：';
       const tag = document.createElement('a');
@@ -46,22 +51,27 @@
       tag.rel = 'noopener';
       tag.title = '打开景点详情';
       primary.append(label, tag);
-      body.appendChild(primary);
+      body.prepend(primary);
     }
+    root.setPrimarySpot = setPrimarySpot;
+    root.dispose = function () { disposed = true; sequence++; controller.abort(); };
+    setPrimarySpot(track.primary_scenic_spot);
 
     function state(text) { const note = document.createElement('p'); note.className = 'text-secondary mb-0'; note.textContent = text; body.querySelectorAll(':scope > :not(.admin-track-primary-spot)').forEach(node => node.remove()); body.appendChild(note); }
     function setBusy(value) { busy = value; root.querySelectorAll('button').forEach(button => { button.disabled = value || button.dataset.unavailable === 'true'; }); }
     async function act(path, payload, message) {
-      if (busy || !canWrite) return;
+      if (disposed || busy || !canWrite) return;
       setBusy(true);
       try {
-        await request(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload || {}) });
+        await fetchData(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload || {}) });
+        if (disposed) return;
         state(message); AdminUI.alert(message, 'success');
         if (typeof options.onChanged === 'function') {
           try { await options.onChanged(); }
           catch (_) { AdminUI.alert('景点处理已生效，列表刷新失败，请手动刷新', 'warning'); }
         }
       } catch (error) {
+        if (disposed || error.name === 'AbortError') return;
         if (error.status === 404 || error.status === 409) state('当前候选或轨迹数据已变化，请重新识别后重试');
         AdminUI.alert('处理失败：' + error.message, 'danger');
       }
@@ -96,10 +106,11 @@
     }
 
     async function confirmPlace(place) {
-      if (busy || !canWrite) return;
+      if (disposed || busy || !canWrite) return;
       setBusy(true);
       try {
-        const data = await request('/place-candidates/' + encodeURIComponent(trackID) + '/confirm', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ place_id: place.id }) });
+        const data = await fetchData('/place-candidates/' + encodeURIComponent(trackID) + '/confirm', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ place_id: place.id }) });
+        if (disposed) return;
         AdminUI.alert('已关联景点：' + place.name, 'success');
         showTitleSuggestion(data && data.suggested_title);
         if (typeof options.onChanged === 'function') {
@@ -107,17 +118,18 @@
           catch (_) { AdminUI.alert('景点处理已生效，列表刷新失败，请手动刷新', 'warning'); }
         }
       } catch (error) {
+        if (disposed || error.name === 'AbortError') return;
         if (error.status === 404 || error.status === 409) state('当前候选或轨迹数据已变化，请重新识别后重试');
         AdminUI.alert('处理失败：' + error.message, 'danger');
       } finally { setBusy(false); }
     }
 
     async function load() {
-      if (busy) return;
+      if (disposed || busy) return;
       const current = ++sequence;
       setBusy(true); state('正在读取景点识别结果…');
       try {
-        const data = await request('/tracks/' + encodeURIComponent(trackID) + '/place-candidates');
+        const data = await fetchData('/tracks/' + encodeURIComponent(trackID) + '/place-candidates');
         if (current !== sequence) return;
         body.querySelectorAll(':scope > :not(.admin-track-primary-spot)').forEach(node => node.remove());
         const note = document.createElement('p'); note.className = 'text-secondary';
@@ -149,7 +161,7 @@
         if (canWrite) {
           const dismiss = document.createElement('button'); dismiss.type = 'button'; dismiss.className = 'btn btn-sm btn-outline-secondary'; dismiss.textContent = '忽略本次候选'; dismiss.dataset.adminWrite = 'tracks';
           dismiss.addEventListener('click', async () => {
-            if (busy) return;
+            if (disposed || busy) return;
             setBusy(true);
             try {
               const confirmed = await AdminUI.confirm({ title: '忽略景点候选', message: '确认忽略这条轨迹的本次景点候选？', confirmText: '忽略候选' });
@@ -167,14 +179,14 @@
     }
 
     refresh.addEventListener('click', async () => {
-      if (busy) return;
+      if (disposed || busy) return;
       if (!canWrite) { load(); return; }
       const current = ++sequence;
       setBusy(true);
       refresh.textContent = '识别中…';
       state('正在执行景点识别，请稍候…');
       try {
-        await request('/tracks/' + encodeURIComponent(trackID) + '/place-refresh', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+        await fetchData('/tracks/' + encodeURIComponent(trackID) + '/place-refresh', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
       } catch (error) {
         if (current === sequence) AdminUI.alert(error.status === 409 ? error.message : '识别执行失败：' + error.message, error.status === 409 ? 'warning' : 'danger');
       } finally {

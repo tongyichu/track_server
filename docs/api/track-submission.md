@@ -30,7 +30,11 @@
 
 `images` 可省略或传空数组，最多 9 张。图片由客户端使用现有 OSS STS 直接上传到 `<OSS_UPLOAD_PREFIX>/<bucket_id>/submission/<user_id>/`，服务端保存 `oss_url`；返回时缓存到 `<LogDir>/static/submission_images/` 并改写为 `/api/v1/static/submission_images/...`。
 
-只有本人已结束、正常、具有 `raw_track_url` 和轨迹截图的轨迹可以投稿。首次投稿状态为 `pending`；`rejected`、`withdrawn`、`invalidated` 可以重新投稿并增加 `revision`。
+`transport_description` 为选填，可省略或传空字符串，trim 后最多 500 个 Unicode 字符；无最少字数限制，选择其他交通方式时也可留空。`transport_modes` 仍须至少选择一项。
+
+只有本人已结束、正常公开且具有 `raw_track_url` 的轨迹可以投稿。提交与审核通过使用同一轨迹资格校验，不校验 `preview_images`、`track_screenshot_url` 或无底图截图；这些字段属于轨迹上传流程自动生成的展示资料，不是投稿必填项。首次投稿状态为 `pending`；`rejected`、`withdrawn`、`invalidated` 可以重新投稿并增加 `revision`。
+
+不符合资格时返回 HTTP 400，并按实际原因返回 `error_code`：`submission_track_running`（仍在录制）、`submission_track_status`（非正常公开）、`submission_track_raw_missing`（缺原始文件）。`submission_transport_length` 仅在交通说明超过 500 字符时返回。
 
 ## 3. 修改待审核投稿
 
@@ -60,7 +64,7 @@
 | `withdrawn` | 用户撤回 |
 | `invalidated` | 轨迹删除或关键内容变化导致审核失效 |
 
-`GET /api/v1/track/my/list` 的 item 通过 `submission` 返回本人投稿状态摘要。我的轨迹、收藏列表 `/track/collected/list` 和推荐/搜索摘要均明确返回 `is_featured`，仅当前投稿状态为 `approved` 时为 true，其余为 false；按当前页批量读取投稿状态，不逐条补查详情。审核通过的推荐/搜索 TrackSummary 还返回 `featured_description` 和 `featured_cover_url`，并使用投稿标题作为 `title`。
+`GET /api/v1/track/my/list` 的 item 通过 `submission` 返回本人投稿状态摘要。我的轨迹、收藏列表 `/track/collected/list` 和推荐/搜索摘要均明确返回 `is_featured`，仅当前投稿状态为 `approved` 时为 true，其余为 false；按当前页批量读取投稿状态，不逐条补查详情。审核通过的推荐/搜索 TrackSummary 还返回 `featured_description` 和 `featured_cover_url`，并使用投稿标题作为 `title`。封面优先投稿首图，无投稿首图或缓存失败时使用新版日间横图，再回退旧截图。
 
 ## 7. 管理后台审核
 

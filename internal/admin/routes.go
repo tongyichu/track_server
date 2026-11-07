@@ -252,6 +252,7 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	api.POST("/tracks/:track_id/labels/generate", m.Handler.GenerateTrackShape)
 	api.POST("/tracks/:track_id/place-refresh", m.Handler.RefreshTrackPlaceCandidate)
 	api.GET("/tracks/:track_id/place-candidates", m.Handler.GetPlaceCandidate)
+	api.POST("/tracks/:track_id/scenic-spot", m.Handler.AssignTrackMapScenicSpot)
 	api.PUT("/tracks/:track_id", m.Handler.UpdateTrack)
 	api.DELETE("/tracks/:track_id", m.Handler.DeleteTrack)
 	api.POST("/tracks/:track_id/restore", m.Handler.RestoreTrack)

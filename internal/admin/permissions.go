@@ -127,6 +127,9 @@ func (a *Authenticator) authorize(ctx context.Context, c *app.RequestContext, se
 	if strings.HasPrefix(route, "/admin/api/scenic-spots/") && (strings.Contains(route, "/tracks") || strings.HasSuffix(route, "/track-search")) {
 		allowed = allowed && account.allows("tracks", write)
 	}
+	if route == "/admin/api/tracks/:track_id/scenic-spot" {
+		allowed = allowed && account.allows("scenic_spots", true)
+	}
 	if !allowed {
 		c.JSON(http.StatusForbidden, utils.H{"error": "没有该页面的" + map[bool]string{false: "查看", true: "操作"}[write] + "权限"})
 		return false

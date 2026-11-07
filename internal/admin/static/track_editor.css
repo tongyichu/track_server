@@ -12,6 +12,10 @@
 .admin-track-editor .admin-track-map { display: flex; flex-direction: column; grid-column: 2; grid-row: 1 / span 2; padding: 12px; border: 1px solid var(--tblr-border-color); border-radius: 10px; }
 .admin-track-editor .admin-track-map-body { display: flex; flex: 1; flex-direction: column; font-size: 12px; }
 .admin-track-editor .admin-track-map-canvas { flex: 1; height: auto; min-height: 220px; }
+.admin-track-map-poi { width: 240px; max-width: 65vw; overflow-wrap: anywhere; font-size: 12px; }
+.admin-track-map-poi strong { display: block; margin-bottom: 6px; font-size: 14px; }
+.admin-track-map-poi p { margin-bottom: 8px; }
+.admin-track-map-poi .btn { white-space: normal; }
 .admin-track-assets { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--tblr-border-color); }
 .admin-track-file { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-size: 13px; }
 .admin-track-download { display: inline-flex; align-items: center; justify-content: center; padding: 5px; }

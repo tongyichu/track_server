@@ -62,6 +62,7 @@
 | GET | `/admin/api/tracks/:track_id` | 鉴权 | 返回 `{track, user_name, user_id_text, geo?}`：轨迹详情、只读归属用户名、主景点与 GCJ02 简化线；`user_id_text` 保留字符串兼容，新表单不展示或提交 ID/用户名，服务端拒绝变更归属人 |
 | GET | `/admin/api/tracks/:track_id/assets/:asset` | 轨迹查看 | 只读图片与原始文件资源，raw 按附件下载；asset 白名单与错误码见 [资源协议](api/admin-tracks.md#详情资源展示与下载) |
 | POST | `/admin/api/tracks/:track_id/place-refresh` | 轨迹操作 | 同步触发单条轨迹重新景点识别；任务忙 409，无索引 404 |
+| POST | `/admin/api/tracks/:track_id/scenic-spot` | 轨迹及景点操作 | 地图 POI 设置主景点，复用/创建目录并比较旧关联 ID；仅更新景点关系 |
 | GET | `/admin/api/tracks/map-config` | 轨迹查看 | 轨迹详情地图的高德 Web Key 配置（service_host 指向 `/admin/api/tracks/amap-service`） |
 | GET | `/admin/api/tracks/amap-service` | 轨迹查看 | 高德 JS API 服务代理（与景点地图同一实现） |
 | PUT | `/admin/api/tracks/:track_id` | 鉴权 | 更新轨迹业务字段（不改 ID、轨迹点与创建/更新时间）；城市/类型更新已有地图索引，状态/进行状态/原始文件变化时清理并按可索引条件重新排队 |
