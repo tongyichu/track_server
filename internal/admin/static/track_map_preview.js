@@ -40,26 +40,46 @@
     const body = document.createElement('div'); body.className = 'admin-track-map-body';
     const note = document.createElement('p'); note.className = 'text-secondary mb-2';
     const canvas = document.createElement('div'); canvas.className = 'admin-track-map-canvas';
+    const selection = document.createElement('div'); selection.className = 'admin-track-map-poi'; selection.hidden = true;
+    selection.setAttribute('aria-live', 'polite');
     if (options.canAssignScenicSpot) {
       const hint = document.createElement('p'); hint.className = 'text-secondary mb-2';
-      hint.textContent = '点击地图景点，可设为这条轨迹的景点标签。';
+      hint.textContent = '点击地图景点，在地图下方设置标签；未点中时可从附近景点中选择。';
       body.appendChild(hint);
     }
-    body.append(note, canvas); section.append(heading, body);
+    body.append(note, canvas, selection); section.append(heading, body);
 
     const controller = new AbortController();
     let disposed = false, map = null, amap = null, overlays = [], variants = null;
     let selected = options.coordinateSystem || '', changed = false, fitted = false, fitTimer = null, observer = null;
     let currentSpot = options.primaryScenicSpot || null, expectedSpotID = options.scenicSpotID;
-    let infoWindow = null, placeSearch = null, selectionSequence = 0, lookupTimer = null, assigning = false;
+    let placeSearch = null, selectionSequence = 0, lookupTimer = null, clickTimer = null, assigning = false;
+    let lastHotspotAt = 0, selectionMarker = null;
 
     function poiPosition(value) {
       if (!value) return null;
-      const lng = Number(typeof value.getLng === 'function' ? value.getLng() : value.lng);
-      const lat = Number(typeof value.getLat === 'function' ? value.getLat() : value.lat);
-      return Number.isFinite(lng) && Number.isFinite(lat) ? [lng, lat] : null;
+      if (typeof value === 'string') value = value.split(',');
+      const longitude = Array.isArray(value) ? value[0] : typeof value.getLng === 'function' ? value.getLng() : value.lng;
+      const latitude = Array.isArray(value) ? value[1] : typeof value.getLat === 'function' ? value.getLat() : value.lat;
+      if (longitude == null || latitude == null || longitude === '' || latitude === '') return null;
+      const lng = Number(longitude), lat = Number(latitude);
+      return Number.isFinite(lng) && Number.isFinite(lat) && Math.abs(lng) <= 180 && Math.abs(lat) <= 90 ? [lng, lat] : null;
     }
     function plainText(value) { return typeof value === 'string' ? value : ''; }
+    function beginSelection(title) {
+      const sequence = ++selectionSequence;
+      clearTimeout(lookupTimer); clearTimeout(clickTimer);
+      selection.replaceChildren(); selection.hidden = false;
+      const name = document.createElement('strong'); name.textContent = title;
+      const detail = document.createElement('p'); detail.className = 'text-secondary';
+      selection.append(name, detail);
+      return { name, detail, current: () => !disposed && sequence === selectionSequence };
+    }
+    function markSelection(position, name) {
+      if (selectionMarker) map.remove(selectionMarker);
+      selectionMarker = new amap.Marker({ position: position, title: name, bubble: true });
+      map.add(selectionMarker);
+    }
     function isCurrentPOI(id) {
       return !!currentSpot && (currentSpot.sources || []).some(source => source.provider === 'amap' && source.provider_id === id && source.status !== 'disabled');
     }
@@ -76,7 +96,6 @@
         if (!response.ok) {
           if (response.status === 409 && typeof options.onScenicSpotRefresh === 'function') {
             await options.onScenicSpotRefresh();
-            if (infoWindow) infoWindow.close();
             throw new Error('景点关联已变化或该景点不可用，请重新选择后再试');
           }
           throw new Error(payload.error || '设置景点标签失败');
@@ -84,7 +103,7 @@
         if (disposed) return;
         const data = payload.data;
         section.setScenicSpot(data.primary_scenic_spot, data.scenic_spot_id);
-        if (infoWindow) infoWindow.close();
+        detail.textContent = '已设为这条轨迹的景点标签。';
         if (typeof options.onScenicSpotAssigned === 'function') {
           try { await options.onScenicSpotAssigned(data); }
           catch (_) { if (!disposed) AdminUI.alert('景点标签已设置，列表刷新失败，请手动刷新', 'warning'); }
@@ -102,26 +121,19 @@
       }
     }
     async function selectPOI(event) {
-      if (disposed || assigning || !event || !map) return;
-      const position = poiPosition(event.lnglat);
-      if (!position) return;
-      const sequence = ++selectionSequence;
-      clearTimeout(lookupTimer);
-      if (infoWindow) infoWindow.close();
-      const popup = document.createElement('div'); popup.className = 'admin-track-map-poi';
-      const name = document.createElement('strong'); name.textContent = plainText(event.name) || '地图景点';
-      const detail = document.createElement('p'); detail.className = 'text-secondary';
-      popup.append(name, detail);
-      infoWindow = new amap.InfoWindow({ content: popup, closeWhenClickMap: true });
-      infoWindow.open(map, position);
-      if (!options.canAssignScenicSpot) { detail.textContent = '景点标签设置需要轨迹及景点操作权限。'; return; }
+      if (disposed || assigning || !event || !map || !options.canAssignScenicSpot) return;
       const id = String(event.id || '').trim();
-      if (!id) { detail.textContent = '此标记没有可用的 POI ID，请选择其他景点。'; return; }
+      const position = poiPosition(event.lnglat || event.location);
+      if (!id) { if (position) searchNearby(position); return; }
+      const { name, detail, current } = beginSelection(plainText(event.name) || '地图景点');
+      if (position) markSelection(position, name.textContent);
       detail.textContent = '正在读取景点资料…';
       const button = document.createElement('button'); button.type = 'button'; button.className = 'btn btn-sm btn-primary';
       button.dataset.adminWrite = 'tracks'; button.textContent = '设为该轨迹景点标签'; button.disabled = true;
-      popup.appendChild(button);
-      const current = () => !disposed && sequence === selectionSequence && popup.isConnected;
+      selection.appendChild(button);
+      const nearby = document.createElement('button'); nearby.type = 'button'; nearby.className = 'btn btn-sm btn-outline-secondary ms-2'; nearby.textContent = '查看附近景点';
+      nearby.addEventListener('click', () => searchNearby(position));
+      if (position) selection.appendChild(nearby);
       try {
         const PlaceSearch = await loadPlaceSearch(amap);
         if (!current()) return;
@@ -136,15 +148,64 @@
             detail.textContent = '景点资料读取失败，请重新点击景点重试。'; return;
           }
           name.textContent = poi.name;
+          markSelection(point, poi.name);
           detail.textContent = [plainText(poi.type), plainText(poi.address)].filter(Boolean).join(' · ');
           const scope = document.createElement('p'); scope.className = 'text-secondary';
           scope.textContent = isCurrentPOI(id) ? '这是当前轨迹的景点标签。' : currentSpot ? '立即替换当前景点标签：' + (currentSpot.name || currentSpot.id) : '设置后立即生效。';
-          popup.insertBefore(scope, button);
+          selection.insertBefore(scope, button);
           button.disabled = isCurrentPOI(id);
           if (button.disabled) button.textContent = '当前景点标签';
           button.addEventListener('click', () => assignPOI({ id: id, name: poi.name, category: plainText(poi.type), address: plainText(poi.address), position: point }, button, detail));
         });
       } catch (error) { if (current()) detail.textContent = error.message; }
+    }
+    async function searchNearby(position) {
+      if (disposed || assigning || !position || !map || !options.canAssignScenicSpot) return;
+      const { detail, current } = beginSelection('选择附近景点');
+      detail.textContent = '正在查询点击位置附近的景点…';
+      markSelection(position, '点击位置');
+      const retrySearch = document.createElement('button'); retrySearch.type = 'button'; retrySearch.className = 'btn btn-sm btn-outline-secondary'; retrySearch.textContent = '重新查询'; retrySearch.hidden = true;
+      retrySearch.addEventListener('click', () => searchNearby(position)); selection.appendChild(retrySearch);
+      try {
+        const PlaceSearch = await loadPlaceSearch(amap);
+        if (!current()) return;
+        const nearbySearch = new PlaceSearch({ pageSize: 8, pageIndex: 1, extensions: 'all', type: '110000' });
+        lookupTimer = setTimeout(() => {
+          if (current()) { detail.textContent = '附近景点查询超时，请重试。'; retrySearch.hidden = false; }
+        }, 15000);
+        nearbySearch.searchNearBy('', position, 1500, (status, result) => {
+          if (!current()) return;
+          clearTimeout(lookupTimer);
+          const pois = status === 'complete' && result && result.poiList && result.poiList.pois;
+          const candidates = Array.isArray(pois) ? pois.filter(poi => plainText(poi.id).trim() && plainText(poi.name).trim() && poiPosition(poi.location)) : [];
+          if (!candidates.length) {
+            detail.textContent = status === 'complete' || status === 'no_data' ? '附近未找到景点，请放大地图后重新点选。' : '附近景点查询失败，请重试。';
+            retrySearch.hidden = false; return;
+          }
+          detail.textContent = '请选择目标景点，再点击设置按钮。';
+          const list = document.createElement('div'); list.className = 'admin-track-map-poi-list';
+          candidates.forEach(poi => {
+            const item = document.createElement('button'); item.type = 'button'; item.className = 'btn btn-sm btn-outline-secondary';
+            item.textContent = poi.name; item.title = [plainText(poi.type), plainText(poi.address)].filter(Boolean).join(' · ');
+            item.addEventListener('click', () => selectPOI(poi)); list.appendChild(item);
+          });
+          selection.insertBefore(list, retrySearch);
+        });
+      } catch (error) {
+        if (current()) { detail.textContent = error.message; retrySearch.hidden = false; }
+      }
+    }
+    function onHotspotClick(event) {
+      lastHotspotAt = Date.now(); clearTimeout(clickTimer);
+      selectPOI(event);
+    }
+    function onMapClick(event) {
+      if (!options.canAssignScenicSpot || disposed || assigning || Date.now() - lastHotspotAt < 300) return;
+      const position = poiPosition(event && event.lnglat);
+      if (!position) return;
+      clearTimeout(clickTimer);
+      // 同一次点击可能同时派发普通点击和热点点击，优先保留精确 POI。
+      clickTimer = setTimeout(() => searchNearby(position), 250);
     }
     const normalize = value => String(value || 'GCJ02').toUpperCase().replace(/-/g, '');
     function pathOf(points) {
@@ -166,7 +227,7 @@
       overlays = [];
       const path = pathOf(points);
       if (path.length < 2) return;
-      const polyline = new amap.Polyline({ path, strokeColor: '#2563eb', strokeWeight: 4, strokeOpacity: 0.9, lineJoin: 'round', lineCap: 'round' });
+      const polyline = new amap.Polyline({ path, strokeColor: '#2563eb', strokeWeight: 4, strokeOpacity: 0.9, lineJoin: 'round', lineCap: 'round', bubble: true });
       const start = new amap.Marker({ position: path[0], label: { content: '起', direction: 'top' } });
       const end = new amap.Marker({ position: path[path.length - 1], label: { content: '终', direction: 'top' } });
       overlays = [polyline, start, end];
@@ -197,9 +258,8 @@
     };
     section.setScenicSpot = function (spot, spotID) { currentSpot = spot; expectedSpotID = spotID; };
     section.dispose = function () {
-      disposed = true; selectionSequence++; controller.abort(); clearTimeout(fitTimer); clearTimeout(lookupTimer);
+      disposed = true; selectionSequence++; controller.abort(); clearTimeout(fitTimer); clearTimeout(lookupTimer); clearTimeout(clickTimer);
       if (observer) observer.disconnect();
-      if (infoWindow) infoWindow.close();
       if (placeSearch) placeSearch.clear();
       if (map) map.destroy();
     };
@@ -215,7 +275,10 @@
         if (disposed || !canvas.isConnected) return;
         map = new amap.Map(canvas, { resizeEnable: true, scrollWheel: true, isHotspot: true, zoom: 13, center: [116.397, 39.909] });
         map.addControl(new amap.Scale());
-        map.on('hotspotclick', selectPOI);
+        if (options.canAssignScenicSpot) {
+          map.on('hotspotclick', onHotspotClick);
+          map.on('click', onMapClick);
+        }
         draw();
         fitTimer = window.setTimeout(fit, 350);
         if ('IntersectionObserver' in window) {
