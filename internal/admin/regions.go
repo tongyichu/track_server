@@ -26,8 +26,27 @@ func (h *Handler) GetRegionCatalog(ctx context.Context, c *app.RequestContext) {
 		c.JSON(http.StatusServiceUnavailable, utils.H{"error": "地区目录读取失败"})
 		return
 	}
+	serveRegionCatalog(c, catalog)
+}
+
+// Catalogs include descriptions and photo metadata; compress each private
+// response without retaining it in the shared static-resource cache.
+func serveRegionCatalog(c *app.RequestContext, catalog *regions.Catalog) {
 	c.Header("Cache-Control", "no-store")
-	c.JSON(http.StatusOK, utils.H{"code": 0, "data": catalog})
+	c.Header("Vary", "Accept-Encoding")
+	payload, err := json.Marshal(utils.H{"code": 0, "data": catalog})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "地区目录编码失败"})
+		return
+	}
+	if len(payload) >= 1024 && acceptsGzip(c.Request.Header.Peek("Accept-Encoding")) {
+		if compressed, err := gzipBytes(payload); err == nil && len(compressed) < len(payload) {
+			c.Header("Content-Encoding", "gzip")
+			c.Data(http.StatusOK, "application/json; charset=utf-8", compressed)
+			return
+		}
+	}
+	c.Data(http.StatusOK, "application/json; charset=utf-8", payload)
 }
 
 func (h *Handler) SaveRegionCatalog(ctx context.Context, c *app.RequestContext) {
@@ -50,7 +69,7 @@ func (h *Handler) SaveRegionCatalog(ctx context.Context, c *app.RequestContext) 
 		c.JSON(http.StatusBadRequest, utils.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, utils.H{"code": 0, "data": catalog})
+	serveRegionCatalog(c, catalog)
 }
 
 func (h *Handler) SaveRegionNode(ctx context.Context, c *app.RequestContext) {
@@ -80,7 +99,7 @@ func (h *Handler) SaveRegionNode(ctx context.Context, c *app.RequestContext) {
 		c.JSON(http.StatusBadRequest, utils.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, utils.H{"code": 0, "data": catalog})
+	serveRegionCatalog(c, catalog)
 }
 
 func (h *Handler) DeleteRegionCountry(ctx context.Context, c *app.RequestContext) {
@@ -105,5 +124,5 @@ func (h *Handler) DeleteRegionCountry(ctx context.Context, c *app.RequestContext
 		c.JSON(http.StatusBadRequest, utils.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, utils.H{"code": 0, "data": catalog})
+	serveRegionCatalog(c, catalog)
 }

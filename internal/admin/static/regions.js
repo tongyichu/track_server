@@ -8,7 +8,11 @@
   let persistedIds = new Set();
   let persistedNodes = new Map();
   let expandedIds = new Set();
+  const nodesById = new Map();
+  const childrenByParent = new Map();
+  const treeButtons = new Map();
   const treeMissingElements = new Map();
+  let treeNeedsRender = true;
   let saving = false;
   let researchDraft = null;
   let researchNodeId = '';
@@ -24,7 +28,7 @@
     photosSaved: (node, result) => {
       const photos = structuredClone(result.node.photos || []);
       node.photos = photos;
-      const currentNode = catalog.nodes.find(item => item.id === node.id);
+      const currentNode = nodesById.get(node.id);
       if (currentNode) currentNode.photos = structuredClone(photos);
       const base = persistedNodes.get(node.id);
       if (base) base.photos = structuredClone(photos);
@@ -83,7 +87,7 @@
     return body.data;
   }
 
-  function current() { return catalog && catalog.nodes.find(node => node.id === selectedId); }
+  function current() { return nodesById.get(selectedId); }
   function canDeleteCountry(node) {
     const saved = node && persistedNodes.get(node.id);
     return !!saved && saved.level === 'country' && !saved.parent_id && saved.active &&
@@ -92,17 +96,30 @@
   function firstCountryId() {
     return children('').find(node => node.level === 'country' && node.active)?.id || '';
   }
-  function children(parentId) {
-    return catalog.nodes.filter(node => node.parent_id === parentId)
-      .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0) || a.name.localeCompare(b.name, 'zh-CN'));
+  const nameOrder = new Intl.Collator('zh-CN');
+  function sortChildren(parentId) {
+    childrenByParent.get(parentId)?.sort((a, b) =>
+      (a.sort_order || 0) - (b.sort_order || 0) || nameOrder.compare(a.name, b.name));
   }
+  function indexCatalog() {
+    treeNeedsRender = true;
+    nodesById.clear();
+    childrenByParent.clear();
+    catalog.nodes.forEach(node => {
+      nodesById.set(node.id, node);
+      if (!childrenByParent.has(node.parent_id)) childrenByParent.set(node.parent_id, []);
+      childrenByParent.get(node.parent_id).push(node);
+    });
+    childrenByParent.forEach((_, parentId) => sortChildren(parentId));
+  }
+  function children(parentId) { return childrenByParent.get(parentId) || []; }
   function ancestors(id) {
     const result = new Set();
-    let node = catalog.nodes.find(item => item.id === id);
+    let node = nodesById.get(id);
     while (node && node.parent_id) {
       if (result.has(node.parent_id)) break;
       result.add(node.parent_id);
-      node = catalog.nodes.find(item => item.id === node.parent_id);
+      node = nodesById.get(node.parent_id);
     }
     return result;
   }
@@ -112,7 +129,7 @@
     while (node && !seen.has(node.id)) {
       if (!node.parent_id) return node.level === 'country' ? node : null;
       seen.add(node.id);
-      node = catalog.nodes.find(item => item.id === node.parent_id);
+      node = nodesById.get(node.parent_id);
     }
     return null;
   }
@@ -134,6 +151,7 @@
       code.textContent = node.country_code || node.code || '';
       tab.append(title, code);
       tab.addEventListener('click', () => {
+        if ($('regionSearch').value) treeNeedsRender = true;
         $('regionSearch').value = '';
         select(node.id);
         root.querySelector('[aria-selected="true"]')?.focus();
@@ -160,16 +178,17 @@
   }
 
   function renderTree() {
+    treeNeedsRender = false;
     const root = $('regionTree');
     root.replaceChildren();
     treeMissingElements.clear();
+    treeButtons.clear();
     if (!catalog || !activeCountryId) return;
     const query = $('regionSearch').value.trim().toLowerCase();
     const visible = new Set();
     if (query) catalog.nodes.forEach(node => {
       if (countryOf(node)?.id === activeCountryId &&
-          (node.name + ' ' + (node.name_en || '') + ' ' + (node.code || '') + ' ' +
-            (node.external_ids || []).map(item => item.value).join(' ')).toLowerCase().includes(query)) {
+          searchText(node).includes(query)) {
         visible.add(node.id);
         ancestors(node.id).forEach(id => visible.add(id));
       }
@@ -208,6 +227,7 @@
         button.className = 'region-tree-item' + (node.id === selectedId ? ' selected' : '');
         button.setAttribute('role', 'treeitem');
         button.setAttribute('aria-selected', node.id === selectedId ? 'true' : 'false');
+        treeButtons.set(node.id, button);
         if (childNodes.length) button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
         const label = document.createElement('span');
         label.className = 'region-tree-name';
@@ -269,12 +289,20 @@
   function select(id) {
     if (photoEditor.busy || saving && id !== selectedId) return;
     if (researchNodeId !== id) { researchDraft = null; researchNodeId = ''; }
+    const previousId = selectedId;
+    const previousCountryId = activeCountryId;
+    let treeChanged = false;
     selectedId = id;
     const node = current();
     if (node) {
       const country = countryOf(node);
       if (country) activeCountryId = country.id;
-      ancestors(node.id).forEach(parentId => { if (parentId !== activeCountryId) expandedIds.add(parentId); });
+      ancestors(node.id).forEach(parentId => {
+        if (parentId !== activeCountryId && !expandedIds.has(parentId)) {
+          expandedIds.add(parentId);
+          treeChanged = true;
+        }
+      });
     } else activeCountryId = '';
     renderCountryTabs();
     $('regionEmpty').hidden = !!node;
@@ -306,13 +334,29 @@
     else researchStatus('');
     updateSaveState();
     renderResearch();
-    renderTree();
+    if (treeNeedsRender || treeChanged || previousCountryId !== activeCountryId) renderTree();
+    else {
+      [previousId, selectedId].forEach(nodeId => {
+        const button = treeButtons.get(nodeId);
+        if (!button) return;
+        button.classList.toggle('selected', nodeId === selectedId);
+        button.setAttribute('aria-selected', nodeId === selectedId ? 'true' : 'false');
+      });
+    }
     if (dirtyIds.has(id)) status('当前节点有未保存修改');
+  }
+
+  function searchText(node) {
+    return (node.name + ' ' + (node.name_en || '') + ' ' + (node.code || '') + ' ' +
+      (node.external_ids || []).map(item => item.value).join(' ')).toLowerCase();
   }
 
   function syncForm() {
     const node = current();
     if (!node) return;
+    const previousName = node.name;
+    const previousCountryCode = node.country_code;
+    const previousSearchText = searchText(node);
     Object.entries(fieldMap).forEach(([id, key]) => { node[key] = $(id).value.trim(); });
     setExternalValue(node, 'amap', 'adcode', $('regionAmapAdcode').value.trim());
     setExternalValue(node, 'google', 'place_id', $('regionGooglePlaceId').value.trim());
@@ -332,8 +376,11 @@
     markDirty(node);
     const country = countryOf(node);
     if (country) activeCountryId = country.id;
-    renderCountryTabs();
-    renderTree();
+    if (previousName !== node.name) {
+      sortChildren(node.parent_id);
+    }
+    if (node.level === 'country' && (previousName !== node.name || previousCountryCode !== node.country_code)) renderCountryTabs();
+    if (previousName !== node.name || ($('regionSearch').value.trim() && previousSearchText !== searchText(node))) renderTree();
   }
 
   function addNode(parent) {
@@ -354,6 +401,7 @@
       selectable: false, active: true, sort_order: siblings.reduce((max, item) => Math.max(max, item.sort_order || 0), -1) + 1
     };
     catalog.nodes.push(node);
+    indexCatalog();
     if (parent) expandedIds.add(parent.id);
     markDirty(node, '已新增节点，请填写资料并保存当前节点');
     select(id);
@@ -364,10 +412,11 @@
     status('正在加载地区目录…');
     try {
       catalog = await api('catalog');
+      indexCatalog();
       researchDraft = null;
       researchNodeId = '';
       persistedIds = new Set(catalog.nodes.map(node => node.id));
-      persistedNodes = new Map(catalog.nodes.map(node => [node.id, structuredClone(node)]));
+      persistedNodes = new Map(structuredClone(catalog.nodes).map(node => [node.id, node]));
       expandedIds = new Set();
       dirtyIds = new Set();
       const selected = current();
@@ -407,7 +456,7 @@
       const pending = catalog.nodes.filter(item => !removed.has(item.id) && dirtyIds.has(item.id));
       catalog = updated;
       persistedIds = new Set(updated.nodes.map(item => item.id));
-      persistedNodes = new Map(updated.nodes.map(item => [item.id, structuredClone(item)]));
+      persistedNodes = new Map(structuredClone(updated.nodes).map(item => [item.id, item]));
       pending.forEach(draft => {
         const index = catalog.nodes.findIndex(item => item.id === draft.id);
         if (index < 0) catalog.nodes.push(draft);
@@ -415,6 +464,7 @@
         if (previousBases.has(draft.id)) persistedNodes.set(draft.id, previousBases.get(draft.id));
         else persistedNodes.delete(draft.id);
       });
+      indexCatalog();
       removed.forEach(id => { dirtyIds.delete(id); expandedIds.delete(id); });
       photoEditor.remove(removed);
       researchDraft = null; researchNodeId = '';
@@ -435,6 +485,7 @@
     const removed = new Set([node.id]);
     catalog.nodes.forEach(item => { if (ancestors(item.id).has(node.id)) removed.add(item.id); });
     catalog.nodes = catalog.nodes.filter(item => !removed.has(item.id));
+    indexCatalog();
     removed.forEach(id => dirtyIds.delete(id));
     select(catalog.nodes.some(item => item.id === activeCountryId && item.active) ? activeCountryId : firstCountryId());
     status('未保存节点及下级已删除');
@@ -480,7 +531,7 @@
       const pending = new Map(catalog.nodes.filter(item => item.id !== savedId && dirtyIds.has(item.id)).map(item => [item.id, item]));
       catalog = updated;
       persistedIds = new Set(updated.nodes.map(item => item.id));
-      persistedNodes = new Map(updated.nodes.map(item => [item.id, structuredClone(item)]));
+      persistedNodes = new Map(structuredClone(updated.nodes).map(item => [item.id, item]));
       pending.forEach((draft, id) => {
         const index = catalog.nodes.findIndex(item => item.id === id);
         if (index < 0) catalog.nodes.push(draft);
@@ -488,6 +539,7 @@
         if (previousBases.has(id)) persistedNodes.set(id, previousBases.get(id));
         else persistedNodes.delete(id);
       });
+      indexCatalog();
       dirtyIds.delete(savedId);
       select(savedId);
       status('当前节点已保存，客户端下次刷新目录时会读取新版本');

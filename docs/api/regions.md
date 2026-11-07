@@ -53,6 +53,8 @@
 | `POST /admin/api/regions/photos/pixabay/search` | 操作 | JSON `{query,page}`；关键词1至100字，页码1至167，每页最多3张真实横版照片，返回 `{query,page,has_more,candidates:[{id,preview_url,source_url,author,tags}]}`；ID为字符串 |
 | `POST /admin/api/regions/:node_id/photos/pixabay/import` | 操作 | JSON `{query,page,id}`；仅接收24小时有效查询缓存中的候选ID，服务端下载API原始地址并等比缩至960×720以内落盘，返回 `{photo}`，不保存节点或改变目录版本 |
 
+后台完整目录响应（读取、完整保存、单节点保存和删除国家）在客户端接受 gzip 且正文至少 1KiB、压缩有效时使用 `Content-Encoding: gzip`，JSON字段和版本语义保持一致；始终返回 `Cache-Control: no-store` 与 `Vary: Accept-Encoding`，不进入公共静态资源缓存。城市树按节点ID和父节点建立内存索引，同级排序在目录更新或名称变化时重算；同一国家内切换已展开节点只更新选中状态，简介、口号等非树字段输入不重建树。
+
 图片落盘到 `static/regions/<region_id>/<随机ID>.<jpg|png|webp>`，客户端资源地址为需业务JWT的 `/api/v1/static/regions/*`；后台预览改写为 `/admin/api/static/regions/*`，仅允许地区查看权限或管理员读取。上传走地区操作权限与既有同源/审计中间件，不新增图片表，MySQL/Mongo/内存均使用既有目录JSON存储。
 
 省份和城市的图片区统一叫“宣传图片”。已保存节点支持多选后自动上传，每次最多并行两张，真实进度与上传失败重试显示在图片遮罩，右上圆圈叉移除并取消在途请求。每张成功后自动通过图片PUT接口保存关联，无需点击“保存当前节点”；删除、排序自动保存，说明在失焦后保存。新节点先保存基本信息再开放上传和Pixabay查询。每节点最多20张，保存中显示状态，失败保留本地修改并可重试；切换节点保留失败草稿，关闭页面不弹浏览器离站确认。
