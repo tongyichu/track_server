@@ -248,7 +248,7 @@
   var activeDetailUserID = '', userDetailRequest = 0, userDetailController = null;
   var profileReady = false, profileSaving = false, overviewLoading = false, permissionLoadedFor = '';
   var restriction = null, restrictionReady = false, restrictionBusy = false, restrictionMode = '';
-  var backgroundURL = '';
+  var backgroundURL = '', backgroundTimer = null;
   var background = document.getElementById('userDetailBackground');
   var backgroundHint = document.getElementById('userBackgroundPlaceholder');
   var backgroundRetry = document.getElementById('userBackgroundRetry');
@@ -261,7 +261,7 @@
     userDetailRequest++;
     if (userDetailController) userDetailController.abort();
     AdminUserPermissions.cancel();
-    background.removeAttribute('src'); backgroundURL = '';
+    cancelBackground(); backgroundURL = '';
   });
   detailRoot.addEventListener('hidden.bs.modal', function () { activeDetailUserID = ''; profileReady = false; });
   function locationText(user) {
@@ -279,20 +279,37 @@
   }
   detailForm.elements.birthday.addEventListener('input', function () { renderBirthday(); });
   detailForm.elements.birthday.addEventListener('change', function () { renderBirthday(); });
+  function cancelBackground() {
+    clearTimeout(backgroundTimer); backgroundTimer = null;
+    background.onload = null; background.onerror = null;
+    background.removeAttribute('src');
+  }
   function loadBackground() {
+    cancelBackground();
     background.hidden = true; backgroundHint.hidden = false; backgroundRetry.hidden = true;
     backgroundHint.textContent = backgroundURL ? '正在加载背景图…' : '未设置背景图';
-    background.removeAttribute('src');
-    if (backgroundURL) background.src = backgroundURL;
-  }
-  background.addEventListener('load', function () {
-    if (!backgroundURL || !background.currentSrc.endsWith(backgroundURL)) return;
-    background.hidden = false; backgroundHint.hidden = true; backgroundRetry.hidden = true;
-  });
-  background.addEventListener('error', function () {
     if (!backgroundURL) return;
-    background.hidden = true; backgroundHint.textContent = '背景图加载失败'; backgroundHint.hidden = false; backgroundRetry.hidden = false;
-  });
+    var userID = activeDetailUserID, request = userDetailRequest, settled = false;
+    // Each attempt owns its element, so a canceled request cannot finish a later user's load.
+    var image = document.createElement('img');
+    image.id = 'userDetailBackground'; image.alt = '用户背景图'; image.hidden = true;
+    background.replaceWith(image); background = image;
+    function finish(success, timedOut) {
+      if (settled || background !== image || !currentDetail(userID, request)) return;
+      settled = true;
+      clearTimeout(backgroundTimer); backgroundTimer = null;
+      image.onload = null; image.onerror = null;
+      image.hidden = !success; backgroundHint.hidden = success; backgroundRetry.hidden = success;
+      if (!success) {
+        image.removeAttribute('src');
+        backgroundHint.textContent = timedOut ? '背景图加载超时，请重试' : '背景图加载失败';
+      }
+    }
+    image.onload = function () { finish(image.naturalWidth > 0, false); };
+    image.onerror = function () { finish(false, false); };
+    backgroundTimer = setTimeout(function () { finish(false, true); }, 30000);
+    image.src = backgroundURL;
+  }
   backgroundRetry.addEventListener('click', loadBackground);
   document.getElementById('userDetailAvatar').addEventListener('load', function () {
     if (!activeDetailUserID || userDetailController.signal.aborted || !this.getAttribute('src')) return;
