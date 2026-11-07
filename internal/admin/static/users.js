@@ -9,17 +9,10 @@
   function fmtTime(s) {
     return esc((s || '').replace('T', ' ').slice(0, 19));
   }
-  function restrictionText(r) {
-    if (!r) return '<span class="badge bg-green-lt text-green">正常</span>';
-    var until = r.expires_at ? ('至 ' + fmtTime(r.expires_at)) : '永久';
-    return '<span class="badge bg-red-lt text-red">已限制</span><br><span class="hint">' + esc(until) + '</span><br><span class="hint">' + esc(r.reason || '') + '</span>';
-  }
   function genderText(value) {
     return value === 'male' ? '男' : (value === 'female' ? '女' : '-');
   }
-  function zodiacText(value) {
-    return distributionLabels[value] || '-';
-  }
+
 
   var distributionLabels = {
     male: '男', female: '女', unknown: '未知', aries: '白羊座', taurus: '金牛座', gemini: '双子座',
@@ -66,11 +59,6 @@
     if (!userCharts[chartID]) userCharts[chartID] = echarts.init(root);
     userCharts[chartID].setOption(AdminChartStyle.bars(rows, total, { unit: '人', showPercent: true }), true);
   }
-  function domesticProvinceCode(cityCode) {
-    var code = String(cityCode || '');
-    var prefixes = ['11','12','13','14','15','21','22','23','31','32','33','34','35','36','37','41','42','43','44','45','46','50','51','52','53','54','61','62','63','64','65','71','81','82'];
-    return /^\d{6}$/.test(code) && prefixes.indexOf(code.slice(0, 2)) >= 0 ? code.slice(0, 2) + '0000' : '';
-  }
   function chooseDefaultProvince() {
     if (selectedProvinceCode) return;
     var bestCode = '', bestTotal = -1;
@@ -87,7 +75,7 @@
     var cities = province ? province.items.slice().sort(function (a, b) { return number(b.count) - number(a.count); }) : [];
     var topCities = cities.slice(0, 10), max = Math.max(1, ...topCities.map(function (item) { return number(item.count); }));
     document.getElementById('userCityStats').innerHTML = topCities.map(function (item) {
-      var label = item.label || item.key || '未知';
+      var label = item.name || '未知';
       var count = number(item.count);
       return '<div class="admin-distribution-row"><span title="' + esc(label) + '">' + esc(label) + '</span><div class="admin-distribution-track"><i style="width:' + Math.round(count * 100 / max) + '%"></i></div><strong>' + count.toLocaleString() + '</strong></div>';
     }).join('') || '<span class="hint">该省暂无用户城市数据</span>';
@@ -161,9 +149,11 @@
     provinceStats = Object.create(null);
     var foreignTotal = 0, foreignCities = 0, unknownTotal = 0;
     (items || []).forEach(function (item) {
-      var key = String(item.key || ''), count = number(item.count), provinceCode = domesticProvinceCode(key);
-      if (key === 'unknown' || !key) { unknownTotal += count; return; }
-      if (!provinceCode) { foreignTotal += count; foreignCities++; return; }
+      var count = number(item.count), countryCode = item.country_code, provinceCode = item.province_map_code;
+      if (!item.region_id || !countryCode) { unknownTotal += count; return; }
+      if (countryCode !== 'CN') { foreignTotal += count; foreignCities++; return; }
+      if (!provinceCode) { unknownTotal += count; return; }
+      provinceNames[provinceCode] = item.province_name;
       if (!provinceStats[provinceCode]) provinceStats[provinceCode] = { total: 0, items: [] };
       provinceStats[provinceCode].total += count;
       provinceStats[provinceCode].items.push(item);
@@ -251,145 +241,220 @@
   var pageHint = document.getElementById('pageHint');
   var totalHint = document.getElementById('totalHint');
 
-  var detailModal = new tabler.Modal(document.getElementById('userDetailModal'), { backdrop: 'static' });
-  var detailForm = document.getElementById('userDetailForm');
-  var detailSave = document.getElementById('userDetailSave');
-  var activeDetailUserID = 0, userDetailRequest = 0, userDetailController = null;
-  document.getElementById('userDetailModal').addEventListener('hide.bs.modal', function () {
+  var detailRoot = document.getElementById('userDetailModal');
+  var detailModal = new tabler.Modal(detailRoot, { backdrop: 'static' });
+  var detailForm = document.getElementById('userDetailForm'), detailSave = document.getElementById('userDetailSave');
+  var profileFields = document.getElementById('userProfileFields');
+  var activeDetailUserID = '', userDetailRequest = 0, userDetailController = null;
+  var profileReady = false, profileSaving = false, overviewLoading = false, permissionLoadedFor = '';
+  var restriction = null, restrictionReady = false, restrictionBusy = false, restrictionMode = '';
+  var backgroundURL = '';
+  var background = document.getElementById('userDetailBackground');
+  var backgroundHint = document.getElementById('userBackgroundPlaceholder');
+  var backgroundRetry = document.getElementById('userBackgroundRetry');
+  var restrictionAction = document.getElementById('userRestrictionAction');
+  var restrictionConfirm = document.getElementById('userRestrictionConfirm');
+  var restrictionEditor = document.getElementById('userRestrictionEditor');
+  var restrictionError = document.getElementById('userRestrictionError');
+  function currentDetail(userID, request) { return userID === activeDetailUserID && request === userDetailRequest; }
+  detailRoot.addEventListener('hide.bs.modal', function () {
     userDetailRequest++;
     if (userDetailController) userDetailController.abort();
     AdminUserPermissions.cancel();
+    background.removeAttribute('src'); backgroundURL = '';
   });
-  document.getElementById('userDetailModal').addEventListener('hidden.bs.modal', function () {
-    activeDetailUserID = 0;
-    AdminUserPermissions.cancel();
-  });
-
+  detailRoot.addEventListener('hidden.bs.modal', function () { activeDetailUserID = ''; profileReady = false; });
   function locationText(user) {
-    var province = String(user.province_name || '').trim();
-    var city = String(user.city_name || '').trim();
-    if (province && city && province !== city) return province + ' · ' + city;
-    return city || province || '-';
+    var province = String(user.province_name || '').trim(), city = String(user.city_name || '').trim();
+    return province && city && province !== city ? province + ' · ' + city : city || province || '-';
   }
-
+  async function userJSON(path, options) {
+    var response = await fetch('/admin/api/users/' + path, options);
+    var payload = await response.json().catch(function () { return {}; });
+    if (!response.ok) throw new Error(payload.error || '请求失败：' + response.status);
+    return payload.data;
+  }
+  function renderBirthday(serverCode) {
+    AdminUserZodiac.render(document.getElementById('userDetailZodiac'), detailForm.elements.birthday.value, serverCode);
+  }
+  detailForm.elements.birthday.addEventListener('input', function () { renderBirthday(); });
+  detailForm.elements.birthday.addEventListener('change', function () { renderBirthday(); });
+  function loadBackground() {
+    background.hidden = true; backgroundHint.hidden = false; backgroundRetry.hidden = true;
+    backgroundHint.textContent = backgroundURL ? '正在加载背景图…' : '未设置背景图';
+    background.removeAttribute('src');
+    if (backgroundURL) background.src = backgroundURL;
+  }
+  background.addEventListener('load', function () {
+    if (!backgroundURL || !background.currentSrc.endsWith(backgroundURL)) return;
+    background.hidden = false; backgroundHint.hidden = true; backgroundRetry.hidden = true;
+  });
+  background.addEventListener('error', function () {
+    if (!backgroundURL) return;
+    background.hidden = true; backgroundHint.textContent = '背景图加载失败'; backgroundHint.hidden = false; backgroundRetry.hidden = false;
+  });
+  backgroundRetry.addEventListener('click', loadBackground);
+  document.getElementById('userDetailAvatar').addEventListener('load', function () {
+    if (!activeDetailUserID || userDetailController.signal.aborted || !this.getAttribute('src')) return;
+    this.hidden = false; document.getElementById('userDetailAvatarPlaceholder').hidden = true;
+  });
+  document.getElementById('userDetailAvatar').addEventListener('error', function () {
+    this.hidden = true; this.removeAttribute('src'); document.getElementById('userDetailAvatarPlaceholder').hidden = false;
+  });
+  async function loadOverview(userID, request, signal) {
+    if (overviewLoading) return;
+    overviewLoading = true; document.getElementById('userOverviewError').hidden = true;
+    try {
+      var overview = await userJSON(encodeURIComponent(userID) + '/overview', { signal: signal });
+      if (!currentDetail(userID, request)) return;
+      [['userFollowingCount','following_count'],['userFollowerCount','follower_count'],['userReceivedLikeCount','received_like_count']].forEach(function (field) {
+        document.getElementById(field[0]).textContent = Number(overview[field[1]]).toLocaleString();
+      });
+      var level = document.getElementById('userDetailLevel');
+      level.textContent = 'Lv.' + overview.level.level + ' · ' + overview.level.name; level.hidden = false;
+    } catch (error) {
+      if (currentDetail(userID, request) && !signal.aborted) document.getElementById('userOverviewError').hidden = false;
+    } finally { if (currentDetail(userID, request)) overviewLoading = false; }
+  }
+  document.getElementById('userOverviewRetry').addEventListener('click', function () {
+    if (activeDetailUserID && userDetailController) loadOverview(activeDetailUserID, userDetailRequest, userDetailController.signal);
+  });
+  function renderRestriction() {
+    var badge = document.getElementById('userRestrictionStatus'), info = document.getElementById('userRestrictionInfo');
+    badge.textContent = restrictionReady ? (restriction ? '已限制' : '正常') : '未知';
+    badge.className = 'badge ' + (restrictionReady ? (restriction ? 'bg-red-lt' : 'bg-green-lt') : 'bg-secondary-lt');
+    info.textContent = restrictionReady ? (restriction ? (restriction.reason || '未填写原因') + '\n' + (restriction.expires_at ? '至 ' + fmtTime(restriction.expires_at) : '永久限制') + (restriction.operator ? '\n操作人：' + restriction.operator : '') : '') : '暂时无法读取限制状态。';
+    restrictionAction.textContent = restriction ? '解除限制' : '限制账号';
+    restrictionAction.classList.toggle('btn-outline-secondary', !!restriction);
+    restrictionAction.classList.toggle('btn-outline-danger', !restriction);
+    restrictionAction.disabled = !profileReady || !restrictionReady || restrictionBusy || profileSaving || !AdminAccess.can('users', true);
+    detailForm.elements.is_internal.disabled = !profileReady || profileSaving || !AdminAccess.can('users', true);
+    restrictionConfirm.disabled = restrictionBusy || profileSaving;
+    document.getElementById('userRestrictionCancel').disabled = restrictionBusy;
+    document.getElementById('userRestrictionReason').disabled = restrictionBusy || !AdminAccess.can('users', true);
+    document.getElementById('userRestrictionDays').disabled = restrictionBusy || !AdminAccess.can('users', true);
+  }
+  async function loadRestriction(userID, request, signal) {
+    document.getElementById('userRestrictionRetry').hidden = true;
+    try {
+      var response = await fetch('/admin/api/users/' + encodeURIComponent(userID) + '/restrictions/current', { signal: signal });
+      var payload = await response.json().catch(function () { return {}; });
+      if (response.status !== 404 && !response.ok) throw new Error(payload.error || '读取失败');
+      if (!currentDetail(userID, request)) return;
+      restriction = response.status === 404 ? null : payload.data; restrictionReady = true;
+    } catch (error) {
+      if (!currentDetail(userID, request) || signal.aborted) return;
+      restrictionReady = false; document.getElementById('userRestrictionRetry').hidden = false;
+    }
+    if (currentDetail(userID, request)) renderRestriction();
+  }
+  document.getElementById('userRestrictionRetry').addEventListener('click', function () {
+    if (activeDetailUserID && userDetailController) loadRestriction(activeDetailUserID, userDetailRequest, userDetailController.signal);
+  });
+  restrictionAction.addEventListener('click', function () {
+    if (!restrictionReady || !profileReady || restrictionBusy || profileSaving || !AdminAccess.can('users', true)) return;
+    restrictionMode = restriction ? 'revoke' : 'create'; restrictionEditor.hidden = false; restrictionAction.hidden = true; restrictionError.textContent = '';
+    document.getElementById('userRestrictionCreateFields').hidden = restrictionMode !== 'create';
+    document.getElementById('userRestrictionConfirmText').hidden = restrictionMode !== 'revoke';
+    document.getElementById('userRestrictionReason').value = '违规上传内容'; document.getElementById('userRestrictionDays').value = '7';
+    restrictionConfirm.textContent = restrictionMode === 'create' ? '确认限制' : '确认解除';
+    restrictionConfirm.classList.toggle('btn-danger', restrictionMode === 'create');
+    restrictionConfirm.classList.toggle('btn-primary', restrictionMode !== 'create');
+  });
+  document.getElementById('userRestrictionCancel').addEventListener('click', function () {
+    if (restrictionBusy) return;
+    restrictionEditor.hidden = true; restrictionAction.hidden = false; restrictionMode = ''; restrictionError.textContent = '';
+  });
+  restrictionConfirm.addEventListener('click', async function () {
+    if (!restrictionMode || !profileReady || restrictionBusy || profileSaving || !AdminAccess.can('users', true)) return;
+    var userID = activeDetailUserID, request = userDetailRequest, payload;
+    var signal = userDetailController.signal, create = restrictionMode === 'create';
+    if (create) {
+      var reason = document.getElementById('userRestrictionReason').value.trim();
+      var daysRaw = document.getElementById('userRestrictionDays').value.trim(), days = Number(daysRaw);
+      if (!reason || Array.from(reason).length > 500) { restrictionError.textContent = '请填写 1–500 字的限制原因'; return; }
+      if (daysRaw && (!Number.isSafeInteger(days) || days <= 0 || !Number.isFinite(Date.now() + days * 86400000) || Date.now() + days * 86400000 > 8640000000000000)) { restrictionError.textContent = '限制天数须为大于 0 的有效整数'; return; }
+      payload = { reason: reason };
+      if (daysRaw) payload.expires_at = new Date(Date.now() + days * 86400000).toISOString();
+    }
+    restrictionBusy = true; restrictionError.textContent = ''; detailSave.disabled = true; renderRestriction();
+    try {
+      await userJSON(encodeURIComponent(userID) + (create ? '/restrictions' : '/restrictions/current'), {
+        method: create ? 'POST' : 'DELETE', signal: signal,
+        headers: create ? { 'Content-Type': 'application/json' } : {}, body: create ? JSON.stringify(payload) : undefined
+      });
+      if (!currentDetail(userID, request)) return;
+      restrictionEditor.hidden = true; restrictionAction.hidden = false; restrictionMode = '';
+      AdminUI.alert(create ? '账号限制已生效' : '账号限制已解除', 'success');
+      await loadRestriction(userID, request, signal);
+    } catch (error) {
+      if (currentDetail(userID, request) && !signal.aborted) restrictionError.textContent = error.message;
+    } finally {
+      if (currentDetail(userID, request)) { restrictionBusy = false; detailSave.disabled = !profileReady; renderRestriction(); }
+    }
+  });
+  document.getElementById('userPermissionSection').addEventListener('toggle', function () {
+    if (this.open && activeDetailUserID && permissionLoadedFor !== activeDetailUserID) {
+      permissionLoadedFor = activeDetailUserID; AdminUserPermissions.load(activeDetailUserID);
+    }
+  });
   function openUserDetail(userID) {
     return AdminUI.runOnce('user-detail', function () { return loadUserDetail(userID); });
   }
   async function loadUserDetail(userID) {
-    if (activeDetailUserID === userID && document.getElementById('userDetailModal').classList.contains('show')) return;
+    if (activeDetailUserID === userID && detailRoot.classList.contains('show')) return;
     var request = ++userDetailRequest;
     if (userDetailController) userDetailController.abort();
-    userDetailController = new AbortController();
-    detailForm.reset();
-    activeDetailUserID = userID;
-    AdminUserPermissions.load(userID);
-    detailSave.disabled = true;
+    var controller = userDetailController = new AbortController();
+    activeDetailUserID = userID; profileReady = false; profileSaving = false; overviewLoading = false; permissionLoadedFor = '';
+    restriction = null; restrictionReady = false; restrictionBusy = false; restrictionMode = '';
+    detailForm.reset(); profileFields.disabled = true; detailSave.disabled = true; detailSave.textContent = '保存资料';
     document.getElementById('userDetailName').textContent = '加载中…';
-    document.getElementById('userDetailMeta').textContent = '';
-    document.getElementById('userDetailAvatar').removeAttribute('src');
-    detailModal.show();
+    document.getElementById('userDetailMeta').textContent = ''; document.getElementById('userDetailID').textContent = 'ID ' + userID;
+    document.getElementById('userDetailAvatar').removeAttribute('src'); document.getElementById('userDetailLevel').hidden = true;
+    document.getElementById('userDetailAvatar').hidden = true; document.getElementById('userDetailAvatarPlaceholder').hidden = false;
+    ['userFollowingCount','userFollowerCount','userReceivedLikeCount'].forEach(function (id) { document.getElementById(id).textContent = '—'; });
+    document.getElementById('userPermissionSection').open = false; document.getElementById('userPermissionSnapshots').replaceChildren();
+    restrictionEditor.hidden = true; restrictionAction.hidden = false; restrictionError.textContent = '';
+    renderRestriction(); document.getElementById('userRestrictionStatus').textContent = '读取中';
+    backgroundURL = ''; loadBackground(); renderBirthday(); detailModal.show();
+    loadOverview(userID, request, controller.signal); loadRestriction(userID, request, controller.signal);
     try {
-      var response = await fetch('/admin/api/users/' + encodeURIComponent(userID), { signal: userDetailController.signal });
-      if (!response.ok) throw new Error(await response.text());
-      var user = (await response.json()).data || {};
-      if (request !== userDetailRequest || activeDetailUserID !== userID) return;
-      detailForm.elements.nickname.value = user.nickname || '';
-      detailForm.elements.phone.value = user.phone || '';
-      detailForm.elements.gender.value = user.gender || '';
-      detailForm.elements.birthday.value = user.birthday || '';
-      detailForm.elements.birthday.max = new Date().toISOString().slice(0, 10);
-      detailForm.elements.signature.value = user.signature || '';
+      var user = await userJSON(encodeURIComponent(userID), { signal: controller.signal });
+      if (!currentDetail(userID, request)) return;
+      detailForm.elements.nickname.value = user.nickname || ''; detailForm.elements.phone.value = user.phone || '';
+      detailForm.elements.gender.value = user.gender || ''; detailForm.elements.birthday.value = user.birthday || '';
+      detailForm.elements.birthday.max = AdminUserZodiac.today(); detailForm.elements.signature.value = user.signature || '';
       detailForm.elements.is_internal.checked = !!user.is_internal;
       document.getElementById('userDetailLocation').value = locationText(user);
       document.getElementById('userDetailName').textContent = user.nickname || '未设置昵称';
-      document.getElementById('userDetailMeta').textContent = '注册：' + fmtTime(user.created_at) + '　更新：' + fmtTime(user.updated_at);
+      document.getElementById('userDetailMeta').textContent = '注册  ' + fmtTime(user.created_at) + '\n更新  ' + fmtTime(user.updated_at);
       if (user.avatar_url) document.getElementById('userDetailAvatar').src = user.avatar_url;
-      detailSave.disabled = false;
+      backgroundURL = user.background_url || ''; loadBackground(); renderBirthday(user.zodiac_sign);
+      profileReady = true; profileFields.disabled = false; detailSave.disabled = false; renderRestriction();
     } catch (error) {
-      if (request !== userDetailRequest || activeDetailUserID !== userID) return;
-      detailModal.hide();
-      AdminUI.alert('读取用户资料失败: ' + error.message, 'danger');
+      if (!currentDetail(userID, request) || controller.signal.aborted) return;
+      detailModal.hide(); AdminUI.alert('读取用户资料失败: ' + error.message, 'danger');
     }
   }
-
   detailForm.addEventListener('submit', async function (event) {
     event.preventDefault();
-    if (!activeDetailUserID || detailSave.disabled || !detailForm.reportValidity()) return;
-    detailSave.disabled = true;
-    var payload = {
-      nickname: detailForm.elements.nickname.value.trim(),
-      phone: detailForm.elements.phone.value.trim(),
-      gender: detailForm.elements.gender.value,
-      birthday: detailForm.elements.birthday.value,
-      signature: detailForm.elements.signature.value,
-      is_internal: detailForm.elements.is_internal.checked
-    };
+    if (!profileReady || profileSaving || restrictionBusy || !AdminAccess.can('users', true) || !detailForm.reportValidity()) return;
+    var userID = activeDetailUserID, request = userDetailRequest;
+    profileSaving = true; profileFields.disabled = true; detailSave.disabled = true; detailSave.textContent = '保存中…'; renderRestriction();
+    var payload = { nickname: detailForm.elements.nickname.value.trim(), gender: detailForm.elements.gender.value,
+      birthday: detailForm.elements.birthday.value, signature: detailForm.elements.signature.value, is_internal: detailForm.elements.is_internal.checked };
     try {
-      var response = await fetch('/admin/api/users/' + encodeURIComponent(activeDetailUserID), {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
-      });
-      if (!response.ok) throw new Error(await response.text());
-      detailModal.hide();
+      await userJSON(encodeURIComponent(userID), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      if (currentDetail(userID, request)) detailModal.hide();
       AdminUI.alert('用户资料已保存', 'success');
-      loadPage();
-    } catch (error) {
-      AdminUI.alert('保存失败: ' + error.message, 'danger');
-      detailSave.disabled = false;
-    }
+      loadPage().catch(function () { AdminUI.alert('资料已保存，列表刷新失败，请手动刷新', 'warning'); });
+    } catch (error) { AdminUI.alert('保存失败: ' + error.message, 'danger'); }
+    finally { if (currentDetail(userID, request)) { profileSaving = false; profileFields.disabled = !profileReady; detailSave.disabled = !profileReady; detailSave.textContent = '保存资料'; renderRestriction(); } }
   });
-
-  tbody.addEventListener('click', function (ev) {
-    var btn = ev.target.closest('[data-action="detail"]');
-    if (!btn) return;
-    openUserDetail(btn.dataset.userId);
-  });
-
-  tbody.addEventListener('change', async function (ev) {
-    var input = ev.target;
-    if (!input.dataset || input.dataset.action !== 'restriction') return;
-    var userID = input.dataset.userId;
-    var restrict = input.checked;
-    input.disabled = true;
-    if (restrict) {
-      var values = await AdminUI.form({
-        title: '限制用户 #' + userID,
-        confirmText: '确认限制',
-        fields: [
-          { name: 'reason', label: '限制原因', value: '违规上传内容', required: true, maxLength: 500 },
-          { name: 'days', label: '限制天数', value: '7', type: 'number', min: 1, placeholder: '留空表示永久' }
-        ]
-      });
-      if (!values) { input.checked = false; input.disabled = false; return; }
-      var daysRaw = values.days.trim();
-      var payload = { reason: values.reason.trim() };
-      if (daysRaw) {
-        var days = Number(daysRaw);
-        if (!isFinite(days) || days <= 0) {
-          AdminUI.alert('限制天数必须大于 0', 'danger');
-          input.checked = false; input.disabled = false; return;
-        }
-        payload.expires_at = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
-      }
-      var response = await fetch('/admin/api/users/' + encodeURIComponent(userID) + '/restrictions', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
-      });
-      if (!response.ok) {
-        AdminUI.alert('限制失败: ' + await response.text(), 'danger');
-        input.checked = false; input.disabled = false; return;
-      }
-      AdminUI.alert('账号限制已生效', 'success');
-      loadPage();
-      return;
-    }
-    var confirmed = await AdminUI.confirm({ title: '解除账号限制', message: '确定解除用户 #' + userID + ' 当前的账号限制？', confirmText: '解除限制' });
-    if (!confirmed) { input.checked = true; input.disabled = false; return; }
-    var revokeResponse = await fetch('/admin/api/users/' + encodeURIComponent(userID) + '/restrictions/current', { method: 'DELETE' });
-    if (!revokeResponse.ok) {
-      AdminUI.alert('解除失败: ' + await revokeResponse.text(), 'danger');
-      input.checked = true; input.disabled = false; return;
-    }
-    AdminUI.alert('账号限制已解除', 'success');
-    loadPage();
+  tbody.addEventListener('click', function (event) {
+    var button = event.target.closest('[data-action="detail"]');
+    if (button) openUserDetail(button.dataset.userId);
   });
 
   refreshBtn.addEventListener('click', function () {
@@ -434,7 +499,7 @@
     }
     var resp = await fetch('/admin/api/users?' + params.toString());
     if (!resp.ok) {
-      tbody.innerHTML = '<tr><td colspan="8">加载失败: ' + resp.status + '</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6">加载失败: ' + resp.status + '</td></tr>';
       return;
     }
     var data = ((await resp.json()).data) || {};
@@ -449,15 +514,12 @@
         : '<span class="admin-user-avatar admin-user-avatar-empty" aria-hidden="true">👤</span>';
       avatar = '<span class="admin-user-avatar-wrap">' + avatar + (it.is_internal ? '<span class="admin-user-inner-badge">inner</span>' : '') + '</span>';
       var tr = document.createElement('tr');
-      tr.innerHTML = '<td><div class="admin-user-identity">' + avatar + '<span>' + esc(it.nickname) + '</span></div></td>' +
+      tr.innerHTML = '<td><div class="admin-user-identity">' + avatar + '<span class="admin-user-name"><span>' + esc(it.nickname) + '</span>' + (Number.isInteger(it.level) && it.level > 0 ? '<span class="admin-user-level">Lv.' + it.level + '</span>' : '') + '</span></div></td>' +
         '<td>' + esc(it.phone || '') + '</td>' +
         '<td>' + esc(genderText(it.gender)) + '</td>' +
-        '<td>' + esc(zodiacText(it.zodiac_sign)) + '</td>' +
         '<td><span class="admin-user-city-cell">' + esc(locationText(it)) + '</span></td>' +
-        '<td>' + restrictionText(it.account_restriction) + '</td>' +
         '<td>' + (it.last_login_at ? fmtTime(it.last_login_at) : '—') + '</td>' +
-        '<td><div class="admin-user-actions"><button data-action="detail" data-user-id="' + esc(it.id) + '">查看详情</button>' +
-        '<label data-admin-write="users" class="form-switch admin-user-restriction-switch"><input type="checkbox" data-action="restriction" data-user-id="' + esc(it.id) + '"' + (it.account_restriction ? ' checked' : '') + '><span>限制</span></label></div></td>';
+        '<td><div class="admin-user-actions"><button data-action="detail" data-user-id="' + esc(it.id) + '">查看详情</button>' + '</div></td>';
       tbody.appendChild(tr);
     });
 

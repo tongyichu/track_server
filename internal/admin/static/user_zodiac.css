@@ -1,0 +1,24 @@
+.admin-user-zodiac[data-zodiac="aries"] { color: #B6383D; background: #FCEBED; }
+.admin-user-zodiac[data-zodiac="taurus"] { color: #286745; background: #E8F4EC; }
+.admin-user-zodiac[data-zodiac="gemini"] { color: #806000; background: #FBF2D9; }
+.admin-user-zodiac[data-zodiac="cancer"] { color: #52687F; background: #EAF0F6; }
+.admin-user-zodiac[data-zodiac="leo"] { color: #935600; background: #FFF0D9; }
+.admin-user-zodiac[data-zodiac="virgo"] { color: #606C2A; background: #F0F3E3; }
+.admin-user-zodiac[data-zodiac="libra"] { color: #A13C6B; background: #FBEAF2; }
+.admin-user-zodiac[data-zodiac="scorpio"] { color: #665171; background: #F0EBF3; }
+.admin-user-zodiac[data-zodiac="sagittarius"] { color: #7340A1; background: #F2EAF9; }
+.admin-user-zodiac[data-zodiac="capricorn"] { color: #6C5C50; background: #F0ECE7; }
+.admin-user-zodiac[data-zodiac="aquarius"] { color: #2465A3; background: #E8F1FB; }
+.admin-user-zodiac[data-zodiac="pisces"] { color: #227565; background: #E4F4EF; }
+[data-bs-theme="dark"] .admin-user-zodiac[data-zodiac="aries"], .theme-dark .admin-user-zodiac[data-zodiac="aries"], [data-theme="dark"] .admin-user-zodiac[data-zodiac="aries"] { color: #F59B9F; background: #3E252A; }
+[data-bs-theme="dark"] .admin-user-zodiac[data-zodiac="taurus"], .theme-dark .admin-user-zodiac[data-zodiac="taurus"], [data-theme="dark"] .admin-user-zodiac[data-zodiac="taurus"] { color: #88C99F; background: #20382A; }
+[data-bs-theme="dark"] .admin-user-zodiac[data-zodiac="gemini"], .theme-dark .admin-user-zodiac[data-zodiac="gemini"], [data-theme="dark"] .admin-user-zodiac[data-zodiac="gemini"] { color: #E4C666; background: #3A3220; }
+[data-bs-theme="dark"] .admin-user-zodiac[data-zodiac="cancer"], .theme-dark .admin-user-zodiac[data-zodiac="cancer"], [data-theme="dark"] .admin-user-zodiac[data-zodiac="cancer"] { color: #B4C7DB; background: #293340; }
+[data-bs-theme="dark"] .admin-user-zodiac[data-zodiac="leo"], .theme-dark .admin-user-zodiac[data-zodiac="leo"], [data-theme="dark"] .admin-user-zodiac[data-zodiac="leo"] { color: #F1BC6D; background: #40301F; }
+[data-bs-theme="dark"] .admin-user-zodiac[data-zodiac="virgo"], .theme-dark .admin-user-zodiac[data-zodiac="virgo"], [data-theme="dark"] .admin-user-zodiac[data-zodiac="virgo"] { color: #BEC98A; background: #303620; }
+[data-bs-theme="dark"] .admin-user-zodiac[data-zodiac="libra"], .theme-dark .admin-user-zodiac[data-zodiac="libra"], [data-theme="dark"] .admin-user-zodiac[data-zodiac="libra"] { color: #ECA4C3; background: #402738; }
+[data-bs-theme="dark"] .admin-user-zodiac[data-zodiac="scorpio"], .theme-dark .admin-user-zodiac[data-zodiac="scorpio"], [data-theme="dark"] .admin-user-zodiac[data-zodiac="scorpio"] { color: #C2AECF; background: #352D3D; }
+[data-bs-theme="dark"] .admin-user-zodiac[data-zodiac="sagittarius"], .theme-dark .admin-user-zodiac[data-zodiac="sagittarius"], [data-theme="dark"] .admin-user-zodiac[data-zodiac="sagittarius"] { color: #C6A4EE; background: #352744; }
+[data-bs-theme="dark"] .admin-user-zodiac[data-zodiac="capricorn"], .theme-dark .admin-user-zodiac[data-zodiac="capricorn"], [data-theme="dark"] .admin-user-zodiac[data-zodiac="capricorn"] { color: #CBB8A8; background: #352E29; }
+[data-bs-theme="dark"] .admin-user-zodiac[data-zodiac="aquarius"], .theme-dark .admin-user-zodiac[data-zodiac="aquarius"], [data-theme="dark"] .admin-user-zodiac[data-zodiac="aquarius"] { color: #96C4F1; background: #213448; }
+[data-bs-theme="dark"] .admin-user-zodiac[data-zodiac="pisces"], .theme-dark .admin-user-zodiac[data-zodiac="pisces"], [data-theme="dark"] .admin-user-zodiac[data-zodiac="pisces"] { color: #88D1BD; background: #1E3832; }

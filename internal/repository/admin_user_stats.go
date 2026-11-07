@@ -101,7 +101,10 @@ func buildAdminUserDistributionStats(total int64, genderCounts, birthdayCounts, 
 		}
 		return items
 	}
-	cityItems := distributionItems(cityCounts, 0)
+	cityItems := make([]models.AdminUserCityDistributionItem, 0, len(cityCounts))
+	for _, item := range distributionItems(cityCounts, 0) {
+		cityItems = append(cityItems, models.AdminUserCityDistributionItem{RegionID: item.Key, Count: item.Count})
+	}
 	return &models.AdminUserDistributionStats{
 		TotalUsers:  total,
 		Gender:      toItems(gender, []string{"male", "female", "unknown"}),

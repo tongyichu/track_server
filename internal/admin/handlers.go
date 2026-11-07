@@ -812,15 +812,9 @@ func (h *Handler) GetAdminUserStatistics(ctx context.Context, c *app.RequestCont
 		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
 		return
 	}
-	for i := range statistics.UserCities {
-		if statistics.UserCities[i].Key != "unknown" {
-			statistics.UserCities[i].Label = config.CityNameByCode(statistics.UserCities[i].Key)
-			if statistics.UserCities[i].Label == "" {
-				statistics.UserCities[i].Label = statistics.UserCities[i].Key
-			}
-		} else {
-			statistics.UserCities[i].Label = "未知城市"
-		}
+	if err := h.resolveUserCityStatistics(ctx, statistics); err != nil {
+		c.JSON(http.StatusServiceUnavailable, utils.H{"error": "用户城市归属暂不可用，请重试"})
+		return
 	}
 	c.JSON(http.StatusOK, utils.H{"code": 0, "data": statistics})
 }
@@ -1156,6 +1150,14 @@ func (h *Handler) ListUsers(ctx context.Context, c *app.RequestContext) {
 			return
 		}
 	}
+	levels := map[int64]models.AchievementLevel{}
+	if h.userSvc != nil && len(userIDs) > 0 {
+		if values, levelErr := h.userSvc.GetUserLevels(ctx, userIDs); levelErr == nil {
+			levels = values
+		} else {
+			log.Printf("admin user list levels unavailable")
+		}
+	}
 	// 与业务接口口径保持一致：把 OSS 上的 avatar_url 改写为服务器本地缓存地址
 	// （/api/v1/static/avatars/...），未配置头像的用户回退到默认头像。
 	h.decorateAdminUserAvatars(ctx, items)
@@ -1166,27 +1168,20 @@ func (h *Handler) ListUsers(ctx context.Context, c *app.RequestContext) {
 			lastLoginAt = value
 		}
 		row := utils.H{
-			"id":                  strconv.FormatInt(u.ID, 10),
-			"nickname":            u.Nickname,
-			"avatar_url":          u.AvatarURL,
-			"gender":              u.Gender,
-			"zodiac_sign":         service.ZodiacSignFromBirthday(u.Birthday),
-			"province_name":       u.ProvinceName,
-			"city_name":           u.CityName,
-			"is_internal":         u.IsInternal,
-			"phone":               u.Phone,
-			"created_at":          u.CreatedAt,
-			"last_login_at":       lastLoginAt,
-			"account_restriction": nil,
+			"id":            strconv.FormatInt(u.ID, 10),
+			"nickname":      u.Nickname,
+			"avatar_url":    u.AvatarURL,
+			"gender":        u.Gender,
+			"province_name": u.ProvinceName,
+			"city_name":     u.CityName,
+			"is_internal":   u.IsInternal,
+			"phone":         u.Phone,
+			"created_at":    u.CreatedAt,
+			"last_login_at": lastLoginAt,
 		}
-		if h.restrictionSvc != nil {
-			restriction, err := h.restrictionSvc.FindActive(ctx, u.ID)
-			if err == nil {
-				row["account_restriction"] = restriction
-			} else if !errors.Is(err, repository.ErrNotFound) {
-				c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
-				return
-			}
+		row["level"] = nil
+		if level, ok := levels[u.ID]; ok {
+			row["level"] = level.Level
 		}
 		rows = append(rows, row)
 	}

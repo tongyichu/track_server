@@ -26,7 +26,7 @@
 | GET | `/admin/api/me` | 公开 | 返回当前会话；未登录返回 401 |
 | GET | `/admin/api/releases` | 鉴权 | 列出发布记录，支持 `platform` / `status` 过滤 |
 | GET | `/admin/api/dashboard` | 鉴权 | 业务库即时统计；`period=day|week|month`，返回同进度上周期对比、用户转化、审核/反馈效率、内容质量、互动、同行与日趋势 |
-| GET | `/admin/api/users/statistics` | 鉴权 | 用户总数、性别/星座/年龄分布、`track_output` 云端轨迹产出分层和 `user_cities` 用户资料所在城市分布；每个用户只计入当前设置的一个城市，未设置计入未知城市 |
+| GET | `/admin/api/users/statistics` | 用户查看 | 用户总数、性别/星座/年龄分布、`track_output` 云端轨迹产出分层；`user_cities` 返回规范化 `region_id/name/country_code/province_id/province_name/province_map_code/count`，按目录合并新旧城市编码，每人只计入一个城市，未知编码归入未知；见 [地域统计](api/admin-regions.md#用户地域统计) |
 | GET | `/admin/api/companions/statistics` | 鉴权 | 同行会话当前活跃数、所选周期创建/结束/自动结束数、平均参与人数 |
 | GET | `/admin/api/companions/usage-statistics` | 鉴权 | days=1/7/30，创建与结束趋势、按本周期创建房间统计的实际参与人数分布 |
 | GET | `/admin/api/route-groups/statistics` | 鉴权 | 全量 active 路线组中心点、覆盖城市和成员轨迹数分布，不受列表类型/城市筛选及 100 条上限影响 |
@@ -37,9 +37,11 @@
 | GET | `/admin/api/releases/upload-token` | 鉴权 | 旧 OSS 直传 STS 凭证接口，前端不再使用 |
 | GET | `/admin/api/releases/client-statistics` | 鉴权 | 客户端活跃统计：`days=7|30`，版本/机型/系统版本分布、按日版本活跃趋势与最新发布版本渗透概况（含低于强升线设备数） |
 | GET | `/admin/api/static/*filepath` | 鉴权 | 后台静态资源代理，从 `<LogDir>/static/` 读取头像等资源；后台页面不要直接访问需业务 JWT 的 `/api/v1/static/*` |
-| GET | `/admin/api/users` | 鉴权 | 用户列表，支持 `title` 昵称模糊搜索、`is_internal` / `province_code` / `city_code` / `gender` / `zodiac_sign` / `restricted` 组合筛选及 cursor 翻页；所有条件参与总数统计，返回按当前页批量统计的 `last_login_at` |
-| GET | `/admin/api/users/:user_id` | 鉴权 | 用户资料详情，包含头像、签名、性别、生日、手机号、内部人员标识和最近确认所在地 |
-| PUT | `/admin/api/users/:user_id` | 鉴权 | 编辑用户昵称、签名、性别、生日、手机号和 `is_internal`；不修改所在地、头像、背景或账号关系 |
+| GET | `/admin/api/users` | 用户查看 | 用户列表，支持 `title` 昵称模糊搜索、`is_internal` / `province_code` / `city_code` / `gender` / `zodiac_sign` / `restricted` 组合筛选及 cursor 翻页；所有条件参与总数统计，按当前页批量补 `last_login_at` 与 `level`，行不再返回星座/限制详情 |
+| GET | `/admin/api/users/:user_id` | 用户查看 | 用户资料、生日派生星座、只读手机号/所在地及受保护背景图入口；见 [资料协议](api/admin-users.md) |
+| PUT | `/admin/api/users/:user_id` | 用户操作 | 编辑昵称、签名、性别、生日与 `is_internal`；显式提交手机号返回400 |
+| GET | `/admin/api/users/:user_id/overview` | 用户查看 | 独立读取关注数、粉丝数、获赞数与完整级别，使用原有规则，不结算奖励 |
+| GET | `/admin/api/users/:user_id/background` | 用户查看 | 代理读取该用户已设置的背景图，不下发原始 OSS URL，不允许指定任意图片源 |
 | PUT | `/admin/api/users/:user_id/internal` | 鉴权 | 仅更新 `is_internal` 内部人员标识；普通资料更新保留该字段 |
 | GET | `/admin/api/users/:user_id/restrictions/current` | 鉴权 | 查询当前账号限制；无生效限制返回 404 |
 | POST | `/admin/api/users/:user_id/restrictions` | 鉴权 | 创建账号限制；`expires_at` 为空表示永久，操作人取 admin session 用户名 |

@@ -6,6 +6,8 @@
   <title>时光轨迹 - 控制台</title>
   <link rel="stylesheet" href="/admin/static/vendor/tabler.min.css" />
   <link rel="stylesheet" href="/admin/static/style.css" />
+  <link rel="stylesheet" href="/admin/static/users.css" />
+  <link rel="stylesheet" href="/admin/static/user_zodiac.css" />
 </head>
 <body>
   <header class="topbar">
@@ -71,8 +73,7 @@
       <table class="data admin-user-table">
         <thead>
           <tr>
-            <th>用户</th><th>手机号</th><th>性别</th><th>星座</th><th>所在城市</th>
-            <th>账号限制</th><th>上次登录</th><th>操作</th>
+            <th>用户</th><th>手机号</th><th>性别</th><th>所在城市</th><th>上次登录</th><th>操作</th>
           </tr>
         </thead>
         <tbody id="userList"></tbody>
@@ -80,38 +81,79 @@
     </section>
   </main>
 
-  <div class="modal modal-blur fade" id="userDetailModal" tabindex="-1" aria-hidden="true" aria-labelledby="userDetailTitle">
-    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg" role="document">
-      <form class="modal-content" id="userDetailForm" data-admin-fields="users">
+  <div class="modal modal-blur fade admin-user-detail" id="userDetailModal" tabindex="-1" aria-hidden="true" aria-labelledby="userDetailTitle">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-xl" role="document">
+      <div class="modal-content">
         <div class="modal-header">
           <h2 class="modal-title" id="userDetailTitle">用户资料</h2>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
         </div>
         <div class="modal-body">
-          <div class="admin-user-detail-head">
-            <img id="userDetailAvatar" class="admin-user-detail-avatar" data-no-preview alt="用户头像" />
-            <div><h3 id="userDetailName">加载中…</h3><div class="hint" id="userDetailMeta"></div></div>
+          <div class="admin-user-cover">
+            <img id="userDetailBackground" alt="用户背景图" hidden />
+            <span id="userBackgroundPlaceholder">未设置背景图</span>
+            <button type="button" id="userBackgroundRetry" class="btn btn-sm btn-outline-secondary" hidden>重试背景图</button>
           </div>
-          <div class="admin-dialog-form admin-user-detail-grid">
-            <label class="form-label">昵称<input class="form-control" name="nickname" maxlength="20" required /></label>
-            <label class="form-label">手机号<input class="form-control" name="phone" maxlength="32" /></label>
-            <label class="form-label">性别<select class="form-select" name="gender"><option value="">未设置</option><option value="male">男</option><option value="female">女</option></select></label>
-            <label class="form-label">生日<input class="form-control" name="birthday" type="date" min="1900-01-01" /></label>
-            <label class="form-label full">所在城市<input class="form-control" id="userDetailLocation" readonly /></label>
-            <label class="form-label full">个人签名<textarea class="form-control" name="signature" maxlength="100" rows="3"></textarea></label>
-            <label class="form-switch admin-user-detail-internal full"><input class="form-check-input" type="checkbox" name="is_internal"><span>内部人员</span></label>
+          <div class="admin-user-profile-head">
+            <img id="userDetailAvatar" class="admin-user-profile-avatar" data-no-preview alt="用户头像" hidden />
+            <span id="userDetailAvatarPlaceholder" class="admin-user-profile-avatar admin-user-avatar-empty" aria-label="用户头像"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/></svg></span>
+            <div class="admin-user-profile-identity">
+              <div class="admin-user-profile-title"><h3 id="userDetailName">加载中…</h3><span id="userDetailLevel" class="admin-user-level" hidden></span></div>
+              <div class="admin-user-profile-id" id="userDetailID"></div>
+            </div>
+            <div class="admin-user-profile-counts" aria-label="互动数据">
+              <div><strong id="userFollowingCount">—</strong><span>关注</span></div>
+              <div><strong id="userFollowerCount">—</strong><span>粉丝</span></div>
+              <div><strong id="userReceivedLikeCount">—</strong><span>获赞</span></div>
+            </div>
           </div>
-          <section class="mt-3 border rounded p-3" aria-label="设备权限">
-            <h3>设备权限</h3>
-            <p class="hint">按安装实例分别展示最近快照，非实时状态；每天首次打开、登录或升级后上报。重装应用会显示为新设备记录。</p>
-            <div id="userPermissionSnapshots" aria-live="polite"></div>
-          </section>
+          <div id="userOverviewError" class="admin-user-inline-error" hidden><span>互动数据与级别加载失败</span><button type="button" id="userOverviewRetry" class="btn btn-sm btn-link">重试</button></div>
+          <div class="admin-user-detail-columns">
+            <section class="admin-user-detail-section">
+              <h3>基本资料</h3>
+              <form id="userDetailForm" data-admin-fields="users">
+                <fieldset id="userProfileFields" disabled>
+                  <div class="admin-dialog-form admin-user-profile-fields">
+                    <label class="form-label">昵称<input class="form-control" name="nickname" maxlength="20" required /></label>
+                    <label class="form-label">手机号<input class="form-control" name="phone" readonly aria-readonly="true" /></label>
+                    <label class="form-label">性别<select class="form-select" name="gender"><option value="">未设置</option><option value="male">男</option><option value="female">女</option></select></label>
+                    <label class="form-label">生日<span class="admin-user-birthday-control"><input name="birthday" type="date" min="1900-01-01" /><span id="userDetailZodiac" class="admin-user-zodiac" aria-live="polite" hidden></span></span></label>
+                    <label class="form-label full">所在城市<input class="form-control" id="userDetailLocation" readonly /></label>
+                    <label class="form-label full">个人签名<textarea class="form-control" name="signature" maxlength="100" rows="3"></textarea></label>
+                  </div>
+                </fieldset>
+              </form>
+            </section>
+            <aside class="admin-user-detail-aside">
+            <section class="admin-user-detail-section admin-user-account-section" data-admin-fields="users">
+              <div class="admin-user-section-title"><h3>账号管理</h3><span id="userRestrictionStatus" class="badge bg-secondary-lt">读取中</span></div>
+              <div id="userRestrictionInfo" class="admin-user-restriction-info"></div>
+              <button type="button" id="userRestrictionAction" class="btn btn-sm btn-outline-danger" data-admin-write="users" disabled>限制账号</button>
+              <button type="button" id="userRestrictionRetry" class="btn btn-sm btn-link" hidden>重新读取</button>
+              <div id="userRestrictionEditor" class="admin-user-restriction-editor" hidden>
+                <div id="userRestrictionCreateFields">
+                  <label class="form-label">限制原因<textarea id="userRestrictionReason" class="form-control" maxlength="500" rows="3"></textarea></label>
+                  <label class="form-label">限制天数<input id="userRestrictionDays" class="form-control" type="number" min="1" step="1" placeholder="留空表示永久" /></label>
+                </div>
+                <p id="userRestrictionConfirmText" hidden>确认解除该账号当前的限制？</p>
+                <div class="d-flex gap-2"><button type="button" id="userRestrictionConfirm" class="btn btn-sm btn-danger" data-admin-write="users">确认限制</button><button type="button" id="userRestrictionCancel" class="btn btn-sm btn-outline-secondary">取消</button></div>
+              </div>
+              <p id="userRestrictionError" class="text-danger mt-2 mb-0" role="status"></p>
+              <label class="form-switch admin-user-profile-internal"><input class="form-check-input" type="checkbox" name="is_internal" form="userDetailForm" disabled><span>内部人员</span></label>
+              <div id="userDetailMeta" class="admin-user-profile-meta"></div>
+            </section>
+          <details id="userPermissionSection" class="admin-user-permission-section">
+            <summary>设备权限<span>最近上报的设备快照</span></summary>
+            <div class="admin-user-permission-content"><p class="hint">按安装实例展示最近快照，非实时状态。</p><div id="userPermissionSnapshots" aria-live="polite"></div></div>
+          </details>
+            </aside>
+          </div>
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button>
-          <button type="submit" class="btn btn-primary" id="userDetailSave" data-admin-write="users">保存</button>
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">关闭</button>
+          <button type="submit" form="userDetailForm" class="btn btn-primary" id="userDetailSave" data-admin-write="users">保存资料</button>
         </div>
-      </form>
+      </div>
     </div>
   </div>
 
@@ -121,6 +163,7 @@
 
   <script src="/admin/static/user_permissions.js"></script>
   <script src="/admin/static/admin_chart_style.js"></script>
+  <script src="/admin/static/user_zodiac.js"></script>
   <script src="/admin/static/users.js"></script>
 </body>
 </html>

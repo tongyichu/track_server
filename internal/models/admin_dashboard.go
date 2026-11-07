@@ -121,12 +121,23 @@ type AdminDashboardCompanionStats struct {
 	AvgParticipants float64                  `json:"avg_participants"`
 }
 
+// AdminUserCityDistributionItem describes a normalized catalog city and its map projection.
+type AdminUserCityDistributionItem struct {
+	RegionID        string `json:"region_id"`
+	Name            string `json:"name"`
+	CountryCode     string `json:"country_code,omitempty"`
+	ProvinceID      string `json:"province_id,omitempty"`
+	ProvinceName    string `json:"province_name,omitempty"`
+	ProvinceMapCode string `json:"province_map_code,omitempty"`
+	Count           int64  `json:"count"`
+}
+
 // AdminUserDistributionStats contains read-only user profile and track output aggregates.
 type AdminUserDistributionStats struct {
 	TotalUsers  int64                            `json:"total_users"`
 	Gender      []AdminDashboardDistributionItem `json:"gender"`
 	Zodiac      []AdminDashboardDistributionItem `json:"zodiac"`
-	UserCities  []AdminDashboardDistributionItem `json:"user_cities"`
+	UserCities  []AdminUserCityDistributionItem  `json:"user_cities"`
 	Age         []AdminDashboardDistributionItem `json:"age"`
 	TrackOutput []AdminDashboardDistributionItem `json:"track_output"`
 }

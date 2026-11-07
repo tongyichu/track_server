@@ -1,0 +1,65 @@
+.admin-user-table { min-width: 860px; }
+.admin-user-name { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.admin-user-name > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admin-user-level { display: inline-flex; align-items: center; flex-shrink: 0; padding: 3px 7px; border-radius: 5px; background: rgba(var(--tblr-primary-rgb), .1); color: var(--tblr-link-color); font-size: 11px; font-weight: 600; line-height: 1.3; white-space: nowrap; }
+.admin-user-detail .modal-dialog { max-width: 1000px; }
+.admin-user-detail .modal-body { padding: 18px; }
+.admin-user-detail .modal-header, .admin-user-detail .modal-footer { padding: 14px 18px; }
+.admin-user-cover { display: flex; position: relative; align-items: center; justify-content: center; gap: 8px; height: 160px; border-radius: 10px; overflow: hidden; background: var(--tblr-bg-surface-secondary); color: var(--tblr-secondary-color); font-size: 12px; }
+.admin-user-cover > img { width: 100%; height: 100%; object-fit: cover; cursor: zoom-in; }
+.admin-user-profile-head { position: relative; display: flex; align-items: center; gap: 14px; margin: -25px 16px 20px; padding-top: 0; }
+.admin-user-profile-avatar { width: 78px; height: 78px; flex: 0 0 78px; border: 4px solid var(--tblr-bg-surface); border-radius: 50%; background: var(--tblr-bg-surface-secondary); object-fit: cover; }
+.admin-user-profile-identity { min-width: 0; padding-top: 25px; flex: 1; }
+.admin-user-profile-title { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.admin-user-profile-title h3 { margin: 0; font-size: 18px; line-height: 1.4; overflow-wrap: anywhere; }
+.admin-user-profile-id { margin-top: 5px; font-size: 11px; color: var(--tblr-secondary-color); overflow-wrap: anywhere; }
+.admin-user-profile-counts { display: flex; flex-shrink: 0; gap: 24px; padding-top: 25px; }
+.admin-user-profile-counts > div { display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 44px; }
+.admin-user-profile-counts strong { font-size: 22px; font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.admin-user-profile-counts span { font-size: 11px; color: var(--tblr-secondary-color); }
+.admin-user-inline-error { display: flex; align-items: center; justify-content: flex-end; margin: -8px 0 12px; font-size: 12px; color: var(--tblr-secondary-color); }
+.admin-user-detail-columns { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(240px, 1fr); gap: 16px; align-items: start; }
+.admin-user-detail-aside { min-width: 0; }
+.admin-user-detail-section { min-width: 0; padding: 18px; border: 1px solid var(--tblr-border-color); border-radius: 9px; }
+.admin-user-detail-section h3 { margin: 0 0 16px; font-size: 13px; font-weight: 600; }
+.admin-user-detail-section fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+.admin-user-profile-fields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 15px 12px; }
+.admin-user-profile-fields .form-label { min-width: 0; margin: 0; font-size: 12px; }
+.admin-user-profile-fields .form-control, .admin-user-profile-fields .form-select { margin-top: 6px; font-size: 13px; }
+.admin-user-profile-fields input[readonly] { color: var(--tblr-secondary-color); background: var(--tblr-bg-surface-secondary); }
+.admin-user-profile-internal { display: flex; align-items: center; gap: 7px; margin: 1px 0 0; font-size: 12px; }
+.admin-user-account-section .admin-user-profile-internal { margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--tblr-border-color); }
+.admin-user-birthday-control { display: flex; align-items: center; gap: 5px; min-height: 38px; margin-top: 6px; padding: 5px 7px; border: 1px solid var(--tblr-border-color); border-radius: var(--tblr-border-radius); background: var(--tblr-bg-forms, var(--tblr-bg-surface)); }
+.admin-user-birthday-control:focus-within { border-color: var(--tblr-primary); box-shadow: 0 0 0 .2rem rgba(var(--tblr-primary-rgb),.15); }
+.admin-user-birthday-control > input { width: 100%; min-width: 0; flex: 1; border: 0; background: transparent; color: inherit; padding: 0; outline: none; font: inherit; font-size: 12px; }
+.admin-user-zodiac { display: inline-flex; align-items: center; flex-shrink: 0; gap: 4px; padding: 4px 6px; border-radius: 4px; font-size: 11px; line-height: 1.2; white-space: nowrap; }
+.admin-user-zodiac svg { width: 14px; height: 14px; flex: 0 0 14px; }
+.admin-user-section-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 14px; }
+.admin-user-section-title h3 { margin: 0; }
+.admin-user-restriction-info { margin-bottom: 14px; color: var(--tblr-secondary-color); font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; white-space: pre-line; }
+.admin-user-restriction-info:empty { display: none; }
+.admin-user-restriction-editor { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--tblr-border-color); }
+.admin-user-restriction-editor .form-label { font-size: 12px; margin-bottom: 12px; }
+.admin-user-profile-meta { margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--tblr-border-color); color: var(--tblr-secondary-color); font-size: 11px; line-height: 1.9; white-space: pre-line; }
+.admin-user-permission-section { margin-top: 16px; border: 1px solid var(--tblr-border-color); border-radius: 9px; }
+.admin-user-permission-section > summary { padding: 14px 18px; cursor: pointer; font-size: 13px; font-weight: 600; }
+.admin-user-permission-section > summary span { margin-left: 10px; font-size: 11px; color: var(--tblr-secondary-color); font-weight: 400; }
+.admin-user-detail-aside .admin-user-permission-section > summary span { display: block; margin: 4px 0 0 14px; }
+.admin-user-permission-content { padding: 0 18px 18px; }
+.admin-user-detail [hidden] { display: none !important; }
+@media (max-width: 767px) {
+  .admin-user-detail .modal-body { padding: 14px; }
+  .admin-user-detail .modal-header, .admin-user-detail .modal-footer { padding: 12px 14px; }
+  .admin-user-cover { height: 132px; }
+  .admin-user-profile-head { flex-wrap: wrap; gap: 10px; margin-left: 8px; margin-right: 8px; }
+  .admin-user-profile-avatar { width: 66px; height: 66px; flex-basis: 66px; }
+  .admin-user-profile-title h3 { font-size: 16px; }
+  .admin-user-profile-counts { width: 100%; justify-content: space-around; padding: 10px 0 0; }
+  .admin-user-profile-counts > div { flex: 1; }
+  .admin-user-profile-counts strong { font-size: 20px; }
+  .admin-user-detail-columns { grid-template-columns: minmax(0,1fr); gap: 12px; }
+  .admin-user-detail-section { padding: 14px; }
+  .admin-user-profile-fields { grid-template-columns: minmax(0,1fr); }
+  .admin-user-permission-section > summary { padding: 14px; }
+  .admin-user-permission-content { padding: 0 14px 14px; }
+}

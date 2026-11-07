@@ -47,6 +47,7 @@ func requestPermission(c *app.RequestContext) (string, bool) {
 	case "accounts", "audit-logs":
 		return "accounts", write
 	case "users":
+		// Profile overview and its protected background image share users read permission.
 		return "users", write
 	// Asset GETs use tracks read permission; AI label POSTs require write permission and consume quota.
 	case "tracks", "place-candidates":

@@ -36,7 +36,7 @@
 
 - 一个独立登录的 Web 控制台（HTML/CSS/JS 经 `go:embed` 内置）；
 - 围绕 `AppRelease` 的发布、列表、删除接口；
-- 发布管理页顶部的客户端活跃统计区（紧凑布局）：活跃设备数、最新版本渗透、低于强升线设备数三张概况卡，以及版本活跃趋势（堆叠面积）、版本分布（饼图）、机型/系统版本 Top 10（条形图），支持近 7/30 天切换与统一刷新；数据来自升级检查与登录上报的 `app_client_devices` / `app_client_active_daily`，经 `AdminAssets.loadCharts()` 异步加载 ECharts，不阻塞发布列表首屏；
+- 发布管理页顶部的客户端活跃统计区（紧凑布局）：活跃设备数、最新版本渗透、低于强升线设备数三张概况卡，以及版本活跃趋势（堆叠面积）、版本分布（饼图）、机型/系统版本 Top 10（条形图），支持近 7/30 天切换与统一刷新；版本标签只展示版本名，同名的不同构建在饼图与逐日趋势中合并计数，缺失版本名显示“未知”；概况区也不展示内部版本号，强升线判定仍使用原有数值规则。数据来自升级检查与登录上报的 `app_client_devices` / `app_client_active_daily`，经 `AdminAssets.loadCharts()` 异步加载 ECharts，不阻塞发布列表首屏；
 - 上传 Android APK 到服务端本地静态目录的接口；发布表单固定 Android，版本名和版本号由包解析结果自动填充；
 - 通过后台会话代理读取服务端静态资源（如用户头像），避免复用业务 JWT；
 - 查看和处理用户意见反馈（含图片预览、状态更新、用户可见反馈意见）。
@@ -169,7 +169,7 @@ GET /admin/api/users
 ```
 未落盘的内置默认头像（`default_avatars/girl_01.png` 等）由后台静态代理返回简单 SVG 兜底；正式视觉素材仍应放入 `<LogDir>/static/default_avatars/`。
 
-用户管理概况位于用户列表上方，不单独展示用户总数卡片；桌面采用紧凑三列，左侧性别、星座两个 ECharts 饼图上下排列，中间为用户所在省份地图，右侧上下展示年龄分布和轨迹产出分层柱状图。页面使用 `/admin/api/users/statistics` 一次读取性别、生日星座、`age` 年龄、`track_output` 云端轨迹产出分层和 `user_cities` 用户资料所在城市分布；MySQL、Mongo、内存仓储均直接按 `users.city_code` 计数，不再使用轨迹记录，每个用户只计入当前设置的一个城市，未设置计入未知城市。城市按省份汇总后通过内置 `static/china_provinces.json` 和 ECharts 矢量地图展示，不加载高德 JS 或地图 Key，也不显示颜色深浅图例。地图采用白色背景与浅蓝到深蓝配色，图表和地图保留内侧留白；过滤 `100000_JD` 南海诸岛元素，不展示南海附图；主图使用 `boundingCoords=[[73,54],[136,17]]` 限制中国主体经纬度范围并垂直居中放大，避免顶部裁切和南部空白，不展示辅助说明文字。省份上显示人数，超过一万用 `w` 缩写；点击省份更新地图下方该省城市用户数 Top 10，海外城市和未知城市的小统计也位于地图下方。统计区右上角“刷新数据”统一重新读取全部顶部统计，保留仍有数据的已选省份；加载时禁用按钮，失败保留上次数据并提示。用户列表头像和昵称合并为“用户”列，头像为圆形；不展示创建时间，改展示性别、服务端按生日派生的星座和最近确认城市。内部人员开关移到详情弹窗，与其他资料一起通过 `PUT /admin/api/users/:user_id` 保存；列表单元格垂直居中，内部用户头像右下角显示 `inner` 标签，不再占用独立列。操作区使用“查看详情 + 限制开关”，开关取消或失败恢复原状态。详情弹窗通过 `GET /admin/api/users/:user_id` 读取资料及内部标识，所在地只读，昵称、签名、性别、生日、手机号和内部人员状态可编辑并保存，保存后刷新当前页。用户列表和详情接口的 `id` 一律以 JSON 字符串下发，避免 int64 用户 ID 被 JavaScript Number 截断后请求错误用户。用户列表的上次登录时间按当前页 user_id 批量查询 `login_log` 的最大 `created_at`，不得用用户资料 `updated_at` 代替；Mongo 登录日志未实现时返回无登录记录。
+用户管理概况位于用户列表上方，不单独展示用户总数卡片；桌面采用紧凑三列，左侧性别、星座两个 ECharts 饼图上下排列，中间为用户所在省份地图，右侧上下展示年龄分布和轨迹产出分层柱状图。页面使用 `/admin/api/users/statistics` 一次读取性别、生日星座、`age` 年龄、`track_output` 云端轨迹产出分层和 `user_cities` 用户资料所在城市分布；MySQL、Mongo、内存仓储均直接按 `users.city_code` 计数，不再使用轨迹记录，每个用户只计入当前设置的一个城市，未设置计入未知城市。后台 `handlers.go` 经 `user_city_statistics.go` 读取一次地区目录，将新旧城市编码合并为统一 `region_id`，`user_cities` 返回专用城市项（内部编号、名称、国家、省份内部编号/名称及省份地图编号），空值或无法识别的编码合并为未知；前端只将明确非 CN 的地区计为海外，不根据编码格式推断。城市按服务端给出的省份地图编号汇总后通过内置 `static/china_provinces.json` 和 ECharts 矢量地图展示，不加载高德 JS 或地图 Key，也不显示颜色深浅图例。地图采用白色背景与浅蓝到深蓝配色，图表和地图保留内侧留白；过滤 `100000_JD` 南海诸岛元素，不展示南海附图；主图使用 `boundingCoords=[[73,54],[136,17]]` 限制中国主体经纬度范围并垂直居中放大，避免顶部裁切和南部空白，不展示辅助说明文字。省份上显示人数，超过一万用 `w` 缩写；点击省份更新地图下方该省城市用户数 Top 10，海外城市和未知城市的小统计也位于地图下方。统计区右上角“刷新数据”统一重新读取全部顶部统计，保留仍有数据的已选省份；加载时禁用按钮，失败保留上次数据并提示。用户列表仅展示用户、手机号、性别、城市、上次登录与详情入口，昵称旁显示不带级别名的 `Lv.N`，内部人员角标保留；星座和限制操作集中在详情。列表按当前页批量流式读取级别所需轨迹字段（`repository/achievement_tracks.go` 三实现），通过 `service/user_profile_overview.go` 复用原 XP/资格/等级规则，不逐用户查轨迹、不结算奖励。详情采用顶部背景/身份/互动数据、左侧基本资料、右侧账号管理和折叠设备权限的布局；昵称、签名、性别、生日与内部人员可保存，手机号和所在地只读，后台拒绝手机号字段。生日输入框内即时显示星座图标标签，使用客户端 MingCute 图形与日夜配色。互动数和级别通过 `/users/:user_id/overview` 独立加载，背景经 `/users/:user_id/background` 鉴权代理，设备权限首次展开才读取；辅助失败可重试，不阻断基础资料。限制区使用既有 GET/POST/DELETE，在当前详情内展开并显式确认，独立于资料保存。协议见 [后台用户资料与级别](api/admin-users.md)。用户列表和详情接口的 `id` 一律以 JSON 字符串下发，避免 int64 用户 ID 被 JavaScript Number 截断后请求错误用户。用户列表的上次登录时间按当前页 user_id 批量查询 `login_log` 的最大 `created_at`，不得用用户资料 `updated_at` 代替；Mongo 登录日志未实现时返回无登录记录。
 
 年龄以服务端当地日期计算周岁，分为 18 岁以下、18–24、25–34、35–44、45–54、55 岁及以上和未知；1900 年以前、未来或无法解析的生日归入未知。轨迹产出按全量现存用户的有效已完成云端轨迹数分为 0、1、2–5、6–20、21 条及以上，包含公开和私密轨迹，排除软删除、进行中、原始文件地址为空及已无所属用户的轨迹；本地未上传记录不计入。MySQL、Mongo、内存仓储保持同口径，生日使用完整日期分组后统一派生年龄和星座，轨迹在仓储层聚合，不逐用户查询；不新增表或客户端协议。顶部统计沿用全量用户口径，不随下方列表筛选变化。
 
@@ -177,14 +177,14 @@ GET /admin/api/users
 
 ```text
 [admin UI] /admin/users.html
-  → GET /admin/api/users 拉取用户列表与当前 account_restriction
+  → 打开用户详情后 GET /admin/api/users/:user_id/restrictions/current 读取生效限制（404表示无）
   → POST /admin/api/users/:user_id/restrictions {reason, expires_at?}
        → AccountRestrictionService.Create
        → 先撤销该用户现有未过期 active 限制，再写入 user_account_restrictions
   → DELETE /admin/api/users/:user_id/restrictions/current
        → AccountRestrictionService.RevokeActive
 ```
-限制生效后由业务 `/api/v1` 侧 `AccountRestrictionMiddleware` 拦截；admin 页面只负责运营写入和解除。
+限制创建/解除在用户详情账号管理区内展开并显式确认，不另弹资料框，也不提交基本资料草稿。限制生效后由业务 `/api/v1` 侧 `AccountRestrictionMiddleware` 拦截；admin 页面只负责运营写入和解除。
 
 ### 处理意见反馈
 
@@ -313,7 +313,7 @@ Kimi 景点简介使用 `MOONSHOT_API_KEY` 和可选的 `KIMI_SCENIC_DESCRIPTION
 
 ## 用户设备权限
 
-- `permission_snapshot.go` 提供用户详情的设备快照读取，路由 `/users/:user_id/permission-snapshots` 归属 users 读取权限。`static/user_permissions.js` 独立异步加载，关闭/切用户取消旧请求；按安装实例显示机型、版本、采集和收到时间，非实时状态。已开启绿色、未开启红色、未知/不适用灰色，普通系统权限折叠；未知项用 textContent 安全显示，禁止把无上报视为关闭。
+- `permission_snapshot.go` 提供用户详情的设备快照读取，路由 `/users/:user_id/permission-snapshots` 归属 users 读取权限。`static/user_permissions.js` 在设备权限首次展开时独立异步加载，关闭/切用户取消旧请求；按安装实例显示机型、版本、采集和收到时间，非实时状态。已开启绿色、未开启红色、未知/不适用灰色，普通系统权限折叠；未知项用 textContent 安全显示，禁止把无上报视为关闭。
 ## 标签管理入口补充
 
 共享 track_editor.js 展示统一 labels 和 label_generation，提供 AI 形象建议及人工 shape_label 输入。POST /admin/api/tracks/:track_id/labels/generate 属 tracks 写权限，复用 TrackNarrativeService 租约和日预算，只填表不落库，保存仍用原 PUT。关闭弹窗取消请求，异步结果不覆盖后来输入。精品、运动、景点沿用原权威来源，不接受独立 labels 写入。实现见 track_labels.go 和 service/track_narrative_admin.go。

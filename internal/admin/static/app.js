@@ -390,12 +390,7 @@
   }
 
   function csVersionLabel(item) {
-    if (item.label && item.label !== '未知' && item.version_code > 0) {
-      return item.label + ' (' + item.version_code + ')';
-    }
-    if (item.label && item.label !== '未知') return item.label;
-    if (item.version_code > 0) return 'Build ' + item.version_code;
-    return '未知';
+    return String(item.version_name || item.label || '').trim() || '未知';
   }
 
   function csTopWithOther(items, limit) {
@@ -422,9 +417,12 @@
   }
 
   function csRenderCharts(data) {
-    const versionItems = (data.version_distribution || []).map(function (it) {
-      return { name: csVersionLabel(it), value: it.devices };
+    const versionTotals = new Map();
+    (data.version_distribution || []).forEach(function (it) {
+      const name = csVersionLabel(it);
+      versionTotals.set(name, (versionTotals.get(name) || 0) + (it.devices || 0));
     });
+    const versionItems = Array.from(versionTotals, function (entry) { return { name: entry[0], value: entry[1] }; });
     const versionChart = csChart('csVersionChart');
     if (versionChart) {
       versionChart.setOption({
@@ -445,13 +443,13 @@
     const trendChart = csChart('csTrendChart');
     if (trendChart) {
       const dates = [];
-      const seriesMap = {};
+      const seriesMap = Object.create(null);
       (data.daily_trend || []).forEach(function (day) {
         dates.push(day.date);
         (day.versions || []).forEach(function (v) {
           const name = csVersionLabel(v);
-          if (!seriesMap[name]) seriesMap[name] = {};
-          seriesMap[name][day.date] = v.devices;
+          if (!seriesMap[name]) seriesMap[name] = Object.create(null);
+          seriesMap[name][day.date] = (seriesMap[name][day.date] || 0) + (v.devices || 0);
         });
       });
       const series = Object.keys(seriesMap).map(function (name) {
@@ -491,9 +489,9 @@
       if (latest) {
         document.getElementById('csLatestDevices').textContent = latest.active_devices + ' 台';
         document.getElementById('csLatestNote').textContent =
-          latest.version_name + ' (' + latest.version_code + ') · 占比 ' + latest.share_percent + '%';
+          csVersionLabel(latest) + ' · 占比 ' + latest.share_percent + '%';
         document.getElementById('csBelowMin').textContent = latest.below_min_supported + ' 台';
-        document.getElementById('csBelowMinNote').textContent = '版本号低于 ' + latest.min_supported_version_code;
+        document.getElementById('csBelowMinNote').textContent = latest.min_supported_version_code > 0 ? '需更新至支持版本' : '暂无强升线';
       } else {
         document.getElementById('csLatestDevices').textContent = '—';
         document.getElementById('csLatestNote').textContent = '暂无已发布版本';

@@ -16,6 +16,11 @@
 | 当前城市精品/景区/图形路线（城市、标签、运动类型筛选后分页） | GET | `/track/discover/routes` | 是 | [track.md](track.md#发现页与年度活动图表) |
 | 上报设备权限快照 | PUT | `/user/permission-snapshot` | 是 | [permission-snapshots.md](permission-snapshots.md) |
 | 后台查看用户设备权限 | GET | `/admin/api/users/:user_id/permission-snapshots` | 后台 users 读取权限 | [permission-snapshots.md](permission-snapshots.md) |
+| 后台用户画像与规范化城市归属统计 | GET | `/admin/api/users/statistics` | 后台 users 读取权限 | [用户地域统计](admin-regions.md#用户地域统计) |
+| 后台用户列表（含批量级别） | GET | `/admin/api/users` | 后台 users 读取权限 | [admin-users.md](admin-users.md#列表) |
+| 后台用户资料读取 / 编辑（手机号只读） | GET / PUT | `/admin/api/users/:user_id` | 后台 users 读 / 写权限 | [admin-users.md](admin-users.md#资料读取与保存) |
+| 后台用户互动数据与级别 | GET | `/admin/api/users/:user_id/overview` | 后台 users 读取权限 | [admin-users.md](admin-users.md#互动数据与级别) |
+| 后台用户背景图 | GET | `/admin/api/users/:user_id/background` | 后台 users 读取权限 | [admin-users.md](admin-users.md#背景图) |
 | 创建轨迹（含可选默认路线说明） | POST | `/track/create` | 是 | [track.md](track.md#1-创建轨迹) |
 | 推荐轨迹列表（个性化 Feed Session，支持 `city_code` 筛选） | GET | `/track/recommend/list` | 是 | [track.md](track.md#2-推荐轨迹列表) |
 | 轨迹详情（含默认路线说明、收藏状态及可选主景区） | GET | `/track/:track_id/detail` | 是 | [track.md](track.md#3-轨迹详情)、[主景区标签](track.md#主景区标签) |
