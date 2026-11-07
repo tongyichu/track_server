@@ -154,7 +154,7 @@
 | 后台轨迹图片与原始文件下载 | GET | `/admin/api/tracks/:track_id/assets/:asset` | 轨迹查看 | [admin-tracks.md](admin-tracks.md#详情资源展示与下载) |
 | 单条轨迹重新识别 | POST | `/admin/api/tracks/:track_id/place-refresh` | 轨迹操作 | [admin-tracks.md](admin-tracks.md) |
 | 地图 POI 设置轨迹景点标签 | POST | `/admin/api/tracks/:track_id/scenic-spot` | 轨迹及景点操作 | [admin-tracks.md](admin-tracks.md#地图点选景点标签) |
-| 轨迹地图高德配置 / 服务代理 | GET | `/admin/api/tracks/map-config`、`/admin/api/tracks/amap-service` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |
+| 轨迹地图高德配置 / 服务代理 | GET | `/admin/api/tracks/map-config`、`/admin/api/tracks/amap-service/*filepath` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |
 | 单条轨迹景点候选 | GET | `/admin/api/tracks/:track_id/place-candidates` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |
 | 轨迹景点候选队列（兼容） | GET | `/admin/api/place-candidates` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |
 | 确认轨迹景点候选 | POST | `/admin/api/place-candidates/:track_id/confirm` | 轨迹操作 | [admin-tracks.md](admin-tracks.md) |

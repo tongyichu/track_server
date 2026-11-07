@@ -66,6 +66,11 @@
       return Number.isFinite(lng) && Number.isFinite(lat) && Math.abs(lng) <= 180 && Math.abs(lat) <= 90 ? [lng, lat] : null;
     }
     function plainText(value) { return typeof value === 'string' ? value : ''; }
+    function lookupFailure(result) {
+      // 仅展示供应商的短错误码，避免把带密钥的请求地址或原始响应带入提示。
+      const code = typeof result === 'string' ? result : result && result.info;
+      return typeof code === 'string' && /^[A-Z][A-Z0-9_]{1,79}$/.test(code) && code !== 'OK' ? '（' + code + '）' : '';
+    }
     function beginSelection(title) {
       const sequence = ++selectionSequence;
       clearTimeout(lookupTimer); clearTimeout(clickTimer);
@@ -134,19 +139,32 @@
       const nearby = document.createElement('button'); nearby.type = 'button'; nearby.className = 'btn btn-sm btn-outline-secondary ms-2'; nearby.textContent = '查看附近景点';
       nearby.addEventListener('click', () => searchNearby(position));
       if (position) selection.appendChild(nearby);
+      const retryDetails = document.createElement('button'); retryDetails.type = 'button'; retryDetails.className = 'btn btn-sm btn-outline-secondary ms-2'; retryDetails.textContent = '重试资料'; retryDetails.hidden = true;
+      retryDetails.addEventListener('click', () => selectPOI(event)); selection.appendChild(retryDetails);
+      const failed = message => {
+        if (current()) { detail.textContent = message; retryDetails.hidden = false; }
+      };
       try {
         const PlaceSearch = await loadPlaceSearch(amap);
         if (!current()) return;
         if (!placeSearch) placeSearch = new PlaceSearch({ extensions: 'all' });
-        lookupTimer = setTimeout(() => { if (current()) detail.textContent = '景点资料读取超时，请重新点击景点重试。'; }, 15000);
+        lookupTimer = setTimeout(() => failed('景点资料读取超时，请重试。'), 15000);
         placeSearch.getDetails(id, (status, result) => {
           if (!current()) return;
           clearTimeout(lookupTimer);
-          const poi = status === 'complete' && result && result.poiList && result.poiList.pois && result.poiList.pois[0];
-          const point = poi && poiPosition(poi.location);
-          if (!poi || !point || !plainText(poi.name).trim() || String(poi.id || '') !== id) {
-            detail.textContent = '景点资料读取失败，请重新点击景点重试。'; return;
+          if (status !== 'complete') {
+            failed('景点资料读取失败' + lookupFailure(result) + '，请重试。'); return;
           }
+          const pois = result && result.poiList && result.poiList.pois;
+          const poi = Array.isArray(pois) && pois.find(item => item && String(item.id || '') === id);
+          const point = poi && poiPosition(poi.location);
+          if (!poi) {
+            failed('未返回所选景点的资料，请重试或查看附近景点。'); return;
+          }
+          if (!point || !plainText(poi.name).trim()) {
+            failed('景点资料缺少名称或坐标，请选择其他景点。'); return;
+          }
+          retryDetails.hidden = true;
           name.textContent = poi.name;
           markSelection(point, poi.name);
           detail.textContent = [plainText(poi.type), plainText(poi.address)].filter(Boolean).join(' · ');
@@ -157,7 +175,7 @@
           if (button.disabled) button.textContent = '当前景点标签';
           button.addEventListener('click', () => assignPOI({ id: id, name: poi.name, category: plainText(poi.type), address: plainText(poi.address), position: point }, button, detail));
         });
-      } catch (error) { if (current()) detail.textContent = error.message; }
+      } catch (error) { failed(error.message); }
     }
     async function searchNearby(position) {
       if (disposed || assigning || !position || !map || !options.canAssignScenicSpot) return;
@@ -179,7 +197,7 @@
           const pois = status === 'complete' && result && result.poiList && result.poiList.pois;
           const candidates = Array.isArray(pois) ? pois.filter(poi => plainText(poi.id).trim() && plainText(poi.name).trim() && poiPosition(poi.location)) : [];
           if (!candidates.length) {
-            detail.textContent = status === 'complete' || status === 'no_data' ? '附近未找到景点，请放大地图后重新点选。' : '附近景点查询失败，请重试。';
+            detail.textContent = status === 'complete' || status === 'no_data' ? '附近未找到景点，请放大地图后重新点选。' : '附近景点查询失败' + lookupFailure(result) + '，请重试。';
             retrySearch.hidden = false; return;
           }
           detail.textContent = '请选择目标景点，再点击设置按钮。';

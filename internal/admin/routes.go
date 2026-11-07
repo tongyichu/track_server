@@ -235,7 +235,7 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	api.GET("/tracks/statistics", m.Handler.GetAdminTrackStatistics)
 	api.POST("/tracks/import", m.Handler.ImportTracks)
 	api.GET("/tracks/map-config", m.Handler.GetTrackMapConfig)
-	api.GET("/tracks/amap-service", m.Handler.ProxyScenicSpotMapService)
+	api.GET("/tracks/amap-service/*filepath", m.Handler.ProxyScenicSpotMapService)
 	api.GET("/cities", m.Handler.ListAdminCities)
 	api.GET("/regions/catalog", m.Handler.GetRegionCatalog)
 	api.PUT("/regions/catalog", m.Handler.SaveRegionCatalog)

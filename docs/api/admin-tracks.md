@@ -117,7 +117,7 @@
 
 确认关联成功后，响应额外返回 `suggested_title`：服务端按客户端标题生成规则（`{景点名}周边{运动}[环线]`，环线判定用地图索引简化轨迹线）以景点名为地名生成的建议标题；与当前标题一致或无法生成时为空串。前端在标题输入框旁展示「代入建议标题」标签，点击仅代入输入框并随表单保存生效，不自动提交。
 
-`GET /admin/api/tracks/map-config`（轨迹查看）：返回高德 Web(JS API) `key` 与 `service_host=/admin/api/tracks/amap-service`，供轨迹详情地图使用；`GET /admin/api/tracks/amap-service` 为同源高德服务代理（安全密钥不下发浏览器）。与景点页 `/scenic-spots/map-config` 同一配置，仅权限归属不同。
+`GET /admin/api/tracks/map-config`（轨迹查看）：返回高德 Web(JS API) `key` 与 `service_host=/admin/api/tracks/amap-service`，供轨迹详情地图使用；`GET /admin/api/tracks/amap-service/*filepath` 为同源高德服务代理，捕获 SDK 追加的 POI 详情、周边搜索等子路径，传入既有代理处理（安全密钥不下发浏览器）。与景点页 `/scenic-spots/map-config` 同一配置，仅权限归属不同。
 
 ### 地图点选景点标签
 
