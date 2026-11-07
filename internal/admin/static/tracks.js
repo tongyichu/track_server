@@ -208,7 +208,7 @@
 
   async function editTrack(trackID) {
     function refreshLists() { return Promise.all([loadPage(), refreshImportedTrack(trackID)]); }
-    return window.AdminTrackEditor.open(trackID, { onSaved: refreshLists, onDeleted: refreshLists });
+    return window.AdminTrackEditor.open(trackID, { cities: cityOptions, onSaved: refreshLists, onDeleted: refreshLists });
   }
 
   function populateCityOptions(regions, provinceCode) {

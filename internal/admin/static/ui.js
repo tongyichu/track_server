@@ -80,95 +80,132 @@
     });
   }
 
+  const openingTasks = new Map();
+  function runOnce(key, action) {
+    if (openingTasks.has(key)) return openingTasks.get(key);
+    // 先登记任务，再执行异步入口，重复点击复用整个工作流，避免重复保存。
+    const task = Promise.resolve().then(action);
+    openingTasks.set(key, task);
+    const release = function () { if (openingTasks.get(key) === task) openingTasks.delete(key); };
+    task.then(release, release);
+    return task;
+  }
+
   function formDialog(options) {
     options = options || {};
     return new Promise(function (resolve) {
       const root = createModal(options);
-      const form = document.createElement('form');
-      if (options.className) root.classList.add(options.className);
-      form.className = 'admin-dialog-form';
-      if (options.beforeFields) root.querySelector('.modal-body').appendChild(options.beforeFields);
-      (options.fields || []).forEach(function (field) {
-        const group = document.createElement('label');
-        group.className = 'form-label';
-        group.textContent = field.label || field.name;
-        const input = document.createElement(field.type === 'textarea' ? 'textarea' : (field.type === 'select' ? 'select' : 'input'));
-        input.className = 'form-control';
-        input.name = field.name;
-        if (field.full) group.classList.add('full');
-        if (field.type && field.type !== 'textarea' && field.type !== 'select') input.type = field.type;
-        if (field.type === 'select') {
-          (field.options || []).forEach(function (option) {
-            const item = document.createElement('option');
-            item.value = String(option.value);
-            item.textContent = String(option.label);
-            input.appendChild(item);
-          });
-        }
-        if (field.value != null) input.value = field.value;
-        if (field.placeholder) input.placeholder = field.placeholder;
-        if (field.required) input.required = true;
-        if (field.maxLength) input.maxLength = field.maxLength;
-        if (field.min != null) input.min = String(field.min);
-        if (field.step != null) input.step = String(field.step);
-        if (field.readOnly) input.readOnly = true;
-        if (options.readOnly) input.disabled = true;
-        if (typeof field.onChange === 'function') input.addEventListener('change', function () { field.onChange(input.value); });
-        group.appendChild(input);
-        form.appendChild(group);
-      });
-      root.querySelector('.modal-body').appendChild(form);
-      if (options.afterFields) root.querySelector('.modal-body').appendChild(options.afterFields);
+      const body = root.querySelector('.modal-body');
       const footer = root.querySelector('.modal-footer');
-      const cancel = document.createElement('button');
-      cancel.type = 'button';
-      cancel.className = options.cancelDanger ? 'btn btn-outline-danger' : 'btn btn-outline-secondary';
-      cancel.textContent = options.cancelText || '取消';
-      const submit = document.createElement('button');
-      submit.type = 'submit';
-      submit.className = 'btn btn-primary';
-      submit.textContent = options.confirmText || '保存';
-      if (options.readOnly) submit.hidden = true;
-      footer.append(cancel, submit);
+      const close = root.querySelector('.btn-close');
       const modal = new tabler.Modal(root, { backdrop: 'static' });
-      let settled = false;
-      let pendingValue = null;
+      const controller = new AbortController();
+      let config = options, settled = false, hidden = false, loading = false, pendingValue = null, form = null;
       function finish(value) {
-        if (settled) return;
-        settled = true;
-        pendingValue = value;
-        if (!options.waitForHidden) resolve(value);
+        if (settled || hidden) return;
+        settled = true; pendingValue = value;
+        controller.abort();
+        if (!config.waitForHidden) resolve(value);
         modal.hide();
       }
-      cancel.addEventListener('click', async function () {
-        if (typeof options.onCancel !== 'function') { finish(null); return; }
-        cancel.disabled = true;
-        try {
-          const action = await options.onCancel();
-          if (action) finish({ _action: action });
-        } catch (error) {
-          window.AdminUI.alert(error.message || String(error), 'danger');
-        } finally {
-          cancel.disabled = false;
+      function focusField() {
+        if (settled || hidden || !form) return;
+        const first = form.querySelector('input:not(:disabled):not([readonly]), textarea:not(:disabled):not([readonly]), select:not(:disabled)');
+        if (first) first.focus();
+      }
+      close.addEventListener('click', function () { finish(null); });
+      root.addEventListener('shown.bs.modal', function () {
+        // Bootstrap 在入场动画中忽略 hide；补齐快速关闭，避免留下无响应的加载框。
+        if (settled) modal.hide(); else focusField();
+      });
+      root.addEventListener('hide.bs.modal', function () { controller.abort(); });
+      root.addEventListener('hidden.bs.modal', function () {
+        hidden = true; controller.abort();
+        try { if (typeof config.onClosed === 'function') config.onClosed(); }
+        finally {
+          if (!settled) resolve(null); else if (config.waitForHidden) resolve(pendingValue);
+          modal.dispose(); root.remove();
         }
       });
-      root.querySelector('.btn-close').addEventListener('click', function () { finish(null); });
-      form.addEventListener('submit', function (event) {
-        event.preventDefault();
-        if (options.readOnly) return;
-        if (!form.reportValidity()) return;
-        const values = {};
-        new FormData(form).forEach(function (value, key) { values[key] = String(value); });
-        finish(values);
-      });
-      submit.addEventListener('click', function () { form.requestSubmit(); });
-      root.addEventListener('hidden.bs.modal', function () { if (typeof options.onClosed === 'function') options.onClosed(); if (options.waitForHidden && settled) resolve(pendingValue); else if (!settled) resolve(null); root.remove(); });
+      function render(loaded) {
+        if (settled || hidden || controller.signal.aborted) return;
+        config = Object.assign({}, options, loaded);
+        root.querySelector('.modal-title').textContent = config.title || '提示';
+        if (config.className) root.classList.add(config.className);
+        body.removeAttribute('aria-busy'); body.replaceChildren(); footer.replaceChildren();
+        form = document.createElement('form'); form.className = 'admin-dialog-form';
+        if (config.beforeFields) body.appendChild(config.beforeFields);
+        (config.fields || []).forEach(function (field) {
+          const group = document.createElement('label'); group.className = 'form-label'; group.textContent = field.label || field.name;
+          const input = document.createElement(field.type === 'textarea' ? 'textarea' : (field.type === 'select' ? 'select' : 'input'));
+          input.className = 'form-control'; input.name = field.name;
+          if (field.full) group.classList.add('full');
+          if (field.type && field.type !== 'textarea' && field.type !== 'select') input.type = field.type;
+          if (field.type === 'select') (field.options || []).forEach(function (option) {
+            const item = document.createElement('option'); item.value = String(option.value); item.textContent = String(option.label); input.appendChild(item);
+          });
+          if (field.value != null) input.value = field.value;
+          if (field.placeholder) input.placeholder = field.placeholder;
+          if (field.required) input.required = true;
+          if (field.maxLength) input.maxLength = field.maxLength;
+          if (field.min != null) input.min = String(field.min);
+          if (field.step != null) input.step = String(field.step);
+          if (field.readOnly) input.readOnly = true;
+          if (config.readOnly) input.disabled = true;
+          if (typeof field.onChange === 'function') input.addEventListener('change', function () { field.onChange(input.value); });
+          group.appendChild(input); form.appendChild(group);
+        });
+        body.appendChild(form);
+        if (config.afterFields) body.appendChild(config.afterFields);
+        const cancel = document.createElement('button'); cancel.type = 'button';
+        cancel.className = config.cancelDanger ? 'btn btn-outline-danger' : 'btn btn-outline-secondary'; cancel.textContent = config.cancelText || '取消';
+        const submit = document.createElement('button'); submit.type = 'submit'; submit.className = 'btn btn-primary'; submit.textContent = config.confirmText || '保存';
+        if (config.readOnly) submit.hidden = true;
+        footer.append(cancel, submit);
+        let cancelling = false;
+        cancel.addEventListener('click', async function () {
+          if (settled || cancelling) return;
+          if (typeof config.onCancel !== 'function') { finish(null); return; }
+          cancelling = true; cancel.disabled = true;
+          try { const action = await config.onCancel(); if (action) finish({ _action: action }); }
+          catch (error) { window.AdminUI.alert(error.message || String(error), 'danger'); }
+          finally { cancelling = false; cancel.disabled = false; }
+        });
+        form.addEventListener('submit', function (event) {
+          event.preventDefault();
+          if (settled || cancelling || config.readOnly || !form.reportValidity()) return;
+          const values = {};
+          new FormData(form).forEach(function (value, key) { values[key] = String(value); });
+          finish(values);
+        });
+        submit.addEventListener('click', function () { form.requestSubmit(); });
+        if (typeof config.onReady === 'function') config.onReady({ root: root, form: form, signal: controller.signal });
+        if (root.classList.contains('show')) focusField();
+      }
+      async function load() {
+        if (loading || settled || hidden || controller.signal.aborted) return;
+        loading = true;
+        body.setAttribute('aria-busy', 'true'); body.replaceChildren(); footer.replaceChildren();
+        const status = document.createElement('div'); status.className = 'd-flex align-items-center gap-2 py-4'; status.setAttribute('role', 'status');
+        const spinner = document.createElement('span'); spinner.className = 'spinner-border spinner-border-sm'; spinner.setAttribute('aria-hidden', 'true');
+        const message = document.createElement('span'); message.textContent = '正在加载详情…'; status.append(spinner, message); body.appendChild(status);
+        const cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'btn btn-outline-secondary'; cancel.textContent = '关闭';
+        cancel.addEventListener('click', function () { finish(null); }); footer.appendChild(cancel);
+        try { render(await options.load(controller.signal)); }
+        catch (error) {
+          if (settled || hidden || controller.signal.aborted) return;
+          body.removeAttribute('aria-busy'); status.replaceChildren();
+          message.textContent = error.message || '详情加载失败'; status.appendChild(message);
+          const retry = document.createElement('button'); retry.type = 'button'; retry.className = 'btn btn-primary'; retry.textContent = '重试';
+          retry.addEventListener('click', load); footer.prepend(retry);
+        } finally { loading = false; }
+      }
+      if (typeof options.load === 'function') load(); else render(options);
       modal.show();
-      setTimeout(function () { const first = form.querySelector('input, textarea'); if (first) first.focus(); }, 150);
     });
   }
 
-  window.AdminUI = { alert: toast, confirm: confirmDialog, form: formDialog };
+  window.AdminUI = { alert: toast, confirm: confirmDialog, form: formDialog, runOnce: runOnce };
 
   let imageViewer;
   function closeImageViewer() {

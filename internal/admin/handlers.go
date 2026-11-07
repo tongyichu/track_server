@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -1506,47 +1507,84 @@ func (h *Handler) GetTrack(ctx context.Context, c *app.RequestContext) {
 		handleAdminRepoError(c, err)
 		return
 	}
-	if h.trackPlaceSvc != nil {
-		if spots, spotErr := h.trackPlaceSvc.PrimaryScenicSpots(ctx, []string{track.ID}); spotErr == nil {
-			track.PrimaryScenicSpot = spots[track.ID]
-		}
+	// 固定五组独立只读查询并行，不在 goroutine 中访问 RequestContext 或共享响应 map。
+	trackCopy := *track
+	track = &trackCopy
+	userName := "未知用户"
+	primarySpot := track.PrimaryScenicSpot
+	submission := track.Submission
+	var spotID string
+	var spotIDReady bool
+	var labelGeneration interface{}
+	var labelGenerationReady bool
+	var geoIndex *models.TrackGeoIndex
+	var reads sync.WaitGroup
+	read := func(fn func()) {
+		reads.Add(1)
+		go func() { defer reads.Done(); fn() }()
 	}
-	data := utils.H{"track": track, "user_id_text": strconv.FormatInt(track.UserID, 10)}
-	data["city_name"] = config.CityNameByCode(config.CanonicalCityCode(track.CityCode))
-	data["user_name"] = "未知用户"
-	if h.userRepo != nil {
-		if owner, err := h.userRepo.FindByID(ctx, track.UserID); err == nil && owner != nil && strings.TrimSpace(owner.Nickname) != "" {
-			data["user_name"] = owner.Nickname
-		}
-	}
-	if h.trackSubmissionSvc != nil {
-		if sub, err := h.trackSubmissionSvc.PublicForTrack(ctx, track.ID); err == nil {
-			track.Submission = sub
-		}
-	}
-	if h.scenicSpotSvc != nil {
-		if spotID, err := h.scenicSpotSvc.AssignedSpotID(ctx, track.ID); err == nil {
-			data["scenic_spot_id"] = spotID
-		}
-		if spots, err := h.scenicSpotSvc.PrimarySpots(ctx, []string{track.ID}); err == nil && spots[track.ID] != nil {
-			track.PrimaryScenicSpot = spots[track.ID]
-		}
-	}
-	track.Labels = service.TrackDisplayLabels(track)
-	if status, err := h.trackNarrativeSvc.AdminStatus(ctx, track.ID); err == nil {
-		data["label_generation"] = status
-	}
-
-	if h.trackMapRepo != nil {
-		if index, indexErr := h.trackMapRepo.FindTrackGeoIndex(ctx, track.ID); indexErr == nil && index != nil && index.SimplifiedPolylineJSON != "" {
-			data["geo"] = utils.H{
-				"simplified_polyline": json.RawMessage(index.SimplifiedPolylineJSON),
-				"coordinate_system":   index.CoordinateSystem,
-				"start_lat":           index.StartLat,
-				"start_lng":           index.StartLng,
-				"end_lat":             index.EndLat,
-				"end_lng":             index.EndLng,
+	read(func() {
+		if h.scenicSpotSvc != nil {
+			if id, err := h.scenicSpotSvc.AssignedSpotID(ctx, track.ID); err == nil {
+				spotID, spotIDReady = id, true
 			}
+			if spots, err := h.scenicSpotSvc.PrimarySpots(ctx, []string{track.ID}); err == nil && spots[track.ID] != nil {
+				primarySpot = spots[track.ID]
+				return
+			}
+		}
+		// 已有目录主景点时不再读取旧识别记录；未关联或目录不可用时保留旧回退。
+		if h.trackPlaceSvc != nil {
+			if spots, err := h.trackPlaceSvc.PrimaryScenicSpots(ctx, []string{track.ID}); err == nil {
+				primarySpot = spots[track.ID]
+			}
+		}
+	})
+	read(func() {
+		if h.userRepo != nil {
+			if owner, err := h.userRepo.FindByID(ctx, track.UserID); err == nil && owner != nil && strings.TrimSpace(owner.Nickname) != "" {
+				userName = owner.Nickname
+			}
+		}
+	})
+	read(func() {
+		if h.trackSubmissionSvc != nil {
+			if sub, err := h.trackSubmissionSvc.PublicForTrack(ctx, track.ID); err == nil {
+				submission = sub
+			}
+		}
+	})
+	read(func() {
+		if status, err := h.trackNarrativeSvc.AdminStatus(ctx, track.ID); err == nil {
+			labelGeneration, labelGenerationReady = status, true
+		}
+	})
+	read(func() {
+		if h.trackMapRepo != nil {
+			if index, err := h.trackMapRepo.FindTrackGeoIndex(ctx, track.ID); err == nil {
+				geoIndex = index
+			}
+		}
+	})
+	reads.Wait()
+	track.PrimaryScenicSpot, track.Submission = primarySpot, submission
+	track.Labels = service.TrackDisplayLabels(track)
+	data := utils.H{"track": track, "user_id_text": strconv.FormatInt(track.UserID, 10), "user_name": userName}
+	data["city_name"] = config.CityNameByCode(config.CanonicalCityCode(track.CityCode))
+	if spotIDReady {
+		data["scenic_spot_id"] = spotID
+	}
+	if labelGenerationReady {
+		data["label_generation"] = labelGeneration
+	}
+	if geoIndex != nil && geoIndex.SimplifiedPolylineJSON != "" {
+		data["geo"] = utils.H{
+			"simplified_polyline": json.RawMessage(geoIndex.SimplifiedPolylineJSON),
+			"coordinate_system":   geoIndex.CoordinateSystem,
+			"start_lat":           geoIndex.StartLat,
+			"start_lng":           geoIndex.StartLng,
+			"end_lat":             geoIndex.EndLat,
+			"end_lng":             geoIndex.EndLng,
 		}
 	}
 	c.JSON(http.StatusOK, utils.H{"code": 0, "data": data})

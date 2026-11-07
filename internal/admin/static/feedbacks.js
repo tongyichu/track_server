@@ -6,7 +6,7 @@
   var pageIndex = 0;
   var lastNextCursor = '';
   var currentID = '';
-  var detailRequest = 0;
+  var detailRequest = 0, detailController = null, loadingDetailID = '';
   var listRequest = 0;
   var saving = false;
   var correction = window.AdminFeedbackCorrection;
@@ -75,14 +75,7 @@
     if (outcomeSelect.value) statusSelect.value = outcomeSelect.value === 'unverified' ? 'ignored' : 'resolved';
     updateReplyRequirement();
   });
-  document.getElementById('detailTrackEdit').addEventListener('click', async function () {
-    if (!currentIssue || saving) return;
-    var id = currentID, trackID = currentIssue.trackID;
-    var baseline = serverResult;
-    var draft = { status: statusSelect.value, reply: replyInput.value, outcome: outcomeSelect.value };
-    var source = structuredCorrection && window.AdminAccess.can('feedbacks', true) ? id : '';
-    await new Promise(function (resolve) {
-      function restoreDraft(draft) {
+  function restoreDraft(draft) {
     statusSelect.value = draft.status; replyInput.value = draft.reply; outcomeSelect.value = draft.outcome;
     updateReplyRequirement();
   }
@@ -91,26 +84,38 @@
     restoreDraft(recoveryDraft); recoveryDraft = null;
     this.classList.add('hidden'); saveErr.textContent = '';
   });
-  document.getElementById('detailModal').addEventListener('hidden.bs.modal', resolve, { once: true });
-      detailModal.hide();
+  document.getElementById('detailTrackEdit').addEventListener('click', function () {
+    AdminUI.runOnce('feedback-track-editor', async function () {
+      if (!currentIssue || saving) return;
+      var button = document.getElementById('detailTrackEdit'); button.disabled = true;
+      var id = currentID, trackID = currentIssue.trackID, baseline = serverResult;
+      var draft = { status: statusSelect.value, reply: replyInput.value, outcome: outcomeSelect.value };
+      var source = structuredCorrection && window.AdminAccess.can('feedbacks', true) ? id : '';
+      try {
+        await new Promise(function (resolve) {
+          document.getElementById('detailModal').addEventListener('hidden.bs.modal', resolve, { once: true });
+          detailModal.hide();
+        });
+        await window.AdminTrackEditor.open(trackID, { sourceFeedbackID: source, waitForHidden: true });
+        await loadDetail(id, true);
+        if (currentID === id) {
+          if (JSON.stringify(baseline) === JSON.stringify(serverResult)) restoreDraft(draft);
+          else {
+            recoveryDraft = draft;
+            document.getElementById('restoreDraft').classList.remove('hidden');
+            saveErr.textContent = '处理结果已被其他操作更新，已显示最新内容。可核对后恢复刚才的草稿。';
+          }
+        }
+      } catch (error) { AdminUI.alert(error.message || String(error), 'danger'); }
+      finally { button.disabled = !currentIssue || !window.AdminAccess.can('tracks', false); }
     });
-    try {
-      await window.AdminTrackEditor.open(trackID, { sourceFeedbackID: source, waitForHidden: true });
-    } catch (error) { AdminUI.alert(error.message || String(error), 'danger'); }
-    await loadDetail(id, true);
-    if (currentID === id) {
-      if (JSON.stringify(baseline) === JSON.stringify(serverResult)) restoreDraft(draft);
-      else {
-        recoveryDraft = draft;
-        document.getElementById('restoreDraft').classList.remove('hidden');
-        saveErr.textContent = '处理结果已被其他操作更新，已显示最新内容。可核对后恢复刚才的草稿。';
-      }
-    }
   });
-  document.getElementById('detailModal').addEventListener('hidden.bs.modal', function () {
+  document.getElementById('detailModal').addEventListener('hide.bs.modal', function () {
     detailRequest += 1;
-    currentID = '';
+    if (detailController) detailController.abort();
+    loadingDetailID = '';
   });
+  document.getElementById('detailModal').addEventListener('hidden.bs.modal', function () { currentID = ''; });
 
   function updateReplyRequirement() {
     var terminal = statusSelect.value === 'resolved' || statusSelect.value === 'ignored';
@@ -249,6 +254,10 @@
   }
 
   async function loadDetail(id, scrollToDetail) {
+    if (loadingDetailID === id) return;
+    if (detailController) detailController.abort();
+    var controller = detailController = new AbortController();
+    loadingDetailID = id;
     var request = ++detailRequest;
     currentID = '';
     saveErr.textContent = '';
@@ -258,7 +267,7 @@
     detailContent.classList.add('hidden');
     if (scrollToDetail) detailModal.show();
     try {
-      var resp = await fetch('/admin/api/feedbacks/' + encodeURIComponent(id));
+      var resp = await fetch('/admin/api/feedbacks/' + encodeURIComponent(id), { signal: controller.signal });
       if (!resp.ok) {
         var errorBody = await resp.json().catch(function () { return {}; });
         if (request !== detailRequest) return;
@@ -331,6 +340,8 @@
       var message = '加载详情失败: ' + (err.message || err);
       emptyDetail.textContent = message;
       AdminUI.alert(message, 'danger');
+    } finally {
+      if (request === detailRequest) loadingDetailID = '';
     }
   }
 
@@ -339,7 +350,7 @@
     if (!window.AdminAccess.can('tracks', false)) { panel.textContent = '当前账号无轨迹查看权限，可核对用户提交的信息。'; return; }
     panel.textContent = '正在读取轨迹当前资料…';
     try {
-      var response = await fetch('/admin/api/tracks/' + encodeURIComponent(trackID));
+      var response = await fetch('/admin/api/tracks/' + encodeURIComponent(trackID), { signal: detailController && detailController.signal });
       if (!response.ok) throw new Error(response.status === 404 ? '轨迹已删除或不存在' : '读取失败: ' + response.status);
       var trackPayload = ((await response.json()).data) || {};
       var track = trackPayload.track || trackPayload;

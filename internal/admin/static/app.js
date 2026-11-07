@@ -181,8 +181,10 @@
     return (bytes / 1024).toFixed(1) + ' KB';
   }
 
+  let releaseDetailRoot = null, changelogRoot = null;
   function showReleaseDetail(it) {
-    const root = document.createElement('div');
+    if (releaseDetailRoot) return;
+    const root = releaseDetailRoot = document.createElement('div');
     root.className = 'modal modal-blur fade';
     root.tabIndex = -1;
     root.innerHTML = '<div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg"><div class="modal-content">' +
@@ -242,7 +244,7 @@
     const modal = new tabler.Modal(root);
     root.querySelector('.btn-close').addEventListener('click', function () { modal.hide(); });
     root.querySelector('.modal-footer button').addEventListener('click', function () { modal.hide(); });
-    root.addEventListener('hidden.bs.modal', function () { root.remove(); });
+    root.addEventListener('hidden.bs.modal', function () { releaseDetailRoot = null; modal.dispose(); root.remove(); });
     modal.show();
   }
 
@@ -296,7 +298,9 @@
 
   // ---------------- 更新日志弹窗（独立留存） ----------------
   async function showChangelogModal() {
-    const root = document.createElement('div');
+    if (changelogRoot) return;
+    const root = changelogRoot = document.createElement('div');
+    const controller = new AbortController();
     root.className = 'modal modal-blur fade';
     root.tabIndex = -1;
     root.innerHTML = '<div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg"><div class="modal-content">' +
@@ -308,14 +312,16 @@
     const modal = new tabler.Modal(root);
     root.querySelector('.btn-close').addEventListener('click', function () { modal.hide(); });
     root.querySelector('.modal-footer button').addEventListener('click', function () { modal.hide(); });
-    root.addEventListener('hidden.bs.modal', function () { root.remove(); });
+    root.addEventListener('hide.bs.modal', function () { controller.abort(); });
+    root.addEventListener('hidden.bs.modal', function () { changelogRoot = null; modal.dispose(); root.remove(); });
     modal.show();
 
     const body = root.querySelector('.modal-body');
     try {
-      const resp = await fetch('/admin/api/releases/changelogs?platform=android');
+      const resp = await fetch('/admin/api/releases/changelogs?platform=android', { signal: controller.signal });
       if (!resp.ok) throw new Error('加载失败: ' + resp.status);
       const items = ((await resp.json()).data || {}).items || [];
+      if (controller.signal.aborted) return;
       body.innerHTML = '';
       if (items.length === 0) {
         body.innerHTML = '<div class="changelog-loading">暂无更新日志</div>';
@@ -340,6 +346,7 @@
         body.appendChild(entry);
       });
     } catch (e) {
+      if (controller.signal.aborted) return;
       body.innerHTML = '<div class="changelog-loading">' + esc(e.message || String(e)) + '</div>';
     }
   }

@@ -254,7 +254,12 @@
   var detailModal = new tabler.Modal(document.getElementById('userDetailModal'), { backdrop: 'static' });
   var detailForm = document.getElementById('userDetailForm');
   var detailSave = document.getElementById('userDetailSave');
-  var activeDetailUserID = 0;
+  var activeDetailUserID = 0, userDetailRequest = 0, userDetailController = null;
+  document.getElementById('userDetailModal').addEventListener('hide.bs.modal', function () {
+    userDetailRequest++;
+    if (userDetailController) userDetailController.abort();
+    AdminUserPermissions.cancel();
+  });
   document.getElementById('userDetailModal').addEventListener('hidden.bs.modal', function () {
     activeDetailUserID = 0;
     AdminUserPermissions.cancel();
@@ -267,7 +272,15 @@
     return city || province || '-';
   }
 
-  async function openUserDetail(userID) {
+  function openUserDetail(userID) {
+    return AdminUI.runOnce('user-detail', function () { return loadUserDetail(userID); });
+  }
+  async function loadUserDetail(userID) {
+    if (activeDetailUserID === userID && document.getElementById('userDetailModal').classList.contains('show')) return;
+    var request = ++userDetailRequest;
+    if (userDetailController) userDetailController.abort();
+    userDetailController = new AbortController();
+    detailForm.reset();
     activeDetailUserID = userID;
     AdminUserPermissions.load(userID);
     detailSave.disabled = true;
@@ -276,10 +289,10 @@
     document.getElementById('userDetailAvatar').removeAttribute('src');
     detailModal.show();
     try {
-      var response = await fetch('/admin/api/users/' + encodeURIComponent(userID));
+      var response = await fetch('/admin/api/users/' + encodeURIComponent(userID), { signal: userDetailController.signal });
       if (!response.ok) throw new Error(await response.text());
       var user = (await response.json()).data || {};
-      if (activeDetailUserID !== userID) return;
+      if (request !== userDetailRequest || activeDetailUserID !== userID) return;
       detailForm.elements.nickname.value = user.nickname || '';
       detailForm.elements.phone.value = user.phone || '';
       detailForm.elements.gender.value = user.gender || '';
@@ -293,7 +306,7 @@
       if (user.avatar_url) document.getElementById('userDetailAvatar').src = user.avatar_url;
       detailSave.disabled = false;
     } catch (error) {
-      if (activeDetailUserID !== userID) return;
+      if (request !== userDetailRequest || activeDetailUserID !== userID) return;
       detailModal.hide();
       AdminUI.alert('读取用户资料失败: ' + error.message, 'danger');
     }
@@ -301,7 +314,7 @@
 
   detailForm.addEventListener('submit', async function (event) {
     event.preventDefault();
-    if (!activeDetailUserID || !detailForm.reportValidity()) return;
+    if (!activeDetailUserID || detailSave.disabled || !detailForm.reportValidity()) return;
     detailSave.disabled = true;
     var payload = {
       nickname: detailForm.elements.nickname.value.trim(),

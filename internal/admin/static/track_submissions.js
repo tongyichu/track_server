@@ -1,5 +1,5 @@
 (function () {
-  var selected = null;
+  var selected = null, detailController = null, detailRequest = 0, loadingID = '';
   function esc(v) { return String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   async function api(path, options) { var r = await fetch(path, options); var j = await r.json(); if (!r.ok) throw new Error(j.error || ('HTTP '+r.status)); return j.data; }
   async function load() {
@@ -27,10 +27,28 @@
     }
   }
   async function show(id) {
-    var data=await api('/admin/api/track-submissions/'+encodeURIComponent(id)); selected=data.submission;
-    document.getElementById('detailPanel').hidden=false; document.getElementById('detailTitle').textContent=selected.title;
-    var imgs=(selected.images||[]).map(function(i){return i.url?'<a href="'+esc(i.url)+'" target="_blank"><img src="'+esc(i.url)+'" style="max-width:180px;max-height:120px;margin:4px"></a>':'';}).join('');
-    document.getElementById('detail').innerHTML='<p>'+esc(selected.description)+'</p><p>难度：'+esc(selected.difficulty)+'；风险：'+esc(selected.risk_level)+'；适宜月份：'+esc((selected.suitable_months||[]).join(','))+'</p><p>路面地形：'+esc((selected.surface_types||[]).join(','))+'</p><p>交通：'+esc((selected.transport_modes||[]).join(','))+'；'+esc(selected.transport_description)+'</p><div>'+imgs+'</div>';
+    if (loadingID === id) return;
+    if (detailController) detailController.abort();
+    var controller = detailController = new AbortController(), request = ++detailRequest;
+    loadingID = id; selected = null;
+    document.getElementById('detailPanel').hidden = false;
+    document.getElementById('detailTitle').textContent = '正在加载投稿…';
+    document.getElementById('detail').replaceChildren();
+    document.getElementById('approveBtn').disabled = true; document.getElementById('rejectBtn').disabled = true;
+    try {
+      var data=await api('/admin/api/track-submissions/'+encodeURIComponent(id), {signal:controller.signal});
+      if(request!==detailRequest||controller.signal.aborted)return; selected=data.submission;
+      document.getElementById('detailPanel').hidden=false; document.getElementById('detailTitle').textContent=selected.title;
+      var imgs=(selected.images||[]).map(function(i){return i.url?'<a href="'+esc(i.url)+'" target="_blank"><img src="'+esc(i.url)+'" style="max-width:180px;max-height:120px;margin:4px"></a>':'';}).join('');
+      document.getElementById('detail').innerHTML='<p>'+esc(selected.description)+'</p><p>难度：'+esc(selected.difficulty)+'；风险：'+esc(selected.risk_level)+'；适宜月份：'+esc((selected.suitable_months||[]).join(','))+'</p><p>路面地形：'+esc((selected.surface_types||[]).join(','))+'</p><p>交通：'+esc((selected.transport_modes||[]).join(','))+'；'+esc(selected.transport_description)+'</p><div>'+imgs+'</div>';
+    } catch(error) {
+      if(request===detailRequest&&!controller.signal.aborted) document.getElementById('detailTitle').textContent='加载失败：'+error.message;
+    } finally {
+      if(request===detailRequest){
+        loadingID='';
+        document.getElementById('approveBtn').disabled=!selected; document.getElementById('rejectBtn').disabled=!selected;
+      }
+    }
   }
   async function review(decision){ if(!selected)return; var reason=document.getElementById('reviewReason').value.trim(); try{await api('/admin/api/track-submissions/'+encodeURIComponent(selected.submission_id)+'/review',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({decision:decision,reason:reason,expected_revision:selected.revision})}); AdminUI.alert(decision==='approved'?'投稿已通过':'投稿已驳回','success'); selected=null; document.getElementById('detailPanel').hidden=true; await Promise.all([load(), loadStats()]);}catch(e){AdminUI.alert(e.message,'danger');} }
   document.getElementById('approveBtn').onclick=function(){review('approved');}; document.getElementById('rejectBtn').onclick=function(){review('rejected');}; document.getElementById('refreshBtn').onclick=function(){load();loadStats();}; document.getElementById('status').onchange=load; load(); loadStats();

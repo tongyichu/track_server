@@ -66,7 +66,7 @@
   }
 
   var PAGE_SIZE = 50;
-  var selectedGroupID = '';
+  var selectedGroupID = '', detailRequest = 0, detailController = null, detailLoadingID = '';
   var selectedTrackType = '';
   var loadedGroups = [];
   var nextOffset = 0;
@@ -83,6 +83,10 @@
   var loadMoreBtn = document.getElementById('loadMoreBtn');
   var cityNames = Object.create(null);
   var detailModal = new tabler.Modal(document.getElementById('detailModal'));
+  document.getElementById('detailModal').addEventListener('hide.bs.modal', function () {
+    detailRequest++; detailLoadingID = '';
+    if (detailController) detailController.abort();
+  });
 
   document.querySelectorAll('[data-route-tab]').forEach(function (button) {
     button.addEventListener('click', function () {
@@ -319,7 +323,7 @@
   }
 
   document.getElementById('renameBtn').addEventListener('click', async function () {
-    if (!selectedGroupID) return;
+    if (!selectedGroupID || detailLoadingID) return;
     var name = document.getElementById('renameInput').value.trim();
     if (!name) { AdminUI.alert('请输入新名称', 'danger'); return; }
     try {
@@ -334,7 +338,7 @@
     }
   });
   document.getElementById('mergeBtn').addEventListener('click', async function () {
-    if (!selectedGroupID) return;
+    if (!selectedGroupID || detailLoadingID) return;
     var sourceGroupID = document.getElementById('mergeInput').value.trim();
     if (!sourceGroupID) { AdminUI.alert('请输入源路线组ID', 'danger'); return; }
     if (!await AdminUI.confirm({ title: '合并路线组', message: '确认把 ' + sourceGroupID + ' 合并到 ' + selectedGroupID + '？', confirmText: '确认合并', danger: true })) return;
@@ -388,6 +392,10 @@
   }
 
   async function loadDetail(groupID) {
+    if (detailLoadingID === groupID) return;
+    if (detailController) detailController.abort();
+    var controller = detailController = new AbortController(), request = ++detailRequest;
+    detailLoadingID = groupID;
     selectedGroupID = groupID;
     document.getElementById('detailPanel').hidden = false;
     document.getElementById('detailName').textContent = '路线组管理';
@@ -397,12 +405,20 @@
     renderGroupsFromSelection();
     detailHint.textContent = '加载中...';
     try {
-      var data = await apiJSON('/admin/api/route-groups/' + encodeURIComponent(groupID) + '?limit=100');
-      renderDetail(data);
-      await loadIntroduction(groupID);
-      detailHint.textContent = '';
+      await Promise.all([
+        apiJSON('/admin/api/route-groups/' + encodeURIComponent(groupID) + '?limit=100', { signal: controller.signal }).then(function (data) {
+          if (request === detailRequest && !controller.signal.aborted) renderDetail(data);
+        }),
+        loadIntroduction(groupID, controller.signal)
+      ]);
+      if (request === detailRequest) detailHint.textContent = '';
     } catch (err) {
-      detailHint.textContent = '加载失败: ' + err.message;
+      if (request === detailRequest && !controller.signal.aborted) {
+        controller.abort();
+        selectedGroupID = ''; detailHint.textContent = '加载失败: ' + err.message;
+      }
+    } finally {
+      if (request === detailRequest) detailLoadingID = '';
     }
   }
 
@@ -414,8 +430,13 @@
 
   function lines(id) { return document.getElementById(id).value.split('\n').map(function (s) { return s.trim(); }).filter(Boolean); }
   function putLines(id, values) { document.getElementById(id).value = (values || []).join('\n'); }
-  async function loadIntroduction(groupID) {
-    var intro = await apiJSON('/admin/api/route-groups/' + encodeURIComponent(groupID) + '/introduction');
+  async function loadIntroduction(groupID, signal) {
+    var request = detailRequest;
+    signal = signal || (detailController && detailController.signal);
+    var intro;
+    try { intro = await apiJSON('/admin/api/route-groups/' + encodeURIComponent(groupID) + '/introduction', { signal: signal }); }
+    catch (error) { if (signal && signal.aborted) return; throw error; }
+    if (request !== detailRequest || selectedGroupID !== groupID || signal && signal.aborted) return;
     var zh = intro.zh || {}, en = intro.en || {};
     document.getElementById('introZhName').value = zh.name || '';
     document.getElementById('introEnName').value = en.name || '';
@@ -440,12 +461,12 @@
       estimated_duration_min:Number(document.getElementById('introDurationMin').value||0),estimated_duration_max:Number(document.getElementById('introDurationMax').value||0)};
   }
   async function saveIntroduction() {
-    if (!selectedGroupID) return;
+    if (!selectedGroupID || detailLoadingID) return;
     try { await apiJSON('/admin/api/route-groups/'+encodeURIComponent(selectedGroupID)+'/introduction',{method:'PUT',body:JSON.stringify(introductionPayload())}); await loadIntroduction(selectedGroupID); }
     catch(err){ AdminUI.alert(err.message, 'danger'); }
   }
   async function setIntroductionPublished(published) {
-    if (!selectedGroupID) return;
+    if (!selectedGroupID || detailLoadingID) return;
     try { await apiJSON('/admin/api/route-groups/'+encodeURIComponent(selectedGroupID)+'/introduction/'+(published?'publish':'unpublish'),{method:'POST'}); await loadIntroduction(selectedGroupID); await reloadKeepingPage(); }
     catch(err){ AdminUI.alert(err.message, 'danger'); }
   }
@@ -499,7 +520,7 @@
   }
 
   async function setRepresentative(trackID) {
-    if (!selectedGroupID || !trackID) return;
+    if (!selectedGroupID || !trackID || detailLoadingID) return;
     try {
       await apiJSON('/admin/api/route-groups/' + encodeURIComponent(selectedGroupID) + '/representative', {
         method: 'PUT',
@@ -513,7 +534,7 @@
   }
 
   async function removeMember(trackID) {
-    if (!selectedGroupID || !trackID) return;
+    if (!selectedGroupID || !trackID || detailLoadingID) return;
     if (!await AdminUI.confirm({ title: '移除成员轨迹', message: '确认从当前路线组移除轨迹 ' + trackID + '？', confirmText: '确认移除', danger: true })) return;
     try {
       await apiJSON('/admin/api/route-groups/' + encodeURIComponent(selectedGroupID) + '/members/' + encodeURIComponent(trackID), {
