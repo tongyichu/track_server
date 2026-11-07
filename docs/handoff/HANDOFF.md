@@ -1,5 +1,12 @@
 # 开发交接：后台图表统一、压缩及城市显示修复（2026-11-04）
 
+## 2026-11-07：城市管理性能优化生产部署
+
+- 服务端main/41d25c4cfa0f39514d63d0fa6d2fc2b358f89e5d已推送并核对远端，包含目录gzip、城市树索引及局部更新；从干净工作树构建linux/amd64镜像。go build ./...、regions.js的node --check、git diff --check通过，未运行自动化业务/UI测试；实际加载耗时和编辑交互待用户手动验收。
+- 镜像manifest为sha256:ac02dc8d5d1929e6b3345c77e7d13727db09633c3955bafaef591c8ac1a38809，配置ID为sha256:a417f5237a576790ad6718b895a1a603d4c8d932e46aa6f2952d8a8bc2446833。生产预拉取并核对摘要、源码revision及架构后运行既有update_track_server.sh，无部署脚本修改；新容器19c793edda581d1b1144a0706f9a5085a416f55ff3ab0a37642e051c2f67956e，running、重启0。
+- 2026-11-07 10:48:28+08:00内网及随后公网ping均200/hello track app，MySQL正常、无内存降级、3个后台账号加载正常。目录API未登录401、城市页面302、登录200；资源版本16efd1b870282c425bf2，内外网regions.js SHA256均与发布源码一致。环境文件、持久化挂载和前版镜像保留，未创建测试业务数据。
+- 完整回执/private/tmp/track-city-performance-deploy-20261107.json，镜像元数据track-city-performance-image-20261107.json，日志和runner分别为track-city-performance-deploy-20261107.log/.py。本段为纯文档收尾，不改变已部署41d25c4源码快照；本轮不提交或发布客户端。
+
 ## 2026-11-07：城市管理加载与编辑性能优化
 
 - 用户先要求同步代码并优化城市管理页内容加载，随后明确要求“同步代码，然后部署”，已授权本次服务端同步、提交、推送和生产更新。正式工作副本track_server的main已同步至ef2d50b；本轮仅发布服务端。
