@@ -39,6 +39,9 @@ func (s *TrackService) ActivityTypeDistribution(ctx context.Context, userID int6
 		}
 		total.TrackCount += max(item.TrackCount, 0)
 		total.DurationSeconds += max(item.DurationSeconds, 0)
+		if code != "driving" {
+			total.ElevationGainMeters += max(item.ElevationGainMeters, 0)
+		}
 		if item.DistanceMeters > 0 && !math.IsNaN(item.DistanceMeters) && !math.IsInf(item.DistanceMeters, 0) {
 			total.DistanceMeters += item.DistanceMeters
 		}

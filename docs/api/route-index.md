@@ -4,7 +4,7 @@
 
 | 接口 | 方法 | 路径 | 需要认证 | 文档 |
 | --- | --- | --- | --- | --- |
-| 本人全部历史运动类型分布 | GET | `/track/activity/type-distribution` | 是 | [运动类型分布](track.md#运动类型分布) |
+| 本人全部历史运动类型分布（次数/时长/里程/爬升） | GET | `/track/activity/type-distribution` | 是 | [运动类型分布](track.md#运动类型分布) |
 | 本人年度活动指标（可按运动类型筛选） | GET | `/track/activity/calendar` | 是 | [年度活动指标](track.md#年度活动指标) |
 | 本人全部历史个人纪录（含轨迹预览） | GET | `/track/activity/records` | 是 | [个人纪录](track.md#个人纪录) |
 | 本人全部历史探索足迹 | GET | `/track/activity/footprint` | 是 | [探索统计](track-footprint.md#全国探索统计) |

@@ -67,14 +67,14 @@ Android左上指标菜单提供次数/里程/时长/累计爬升/步数，右上
 
 ```json
 {"code":0,"data":{"items":[
-  {"track_type":"running","track_count":12,"duration_seconds":36000,"distance_meters":80000},
-  {"track_type":"hiking","track_count":4,"duration_seconds":18000,"distance_meters":24000}
+  {"track_type":"running","track_count":12,"duration_seconds":36000,"distance_meters":80000,"elevation_gain_meters":1200},
+  {"track_type":"hiking","track_count":4,"duration_seconds":18000,"distance_meters":24000,"elevation_gain_meters":2400}
 ]}}
 ```
 
-`track_count`、`duration_seconds`为64位整数，距离为米。无数据时items=[]；合法正常数据非负，历史负值/空指标按0累计；类型归一已知别名后合并，未知code保留，空code为other。按时长降序、同值按code升序。接口只返回聚合，不返回用户私有明细、轨迹点或供应商数据，不允许指定其他用户；存储异常返回标准错误，不返回伪造的空统计。
+`track_count`、`duration_seconds`、`elevation_gain_meters`为64位整数，距离与累计爬升均以米计。爬升只汇总轨迹已保存的 `elevation_gain`，不读取GPS、不按起终海拔差推算；归一后的driving不参与运动爬升，固定返回0。无数据时items=[]；合法正常数据非负，历史负值/空指标按0累计；类型归一已知别名后合并，未知code保留，空code为other。按时长降序、同值按code升序。接口只返回聚合，不返回用户私有明细、轨迹点或供应商数据，不允许指定其他用户；存储异常返回标准错误，不返回伪造的空统计。新增爬升字段不改变原字段，旧客户端可忽略，无表结构或数据迁移。
 
-Android数据页将结果与当前账号isUploaded=0且已完成的本地记录按相同类型合并，再计算时长占比；已上传本地副本不叠加。无总时长时显示暂无时长和—占比；云端失败明确仅显示本机未上传记录并可重试。名称/图标/日夜颜色沿用track/types元数据，类型统计不重复保存元数据或比例。
+Android数据页将结果与当前账号isUploaded=0且已完成的本地记录按相同类型合并，再计算时长/里程/次数/爬升占比；已上传本地副本不叠加。全部运动展示运动构成，具体类型展示首张“xx数据”，选中维度优先高亮，爬升以全部非自驾类型的爬升为分母，自驾卡隐藏该选项；无总量显示—占比。旧接口缺失爬升字段时客户端保留未知，不与本地爬升相加伪造完整统计，隐藏爬升切换及辅助值；恢复的爬升选项在确认不支持后回退时长。云端失败保留上次完整数据或明确仅显示本机未上传记录并可重试。名称/图标/日夜颜色沿用track/types元数据，类型统计不重复保存元数据或比例。
 
 ## 静态轨迹预览图
 

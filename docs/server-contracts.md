@@ -165,7 +165,7 @@
 
 ## 本人运动类型分布
 
-`GET /track/activity/type-distribution` 只取当前JWT用户，返回全部历史已完成、正常/私密且raw_track_url非空的记录按类型聚合的次数、时长秒数、距离米数。删除、进行中与自动创建的未上传原始文件占位记录排除；负数/缺失指标归零，空集合返回items=[]。权限不支持指定其他用户。入口 internal/service/track_activity.go，复用类型归一函数、合并已知别名，未知类型保留，空类型为other；按时长降序、同值按type code排序。
+`GET /track/activity/type-distribution` 只取当前JWT用户，返回全部历史已完成、正常/私密且raw_track_url非空的记录按类型聚合的次数、时长秒数、距离米数及累计爬升米数（elevation_gain_meters，int64）。爬升取已保存elevation_gain，归一后driving固定为0，不解析GPS或改写历史数据。删除、进行中与自动创建的未上传原始文件占位记录排除；负数/缺失指标归零，空集合返回items=[]。权限不支持指定其他用户。入口 internal/service/track_activity.go，复用类型归一函数、合并已知别名，未知类型保留，空类型为other；按时长降序、同值按type code排序。
 
 独立 `repository.ActivityTypeStatisticsRepository` 的MySQL GROUP BY、Mongo聚合与内存实现提供相同口径，不逐条加载轨迹、GPS、图片或供应商内容；三种实现有编译期断言。不新建表、列、索引、缓存或后台任务，不改写业务数据。协议见 [运动类型分布](api/track.md#运动类型分布)。客户端合并本机未上传记录后计算比例，统计范围与近12个月日历分开标注。
 

@@ -29,6 +29,7 @@ func (r *InMemoryTrackRepository) AggregateActivityTypes(_ context.Context, user
 			groups[track.TrackType] = item
 		}
 		item.TrackCount++
+		item.ElevationGainMeters += int64(max(track.ElevationGain, 0))
 		item.DurationSeconds += int64(track.Duration)
 		if track.Distance > 0 && !math.IsNaN(track.Distance) && !math.IsInf(track.Distance, 0) {
 			item.DistanceMeters += track.Distance
@@ -44,7 +45,8 @@ func (r *InMemoryTrackRepository) AggregateActivityTypes(_ context.Context, user
 func (r *MySQLTrackRepository) AggregateActivityTypes(ctx context.Context, userID int64) ([]models.ActivityTypeTotal, error) {
 	rows, err := r.db.QueryContext(ctx, `SELECT COALESCE(track_type,''), COUNT(*),
 		COALESCE(SUM(GREATEST(COALESCE(duration,0),0)),0),
-		COALESCE(SUM(GREATEST(COALESCE(distance,0),0)),0)
+		COALESCE(SUM(GREATEST(COALESCE(distance,0),0)),0),
+		COALESCE(SUM(GREATEST(COALESCE(elevation_gain,0),0)),0)
 		FROM track_records WHERE user_id=? AND status IN (?,?) AND is_running=0
 		AND raw_track_url IS NOT NULL AND TRIM(raw_track_url) <> '' GROUP BY track_type`,
 		userID, models.TrackStatusNormal, models.TrackStatusPrivate)
@@ -55,7 +57,7 @@ func (r *MySQLTrackRepository) AggregateActivityTypes(ctx context.Context, userI
 	items := make([]models.ActivityTypeTotal, 0)
 	for rows.Next() {
 		var item models.ActivityTypeTotal
-		if err := rows.Scan(&item.TrackType, &item.TrackCount, &item.DurationSeconds, &item.DistanceMeters); err != nil {
+		if err := rows.Scan(&item.TrackType, &item.TrackCount, &item.DurationSeconds, &item.DistanceMeters, &item.ElevationGainMeters); err != nil {
 			return nil, err
 		}
 		items = append(items, item)
@@ -74,10 +76,11 @@ func (r *MongoTrackRepository) AggregateActivityTypes(ctx context.Context, userI
 			"raw_track_url": bson.M{"$type": "string", "$regex": `\S`},
 		}}},
 		bson.D{{Key: "$group", Value: bson.M{
-			"_id":              bson.M{"$ifNull": bson.A{"$track_type", ""}},
-			"track_count":      bson.M{"$sum": 1},
-			"duration_seconds": bson.M{"$sum": positive("$duration")},
-			"distance_meters":  bson.M{"$sum": positive("$distance")},
+			"_id":                   bson.M{"$ifNull": bson.A{"$track_type", ""}},
+			"track_count":           bson.M{"$sum": 1},
+			"duration_seconds":      bson.M{"$sum": positive("$duration")},
+			"distance_meters":       bson.M{"$sum": positive("$distance")},
+			"elevation_gain_meters": bson.M{"$sum": positive("$elevation_gain")},
 		}}},
 	}
 	cur, err := r.collection.Aggregate(ctx, pipeline)
