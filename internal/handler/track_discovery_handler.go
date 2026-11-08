@@ -111,12 +111,25 @@ func (h *TrackHandler) DiscoverRoutes(ctx context.Context, c *app.RequestContext
 		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid limit"})
 		return
 	}
-	page, err := h.trackSvc.DiscoverRoutes(ctx, userID, string(c.Query("city_code")), string(c.Query("label_type")), string(c.Query("track_type")), string(c.Query("cursor")), limit)
+	page, err := h.trackSvc.DiscoverRoutes(ctx, userID, string(c.Query("city_code")), string(c.Query("label_type")), string(c.Query("track_type")), string(c.Query("cursor")), limit, string(c.Query("shape_label")))
 	if err != nil {
 		discoveryError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, successResponse(page))
+}
+
+func (h *TrackHandler) DiscoveryShapeLabels(ctx context.Context, c *app.RequestContext) {
+	if _, ok := discoveryUserID(c); !ok {
+		c.JSON(http.StatusUnauthorized, utils.H{"error": "unauthorized"})
+		return
+	}
+	result, err := h.trackSvc.DiscoveryShapeLabels(ctx, string(c.Query("city_code")), string(c.Query("track_type")))
+	if err != nil {
+		discoveryError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, successResponse(result))
 }
 
 func (h *TrackHandler) ActivityCalendar(ctx context.Context, c *app.RequestContext) {

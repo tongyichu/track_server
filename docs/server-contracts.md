@@ -163,6 +163,10 @@
 发现景点及轨迹 primary_scenic_spot 下发可选 scenic_grade，读取不调用供应商；未知不能解释为官方未评级。统一 labels 的 scenic_spot.name 由 API 组装为“景点名·5A”（U+00B7 居中点），无等级保留原名，code 仍为稳定景点 ID，primary_scenic_spot.name 保持纯名称。客户端直接消费 labels，不重复拼接。完整同步与字段契约见 [景区等级采集与下发](track-place-discovery.md#景区等级采集与下发)。
 
 
+## 发现页图形标签筛选
+
+发现页图形路线按shape_label精确筛选，筛选在对外游标分页前完成。业务JWT只读GET /track/discover/shape-labels按必填城市与可选运动类型聚合全部公开、已结束、有原始文件的图形轨迹，返回各标签计数、合计及filter_version=1；路线响应shape_filter_version=1用于确认筛选能力。MySQL/Mongo/内存统计一致，复用稳定城市编号兼容与已保存图形字段，不从标题猜测、不读取GPS、不新增表或调用外部服务。接口、排序与客户端兼容细节见[发现页](api/track.md#发现页与年度活动图表)。
+
 ## 本人运动类型分布
 
 `GET /track/activity/type-distribution` 只取当前JWT用户，返回全部历史已完成、正常/私密且raw_track_url非空的记录按类型聚合的次数、时长秒数、距离米数及累计爬升米数（elevation_gain_meters，int64）。爬升取已保存elevation_gain，归一后driving固定为0，不解析GPS或改写历史数据。删除、进行中与自动创建的未上传原始文件占位记录排除；负数/缺失指标归零，空集合返回items=[]。权限不支持指定其他用户。入口 internal/service/track_activity.go，复用类型归一函数、合并已知别名，未知类型保留，空类型为other；按时长降序、同值按type code排序。

@@ -10,13 +10,23 @@ import (
 
 // DiscoverRoutes filters the authoritative label sources before forming a page.
 // Internal scan cursors are independent of the last returned matching track.
-func (s *TrackService) DiscoverRoutes(ctx context.Context, userID int64, city, label, trackType, rawCursor string, limit int) (*models.TrackSummaryPage, error) {
+func (s *TrackService) DiscoverRoutes(ctx context.Context, userID int64, city, label, trackType, rawCursor string, limit int, shapes ...string) (*models.TrackSummaryPage, error) {
 	city, label, trackType = strings.TrimSpace(city), strings.TrimSpace(label), strings.TrimSpace(trackType)
 	if city == "" {
 		return nil, invalidArg("city_code is required")
 	}
 	if label != "featured" && label != "scenic_spot" && label != "shape" {
 		return nil, invalidArg("invalid label_type")
+	}
+	shape := ""
+	if len(shapes) > 0 {
+		shape = strings.TrimSpace(shapes[0])
+	}
+	if shape != "" && label != "shape" {
+		return nil, invalidArg("shape_label requires label_type=shape")
+	}
+	if err := validateTrackShapeLabel(&shape); err != nil {
+		return nil, err
 	}
 	cursor, err := decodeTrackListCursor(rawCursor)
 	if err != nil {
@@ -50,6 +60,9 @@ func (s *TrackService) DiscoverRoutes(ctx context.Context, userID int64, city, l
 		}
 		ids := make([]string, 0, len(batch))
 		for _, track := range batch {
+			if shape != "" && strings.TrimSpace(track.ShapeLabel) != shape {
+				continue
+			}
 			ids = append(ids, track.ID)
 		}
 		var spots map[string]*models.TrackPrimaryScenicSpot
@@ -87,7 +100,11 @@ func (s *TrackService) DiscoverRoutes(ctx context.Context, userID int64, city, l
 	if err != nil {
 		return nil, err
 	}
-	return buildTrackSummaryPage(summaries, hasMore)
+	page, err := buildTrackSummaryPage(summaries, hasMore)
+	if err == nil && label == "shape" {
+		page.ShapeFilterVersion = 1
+	}
+	return page, err
 }
 
 // A failed label read must not turn a populated city into a successful empty page.
