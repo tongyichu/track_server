@@ -1,0 +1,4 @@
+interface:
+  display_name: "地区宣传素材与文案"
+  short_description: "检索省市代表照片、真实口号与介绍，压缩 WebP 并安全补入后台"
+  default_prompt: "使用 $track-region-content 为指定省市准备三张宣传图、可核实口号与介绍，并按本次授权交付素材或补入后台。"

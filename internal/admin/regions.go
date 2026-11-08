@@ -12,9 +12,6 @@ import (
 )
 
 func (h *Handler) SetRegionService(svc *regions.Service) { h.regionSvc = svc }
-func (h *Handler) SetRegionResearcher(researcher *regions.Researcher) {
-	h.regionResearcher = researcher
-}
 
 func (h *Handler) GetRegionCatalog(ctx context.Context, c *app.RequestContext) {
 	if h.regionSvc == nil {

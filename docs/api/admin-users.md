@@ -4,11 +4,13 @@
 
 ## 列表
 
-`GET /admin/api/users` 保留昵称、内部人员、省市、性别、星座、限制状态和游标筛选。列表行展示用户、手机号、性别、所在城市、上次登录和详情入口；头像保留内部人员角标，昵称旁只显示 `Lv.N`。
+`GET /admin/api/users` 支持昵称、内部人员、省市、性别、用户等级、限制状态和游标筛选。页面以“用户等级”替换星座筛选，传入精确 `level`；不传表示全部等级，非法等级返回400。旧 `zodiac_sign` 查询参数继续兼容。列表行展示用户、手机号、性别、所在城市、粉丝数、上次登录和详情入口；头像保留内部人员角标，昵称旁只显示 `Lv.N`。
 
-行响应新增 `level`（整数）；级别读取失败为 `null`，页面隐藏级别标签，不伪造 Lv.1。不再下发列表用的 `zodiac_sign` 和 `account_restriction`，这两项在详情展示；对应筛选仍在仓储层参与 total/分页。级别名不进入列表行响应。
+行响应包含 `level`（整数）及 `follower_count`（整数）。未按等级筛选时，级别读取失败为 `null`，页面隐藏标签，不伪造 Lv.1；粉丝数读取失败为 `null`，页面显示“—”，无粉丝时为0。响应 `data.level_options` 取权威等级定义（`level/name/xp`），供筛选项使用，级别名不进入列表行。列表不下发 `zodiac_sign` 和 `account_restriction`，这两项在详情展示。`next_cursor.id` 使用字符串，保持完整 int64 精度。
 
-级别查询由 `UserService.GetUserLevels` 对当前页 user_id 一次批量读取，`AchievementTrackReader.ScanAchievementTracks` 的 MySQL/Mongo/内存实现流式投影所需轨迹字段，再复用现有 `isQualifiedAchievementTrack`、`achievementTrackXP` 和 `resolveAchievementLevel`。规则与客户端一致，不逐用户读全部轨迹详情，不结算奖励、不触发后台回填或供应商调用。
+未选择等级时，`UserService.GetUserLevels` 对当前页 user_id 一次批量读取，`AchievementTrackReader.ScanAchievementTracks` 的 MySQL/Mongo/内存实现流式投影所需轨迹字段，复用 `isQualifiedAchievementTrack`、`achievementTrackXP` 和 `resolveAchievementLevel`。选择等级时，通过 `AchievementTrackScanner.ScanAllAchievementTracks` 对全量已完成有效状态轨迹做一次流式读取，再按同一资格及 XP 规则计算用户等级；匹配 ID 集合进入三种用户仓储的查询条件，先筛选再统计 total、应用游标和分页。初始等级通过排除更高等级用户匹配，包含没有轨迹的用户；无匹配的非初始等级返回空列表。等级依赖不可用时筛选返回503，不忽略该条件。显式等级筛选的查询成本随轨迹规模增长；未筛选时仍保持当前页读取。规则与客户端一致，不逐用户读全部轨迹详情、不结算奖励、不触发后台回填或供应商调用。
+
+粉丝数通过 `FollowRepository.CountFollowersByUserIDs` 按当前页批量聚合，MySQL 使用 GROUP BY，Mongo 使用 match/group，内存实现遍历关注关系并统计目标用户；不按行请求详情。用户列表“刷新”位于“用户列表 共 xx 个用户”标题行右侧；分页在表格下方，与同行房间复用布局：左侧“第 N 页 · 本页 X 个用户”，右侧上一页/下一页，窄屏纵向排列。加载时提示“正在加载…”并禁用翻页，失败明确提示，快速筛选忽略旧响应。
 
 ## 资料读取与保存
 

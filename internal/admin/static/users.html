@@ -38,46 +38,46 @@
           <article class="admin-stat-panel admin-user-chart-card admin-user-zodiac-card"><div><h3>星座分布</h3></div><div class="admin-user-chart-layout admin-user-zodiac-layout"><div id="userZodiacChart" class="admin-user-pie"></div><div id="userZodiacStats" class="admin-user-legend admin-zodiac-legend"></div></div></article>
         </div>
         <article class="admin-stat-panel admin-user-chart-card admin-user-city-card">
-          <div><h3>用户所在省份分布</h3></div>
+          <div><h3>用户位置分布</h3></div>
           <div class="admin-user-map-stage"><div id="userProvinceMap" class="admin-user-china-map" role="img" aria-label="中国各省份用户所在城市分布矢量地图"></div></div>
           <div class="admin-user-city-below">
             <div class="admin-user-city-summary">
               <div class="admin-user-foreign-stat"><span>海外城市</span><strong id="userForeignCityTotal">—</strong><small id="userForeignCityNote">每个用户只计入当前所在城市</small></div>
               <div class="admin-user-foreign-stat admin-user-unknown-stat"><span>未知城市</span><strong id="userUnknownCityTotal">—</strong></div>
             </div>
-            <div class="admin-user-city-top"><h4 id="userCityStatsTitle">城市用户数 Top 10</h4><div id="userCityStats" class="admin-distribution-list admin-city-list"></div></div>
+            <div class="admin-user-city-top"><h4 id="userCityStatsTitle">省份用户数 Top 10</h4><div id="userCityStats" class="admin-distribution-list admin-city-list"></div></div>
           </div>
         </article>
         <div class="admin-user-insight-charts">
-          <article class="admin-stat-panel admin-user-chart-card"><div><h3>年龄分布</h3><small>按生日计算周岁 · 全量用户</small></div><div id="userAgeChart" class="admin-user-bar-chart" role="img" aria-label="用户年龄分布柱状图"></div></article>
+          <article class="admin-stat-panel admin-user-chart-card"><div><h3>年龄分布</h3><small>按生日计算周岁 · 全量用户</small></div><div class="admin-user-chart-layout"><div id="userAgeChart" class="admin-user-pie" role="img" aria-label="用户年龄分布饼图"></div><div id="userAgeStats" class="admin-user-legend"></div></div></article>
           <article class="admin-stat-panel admin-user-chart-card"><div><h3>轨迹产出分层</h3><small>按每人累计完成的云端轨迹数</small></div><div id="userTrackOutputChart" class="admin-user-bar-chart" role="img" aria-label="用户云端轨迹产出分层柱状图"></div><p class="admin-user-chart-note">包含公开和私密轨迹，排除已删除、进行中及缺少原始文件的轨迹。</p></article>
         </div>
       </div>
     </section>
     <section class="panel">
-      <h2>用户列表 <span class="hint" id="totalHint"></span></h2>
+      <div class="admin-section-heading"><h2>用户列表 <span class="hint" id="totalHint"></span></h2><button id="refreshBtn" type="button" class="btn btn-outline-secondary">刷新</button></div>
       <div class="row admin-toolbar user-toolbar">
         <label>昵称搜索 <input id="titleFilter" class="form-control" type="search" placeholder="输入用户名称关键词" /></label>
         <label>内部人员 <select id="internalFilter" class="form-select"><option value="">全部</option><option value="true">是</option><option value="false">否</option></select></label>
         <label>省份 <select id="provinceFilter" class="form-select"><option value="">全部省份</option></select></label>
         <label>所在城市 <select id="cityFilter" class="form-select"><option value="">全部城市</option></select></label>
         <label>性别 <select id="genderFilter" class="form-select"><option value="">全部</option><option value="male">男</option><option value="female">女</option><option value="unknown">未设置</option></select></label>
-        <label>星座 <select id="zodiacFilter" class="form-select"><option value="">全部</option><option value="aries">白羊座</option><option value="taurus">金牛座</option><option value="gemini">双子座</option><option value="cancer">巨蟹座</option><option value="leo">狮子座</option><option value="virgo">处女座</option><option value="libra">天秤座</option><option value="scorpio">天蝎座</option><option value="sagittarius">射手座</option><option value="capricorn">摩羯座</option><option value="aquarius">水瓶座</option><option value="pisces">双鱼座</option></select></label>
+        <label>用户等级 <select id="levelFilter" class="form-select"><option value="">全部等级</option></select></label>
         <label>账号限制 <select id="restrictedFilter" class="form-select"><option value="">全部</option><option value="true">已限制</option><option value="false">正常</option></select></label>
         <button id="searchBtn" class="btn btn-primary">搜索</button>
-        <button id="refreshBtn" class="btn btn-outline-secondary">刷新</button>
-        <button id="prevBtn" class="btn btn-outline-secondary" disabled>上一页</button>
-        <button id="nextBtn" class="btn btn-outline-secondary" disabled>下一页</button>
-        <span class="hint" id="pageHint"></span>
       </div>
       <table class="data admin-user-table">
         <thead>
           <tr>
-            <th>用户</th><th>手机号</th><th>性别</th><th>所在城市</th><th>上次登录</th><th>操作</th>
+            <th>用户</th><th>手机号</th><th>性别</th><th>所在城市</th><th>粉丝数</th><th>上次登录</th><th>操作</th>
           </tr>
         </thead>
         <tbody id="userList"></tbody>
       </table>
+      <div class="admin-pagination">
+        <span class="hint" id="pageHint" role="status" aria-live="polite"></span>
+        <div><button id="prevBtn" class="btn btn-outline-secondary" type="button" disabled>上一页</button><button id="nextBtn" class="btn btn-outline-secondary" type="button" disabled>下一页</button></div>
+      </div>
     </section>
   </main>
 

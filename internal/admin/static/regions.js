@@ -14,9 +14,6 @@
   const treeMissingElements = new Map();
   let treeNeedsRender = true;
   let saving = false;
-  let researchDraft = null;
-  let researchNodeId = '';
-  let researchingNodeId = '';
   const photoEditor = new RegionPhotosEditor($('regionPhotos'), {
     editable,
     locked: () => saving,
@@ -56,13 +53,6 @@
   function status(message, error) {
     $('regionStatus').textContent = message;
     $('regionStatus').className = error ? 'text-danger' : 'text-secondary';
-  }
-
-  function researchStatus(message, loading, error) {
-    $('regionResearchStatusText').textContent = message;
-    $('regionResearchStatus').hidden = !message;
-    $('regionResearchStatus').classList.toggle('text-danger', !!error);
-    $('regionResearchDots').hidden = !loading;
   }
 
   function updateSaveState() {
@@ -260,35 +250,8 @@
 
   function editable() { return !!(window.AdminAccess && AdminAccess.can('regions', true)); }
 
-  function renderResearch() {
-    const available = researchDraft && researchNodeId === selectedId;
-    $('regionResearchPanel').hidden = !available;
-    if (!available) return;
-    const fields = $('regionDraftFields');
-    fields.replaceChildren();
-    [['英文名称', researchDraft.name_en], ['城市宣传口号', researchDraft.slogan], ['简介', researchDraft.description]].forEach(([label, value]) => {
-      const row = document.createElement('p');
-      const strong = document.createElement('strong'); strong.textContent = label + '：';
-      const content = document.createElement('span'); content.textContent = value || '未查到可靠资料';
-      row.append(strong, content); fields.appendChild(row);
-    });
-    if (researchDraft.slogan_source_url) {
-      const link = document.createElement('a');
-      link.href = researchDraft.slogan_source_url; link.target = '_blank'; link.rel = 'noopener noreferrer';
-      link.textContent = '核对宣传口号来源'; fields.appendChild(link);
-    }
-    const sources = $('regionResearchSources');
-    sources.replaceChildren();
-    const title = document.createElement('h4'); title.textContent = '资料来源'; sources.appendChild(title);
-    researchDraft.sources.forEach(source => {
-      const link = document.createElement('a'); link.href = source.url; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.textContent = source.title;
-      sources.appendChild(link);
-    });
-  }
-
   function select(id) {
     if (photoEditor.busy || saving && id !== selectedId) return;
-    if (researchNodeId !== id) { researchDraft = null; researchNodeId = ''; }
     const previousId = selectedId;
     const previousCountryId = activeCountryId;
     let treeChanged = false;
@@ -328,12 +291,7 @@
     $('regionLongitude').value = node.longitude == null ? '' : String(node.longitude);
     $('regionSelectable').checked = !!node.selectable;
     $('regionDeleteDraft').hidden = persistedIds.has(node.id);
-    $('regionResearch').disabled = !editable() || !persistedIds.has(node.id) || !!researchingNodeId;
-    if (researchingNodeId === node.id) researchStatus('正在联网查询城市资料', true);
-    else if (researchDraft && researchNodeId === node.id) researchStatus('联网草稿已就绪，请核对后代入');
-    else researchStatus('');
     updateSaveState();
-    renderResearch();
     if (treeNeedsRender || treeChanged || previousCountryId !== activeCountryId) renderTree();
     else {
       [previousId, selectedId].forEach(nodeId => {
@@ -413,8 +371,6 @@
     try {
       catalog = await api('catalog');
       indexCatalog();
-      researchDraft = null;
-      researchNodeId = '';
       persistedIds = new Set(catalog.nodes.map(node => node.id));
       persistedNodes = new Map(structuredClone(catalog.nodes).map(node => [node.id, node]));
       expandedIds = new Set();
@@ -467,7 +423,6 @@
       indexCatalog();
       removed.forEach(id => { dirtyIds.delete(id); expandedIds.delete(id); });
       photoEditor.remove(removed);
-      researchDraft = null; researchNodeId = '';
       $('regionSearch').value = '';
       saving = false;
       select(firstCountryId());
@@ -490,34 +445,6 @@
     select(catalog.nodes.some(item => item.id === activeCountryId && item.active) ? activeCountryId : firstCountryId());
     status('未保存节点及下级已删除');
   });
-  $('regionResearch').addEventListener('click', async () => {
-    const node = current();
-    if (!node || !persistedIds.has(node.id) || researchingNodeId) return;
-    const nodeId = node.id, targetCatalog = catalog;
-    researchingNodeId = nodeId;
-    $('regionResearch').disabled = true;
-    researchStatus('正在联网查询城市资料', true);
-    try {
-      const draft = await api('research', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: nodeId }) });
-      if (catalog !== targetCatalog || selectedId !== nodeId) return;
-      researchDraft = draft; researchNodeId = nodeId;
-      renderResearch(); researchStatus('联网草稿已就绪，请核对后代入');
-    } catch (error) { if (selectedId === nodeId) researchStatus(error.message, false, true); }
-    finally {
-      researchingNodeId = '';
-      $('regionResearch').disabled = !editable() || !persistedIds.has(selectedId);
-    }
-  });
-  function applyDraft(overwrite) {
-    if (!researchDraft || researchNodeId !== selectedId || !editable()) return;
-    [['regionNameEn', 'name_en'], ['regionSlogan', 'slogan'], ['regionDescription', 'description']].forEach(([id, key]) => {
-      if (researchDraft[key] && (overwrite || !$(id).value.trim())) $(id).value = researchDraft[key];
-    });
-    syncForm();
-    status('文字已代入，请核对并保存当前节点');
-  }
-  $('regionApplyEmpty').addEventListener('click', () => applyDraft(false));
-  $('regionApplyAll').addEventListener('click', () => applyDraft(true));
   $('regionSaveNode').addEventListener('click', async () => {
     const node = current();
     if (!node || !dirtyIds.has(node.id) || saving || photoEditor.busy || !editable()) return;
@@ -549,7 +476,6 @@
       $('regionForm').inert = false;
       $('regionForm').querySelector('.region-form-grid').inert = false;
       $('regionForm').querySelector('.region-editor-title').inert = false;
-      $('regionResearchPanel').inert = false;
       updateSaveState();
     }
   });

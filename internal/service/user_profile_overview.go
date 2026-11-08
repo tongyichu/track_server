@@ -25,18 +25,42 @@ func (s *UserService) GetUserLevels(ctx context.Context, userIDs []int64) (map[i
 	if !ok {
 		return nil, errors.New("achievement track reader unavailable")
 	}
+	return userLevelsFromTracks(userIDs, func(consume func(*models.Track)) error {
+		return reader.ScanAchievementTracks(ctx, userIDs, consume)
+	})
+}
+
+// UserLevelOptions returns a copy of the authoritative level definitions.
+func UserLevelOptions() []models.AchievementLevel {
+	return append([]models.AchievementLevel(nil), achievementLevels...)
+}
+
+// GetAllUserLevels streams existing tracks once; absent users have the base level.
+// Only explicit admin level filters need this full scan; ordinary lists stay page-scoped.
+func (s *UserService) GetAllUserLevels(ctx context.Context) (map[int64]models.AchievementLevel, error) {
+	if s == nil || s.achievements == nil {
+		return nil, errors.New("achievement service unavailable")
+	}
+	reader, ok := s.achievements.tracks.(repository.AchievementTrackScanner)
+	if !ok {
+		return nil, errors.New("achievement track scanner unavailable")
+	}
+	return userLevelsFromTracks(nil, func(consume func(*models.Track)) error {
+		return reader.ScanAllAchievementTracks(ctx, consume)
+	})
+}
+
+func userLevelsFromTracks(userIDs []int64, scan func(func(*models.Track)) error) (map[int64]models.AchievementLevel, error) {
 	xp := make(map[int64]int64, len(userIDs))
 	for _, id := range userIDs {
 		xp[id] = 0
 	}
-	if len(userIDs) > 0 {
-		if err := reader.ScanAchievementTracks(ctx, userIDs, func(track *models.Track) {
-			if isQualifiedAchievementTrack(track) {
-				xp[track.UserID] += achievementTrackXP(track)
-			}
-		}); err != nil {
-			return nil, err
+	if err := scan(func(track *models.Track) {
+		if isQualifiedAchievementTrack(track) {
+			xp[track.UserID] += achievementTrackXP(track)
 		}
+	}); err != nil {
+		return nil, err
 	}
 	levels := make(map[int64]models.AchievementLevel, len(xp))
 	for id, total := range xp {
@@ -44,6 +68,13 @@ func (s *UserService) GetUserLevels(ctx context.Context, userIDs []int64) (map[i
 		levels[id] = level
 	}
 	return levels, nil
+}
+
+func (s *UserService) GetUserFollowerCounts(ctx context.Context, userIDs []int64) (map[int64]int64, error) {
+	if s == nil || s.follows == nil {
+		return nil, errors.New("follow repository unavailable")
+	}
+	return s.follows.CountFollowersByUserIDs(ctx, userIDs)
 }
 
 // GetUserProfileOverview is read-only: no media fetching or achievement settlement.
