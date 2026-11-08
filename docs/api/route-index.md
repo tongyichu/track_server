@@ -130,7 +130,6 @@
 | 后台账号列表与页面目录 | GET | `/admin/api/accounts` | 管理员 session | [admin-accounts.md](admin-accounts.md) |
 | 后台读取/保存地区目录（完整响应支持 gzip，no-store） | GET / PUT | `/admin/api/regions/catalog` | 地区查看 / 操作 | [regions.md](regions.md) |
 | 后台保存单个地区节点 | PUT | `/admin/api/regions/node` | 地区操作 | [regions.md](regions.md) |
-| 联网查询单个地区资料 | POST | `/admin/api/regions/research` | 地区操作 | [regions.md](regions.md) |
 | 上传省份/城市图片文件（前端自动PUT关联） | POST | `/admin/api/regions/:node_id/photos` | 地区操作 | [regions.md](regions.md) |
 | 自动保存省份/城市图片关联、说明和顺序 | PUT | `/admin/api/regions/:node_id/photos` | 地区操作 | [regions.md](regions.md#图片自动保存) |
 | 删除非中国国家及其下级（归档） | DELETE | `/admin/api/regions/:node_id` | 地区操作 | [regions.md](regions.md#后台管理) |

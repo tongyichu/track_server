@@ -36,7 +36,6 @@ import (
 // Handler 聚合管理后台需要的业务依赖。
 type Handler struct {
 	regionSvc             *regions.Service
-	regionResearcher      *regions.Researcher
 	pixabay               *regions.PixabayClient
 	permissionSnapshotSvc *service.PermissionSnapshotService
 	releaseSvc            *service.AppReleaseService
