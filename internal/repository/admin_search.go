@@ -203,6 +203,13 @@ func (r *InMemoryAccountRestrictionRepository) hasActive(userID int64, now time.
 }
 
 func (r *InMemoryUserRepository) ListAdminUsers(_ context.Context, filter AdminUserListFilter, cursor *models.UserListCursor, limit int) ([]*models.User, int64, error) {
+	var selected map[int64]bool
+	if filter.UserIDs != nil {
+		selected = make(map[int64]bool, len(filter.UserIDs))
+		for _, id := range filter.UserIDs {
+			selected[id] = true
+		}
+	}
 	if limit <= 0 {
 		limit = 20
 	}
@@ -214,6 +221,9 @@ func (r *InMemoryUserRepository) ListAdminUsers(_ context.Context, filter AdminU
 	var total int64
 	for _, user := range r.users {
 		if user == nil || !strings.Contains(strings.ToLower(user.Nickname), needle) {
+			continue
+		}
+		if selected != nil && selected[user.ID] == filter.ExcludeUserIDs {
 			continue
 		}
 		if filter.IsInternal != nil && user.IsInternal != *filter.IsInternal {

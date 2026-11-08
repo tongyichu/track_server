@@ -6,6 +6,7 @@
   <title>时光轨迹 - 控制台</title>
   <link rel="stylesheet" href="/admin/static/vendor/tabler.min.css" />
   <link rel="stylesheet" href="/admin/static/style.css" />
+  <link rel="stylesheet" href="/admin/static/track_submissions.css" />
 </head>
 <body>
   <header class="topbar">
@@ -40,17 +41,30 @@
     </div>
     <section class="panel">
       <h2>轨迹投稿审核</h2>
-      <div class="row">
-        <select id="status"><option value="pending">待审核</option><option value="approved">已通过</option><option value="rejected">已驳回</option><option value="withdrawn">已撤回</option><option value="invalidated">已失效</option><option value="">全部</option></select>
-        <button id="refreshBtn">刷新</button>
+      <div class="submission-list-toolbar">
+        <label for="status" class="visually-hidden">投稿状态</label>
+        <select id="status" class="form-select"><option value="pending">待审核</option><option value="approved">已通过</option><option value="rejected">已驳回</option><option value="withdrawn">已撤回</option><option value="invalidated">已失效</option><option value="">全部</option></select>
+        <button id="refreshBtn" type="button" class="btn btn-outline-secondary">刷新</button>
       </div>
-      <table class="data"><thead><tr><th>投稿ID</th><th>轨迹ID</th><th>标题</th><th>类型</th><th>难度</th><th>风险</th><th>状态</th><th>版本</th><th>提交时间</th><th>操作</th></tr></thead><tbody id="list"></tbody></table>
-    </section>
-    <section class="panel" id="detailPanel" hidden>
-      <h2 id="detailTitle">投稿详情</h2><div id="detail"></div>
-      <div class="row"><input id="reviewReason" data-admin-write="track_submissions" placeholder="驳回原因（驳回时必填）" class="flex1" /><button id="approveBtn" data-admin-write="track_submissions">通过</button><button id="rejectBtn" data-admin-write="track_submissions" class="danger">驳回</button></div>
+      <div class="table-responsive"><table class="data submission-list-table"><thead><tr><th>轨迹编号</th><th>标题</th><th>类型</th><th>难度</th><th>风险</th><th>状态</th><th>版本</th><th>提交时间</th><th>操作</th></tr></thead><tbody id="list"></tbody></table></div>
     </section>
   </main>
+  <div class="modal modal-blur fade submission-detail-modal" id="submissionDetailModal" tabindex="-1" aria-hidden="true" aria-labelledby="detailTitle">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-xl">
+      <div class="modal-content">
+        <div class="modal-header"><div class="submission-modal-heading"><h2 class="modal-title" id="detailTitle">投稿详情</h2><p id="detailSubtitle" class="text-secondary"></p></div><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
+        <div class="modal-body">
+          <p id="detailLoading" class="submission-loading" role="status" hidden>正在加载投稿详情…</p>
+          <div id="detailError" class="alert alert-danger" role="alert" hidden><span id="detailErrorText"></span><button id="retryDetail" type="button" class="btn btn-sm btn-outline-danger">重新加载</button></div>
+          <div id="detail" hidden></div>
+          <section id="reviewSection" class="submission-detail-section submission-review-section" data-admin-write="track_submissions" hidden>
+            <h3>审核意见</h3><label for="reviewReason" class="form-label">备注或驳回原因</label><textarea id="reviewReason" data-admin-input="track_submissions" class="form-control" rows="3" placeholder="驳回时必须填写原因；通过时可填写备注。"></textarea><p id="reviewError" class="text-danger" role="alert" hidden></p>
+          </section>
+        </div>
+        <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">关闭</button><button id="rejectBtn" type="button" data-admin-write="track_submissions" class="btn btn-danger" hidden>驳回投稿</button><button id="approveBtn" type="button" data-admin-write="track_submissions" class="btn btn-primary" hidden>通过投稿</button></div>
+      </div>
+    </div>
+  </div>
   <script src="/admin/static/vendor/tabler.min.js"></script>
   <script src="/admin/static/shell.js"></script>
   <script src="/admin/static/ui.js"></script>

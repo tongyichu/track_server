@@ -543,7 +543,18 @@ func (h *Handler) ListTrackSubmissions(ctx context.Context, c *app.RequestContex
 	for _, sub := range items {
 		rewriteAdminSubmissionImages(sub)
 	}
-	c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"items": items, "total": len(items)}})
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": h.adminSubmissionData(utils.H{"items": items, "total": len(items)})})
+}
+
+// Keep admin labels/icons aligned with the submission options and built-in sports.
+func (h *Handler) adminSubmissionData(data utils.H) utils.H {
+	data["options"] = h.trackSubmissionSvc.Options()
+	types := make([]utils.H, 0, len(config.DefaultTrackTypeConfigs))
+	for _, item := range config.DefaultTrackTypeConfigs {
+		types = append(types, utils.H{"code": item.Type, "name": item.Name, "color": item.ThemeColor, "icon": item.IconFile})
+	}
+	data["track_types"] = types
+	return data
 }
 
 func (h *Handler) GetTrackSubmission(ctx context.Context, c *app.RequestContext) {
@@ -569,7 +580,7 @@ func (h *Handler) GetTrackSubmission(ctx context.Context, c *app.RequestContext)
 			h.decorateAdminTrackAssetURLs(ctx, []*models.Track{track})
 		}
 	}
-	c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"submission": selected, "track": track, "events": events}})
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": h.adminSubmissionData(utils.H{"submission": selected, "track": track, "events": events})})
 }
 
 func (h *Handler) ReviewTrackSubmission(ctx context.Context, c *app.RequestContext) {
@@ -1101,6 +1112,20 @@ func (h *Handler) ListUsers(ctx context.Context, c *app.RequestContext) {
 		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid zodiac_sign"})
 		return
 	}
+	levelOptions := service.UserLevelOptions()
+	selectedLevel := 0
+	if raw := strings.TrimSpace(string(c.Query("level"))); raw != "" {
+		value, err := strconv.Atoi(raw)
+		valid := false
+		for _, option := range levelOptions {
+			valid = valid || option.Level == value
+		}
+		if err != nil || !valid {
+			c.JSON(http.StatusBadRequest, utils.H{"error": "invalid level"})
+			return
+		}
+		selectedLevel = value
+	}
 	var ok bool
 	filter.IsInternal, ok = parseAdminOptionalBool(string(c.Query("is_internal")))
 	if !ok {
@@ -1132,6 +1157,23 @@ func (h *Handler) ListUsers(ctx context.Context, c *app.RequestContext) {
 		c.JSON(http.StatusInternalServerError, utils.H{"error": "user list filters not configured"})
 		return
 	}
+	levels := map[int64]models.AchievementLevel{}
+	if selectedLevel > 0 {
+		var levelErr error
+		levels, levelErr = h.userSvc.GetAllUserLevels(ctx)
+		if levelErr != nil {
+			c.JSON(http.StatusServiceUnavailable, utils.H{"error": "用户等级暂不可用，请稍后重试"})
+			return
+		}
+		// Base-level users may have no tracks, so exclude only users above base.
+		filter.UserIDs = make([]int64, 0)
+		filter.ExcludeUserIDs = selectedLevel == levelOptions[0].Level
+		for id, level := range levels {
+			if filter.ExcludeUserIDs && level.Level != selectedLevel || !filter.ExcludeUserIDs && level.Level == selectedLevel {
+				filter.UserIDs = append(filter.UserIDs, id)
+			}
+		}
+	}
 	items, total, err := search.ListAdminUsers(ctx, filter, cursor, limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
@@ -1149,12 +1191,26 @@ func (h *Handler) ListUsers(ctx context.Context, c *app.RequestContext) {
 			return
 		}
 	}
-	levels := map[int64]models.AchievementLevel{}
-	if h.userSvc != nil && len(userIDs) > 0 {
+	if selectedLevel == levelOptions[0].Level {
+		for _, id := range userIDs {
+			if _, found := levels[id]; !found {
+				levels[id] = levelOptions[0]
+			}
+		}
+	}
+	if selectedLevel == 0 && h.userSvc != nil && len(userIDs) > 0 {
 		if values, levelErr := h.userSvc.GetUserLevels(ctx, userIDs); levelErr == nil {
 			levels = values
 		} else {
 			log.Printf("admin user list levels unavailable")
+		}
+	}
+	var followers map[int64]int64
+	if h.userSvc != nil && len(userIDs) > 0 {
+		followers, err = h.userSvc.GetUserFollowerCounts(ctx, userIDs)
+		if err != nil {
+			log.Printf("admin user list follower counts unavailable")
+			followers = nil
 		}
 	}
 	// 与业务接口口径保持一致：把 OSS 上的 avatar_url 改写为服务器本地缓存地址
@@ -1182,18 +1238,23 @@ func (h *Handler) ListUsers(ctx context.Context, c *app.RequestContext) {
 		if level, ok := levels[u.ID]; ok {
 			row["level"] = level.Level
 		}
+		row["follower_count"] = nil
+		if followers != nil {
+			row["follower_count"] = followers[u.ID]
+		}
 		rows = append(rows, row)
 	}
 	resp := utils.H{
-		"items":    rows,
-		"total":    total,
-		"has_more": len(items) == limit,
+		"items":         rows,
+		"total":         total,
+		"has_more":      len(items) == limit,
+		"level_options": levelOptions,
 	}
 	if len(items) == limit {
 		last := items[len(items)-1]
 		resp["next_cursor"] = utils.H{
 			"created_at": last.CreatedAt.Format(time.RFC3339Nano),
-			"id":         last.ID,
+			"id":         strconv.FormatInt(last.ID, 10),
 		}
 	}
 	c.JSON(http.StatusOK, utils.H{"code": 0, "data": resp})

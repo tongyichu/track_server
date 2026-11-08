@@ -40,10 +40,11 @@
     var scaled = count / 10000;
     return (scaled >= 10 ? scaled.toFixed(0) : scaled.toFixed(1)).replace(/\.0$/, '') + 'w';
   }
-  function renderPie(chartID, legendID, items, total) {
+  function renderPie(chartID, legendID, items, total, labels) {
     var chartRoot = document.getElementById(chartID), legendRoot = document.getElementById(legendID);
     if (!chartRoot || !legendRoot) return;
-    var rows = (items || []).map(function (item) { return { key: item.key, name: item.label || distributionLabels[item.key] || item.key || '未知', value: number(item.count) }; });
+    labels = labels || distributionLabels;
+    var rows = (items || []).map(function (item) { return { key: item.key, name: item.label || labels[item.key] || item.key || '未知', value: number(item.count) }; });
     var totalValue = number(total);
     AdminChartStyle.legend(legendRoot, rows, chartID === 'userGenderChart' ? '全部用户' : '', totalValue);
     if (!window.echarts) return;
@@ -59,26 +60,20 @@
     if (!userCharts[chartID]) userCharts[chartID] = echarts.init(root);
     userCharts[chartID].setOption(AdminChartStyle.bars(rows, total, { unit: '人', showPercent: true }), true);
   }
-  function chooseDefaultProvince() {
-    if (selectedProvinceCode) return;
-    var bestCode = '', bestTotal = -1;
-    Object.keys(provinceStats).forEach(function (code) {
-      if (provinceStats[code].total > bestTotal) { bestCode = code; bestTotal = provinceStats[code].total; }
-    });
-    selectedProvinceCode = bestCode;
-  }
-  function renderCityTop() {
-    chooseDefaultProvince();
+  function renderLocationTop() {
     var province = provinceStats[selectedProvinceCode];
     var provinceName = provinceNames[selectedProvinceCode] || selectedProvinceCode;
-    document.getElementById('userCityStatsTitle').textContent = provinceName ? provinceName + ' · 城市用户数 Top 10' : '城市用户数 Top 10';
-    var cities = province ? province.items.slice().sort(function (a, b) { return number(b.count) - number(a.count); }) : [];
-    var topCities = cities.slice(0, 10), max = Math.max(1, ...topCities.map(function (item) { return number(item.count); }));
-    document.getElementById('userCityStats').innerHTML = topCities.map(function (item) {
+    document.getElementById('userCityStatsTitle').textContent = selectedProvinceCode ? provinceName + ' · 城市用户数 Top 10' : '省份用户数 Top 10';
+    var rows = selectedProvinceCode ? (province ? province.items.slice() : []) : Object.keys(provinceStats).map(function (code) {
+      return { name: provinceNames[code] || code, count: provinceStats[code].total };
+    });
+    rows.sort(function (a, b) { return number(b.count) - number(a.count); });
+    var topRows = rows.slice(0, 10), max = Math.max(1, ...topRows.map(function (item) { return number(item.count); }));
+    document.getElementById('userCityStats').innerHTML = topRows.map(function (item) {
       var label = item.name || '未知';
       var count = number(item.count);
       return '<div class="admin-distribution-row"><span title="' + esc(label) + '">' + esc(label) + '</span><div class="admin-distribution-track"><i style="width:' + Math.round(count * 100 / max) + '%"></i></div><strong>' + count.toLocaleString() + '</strong></div>';
-    }).join('') || '<span class="hint">该省暂无用户城市数据</span>';
+    }).join('') || '<span class="hint">' + (selectedProvinceCode ? '该省暂无用户城市数据' : '暂无省份用户数据') + '</span>';
   }
   function loadProvinceGeo() {
     if (!provinceGeoPromise) {
@@ -104,8 +99,7 @@
         provinceNames[code] = fullName;
         nameMap[fullName] = provinceNameMap[fullName] || fullName.replace(/[省市]$/, '');
       });
-      chooseDefaultProvince();
-      renderCityTop();
+      renderLocationTop();
       var values = Object.keys(provinceStats).map(function (code) { return provinceStats[code].total; });
       var max = Math.max(1, ...values);
       var data = features.map(function (feature) {
@@ -117,7 +111,15 @@
           selected: code === selectedProvinceCode
         };
       });
-      if (!userMap) userMap = echarts.init(root);
+      if (!userMap) {
+        userMap = echarts.init(root);
+        userMap.getZr().on('click', function (event) {
+          if (event.target || !selectedProvinceCode) return;
+          selectedProvinceCode = '';
+          renderLocationTop();
+          renderProvinceMap();
+        });
+      }
       userMap.setOption({
         tooltip: { trigger: 'item', formatter: function (params) {
           if (!params.data || !params.data.fullName) return '';
@@ -140,10 +142,10 @@
       userMap.on('click', function (params) {
         if (!params.data || !params.data.adcode) return;
         selectedProvinceCode = String(params.data.adcode);
-        renderCityTop();
+        renderLocationTop();
         renderProvinceMap();
       });
-    }).catch(function () { root.textContent = '省份地图暂不可用，请查看下方城市统计'; });
+    }).catch(function () { root.textContent = '省份地图暂不可用，请查看下方位置统计'; });
   }
   function renderProvinceStats(items, drawMap) {
     provinceStats = Object.create(null);
@@ -162,7 +164,7 @@
     document.getElementById('userForeignCityNote').textContent = foreignCities ? foreignCities + ' 个海外城市；每个用户只计入当前所在城市' : '当前没有海外城市数据';
     document.getElementById('userUnknownCityTotal').textContent = unknownTotal.toLocaleString();
     if (!provinceStats[selectedProvinceCode]) selectedProvinceCode = '';
-    renderCityTop();
+    renderLocationTop();
     if (drawMap !== false) renderProvinceMap();
   }
   var filterRegions = [];
@@ -199,12 +201,13 @@
       var data = (await response.json()).data || {};
       renderPie('userGenderChart', 'userGenderStats', data.gender, data.total_users);
       renderPie('userZodiacChart', 'userZodiacStats', data.zodiac, data.total_users);
+      renderPie('userAgeChart', 'userAgeStats', data.age, data.total_users, ageLabels);
       renderProvinceStats(data.user_cities || [], false);
       await AdminAssets.loadCharts();
       renderPie('userGenderChart', 'userGenderStats', data.gender, data.total_users);
       renderPie('userZodiacChart', 'userZodiacStats', data.zodiac, data.total_users);
       renderProvinceMap();
-      renderUserBars('userAgeChart', data.age, ageLabels, data.total_users);
+      renderPie('userAgeChart', 'userAgeStats', data.age, data.total_users, ageLabels);
       renderUserBars('userTrackOutputChart', data.track_output, trackOutputLabels, data.total_users);
       statisticsLoaded = true;
     } catch (_) {
@@ -225,6 +228,7 @@
   var pageIndex = 0;
   var lastNextCursor = null;
   var totalCount = 0;
+  var listRequest = 0;
 
   var tbody = document.getElementById('userList');
   var prevBtn = document.getElementById('prevBtn');
@@ -236,7 +240,7 @@
   var provinceFilter = document.getElementById('provinceFilter');
   var cityFilter = document.getElementById('cityFilter');
   var genderFilter = document.getElementById('genderFilter');
-  var zodiacFilter = document.getElementById('zodiacFilter');
+  var levelFilter = document.getElementById('levelFilter');
   var restrictedFilter = document.getElementById('restrictedFilter');
   var pageHint = document.getElementById('pageHint');
   var totalHint = document.getElementById('totalHint');
@@ -483,7 +487,7 @@
   searchBtn.addEventListener('click', resetSearch);
   titleFilter.addEventListener('keydown', function (event) { if (event.key === 'Enter') resetSearch(); });
   provinceFilter.addEventListener('change', function () { populateFilterCities(); resetSearch(); });
-  [internalFilter, cityFilter, genderFilter, zodiacFilter, restrictedFilter].forEach(function (filter) {
+  [internalFilter, cityFilter, genderFilter, levelFilter, restrictedFilter].forEach(function (filter) {
     filter.addEventListener('change', resetSearch);
   });
   prevBtn.addEventListener('click', function () {
@@ -500,6 +504,7 @@
   });
 
   async function loadPage() {
+    var request = ++listRequest;
     var params = new URLSearchParams();
     params.set('limit', String(pageSize));
     if (titleFilter.value.trim()) params.set('title', titleFilter.value.trim());
@@ -507,43 +512,65 @@
     if (provinceFilter.value) params.set('province_code', provinceFilter.value);
     if (cityFilter.value) params.set('city_code', cityFilter.value);
     if (genderFilter.value) params.set('gender', genderFilter.value);
-    if (zodiacFilter.value) params.set('zodiac_sign', zodiacFilter.value);
+    if (levelFilter.value) params.set('level', levelFilter.value);
     if (restrictedFilter.value) params.set('restricted', restrictedFilter.value);
     var cur = cursorStack[pageIndex];
     if (cur) {
       params.set('cursor_created_at', cur.created_at);
       params.set('cursor_id', String(cur.id));
     }
-    var resp = await fetch('/admin/api/users?' + params.toString());
-    if (!resp.ok) {
-      tbody.innerHTML = '<tr><td colspan="6">加载失败: ' + resp.status + '</td></tr>';
-      return;
+    prevBtn.disabled = nextBtn.disabled = true;
+    lastNextCursor = null;
+    totalHint.textContent = '';
+    pageHint.textContent = '正在加载…';
+    tbody.setAttribute('aria-busy', 'true');
+    tbody.innerHTML = '<tr><td colspan="7">正在加载用户…</td></tr>';
+    try {
+      var resp = await fetch('/admin/api/users?' + params.toString());
+      var body = await resp.json();
+      if (request !== listRequest) return;
+      if (!resp.ok || body.code !== 0) throw new Error(body.error || String(resp.status));
+      var data = body.data || {};
+      var items = data.items || [];
+      totalCount = data.total || 0;
+      lastNextCursor = data.next_cursor || null;
+      if (Array.isArray(data.level_options)) {
+        var selectedLevel = levelFilter.value;
+        levelFilter.replaceChildren(new Option('全部等级', ''));
+        data.level_options.forEach(function (item) { levelFilter.add(new Option('Lv.' + item.level, String(item.level))); });
+        levelFilter.value = selectedLevel;
+      }
+
+      tbody.innerHTML = '';
+      items.forEach(function (it) {
+        var avatar = it.avatar_url
+          ? '<img class="admin-user-avatar" src="' + esc(it.avatar_url) + '" alt="" />'
+          : '<span class="admin-user-avatar admin-user-avatar-empty" aria-hidden="true">👤</span>';
+        avatar = '<span class="admin-user-avatar-wrap">' + avatar + (it.is_internal ? '<span class="admin-user-inner-badge">inner</span>' : '') + '</span>';
+        var tr = document.createElement('tr');
+        tr.innerHTML = '<td><div class="admin-user-identity">' + avatar + '<span class="admin-user-name"><span>' + esc(it.nickname) + '</span>' + (Number.isInteger(it.level) && it.level > 0 ? '<span class="admin-user-level">Lv.' + it.level + '</span>' : '') + '</span></div></td>' +
+          '<td>' + esc(it.phone || '') + '</td>' +
+          '<td>' + esc(genderText(it.gender)) + '</td>' +
+          '<td><span class="admin-user-city-cell">' + esc(locationText(it)) + '</span></td>' +
+          '<td>' + (it.follower_count == null ? '—' : esc(number(it.follower_count).toLocaleString())) + '</td>' +
+          '<td>' + (it.last_login_at ? fmtTime(it.last_login_at) : '—') + '</td>' +
+          '<td><div class="admin-user-actions"><button data-action="detail" data-user-id="' + esc(it.id) + '">查看详情</button>' + '</div></td>';
+        tbody.appendChild(tr);
+      });
+      if (!items.length) tbody.innerHTML = '<tr><td colspan="7">暂无符合条件的用户</td></tr>';
+      nextBtn.disabled = !lastNextCursor;
+      pageHint.textContent = '第 ' + (pageIndex + 1) + ' 页 · 本页 ' + items.length + ' 个用户';
+      totalHint.textContent = '共 ' + totalCount.toLocaleString() + ' 个用户';
+    } catch (error) {
+      if (request !== listRequest) return;
+      tbody.innerHTML = '<tr><td colspan="7">加载失败：' + esc(error.message) + '。请点击“刷新”重试。</td></tr>';
+      pageHint.textContent = '加载失败';
+    } finally {
+      if (request === listRequest) {
+        tbody.removeAttribute('aria-busy');
+        prevBtn.disabled = pageIndex <= 0;
+      }
     }
-    var data = ((await resp.json()).data) || {};
-    var items = data.items || [];
-    totalCount = data.total || 0;
-    lastNextCursor = data.next_cursor || null;
-
-    tbody.innerHTML = '';
-    items.forEach(function (it) {
-      var avatar = it.avatar_url
-        ? '<img class="admin-user-avatar" src="' + esc(it.avatar_url) + '" alt="" />'
-        : '<span class="admin-user-avatar admin-user-avatar-empty" aria-hidden="true">👤</span>';
-      avatar = '<span class="admin-user-avatar-wrap">' + avatar + (it.is_internal ? '<span class="admin-user-inner-badge">inner</span>' : '') + '</span>';
-      var tr = document.createElement('tr');
-      tr.innerHTML = '<td><div class="admin-user-identity">' + avatar + '<span class="admin-user-name"><span>' + esc(it.nickname) + '</span>' + (Number.isInteger(it.level) && it.level > 0 ? '<span class="admin-user-level">Lv.' + it.level + '</span>' : '') + '</span></div></td>' +
-        '<td>' + esc(it.phone || '') + '</td>' +
-        '<td>' + esc(genderText(it.gender)) + '</td>' +
-        '<td><span class="admin-user-city-cell">' + esc(locationText(it)) + '</span></td>' +
-        '<td>' + (it.last_login_at ? fmtTime(it.last_login_at) : '—') + '</td>' +
-        '<td><div class="admin-user-actions"><button data-action="detail" data-user-id="' + esc(it.id) + '">查看详情</button>' + '</div></td>';
-      tbody.appendChild(tr);
-    });
-
-    prevBtn.disabled = pageIndex <= 0;
-    nextBtn.disabled = !lastNextCursor;
-    pageHint.textContent = '第 ' + (pageIndex + 1) + ' 页（' + items.length + ' 条）';
-    totalHint.textContent = '共 ' + totalCount + ' 个用户';
   }
 
   loadUserStatistics();

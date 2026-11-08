@@ -2786,11 +2786,24 @@ func (r *MySQLUserRepository) CountAll(ctx context.Context) (int64, error) {
 }
 
 func (r *MySQLUserRepository) ListAdminUsers(ctx context.Context, filter AdminUserListFilter, cursor *models.UserListCursor, limit int) ([]*models.User, int64, error) {
+	if filter.UserIDs != nil && len(filter.UserIDs) == 0 && !filter.ExcludeUserIDs {
+		return []*models.User{}, 0, nil
+	}
 	if limit <= 0 {
 		limit = 20
 	}
 	conditions := []string{"1=1"}
 	args := make([]any, 0, 16)
+	if len(filter.UserIDs) > 0 {
+		operator := "IN"
+		if filter.ExcludeUserIDs {
+			operator = "NOT IN"
+		}
+		conditions = append(conditions, "id "+operator+" ("+strings.TrimSuffix(strings.Repeat("?,", len(filter.UserIDs)), ",")+")")
+		for _, id := range filter.UserIDs {
+			args = append(args, id)
+		}
+	}
 	if filter.Title != "" {
 		conditions = append(conditions, `nickname LIKE ? ESCAPE '!'`)
 		args = append(args, "%"+escapeAdminLike(filter.Title)+"%")

@@ -131,12 +131,15 @@ type AdminUserListFilterRepository interface {
 }
 
 type AdminUserListFilter struct {
-	Title      string
-	IsInternal *bool
-	CityCode   string
-	Gender     string
-	ZodiacSign string
-	Restricted *bool
+	// UserIDs 为 nil 时不限制；非 nil 空集匹配空列表。ExcludeUserIDs 反转为排除集合。
+	UserIDs        []int64
+	ExcludeUserIDs bool
+	Title          string
+	IsInternal     *bool
+	CityCode       string
+	Gender         string
+	ZodiacSign     string
+	Restricted     *bool
 	// ProvinceCode 按用户资料所在省份精确筛选；与 CityCode 同时设置时取交集。
 	ProvinceCode string
 }
@@ -347,6 +350,8 @@ type FollowRepository interface {
 	ListFollowers(ctx context.Context, userID int64, cursor *models.UserFollowCursor, limit int) ([]*models.UserFollow, error)
 	CountFollowing(ctx context.Context, userID int64) (int64, error)
 	CountFollowers(ctx context.Context, userID int64) (int64, error)
+	// CountFollowersByUserIDs 批量统计当前页粉丝数；缺失 ID 视为 0。
+	CountFollowersByUserIDs(ctx context.Context, userIDs []int64) (map[int64]int64, error)
 }
 
 // NavigationRepository defines persistence operations for track navigation usage records.

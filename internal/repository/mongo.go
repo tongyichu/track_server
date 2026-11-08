@@ -803,10 +803,20 @@ func (r *MongoUserRepository) ListAll(ctx context.Context, cursor *models.UserLi
 }
 
 func (r *MongoUserRepository) ListAdminUsers(ctx context.Context, filter AdminUserListFilter, cursor *models.UserListCursor, limit int) ([]*models.User, int64, error) {
+	if filter.UserIDs != nil && len(filter.UserIDs) == 0 && !filter.ExcludeUserIDs {
+		return []*models.User{}, 0, nil
+	}
 	if limit <= 0 {
 		limit = 20
 	}
 	query := bson.M{}
+	if len(filter.UserIDs) > 0 {
+		operator := "$in"
+		if filter.ExcludeUserIDs {
+			operator = "$nin"
+		}
+		query["_id"] = bson.M{operator: filter.UserIDs}
+	}
 	if filter.Title != "" {
 		query["nickname"] = primitive.Regex{Pattern: regexp.QuoteMeta(filter.Title), Options: "i"}
 	}

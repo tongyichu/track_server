@@ -17,7 +17,7 @@
 | 上报设备权限快照 | PUT | `/user/permission-snapshot` | 是 | [permission-snapshots.md](permission-snapshots.md) |
 | 后台查看用户设备权限 | GET | `/admin/api/users/:user_id/permission-snapshots` | 后台 users 读取权限 | [permission-snapshots.md](permission-snapshots.md) |
 | 后台用户画像与规范化城市归属统计 | GET | `/admin/api/users/statistics` | 后台 users 读取权限 | [用户地域统计](admin-regions.md#用户地域统计) |
-| 后台用户列表（含批量级别） | GET | `/admin/api/users` | 后台 users 读取权限 | [admin-users.md](admin-users.md#列表) |
+| 后台用户列表（等级筛选、批量级别与粉丝数） | GET | `/admin/api/users` | 后台 users 读取权限 | [admin-users.md](admin-users.md#列表) |
 | 后台用户资料读取 / 编辑（手机号只读） | GET / PUT | `/admin/api/users/:user_id` | 后台 users 读 / 写权限 | [admin-users.md](admin-users.md#资料读取与保存) |
 | 后台用户互动数据与级别 | GET | `/admin/api/users/:user_id/overview` | 后台 users 读取权限 | [admin-users.md](admin-users.md#互动数据与级别) |
 | 后台用户背景图 | GET | `/admin/api/users/:user_id/background` | 后台 users 读取权限 | [admin-users.md](admin-users.md#背景图) |
@@ -128,6 +128,9 @@
 | 接口 | 方法 | 完整路径 | 需要认证 | 文档 |
 | --- | --- | --- | --- | --- |
 | 后台账号列表与页面目录 | GET | `/admin/api/accounts` | 管理员 session | [admin-accounts.md](admin-accounts.md) |
+| 投稿审核列表与中文展示元数据 | GET | `/admin/api/track-submissions` | 投稿查看 | [track-submission.md](track-submission.md#7-管理后台审核) |
+| 投稿、轨迹与审核记录详情（弹窗） | GET | `/admin/api/track-submissions/:submission_id` | 投稿查看 | [track-submission.md](track-submission.md#7-管理后台审核) |
+| 审核通过或驳回投稿（版本条件保存） | POST | `/admin/api/track-submissions/:submission_id/review` | 投稿操作 | [track-submission.md](track-submission.md#7-管理后台审核) |
 | 后台读取/保存地区目录（完整响应支持 gzip，no-store） | GET / PUT | `/admin/api/regions/catalog` | 地区查看 / 操作 | [regions.md](regions.md) |
 | 后台保存单个地区节点 | PUT | `/admin/api/regions/node` | 地区操作 | [regions.md](regions.md) |
 | 上传省份/城市图片文件（前端自动PUT关联） | POST | `/admin/api/regions/:node_id/photos` | 地区操作 | [regions.md](regions.md) |
