@@ -60,9 +60,6 @@ func (s *TrackService) DiscoverRoutes(ctx context.Context, userID int64, city, l
 		}
 		ids := make([]string, 0, len(batch))
 		for _, track := range batch {
-			if shape != "" && strings.TrimSpace(track.ShapeLabel) != shape {
-				continue
-			}
 			ids = append(ids, track.ID)
 		}
 		var spots map[string]*models.TrackPrimaryScenicSpot
@@ -74,6 +71,9 @@ func (s *TrackService) DiscoverRoutes(ctx context.Context, userID int64, city, l
 		}
 		for _, track := range batch {
 			if track.Status != models.TrackStatusNormal || track.IsRunning || strings.TrimSpace(track.RawTrackURL) == "" || trackType != "" && track.TrackType != trackType {
+				continue
+			}
+			if shape != "" && strings.TrimSpace(track.ShapeLabel) != shape {
 				continue
 			}
 			for _, candidate := range buildTrackLabels(track.ShapeLabel, track.TrackType, spots[track.ID], label == "featured") {
