@@ -19,6 +19,8 @@ import (
 	"github.com/tongyichu/track_server/internal/repository"
 )
 
+const maxScenicDescription = 8000
+
 type ScenicSpotCatalogService struct {
 	ai                   *ai.Manager
 	aiModel              string
@@ -81,7 +83,7 @@ func validateScenicSpot(v *models.ScenicSpot) error {
 	}
 	v.CityCode = config.CanonicalCityCode(v.CityCode)
 	v.CityName = strings.TrimSpace(v.CityName)
-	if utf8.RuneCountInString(v.Name) > 160 || utf8.RuneCountInString(v.Description) > 8000 || utf8.RuneCountInString(v.Address) > 500 || utf8.RuneCountInString(v.Category) > 100 || len(v.Aliases) > 40 || len(v.Photos) > 30 || len(v.Sources) > 8 {
+	if utf8.RuneCountInString(v.Name) > 160 || utf8.RuneCountInString(v.Description) > maxScenicDescription || utf8.RuneCountInString(v.Address) > 500 || utf8.RuneCountInString(v.Category) > 100 || len(v.Aliases) > 40 || len(v.Photos) > 30 || len(v.Sources) > 8 {
 		return invalidScenicSpot("scenic spot fields exceed limits")
 	}
 	seen := map[string]bool{}

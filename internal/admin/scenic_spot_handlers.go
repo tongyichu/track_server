@@ -61,6 +61,11 @@ func (h *Handler) ListScenicSpots(ctx context.Context, c *app.RequestContext) {
 	if !h.scenicSpotServiceReady(c) {
 		return
 	}
+	view := strings.TrimSpace(string(c.Query("view")))
+	if view != "" && view != "summary" {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid scenic spot list view"})
+		return
+	}
 	f := repository.ScenicSpotListFilter{Query: strings.TrimSpace(string(c.Query("q"))), Status: strings.TrimSpace(string(c.Query("status"))), Cursor: strings.TrimSpace(string(c.Query("cursor"))), Limit: parseAdminListLimit(string(c.Query("limit")))}
 	switch f.Status {
 	case "", models.ScenicSpotActive, models.ScenicSpotArchived, models.ScenicSpotMerged:
@@ -92,7 +97,7 @@ func (h *Handler) ListScenicSpots(ctx context.Context, c *app.RequestContext) {
 		h.scenicSpotServiceError(c, err)
 		return
 	}
-	counts, err := h.enrichScenicSpotCities(ctx, items)
+	metadata, err := h.enrichScenicSpotCities(ctx, items)
 	if err != nil {
 		h.scenicSpotServiceError(c, err)
 		return
@@ -103,16 +108,58 @@ func (h *Handler) ListScenicSpots(ctx context.Context, c *app.RequestContext) {
 	}
 	listItems := make([]listItem, 0, len(items))
 	for _, spot := range items {
-		listItems = append(listItems, listItem{ScenicSpot: spot, RelatedTrackCount: counts[spot.ID]})
+		listItems = append(listItems, listItem{ScenicSpot: spot, RelatedTrackCount: metadata[spot.ID].TrackCount})
 	}
 	next := ""
 	if len(items) > 0 {
 		next = items[len(items)-1].ID
 	}
-	c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"items": listItems, "total": total, "next_cursor": next, "has_more": len(items) == f.Limit}})
+	var responseItems any = listItems
+	if view == "summary" {
+		summaries := make([]scenicSpotListSummary, 0, len(items))
+		for _, spot := range items {
+			mode := "automatic"
+			if scenicSpotListManual(spot) {
+				mode = "manual"
+			}
+			meta := metadata[spot.ID]
+			summaries = append(summaries, scenicSpotListSummary{ID: spot.ID, Name: spot.Name, ScenicGrade: spot.ScenicGrade, CityLabels: meta.CityLabels, PhotoCount: len(spot.Photos), EditMode: mode, RelatedTrackCount: meta.TrackCount})
+		}
+		responseItems = summaries
+	}
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"items": responseItems, "total": total, "next_cursor": next, "has_more": len(items) == f.Limit}})
 }
 
-func (h *Handler) enrichScenicSpotCities(ctx context.Context, spots []*models.ScenicSpot) (map[string]int64, error) {
+type scenicSpotListSummary struct {
+	ID                string   `json:"id"`
+	Name              string   `json:"name"`
+	ScenicGrade       string   `json:"scenic_grade,omitempty"`
+	CityLabels        []string `json:"related_city_labels"`
+	PhotoCount        int      `json:"photo_count"`
+	EditMode          string   `json:"edit_mode"`
+	RelatedTrackCount int64    `json:"related_track_count"`
+}
+
+type scenicSpotListMetadata struct {
+	TrackCount int64
+	CityLabels []string
+}
+
+// Match the existing editor's manual/automatic semantics without sending its
+// photos, sources and long text with each list row.
+func scenicSpotListManual(spot *models.ScenicSpot) bool {
+	if spot.ManualEdited {
+		return true
+	}
+	for _, source := range spot.Sources {
+		if source.Status == "active" && source.ProviderID != "" {
+			return false
+		}
+	}
+	return spot.ProviderDataStatus != "synced" && (spot.Name != "" || spot.Category != "" || spot.Address != "" || spot.Description != "" || len(spot.Photos) > 0)
+}
+
+func (h *Handler) enrichScenicSpotCities(ctx context.Context, spots []*models.ScenicSpot) (map[string]scenicSpotListMetadata, error) {
 	ids := make([]string, 0, len(spots))
 	for _, spot := range spots {
 		if spot != nil {
@@ -123,22 +170,47 @@ func (h *Handler) enrichScenicSpotCities(ctx context.Context, spots []*models.Sc
 	if err != nil {
 		return nil, err
 	}
-	counts := make(map[string]int64, len(spots))
+	options := config.CityOptions()
+	byCode := make(map[string]config.CityOption, len(options))
+	for _, option := range options {
+		byCode[option.Code] = option
+	}
+	cityLabel := func(code, fallback string) string {
+		option, exists := byCode[config.CanonicalCityCode(code)]
+		if !exists {
+			return fallback
+		}
+		if province, ok := byCode[option.ProvinceCode]; ok && province.Name != "" && province.Name != option.Name {
+			return province.Name + " · " + option.Name
+		}
+		return option.Name
+	}
+	metadata := make(map[string]scenicSpotListMetadata, len(spots))
 	for _, spot := range spots {
 		if spot == nil {
 			continue
 		}
 		cities := make(map[string]struct{})
-		if spot.CityName != "" {
-			cities[spot.CityName] = struct{}{}
-		} else if name := config.CityNameByCode(spot.CityCode); name != "" {
-			cities[name] = struct{}{}
+		labels := make(map[string]struct{})
+		ownCity := spot.CityName
+		if ownCity == "" {
+			ownCity = config.CityNameByCode(spot.CityCode)
 		}
+		if ownCity != "" {
+			cities[ownCity] = struct{}{}
+		}
+		if label := cityLabel(spot.CityCode, ownCity); label != "" {
+			labels[label] = struct{}{}
+		}
+		meta := scenicSpotListMetadata{CityLabels: []string{}}
 		if stats := statistics[spot.ID]; stats != nil {
-			counts[spot.ID] = stats.TrackCount
+			meta.TrackCount = stats.TrackCount
 			for code := range stats.CityCodes {
 				if name := config.CityNameByCode(code); name != "" {
 					cities[name] = struct{}{}
+					if label := cityLabel(code, name); label != "" {
+						labels[label] = struct{}{}
+					}
 				}
 			}
 		}
@@ -147,8 +219,13 @@ func (h *Handler) enrichScenicSpotCities(ctx context.Context, spots []*models.Sc
 			spot.RelatedCities = append(spot.RelatedCities, name)
 		}
 		sort.Strings(spot.RelatedCities)
+		for label := range labels {
+			meta.CityLabels = append(meta.CityLabels, label)
+		}
+		sort.Strings(meta.CityLabels)
+		metadata[spot.ID] = meta
 	}
-	return counts, nil
+	return metadata, nil
 }
 func (h *Handler) GetScenicSpotStatistics(ctx context.Context, c *app.RequestContext) {
 	if !h.scenicSpotServiceReady(c) {

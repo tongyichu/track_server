@@ -175,7 +175,7 @@
 
 纠错协议扩展（现有路由）：`GET /feedback/correction-options` 与后台配置接口支持双语问题解释/填写提示；`GET /admin/api/feedbacks` 支持 kind/track_id/correction_option_id 仓储筛选；后台反馈详情支持 handled_by/track_change，状态更新支持 outcome/revision；`PUT /admin/api/tracks/:track_id` 可选 source_feedback_id。详见 [feedback.md](feedback.md#纠错体验与处理结果扩展)，权限仍由既有路由映射及跨模块校验执行。
 
-后台地域筛选：`GET /admin/api/users`（用户查看）支持 `province_code`；`GET /admin/api/scenic-spots`（景点查看）支持 `province_code` / `city_code`，见 [admin-regions.md](admin-regions.md)。
+后台地域筛选：`GET /admin/api/users`（用户查看）支持 `province_code`；`GET /admin/api/scenic-spots`（景点查看）支持 `province_code` / `city_code` 及目录轻量 `view=summary`（省市、等级、图片数等，不传图片和简介），见 [admin-regions.md](admin-regions.md)。
 - `POST /admin/api/tracks/:track_id/labels/generate`：轨迹写权限，AI 形象建议，不直接保存，见 admin-tracks.md。
 
 - `POST /admin/api/tracks/:track_id/description/generate`：轨迹写权限，手动联网生成候选说明，返回来源与 source_version，不直接写轨迹，见 [后台协议](admin-tracks.md#路线说明与-ai-联网填写)。

@@ -16,10 +16,9 @@ import (
 	"github.com/tongyichu/track_server/internal/models"
 )
 
-const (
-	kimiAPIBaseURL       = "https://api.moonshot.cn/v1"
-	maxScenicDescription = 200
-)
+const kimiAPIBaseURL = "https://api.moonshot.cn/v1"
+
+const scenicDescriptionRuleVersion = "2"
 
 type ScenicSpotDescriptionGenerator interface {
 	Generate(context.Context, *models.ScenicSpot) (string, error)
@@ -118,7 +117,7 @@ func (g *KimiScenicSpotDescriptionGenerator) Generate(ctx context.Context, spot 
 		return "", errors.New("kimi scenic search returned empty source content")
 	}
 
-	prompt := fmt.Sprintf("景点名称：%s\n城市：%s\n分类：%s\n地址：%s\n\n联网检索资料：\n%s\n\n请根据检索资料为该景点写一段通顺、简洁、适合旅游客户端展示的中文介绍。只能陈述资料明确支持的事实；资料不足以确认这是同一个景点，或没有可用介绍信息时，只输出 NO_DESCRIPTION。不要猜测，不要写营业时间、票价等易变化信息。只输出一个自然段，不超过 180 个汉字，不要标题、列表、引用标记或来源说明。", strings.TrimSpace(spot.Name), strings.TrimSpace(spot.CityName), strings.TrimSpace(spot.Category), strings.TrimSpace(spot.Address), sources.String())
+	prompt := fmt.Sprintf("景点名称：%s\n城市：%s\n分类：%s\n地址：%s\n\n联网检索资料：\n%s\n\n请根据检索资料为该景点写一段通顺、简洁、适合旅游客户端展示的中文介绍。只能陈述资料明确支持的事实；资料不足以确认这是同一个景点，或没有可用介绍信息时，只输出 NO_DESCRIPTION。不要猜测，不要写营业时间、票价等易变化信息。只输出一个自然段，篇幅以讲清特色和有用背景为准，不机械凑字或重复资料，不要标题、列表、引用标记或来源说明。", strings.TrimSpace(spot.Name), strings.TrimSpace(spot.CityName), strings.TrimSpace(spot.Category), strings.TrimSpace(spot.Address), sources.String())
 	completionBody, err := json.Marshal(map[string]any{
 		"model": g.model,
 		"messages": []map[string]string{
@@ -126,9 +125,7 @@ func (g *KimiScenicSpotDescriptionGenerator) Generate(ctx context.Context, spot 
 			{"role": "user", "content": prompt},
 		},
 		"temperature": 1,
-		// K2.6 reasoning tokens share the completion budget with its answer.
-		// The prompt caps the final description, so leave ample room for reasoning.
-		"max_tokens": 32768,
+		// Leave the completion budget to the selected model, as in track generation.
 	})
 	if err != nil {
 		return "", err
@@ -137,8 +134,11 @@ func (g *KimiScenicSpotDescriptionGenerator) Generate(ctx context.Context, spot 
 	if err := g.postJSON(ctx, kimiAPIBaseURL+"/chat/completions", completionBody, &completion); err != nil {
 		return "", fmt.Errorf("kimi scenic summary: %w", err)
 	}
-	if len(completion.Choices) == 0 {
-		return "", errors.New("kimi scenic summary returned no choices")
+	if len(completion.Choices) == 1 && completion.Choices[0].FinishReason == "length" {
+		return "", errKimiOutputLimit
+	}
+	if len(completion.Choices) != 1 || completion.Choices[0].FinishReason != "stop" {
+		return "", errors.New("incomplete Kimi scenic response")
 	}
 	choice := completion.Choices[0]
 	description := strings.TrimSpace(choice.Message.Content)

@@ -30,7 +30,7 @@ func (s *ScenicSpotCatalogService) generateScenicDescription(ctx context.Context
 	}
 	ctx, cancel := context.WithTimeout(ctx, 75*time.Second)
 	defer cancel()
-	ctx, run, err := s.ai.Begin(ctx, ai.Spec{Feature: "scenic_description", Provider: "moonshot", Model: s.aiModel, ObjectID: spot.ID, ObjectName: spot.Name, Reason: "景点创建或后台介绍生成", InputVersion: scenicAIVersion(spot), RuleVersion: "1", InputSummary: strings.Join([]string{spot.Name, spot.CityName, spot.Category, spot.Address}, "；") + "；联网检索后生成介绍"})
+	ctx, run, err := s.ai.Begin(ctx, ai.Spec{Feature: "scenic_description", Provider: "moonshot", Model: s.aiModel, ObjectID: spot.ID, ObjectName: spot.Name, Reason: "景点创建或后台介绍生成", InputVersion: scenicAIVersion(spot), RuleVersion: scenicDescriptionRuleVersion, InputSummary: strings.Join([]string{spot.Name, spot.CityName, spot.Category, spot.Address}, "；") + "；联网检索后生成介绍"})
 	if err != nil {
 		return "", "", err
 	}

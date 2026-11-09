@@ -119,7 +119,9 @@ func (g *KimiTrackNarrativeGenerator) complete(ctx context.Context, facts, image
 	if instant {
 		temperature = 0.6
 	}
-	payload := map[string]interface{}{"model": g.model, "temperature": temperature, "max_tokens": 8192,
+	// Use the selected model's default completion budget. Thinking and the final
+	// answer share that budget, so a small application cap can truncate valid work.
+	payload := map[string]interface{}{"model": g.model, "temperature": temperature,
 		"messages": []interface{}{
 			map[string]interface{}{"role": "system", "content": prompt},
 			map[string]interface{}{"role": "user", "content": []interface{}{

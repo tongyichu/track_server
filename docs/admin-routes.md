@@ -136,3 +136,7 @@
 | GET | `/admin/api/audit-logs` | 管理员 | 可选 username 精确筛选，返回筛选后最近 100 条发起/结果日志 |
 
 AI 使用完整协议见 [admin-ai](api/admin-ai.md)，运行与计费边界见 [AI 使用运行说明](ai-usage.md)。
+
+### 景点列表摘要
+
+`GET /admin/api/scenic-spots?view=summary`沿用景点查看权限，返回目录所需的编号、名称、等级、省市展示名、图片数、人工/自动类型及关联轨迹数，不返回分类、简介、照片URL或来源明细。不传view仍返回原完整条目；查看详情继续用既有单条接口。分页和筛选规则及字段见[省市筛选协议](api/admin-regions.md#景点目录轻量摘要)。
