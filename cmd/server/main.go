@@ -619,7 +619,7 @@ func main() {
 	_, narrativeMemoryFallback := trackRepo.(*repository.InMemoryTrackRepository)
 	if !narrativeMemoryFallback && cfg.MoonshotAPIKey != "" && trackMapRepo != nil && trackPlaceRepo != nil && previewCache != nil {
 		trackNarrativeSvc = service.NewTrackNarrativeService(trackRepo, trackMapRepo, trackPlaceRepo, trackSvc,
-			service.NewKimiTrackNarrativeGenerator(cfg.MoonshotAPIKey, cfg.TrackNarrativeModel), cfg.TrackNarrativeModel, cfg.TrackNarrativeDailyBudget)
+			service.NewKimiTrackNarrativeGenerator(cfg.MoonshotAPIKey, cfg.TrackNarrativeModel), cfg.TrackNarrativeModel)
 		log.Printf("track narrative configured: model=%s automatic_enabled=%t scheduler_enabled=%t", cfg.TrackNarrativeModel, cfg.TrackNarrativeEnabled, cfg.SchedulerEnabled)
 	}
 
@@ -708,7 +708,7 @@ func main() {
 		adminModule.Handler.SetScenicSpotCatalogService(scenicSpotCatalogSvc)
 		adminModule.Handler.SetTrackPlaceService(trackPlaceSvc)
 		adminModule.Handler.SetTrackNarrativeService(trackNarrativeSvc)
-		adminModule.Handler.SetAIManager(aiManager, cfg.TrackNarrativeModel, cfg.KimiScenicDescriptionModel, cfg.TrackNarrativeDailyBudget)
+		adminModule.Handler.SetAIManager(aiManager, cfg.TrackNarrativeModel, cfg.KimiScenicDescriptionModel)
 		adminModule.Handler.SetPermissionSnapshotService(permissionSnapshotSvc)
 		adminModule.Handler.SetTrackMapIndexService(trackMapIndexSvc)
 		if ossTokenSvc != nil {

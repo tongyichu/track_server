@@ -71,14 +71,7 @@ func (s *TrackNarrativeService) PreviewShape(ctx context.Context, id string) (re
 	if err != nil {
 		return nil, err
 	}
-	day := now.In(time.FixedZone("Asia/Shanghai", 8*3600)).Format("2006-01-02")
-	reserved, err := s.store.ReservePlaceAPICall(ctx, narrativeBudgetProvider, day, s.budget)
-	if err != nil {
-		return nil, err
-	}
-	if !reserved {
-		return nil, errors.New("今日 AI 调用额度已用完，请明天重试")
-	}
+
 	// Shape-only input deliberately excludes narrative, submission and scenic prose.
 	raw, err := json.Marshal(map[string]interface{}{"title": snap.Input.Title, "sport": snap.Input.Sport, "distance_km": snap.Input.DistanceKM, "recorded_duration_minutes": snap.Input.DurationMinutes, "recorded_gain_m": snap.Input.Gain, "learned_shape_examples": snap.Input.LearnedShapeExamples})
 	if err != nil {

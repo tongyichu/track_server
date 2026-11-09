@@ -20,7 +20,7 @@ import (
 
 var ErrCancelled = errors.New("AI 任务已中断，未继续写入结果")
 var ErrPaused = errors.New("该功能的自动 AI 任务已暂停")
-var ErrBudget = errors.New("该功能今日 AI 请求预算已用完")
+var ErrBudget = errors.New("后台配置的该功能每日请求上限已用完，请调整预算后重试")
 var ErrSuppressed = errors.New("此版本的自动 AI 任务已被中断，请手动重试或等待资料变化")
 var ErrUnavailable = errors.New("AI 使用记录暂不可用，已阻止新的付费调用")
 var ErrBusy = errors.New("AI 任务繁忙，请稍后重试")
@@ -84,6 +84,16 @@ type Manager struct {
 func New(repo repository.AIUsageRepository, durable bool) *Manager {
 	ctx, stop := context.WithCancel(context.Background())
 	m := &Manager{Repo: repo, Durable: durable, local: map[string]context.CancelFunc{}, retries: map[string]RetryFunc{}, workers: make(chan struct{}, 4), shutdown: ctx, stop: stop}
+	if durable {
+		initCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+		if err := m.initializeDailyLimits(initCtx); err != nil {
+			m.Durable = false
+			log.Printf("AI daily-limit initialization unavailable; new AI billing disabled")
+		} else {
+			log.Printf("AI daily request policies initialized; shared narrative quota removed")
+		}
+		cancel()
+	}
 	m.wg.Add(1)
 	go func() {
 		defer m.wg.Done()
@@ -153,7 +163,7 @@ func (m *Manager) edit(ctx context.Context, id string, fn func(*models.AITask) e
 	return ErrBusy
 }
 func defaultControl(feature string) models.AIControl {
-	return models.AIControl{Policy: models.AIPolicy{Feature: feature, DailyRequests: 100, MaxConcurrent: 1}, Leases: map[string]time.Time{}}
+	return models.AIControl{Policy: models.AIPolicy{Feature: feature, DailyRequests: 0, MaxConcurrent: 1}, Leases: map[string]time.Time{}}
 }
 func (m *Manager) control(ctx context.Context, feature string, fn func(*models.AIControl) error) error {
 	if m == nil || m.Repo == nil {
@@ -210,7 +220,7 @@ func (m *Manager) Policies(ctx context.Context) ([]models.AIControl, error) {
 	return out, nil
 }
 func (m *Manager) SavePolicy(ctx context.Context, p models.AIPolicy, actor string) error {
-	if !ValidFeature(p.Feature) || p.DailyRequests < 1 || p.DailyRequests > 100000 || p.MaxConcurrent < 1 || p.MaxConcurrent > 16 || p.TokenAlert < 0 || p.TokenAlert > 1000000000 || math.IsNaN(p.CostAlertCNY) || math.IsInf(p.CostAlertCNY, 0) || p.CostAlertCNY < 0 || p.CostAlertCNY > 100000 {
+	if !ValidFeature(p.Feature) || p.DailyRequests < 0 || p.DailyRequests > 100000 || p.MaxConcurrent < 1 || p.MaxConcurrent > 16 || p.TokenAlert < 0 || p.TokenAlert > 1000000000 || math.IsNaN(p.CostAlertCNY) || math.IsInf(p.CostAlertCNY, 0) || p.CostAlertCNY < 0 || p.CostAlertCNY > 100000 {
 		return errors.New("预算或并发参数无效")
 	}
 	return m.control(ctx, p.Feature, func(c *models.AIControl) error {
@@ -248,7 +258,7 @@ func (m *Manager) AutomaticAllowed(ctx context.Context, feature, id, version str
 			return ErrPaused
 		}
 		day := time.Now().In(time.FixedZone("Asia/Shanghai", 28800)).Format("2006-01-02")
-		if c.Day == day && c.Requests >= c.Policy.DailyRequests {
+		if c.Policy.DailyRequests > 0 && c.Day == day && c.Requests >= c.Policy.DailyRequests {
 			return ErrBudget
 		}
 	}
@@ -778,4 +788,27 @@ func (r *Run) CancellationRequested() bool {
 	defer cancel()
 	task, err := r.m.Repo.GetAITask(ctx, r.id)
 	return err == nil && task.CancelRequested
+}
+
+// initializeDailyLimits applies the operator-authorized unlock once per feature.
+// The marker is stored atomically with the policy so concurrent startups cannot undo later admin edits.
+func (m *Manager) initializeDailyLimits(ctx context.Context) error {
+	for _, feature := range Features {
+		if err := m.control(ctx, feature.ID, func(c *models.AIControl) error {
+			if c.DailyLimitMigration >= 1 {
+				return nil
+			}
+			if c.Policy.DailyRequests != 0 {
+				c.Policy.DailyRequests = 0
+				c.Policy.Revision++
+				c.Policy.UpdatedBy = "system:daily-limit-unlock"
+				c.Policy.UpdatedAt = time.Now().UTC()
+			}
+			c.DailyLimitMigration = 1
+			return nil
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
 }

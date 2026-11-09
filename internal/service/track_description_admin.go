@@ -73,14 +73,7 @@ func (s *TrackNarrativeService) PreviewDescription(ctx context.Context, id strin
 	if err != nil {
 		return nil, errors.New("预览图读取失败，请稍后重试")
 	}
-	day := now.In(time.FixedZone("Asia/Shanghai", 8*3600)).Format("2006-01-02")
-	reserved, err := s.store.ReservePlaceAPICall(ctx, narrativeBudgetProvider, day, s.budget)
-	if err != nil {
-		return nil, err
-	}
-	if !reserved {
-		return nil, errors.New("今日 AI 调用额度已用完，请明天重试")
-	}
+
 	// This operation changes only description, so it must not advertise an unsaved shape suggestion.
 	snap.Input.ShapeLocked = true
 	facts, err := json.Marshal(snap.Input)

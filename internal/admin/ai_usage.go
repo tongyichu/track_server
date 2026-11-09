@@ -15,9 +15,8 @@ import (
 	"github.com/tongyichu/track_server/internal/repository"
 )
 
-func (h *Handler) SetAIManager(m *ai.Manager, trackModel, scenicModel string, legacy int) {
+func (h *Handler) SetAIManager(m *ai.Manager, trackModel, scenicModel string) {
 	h.ai = m
-	h.aiLegacyBudget = legacy
 	for _, name := range []string{trackModel, scenicModel} {
 		if name != "" && (len(h.aiModels) == 0 || name != h.aiModels[0]) {
 			h.aiModels = append(h.aiModels, name)
@@ -185,7 +184,7 @@ func (h *Handler) AISettings(ctx context.Context, c *app.RequestContext) {
 	for _, f := range ai.Features {
 		features = append(features, utils.H{"id": f.ID, "name": f.Name})
 	}
-	c.JSON(200, utils.H{"data": utils.H{"today_usage": todayStats, "features": features, "models": h.aiModels, "policies": policies, "prices": prices, "durable": h.ai.Durable, "legacy_narrative_daily_budget": h.aiLegacyBudget}})
+	c.JSON(200, utils.H{"data": utils.H{"today_usage": todayStats, "features": features, "models": h.aiModels, "policies": policies, "prices": prices, "durable": h.ai.Durable, "legacy_narrative_daily_budget": 0}})
 }
 func (h *Handler) SaveAIPolicy(ctx context.Context, c *app.RequestContext) {
 	if !h.aiReady(c) {

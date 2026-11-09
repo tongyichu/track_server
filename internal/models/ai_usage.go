@@ -82,10 +82,11 @@ type AIPrice struct {
 
 // One CAS document per feature coordinates budgets and expiring task leases across processes.
 type AIControl struct {
-	Policy   AIPolicy             `json:"policy"`
-	Day      string               `json:"day"`
-	Requests int64                `json:"requests"`
-	Leases   map[string]time.Time `json:"leases"`
+	DailyLimitMigration int                  `json:"daily_limit_migration"`
+	Policy              AIPolicy             `json:"policy"`
+	Day                 string               `json:"day"`
+	Requests            int64                `json:"requests"`
+	Leases              map[string]time.Time `json:"leases"`
 }
 
 type AIFilter struct {

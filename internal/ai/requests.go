@@ -43,7 +43,7 @@ func Observe(ctx context.Context, client *http.Client, req *http.Request, kind s
 			c.Day = day
 			c.Requests = 0
 		}
-		if c.Requests >= c.Policy.DailyRequests {
+		if c.Policy.DailyRequests > 0 && c.Requests >= c.Policy.DailyRequests {
 			return ErrBudget
 		}
 		if !c.Leases[r.id].After(time.Now()) {

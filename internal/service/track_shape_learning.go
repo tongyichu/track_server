@@ -191,11 +191,6 @@ func (s *TrackNarrativeService) learnShapeCorrection(ctx context.Context, id str
 		if err != nil {
 			return false, s.shapeLearningFailure(ctx, &f)
 		}
-		day := time.Now().In(time.FixedZone("Asia/Shanghai", 8*3600)).Format("2006-01-02")
-		ok, err := s.store.ReservePlaceAPICall(ctx, narrativeBudgetProvider, day, s.budget)
-		if err != nil || !ok {
-			return false, err
-		}
 		ctx, run, err = s.ai.Begin(ctx, ai.Spec{Feature: "shape_learning", Provider: "moonshot", Model: s.model, ObjectID: id, ObjectName: t.Title, Reason: fmt.Sprintf("人工改标后的学习复核（第%d次尝试）", f.Attempts+1), RetryOf: f.TaskID, InputVersion: f.Revision, RuleVersion: fmt.Sprint(trackNarrativeRuleVersion), InputSummary: "复核人工图案修正及轨迹方图，不修改人工标签"})
 		if err != nil {
 			return false, err

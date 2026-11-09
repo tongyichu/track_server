@@ -133,7 +133,6 @@ type Config struct {
 	TrackNarrativeEnabled      bool
 	TrackNarrativeModel        string
 	TrackNarrativeCron         string
-	TrackNarrativeDailyBudget  int
 
 	// 客户端埋点采集
 	// - ANALYTICS_ENABLED=false 时关闭 /api/v1/analytics/events；
@@ -205,7 +204,6 @@ func Load() *Config {
 		TrackNarrativeEnabled:            getEnv("TRACK_NARRATIVE_ENABLED", "true") == "true",
 		TrackNarrativeModel:              getEnv("TRACK_NARRATIVE_MODEL", "kimi-k2.6"),
 		TrackNarrativeCron:               getEnv("TRACK_NARRATIVE_CRON", "@every 1m"),
-		TrackNarrativeDailyBudget:        int(getEnvInt64("TRACK_NARRATIVE_DAILY_BUDGET", 100)),
 		TLSCertFile:                      tlsCert,
 		TLSKeyFile:                       tlsKey,
 		EnableTLS:                        tlsCert != "" && tlsKey != "",

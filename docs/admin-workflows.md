@@ -355,4 +355,4 @@ Pixabay大图下载失败时最多回退同一缓存中的原始640图一次，�
 
 ## AI 使用管理
 
-新增 `/admin/ai_usage.html`，统计、筛选记录、实时中断、手动重试及功能暂停/预算/并发/价格配置。复用既有图表与后台权限审计；候选和实际采用独立记录。入口：internal/admin/ai_usage.go、internal/ai/、internal/repository/ai_usage*.go。详见 [运行说明](ai-usage.md) 与 [接口协议](api/admin-ai.md)。
+新增 `/admin/ai_usage.html`，统计、筛选记录、实时中断、手动重试及功能暂停/预算/并发/价格配置。复用既有图表与后台权限审计；候选和实际采用独立记录。日请求上限0表示不限、默认为不限；旧路线共享日额度已停用。入口：internal/admin/ai_usage.go、internal/ai/、internal/repository/ai_usage*.go。详见 [运行说明](ai-usage.md) 与 [接口协议](api/admin-ai.md)。

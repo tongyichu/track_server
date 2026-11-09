@@ -38,7 +38,6 @@ import (
 type Handler struct {
 	ai                    *ai.Manager
 	aiModels              []string
-	aiLegacyBudget        int
 	regionSvc             *regions.Service
 	pixabay               *regions.PixabayClient
 	permissionSnapshotSvc *service.PermissionSnapshotService

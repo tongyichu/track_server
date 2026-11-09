@@ -28,7 +28,7 @@
 | GET | `/admin/api/ai/tasks/:task_id` | AI 使用查看 | 任务及请求明细、业务结果和重试关联 |
 | POST | `/admin/api/ai/tasks/:task_id/cancel` | AI 任务操作 + AI 查看 | 登记中断，保存阶段拒绝；消耗保留 |
 | POST | `/admin/api/ai/tasks/:task_id/retry` | AI 任务操作 + AI 查看 + 源业务操作 | 重读当前资料并创建关联重试任务 |
-| PUT | `/admin/api/ai/policies/:feature` | AI 配置操作 + AI 查看 | CAS保存自动暂停、请求预算/并发和提醒阈值 |
+| PUT | `/admin/api/ai/policies/:feature` | AI 配置操作 + AI 查看 | CAS保存自动暂停、请求预算（0不限）/并发和提醒阈值 |
 | PUT | `/admin/api/ai/prices` | AI 配置操作 + AI 查看 | CAS保存仅对未来请求生效的估算价格 |
 | POST | `/admin/api/login` | 公开 | bcrypt 校验，成功后下发 `admin_session` cookie |
 | POST | `/admin/api/logout` | 公开 | 删除 session + 清 cookie |

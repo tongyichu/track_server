@@ -16,9 +16,6 @@ import (
 
 const narrativeScanKey = "narrative:scan"
 
-// Keep the budget key within the existing MySQL provider VARCHAR(16).
-const narrativeBudgetProvider = "kimi_track_narra"
-
 type narrativeScan struct {
 	ActivatedAt time.Time `json:"activated_at"`
 	Cursor      string    `json:"cursor"`
@@ -49,14 +46,13 @@ type TrackNarrativeService struct {
 	trackSvc  *TrackService
 	generator TrackNarrativeGenerator
 	model     string
-	budget    int
 	startedAt time.Time
 	mu        sync.Mutex
 }
 
 type TrackNarrativeRunResult struct{ Scanned, Generated, Skipped, Deferred, Failed int }
 
-func NewTrackNarrativeService(tracks repository.TrackRepository, maps repository.TrackMapRepository, store repository.TrackPlaceRepository, trackSvc *TrackService, generator TrackNarrativeGenerator, model string, budget int) *TrackNarrativeService {
+func NewTrackNarrativeService(tracks repository.TrackRepository, maps repository.TrackMapRepository, store repository.TrackPlaceRepository, trackSvc *TrackService, generator TrackNarrativeGenerator, model string) *TrackNarrativeService {
 	writer, ok := tracks.(repository.TrackNarrativeWriter)
 	if !ok {
 		return nil
@@ -65,10 +61,7 @@ func NewTrackNarrativeService(tracks repository.TrackRepository, maps repository
 	if !ok || store == nil || generator == nil || trackSvc == nil {
 		return nil
 	}
-	if budget <= 0 {
-		budget = 100
-	}
-	return &TrackNarrativeService{tracks: tracks, writer: writer, maps: maps, indexes: indexes, store: store, trackSvc: trackSvc, generator: generator, model: model, budget: budget, startedAt: time.Now()}
+	return &TrackNarrativeService{tracks: tracks, writer: writer, maps: maps, indexes: indexes, store: store, trackSvc: trackSvc, generator: generator, model: model, startedAt: time.Now()}
 }
 
 func (s *TrackNarrativeService) readState(ctx context.Context, key string, target interface{}) error {
@@ -255,15 +248,6 @@ func (s *TrackNarrativeService) process(ctx context.Context, id string, activate
 		imagePath, err := s.trackSvc.TrackPreviewFile(ctx, t.UserID, t.ID, snap.PreviewVariant, previewVersion(snap.PreviewURL))
 		if err != nil {
 			return false, s.fail(ctx, key, &state, err)
-		}
-		day := now.In(time.FixedZone("Asia/Shanghai", 8*3600)).Format("2006-01-02")
-		reserved, err := s.store.ReservePlaceAPICall(ctx, narrativeBudgetProvider, day, s.budget)
-		if err != nil {
-			return false, err
-		}
-		if !reserved {
-			out.Deferred++
-			return false, ai.ErrBudget
 		}
 		if state.TriggerReason == "" {
 			state.TriggerReason = "已保存轨迹资料的生成或重试"

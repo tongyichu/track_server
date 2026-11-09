@@ -49,15 +49,15 @@
 
 ## 控制与估算价格
 
-`GET /admin/api/ai/settings` 返回：features、已配置 models、policies（AIControl数组）、prices（PriceBook）、durable、legacy_narrative_daily_budget、today_usage。策略读取不重置预算，跨日旧计数由前端按day判断。today_usage 按今天创建任务统计，只用作提示；实时租约只显示未过期项。
+`GET /admin/api/ai/settings` 返回：features、已配置 models、policies（AIControl数组）、prices（PriceBook）、durable、today_usage；legacy_narrative_daily_budget仅为旧页面兼容保留，固定0，旧共享限制已停用。策略读取不重置预算，跨日旧计数由前端按day判断。today_usage 按今天创建任务统计，只用作提示；实时租约只显示未过期项。
 
 `PUT /admin/api/ai/policies/:feature`：
 
 ```json
-{"feature":"track_auto","revision":0,"pause_automatic":false,"daily_requests":100,"max_concurrent":1,"token_alert":0,"cost_alert_cny":0}
+{"feature":"track_auto","revision":0,"pause_automatic":false,"daily_requests":0,"max_concurrent":1,"token_alert":0,"cost_alert_cny":0}
 ```
 
-成功 `{saved:true}`；revision为所读策略版本，冲突409。每日请求上限1～100000，最大并发1～16；Token提醒0～10亿、费用提醒0～10万元，0关闭提醒。操作者和更新时间由服务端写入。暂停仅影响自动任务，执行端将尚未进入保存的任务停止；人工操作和手动重试继续受请求预算/并发限制。减少并发不会中断已有任务，新任务等待可用槽位。自动路线和学习仍遵守原有全局叙述租约及共享日额度，不能用此页面绕过原限制。
+成功 `{saved:true}`；revision为所读策略版本，冲突409。每日请求上限0～100000，0表示不限且为默认值，最大并发1～16；Token提醒0～10亿、费用提醒0～10万元，0关闭提醒。本次解限部署会一次性将现有功能日预算迁移为0，之后后台设置的预算在重启时保留；迁移不改变计数或其他策略。操作者和更新时间由服务端写入。暂停仅影响自动任务，执行端将尚未进入保存的任务停止；人工操作和手动重试继续受请求预算/并发限制。减少并发不会中断已有任务，新任务等待可用槽位。自动路线和学习仍遵守原有全局叙述租约，旧共享日额度已移除。
 
 `PUT /admin/api/ai/prices`：
 
