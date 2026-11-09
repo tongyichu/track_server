@@ -377,6 +377,9 @@ func main() {
 	// 供列表/详情接口返回一个服务端可直接下载的 URL。
 	// 缓存目录按类别分子目录放在 <LogDir>/static/<category>，统一通过 /static 静态路由下发。
 	staticRoot := filepath.Join(cfg.LogDir, "static")
+	if _, memoryFallback := scenicSpotRepo.(*repository.MemoryScenicSpotRepository); !memoryFallback {
+		scenicSpotCatalogSvc.SetPhotoStore(service.NewScenicSpotPhotoStore(staticRoot))
+	}
 	screenshotCacheDir := filepath.Join(staticRoot, "screenshots")
 	screenshotCache, err := service.NewAssetCacheService(
 		screenshotCacheDir,

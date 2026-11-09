@@ -82,7 +82,25 @@
       try {
         const result = await this.options.savePhotos(photos, structuredClone(this.savedPhotos), controller.signal);
         if (generation !== this.generation) return;
-        this.savedPhotos = photos;
+        const savedPhotos = this.options.photosFromResult?.(result) || photos;
+        this.savedPhotos = structuredClone(savedPhotos);
+        // A server import may replace remote URLs while caption edits remain in progress.
+        this.items.forEach(item => {
+          if (item.state !== 'done') return;
+          const sent = photos.find(photo => photo.id === item.photo.id && photo.url === item.photo.url);
+          const saved = sent && savedPhotos.find(photo => photo.id === sent.id);
+          if (!saved) return;
+          const previousURL = item.photo.url;
+          item.photo = { ...saved, caption: item.photo.caption };
+          if (previousURL !== item.photo.url) {
+            item.info = {}; item.infoState = 'idle';
+            if (item.view) {
+              item.view.card.dataset.url = item.photo.url;
+              item.view.image.src = this.options.photoURL(item.photo.url);
+            }
+            this.queueInfo(item); this.renderInfo(item);
+          }
+        });
         this.options.photosSaved?.(result, photos);
       } catch (error) {
         if (generation === this.generation) this.saveError = error.name === 'AbortError' ? '图片保存超时，请重试' : error.message;

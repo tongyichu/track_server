@@ -23,6 +23,7 @@ type ScenicSpotCatalogService struct {
 	tracks               repository.TrackRepository
 	places               repository.TrackPlaceRepository
 	provider             *TrackPlaceService
+	photoStore           *ScenicSpotPhotoStore
 	descriptionGenerator ScenicSpotDescriptionGenerator
 }
 
@@ -34,6 +35,11 @@ func NewScenicSpotCatalogService(spots repository.ScenicSpotRepository, tracks r
 func (s *ScenicSpotCatalogService) SetProviderService(provider *TrackPlaceService) {
 	if s != nil {
 		s.provider = provider
+	}
+}
+func (s *ScenicSpotCatalogService) SetPhotoStore(store *ScenicSpotPhotoStore) {
+	if s != nil {
+		s.photoStore = store
 	}
 }
 func (s *ScenicSpotCatalogService) SetDescriptionGenerator(generator ScenicSpotDescriptionGenerator) {
@@ -142,6 +148,10 @@ func (s *ScenicSpotCatalogService) SavePhotos(ctx context.Context, operator, id 
 	if old.Version != expected || old.Status == models.ScenicSpotMerged {
 		return nil, repository.ErrConflict
 	}
+	photos, err = s.localizePhotosForWrite(ctx, photos)
+	if err != nil {
+		return nil, err
+	}
 	v := *old
 	v.Photos = append([]models.ScenicSpotPhoto(nil), photos...)
 	v.Version++
@@ -168,15 +178,17 @@ func (s *ScenicSpotCatalogService) List(ctx context.Context, f repository.Scenic
 }
 
 type ScenicSpotProviderContentBackfillResult struct {
-	Scanned     int    `json:"scanned"`
-	Synced      int    `json:"synced"`
-	Coordinates int    `json:"coordinates"`
-	Grades      int    `json:"grades"`
-	NoSource    int    `json:"no_source"`
-	Skipped     int    `json:"skipped"`
-	Failed      int    `json:"failed"`
-	HasMore     bool   `json:"has_more"`
-	NextCursor  string `json:"next_cursor,omitempty"`
+	Scanned      int    `json:"scanned"`
+	Synced       int    `json:"synced"`
+	Coordinates  int    `json:"coordinates"`
+	Grades       int    `json:"grades"`
+	PhotosCached int    `json:"photos_cached"`
+	PhotosFailed int    `json:"photos_failed"`
+	NoSource     int    `json:"no_source"`
+	Skipped      int    `json:"skipped"`
+	Failed       int    `json:"failed"`
+	HasMore      bool   `json:"has_more"`
+	NextCursor   string `json:"next_cursor,omitempty"`
 }
 
 func (s *ScenicSpotCatalogService) GenerateDescription(ctx context.Context, spot *models.ScenicSpot) (string, error) {
@@ -206,6 +218,9 @@ func (s *ScenicSpotCatalogService) BackfillProviderContent(ctx context.Context, 
 		out.NextCursor = spots[len(spots)-1].ID
 	}
 	for _, spot := range spots {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		if spot != nil && spot.Status == models.ScenicSpotActive {
 			collected, err := s.syncScenicGrade(ctx, spot, operator)
 			if err != nil {
@@ -219,6 +234,20 @@ func (s *ScenicSpotCatalogService) BackfillProviderContent(ctx context.Context, 
 			}
 			if collected {
 				out.Grades++
+			}
+			// Photo localization is independent of provider text/coordinate sync status.
+			photos, cached, failed := s.photoStore.localize(ctx, spot.Photos)
+			out.PhotosFailed += failed
+			if failed > 0 {
+				out.Failed++
+			}
+			if cached > 0 {
+				spot.Photos = photos
+				if err := s.persistProviderContentSync(ctx, spot, operator, "amap photos downloaded and compressed"); err != nil {
+					out.Failed++
+					continue
+				}
+				out.PhotosCached += cached
 			}
 		}
 		if spot == nil || spot.Status == models.ScenicSpotMerged || spot.ProviderDataStatus == "no_source" {
@@ -313,14 +342,20 @@ func (s *ScenicSpotCatalogService) BackfillProviderContent(ctx context.Context, 
 		for _, photo := range spot.Photos {
 			knownPhotos[photo.URL] = struct{}{}
 		}
+		var incomingPhotos []models.ScenicSpotPhoto
 		for _, photo := range preview.Photos {
-			if len(spot.Photos) >= 30 || strings.TrimSpace(photo.URL) == "" {
+			if len(spot.Photos)+len(incomingPhotos) >= 30 || strings.TrimSpace(photo.URL) == "" {
 				break
 			}
 			if _, exists := knownPhotos[photo.URL]; exists {
 				continue
 			}
-			spot.Photos = append(spot.Photos, models.ScenicSpotPhoto{
+			if original := safeAMapPhotoURL(photo.URL); original != "" {
+				if _, exists := knownPhotos[scenicPhotoCachedURL(original)]; exists {
+					continue
+				}
+			}
+			incomingPhotos = append(incomingPhotos, models.ScenicSpotPhoto{
 				ID:             newScenicID("SPP-"),
 				URL:            photo.URL,
 				Caption:        strings.TrimSpace(photo.Title),
@@ -332,6 +367,12 @@ func (s *ScenicSpotCatalogService) BackfillProviderContent(ctx context.Context, 
 			})
 			knownPhotos[photo.URL] = struct{}{}
 		}
+		localized, cached, failed := s.photoStore.localize(ctx, incomingPhotos)
+		spot.Photos = append(spot.Photos, localized...)
+		out.PhotosFailed += failed
+		if failed > 0 {
+			out.Failed++
+		}
 		now := time.Now()
 		spot.ProviderDataStatus = "synced"
 		spot.ProviderDataFetchedAt = &now
@@ -340,6 +381,7 @@ func (s *ScenicSpotCatalogService) BackfillProviderContent(ctx context.Context, 
 			continue
 		}
 		out.Synced++
+		out.PhotosCached += cached
 	}
 	return out, nil
 }
@@ -402,6 +444,11 @@ func (s *ScenicSpotCatalogService) Create(ctx context.Context, operator string, 
 		return nil, err
 	}
 	v.ID = newScenicID("SCP-")
+	photos, err := s.localizePhotosForWrite(ctx, v.Photos)
+	if err != nil {
+		return nil, err
+	}
+	v.Photos = photos
 	v.Status = models.ScenicSpotActive
 	v.ManualEdited = true
 	v.Version = 1
@@ -475,6 +522,10 @@ func (s *ScenicSpotCatalogService) Update(ctx context.Context, operator, id stri
 		if e == nil && found.ID != id {
 			return nil, repository.ErrAlreadyExists
 		}
+	}
+	v.Photos, err = s.localizePhotosForWrite(ctx, v.Photos)
+	if err != nil {
+		return nil, err
 	}
 	if err := s.collectScenicGrade(ctx, v); err != nil {
 		log.Printf("scenic grade lookup failed: spot=%s err=%v", v.ID, err)

@@ -188,10 +188,31 @@
   }
 
   async function syncProviderContent() {
-    if(!AdminAccess.can('scenic_spots',true)||state.providerSyncing)return;state.providerSyncing=true;const progress=$('providerSyncProgress');progress.hidden=false;
-    let cursor='',scanned=0,synced=0,coordinates=0,grades=0,noSource=0,failed=0,errorMessage='';
-    try{while(true){try{const params=new URLSearchParams({limit:'5'});if(cursor)params.set('cursor',cursor);const result=await api('/scenic-spots/provider-content/backfill?'+params,{method:'POST'});scanned+=result.scanned||0;synced+=result.synced||0;coordinates+=result.coordinates||0;grades+=result.grades||0;noSource+=result.no_source||0;failed+=result.failed||0;progress.textContent='供应商资料同步：已扫描 '+scanned+' 处，新增资料 '+synced+' 处，补齐坐标 '+coordinates+' 处，补齐等级 '+grades+' 处，缺少来源 '+noSource+' 处，失败 '+failed+' 处';if(!result.has_more)break;cursor=result.next_cursor||'';if(!cursor)break;}catch(error){errorMessage=error.message;break;}}await Promise.all([loadList(),loadStats()]);progress.textContent='供应商资料同步完成：新增资料 '+synced+' 处，补齐坐标 '+coordinates+' 处，补齐等级 '+grades+' 处，缺少来源 '+noSource+' 处，失败 '+failed+' 处。'+(errorMessage?'同步中断：'+errorMessage:'');}
-    finally{state.providerSyncing=false;}
+    if (!AdminAccess.can('scenic_spots', true) || state.providerSyncing) return;
+    state.providerSyncing = true;
+    const progress = $('providerSyncProgress'); progress.hidden = false;
+    progress.textContent = '正在同步供应商资料和图片…';
+    let cursor = '', scanned = 0, synced = 0, coordinates = 0, grades = 0, photos = 0, photosFailed = 0, noSource = 0, failed = 0, errorMessage = '';
+    const summary = () => '已扫描 ' + scanned + ' 处，新增资料 ' + synced + ' 处，补齐坐标 ' + coordinates + ' 处，补齐等级 ' + grades + ' 处，图片存储 ' + photos + ' 张，图片失败 ' + photosFailed + ' 张，缺少来源 ' + noSource + ' 处，失败 ' + failed + ' 次';
+    try {
+      while (true) {
+        try {
+          const params = new URLSearchParams({ limit: '1' });
+          if (cursor) params.set('cursor', cursor);
+          const result = await api('/scenic-spots/provider-content/backfill?' + params, { method: 'POST' });
+          scanned += result.scanned || 0; synced += result.synced || 0;
+          coordinates += result.coordinates || 0; grades += result.grades || 0;
+          photos += result.photos_cached || 0; photosFailed += result.photos_failed || 0;
+          noSource += result.no_source || 0; failed += result.failed || 0;
+          progress.textContent = '供应商资料同步：' + summary();
+          if (!result.has_more) break;
+          cursor = result.next_cursor || '';
+          if (!cursor) break;
+        } catch (error) { errorMessage = error.message; break; }
+      }
+      await Promise.all([loadList(), loadStats()]);
+      progress.textContent = '供应商资料同步完成：' + summary() + '。' + (errorMessage ? '同步中断：' + errorMessage : '');
+    } finally { state.providerSyncing = false; }
   }
 
   function fillForm(spot) {
@@ -267,6 +288,7 @@
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, signal,
       body: JSON.stringify({ expected_version: state.current.version, photos })
     }),
+    photosFromResult: spot => spot.photos || [],
     photosSaved: spot => {
       if (state.current?.id !== spot.id) return;
       Object.assign(state.current, { photos: spot.photos || [], version: spot.version, manual_edited: spot.manual_edited, updated_at: spot.updated_at, updated_by: spot.updated_by });

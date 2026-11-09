@@ -11,7 +11,7 @@
 | 本人省份/城市足迹卡片与总数 | GET | `/track/activity/footprint/tracks` | 是 | [对应轨迹](track-footprint.md#对应轨迹列表) |
 | 后台景点状态调整（详情删除按 archived 归档） | POST | `/admin/api/scenic-spots/:spot_id/status` | 后台景点写权限 | [track-place-discovery.md](../track-place-discovery.md#后台景点删除归档) |
 | 后台景点等级编辑与详情 | GET / PUT | `/admin/api/scenic-spots/:spot_id` | 后台景点读/写权限 | [景区等级采集与下发](../track-place-discovery.md#景区等级采集与下发) |
-| 存量景点资料及等级补采 | POST | `/admin/api/scenic-spots/provider-content/backfill` | 后台景点写权限 | [景区等级采集与下发](../track-place-discovery.md#景区等级采集与下发) |
+| 存量景点资料、等级补采及高德图片下载压缩 | POST | `/admin/api/scenic-spots/provider-content/backfill` | 后台景点写权限 | [景区等级采集](../track-place-discovery.md#景区等级采集与下发)、[图片本地存储](../track-place-discovery.md#高德景点图片本地存储) |
 | 发现景点列表（含 photos 相册、scenic_grade） | GET | `/track/discover/scenic-spots` | 是 | [track.md](track.md#发现页与年度活动图表) |
 | 当前城市精品/景区/图形路线（城市、标签、运动类型筛选后分页） | GET | `/track/discover/routes` | 是 | [track.md](track.md#发现页与年度活动图表) |
 | 当前城市图形标签完整计数（可按运动类型筛选） | GET | `/track/discover/shape-labels` | 是 | [track.md](track.md#发现页与年度活动图表) |
@@ -141,7 +141,7 @@
 | 人工查询3张Pixabay图片候选 | POST | `/admin/api/regions/photos/pixabay/search` | 地区操作 | [regions.md](regions.md#pixabay-人工选图) |
 | 导入Pixabay图片文件（前端自动PUT关联） | POST | `/admin/api/regions/:node_id/photos/pixabay/import` | 地区操作 | [regions.md](regions.md#pixabay-人工选图) |
 | 上传景点图片文件 | POST | `/admin/api/scenic-spots/:spot_id/photos` | 景点操作 | 可选 `draft=1` 仅暂存；省略时追加并保存，见 [后台路由](../admin-routes.md) |
-| 自动保存景点图片关联、说明和顺序 | PUT | `/admin/api/scenic-spots/:spot_id/photos` | 景点操作 | 独立图片数组及expected_version，见 [后台路由](../admin-routes.md) |
+| 自动保存景点图片关联、说明和顺序 | PUT | `/admin/api/scenic-spots/:spot_id/photos` | 景点操作 | 独立图片数组及expected_version，高德外链先压缩为本站WebP，见 [后台路由](../admin-routes.md) |
 | 新增后台账号 | POST | `/admin/api/accounts` | 管理员 session | [admin-accounts.md](admin-accounts.md) |
 | 调整身份、状态与页面权限 | PUT | `/admin/api/accounts/:username` | 管理员 session | [admin-accounts.md](admin-accounts.md) |
 | 迁移期应急重置后台密码 | POST | `/admin/api/accounts/:username/reset-password` | 管理员 session，且目标未验证邮箱/旧入口未关闭 | [admin-accounts.md](admin-accounts.md) |
