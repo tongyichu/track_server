@@ -24,32 +24,8 @@ func (s *TrackNarrativeService) PreviewDescription(ctx context.Context, id strin
 	if !ok {
 		return nil, errors.New("AI 联网填写服务未配置")
 	}
-	if !s.mu.TryLock() {
-		return nil, errors.New("AI 任务正在运行，请稍后重试")
-	}
-	defer s.mu.Unlock()
 	ctx, cancel := context.WithTimeout(ctx, 270*time.Second)
 	defer cancel()
-	owner, err := submissionID("NAR-DESC-")
-	if err != nil {
-		return nil, err
-	}
-	now := time.Now()
-	acquired, err := s.store.LeasePlaceRecord(ctx, narrativeScanKey, owner, now, now.Add(5*time.Minute))
-	if err != nil || !acquired {
-		return nil, errors.New("AI 任务正在运行，请稍后重试")
-	}
-	var scan narrativeScan
-	if err := s.readState(ctx, narrativeScanKey, &scan); err != nil {
-		return nil, err
-	}
-	defer func() {
-		releaseCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if err := s.saveState(releaseCtx, narrativeScanKey, scan, owner); err != nil {
-			log.Printf("[TrackDescription] lease_release_failed: %v", err)
-		}
-	}()
 	snap, err := s.snapshot(ctx, id)
 	if errors.Is(err, repository.ErrNotFound) {
 		return nil, errors.New("需公开且已结束的轨迹，并准备好地理索引与方形预览图")
@@ -69,6 +45,20 @@ func (s *TrackNarrativeService) PreviewDescription(ctx context.Context, id strin
 		return nil, err
 	}
 	defer func() { run.Finish(err) }()
+
+	release, err := s.leaseNarrativeTrack(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	currentInput, err := s.snapshot(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if trackDescriptionVersion(currentInput) != trackDescriptionVersion(snap) {
+		return nil, errors.New("排队期间轨迹资料已变化，请重新点击生成；本次未调用AI")
+	}
+
 	image, err := s.trackSvc.TrackPreviewFile(ctx, snap.Track.UserID, id, snap.PreviewVariant, previewVersion(snap.PreviewURL))
 	if err != nil {
 		return nil, errors.New("预览图读取失败，请稍后重试")

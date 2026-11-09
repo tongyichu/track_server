@@ -225,6 +225,18 @@ func (s *TrackNarrativeService) process(ctx context.Context, id string, activate
 		out.Deferred++
 		return false, nil
 	}
+	workCtx, cancelWork := context.WithTimeout(ctx, 270*time.Second)
+	defer cancelWork()
+	release, leaseErr := s.leaseNarrativeTrack(workCtx, id)
+	if errors.Is(leaseErr, errNarrativeTrackBusy) {
+		out.Deferred++
+		return false, nil
+	}
+	if leaseErr != nil {
+		return false, leaseErr
+	}
+	defer release()
+	ctx = workCtx
 	var run *ai.Run
 	defer func() {
 		if run.CancellationRequested() {

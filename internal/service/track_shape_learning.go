@@ -154,6 +154,17 @@ func (s *TrackNarrativeService) learnShapeCorrection(ctx context.Context, id str
 	if allowed := s.ai.AutomaticAllowed(ctx, "shape_learning", id, f.Revision); allowed != nil {
 		return false, nil
 	}
+	workCtx, cancelWork := context.WithTimeout(ctx, 270*time.Second)
+	defer cancelWork()
+	release, leaseErr := s.leaseNarrativeTrack(workCtx, id)
+	if errors.Is(leaseErr, errNarrativeTrackBusy) {
+		return false, nil
+	}
+	if leaseErr != nil {
+		return false, leaseErr
+	}
+	defer release()
+	ctx = workCtx
 	var run *ai.Run
 	defer func() {
 		if run.CancellationRequested() {
