@@ -16,8 +16,104 @@
   let settings = null, statistics = null, cursor = '', nextCursor = '', history = [], page = 1, activeCursor = '', activeRows = [], modalTaskID = '', detailController = null;
   let policyDirty = false, pricesDirty = false, busySettings = false;
   const controllers = {}, charts = new Map(), operations = new Set();
-  const modal = new bootstrap.Modal($('detailModal'));
+  const modal = new tabler.Modal($('detailModal'));
   function localDate(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  let quotaLoading = false, quotaSnapshot = null, tasksLoading = false, statisticsLoading = false;
+  const quotaNodes = new Map(), quotaDrafts = new Map(), controlPolicies = new Map();
+  async function loadQuotas(force) {
+    if (quotaLoading && !force) return;
+    const ctrl = replaceController('quotas'); quotaLoading = true; $('refreshQuota').disabled = true;
+    try {
+      const data = await request('quotas', { signal: ctrl.signal });
+      if (ctrl.signal.aborted) return;
+      quotaSnapshot = data; renderQuotas(data);
+      if(settings)alerts(Object.assign({},settings,{policies:(data.items||[]).map(item=>({policy:item.policy,day:data.day,requests:item.used}))}));
+    } catch (error) {
+      if (error.name !== 'AbortError') $('quotaHint').textContent = '配额读取失败，请刷新重试' + (quotaSnapshot ? '；保留上次数据' : '');
+    } finally {
+      if (controllers.quotas === ctrl) { quotaLoading = false; $('refreshQuota').disabled = false; }
+    }
+  }
+  function quotaRow(id) {
+    if (quotaNodes.has(id)) return quotaNodes.get(id);
+    if (!quotaNodes.size) $('quotaRows').replaceChildren();
+    const row = node('tr'), title = node('strong', feature(id)), meta = node('small', '', 'ai-quota-meta');
+    const name = node('td'); name.append(title, meta);
+    const used = node('td'), limit = node('td'), remaining = node('td'), state = node('td'), load = node('td'), action = node('td');
+    const caption = node('span'), progress = node('div', null, 'progress'), bar = node('div', null, 'progress-bar'); progress.append(bar); state.append(caption, progress);
+    const actions = node('div', null, 'ai-quota-actions');
+    const edit = button('调整配额', () => editQuota(id), 'ai_settings');
+    const unlimited = button('设为不限', () => editQuota(id, 0), 'ai_settings');
+    actions.append(edit, unlimited); action.append(actions);
+    row.append(name, used, limit, remaining, state, load, action); $('quotaRows').append(row);
+    const item = { row, title, meta, used, limit, remaining, caption, progress, bar, load, edit, unlimited };
+    quotaNodes.set(id, item); return item;
+  }
+  function renderQuotas(data) {
+    const items = data.items || [], existing = new Set(items.map(item => item.feature));
+    quotaNodes.forEach((item, id) => { if (!existing.has(id)) { item.row.remove(); quotaNodes.delete(id); } });
+    const total = items.reduce((sum, item) => sum + item.used, 0), unlimited = items.filter(item => item.unlimited).length;
+    const exhausted = items.filter(item => !item.unlimited && item.remaining === 0).length;
+    $('quotaSummary').replaceChildren(metric('今日已计额度', n(total) + ' 次', '含失败和已预留请求'), metric('不限配额', n(unlimited) + ' 个功能', '继续记录用量'), metric('已设日上限', n(items.length - unlimited) + ' 个功能', '各功能分别计数'), metric('今日配额已用尽', n(exhausted) + ' 个功能', '调高或设为不限可恢复后续请求'));
+    const clock = new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(new Date(data.as_of));
+    $('quotaHint').textContent = data.day + ' · 北京时间 ' + clock + ' 更新 · 每日 00:00 重新计数';
+    items.forEach(item => {
+      const view = quotaRow(item.feature), policy = item.policy;
+      view.title.textContent = feature(item.feature); view.used.textContent = n(item.used) + ' 次';
+      view.limit.textContent = item.unlimited ? '不限' : n(policy.daily_requests) + ' 次 / 天';
+      view.remaining.textContent = item.unlimited ? '不限' : n(item.remaining) + ' 次';
+      const actor = policy.updated_by && policy.updated_by.startsWith('system:') ? '系统' : policy.updated_by;
+      view.meta.textContent = (policy.pause_automatic ? '自动已暂停 · ' : '') + (actor ? '最近调整：' + actor : '默认不限');
+      view.meta.title = actor ? dateTime(policy.updated_at) : '';
+      view.load.textContent = n(item.active) + ' / ' + n(policy.max_concurrent);
+      view.progress.hidden = item.unlimited;
+      if (item.unlimited) { view.caption.textContent = '持续计量'; view.progress.removeAttribute('role'); }
+      else {
+        const percent = Math.min(100, item.used * 100 / policy.daily_requests);
+        view.caption.textContent = item.remaining === 0 ? '配额已用尽' : '已用 ' + percent.toFixed(1) + '%';
+        view.bar.style.width = percent + '%'; view.bar.classList.toggle('exhausted', item.remaining === 0);
+        view.progress.setAttribute('role', 'progressbar'); view.progress.setAttribute('aria-label', feature(item.feature) + '配额使用情况');
+        view.progress.setAttribute('aria-valuemin', '0'); view.progress.setAttribute('aria-valuemax', String(policy.daily_requests));
+        view.progress.setAttribute('aria-valuenow', String(Math.min(item.used, policy.daily_requests))); view.progress.setAttribute('aria-valuetext', '已用' + item.used + '次，剩余' + item.remaining + '次');
+      }
+      view.edit.disabled = !data.durable; view.unlimited.disabled = !data.durable; view.unlimited.hidden = item.unlimited;
+    });
+    if (!items.length) {const row=node('tr'),cell=node('td','暂无可用功能配额','hint');cell.colSpan=7;row.append(cell);$('quotaRows').replaceChildren(row);}
+  }
+  function editQuota(id, preset) {
+    if (!can('ai_settings', true)) return;
+    return AdminUI.runOnce('ai-quota:' + id, async () => {
+      let baseline = null;
+      const values = await AdminUI.form({
+        title: '调整配额 · ' + feature(id), confirmText: '保存并立即生效', waitForHidden: true,
+        load: async signal => {
+          const data = await request('quotas', { signal }); const item = (data.items || []).find(row => row.feature === id);
+          if (!data.durable || !item) throw new Error('当前配额暂不可调整');
+          baseline = item.policy;
+          const intro = node('p', '今日已用 ' + n(item.used) + ' 次；当前日配额' + (item.unlimited ? '不限' : n(baseline.daily_requests) + ' 次') + '。', 'hint');
+          const note = node('p', '填 0 表示不限。仅调整每日请求配额，用量和其他配置保留；低于今日已用次数时，后续请求将等待配额恢复。', 'hint');
+          return { beforeFields: intro, afterFields: note, fields: [{ name: 'daily_requests', label: '每日请求配额（0＝不限）', type: 'number', value: preset != null ? preset : quotaDrafts.has(id) ? quotaDrafts.get(id) : baseline.daily_requests, min: 0, step: 1, required: true }] };
+        },
+        onReady: view => { const input = view.form.elements.daily_requests; input.max = '100000'; input.dataset.adminInput = 'ai_settings'; const submit = view.root.querySelector('button[type="submit"]'); if (submit) submit.dataset.adminWrite = 'ai_settings'; }
+      });
+      if (!values || !baseline) return;
+      const limit = Number(values.daily_requests); quotaDrafts.set(id, values.daily_requests);
+      if (!Number.isInteger(limit) || limit < 0 || limit > 100000) { $('quotaMessage').textContent = '每日配额需为 0～100000，输入已保留。'; return; }
+      const ctrl = replaceController('quota-save:' + id);
+      try {
+        const data = await request('policies/' + encodeURIComponent(id) + '/quota', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, signal: ctrl.signal, body: JSON.stringify({ revision: baseline.revision, daily_requests: limit }) });
+        if (!data.saved || !data.policy) throw new Error('保存结果未确认，请刷新核实');
+        quotaDrafts.delete(id);
+        const existing = controlPolicies.get(id);
+        if (existing && existing.revision === baseline.revision) Object.assign(existing, { revision: data.policy.revision, daily_requests: data.policy.daily_requests, updated_by: data.policy.updated_by, updated_at: data.policy.updated_at });
+        $('quotaMessage').textContent = feature(id) + '的日配额已设为' + (limit === 0 ? '不限' : n(limit) + ' 次') + '，对后续请求立即生效，已有用量保留。';
+        await loadQuotas(true); loadSettings();
+      } catch (error) {
+        if (error.name !== 'AbortError') $('quotaMessage').textContent = error.message + '；新配额输入已保留，重新调整时可继续使用。';
+      }
+    });
+  }
+
   function setPeriod() { if ($('period').value === 'custom') return; const today = new Date(); const from = new Date(today); from.setDate(from.getDate() - (Number($('period').value) || 1) + 1); $('from').value = localDate(from); $('to').value = localDate(today); }
   setPeriod();
   function query(active) {
@@ -57,9 +153,10 @@
     finally { operations.delete(t.id); }
   }
   async function loadTasks() {
-    const ctrl = replaceController('tasks'), params = query(false); if (cursor) params.set('cursor', cursor);
+    const ctrl = replaceController('tasks'), params = query(false); tasksLoading=true; if (cursor) params.set('cursor', cursor);
     try { const data = await request('tasks?' + params, { signal: ctrl.signal }); if (ctrl.signal.aborted) return; renderTasks(data.items || []); nextCursor = data.next_cursor || ''; $('total').textContent = '共 ' + n(data.total) + ' 项'; $('prev').disabled = history.length === 0; $('next').disabled = !nextCursor; $('pageHint').textContent = '第 ' + page + ' 页'; }
     catch (error) { showError('pageError', error); }
+    finally {if(controllers.tasks===ctrl)tasksLoading=false;}
   }
   function renderTasks(items) {
     const body = $('tasks'); body.replaceChildren(); if (!items.length) { const td = node('td', '当前条件下暂无任务记录', 'hint'); td.colSpan = 6; const row = node('tr'); row.append(td); body.append(row); return; }
@@ -83,13 +180,14 @@
   }
   function metric(title, value, hint) { const card = node('div', null, 'ai-metric'); card.append(node('span', title), node('strong', value), node('small', hint)); return card; }
   async function loadStatistics() {
-    const ctrl = replaceController('statistics');
+    const ctrl = replaceController('statistics'); statisticsLoading=true;
     try { const data = await request('statistics?' + query(false), { signal: ctrl.signal }); if (ctrl.signal.aborted) return; statistics = data; const root = $('stats'); root.replaceChildren();
       root.append(metric('任务 / 请求', n(data.tasks) + ' / ' + n(data.requests), '一个任务可包含搜索、生成等多个请求'), metric('执行中 / 排队', n(data.running) + ' / ' + n(data.queued), '所选筛选范围内'), metric('成功率', data.success + data.failed ? ((data.success * 100) / (data.success + data.failed)).toFixed(1) + '%' : '—', n(data.failed) + ' 项失败；中断不计入成功率'), metric('输入 / 输出 Token', n(data.input_tokens) + ' / ' + n(data.output_tokens), n(data.usage_known) + ' 次请求返回了用量，其余不补零'), metric('预估费用（已知部分）', data.cost_known ? '¥' + amount(data.estimated_cny) : '未知', n(data.cost_known) + ' / ' + n(data.requests) + ' 次请求可估算，非供应商账单'), metric('平均耗时 / 已采用', (data.finished ? seconds(data.duration_ms / data.finished) : '—') + ' / ' + n(data.adopted), '耗时包含排队；采用量按当前任务结果计'));
       $('statHint').textContent = '北京时间 · ' + (data.first_recorded_at ? '记录始于 ' + dateTime(data.first_recorded_at) : '上线后开始记录，历史未采集数据不可追溯');
       renderBreakdown(data);
       (data.models || []).forEach(row => addModel(row.key.split(' / ').slice(1).join(' / '))); drawCharts(data); }
     catch (error) { if (error.name !== 'AbortError') $('statHint').textContent = '统计读取失败，请点击查询重试'; }
+    finally {if(controllers.statistics===ctrl)statisticsLoading=false;}
   }
   function renderBreakdown(data) {
     const root=$('breakdown');root.replaceChildren();
@@ -106,7 +204,7 @@
   }
   function alerts(data) {
     const root = $('alerts'); root.replaceChildren(); const rows = (data.today_usage || {}).features || [];
-    (data.policies || []).forEach(control => { const p = control.policy, usage = rows.find(row => row.key === p.feature) || {}; const today = localDate(new Date()); const requests = control.day === today ? control.requests : 0; const messages = [];
+    (data.policies || []).forEach(control => { const p = control.policy, usage = rows.find(row => row.key === p.feature) || {}; const today = quotaSnapshot ? quotaSnapshot.day : localDate(new Date()); const requests = control.day === today ? control.requests : 0; const messages = [];
       if (p.pause_automatic) messages.push('自动任务已暂停'); if (p.daily_requests > 0 && requests >= p.daily_requests * 0.8) messages.push('今日请求预算已使用 ' + n(requests) + ' / ' + n(p.daily_requests)); if (p.token_alert > 0 && usage.input_tokens + usage.output_tokens >= p.token_alert) messages.push('今日已知 Token 超过提醒阈值'); if (p.cost_alert_cny > 0 && usage.estimated_cny >= p.cost_alert_cny) messages.push('今日已知费用估算超过提醒阈值'); if (usage.failed >= 3 && usage.failed / (usage.failed + usage.success) >= 0.2) messages.push('今日失败比例较高，请查看失败原因'); if (usage.finished >= 3 && usage.duration_ms / usage.finished >= 60000) messages.push('今日平均任务耗时超过一分钟'); if (messages.length) root.append(node('div', feature(p.feature) + '：' + messages.join('；'), 'ai-alert'));
     });
   }
@@ -119,13 +217,13 @@
   }
   function numberInput(value, min, max, step) { const input = node('input'); input.type = 'number'; input.min = min; input.max = max; if (Number(min) > 0) input.required = true; input.step = step || '1'; if (value != null) input.value = value; else input.placeholder = '未知'; input.dataset.adminInput = 'ai_settings'; return input; }
   function renderPolicies(controls) {
-    const root = $('policies'); root.replaceChildren(); controls.forEach(c => { const p = c.policy, row = node('tr'); const title = node('td', feature(p.feature)); title.append(node('small', ' · 今日预留 ' + n(c.day === localDate(new Date()) ? c.requests : 0) + ' 次 / 运行 ' + Object.keys(c.leases || {}).length + ' 项', 'hint'));
+    const root = $('policies'); root.replaceChildren(); controls.forEach(c => { const p = Object.assign({},c.policy), row = node('tr'); controlPolicies.set(p.feature,p); const title = node('td', feature(p.feature));
       const paused = node('input'); paused.type = 'checkbox'; paused.checked = p.pause_automatic; paused.dataset.adminInput = 'ai_settings'; paused.setAttribute('aria-label', '暂停' + feature(p.feature) + '的自动任务');
-      const limits = [numberInput(p.daily_requests, 0, 100000), numberInput(p.max_concurrent, 1, 16), numberInput(p.token_alert, 0, 1000000000), numberInput(p.cost_alert_cny, 0, 100000, '0.01')]; row.append(title); const pauseCell = node('td'); const pauseLabel = node('label'); pauseLabel.append(paused, document.createTextNode(' 暂停自动')); if (['track_description','track_shape'].includes(p.feature)) {pauseCell.append(node('span','仅手动入口','hint'));} else {pauseCell.append(pauseLabel);} row.append(pauseCell); limits.forEach((input, i) => { input.setAttribute('aria-label', feature(p.feature) + ['每日请求上限', '最大并发', 'Token 提醒阈值', '费用提醒阈值'][i]); const td = node('td'); td.append(input); row.append(td); });
+      const limits = [numberInput(p.max_concurrent, 1, 16), numberInput(p.token_alert, 0, 1000000000), numberInput(p.cost_alert_cny, 0, 100000, '0.01')]; row.append(title); const pauseCell = node('td'); const pauseLabel = node('label'); pauseLabel.append(paused, document.createTextNode(' 暂停自动')); if (['track_description','track_shape'].includes(p.feature)) {pauseCell.append(node('span','仅手动入口','hint'));} else {pauseCell.append(pauseLabel);} row.append(pauseCell); limits.forEach((input, i) => { input.setAttribute('aria-label', feature(p.feature) + ['最大并发', 'Token 提醒阈值', '费用提醒阈值'][i]); const td = node('td'); td.append(input); row.append(td); });
       [paused].concat(limits).forEach(input => input.addEventListener('change', () => { policyDirty = true; })); const action = node('td'); const save = button('保存', async () => {
         if (busySettings) return; if (limits.some(input => !input.reportValidity())) return; busySettings = true; save.disabled = true;
-        try { await request('policies/' + encodeURIComponent(p.feature), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({}, p, { pause_automatic: paused.checked, daily_requests: Number(limits[0].value), max_concurrent: Number(limits[1].value), token_alert: Number(limits[2].value), cost_alert_cny: Number(limits[3].value) })) }); $('policyMessage').textContent = feature(p.feature) + '配置已保存。'; p.revision++; policyDirty = true; }
-        catch (error) { showError('policyMessage', error); } finally { busySettings = false; save.disabled = false; loadSettings(); }
+        try { await request('policies/' + encodeURIComponent(p.feature), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({}, p, { pause_automatic: paused.checked, max_concurrent: Number(limits[0].value), token_alert: Number(limits[1].value), cost_alert_cny: Number(limits[2].value) })) }); $('policyMessage').textContent = feature(p.feature) + '配置已保存。'; p.revision++; policyDirty = true; }
+        catch (error) { showError('policyMessage', error); } finally { busySettings = false; save.disabled = false; loadSettings(); loadQuotas(true); }
       }, 'ai_settings'); action.append(save); row.append(action); root.append(row);
     });
   }
@@ -152,10 +250,12 @@
     } catch (error) { if (!signal.aborted) $('detail').replaceChildren(node('p', error.message, 'text-danger'), button('重试读取', () => loadDetail(id, signal))); }
   }
   $('detailModal').addEventListener('hidden.bs.modal', () => { modalTaskID = ''; if (detailController) detailController.abort(); $('detail').replaceChildren(); });
-  function refresh(reset) { if (reset) { cursor = ''; nextCursor = ''; history = []; page = 1; } $('pageError').textContent = ''; loadTasks(); loadStatistics(); loadActive(false); loadSettings(); }
+  function refresh(reset) { if (reset) { cursor = ''; nextCursor = ''; history = []; page = 1; } $('pageError').textContent = ''; loadTasks(); loadStatistics(); loadActive(false); loadSettings(); loadQuotas(true); }
   $('period').addEventListener('change', () => { setPeriod(); refresh(true); }); ['from', 'to'].forEach(id => $(id).addEventListener('change', () => { $('period').value = 'custom'; refresh(true); })); ['feature', 'provider', 'model', 'mode', 'status', 'adoption'].forEach(id => $(id).addEventListener('change', () => refresh(true))); $('q').addEventListener('keydown', event => { if (event.key === 'Enter') refresh(true); }); $('refresh').addEventListener('click', () => refresh(true)); $('prev').addEventListener('click', () => { cursor = history.pop() || ''; page--; loadTasks(); }); $('next').addEventListener('click', () => { if (!nextCursor) return; history.push(cursor); cursor = nextCursor; page++; loadTasks(); }); $('moreActive').addEventListener('click', () => loadActive(true));
   $('reloadSettings').addEventListener('click', async () => { if (busySettings) return; if ((policyDirty || pricesDirty) && !await AdminUI.confirm({title:'重新载入配置',message:'将放弃尚未保存的预算和价格修改，读取服务端最新配置。'})) return; policyDirty=false; pricesDirty=false; await loadSettings(); });
-  const timer = setInterval(() => { if (document.hidden || !$('autoRefresh').checked) return; loadActive(false); }, 5000);
+  $('refreshQuota').addEventListener('click',()=>loadQuotas(true));
+  let refreshTicks=0;
+  const timer = setInterval(() => { if (document.hidden || !$('autoRefresh').checked) return; loadActive(false); loadQuotas(false); if(++refreshTicks%3===0){if(!statisticsLoading)loadStatistics();if(!tasksLoading)loadTasks();} }, 5000);
   const resize = new ResizeObserver(() => charts.forEach(chart => chart.resize())); ['trend', 'featuresChart', 'modelsChart'].forEach(id => resize.observe($(id)));
   window.addEventListener('pagehide', () => { clearInterval(timer); resize.disconnect(); Object.values(controllers).forEach(ctrl => ctrl.abort()); if (detailController) detailController.abort(); charts.forEach(chart => chart.dispose()); });
   refresh(true);

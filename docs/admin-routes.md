@@ -24,6 +24,8 @@
 | GET | `/admin/ai_usage.html` | AI 使用查看 | AI 统计、任务、控制与价格估算页面 |
 | GET | `/admin/api/ai/tasks` | AI 使用查看 | 任务筛选/实时列表与游标分页 |
 | GET | `/admin/api/ai/statistics` | AI 使用查看 | Token/费用/成功率及功能/模型/日期分组 |
+| GET | `/admin/api/ai/quotas` | AI 使用查看 | 独立实时配额快照（今日已用、剩余、并发槽位） |
+| PUT | `/admin/api/ai/policies/:feature/quota` | AI 配置操作 + AI 查看 | 只调整每日配额，保留计数与其他配置 |
 | GET | `/admin/api/ai/settings` | AI 使用查看 | 持久化状态、功能策略、模型价格和今天用量 |
 | GET | `/admin/api/ai/tasks/:task_id` | AI 使用查看 | 任务及请求明细、业务结果和重试关联 |
 | POST | `/admin/api/ai/tasks/:task_id/cancel` | AI 任务操作 + AI 查看 | 登记中断，保存阶段拒绝；消耗保留 |

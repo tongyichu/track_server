@@ -216,3 +216,70 @@ func (h *Handler) SaveAIPrices(ctx context.Context, c *app.RequestContext) {
 	}
 	c.JSON(200, utils.H{"data": utils.H{"saved": true}})
 }
+
+// AIQuotas is a small read-only snapshot, independent of history statistics and price settings.
+func (h *Handler) AIQuotas(ctx context.Context, c *app.RequestContext) {
+	if !h.aiReady(c) {
+		return
+	}
+	if !h.ai.Durable {
+		c.JSON(503, utils.H{"error": "配额账本暂不可用，请稍后刷新"})
+		return
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	controls, err := h.ai.Policies(ctx)
+	if err != nil {
+		aiError(c, err)
+		return
+	}
+	now := time.Now().In(time.FixedZone("Asia/Shanghai", 28800))
+	day := now.Format("2006-01-02")
+	start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	items := []utils.H{}
+	for _, control := range controls {
+		used := int64(0)
+		if control.Day == day {
+			used = control.Requests
+		}
+		var remaining *int64
+		if control.Policy.DailyRequests > 0 {
+			v := control.Policy.DailyRequests - used
+			if v < 0 {
+				v = 0
+			}
+			remaining = &v
+		}
+		items = append(items, utils.H{"feature": control.Policy.Feature, "policy": control.Policy, "used": used, "remaining": remaining, "unlimited": control.Policy.DailyRequests == 0, "active": len(control.Leases)})
+	}
+	c.JSON(200, utils.H{"data": utils.H{"day": day, "resets_at": start.AddDate(0, 0, 1), "as_of": now, "durable": h.ai.Durable, "items": items}})
+}
+func (h *Handler) SaveAIDailyQuota(ctx context.Context, c *app.RequestContext) {
+	if !h.aiReady(c) {
+		return
+	}
+	if !h.ai.Durable {
+		c.JSON(503, utils.H{"error": "配额账本暂不可用，未修改配额"})
+		return
+	}
+	var input struct {
+		Revision *int64 `json:"revision"`
+		Limit    *int64 `json:"daily_requests"`
+	}
+	if len(c.Request.Body()) > 4096 || json.Unmarshal(c.Request.Body(), &input) != nil || input.Revision == nil || input.Limit == nil {
+		c.JSON(400, utils.H{"error": "请提供当前版本和每日配额，0表示不限"})
+		return
+	}
+	if !ai.ValidFeature(c.Param("feature")) || *input.Revision < 0 || *input.Limit < 0 || *input.Limit > 100000 {
+		c.JSON(400, utils.H{"error": "每日配额需为0～100000，0表示不限"})
+		return
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	policy, err := h.ai.SaveDailyQuota(ctx, c.Param("feature"), *input.Revision, *input.Limit, h.adminOperator(c))
+	if err != nil {
+		aiError(c, err)
+		return
+	}
+	c.JSON(200, utils.H{"data": utils.H{"saved": true, "policy": policy}})
+}

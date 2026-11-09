@@ -812,3 +812,23 @@ func (m *Manager) initializeDailyLimits(ctx context.Context) error {
 	}
 	return nil
 }
+
+// SaveDailyQuota changes only the request ceiling; counters, leases and all other controls stay authoritative.
+func (m *Manager) SaveDailyQuota(ctx context.Context, feature string, revision, limit int64, actor string) (*models.AIPolicy, error) {
+	if !ValidFeature(feature) || revision < 0 || limit < 0 || limit > 100000 {
+		return nil, errors.New("每日配额需为0～100000，0表示不限")
+	}
+	var saved models.AIPolicy
+	err := m.control(ctx, feature, func(c *models.AIControl) error {
+		if c.Policy.Revision != revision {
+			return errors.New("配额或功能配置已变化，请重新打开调整；原输入已保留")
+		}
+		c.Policy.DailyRequests = limit
+		c.Policy.Revision++
+		c.Policy.UpdatedBy = actor
+		c.Policy.UpdatedAt = time.Now().UTC()
+		saved = c.Policy
+		return nil
+	})
+	return &saved, err
+}

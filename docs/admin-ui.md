@@ -68,3 +68,13 @@
 - 页面/共享脚本/列表改动：逐项自查本文“页面性能约束”，对改动的 JS 执行 `node --check`；特别检查是否重新引入同步图表依赖、无版本动态资源、全页观察器扫描或重复逐行 I/O。不得把这些静态检查当作实际性能测量。
 - 页面/Card/样式改动：逐项检查“卡片布局与边距约束”，同节点与子节点 card-body 的内边距必须都覆盖桌面/窄屏；任何 p-0 都要确认只作用于有意满宽的区域，不能消除标题、说明或工具栏留白。
 - 接口契约变更：同步更新 `docs/api/feedback.md` 与 `docs/api/route-index.md`；`track_api.md` 仅保留轻量入口。
+
+## 导航图标
+
+侧栏图标按功能语义区分，桌面与移动导航统一由shell.js维护；移动“更多”页包含AI使用入口。保留原有24×24、2px描边Tabler轮廓风格，图标本地内嵌，不增加运行时CDN。
+
+- 景点：mountain；城市：building-community；地图模式：map-2。
+- 用户：users；账号权限：shield-lock；同行：friends。
+- AI使用：robot；埋点同步：cloud-upload；其余既有图标保持各自含义。
+
+新增SVG来自Tabler官方tabler-icons仓库的icons/outline，沿用vendor/TABLER_ICONS_LICENSE.txt中的MIT授权；导航项不重复复用同一图标。

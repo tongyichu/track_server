@@ -4,6 +4,7 @@
 
 | 接口 | 方法 | 路径 | 需要认证 | 文档 |
 | --- | --- | --- | --- | --- |
+| 后台 AI 实时配额 / 独立调整 | GET / PUT | `/admin/api/ai/quotas`, `/admin/api/ai/policies/:feature/quota` | AI 使用读取 / AI 配置操作及读取 | [admin-ai](admin-ai.md#实时配额与独立调整) |
 | 后台 AI 任务列表 / 统计 / 设置读取 | GET | `/admin/api/ai/tasks`, `/admin/api/ai/statistics`, `/admin/api/ai/settings` | AI 使用读取 | [admin-ai](admin-ai.md) |
 | 后台 AI 任务详情 | GET | `/admin/api/ai/tasks/:task_id` | AI 使用读取 | [admin-ai](admin-ai.md) |
 | 后台 AI 中断 / 重试 | POST | `/admin/api/ai/tasks/:task_id/cancel`, `/admin/api/ai/tasks/:task_id/retry` | AI 任务操作及 AI 读取，重试另需源业务操作 | [admin-ai](admin-ai.md) |

@@ -285,10 +285,12 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	api.GET("/ai/tasks", m.Handler.ListAITasks)
 	api.GET("/ai/statistics", m.Handler.AIStatistics)
 	api.GET("/ai/settings", m.Handler.AISettings)
+	api.GET("/ai/quotas", m.Handler.AIQuotas)
 	api.GET("/ai/tasks/:task_id", m.Handler.GetAITask)
 	api.POST("/ai/tasks/:task_id/cancel", m.Handler.CancelAITask)
 	api.POST("/ai/tasks/:task_id/retry", m.Handler.RetryAITask)
 	api.PUT("/ai/policies/:feature", m.Handler.SaveAIPolicy)
+	api.PUT("/ai/policies/:feature/quota", m.Handler.SaveAIDailyQuota)
 	api.PUT("/ai/prices", m.Handler.SaveAIPrices)
 	api.GET("/analytics/sync-summaries", m.Handler.ListAnalyticsSyncSummaries)
 }

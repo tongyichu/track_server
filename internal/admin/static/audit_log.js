@@ -4,6 +4,7 @@
   const rules = [
     ['POST', 'ai/tasks/:task/cancel', '请求中断 AI 任务', 'AI 任务 {task}', '请求成功仅代表已登记中断；最终结果以 AI 使用页为准，已发生的消耗不会撤回。'],
     ['POST', 'ai/tasks/:task/retry', '创建 AI 重试任务', 'AI 任务 {task}', '重新读取当前资料，可能产生新的消耗；完成情况见关联重试任务。'],
+    ['PUT', 'ai/policies/:feature/quota', '调整 AI 每日请求配额', 'AI 功能 {feature}', '只调整请求上限，0表示不限；不清空用量，不修改暂停或并发配置。'],
     ['PUT', 'ai/policies/:feature', '调整 AI 功能控制与预算', 'AI 功能 {feature}'],
     ['PUT', 'ai/prices', '更新 AI 模型估算价格', 'AI 费用估算', '仅影响后续请求的费用估算，不修改历史记录或供应商账单。'],
     ['POST', 'tracks/:track/labels/generate', '生成轨迹图案建议', '轨迹 {track}', '生成建议不代表已保存。'],
