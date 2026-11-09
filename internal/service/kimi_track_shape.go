@@ -22,6 +22,7 @@ type TrackShapeCandidate struct {
 	Conflict string `json:"conflict"`
 }
 type TrackShapeResult struct {
+	TaskID            string                `json:"task_id,omitempty"`
 	CategoryChecks    []TrackShapeCheck     `json:"category_checks"`
 	Candidates        []TrackShapeCandidate `json:"candidates"`
 	ShapeLabel        string                `json:"shape_label"`

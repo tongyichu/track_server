@@ -21,6 +21,15 @@
 | GET | `/admin/route_groups.html` | 会话 | 聚合路线运营页，服务端返回 HTML 前校验会话 |
 | GET | `/admin/track_submissions.html` | 会话 | 轨迹投稿审核页，服务端返回 HTML 前校验会话 |
 | GET | `/admin/static/*filepath` | 公开 | 内置静态资源 |
+| GET | `/admin/ai_usage.html` | AI 使用查看 | AI 统计、任务、控制与价格估算页面 |
+| GET | `/admin/api/ai/tasks` | AI 使用查看 | 任务筛选/实时列表与游标分页 |
+| GET | `/admin/api/ai/statistics` | AI 使用查看 | Token/费用/成功率及功能/模型/日期分组 |
+| GET | `/admin/api/ai/settings` | AI 使用查看 | 持久化状态、功能策略、模型价格和今天用量 |
+| GET | `/admin/api/ai/tasks/:task_id` | AI 使用查看 | 任务及请求明细、业务结果和重试关联 |
+| POST | `/admin/api/ai/tasks/:task_id/cancel` | AI 任务操作 + AI 查看 | 登记中断，保存阶段拒绝；消耗保留 |
+| POST | `/admin/api/ai/tasks/:task_id/retry` | AI 任务操作 + AI 查看 + 源业务操作 | 重读当前资料并创建关联重试任务 |
+| PUT | `/admin/api/ai/policies/:feature` | AI 配置操作 + AI 查看 | CAS保存自动暂停、请求预算/并发和提醒阈值 |
+| PUT | `/admin/api/ai/prices` | AI 配置操作 + AI 查看 | CAS保存仅对未来请求生效的估算价格 |
 | POST | `/admin/api/login` | 公开 | bcrypt 校验，成功后下发 `admin_session` cookie |
 | POST | `/admin/api/logout` | 公开 | 删除 session + 清 cookie |
 | GET | `/admin/api/me` | 公开 | 返回当前会话；未登录返回 401 |
@@ -121,3 +130,5 @@
 | POST | `/admin/api/password-recovery/request` | 公开 | username/email，通用 202，异步有界发送 |
 | POST | `/admin/api/password-recovery/complete` | 公开 | username/email/code/password/confirmation；验证后设置密码，不自动登录 |
 | GET | `/admin/api/audit-logs` | 管理员 | 可选 username 精确筛选，返回筛选后最近 100 条发起/结果日志 |
+
+AI 使用完整协议见 [admin-ai](api/admin-ai.md)，运行与计费边界见 [AI 使用运行说明](ai-usage.md)。

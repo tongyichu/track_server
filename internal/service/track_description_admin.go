@@ -11,11 +11,12 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/tongyichu/track_server/internal/ai"
 	"github.com/tongyichu/track_server/internal/repository"
 )
 
 // PreviewDescription bypasses the historical watermark but never writes track fields or queues a batch.
-func (s *TrackNarrativeService) PreviewDescription(ctx context.Context, id string) (*TrackDescriptionResult, error) {
+func (s *TrackNarrativeService) PreviewDescription(ctx context.Context, id string) (result *TrackDescriptionResult, err error) {
 	if s == nil {
 		return nil, errors.New("AI 路线说明服务未配置")
 	}
@@ -63,6 +64,11 @@ func (s *TrackNarrativeService) PreviewDescription(ctx context.Context, id strin
 	if strings.TrimSpace(place) == "" {
 		return nil, errors.New("请先保存位置信息或关联景点，再联网填写")
 	}
+	ctx, run, err := s.ai.Begin(ctx, ai.Spec{Feature: "track_description", Provider: "moonshot", Model: s.model, ObjectID: id, ObjectName: snap.Track.Title, Mode: "manual", Reason: "后台 AI 联网填写", InputVersion: trackDescriptionVersion(snap), RuleVersion: fmt.Sprint(trackNarrativeRuleVersion), InputSummary: narrativeAISummary(snap)})
+	if err != nil {
+		return nil, err
+	}
+	defer func() { run.Finish(err) }()
 	image, err := s.trackSvc.TrackPreviewFile(ctx, snap.Track.UserID, id, snap.PreviewVariant, previewVersion(snap.PreviewURL))
 	if err != nil {
 		return nil, errors.New("预览图读取失败，请稍后重试")
@@ -82,9 +88,15 @@ func (s *TrackNarrativeService) PreviewDescription(ctx context.Context, id strin
 		return nil, err
 	}
 	query := strings.TrimSpace(snap.Input.City+" "+place) + " 官方 地理 景点 户外介绍"
-	result, err := generator.GenerateDescription(ctx, string(facts), image, query)
+	result, err = generator.GenerateDescription(ctx, string(facts), image, query)
 	if err != nil {
 		log.Printf("[TrackDescription] track_id=%s generation_failed: %v", id, err)
+		if ai.IsControlError(err) {
+			return nil, err
+		}
+		if e := run.Check(); e != nil {
+			return nil, e
+		}
 		if errors.Is(err, errKimiInsufficientBalance) || errors.Is(err, errKimiSearchDenied) {
 			return nil, err
 		}
@@ -98,6 +110,10 @@ func (s *TrackNarrativeService) PreviewDescription(ctx context.Context, id strin
 		return nil, errors.New("轨迹资料已变化，请重新打开后生成")
 	}
 	result.SourceVersion = trackDescriptionVersion(current)
+	result.TaskID = ai.TaskID(ctx)
+	if err = run.Result(result, "pending"); err != nil {
+		return nil, err
+	}
 	return result, nil
 }
 
@@ -107,7 +123,7 @@ func trackDescriptionVersion(snapshot *trackNarrativeSnapshot) string {
 	return fmt.Sprintf("%x", sha256.Sum256(raw))
 }
 
-func (s *TrackNarrativeService) ApplyDescription(ctx context.Context, id, version, description string) (string, error) {
+func (s *TrackNarrativeService) ApplyDescription(ctx context.Context, id, version, description string, taskIDs ...string) (string, error) {
 	if s == nil {
 		return "", errors.New("路线说明保存服务未配置")
 	}
@@ -122,6 +138,13 @@ func (s *TrackNarrativeService) ApplyDescription(ctx context.Context, id, versio
 	if version != trackDescriptionVersion(current) {
 		return "", errors.New("轨迹资料已变化，请重新生成说明后代入")
 	}
+	taskID := ""
+	if len(taskIDs) > 0 {
+		taskID = taskIDs[0]
+	}
+	if err := s.ai.ValidateCandidate(ctx, taskID, "track_description", id, version); err != nil {
+		return "", err
+	}
 	writer, ok := s.tracks.(repository.TrackDescriptionWriter)
 	if !ok {
 		return "", errors.New("路线说明保存服务未配置")
@@ -133,6 +156,9 @@ func (s *TrackNarrativeService) ApplyDescription(ctx context.Context, id, versio
 	}
 	if !applied {
 		return "", errors.New("轨迹资料已变化，请重新生成说明后代入")
+	}
+	if err := s.ai.MarkAdopted(ctx, taskID, "track_description", id); err != nil {
+		log.Printf("AI description saved but adoption record unavailable: task=%s", taskID)
 	}
 	return description, nil
 }

@@ -19,6 +19,7 @@ type TrackDescriptionSource struct {
 }
 
 type TrackDescriptionResult struct {
+	TaskID        string                   `json:"task_id,omitempty"`
 	SourceVersion string                   `json:"source_version"`
 	Description   string                   `json:"description"`
 	Sources       []TrackDescriptionSource `json:"sources"`

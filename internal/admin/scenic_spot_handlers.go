@@ -23,6 +23,7 @@ import (
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/common/utils"
+	"github.com/tongyichu/track_server/internal/ai"
 	"github.com/tongyichu/track_server/internal/config"
 	"github.com/tongyichu/track_server/internal/models"
 	"github.com/tongyichu/track_server/internal/repository"
@@ -206,7 +207,7 @@ func (h *Handler) GenerateScenicSpotDescription(ctx context.Context, c *app.Requ
 		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid scenic spot payload"})
 		return
 	}
-	description, err := h.scenicSpotSvc.GenerateDescription(ctx, &spot)
+	description, taskID, err := h.scenicSpotSvc.GenerateDescriptionPreview(ai.WithActor(ctx, h.adminOperator(c)), &spot)
 	if err != nil {
 		log.Printf("Kimi scenic description query failed: spot=%q err=%v", spot.Name, err)
 		if strings.Contains(err.Error(), "not configured") {
@@ -216,7 +217,7 @@ func (h *Handler) GenerateScenicSpotDescription(ctx context.Context, c *app.Requ
 		c.JSON(http.StatusBadGateway, utils.H{"error": "AI scenic description lookup failed: " + err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"description": description}})
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"description": description, "task_id": taskID}})
 }
 
 func (h *Handler) GetScenicSpotMap(ctx context.Context, c *app.RequestContext) {
@@ -270,10 +271,21 @@ func (h *Handler) CreateScenicSpot(ctx context.Context, c *app.RequestContext) {
 		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid payload"})
 		return
 	}
-	v, err := h.scenicSpotSvc.Create(ctx, h.adminOperator(c), &body)
+	var candidate struct {
+		TaskID string `json:"ai_description_task_id"`
+	}
+	_ = json.Unmarshal(c.Request.Body(), &candidate)
+	if err := h.ai.ValidateScenicCandidate(ctx, candidate.TaskID, "", h.adminOperator(c)); err != nil {
+		c.JSON(409, utils.H{"error": "AI 景点建议已失效，请重新生成"})
+		return
+	}
+	v, err := h.scenicSpotSvc.Create(ai.WithActor(ctx, h.adminOperator(c)), h.adminOperator(c), &body)
 	if err != nil {
 		h.scenicSpotServiceError(c, err)
 		return
+	}
+	if err := h.ai.BindScenicAdoption(ctx, candidate.TaskID, v.ID); err != nil {
+		log.Printf("scenic spot saved but AI adoption record unavailable: task=%s", candidate.TaskID)
 	}
 	c.JSON(http.StatusCreated, utils.H{"code": 0, "data": v})
 }
@@ -282,6 +294,7 @@ func (h *Handler) UpdateScenicSpot(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 	var body struct {
+		TaskID          string          `json:"ai_description_task_id"`
 		ExpectedVersion int64           `json:"expected_version"`
 		Spot            json.RawMessage `json:"spot"`
 	}
@@ -300,10 +313,17 @@ func (h *Handler) UpdateScenicSpot(ctx context.Context, c *app.RequestContext) {
 		c.JSON(http.StatusBadRequest, utils.H{"error": "scenic_grade must be a string"})
 		return
 	}
+	if err := h.ai.ValidateScenicCandidate(ctx, body.TaskID, c.Param("spot_id"), h.adminOperator(c)); err != nil {
+		c.JSON(409, utils.H{"error": "AI 景点建议与当前对象不匹配"})
+		return
+	}
 	v, err := h.scenicSpotSvc.Update(ctx, h.adminOperator(c), c.Param("spot_id"), body.ExpectedVersion, &spot, gradeProvided)
 	if err != nil {
 		h.scenicSpotServiceError(c, err)
 		return
+	}
+	if err := h.ai.BindScenicAdoption(ctx, body.TaskID, v.ID); err != nil {
+		log.Printf("scenic spot saved but AI adoption record unavailable: task=%s", body.TaskID)
 	}
 	c.JSON(http.StatusOK, utils.H{"code": 0, "data": v})
 }

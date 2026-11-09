@@ -4,14 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
+	"github.com/tongyichu/track_server/internal/ai"
 	"github.com/tongyichu/track_server/internal/models"
 )
 
 const shapeMemoryKey = "narrative:shape-memory"
 
 type shapeFeedback struct {
+	TaskID        string       `json:"task_id,omitempty"`
 	Revision      string       `json:"revision"`
 	TrackID       string       `json:"track_id"`
 	Before        string       `json:"before"`
@@ -127,7 +130,7 @@ func (s *TrackNarrativeService) learnedShapeExamples(ctx context.Context) ([]map
 }
 
 // Called only under the narrative scan lease; at most one learning request per scan.
-func (s *TrackNarrativeService) learnShapeCorrection(ctx context.Context, id string) (bool, error) {
+func (s *TrackNarrativeService) learnShapeCorrection(ctx context.Context, id string) (called bool, err error) {
 	var f shapeFeedback
 	key := "narrative:shape-feedback:" + id
 	if err := s.readState(ctx, key, &f); err != nil {
@@ -148,8 +151,30 @@ func (s *TrackNarrativeService) learnShapeCorrection(ctx context.Context, id str
 			return nil
 		})
 	}
-	called := false
+	if allowed := s.ai.AutomaticAllowed(ctx, "shape_learning", id, f.Revision); allowed != nil {
+		return false, nil
+	}
+	var run *ai.Run
+	defer func() {
+		if run.CancellationRequested() {
+			cleanup, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_ = s.editShapeFeedback(cleanup, id, func(v *shapeFeedback) error {
+				if v.Revision == f.Revision {
+					v.Status = "cancelled"
+					v.Review = nil
+					v.NextAttempt = time.Time{}
+				}
+				return nil
+			})
+		}
+		run.Finish(err)
+	}()
 	if f.Review == nil {
+		if allowed := s.ai.AutomaticAllowed(ctx, "shape_learning", id, f.Revision); allowed != nil {
+			return false, nil
+		}
+
 		if f.Attempts >= 3 {
 			return false, s.editShapeFeedback(ctx, id, func(v *shapeFeedback) error {
 				if v.Revision == f.Revision {
@@ -171,6 +196,11 @@ func (s *TrackNarrativeService) learnShapeCorrection(ctx context.Context, id str
 		if err != nil || !ok {
 			return false, err
 		}
+		ctx, run, err = s.ai.Begin(ctx, ai.Spec{Feature: "shape_learning", Provider: "moonshot", Model: s.model, ObjectID: id, ObjectName: t.Title, Reason: fmt.Sprintf("人工改标后的学习复核（第%d次尝试）", f.Attempts+1), RetryOf: f.TaskID, InputVersion: f.Revision, RuleVersion: fmt.Sprint(trackNarrativeRuleVersion), InputSummary: "复核人工图案修正及轨迹方图，不修改人工标签"})
+		if err != nil {
+			return false, err
+		}
+		f.TaskID = ai.TaskID(ctx)
 		f.Attempts++
 		f.Status = "running"
 		f.NextAttempt = time.Now().Add(5 * time.Minute)
@@ -187,8 +217,38 @@ func (s *TrackNarrativeService) learnShapeCorrection(ctx context.Context, id str
 		facts, _ := json.Marshal(map[string]interface{}{"title": f.Title, "shape_correction": map[string]interface{}{"before": f.Before, "admin_label": f.Label, "previous_ai": f.PreviousAI, "has_previous_ai": f.HasPreviousAI}})
 		result, err := s.generator.Generate(ctx, string(facts), path)
 		called = true
+		if e := run.Check(); e != nil {
+			return true, e
+		}
+		if ai.IsControlError(err) {
+			f.Attempts--
+			f.Status = "pending"
+			f.NextAttempt = time.Now().Add(time.Minute)
+			cleanup, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_ = s.editShapeFeedback(cleanup, id, func(v *shapeFeedback) error {
+				if v.Revision == f.Revision {
+					*v = f
+				}
+				return nil
+			})
+			return true, err
+		}
 		if err != nil || result.ShapeReview == nil {
-			return true, s.shapeLearningFailure(ctx, &f)
+			cause := err
+			if cause == nil {
+				cause = errors.New("AI 未返回有效学习复核结果")
+			}
+			if saveErr := s.shapeLearningFailure(ctx, &f); saveErr != nil {
+				return true, saveErr
+			}
+			return true, cause
+		}
+		if err = run.Result(result.ShapeReview, "pending"); err != nil {
+			return true, err
+		}
+		if err = run.BeforeWrite(); err != nil {
+			return true, err
 		}
 		f.Review = result.ShapeReview
 		if f.Review.Supported && (result.ShapeLabel != f.Label || (f.Label != "" && (result.ShapeAppropriate == nil || !*result.ShapeAppropriate || result.ShapeConfident == nil || !*result.ShapeConfident))) {
@@ -208,12 +268,16 @@ func (s *TrackNarrativeService) learnShapeCorrection(ctx context.Context, id str
 		}
 	}
 	if !f.Review.Supported {
+		_ = run.Adoption("not_applied")
 		return called, s.editShapeFeedback(ctx, id, func(v *shapeFeedback) error {
 			if v.Revision == f.Revision {
 				v.Status = "disputed"
 			}
 			return nil
 		})
+	}
+	if err = run.BeforeWrite(); err != nil {
+		return called, err
 	}
 	// Idempotent compact memory update. Reviewed results survive a failed persistence/restart.
 	var memory shapeMemory
@@ -230,12 +294,19 @@ func (s *TrackNarrativeService) learnShapeCorrection(ctx context.Context, id str
 	if err = s.saveState(ctx, shapeMemoryKey, memory, ""); err != nil {
 		return called, err
 	}
-	return called, s.editShapeFeedback(ctx, id, func(v *shapeFeedback) error {
+	err = s.editShapeFeedback(ctx, id, func(v *shapeFeedback) error {
 		if v.Revision == f.Revision {
 			v.Status = "learned"
 		}
 		return nil
 	})
+	if err == nil {
+		_ = run.Adoption("applied")
+		if run == nil && s.ai != nil && f.TaskID != "" {
+			_ = s.ai.MarkAdopted(ctx, f.TaskID, "shape_learning", id)
+		}
+	}
+	return called, err
 }
 
 func (s *TrackNarrativeService) shapeLearningFailure(ctx context.Context, f *shapeFeedback) error {

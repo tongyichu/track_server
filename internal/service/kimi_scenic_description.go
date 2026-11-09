@@ -12,6 +12,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/tongyichu/track_server/internal/ai"
 	"github.com/tongyichu/track_server/internal/models"
 )
 
@@ -162,7 +163,12 @@ func (g *KimiScenicSpotDescriptionGenerator) postJSON(ctx context.Context, endpo
 	}
 	request.Header.Set("Authorization", "Bearer "+g.apiKey)
 	request.Header.Set("Content-Type", "application/json")
-	response, err := g.client.Do(request)
+	response, err := ai.Observe(ctx, g.client, request, func() string {
+		if strings.Contains(endpoint, "/tools/") {
+			return "search"
+		}
+		return "generation"
+	}())
 	if err != nil {
 		return err
 	}

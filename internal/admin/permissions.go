@@ -67,6 +67,14 @@ func requestPermission(c *app.RequestContext) (string, bool) {
 		return "feedbacks", write
 	case "releases":
 		return "releases", write || route == "releases/upload-token"
+	case "ai":
+		if !write {
+			return "ai_usage", false
+		}
+		if len(parts) > 1 && (parts[1] == "policies" || parts[1] == "prices") {
+			return "ai_settings", true
+		}
+		return "ai_tasks", true
 	case "analytics":
 		return "analytics", write
 	}
@@ -130,6 +138,9 @@ func (a *Authenticator) authorize(ctx context.Context, c *app.RequestContext, se
 	}
 	if route == "/admin/api/tracks/:track_id/scenic-spot" {
 		allowed = allowed && account.allows("scenic_spots", true)
+	}
+	if strings.HasPrefix(route, "/admin/api/ai/") && write {
+		allowed = allowed && account.allows("ai_usage", false)
 	}
 	if !allowed {
 		c.JSON(http.StatusForbidden, utils.H{"error": "没有该页面的" + map[bool]string{false: "查看", true: "操作"}[write] + "权限"})

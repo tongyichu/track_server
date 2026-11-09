@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tongyichu/track_server/internal/ai"
 	"github.com/tongyichu/track_server/internal/models"
 	"github.com/tongyichu/track_server/internal/repository"
 )
@@ -24,18 +25,22 @@ type narrativeScan struct {
 }
 
 type narrativeState struct {
-	Version      string                `json:"version"`
-	FactsVersion string                `json:"facts_version,omitempty"`
-	Status       string                `json:"status"`
-	FirstSeen    time.Time             `json:"first_seen"`
-	NextAttempt  time.Time             `json:"next_attempt"`
-	Attempts     int                   `json:"attempts"`
-	Result       *TrackNarrativeResult `json:"result,omitempty"`
-	OwnsShape    bool                  `json:"owns_shape"`
-	LastShape    string                `json:"last_shape"`
+	TaskID        string                `json:"task_id,omitempty"`
+	TriggerReason string                `json:"trigger_reason,omitempty"`
+	TriggerFields map[string]string     `json:"trigger_fields,omitempty"`
+	Version       string                `json:"version"`
+	FactsVersion  string                `json:"facts_version,omitempty"`
+	Status        string                `json:"status"`
+	FirstSeen     time.Time             `json:"first_seen"`
+	NextAttempt   time.Time             `json:"next_attempt"`
+	Attempts      int                   `json:"attempts"`
+	Result        *TrackNarrativeResult `json:"result,omitempty"`
+	OwnsShape     bool                  `json:"owns_shape"`
+	LastShape     string                `json:"last_shape"`
 }
 
 type TrackNarrativeService struct {
+	ai        *ai.Manager
 	tracks    repository.TrackRepository
 	writer    repository.TrackNarrativeWriter
 	maps      repository.TrackMapRepository
@@ -177,7 +182,7 @@ func (s *TrackNarrativeService) RunOnce(parent context.Context) (*TrackNarrative
 	return out, nil
 }
 
-func (s *TrackNarrativeService) process(ctx context.Context, id string, activated time.Time, out *TrackNarrativeRunResult) (bool, error) {
+func (s *TrackNarrativeService) process(ctx context.Context, id string, activated time.Time, out *TrackNarrativeRunResult) (called bool, err error) {
 	snap, err := s.snapshot(ctx, id)
 	if errors.Is(err, repository.ErrNotFound) {
 		out.Skipped++
@@ -192,7 +197,7 @@ func (s *TrackNarrativeService) process(ctx context.Context, id string, activate
 		return false, err
 	}
 	if state.Version == "" && snap.ChangedAt.Before(activated) {
-		state = narrativeState{Version: snap.Version, FactsVersion: snap.FactsVersion, Status: "historical"}
+		state = narrativeState{Version: snap.Version, FactsVersion: snap.FactsVersion, Status: "historical", TriggerFields: narrativeTriggerFields(snap)}
 		out.Skipped++
 		return false, s.saveState(ctx, key, state, "")
 	}
@@ -202,11 +207,12 @@ func (s *TrackNarrativeService) process(ctx context.Context, id string, activate
 	}
 	now := time.Now()
 	if state.Version != snap.Version {
-		state = narrativeState{Version: snap.Version, FactsVersion: snap.FactsVersion, Status: "waiting", FirstSeen: now, NextAttempt: now.Add(time.Minute), OwnsShape: state.OwnsShape, LastShape: state.LastShape}
+		reason := narrativeTriggerReason(state, snap)
+		state = narrativeState{TriggerReason: reason, TriggerFields: narrativeTriggerFields(snap), Version: snap.Version, FactsVersion: snap.FactsVersion, Status: "waiting", FirstSeen: now, NextAttempt: now.Add(time.Minute), OwnsShape: state.OwnsShape, LastShape: state.LastShape}
 		out.Deferred++
 		return false, s.saveState(ctx, key, state, "")
 	}
-	if state.Status == "complete" || state.Status == "failed" {
+	if state.Status == "complete" || state.Status == "failed" || state.Status == "cancelled" {
 		out.Skipped++
 		return false, nil
 	}
@@ -222,7 +228,24 @@ func (s *TrackNarrativeService) process(ctx context.Context, id string, activate
 		out.Skipped++
 		return false, s.saveState(ctx, key, state, "")
 	}
-	called := false
+	if allowed := s.ai.AutomaticAllowed(ctx, "track_auto", id, snap.Version); allowed != nil {
+		out.Deferred++
+		return false, nil
+	}
+	var run *ai.Run
+	defer func() {
+		if run.CancellationRequested() {
+			state.Status = "cancelled"
+			state.Result = nil
+			state.NextAttempt = time.Time{}
+			cleanup, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if saveErr := s.saveState(cleanup, key, state, ""); saveErr != nil {
+				log.Printf("AI narrative cancel state unavailable: task=%s", state.TaskID)
+			}
+		}
+		run.Finish(err)
+	}()
 	if state.Result == nil {
 		if state.Attempts >= 3 {
 			state.Status = "failed"
@@ -240,8 +263,17 @@ func (s *TrackNarrativeService) process(ctx context.Context, id string, activate
 		}
 		if !reserved {
 			out.Deferred++
-			return false, nil
+			return false, ai.ErrBudget
 		}
+		if state.TriggerReason == "" {
+			state.TriggerReason = "已保存轨迹资料的生成或重试"
+		}
+		ctx, run, err = s.ai.Begin(ctx, ai.Spec{Feature: "track_auto", Provider: "moonshot", Model: s.model, ObjectID: id, ObjectName: t.Title, InputVersion: snap.Version, RuleVersion: fmt.Sprint(trackNarrativeRuleVersion), Reason: fmt.Sprintf("%s（第%d次尝试）", state.TriggerReason, state.Attempts+1), RetryOf: state.TaskID, InputSummary: narrativeAISummary(snap)})
+		if err != nil {
+			out.Deferred++
+			return false, err
+		}
+		state.TaskID = ai.TaskID(ctx)
 		state.Attempts++
 		state.Status = "running"
 		state.NextAttempt = now.Add(5 * time.Minute)
@@ -258,6 +290,12 @@ func (s *TrackNarrativeService) process(ctx context.Context, id string, activate
 		if err != nil {
 			return true, s.fail(ctx, key, &state, err)
 		}
+		if err = run.Result(state.Result, "cached"); err != nil {
+			return true, err
+		}
+		if err = run.BeforeWrite(); err != nil {
+			return true, err
+		}
 		// Cache the paid result before CAS. Restart/concurrent edits do not require a second call.
 		state.Status = "ready"
 		if err = s.saveState(ctx, key, state, ""); err != nil {
@@ -269,17 +307,22 @@ func (s *TrackNarrativeService) process(ctx context.Context, id string, activate
 		return called, err
 	}
 	if current.Version != snap.Version {
+		_ = run.Adoption("stale")
 		out.Deferred++
 		return called, nil
 	}
 	t = current.Track
 	writeDescription = t.DescriptionSource == "" || t.DescriptionSource == "auto" || t.DescriptionSource == "ai"
 	writeShape = !current.Input.ShapeLocked
+	if err = run.BeforeWrite(); err != nil {
+		return called, err
+	}
 	applied, err := s.writer.ApplyTrackNarrative(ctx, t, state.Result.Description, state.Result.ShapeLabel, writeDescription, writeShape)
 	if err != nil {
 		return called, err
 	}
 	if !applied {
+		_ = run.Adoption("cached")
 		out.Deferred++
 		return called, nil
 	}
@@ -293,10 +336,30 @@ func (s *TrackNarrativeService) process(ctx context.Context, id string, activate
 		return called, err
 	}
 	out.Generated++
+	if run == nil && state.TaskID != "" && s.ai != nil {
+		if e := s.ai.MarkAdopted(ctx, state.TaskID, "track_auto", id); e != nil {
+			log.Printf("AI adoption record unavailable: task=%s", state.TaskID)
+		}
+	}
+	_ = run.Adoption("applied")
 	return called, nil
 }
 
 func (s *TrackNarrativeService) fail(ctx context.Context, key string, state *narrativeState, cause error) error {
+	if ai.IsControlError(cause) || ctx.Err() != nil {
+		if state.Status == "running" && state.Attempts > 0 {
+			state.Attempts--
+		}
+		state.Status = "waiting"
+		state.NextAttempt = time.Now().Add(time.Minute)
+		cleanup, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := s.saveState(cleanup, key, state, ""); err != nil {
+			return err
+		}
+		return cause
+	}
+
 	// Image failures also have bounded retries, but do not consume the model-call budget.
 	if state.Status != "running" {
 		state.Attempts++

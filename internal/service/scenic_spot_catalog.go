@@ -13,12 +13,15 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/tongyichu/track_server/internal/ai"
 	"github.com/tongyichu/track_server/internal/config"
 	"github.com/tongyichu/track_server/internal/models"
 	"github.com/tongyichu/track_server/internal/repository"
 )
 
 type ScenicSpotCatalogService struct {
+	ai                   *ai.Manager
+	aiModel              string
 	spots                repository.ScenicSpotRepository
 	tracks               repository.TrackRepository
 	places               repository.TrackPlaceRepository
@@ -185,7 +188,8 @@ func (s *ScenicSpotCatalogService) GenerateDescription(ctx context.Context, spot
 	}
 	generationCtx, cancel := context.WithTimeout(ctx, 75*time.Second)
 	defer cancel()
-	return s.descriptionGenerator.Generate(generationCtx, spot)
+	description, _, err := s.generateScenicDescription(generationCtx, spot, nil)
+	return description, err
 }
 
 // BackfillProviderContent fetches missing provider text and photos once and
@@ -419,8 +423,10 @@ func (s *ScenicSpotCatalogService) Create(ctx context.Context, operator string, 
 			return nil, repository.ErrAlreadyExists
 		}
 	}
+	generatedTaskID := ""
 	if s.descriptionGenerator != nil && strings.TrimSpace(v.Description) == "" {
-		description, err := s.GenerateDescription(ctx, v)
+		description, taskID, err := s.GenerateDescriptionPreview(ai.WithReason(ctx, "manual", "后台创建景点时补充介绍"), v)
+		generatedTaskID = taskID
 		if err != nil {
 			log.Printf("scenic description generation failed: spot_id=%s error=%v", v.ID, err)
 		} else if description != "" {
@@ -432,6 +438,11 @@ func (s *ScenicSpotCatalogService) Create(ctx context.Context, operator string, 
 	}
 	if err := s.spots.CreateScenicSpot(ctx, v); err != nil {
 		return nil, err
+	}
+	if generatedTaskID != "" {
+		if err := s.ai.MarkAdopted(ctx, generatedTaskID, "scenic_description", v.ID); err != nil {
+			log.Printf("scenic spot saved but AI adoption record unavailable: task=%s", generatedTaskID)
+		}
 	}
 	s.audit(ctx, v.ID, "create", operator, "active spot created", nil, v)
 	return v, nil
@@ -1121,29 +1132,24 @@ func (s *ScenicSpotCatalogService) autoGenerateSpotDescription(spotID string) {
 	if err != nil || spot.ManualEdited || strings.TrimSpace(spot.Description) != "" {
 		return
 	}
-	description, err := s.GenerateDescription(ctx, spot)
+	_, _, err = s.generateScenicDescription(ai.WithReason(ctx, "auto", "新景点识别后自动补充介绍"), spot, func(ctx context.Context, description string) error {
+		latest, err := s.spots.GetScenicSpot(ctx, spotID)
+		if err != nil {
+			return err
+		}
+		if latest.ManualEdited || strings.TrimSpace(latest.Description) != "" || latest.Status == models.ScenicSpotMerged {
+			return errors.New("景点资料已变化，未采用生成结果")
+		}
+		latest.Description = strings.TrimSpace(description)
+		expected := latest.Version
+		latest.Version++
+		latest.UpdatedAt = time.Now()
+		latest.UpdatedBy = "system"
+		return s.spots.UpdateScenicSpot(ctx, latest, expected)
+	})
 	if err != nil {
 		log.Printf("auto scenic description failed: spot=%s err=%v", spotID, err)
-		return
 	}
-	description = strings.TrimSpace(description)
-	if description == "" {
-		return
-	}
-	latest, err := s.spots.GetScenicSpot(ctx, spotID)
-	if err != nil || latest.ManualEdited || strings.TrimSpace(latest.Description) != "" || latest.Status == models.ScenicSpotMerged {
-		return
-	}
-	latest.Description = description
-	expected := latest.Version
-	latest.Version++
-	latest.UpdatedAt = time.Now()
-	latest.UpdatedBy = "system"
-	if err := s.spots.UpdateScenicSpot(ctx, latest, expected); err != nil {
-		log.Printf("auto scenic description save failed: spot=%s err=%v", spotID, err)
-		return
-	}
-	s.audit(ctx, spotID, "auto_description", "system", "auto generated description for new outdoor destination", nil, latest)
 }
 
 func (s *ScenicSpotCatalogService) PublicSpotForTrack(ctx context.Context, trackID string) (*models.ScenicSpot, error) {

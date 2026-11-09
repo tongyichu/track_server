@@ -4,14 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"time"
 
+	"github.com/tongyichu/track_server/internal/ai"
 	"github.com/tongyichu/track_server/internal/repository"
 )
 
 // PreviewShape generates a reviewable suggestion without changing the track.
-func (s *TrackNarrativeService) PreviewShape(ctx context.Context, id string) (*TrackShapeResult, error) {
+func (s *TrackNarrativeService) PreviewShape(ctx context.Context, id string) (result *TrackShapeResult, err error) {
 	if s == nil {
 		return nil, errors.New("AI 标签服务未配置")
 	}
@@ -56,6 +58,11 @@ func (s *TrackNarrativeService) PreviewShape(ctx context.Context, id string) (*T
 	if err != nil {
 		return nil, err
 	}
+	ctx, run, err := s.ai.Begin(ctx, ai.Spec{Feature: "track_shape", Provider: "moonshot", Model: s.model, ObjectID: id, ObjectName: snap.Track.Title, Mode: "manual", Reason: "后台手动识别轨迹图案", InputVersion: snap.Version, RuleVersion: fmt.Sprint(trackNarrativeRuleVersion), InputSummary: narrativeAISummary(snap)})
+	if err != nil {
+		return nil, err
+	}
+	defer func() { run.Finish(err) }()
 	image, err := s.trackSvc.TrackPreviewFile(ctx, snap.Track.UserID, id, snap.PreviewVariant, previewVersion(snap.PreviewURL))
 	if err != nil {
 		return nil, errors.New("预览图读取失败，请稍后重试")
@@ -77,9 +84,15 @@ func (s *TrackNarrativeService) PreviewShape(ctx context.Context, id string) (*T
 	if err != nil {
 		return nil, err
 	}
-	result, err := generator.GenerateShape(ctx, string(raw), image)
+	result, err = generator.GenerateShape(ctx, string(raw), image)
 	if err != nil {
 		log.Printf("[TrackShape] track_id=%s generation_failed: %v", id, err)
+		if ai.IsControlError(err) {
+			return nil, err
+		}
+		if e := run.Check(); e != nil {
+			return nil, e
+		}
 		if errors.Is(err, errKimiOutputLimit) {
 			return nil, errors.New("AI 输出达到单次上限，未获得完整结果，请重试")
 		}
@@ -88,6 +101,13 @@ func (s *TrackNarrativeService) PreviewShape(ctx context.Context, id string) (*T
 	current, err := s.snapshot(ctx, id)
 	if err != nil || current.Version != snap.Version {
 		return nil, errors.New("轨迹资料已变化，请重新打开后生成")
+	}
+	result.TaskID = ai.TaskID(ctx)
+	if err = run.Result(result, "pending"); err != nil {
+		return nil, err
+	}
+	if err = run.BeforeWrite(); err != nil {
+		return nil, err
 	}
 	if err = s.saveState(ctx, "narrative:shape-preview:"+id, trackShapePreview{Version: snap.Version, Model: s.model, CreatedAt: time.Now(), Result: result}, ""); err != nil {
 		log.Printf("[TrackShape] track_id=%s preview_save_failed: %v", id, err)

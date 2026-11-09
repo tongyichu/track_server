@@ -2,7 +2,8 @@
   'use strict';
   const $ = id => document.getElementById(id);
   const state = { current: null, list: [], listCursor: "", listTotal: 0, listHasMore: false, newSpot: false, saving: false, providerSyncing: false, pendingCoordinates: null, map: null, mapMarker: null, mapOriginalPosition: null, selectingMapLocation: false, mapSDKPromise: null, amapPluginPromises: {}, regions: null, districtSearch: null, placeSearch: null, poiSearchPoint: null, poiDraft: null, relatedSpot: null, relatedCursor: '' };
-  let baselineFormSnapshot = null;
+  let baselineFormSnapshot = null, aiDescriptionController = null;
+  function abortDescriptionGeneration() {if (aiDescriptionController) aiDescriptionController.abort();aiDescriptionController=null;$('generateDescriptionBtn').disabled=false;$('generateDescriptionBtn').removeAttribute('aria-disabled');}
 
   async function api(path, options) {
     const response = await fetch('/admin/api' + path, Object.assign({ credentials: 'same-origin' }, options || {}));
@@ -195,10 +196,11 @@
   }
 
   function fillForm(spot) {
+    abortDescriptionGeneration();
     baselineFormSnapshot=null;
     $('deleteSpotError').hidden=true;
     state.current=spot;if(!$('detailModal').open)$('detailModal').showModal();$('detailTitle').textContent=state.newSpot?'新建景点':(spot.name||'待补充名称');
-    $('aiDescriptionCandidate').hidden=true;$('aiDescriptionCandidateText').textContent='';
+    $('aiDescriptionCandidate').hidden=true;$('aiDescriptionCandidateText').textContent='';delete $('descriptionInput').dataset.aiTaskId;delete $('aiDescriptionCandidateText').dataset.aiTaskId;
     $('detailMeta').textContent=spot.id?'内部 ID：'+spot.id:'保存后生成内部景点 ID';setModeBadge(spot);
     $('nameInput').value=spot.name||'';$('categoryInput').value=spot.category||'';$('addressInput').value=spot.address||'';$('descriptionInput').value=spot.description||'';$('scenicGradeInput').value=spot.scenic_grade||'';$('scenicGradeHint').textContent=spot.scenic_grade_source==='manual'?'人工维护，自动采集不会覆盖':spot.scenic_grade_status==='synced'?'来自高德':spot.scenic_grade_status==='unavailable'?'暂无可用等级信息':spot.scenic_grade_status==='failed'?'等级采集失败，后续同步时重试':'保存后自动采集';
     const cities=spotCities(spot);$('cityInfo').textContent=cities.length?cities.join('、'):'暂无';
@@ -325,7 +327,7 @@
     try {
       let spot;
       if (state.newSpot) {
-        spot = await api('/scenic-spots', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(currentPayload()) });
+        spot = await api('/scenic-spots', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({},currentPayload(),{ai_description_task_id:$('descriptionInput').dataset.aiTaskId||undefined})) });
         if (state.current !== owner) return;
         state.newSpot = false; fillForm(spot);
         await Promise.all([loadList(), loadStats()]);
@@ -334,7 +336,7 @@
       }
       spot = await api('/scenic-spots/' + encodeURIComponent(state.current.id), {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ expected_version: state.current.version, spot: currentPayload() })
+        body: JSON.stringify({ expected_version: state.current.version, spot: currentPayload(), ai_description_task_id:$('descriptionInput').dataset.aiTaskId||undefined })
       });
       state.current = spot; state.newSpot = false;
       const hasPendingPhotos = photoEditor.pending;
@@ -406,13 +408,22 @@
     }
   }
   async function generateScenicDescription() {
+    if(aiDescriptionController||!AdminAccess.can('scenic_spots',true))return;
     const spot=currentPayload();if(!spot.name){toast('请先填写景点名称','warning');return;}
-    const button=$('generateDescriptionBtn'),hint=$('providerDescriptionHint');$('aiDescriptionCandidate').hidden=true;$('aiDescriptionCandidateText').textContent='';button.setAttribute('aria-disabled','true');showDescriptionQueryProgress(hint);
-    try{const result=await api('/scenic-spots/description/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(spot)});if(!result.description){hint.textContent='没有查到足够可靠的介绍信息';toast('没有查到足够可靠的景点介绍','warning');return;}$('aiDescriptionCandidateText').textContent=result.description;$('aiDescriptionCandidate').hidden=false;hint.textContent='简介已生成，请确认后代入';}
-    catch(error){hint.textContent='查询失败：'+error.message;toast(error.message,'danger');}
-    finally{button.removeAttribute('aria-disabled');}
+    const owner=state.current, original=JSON.stringify(formSnapshot()),controller=aiDescriptionController=new AbortController();
+    const button=$('generateDescriptionBtn'),hint=$('providerDescriptionHint');
+    $('aiDescriptionCandidate').hidden=true;$('aiDescriptionCandidateText').textContent='';delete $('aiDescriptionCandidateText').dataset.aiTaskId;
+    button.disabled=true;button.setAttribute('aria-disabled','true');showDescriptionQueryProgress(hint);
+    try{
+      const result=await api('/scenic-spots/description/generate',{method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,body:JSON.stringify(spot)});
+      if(controller.signal.aborted||state.current!==owner||!$('detailModal').open||state.saving)return;
+      if(JSON.stringify(formSnapshot())!==original){hint.textContent='生成期间资料有修改，本次结果未覆盖草稿，可在 AI 使用中查看记录。';return;}
+      if(!result.description){hint.textContent='没有查到足够可靠的介绍信息';toast('没有查到足够可靠的景点介绍','warning');return;}
+      $('aiDescriptionCandidateText').textContent=result.description;$('aiDescriptionCandidateText').dataset.aiTaskId=result.task_id||'';$('aiDescriptionCandidate').hidden=false;hint.textContent='简介已生成，请确认后代入';
+    }catch(error){if(!controller.signal.aborted&&state.current===owner){hint.textContent='查询失败：'+error.message;toast(error.message,'danger');}}
+    finally{if(aiDescriptionController===controller){aiDescriptionController=null;button.disabled=false;button.removeAttribute('aria-disabled');}}
   }
-  $('applyAiDescriptionBtn').addEventListener('click',()=>{const candidate=$('aiDescriptionCandidateText').textContent.trim();if(!candidate)return;$('descriptionInput').value=candidate;$('aiDescriptionCandidate').hidden=true;$('providerDescriptionHint').textContent='已代入简介，保存后写入景点资料';updateSaveButton();});
+  $('applyAiDescriptionBtn').addEventListener('click',()=>{const candidate=$('aiDescriptionCandidateText').textContent.trim();if(!candidate)return;$('descriptionInput').value=candidate;$('descriptionInput').dataset.aiTaskId=$('aiDescriptionCandidateText').dataset.aiTaskId||'';$('aiDescriptionCandidate').hidden=true;$('providerDescriptionHint').textContent='已代入简介，保存后写入景点资料';updateSaveButton();});
   async function copySpotId() {
     const id=state.current&&state.current.id;if(!id)return;
     try{if(navigator.clipboard&&navigator.clipboard.writeText){await navigator.clipboard.writeText(id);}else{const input=document.createElement('textarea');input.value=id;input.style.position='fixed';input.style.opacity='0';document.body.appendChild(input);input.select();const copied=document.execCommand('copy');input.remove();if(!copied)throw new Error('浏览器不支持复制');}toast('ID 复制成功','success');}
@@ -424,8 +435,8 @@
   $('newBtn').addEventListener('click',()=>{if(state.saving||!canLeavePhotos())return;detailLoadVersion++;if(detailController)detailController.abort();state.newSpot=true;fillForm({status:'active',manual_edited:true});});$('closeDetailBtn').addEventListener('click',closeDetail);$('detailModal').addEventListener('click',event=>{if(event.target===$('detailModal'))closeDetail();});
   $('deleteSpotBtn').addEventListener('click',deleteSpot);
   $('detailModal').addEventListener('cancel', event => { if (state.saving || !canLeavePhotos()) event.preventDefault(); });
-  $('detailModal').addEventListener('close', () => { if (!state.saving) { detailLoadVersion++; if(detailController)detailController.abort(); clearPhotoPreview(); } });
-  window.addEventListener('pagehide', clearPhotoPreview);
+  $('detailModal').addEventListener('close', () => { abortDescriptionGeneration(); if (!state.saving) { detailLoadVersion++; if(detailController)detailController.abort(); clearPhotoPreview(); } });
+  window.addEventListener('pagehide', () => {abortDescriptionGeneration();clearPhotoPreview();});
   window.addEventListener('beforeunload', event => {
     if (photoEditor.pending || photoEditor.busy || state.saving) { event.preventDefault(); event.returnValue = ''; }
   });

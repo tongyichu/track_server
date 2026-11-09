@@ -693,3 +693,19 @@ CREATE TABLE IF NOT EXISTS user_permission_snapshots (
  data_json JSON NOT NULL,
  PRIMARY KEY(user_id,installation_id), KEY idx_permission_user_received(user_id,received_at)
 );
+
+
+-- AI 使用管理：任务账本与跨进程策略/预算/租约。
+CREATE TABLE IF NOT EXISTS ai_usage_tasks (
+ id VARCHAR(80) NOT NULL PRIMARY KEY, revision BIGINT NOT NULL,
+ feature VARCHAR(48) NOT NULL, provider VARCHAR(40) NOT NULL, model VARCHAR(100) NOT NULL,
+ object_id VARCHAR(100) NOT NULL, object_name VARCHAR(200) NOT NULL, actor VARCHAR(100) NOT NULL,
+ mode VARCHAR(16) NOT NULL, status VARCHAR(24) NOT NULL, adoption VARCHAR(24) NOT NULL,
+ created_at DATETIME(6) NOT NULL, payload JSON NOT NULL, summary JSON NOT NULL,
+ INDEX idx_ai_created(created_at,id), INDEX idx_ai_status(status,id), INDEX idx_ai_feature(feature,created_at),
+ INDEX idx_ai_model(provider,model,created_at), INDEX idx_ai_object(object_id,id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS ai_usage_state (
+ state_key VARCHAR(160) NOT NULL PRIMARY KEY, revision BIGINT NOT NULL, payload JSON NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

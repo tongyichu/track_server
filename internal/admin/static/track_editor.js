@@ -86,7 +86,7 @@
     if (!trackID) return false;
     if (!window.AdminAccess.can('tracks', false)) { window.AdminUI.alert('没有轨迹管理的查看权限', 'warning'); return false; }
     const readOnly = !window.AdminAccess.can('tracks', true);
-    let track = null, isDeleted = false;
+    let track = null, isDeleted = false, shapeCandidate = null;
     const values = await window.AdminUI.form({
       title: (readOnly ? '查看轨迹 ' : '编辑轨迹 ') + trackID,
       wide: true, className: 'admin-track-editor', waitForHidden: true,
@@ -183,7 +183,7 @@
           apply.textContent = '一键代入并保存'; apply.setAttribute('aria-label', '一键代入并保存');
           const note = document.createElement('span'); note.className = 'text-secondary'; note.textContent = '只保存路线说明，其他未保存的修改会保留。';
           actions.append(apply, note); candidateArea.append(candidateTitle, candidateInput, sources, actions); group.appendChild(candidateArea);
-          let revision = 0, candidateVersion = '', generating = false, applying = false;
+          let revision = 0, candidateVersion = '', candidateTaskID = '', generating = false, applying = false;
           view.form.addEventListener('input', function () { revision++; });
           view.form.addEventListener('change', function () { revision++; });
           function updateButtons() {
@@ -211,7 +211,7 @@
               }
               const data = result.data || {};
               if (!String(data.description || '').trim() || !data.source_version) throw new Error('AI 未返回有效建议，原说明已保留');
-              candidateInput.value = data.description; candidateVersion = data.source_version;
+              candidateInput.value = data.description; candidateVersion = data.source_version; candidateTaskID = data.task_id || '';
               candidateArea.hidden = false; sources.replaceChildren();
               hint.textContent = '建议已生成，原说明未变；可编辑建议，确认后点击“一键代入并保存”。';
               const sourceList = Array.isArray(data.sources) ? data.sources : [];
@@ -242,7 +242,7 @@
             try {
               const response = await fetch('/admin/api/tracks/' + encodeURIComponent(trackID) + '/description', {
                 method: 'PUT', headers: { 'Content-Type': 'application/json' }, signal: view.signal,
-                body: JSON.stringify({ description: description, source_version: candidateVersion })
+                body: JSON.stringify({ description: description, source_version: candidateVersion, task_id: candidateTaskID })
               });
               const result = await response.json(); responseReceived = true;
               if (!response.ok) throw new Error(result.error || '路线说明保存失败');
@@ -349,7 +349,7 @@
             labelBadges = document.createElement('div'); labelBadges.className = 'd-flex flex-wrap gap-2 mb-2';
             renderLabelBadges();
             content.appendChild(labelBadges);
-            const states = { historical: '历史轨迹，未自动生成，可手动填写', waiting: '等待自动生成', running: '正在生成', ready: '生成完成，等待写入', complete: '自动生成已完成（无明确形象时不打标）', retry: '等待重试', failed: '自动生成失败', not_queued: '未进入自动任务', unconfigured: 'AI 未配置' };
+            const states = { cancelled: 'AI 自动任务已中断，可在 AI 使用中手动重试', historical: '历史轨迹，未自动生成，可手动填写', waiting: '等待自动生成', running: '正在生成', ready: '生成完成，等待写入', complete: '自动生成已完成（无明确形象时不打标）', retry: '等待重试', failed: '自动生成失败', not_queued: '未进入自动任务', unconfigured: 'AI 未配置' };
             const status = document.createElement('p'); status.className = 'text-secondary mb-2';
             const generation = trackPayload.label_generation || {};
             status.textContent = (states[generation.status] || '状态暂不可用') + (generation.attempts ? '，已尝试 ' + generation.attempts + ' 次' : '') + (generation.reason ? '：' + generation.reason : '');
@@ -377,7 +377,7 @@
             showDiagnosis(generation.shape_preview && generation.shape_preview.result);
             if (generation.learning) {
               const learning = generation.learning;
-              const names = { pending: '等待复核', running: '正在复核', retry: '等待重试', reviewed: '已复核，等待保存经验', learned: '已纳入识别经验', disputed: '图像依据不足，未采纳为经验', stale: '资料已变化，样例已失效', failed: '复核失败', unavailable: '状态读取失败' };
+              const names = { cancelled: 'AI 复核已中断', pending: '等待复核', running: '正在复核', retry: '等待重试', reviewed: '已复核，等待保存经验', learned: '已纳入识别经验', disputed: '图像依据不足，未采纳为经验', stale: '资料已变化，样例已失效', failed: '复核失败', unavailable: '状态读取失败' };
               const note = document.createElement('p'); note.className = 'text-secondary mb-2';
               note.textContent = '人工标注学习：' + (names[learning.status] || learning.status) + (learning.review ? '。依据：' + learning.review.evidence + '。经验：' + learning.review.lesson : '');
               content.appendChild(note);
@@ -402,6 +402,7 @@
                   showDiagnosis(result.data.diagnosis);
                   if (input.value !== original) { status.textContent = '你已修改形象输入，本次结果未覆盖，请重新生成或保存人工内容。'; return; }
                   input.value = result.data.shape_label || '';
+                  shapeCandidate={ id:result.data.task_id || '', label:input.value };
                   input.dispatchEvent(new Event('change', { bubbles: true }));
                   status.textContent = input.value ? '建议形象：' + input.value + '。点击保存修改后生效。' : '没有识别到明确且适宜的形象，建议留空。点击保存修改后生效。';
                 } catch (error) {
@@ -474,6 +475,7 @@
     }
     const body = {
       source_feedback_id: options.sourceFeedbackID || undefined,
+      shape_ai_task_id:shapeCandidate && shapeCandidate.label === values.shape_label && values.shape_label !== (track.shape_label || '') ? shapeCandidate.id : undefined,
       session_id: values.session_id, title: values.title, city_code: values.city_code,
       shape_label: values.shape_label !== (track.shape_label || '') ? values.shape_label : undefined,
       locate_addr: values.locate_addr, track_type: values.track_type, source_tag: values.source_tag,

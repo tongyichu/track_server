@@ -26,6 +26,7 @@ import (
 	"github.com/shogo82148/androidbinary/apk"
 	"howett.net/plist"
 
+	"github.com/tongyichu/track_server/internal/ai"
 	"github.com/tongyichu/track_server/internal/config"
 	"github.com/tongyichu/track_server/internal/models"
 	"github.com/tongyichu/track_server/internal/regions"
@@ -35,6 +36,9 @@ import (
 
 // Handler 聚合管理后台需要的业务依赖。
 type Handler struct {
+	ai                    *ai.Manager
+	aiModels              []string
+	aiLegacyBudget        int
 	regionSvc             *regions.Service
 	pixabay               *regions.PixabayClient
 	permissionSnapshotSvc *service.PermissionSnapshotService
@@ -81,6 +85,7 @@ type trackMapCleanupRepository interface {
 }
 
 type updateTrackBody struct {
+	ShapeAITaskID    string  `json:"shape_ai_task_id"`
 	SourceFeedbackID string  `json:"source_feedback_id"`
 	ShapeLabel       *string `json:"shape_label"`
 	// 兼容旧表单回传原归属人，但不允许通过后台修改归属。
@@ -1876,6 +1881,16 @@ func (h *Handler) UpdateTrack(ctx context.Context, c *app.RequestContext) {
 			return
 		}
 	}
+	if body.ShapeAITaskID != "" {
+		if body.ShapeLabel == nil || h.trackNarrativeSvc == nil {
+			c.JSON(400, utils.H{"error": "AI 图案确认参数无效"})
+			return
+		}
+		if err := h.trackNarrativeSvc.ValidateShapeTask(ctx, trackID, body.ShapeAITaskID); err != nil {
+			c.JSON(409, utils.H{"error": "AI 图案与当前轨迹资料不匹配，请重新生成"})
+			return
+		}
+	}
 	beforeCorrectionEdit := *track
 	oldCityCode, oldType := track.CityCode, track.TrackType
 	oldStatus, oldRunning, oldRawURL, oldCoordinate := track.Status, track.IsRunning, track.RawTrackURL, track.CoordinateSystem
@@ -1886,6 +1901,11 @@ func (h *Handler) UpdateTrack(ctx context.Context, c *app.RequestContext) {
 	if err := h.trackRepo.Update(ctx, track); err != nil {
 		handleAdminRepoError(c, err)
 		return
+	}
+	if body.ShapeAITaskID != "" {
+		if err := h.trackNarrativeSvc.MarkShapeAdopted(ctx, trackID, body.ShapeAITaskID); err != nil {
+			log.Printf("track saved but AI adoption record unavailable: task=%s", body.ShapeAITaskID)
+		}
 	}
 	learningWarning := ""
 	if body.ShapeLabel != nil && beforeCorrectionEdit.ShapeLabel != track.ShapeLabel {

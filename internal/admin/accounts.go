@@ -40,6 +40,9 @@ var permissionModules = []PermissionModule{
 	{"feedbacks", "反馈与纠错", "/admin/feedbacks.html"},
 	{"releases", "App 发布", "/admin/index.html"},
 	{"analytics", "埋点同步", "/admin/analytics.html"},
+	{"ai_usage", "AI 使用", "/admin/ai_usage.html"},
+	{"ai_tasks", "AI 任务中断与重试", ""},
+	{"ai_settings", "AI 预算与价格配置", ""},
 }
 
 type accountRecord struct {
@@ -106,7 +109,7 @@ func (a *accountRecord) home() string {
 		return "/admin/password.html"
 	}
 	for _, module := range permissionModules {
-		if a.allows(module.ID, false) {
+		if module.Page != "" && a.allows(module.ID, false) {
 			return module.Page
 		}
 	}

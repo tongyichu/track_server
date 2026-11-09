@@ -16,6 +16,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"github.com/tongyichu/track_server/internal/admin"
+	"github.com/tongyichu/track_server/internal/ai"
 	"github.com/tongyichu/track_server/internal/config"
 	"github.com/tongyichu/track_server/internal/handler"
 	"github.com/tongyichu/track_server/internal/middleware"
@@ -65,6 +66,8 @@ func main() {
 	var scenicSpotRepo repository.ScenicSpotRepository
 	var trackSubmissionRepo repository.TrackSubmissionRepository
 	var recommendationRepo repository.RecommendationRepository
+	var aiUsageRepo repository.AIUsageRepository
+	var aiDurable bool
 	var adminAccountStorage admin.AccountStorage
 	var regionStore regions.Store
 
@@ -133,6 +136,13 @@ func main() {
 				adminCancel()
 				if err != nil {
 					log.Printf("admin account storage unavailable; admin authentication will be disabled")
+				}
+				aiRepo, aiErr := repository.NewMySQLAIUsageRepository(ctx, db)
+				if aiErr != nil {
+					log.Printf("AI usage storage unavailable; new AI billing disabled")
+				} else {
+					aiUsageRepo = aiRepo
+					aiDurable = true
 				}
 				trackMapRepo = repository.NewMySQLTrackMapRepository(db)
 				regionStore, err = regions.NewMySQLStore(ctx, db)
@@ -203,6 +213,13 @@ func main() {
 			}
 			placeIndexCancel()
 			trackPlaceRepo = mongoPlaceRepo
+			aiRepo, aiErr := repository.NewMongoAIUsageRepository(ctx, db)
+			if aiErr != nil {
+				log.Printf("AI usage storage unavailable; new AI billing disabled")
+			} else {
+				aiUsageRepo = aiRepo
+				aiDurable = true
+			}
 			trackRepo = repository.NewMongoTrackRepository(db.Collection("tracks"))
 			likeRepo = repository.NewMongoTrackLikeRepository(db.Collection("track_likes"))
 			commentRepo = repository.NewMongoCommentRepository(db)
@@ -285,6 +302,11 @@ func main() {
 
 	trackSvc := service.NewTrackService(trackRepo, collectRepo)
 	trackSvc.SetFootprintRegionService(regionSvc)
+	if aiUsageRepo == nil {
+		aiUsageRepo = repository.NewMemoryAIUsageRepository()
+	}
+	aiManager := ai.New(aiUsageRepo, aiDurable)
+	defer aiManager.Close()
 	scenicSpotCatalogSvc := service.NewScenicSpotCatalogService(scenicSpotRepo, trackRepo, trackPlaceRepo)
 	if cfg.MoonshotAPIKey != "" {
 		if _, memoryFallback := scenicSpotRepo.(*repository.MemoryScenicSpotRepository); !memoryFallback {
@@ -294,6 +316,8 @@ func main() {
 			log.Printf("Kimi scenic descriptions disabled while using in-memory scenic spot storage")
 		}
 	}
+	scenicSpotCatalogSvc.SetAIManager(aiManager, cfg.KimiScenicDescriptionModel)
+	aiManager.RegisterRetry("scenic_description", scenicSpotCatalogSvc.RetryAI)
 	trackSvc.SetScenicSpotCatalogService(scenicSpotCatalogSvc)
 	trackSubmissionSvc := service.NewTrackSubmissionService(trackSubmissionRepo, trackRepo)
 	recommendationSvc := service.NewRecommendationService(service.RecommendationConfig{
@@ -596,6 +620,12 @@ func main() {
 		log.Printf("track narrative configured: model=%s automatic_enabled=%t scheduler_enabled=%t", cfg.TrackNarrativeModel, cfg.TrackNarrativeEnabled, cfg.SchedulerEnabled)
 	}
 
+	if trackNarrativeSvc != nil {
+		trackNarrativeSvc.SetAIManager(aiManager)
+		for _, feature := range []string{"track_auto", "track_description", "track_shape", "shape_learning"} {
+			aiManager.RegisterRetry(feature, trackNarrativeSvc.RetryAI)
+		}
+	}
 	var h *server.Hertz
 	if cfg.EnableTLS {
 		cert, err := tls.LoadX509KeyPair(cfg.TLSCertFile, cfg.TLSKeyFile)
@@ -675,6 +705,7 @@ func main() {
 		adminModule.Handler.SetScenicSpotCatalogService(scenicSpotCatalogSvc)
 		adminModule.Handler.SetTrackPlaceService(trackPlaceSvc)
 		adminModule.Handler.SetTrackNarrativeService(trackNarrativeSvc)
+		adminModule.Handler.SetAIManager(aiManager, cfg.TrackNarrativeModel, cfg.KimiScenicDescriptionModel, cfg.TrackNarrativeDailyBudget)
 		adminModule.Handler.SetPermissionSnapshotService(permissionSnapshotSvc)
 		adminModule.Handler.SetTrackMapIndexService(trackMapIndexSvc)
 		if ossTokenSvc != nil {

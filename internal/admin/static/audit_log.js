@@ -2,6 +2,13 @@
   'use strict';
   // Describe only facts available in historical method/path records.
   const rules = [
+    ['POST', 'ai/tasks/:task/cancel', '请求中断 AI 任务', 'AI 任务 {task}', '请求成功仅代表已登记中断；最终结果以 AI 使用页为准，已发生的消耗不会撤回。'],
+    ['POST', 'ai/tasks/:task/retry', '创建 AI 重试任务', 'AI 任务 {task}', '重新读取当前资料，可能产生新的消耗；完成情况见关联重试任务。'],
+    ['PUT', 'ai/policies/:feature', '调整 AI 功能控制与预算', 'AI 功能 {feature}'],
+    ['PUT', 'ai/prices', '更新 AI 模型估算价格', 'AI 费用估算', '仅影响后续请求的费用估算，不修改历史记录或供应商账单。'],
+    ['POST', 'tracks/:track/labels/generate', '生成轨迹图案建议', '轨迹 {track}', '生成建议不代表已保存。'],
+    ['POST', 'tracks/:track/description/generate', '联网生成路线说明建议', '轨迹 {track}', '生成建议不代表已保存。'],
+    ['PUT', 'tracks/:track/description', '独立保存路线说明', '轨迹 {track}', '只保存说明，不提交详情里的其他草稿。'],
     ['POST', 'accounts', '创建后台账号', '新后台账号'],
     ['POST', 'accounts/:account', '创建后台账号', '后台账号 {account}'],
     ['PUT', 'accounts/:account', '更新后台账号设置', '后台账号 {account}', '可能涉及名称、身份、启停状态或页面权限；历史记录未保存具体字段变化。'],

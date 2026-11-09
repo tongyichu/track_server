@@ -350,3 +350,7 @@ Pixabay大图下载失败时最多回退同一缓存中的原始640图一次，�
 等级表单可选“暂无等级/1A/2A/3A/4A/5A”，来源/状态/时间服务端托管，人工改值或清空不被自动覆盖；旧 PUT 省略保留，空串清空，null/非法值400。新建或来源变更在相同保存内尝试采集，以保持返回版本供后续图片上传使用；自动识别新建异步采集。provider-content/backfill 在原文字图片已同步时也独立补采等级，grades 为本批补齐数；查询失败不阻止原有资料同步。完整协议见 [景点等级](track-place-discovery.md#景区等级采集与下发) 和 [删除归档](track-place-discovery.md#后台景点删除归档)。
 
 共享轨迹信息弹窗将 description 显示为“路线说明”，旁边的“AI 联网填写”调用 POST `/admin/api/tracks/:track_id/description/generate`，结果先在独立可编辑候选区展示原文与来源，原说明不变。确认后点击“一键代入并保存”，PUT `/admin/api/tracks/:track_id/description` 携带说明与source_version，三仓储CAS仅保存说明、manual/v0和更新时间，其他草稿保持原样，无需详情页保存。tracks写权限、同源与审计沿用既有链路，生成期间编辑/切换不覆盖，网络保存结果不确定时重新打开核实。说明规则v5为第一人称向朋友介绍，用数据提炼定性感受，不罗列运动数字或虚构见闻。历史轨迹无需进入自动队列，自动开关不关闭手动入口，仍共享租约与日预算。入口 `service/track_description_admin.go`、`kimi_track_description.go` 与 `repository/track_description.go`，协议见 `docs/api/admin-tracks.md`。
+
+## AI 使用管理
+
+新增 `/admin/ai_usage.html`，统计、筛选记录、实时中断、手动重试及功能暂停/预算/并发/价格配置。复用既有图表与后台权限审计；候选和实际采用独立记录。入口：internal/admin/ai_usage.go、internal/ai/、internal/repository/ai_usage*.go。详见 [运行说明](ai-usage.md) 与 [接口协议](api/admin-ai.md)。

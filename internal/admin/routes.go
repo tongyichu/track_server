@@ -156,6 +156,7 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	g.GET("/companions.html", serveAdminPage(m.Auth, "static/companions.html"))
 	g.GET("/companion_detail.html", serveAdminPage(m.Auth, "static/companion_detail.html"))
 	g.GET("/feedbacks.html", serveAdminPage(m.Auth, "static/feedbacks.html"))
+	g.GET("/ai_usage.html", serveAdminPage(m.Auth, "static/ai_usage.html"))
 	g.GET("/analytics.html", serveAdminPage(m.Auth, "static/analytics.html"))
 	g.GET("/accounts.html", serveAdminPage(m.Auth, "static/accounts.html"))
 	g.GET("/password.html", serveAdminPage(m.Auth, "static/password.html"))
@@ -281,6 +282,14 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	api.GET("/feedbacks/:feedback_id", m.Handler.GetFeedback)
 	api.PUT("/feedbacks/:feedback_id/status", m.Handler.UpdateFeedbackStatus)
 	api.GET("/feedbacks/:feedback_id/images/:image_id", m.Handler.GetFeedbackImage)
+	api.GET("/ai/tasks", m.Handler.ListAITasks)
+	api.GET("/ai/statistics", m.Handler.AIStatistics)
+	api.GET("/ai/settings", m.Handler.AISettings)
+	api.GET("/ai/tasks/:task_id", m.Handler.GetAITask)
+	api.POST("/ai/tasks/:task_id/cancel", m.Handler.CancelAITask)
+	api.POST("/ai/tasks/:task_id/retry", m.Handler.RetryAITask)
+	api.PUT("/ai/policies/:feature", m.Handler.SaveAIPolicy)
+	api.PUT("/ai/prices", m.Handler.SaveAIPrices)
 	api.GET("/analytics/sync-summaries", m.Handler.ListAnalyticsSyncSummaries)
 }
 

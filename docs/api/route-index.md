@@ -4,6 +4,10 @@
 
 | 接口 | 方法 | 路径 | 需要认证 | 文档 |
 | --- | --- | --- | --- | --- |
+| 后台 AI 任务列表 / 统计 / 设置读取 | GET | `/admin/api/ai/tasks`, `/admin/api/ai/statistics`, `/admin/api/ai/settings` | AI 使用读取 | [admin-ai](admin-ai.md) |
+| 后台 AI 任务详情 | GET | `/admin/api/ai/tasks/:task_id` | AI 使用读取 | [admin-ai](admin-ai.md) |
+| 后台 AI 中断 / 重试 | POST | `/admin/api/ai/tasks/:task_id/cancel`, `/admin/api/ai/tasks/:task_id/retry` | AI 任务操作及 AI 读取，重试另需源业务操作 | [admin-ai](admin-ai.md) |
+| 后台 AI 策略 / 价格 | PUT | `/admin/api/ai/policies/:feature`, `/admin/api/ai/prices` | AI 配置操作及 AI 读取 | [admin-ai](admin-ai.md) |
 | 本人全部历史运动类型分布（次数/时长/里程/爬升） | GET | `/track/activity/type-distribution` | 是 | [运动类型分布](track.md#运动类型分布) |
 | 本人年度活动指标（可按运动类型筛选） | GET | `/track/activity/calendar` | 是 | [年度活动指标](track.md#年度活动指标) |
 | 本人全部历史个人纪录（含轨迹预览） | GET | `/track/activity/records` | 是 | [个人纪录](track.md#个人纪录) |

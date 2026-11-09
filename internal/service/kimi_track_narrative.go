@@ -18,6 +18,7 @@ import (
 
 	trackshape "github.com/tongyichu/track_server/skills/track-shape-label"
 
+	"github.com/tongyichu/track_server/internal/ai"
 	_ "golang.org/x/image/webp"
 )
 
@@ -140,8 +141,11 @@ func (g *KimiTrackNarrativeGenerator) complete(ctx context.Context, facts, image
 	}
 	req.Header.Set("Authorization", "Bearer "+g.key)
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := g.client.Do(req)
+	resp, err := ai.Observe(ctx, g.client, req, "generation")
 	if err != nil {
+		if ai.IsControlError(err) {
+			return "", err
+		}
 		return "", errors.New("Kimi track request failed")
 	}
 	defer resp.Body.Close()

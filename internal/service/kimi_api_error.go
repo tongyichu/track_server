@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/tongyichu/track_server/internal/ai"
 	"io"
 	"net/http"
 	"strings"
@@ -61,7 +62,7 @@ func kimiBalanceInsufficient(ctx context.Context, client *http.Client, key strin
 		return false, err
 	}
 	request.Header.Set("Authorization", "Bearer "+key)
-	response, err := client.Do(request)
+	response, err := ai.Observe(ctx, client, request, "balance")
 	if err != nil {
 		return false, errors.New("Kimi balance check failed")
 	}
