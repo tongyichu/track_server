@@ -26,7 +26,7 @@ WORKDIR /app
 ENV TZ=Asia/Shanghai
 
 RUN apt-get update \
-    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends curl procps tzdata \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends curl procps tzdata webp \
     && apt-get install -y --no-install-recommends ca-certificates \
     && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime \
     && echo $TZ > /etc/timezone \

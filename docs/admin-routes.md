@@ -69,7 +69,7 @@
 | POST | `/admin/api/regions/photos/pixabay/search` | 地区操作 | 人工查询3张Pixabay候选，24小时缓存，不自动导入；需服务端配置 `PIXABAY_API_KEY` |
 | POST | `/admin/api/regions/:node_id/photos/pixabay/import` | 地区操作 | 按缓存候选ID下载API原始地址，等比缩至960×720以内保存到本站，返回Photo；前端自动PUT保存关联 |
 | POST | `/admin/api/scenic-spots/:spot_id/photos` | 景点操作 | 图片上传；可选 `draft=1` 仅暂存并返回图片，不更新景点版本；省略时保持追加图片并保存 |
-| PUT | `/admin/api/scenic-spots/:spot_id/photos` | 景点操作 | `{expected_version,photos}` 独立保存图片数组，版本CAS，返回景点；不触发供应商采集或保存未提交文字 |
+| PUT | `/admin/api/scenic-spots/:spot_id/photos` | 景点操作 | `{expected_version,photos}` 独立保存图片数组，版本CAS，返回景点；高德外链先下载压缩为本站WebP，不重新查询POI或保存未提交文字 |
 | GET | `/admin/api/tracks/:track_id` | 鉴权 | 返回 `{track, user_name, user_id_text, geo?}`：轨迹详情、只读归属用户名、主景点与 GCJ02 简化线；`user_id_text` 保留字符串兼容，新表单不展示或提交 ID/用户名，服务端拒绝变更归属人 |
 | GET | `/admin/api/tracks/:track_id/assets/:asset` | 轨迹查看 | 只读图片与原始文件资源，raw 按附件下载；asset 白名单与错误码见 [资源协议](api/admin-tracks.md#详情资源展示与下载) |
 | POST | `/admin/api/tracks/:track_id/description/generate` | 轨迹操作 | 单条 AI 联网生成候选说明、来源及 source_version，不写轨迹，见 [协议](api/admin-tracks.md#路线说明与-ai-联网填写) |
@@ -104,6 +104,8 @@
 ### 图片文件信息
 
 省市/景点本站图片资源可传 `?photo_info=1`，返回 `{code:0,data:{width,height,size_bytes}}`。沿用原静态资源会话和模块查看权限、路径校验及no-store，仅允许`regions`/`scenic_spots`下的JPG/PNG/WebP；只读本地文件头和实际文件长度，不访问第三方URL。缺文件404，信息不可用不会阻止图片区其他操作。普通资源请求仍返回图片字节。
+
+高德景点图片在写入及存量同步时下载成本站WebP，横图宽1024、竖图高720，质量75；文件完成后才保存关联，图片信息读取压缩后的实际文件。`POST /admin/api/scenic-spots/provider-content/backfill` 增加 `photos_cached`、`photos_failed` 图片计数，已同步文字的记录仍检查外链图片，不在GET请求中迁移。详情见[高德景点图片本地存储](track-place-discovery.md#高德景点图片本地存储)。
 
 ### 国家删除
 

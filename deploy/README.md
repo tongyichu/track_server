@@ -47,6 +47,7 @@ Docker Compose 部署使用的环境变量模板文件。
 
 - 在构建阶段使用 Go 环境编译 `./cmd/server`，生成 `hertz-track` 二进制。
 - 在运行阶段基于精简版 Debian 镜像打包最终产物。
+- 运行层安装 `webp`，为高德景点图片提供与城市图一致的 `cwebp` 压缩能力；独立二进制部署也需在PATH提供 `cwebp`。横图宽1024、竖图高720，质量75，详见[图片存储规则](../docs/track-place-discovery.md#高德景点图片本地存储)。
 - 预创建 `/var/log/track_server` 日志目录，并暴露 `8080` / `8443` 端口，兼容 HTTP 和 HTTPS 场景。
 
 适用场景：
