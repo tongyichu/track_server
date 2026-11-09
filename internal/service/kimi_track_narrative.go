@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"image"
 	_ "image/jpeg"
 	_ "image/png"
@@ -146,21 +145,7 @@ func (g *KimiTrackNarrativeGenerator) complete(ctx context.Context, facts, image
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		var failure struct {
-			Error struct {
-				Message string `json:"message"`
-			} `json:"error"`
-		}
-		// Classify known parameter errors without logging provider text that may echo input data.
-		if json.NewDecoder(io.LimitReader(resp.Body, 16<<10)).Decode(&failure) == nil {
-			message := strings.ToLower(failure.Error.Message)
-			for _, parameter := range []string{"temperature", "thinking", "max_tokens", "image"} {
-				if strings.Contains(message, parameter) {
-					return "", fmt.Errorf("Kimi track HTTP %d (parameter=%s)", resp.StatusCode, parameter)
-				}
-			}
-		}
-		return "", fmt.Errorf("Kimi track HTTP %d", resp.StatusCode)
+		return "", kimiResponseError(resp)
 	}
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 	if err != nil {

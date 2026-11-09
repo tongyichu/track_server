@@ -41,6 +41,14 @@ func (g *KimiTrackNarrativeGenerator) GenerateDescription(ctx context.Context, f
 	err = searchClient.postJSON(searchCtx, kimiAPIBaseURL+"/tools/search_pro", searchBody, &search)
 	cancel()
 	if err != nil {
+		var httpError *kimiHTTPError
+		if errors.As(err, &httpError) && httpError.StatusCode == 403 {
+			insufficient, balanceErr := kimiBalanceInsufficient(ctx, g.client, g.key)
+			if insufficient || errors.Is(balanceErr, errKimiInsufficientBalance) {
+				return nil, errKimiInsufficientBalance
+			}
+			return nil, errKimiSearchDenied
+		}
 		return nil, fmt.Errorf("track description search failed: %w", err)
 	}
 	sources := make([]TrackDescriptionSource, 0, 5)

@@ -82,6 +82,9 @@ func (s *TrackNarrativeService) PreviewDescription(ctx context.Context, id strin
 	result, err := generator.GenerateDescription(ctx, string(facts), image, query)
 	if err != nil {
 		log.Printf("[TrackDescription] track_id=%s generation_failed: %v", id, err)
+		if errors.Is(err, errKimiInsufficientBalance) || errors.Is(err, errKimiSearchDenied) {
+			return nil, err
+		}
 		if errors.Is(err, errKimiOutputLimit) {
 			return nil, errors.New("AI 输出达到单次上限，未获得完整说明，请重试")
 		}
