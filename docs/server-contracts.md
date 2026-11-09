@@ -153,7 +153,7 @@
 
 - `internal/{models,repository,service,handler}/permission_snapshot.go` 负责 JWT 账号 + 安装实例全量快照；启动时按用户仓储选择 MySQL/Mongo/内存，初始化失败只禁用快照接口，不静默转内存。表/集合为 `user_permission_snapshots`，按 sequence 单调替换，收到时间由服务端生成；未知权限键、分类、状态必须兼容。协议见 `docs/api/permission-snapshots.md`。
 
-- AI 路线说明自动任务仅在持久仓储、预览缓存、Moonshot key 与 scheduler 就绪时启用；首次水位排除未变更历史记录。复用现有索引和一张方图，不重复解析 KMZ；输入摘要去重、持久缓存、分布式租约和每日预算，条件更新保护人工说明/形象。`description_source=ai` 不进入旧客户端 auto 补齐。说明规则 v4 纳入 labels 的语义变化，AI 自己写回的图案排除触发指纹，人工图案与清空参与指纹且约束说明；历史轨迹首次只记事实基线，后续有事实变化才生成，详见 `docs/track-narrative.md`。
+- AI 路线说明自动任务仅在持久仓储、预览缓存、Moonshot key 与 scheduler 就绪时启用；首次水位排除未变更历史记录。复用现有索引和一张方图，不重复解析 KMZ；输入摘要去重、持久缓存、分布式租约和每日预算，条件更新保护人工说明/形象。`description_source=ai` 不进入旧客户端 auto 补齐。说明规则纳入 labels 的语义变化，v5使用第一人称和数据提炼的定性感受、不列运动数字；AI 自己写回的图案排除触发指纹，人工图案与清空参与指纹且约束说明；历史轨迹首次只记事实基线，后续有事实变化才生成，详见 `docs/track-narrative.md`。
 
 
 ## 景区 A 级与标签文案
@@ -177,4 +177,4 @@
 
 搜索列表的min_distance_m（含）/max_distance_m（不含）由handler解析、service验证，在MySQL/Mongo/memory搜索和总数统计前使用相同过滤，保持原游标排序。启用范围时排除未知或非正/非有限里程，未传时保持旧行为。GET /track/search/options属于业务JWT只读接口，返回version=1与服务端维护的各类型分段；客户端不在旧接口上伪造筛选。不新增schema，不改变发现页/象形轨迹/地图查询，完整协议见docs/api/track.md搜索章节。
 
-- 后台单条路线说明入口 `track_description_admin.go` / `kimi_track_description.go`：复用 narrative 租约、预算与预览，显式联网检索后只返回说明草稿及来源，不修改图案或触发历史批处理；保存修改的说明由后台标记 manual。自动开关只影响巡检，手动入口在配置就绪时保留。完整协议见 `docs/api/admin-tracks.md`。
+- 后台单条路线说明入口 `track_description_admin.go` / `kimi_track_description.go`：复用 narrative 租约、预算与预览，显式联网检索后只返回独立候选及来源/source_version，不修改原说明、图案或触发历史批处理；候选区“一键代入并保存”调用独立PUT与三仓储CAS，只保存说明并标记manual/v0，其他表单草稿不提交。自动开关只影响巡检，手动入口在配置就绪时保留。完整协议见 `docs/api/admin-tracks.md`。

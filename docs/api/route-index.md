@@ -173,4 +173,6 @@
 后台地域筛选：`GET /admin/api/users`（用户查看）支持 `province_code`；`GET /admin/api/scenic-spots`（景点查看）支持 `province_code` / `city_code`，见 [admin-regions.md](admin-regions.md)。
 - `POST /admin/api/tracks/:track_id/labels/generate`：轨迹写权限，AI 形象建议，不直接保存，见 admin-tracks.md。
 
-- `POST /admin/api/tracks/:track_id/description/generate`：轨迹写权限，手动联网填写路线说明，返回草稿与检索参考来源，保存后生效，见 [后台协议](admin-tracks.md#路线说明与-ai-联网填写)。
+- `POST /admin/api/tracks/:track_id/description/generate`：轨迹写权限，手动联网生成候选说明，返回来源与 source_version，不直接写轨迹，见 [后台协议](admin-tracks.md#路线说明与-ai-联网填写)。
+
+- `PUT /admin/api/tracks/:track_id/description`：轨迹写权限，候选区“一键代入并保存”，校验 source_version 并只保存说明，见 [后台协议](admin-tracks.md#路线说明与-ai-联网填写)。

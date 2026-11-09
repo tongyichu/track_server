@@ -2,11 +2,14 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/tongyichu/track_server/internal/repository"
 )
@@ -94,5 +97,42 @@ func (s *TrackNarrativeService) PreviewDescription(ctx context.Context, id strin
 	if err != nil || current.Version != snap.Version || current.Track.ShapeLabel != snap.Track.ShapeLabel || current.Track.Description != snap.Track.Description || current.Track.DescriptionSource != snap.Track.DescriptionSource {
 		return nil, errors.New("轨迹资料已变化，请重新打开后生成")
 	}
+	result.SourceVersion = trackDescriptionVersion(current)
 	return result, nil
+}
+
+func trackDescriptionVersion(snapshot *trackNarrativeSnapshot) string {
+	t := snapshot.Track
+	raw, _ := json.Marshal([]interface{}{snapshot.Version, t.ID, t.UpdatedAt.UTC(), t.Description, t.DescriptionSource, t.DescriptionRuleVersion, t.ShapeLabel})
+	return fmt.Sprintf("%x", sha256.Sum256(raw))
+}
+
+func (s *TrackNarrativeService) ApplyDescription(ctx context.Context, id, version, description string) (string, error) {
+	if s == nil {
+		return "", errors.New("路线说明保存服务未配置")
+	}
+	description = strings.TrimSpace(description)
+	if description == "" || utf8.RuneCountInString(description) > 4000 || strings.TrimSpace(version) == "" {
+		return "", errors.New("请先生成有效说明，说明最多4000个字符")
+	}
+	current, err := s.snapshot(ctx, id)
+	if err != nil {
+		return "", errors.New("轨迹资料不可用，请重新打开后生成")
+	}
+	if version != trackDescriptionVersion(current) {
+		return "", errors.New("轨迹资料已变化，请重新生成说明后代入")
+	}
+	writer, ok := s.tracks.(repository.TrackDescriptionWriter)
+	if !ok {
+		return "", errors.New("路线说明保存服务未配置")
+	}
+	applied, err := writer.ApplyTrackDescription(ctx, current.Track, description)
+	if err != nil {
+		log.Printf("[TrackDescription] track_id=%s save_failed: %v", id, err)
+		return "", errors.New("路线说明保存失败，请稍后重试；建议内容已保留")
+	}
+	if !applied {
+		return "", errors.New("轨迹资料已变化，请重新生成说明后代入")
+	}
+	return description, nil
 }

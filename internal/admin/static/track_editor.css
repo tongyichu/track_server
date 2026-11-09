@@ -7,6 +7,9 @@
 .admin-track-editor .admin-track-description-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; }
 .admin-track-editor .admin-track-description-heading .btn { white-space: normal; }
 .admin-track-editor .admin-track-description-sources { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 6px; overflow-wrap: anywhere; font-weight: normal; }
+.admin-track-editor .admin-track-description-candidate { margin-top: 12px; padding: 12px; border: 1px solid var(--tblr-border-color); border-radius: 8px; background: var(--tblr-bg-surface-secondary); }
+.admin-track-editor .admin-track-description-candidate .form-control { min-height: 88px; }
+.admin-track-editor .admin-track-description-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 10px; font-weight: normal; }
 .admin-track-editor .admin-track-detail-side { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
 .admin-track-editor .admin-track-detail-side > * { min-width: 0; margin-bottom: 0; }
 .admin-track-editor .admin-track-detail-side .card-body { padding: 12px; font-size: 12px; }

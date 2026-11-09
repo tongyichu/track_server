@@ -252,6 +252,7 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	api.GET("/tracks/:track_id/map-preview", m.Handler.GetTrackMapPreview)
 	api.POST("/tracks/:track_id/labels/generate", m.Handler.GenerateTrackShape)
 	api.POST("/tracks/:track_id/description/generate", m.Handler.GenerateTrackDescription)
+	api.PUT("/tracks/:track_id/description", m.Handler.ApplyTrackDescription)
 	api.POST("/tracks/:track_id/place-refresh", m.Handler.RefreshTrackPlaceCandidate)
 	api.GET("/tracks/:track_id/place-candidates", m.Handler.GetPlaceCandidate)
 	api.POST("/tracks/:track_id/scenic-spot", m.Handler.AssignTrackMapScenicSpot)

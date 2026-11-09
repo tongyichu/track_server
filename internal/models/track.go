@@ -46,7 +46,7 @@ type Track struct {
 	SourceTag                 string                   `json:"source_tag" bson:"source_tag"`                       // SourceTag 是轨迹来源/运营标签，例如人工录入的冷启动轨迹。
 	CoordinateSystem          string                   `json:"coordinate_system" bson:"coordinate_system"`         // CoordinateSystem 描述上传原始文件的坐标系，例如 WGS84/GCJ02/BD09。
 	Title                     string                   `json:"title" bson:"title"`                                 // Title 是轨迹名称。
-	Description               string                   `json:"description,omitempty" bson:"description,omitempty"` // Description 是客户端根据轨迹点生成的默认路线说明。
+	Description               string                   `json:"description,omitempty" bson:"description,omitempty"` // Description 是服务端默认路线说明，人工确认后保留。
 	DescriptionSource         string                   `json:"description_source" bson:"description_source"`
 	DescriptionRuleVersion    int                      `json:"description_rule_version" bson:"description_rule_version"`
 	StartTime                 time.Time                `json:"start_time" bson:"start_time"`                                         // StartTime 是运动开始时间。

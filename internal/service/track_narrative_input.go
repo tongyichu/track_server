@@ -15,7 +15,7 @@ import (
 	"github.com/tongyichu/track_server/internal/repository"
 )
 
-const trackNarrativeRuleVersion = 4
+const trackNarrativeRuleVersion = 5
 
 type trackNarrativeInput struct {
 	LearnedShapeExamples []map[string]string   `json:"learned_shape_examples,omitempty"`
