@@ -111,6 +111,7 @@ type updateTrackBody struct {
 }
 
 func applyAdminTrackUpdate(track *models.Track, body updateTrackBody) error {
+	previousDescription := track.Description
 	if body.ShapeLabel != nil {
 		label := strings.TrimSpace(*body.ShapeLabel)
 		if utf8.RuneCountInString(label) > 32 || strings.IndexFunc(label, unicode.IsControl) >= 0 {
@@ -155,6 +156,10 @@ func applyAdminTrackUpdate(track *models.Track, body updateTrackBody) error {
 	}
 	if body.CityCode != nil {
 		track.CityCode = config.CanonicalCityCode(track.CityCode)
+	}
+	if body.Description != nil && body.DescriptionSource == nil && track.Description != previousDescription {
+		track.DescriptionSource = "manual"
+		track.DescriptionRuleVersion = 0
 	}
 	if body.CityCode != nil && track.CityCode != "" && config.CityNameByCode(track.CityCode) == "" {
 		return errors.New("city_code is not in the city list")

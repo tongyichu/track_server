@@ -24,14 +24,15 @@ type narrativeScan struct {
 }
 
 type narrativeState struct {
-	Version     string                `json:"version"`
-	Status      string                `json:"status"`
-	FirstSeen   time.Time             `json:"first_seen"`
-	NextAttempt time.Time             `json:"next_attempt"`
-	Attempts    int                   `json:"attempts"`
-	Result      *TrackNarrativeResult `json:"result,omitempty"`
-	OwnsShape   bool                  `json:"owns_shape"`
-	LastShape   string                `json:"last_shape"`
+	Version      string                `json:"version"`
+	FactsVersion string                `json:"facts_version,omitempty"`
+	Status       string                `json:"status"`
+	FirstSeen    time.Time             `json:"first_seen"`
+	NextAttempt  time.Time             `json:"next_attempt"`
+	Attempts     int                   `json:"attempts"`
+	Result       *TrackNarrativeResult `json:"result,omitempty"`
+	OwnsShape    bool                  `json:"owns_shape"`
+	LastShape    string                `json:"last_shape"`
 }
 
 type TrackNarrativeService struct {
@@ -191,12 +192,17 @@ func (s *TrackNarrativeService) process(ctx context.Context, id string, activate
 		return false, err
 	}
 	if state.Version == "" && snap.ChangedAt.Before(activated) {
+		state = narrativeState{Version: snap.Version, FactsVersion: snap.FactsVersion, Status: "historical"}
+		out.Skipped++
+		return false, s.saveState(ctx, key, state, "")
+	}
+	if state.Status == "historical" && state.FactsVersion == snap.FactsVersion {
 		out.Skipped++
 		return false, nil
 	}
 	now := time.Now()
 	if state.Version != snap.Version {
-		state = narrativeState{Version: snap.Version, Status: "waiting", FirstSeen: now, NextAttempt: now.Add(time.Minute), OwnsShape: state.OwnsShape, LastShape: state.LastShape}
+		state = narrativeState{Version: snap.Version, FactsVersion: snap.FactsVersion, Status: "waiting", FirstSeen: now, NextAttempt: now.Add(time.Minute), OwnsShape: state.OwnsShape, LastShape: state.LastShape}
 		out.Deferred++
 		return false, s.saveState(ctx, key, state, "")
 	}
@@ -210,12 +216,7 @@ func (s *TrackNarrativeService) process(ctx context.Context, id string, activate
 	}
 	t := snap.Track
 	writeDescription := t.DescriptionSource == "" || t.DescriptionSource == "auto" || t.DescriptionSource == "ai"
-	writeShape := (state.OwnsShape && t.ShapeLabel == state.LastShape) || (!state.OwnsShape && t.ShapeLabel == "")
-	manualShape, err := s.adminOwnsShape(ctx, t)
-	if err != nil {
-		return false, err
-	}
-	writeShape = writeShape && !manualShape
+	writeShape := !snap.Input.ShapeLocked
 	if !writeDescription && !writeShape {
 		state.Status = "complete"
 		out.Skipped++
@@ -273,12 +274,7 @@ func (s *TrackNarrativeService) process(ctx context.Context, id string, activate
 	}
 	t = current.Track
 	writeDescription = t.DescriptionSource == "" || t.DescriptionSource == "auto" || t.DescriptionSource == "ai"
-	writeShape = (state.OwnsShape && t.ShapeLabel == state.LastShape) || (!state.OwnsShape && t.ShapeLabel == "")
-	manualShape, err = s.adminOwnsShape(ctx, t)
-	if err != nil {
-		return called, err
-	}
-	writeShape = writeShape && !manualShape
+	writeShape = !current.Input.ShapeLocked
 	applied, err := s.writer.ApplyTrackNarrative(ctx, t, state.Result.Description, state.Result.ShapeLabel, writeDescription, writeShape)
 	if err != nil {
 		return called, err

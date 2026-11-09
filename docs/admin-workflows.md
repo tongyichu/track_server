@@ -61,7 +61,7 @@
 
 共享轨迹编辑器只读展示详情接口的 `user_name`，`user_id_text` 仅保留协议兼容，保存不传 `user_id`/`user_name`，服务端仅兼容回传原 ID 并拒绝更换归属。坐标系和来源标签使用下拉选项，未知历史值保留。`GET /tracks/:track_id/map-preview` 归属轨迹查看权限，由 `TrackMapIndexService.PreviewCoordinateSystems` 读取原始轨迹并返回按 WGS84/GCJ02/BD09 解释的三组 GCJ02 预览线；不得将既有 GCJ02 索引线二次转换。预览独立异步加载，准备后切换立即重绘且保持视野，关闭弹窗释放地图及取消请求。保存坐标系变更纳入旧空间索引清理及重新排队流程；预览自身不写业务数据。`ui.js` 支持字段 `readOnly` / `onChange` 及表单 `onClosed` 生命周期。接口细节见 `docs/api/admin-tracks.md`。
 
-描述来源、描述规则版本、轨迹进行状态不展示且不随表单保存；隐藏字段保持原值。无地图 SVG 由 `track_asset_svg.go` 复制安全矢量几何并按服务端运动主题色渲染，切换表单运动类型即时预览，不改写原文件；未知类型与历史位图保留原图。
+描述来源、描述规则版本、轨迹进行状态不展示且不随表单保存；未修改说明时保留原值，修改说明时由服务端标记 manual、版本0（含清空）。无地图 SVG 由 `track_asset_svg.go` 复制安全矢量几何并按服务端运动主题色渲染，切换表单运动类型即时预览，不改写原文件；未知类型与历史位图保留原图。
 
 详情资源由 `track_assets.go` 的 `GET /tracks/:track_id/assets/:asset` 按轨迹查看权限读取，asset 白名单为 raw、square_day/night、landscape_day/night、legacy、no_map。`main` 经 `SetTrackAssetCaches` 注入既有 raw/preview 缓存，截图沿用 `SetScreenshotCache`；按请求异步缓存，不阻塞详情字段，不接受浏览器 URL，不把资源代理地址写回轨迹。原始文件使用 attachment 下载，空字段显示“缺失”；图片只显示缩略图（点击放大），空字段显示“无”，读取失败可重试。共享编辑器保存不提交原文件/截图/preview_images；加载共享编辑器的页面同时引用 `static/track_editor.css`（由嵌入资源机制自动加内容版本）；`ui.js` 的 `className` 与 `afterFields` 将最多四列表单及资源区限定在 `.admin-track-editor`。接口见 [详情资源展示与下载](api/admin-tracks.md#详情资源展示与下载)。
 
@@ -252,7 +252,7 @@ GET /admin/api/users
   → POST /admin/api/tracks/import（multipart）
        → AdminTrackImportService 逐文件解析（复用地图索引解析器）→ 服务端直传 OSS 归属人目录
        → TrackService.CreateTrack 建档（source_tag=manual_seed，已完成），自动排队地图索引与成就结算
-       → 城市/地址由内置行政区目录离线解析；不生成预览四图与路线描述，由客户端 DevMode 后续补齐
+       → 城市/地址由内置行政区目录离线解析；不生成预览四图；预览由客户端 DevMode 补齐，路线说明由服务端 AI 或后台单条联网填写，不再依赖客户端算法
        → 源文件无时间戳时按运动类型估算速度沿轨迹合成时间戳（见 docs/api/admin-tracks.md），保证耗时/热量/均速与客户端图表可用
        → 标题默认自动生成；文件名（去扩展名）含汉字时优先用文件名做标题（≤40 字符）
        → 成功结果附带 track 摘要（id/city_code/title/track_type/status），结果表复用主列表单元格并增加文件名/导入结果；用户名与头像复用本批归属人，不逐文件查详情。成功行直接打开共享编辑器，保存/删除后刷新对应导入行与主列表；失败行保留错误且无编辑入口
@@ -348,3 +348,5 @@ Pixabay大图下载失败时最多回退同一缓存中的原始640图一次，�
 景点图片与省市“宣传图片”共用 `static/photo_upload_editor.js/css`：多选后立即生成有序图片项，已保存记录自动上传，每个编辑器最多并行两张；遮罩只覆盖图片，显示真实发送进度，100%后等待服务端确认再隐藏。网络/服务端失败原项重试，格式/大小错误提示重新选择；右上角圆圈叉移除并取消请求，取消或关闭后的旧回调不得复活图片；正常完成不重建其他图片项。说明输入及拖动排序保留，取消左右移动按钮，图片顺序由本地项顺序决定。每张完成后由独立PUT自动关联，删除/排序自动保存、说明失焦保存；保存队列串行，状态显示保存中/已保存/失败并可重试。新记录先保存基本信息再开放上传，新建景点保存后保留详情供继续添加图片。图片编辑不标记文字表单dirty，基本资料保存只携带已确认的图片，未完成图片修改保留在原详情。景点上传使用可选 `POST /admin/api/scenic-spots/:spot_id/photos?draft=1`，只返回图片资源、不改变景点版本，随后调用独立 `PUT /admin/api/scenic-spots/:spot_id/photos`，通过expected_version只替换照片，不触发等级采集、不提交文字；未传draft的旧调用保持原有追加并保存行为。省市通过 `PUT /admin/api/regions/:node_id/photos` 比较base_photos，并在最新目录CAS保存图片字段。未关联文件不因移除立即物理删除。城市表单隐藏“可在客户端选为城市”和已有节点的国家代码，保留值；新增国家仍需填写两位缩写。
 
 等级表单可选“暂无等级/1A/2A/3A/4A/5A”，来源/状态/时间服务端托管，人工改值或清空不被自动覆盖；旧 PUT 省略保留，空串清空，null/非法值400。新建或来源变更在相同保存内尝试采集，以保持返回版本供后续图片上传使用；自动识别新建异步采集。provider-content/backfill 在原文字图片已同步时也独立补采等级，grades 为本批补齐数；查询失败不阻止原有资料同步。完整协议见 [景点等级](track-place-discovery.md#景区等级采集与下发) 和 [删除归档](track-place-discovery.md#后台景点删除归档)。
+
+共享轨迹信息弹窗将 description 显示为“路线说明”，旁边的“AI 联网填写”调用 POST `/admin/api/tracks/:track_id/description/generate`。tracks 写权限及审计沿用既有链路；一次 Kimi 搜索 + 一次说明生成，结合已保存的轨迹事实，返回说明及实际检索来源，只填草稿、保存后生效。关闭弹窗取消请求，生成期间修改表单/景区时不覆盖，失败保留原值。说明未改动不重交，实际改动由服务端标记 manual 防自动覆盖。历史轨迹无需进入自动队列，`TRACK_NARRATIVE_ENABLED=false` 也可手动试写，仍共享租约与日预算。入口 `service/track_description_admin.go` / `kimi_track_description.go`，协议见 `docs/api/admin-tracks.md`。

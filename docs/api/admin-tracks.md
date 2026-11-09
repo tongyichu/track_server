@@ -6,6 +6,19 @@
 
 以下接口属于独立 `/admin/api`，使用后台 session。查看需轨迹管理页面 read/write 权限，确认、忽略和修改需轨迹管理 write 权限，不复用 App 用户 JWT。
 
+## 路线说明与 AI 联网填写
+
+共享轨迹信息弹窗的 `description` 字段显示为“路线说明”，旁边提供“AI 联网填写”；只读账号和已下架轨迹不提供生成按钮。首次读取只展示已有说明，不触发联网。前端使用已保存的轨迹资料生成；需要调整运动数据、位置、图案时先保存，再生成。
+
+`POST /admin/api/tracks/:track_id/description/generate`：无需请求体，需 tracks 写权限、同源校验和发起/结果审计。返回 `{code:0,data:{description,sources:[{title,url,text}],saved:false}}`；sources 是实际检索参考资料，不代表正文逐条采用。只接受 HTTP(S) 来源，模型输入每条正文最多2000字符、最多5条。使用既有 MOONSHOT_API_KEY、TRACK_NARRATIVE_MODEL 与预览缓存，不增加客户端接口。
+
+- 手动处理单条历史轨迹，不受自动任务首次激活水位限制，不开启批量回填；仍需公开、已完成、有原始文件、有效地理索引和一张方形预览图，并有位置或主景区信息。
+- 以城市 + 主景区（缺失时用位置）检索稳定地点背景，再结合已保存的运动统计、labels、景区、可信投稿和方图填写，复用自动说明的口语化规则。不会生成/修改 shape_label，也不把其他人的游记、难度或路线当成本轨迹事实。
+- 固定一次 Kimi `/tools/search_pro`（最多5条）+ 一次说明模型请求；搜索超时30秒、整体270秒。复用 narrative 扫描租约与日预算，每次显式生成预留1份额度（含搜索失败），不自动重试。AI 未配置返回503；忙、额度耗尽、资料不完整/变化或生成失败返回409及可读错误。
+- 点击后禁用重复生成；关闭/切换弹窗取消请求，生成期间编辑表单或改绑景区时丢弃旧结果，失败保留原值。成功仅填入可编辑草稿，附检索来源链接；必须点击“保存修改”才写入。
+- PUT 保存仅在说明实际改动时提交 `description`。服务端在说明改变且未显式指定来源时标记 `description_source=manual`、规则版本0（含清空），防止自动任务覆盖管理员确认的内容；未修改说明不随其他资料重交，保留最新服务端值。来源和规则版本仍不展示为编辑项。
+- `TRACK_NARRATIVE_ENABLED=false` 只停止自动巡检，配置和持久仓储就绪时手动说明/形象生成仍可用；scheduler 可关闭，不影响手动入口。数据库降级内存时不启用这些外部生成入口。
+
 ## 轨迹类型与用户贡献统计
 
 `GET /admin/api/tracks/statistics?period=day|week|month` 使用后台 session 和轨迹管理读取权限；默认 `month`，非法周期返回 400。
@@ -168,7 +181,7 @@
 
 普通字段按弹窗宽度最多四列、逐级减少至单列；轨迹描述保留整行。标签/景点识别与地图在宽屏并排，窄屏顺排，样式限定 `.admin-track-editor`，不改变其他后台表单的密度。
 
-共享轨迹编辑表单只读显示归属用户名 `user_name`，保存不提交 `user_id` 或 `user_name`。描述来源 `description_source`、描述规则版本 `description_rule_version`、轨迹进行状态 `is_running` 不展示且不随表单提交，原值保留。`PUT /admin/api/tracks/:track_id` 仅兼容旧页面回传原归属人；不同 ID 或非法 ID 返回 400，不允许通过后台转移归属。
+共享轨迹编辑表单只读显示归属用户名 `user_name`，保存不提交 `user_id` 或 `user_name`。描述来源 `description_source`、描述规则版本 `description_rule_version`、轨迹进行状态 `is_running` 不展示且不随表单提交；说明实际改动时由服务端标记 manual，未改动则保留原值。`PUT /admin/api/tracks/:track_id` 仅兼容旧页面回传原归属人；不同 ID 或非法 ID 返回 400，不允许通过后台转移归属。
 
 坐标系使用下拉选项：未设置、WGS84、GCJ02、BD09；来源标签使用下拉选项：空值（用户录制/默认）、`manual_seed`（人工导入）。未知历史值保留在当前记录的选项中，避免保存其他字段时被静默替换。
 

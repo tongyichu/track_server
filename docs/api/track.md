@@ -139,13 +139,13 @@ Android数据页将结果与当前账号isUploaded=0且已完成的本地记录�
 
 ### 历史路线说明补齐（DevMode）
 
-复用 Android DevMode 的历史数据补齐页。沿用业务 JWT，不增加管理员或轨迹作者校验；提交接口沿用账号上传限制。客户端复用正式上传的路线说明生成规则；服务端只负责筛选空说明记录、提供 GPS 并条件写入，不在服务端复制生成规则。
+以下接口保留兼容旧版客户端。当前 Android 已移除本地说明算法及 DevMode 说明补齐任务，普通上传不再提交默认说明，由服务端 AI 后台生成（见 [运行规则](../track-narrative.md)）。旧接口沿用业务 JWT，不增加管理员或轨迹作者校验；提交接口沿用账号上传限制，不触发 AI。
 
 1. `GET /api/v1/track/description-backfill/list?cursor=<cursor>&limit=20&rule_version=1`：查询未删除、已结束且自动说明为空或规则版本落后的轨迹并游标分页，返回任务元信息、当前说明及来源/规则版本、`source_version`、`pending_count` 及缺原始 GPS 数量。旧记录缺少来源字段时默认按 `auto` 处理；`manual` 不进入批处理。没有原始轨迹的符合项计入缺源数量但不进入任务列表。
 2. `GET /api/v1/track/description-backfill/:track_id/data?source_version=<version>`：读取完整原始 GPS 点。轨迹已被补齐时返回 `state=already_complete`；记录不可用返回 404，版本变化返回 409。
 3. `POST /api/v1/track/description-backfill/:track_id/complete`，请求 `{"source_version":"<version>","description":"<客户端生成的说明>","description_rule_version":1}`。服务端限制 1 至 1000 个字符，仅自动来源且说明为空或规则版本落后时更新，并以说明、来源、规则版本及轨迹源数据做条件比较；人工说明不会被覆盖。已有最新说明返回 `state=already_complete`，版本变化返回 409 `description_source_changed`。
 
-`track_records.description_source` 标记 `auto`/`manual`/`ai`（AI 来源不进入客户端补齐），`description_rule_version` 标记自动生成规则版本。MySQL 存量通过默认值视为 `auto/v0`，Mongo 缺失元数据也按 `auto/v0` 解释；当前客户端规则版本为 1。后续升级生成规则时只需提升当前版本，批处理可重新生成所有自动说明；人工说明始终排除。投稿编辑内容仍独立存于投稿记录。
+`track_records.description_source` 标记 `auto`/`manual`/`ai`（AI 来源不进入客户端补齐），`description_rule_version` 标记自动生成规则版本。MySQL 存量通过默认值视为 `auto/v0`，Mongo 缺失元数据也按 `auto/v0` 解释；旧客户端规则版本为 1，仅用于兼容 auto 补齐，不代表服务端 AI 规则版本；人工说明始终排除。投稿编辑内容仍独立存于投稿记录。
 
 ## 1. 创建轨迹
 
@@ -166,7 +166,6 @@ Authorization: Bearer <token>
 ```json
 {
   "title": "傍晚夜跑",
-  "description": "从起点附近出发，沿本次记录路线完成约 1.2 公里。",
   "session_id": "sess_xxx",
   "city_code": "CN000118",
   "locate_addr": "杭州市西湖区",
@@ -190,7 +189,7 @@ Authorization: Bearer <token>
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | `title` | string | 否 | 轨迹标题，默认 `新的轨迹` |
-| `description` | string | 否 | 默认路线说明，最多 `1000` 字符；详情接口返回。客户端可在轨迹上传完成时补充，已有非空说明不会被覆盖 |
+| `description` | string | 否 | 兼容旧客户端的默认路线说明，最多 `1000` 字符；当前 Android 普通上传省略，由服务端 AI 异步生成；详情接口返回 |
 | `session_id` | string | 否 | 关联的同行会话 ID；参加同行结束后上传个人轨迹时传同一个 `session_id`，用于把本次同行内多人轨迹串联起来 |
 | `city_code` | string | 否 | 城市 Code（标识轨迹所属城市） |
 | `locate_addr` | string | 否 | 轨迹的具体位置信息，最大长度 `255` 字符 |
@@ -473,7 +472,7 @@ Authorization: Bearer <token>
 
 返回 `StandardResponse`，`data` 为 `Track`：
 
-`description` 是上传时保存的默认路线说明；投稿编辑后的说明仍单独保存在投稿记录中。
+`description` 是服务端保存的默认路线说明，新版 Android 不在上传时生成或提交；服务端 AI 异步完成后重新读取详情可获得，未生成时可能为空。投稿编辑后的说明仍单独保存在投稿记录中。
 
 详情直接返回 `collect_count`（当前收藏用户总数）与 `collected`（当前 JWT 用户是否收藏），与列表的收藏总数口径一致，无收藏返回 0。客户端复用轨迹信息展示数量与星星状态，不需要额外请求收藏计数。收藏/取消收藏响应也返回操作后的状态和总数，见 [collect-navigation.md](collect-navigation.md)。
 
@@ -862,7 +861,6 @@ Authorization: Bearer <token>
 ```json
 {
   "status": 2,
-  "description": "从起点附近出发，沿本次记录路线完成约 1.2 公里。",
   "session_id": "sess_xxx",
   "city_code": "CN000118",
   "locate_addr": "杭州市西湖区",
@@ -884,7 +882,7 @@ Authorization: Bearer <token>
 |------|------|------|------|
 | `status` | int | 否 | 可见性：`1` 公开（新建默认值）/ `2` 私密（仅本人可见）；只接受 1 或 2，按请求值更新 |
 | `session_id` | string | 否 | 关联的同行会话 ID，仅当原值为空时才会写入；用于把同一次同行结束后各成员上传的个人轨迹串联起来 |
-| `description` | string | 否 | 默认路线说明，最多 `1000` 字符；仅当原值为空时才会写入，投稿编辑后的说明单独保存在投稿记录中 |
+| `description` | string | 否 | 兼容旧客户端的默认路线说明，最多 `1000` 字符；仅 auto 来源为空或规则版本升级时写入，manual/ai 不覆盖；当前 Android 普通更新省略，投稿说明独立保存 |
 | `city_code` | string | 否 | 城市 Code（仅当原值为空时才会写入） |
 | `locate_addr` | string | 否 | 轨迹的具体位置信息，最大长度 `255` 字符（仅当原值为空时才会写入） |
 | `track_type` | string | 否 | 轨迹类型，仅当原值为空时才会写入；使用 `/track/types` 返回的英文 `type`，服务端兼容历史中文名输入但会归一为英文 code |
@@ -1125,7 +1123,7 @@ Authorization: Bearer <token>
 
 既有创建与更新轨迹接口支持可选 `shape_label`，沿用所有者鉴权。省略或传 null 不修改，传空字符串清空；去除首尾空白后最多32个 Unicode 字符，不允许内部控制字符，非法输入返回400。旧客户端不发送该字段，不影响已有标签。MySQL 启动迁移补齐非空默认空串列，Mongo 与内存仓储保持同样的字段读写语义。
 
-后续 AI 生成流程约定同时产出 `description` 与 `shape_label`，例如：
+服务端 AI 后台生成流程同时产出 `description` 与 `shape_label`，例如：
 
 ```json
 {"description":"这条路线把玫瑰的花瓣、花茎和叶子串了起来……","shape_label":"玫瑰花"}
@@ -1140,7 +1138,7 @@ Authorization: Bearer <token>
 - 内容适宜性独立于形状相似度：只接受积极或中性、适合公开展示的标签，不要求每个形象都表达正面寓意。低俗色情、侮辱辱骂、歧视仇恨、恶意挑衅或其他负面冒犯性形象，即使轮廓清晰也输出空标签。结合图像与标题判断含义，无法确认适宜性时留空；不得用正面别名包装不当形象，也不将其在路线说明中作为卖点宣传。中性的普通动物、植物或物品不因缺少积极寓意而被排除。
 - 识别用短名称输出，例如“玫瑰花”“兔子”；“闭合环线”属于路线结构，不能代替具象形象。上述规则已用于服务端 Kimi 自动生成器；创建/更新接口直接提交形象标签仍仅校验文本格式，不执行视觉核验。
 
-文本应优先使用可信投稿的路线特色、路况与风险，并剔除 DevMode 测试资料；不把单次运动统计冒充普遍体验。服务端已接通后台自动生成说明与形象标签，触发条件、成本限制见 [自动生成说明](../track-narrative.md)；不自动全量回填历史记录，页面标签组件另行实现。标签独立于默认说明及精品投稿说明，修改它不会覆盖这些文案。
+文本综合运动数据、位置/城市、统一 labels、景区背景和可信投稿，采用口语化路线介绍，突出特色与有依据的体力参考，并剔除 DevMode 测试资料；不把单次运动统计冒充普遍体验，不虚构路况或补给。上传以及标签新增/修改/移除等事实变化由后台巡检发现，AI 自己写回图案不循环触发；人工图案（含清空）约束说明，人工说明不覆盖。服务端已接通后台自动生成说明与形象标签，触发条件、成本限制见 [自动生成说明](../track-narrative.md)；不自动全量回填历史记录，页面标签组件另行实现。标签独立于默认说明及精品投稿说明，修改它不会覆盖这些文案。
 
 
 ## 统一轨迹标签 labels
