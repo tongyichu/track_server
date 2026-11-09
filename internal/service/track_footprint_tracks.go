@@ -35,10 +35,12 @@ func (s *TrackService) FootprintTracks(ctx context.Context, userID int64, region
 		return nil, err
 	}
 	selected := make([]models.FootprintTrack, 0)
+	var total int64
 	for _, t := range tracks {
 		if !allowed[known[strings.TrimSpace(t.CityCode)]] {
 			continue
 		}
+		total++
 		if cursor != nil && (t.StartTime.After(cursor.StartTime) || (t.StartTime.Equal(cursor.StartTime) && t.ID >= cursor.ID)) {
 			continue
 		}
@@ -68,11 +70,24 @@ func (s *TrackService) FootprintTracks(ctx context.Context, userID int64, region
 			values = append(values, t)
 		}
 	}
-	page, err := buildTrackSummaryPage(toSummaries(values), false)
+	summaries := toSummaries(values)
+	if err := s.fillTrackSummaryExtrasWithAvatarCache(ctx, userID, summaries, false); err != nil {
+		return nil, err
+	}
+	if s.submissions != nil {
+		if err := s.submissions.DecorateSummaries(ctx, summaries); err != nil {
+			return nil, err
+		}
+	}
+	page, err := buildTrackSummaryPage(summaries, false)
 	if err != nil {
 		return nil, err
 	}
 	page.HasMore = hasMore
+	page.FootprintCardVersion = 1
+	if cursor == nil {
+		page.TotalCount = &total
+	}
 	if hasMore && len(selected) > 0 {
 		anchor := selected[len(selected)-1]
 		page.NextCursor, err = encodeTrackListCursor(anchor.StartTime, anchor.ID)

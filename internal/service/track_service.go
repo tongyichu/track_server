@@ -1929,6 +1929,10 @@ func (s *TrackService) fillMyTrackSummaryExtras(ctx context.Context, userID int6
 // - collected 通过 ListCollectedByTrackIDs 按浏览者和当前页轨迹批量查询；
 // - 该函数只负责“组装返回”，不保证强一致（例如用户刚改昵称/头像、刚收藏/取消收藏时可能存在短暂延迟）。
 func (s *TrackService) fillTrackSummaryExtras(ctx context.Context, userID int64, summaries []*models.TrackSummary) error {
+	return s.fillTrackSummaryExtrasWithAvatarCache(ctx, userID, summaries, true)
+}
+
+func (s *TrackService) fillTrackSummaryExtrasWithAvatarCache(ctx context.Context, userID int64, summaries []*models.TrackSummary, allowAvatarCache bool) error {
 	if len(summaries) == 0 {
 		return nil
 	}
@@ -1994,7 +1998,7 @@ func (s *TrackService) fillTrackSummaryExtras(ctx context.Context, userID int64,
 			switch {
 			case u != nil:
 				avatar := fallbackAvatarURL(uid, u.AvatarURL)
-				if s.avatarCache != nil && shouldRewriteAvatarURL(avatar) {
+				if allowAvatarCache && s.avatarCache != nil && shouldRewriteAvatarURL(avatar) {
 					cacheCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 					if local := s.avatarCache.EnsureCached(cacheCtx, uid, formatUserAvatarCacheKey(uid), avatar); local != "" {
 						avatar = local

@@ -167,12 +167,13 @@ type TrackListCursor struct {
 
 // TrackSummaryPage 是推荐与搜索轨迹列表的分页返回模型。
 type TrackSummaryPage struct {
-	ShapeFilterVersion int                     `json:"shape_filter_version,omitempty"`
-	Items              []*TrackSummary         `json:"items"`
-	TotalCount         *int64                  `json:"total_count,omitempty"`
-	NextCursor         string                  `json:"next_cursor,omitempty"`
-	HasMore            bool                    `json:"has_more"`
-	Recommendation     *RecommendationMetadata `json:"recommendation,omitempty"`
+	FootprintCardVersion int                     `json:"footprint_card_version,omitempty"`
+	ShapeFilterVersion   int                     `json:"shape_filter_version,omitempty"`
+	Items                []*TrackSummary         `json:"items"`
+	TotalCount           *int64                  `json:"total_count,omitempty"`
+	NextCursor           string                  `json:"next_cursor,omitempty"`
+	HasMore              bool                    `json:"has_more"`
+	Recommendation       *RecommendationMetadata `json:"recommendation,omitempty"`
 }
 
 // CollectedTrackSummaryPage is the paging response of collected track list.
