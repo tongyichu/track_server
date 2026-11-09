@@ -29,7 +29,10 @@
       quotaSnapshot = data; renderQuotas(data);
       if(settings)alerts(Object.assign({},settings,{policies:(data.items||[]).map(item=>({policy:item.policy,day:data.day,requests:item.used}))}));
     } catch (error) {
-      if (error.name !== 'AbortError') $('quotaHint').textContent = '配额读取失败，请刷新重试' + (quotaSnapshot ? '；保留上次数据' : '');
+      if (error.name !== 'AbortError') {
+        $('quotaHint').textContent = '额度读取失败，请刷新重试' + (quotaSnapshot ? '；保留上次数据' : '');
+        $('settingsHint').textContent = '额度读取失败'; $('settingsHint').classList.add('text-danger');
+      }
     } finally {
       if (controllers.quotas === ctrl) { quotaLoading = false; $('refreshQuota').disabled = false; }
     }
@@ -39,48 +42,33 @@
     if (!quotaNodes.size) $('quotaRows').replaceChildren();
     const row = node('tr'), title = node('strong', feature(id)), meta = node('small', '', 'ai-quota-meta');
     const name = node('td'); name.append(title, meta);
-    const used = node('td'), limit = node('td'), remaining = node('td'), state = node('td'), load = node('td'), action = node('td');
-    const caption = node('span'), progress = node('div', null, 'progress'), bar = node('div', null, 'progress-bar'); progress.append(bar); state.append(caption, progress);
-    const actions = node('div', null, 'ai-quota-actions');
-    const edit = button('调整配额', () => editQuota(id), 'ai_settings');
-    const unlimited = button('设为不限', () => editQuota(id, 0), 'ai_settings');
-    actions.append(edit, unlimited); action.append(actions);
-    row.append(name, used, limit, remaining, state, load, action); $('quotaRows').append(row);
-    const item = { row, title, meta, used, limit, remaining, caption, progress, bar, load, edit, unlimited };
+    const used = node('td'), limit = node('td'), caption = node('small', '', 'ai-quota-meta'), value = node('span'), action = node('td');
+    limit.append(value, caption);
+    const edit = button('调整', () => editQuota(id), 'ai_settings'); action.append(edit);
+    row.append(name, used, limit, action); $('quotaRows').append(row);
+    const item = { row, title, meta, used, value, caption, edit };
     quotaNodes.set(id, item); return item;
   }
   function renderQuotas(data) {
     const items = data.items || [], existing = new Set(items.map(item => item.feature));
     quotaNodes.forEach((item, id) => { if (!existing.has(id)) { item.row.remove(); quotaNodes.delete(id); } });
-    const total = items.reduce((sum, item) => sum + item.used, 0), unlimited = items.filter(item => item.unlimited).length;
     const exhausted = items.filter(item => !item.unlimited && item.remaining === 0).length;
-    $('quotaSummary').replaceChildren(metric('今日已计额度', n(total) + ' 次', '含失败和已预留请求'), metric('不限配额', n(unlimited) + ' 个功能', '继续记录用量'), metric('已设日上限', n(items.length - unlimited) + ' 个功能', '各功能分别计数'), metric('今日配额已用尽', n(exhausted) + ' 个功能', '调高或设为不限可恢复后续请求'));
-    const clock = new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(new Date(data.as_of));
-    $('quotaHint').textContent = data.day + ' · 北京时间 ' + clock + ' 更新 · 每日 00:00 重新计数';
+    const limited = items.filter(item => !item.unlimited).length;
+    $('settingsHint').textContent = !items.length ? '暂无额度信息' : exhausted ? exhausted + ' 个功能额度已用尽' : limited ? limited + ' 个功能已设每日上限' : '当前额度不限';
+    $('settingsHint').classList.toggle('text-danger', exhausted > 0);
+    $('quotaHint').textContent = data.day + ' · 北京时间';
     items.forEach(item => {
       const view = quotaRow(item.feature), policy = item.policy;
       view.title.textContent = feature(item.feature); view.used.textContent = n(item.used) + ' 次';
-      view.limit.textContent = item.unlimited ? '不限' : n(policy.daily_requests) + ' 次 / 天';
-      view.remaining.textContent = item.unlimited ? '不限' : n(item.remaining) + ' 次';
-      const actor = policy.updated_by && policy.updated_by.startsWith('system:') ? '系统' : policy.updated_by;
-      view.meta.textContent = (policy.pause_automatic ? '自动已暂停 · ' : '') + (actor ? '最近调整：' + actor : '默认不限');
-      view.meta.title = actor ? dateTime(policy.updated_at) : '';
-      view.load.textContent = n(item.active) + ' / ' + n(policy.max_concurrent);
-      view.progress.hidden = item.unlimited;
-      if (item.unlimited) { view.caption.textContent = '持续计量'; view.progress.removeAttribute('role'); }
-      else {
-        const percent = Math.min(100, item.used * 100 / policy.daily_requests);
-        view.caption.textContent = item.remaining === 0 ? '配额已用尽' : '已用 ' + percent.toFixed(1) + '%';
-        view.bar.style.width = percent + '%'; view.bar.classList.toggle('exhausted', item.remaining === 0);
-        view.progress.setAttribute('role', 'progressbar'); view.progress.setAttribute('aria-label', feature(item.feature) + '配额使用情况');
-        view.progress.setAttribute('aria-valuemin', '0'); view.progress.setAttribute('aria-valuemax', String(policy.daily_requests));
-        view.progress.setAttribute('aria-valuenow', String(Math.min(item.used, policy.daily_requests))); view.progress.setAttribute('aria-valuetext', '已用' + item.used + '次，剩余' + item.remaining + '次');
-      }
-      view.edit.disabled = !data.durable; view.unlimited.disabled = !data.durable; view.unlimited.hidden = item.unlimited;
+      view.value.textContent = item.unlimited ? '不限' : n(policy.daily_requests) + ' 次';
+      view.caption.textContent = item.unlimited ? '' : item.remaining === 0 ? '今日已用尽' : '今日剩余 ' + n(item.remaining) + ' 次';
+      view.caption.classList.toggle('text-danger', !item.unlimited && item.remaining === 0);
+      view.meta.textContent = policy.pause_automatic ? '自动任务已暂停' : '';
+      view.edit.disabled = !data.durable;
     });
-    if (!items.length) {const row=node('tr'),cell=node('td','暂无可用功能配额','hint');cell.colSpan=7;row.append(cell);$('quotaRows').replaceChildren(row);}
+    if (!items.length) { const row = node('tr'), cell = node('td', '暂无可用功能额度', 'hint'); cell.colSpan = 4; row.append(cell); $('quotaRows').replaceChildren(row); }
   }
-  function editQuota(id, preset) {
+  function editQuota(id) {
     if (!can('ai_settings', true)) return;
     return AdminUI.runOnce('ai-quota:' + id, async () => {
       let baseline = null;
@@ -92,7 +80,7 @@
           baseline = item.policy;
           const intro = node('p', '今日已用 ' + n(item.used) + ' 次；当前日配额' + (item.unlimited ? '不限' : n(baseline.daily_requests) + ' 次') + '。', 'hint');
           const note = node('p', '填 0 表示不限。仅调整每日请求配额，用量和其他配置保留；低于今日已用次数时，后续请求将等待配额恢复。', 'hint');
-          return { beforeFields: intro, afterFields: note, fields: [{ name: 'daily_requests', label: '每日请求配额（0＝不限）', type: 'number', value: preset != null ? preset : quotaDrafts.has(id) ? quotaDrafts.get(id) : baseline.daily_requests, min: 0, step: 1, required: true }] };
+          return { beforeFields: intro, afterFields: note, fields: [{ name: 'daily_requests', label: '每日请求配额（0＝不限）', type: 'number', value: quotaDrafts.has(id) ? quotaDrafts.get(id) : baseline.daily_requests, min: 0, step: 1, required: true }] };
         },
         onReady: view => { const input = view.form.elements.daily_requests; input.max = '100000'; input.dataset.adminInput = 'ai_settings'; const submit = view.root.querySelector('button[type="submit"]'); if (submit) submit.dataset.adminWrite = 'ai_settings'; }
       });
@@ -114,7 +102,15 @@
     });
   }
 
-  function setPeriod() { if ($('period').value === 'custom') return; const today = new Date(); const from = new Date(today); from.setDate(from.getDate() - (Number($('period').value) || 1) + 1); $('from').value = localDate(from); $('to').value = localDate(today); }
+  function setPeriod() {
+    const custom = $('period').value === 'custom'; $('customDates').hidden = !custom;
+    if (custom) return;
+    const today = new Date(), from = new Date(today); from.setDate(from.getDate() - (Number($('period').value) || 1) + 1); $('from').value = localDate(from); $('to').value = localDate(today);
+  }
+  function updateFilterSummary() {
+    const selected = ['provider', 'mode', 'status', 'adoption'].map(id => $(id).selectedOptions[0]).filter(option => option.value).map(option => option.textContent);
+    $('filterSummary').textContent = selected.length ? '更多筛选 · ' + selected.join(' / ') : '更多筛选';
+  }
   setPeriod();
   function query(active) {
     const params = new URLSearchParams();
@@ -136,8 +132,8 @@
     if (!t.object_id || !can(module)) return node('span', title || '未保存的景点草稿');
     const a = node('a', title); a.href = '/admin/' + module + '.html?' + (module === 'tracks' ? 'track_id' : 'spot_id') + '=' + encodeURIComponent(t.object_id); a.target = '_blank'; a.rel = 'noopener'; return a;
   }
-  function taskActions(t, target) {
-    target.append(button('详情', () => openDetail(t.id)));
+  function taskActions(t, target, inDetail) {
+    if (!inDetail) target.append(button('详情', () => openDetail(t.id)));
     if (['queued', 'running', 'cancelling'].includes(t.status) && t.stage !== 'saving' && can('ai_tasks', true)) {
       const b = button(t.cancel_requested ? '正在中断…' : '中断', () => mutate(t, 'cancel'), 'ai_tasks'); b.disabled = !!t.cancel_requested; target.append(b);
     }
@@ -162,12 +158,15 @@
     const body = $('tasks'); body.replaceChildren(); if (!items.length) { const td = node('td', '当前条件下暂无任务记录', 'hint'); td.colSpan = 6; const row = node('tr'); row.append(td); body.append(row); return; }
     items.forEach(t => {
       const row = node('tr');
-      const time = node('td'); time.append(node('span', dateTime(t.created_at)), node('small', t.id));
+      const time = node('td', dateTime(t.created_at));
       const business = node('td'); business.append(node('strong', feature(t.feature)), node('br'), objectLink(t));
-      const source = node('td', (t.mode === 'manual' ? '手动' : '自动') + ' · ' + t.actor); source.append(node('small', t.reason), node('small', t.provider + ' / ' + t.model));
-      const status = node('td'); status.append(node('span', states[t.status] || t.status, 'ai-state ai-state-' + t.status), node('small', adoptions[t.adoption] || t.adoption), node('small', t.finished_at ? seconds(t.duration_ms) : stages[t.stage] || t.stage)); if (t.error) status.append(node('small', t.error));
-      const usage = node('td', n(t.requests) + ' 次请求'); usage.append(node('small', t.usage_known ? n(t.input_tokens) + ' 输入 / ' + n(t.output_tokens) + ' 输出 Token' : 'Token 暂无记录'), node('small', t.cost_known ? '已知部分 ≈ ¥' + amount(t.estimated_cny) : '费用未知'));
-      const actions = node('td'); taskActions(t, actions); if (t.retry_of) actions.append(button('原任务', () => openDetail(t.retry_of))); if (t.retry_task_id) actions.append(button('重试任务', () => openDetail(t.retry_task_id)));
+      const source = node('td', t.model || '—'); source.append(node('small', t.mode === 'manual' ? '手动触发' : '自动触发'));
+      const status = node('td'); status.append(node('span', states[t.status] || t.status, 'ai-state ai-state-' + t.status));
+      if (t.status === 'success' && t.adoption && t.adoption !== 'not_generated') status.append(node('small', adoptions[t.adoption] || t.adoption));
+      if (t.error) { const error = node('small', t.error, 'ai-task-error'); error.title = t.error; status.append(error); }
+      const usage = node('td', n(t.requests) + ' 次请求');
+      if (t.usage_known) usage.append(node('small', n(t.input_tokens + t.output_tokens) + ' Token'));
+      const actions = node('td'); taskActions(t, actions);
       row.append(time, business, source, status, usage, actions); body.append(row);
     });
   }
@@ -175,17 +174,23 @@
     const ctrl = replaceController('active'), params = query(true); if (append && activeCursor) params.set('cursor', activeCursor);
     try { const data = await request('tasks?' + params, { signal: ctrl.signal }); if (ctrl.signal.aborted) return; activeCursor = data.next_cursor || ''; activeRows = append ? activeRows.concat(data.items || []) : data.items || []; $('activeHint').textContent = n(data.total) + ' 项'; $('moreActive').hidden = !activeCursor; const root = $('active'); root.replaceChildren();
       if (!activeRows.length) root.append(node('p', '当前没有正在执行或排队的任务', 'hint'));
-      activeRows.forEach(t => { const card = node('article', null, 'ai-active-card'); card.append(node('strong', feature(t.feature)), node('p')); card.lastChild.append(objectLink(t)); card.append(node('p', (t.mode === 'manual' ? '手动' : '自动') + ' · ' + t.actor + ' · ' + t.model), node('p', t.reason, 'hint'), node('p', (states[t.status] || t.status) + ' · ' + (stages[t.stage] || t.stage) + ' · 已等待/运行 ' + seconds(Date.now() - new Date(t.created_at).getTime()))); const actions = node('div'); taskActions(t, actions); card.append(actions); root.append(card); }); }
+      activeRows.forEach(t => {
+        const card = node('article', null, 'ai-active-card'); card.append(node('strong', feature(t.feature)), node('p')); card.lastChild.append(objectLink(t));
+        card.append(node('p', (t.mode === 'manual' ? '手动' : '自动') + ' · ' + t.model, 'hint'), node('p', (t.cancel_requested ? '正在中断' : stages[t.stage] || states[t.status] || t.status) + ' · ' + seconds(Date.now() - new Date(t.created_at).getTime())));
+        const actions = node('div', null, 'ai-detail-actions'); taskActions(t, actions); card.append(actions); root.append(card);
+      }); }
+
     catch (error) { $('activeHint').textContent = error.name === 'AbortError' ? $('activeHint').textContent : '读取失败，保留上次数据'; }
   }
   function metric(title, value, hint) { const card = node('div', null, 'ai-metric'); card.append(node('span', title), node('strong', value), node('small', hint)); return card; }
   async function loadStatistics() {
     const ctrl = replaceController('statistics'); statisticsLoading=true;
     try { const data = await request('statistics?' + query(false), { signal: ctrl.signal }); if (ctrl.signal.aborted) return; statistics = data; const root = $('stats'); root.replaceChildren();
-      root.append(metric('任务 / 请求', n(data.tasks) + ' / ' + n(data.requests), '一个任务可包含搜索、生成等多个请求'), metric('执行中 / 排队', n(data.running) + ' / ' + n(data.queued), '所选筛选范围内'), metric('成功率', data.success + data.failed ? ((data.success * 100) / (data.success + data.failed)).toFixed(1) + '%' : '—', n(data.failed) + ' 项失败；中断不计入成功率'), metric('输入 / 输出 Token', n(data.input_tokens) + ' / ' + n(data.output_tokens), n(data.usage_known) + ' 次请求返回了用量，其余不补零'), metric('预估费用（已知部分）', data.cost_known ? '¥' + amount(data.estimated_cny) : '未知', n(data.cost_known) + ' / ' + n(data.requests) + ' 次请求可估算，非供应商账单'), metric('平均耗时 / 已采用', (data.finished ? seconds(data.duration_ms / data.finished) : '—') + ' / ' + n(data.adopted), '耗时包含排队；采用量按当前任务结果计'));
-      $('statHint').textContent = '北京时间 · ' + (data.first_recorded_at ? '记录始于 ' + dateTime(data.first_recorded_at) : '上线后开始记录，历史未采集数据不可追溯');
+      root.append(metric('任务数', n(data.tasks), n(data.success) + ' 成功 · ' + n(data.failed) + ' 失败'), metric('请求次数', n(data.requests), '包含联网搜索与生成'), metric('消耗 Token', data.usage_known ? n(data.input_tokens + data.output_tokens) : '暂无记录', data.usage_known ? '已返回的用量' : '等待模型返回用量'), metric('预估费用', data.cost_known ? '¥' + amount(data.estimated_cny) : '暂无估算', data.cost_known ? '仅含已知费用' : '可在设置中配置单价'));
+      $('statHint').textContent = $('period').selectedOptions[0].textContent;
       renderBreakdown(data);
-      (data.models || []).forEach(row => addModel(row.key.split(' / ').slice(1).join(' / '))); drawCharts(data); }
+      (data.models || []).forEach(row => addModel(row.key.split(' / ').slice(1).join(' / '))); if ($('usageDetails').open) drawCharts(data); }
+
     catch (error) { if (error.name !== 'AbortError') $('statHint').textContent = '统计读取失败，请点击查询重试'; }
     finally {if(controllers.statistics===ctrl)statisticsLoading=false;}
   }
@@ -196,7 +201,7 @@
   }
   function addModel(value) { if (value && !Array.from($('model').options).some(option => option.value === value)) { const option = node('option', value); option.value = value; $('model').append(option); } }
   async function drawCharts(data) {
-    try { const ec = await AdminAssets.loadCharts(); if (statistics !== data) return; ['trend', 'featuresChart', 'modelsChart'].forEach(id => { if (!charts.has(id)) charts.set(id, ec.init($(id))); });
+    try { const ec = await AdminAssets.loadCharts(); if (statistics !== data || !$('usageDetails').open) return; ['trend', 'featuresChart', 'modelsChart'].forEach(id => { if (!charts.has(id)) charts.set(id, ec.init($(id))); });
       const days = data.days || []; const trend = AdminChartStyle.bars(days.map(row => ({ name: row.key, value: row.tasks })), data.tasks, { unit: '项' }); if (days.length > 10) trend.dataZoom = [{ type: 'inside', yAxisIndex: 0, start: Math.max(0, 100 - 1000 / days.length), end: 100 }]; charts.get('trend').setOption(trend, true);
       const features = (data.features || []).map(row => ({ name: feature(row.key), value: row.tasks })); charts.get('featuresChart').setOption(AdminChartStyle.ring(features, data.tasks, '任务总数', '项'), true); AdminChartStyle.legend($('featuresLegend'), features);
       const models = (data.models || []).map(row => ({ name: row.key, value: row.input_tokens + row.output_tokens })); charts.get('modelsChart').setOption(AdminChartStyle.bars(models, data.input_tokens + data.output_tokens, { unit: 'Token', labelWidth: 150 }), true);
@@ -205,15 +210,16 @@
   function alerts(data) {
     const root = $('alerts'); root.replaceChildren(); const rows = (data.today_usage || {}).features || [];
     (data.policies || []).forEach(control => { const p = control.policy, usage = rows.find(row => row.key === p.feature) || {}; const today = quotaSnapshot ? quotaSnapshot.day : localDate(new Date()); const requests = control.day === today ? control.requests : 0; const messages = [];
-      if (p.pause_automatic) messages.push('自动任务已暂停'); if (p.daily_requests > 0 && requests >= p.daily_requests * 0.8) messages.push('今日请求预算已使用 ' + n(requests) + ' / ' + n(p.daily_requests)); if (p.token_alert > 0 && usage.input_tokens + usage.output_tokens >= p.token_alert) messages.push('今日已知 Token 超过提醒阈值'); if (p.cost_alert_cny > 0 && usage.estimated_cny >= p.cost_alert_cny) messages.push('今日已知费用估算超过提醒阈值'); if (usage.failed >= 3 && usage.failed / (usage.failed + usage.success) >= 0.2) messages.push('今日失败比例较高，请查看失败原因'); if (usage.finished >= 3 && usage.duration_ms / usage.finished >= 60000) messages.push('今日平均任务耗时超过一分钟'); if (messages.length) root.append(node('div', feature(p.feature) + '：' + messages.join('；'), 'ai-alert'));
+      if (p.pause_automatic) messages.push('自动任务已暂停'); if (p.daily_requests > 0 && requests >= p.daily_requests * 0.8) messages.push('今日请求预算已使用 ' + n(requests) + ' / ' + n(p.daily_requests)); if (p.token_alert > 0 && usage.input_tokens + usage.output_tokens >= p.token_alert) messages.push('今日已知 Token 超过提醒阈值'); if (p.cost_alert_cny > 0 && usage.estimated_cny >= p.cost_alert_cny) messages.push('今日已知费用估算超过提醒阈值'); if (usage.failed >= 3 && usage.failed / (usage.failed + usage.success) >= 0.2) messages.push('今日失败比例较高，请查看失败原因'); if (messages.length) root.append(node('div', feature(p.feature) + '：' + messages.join('；'), 'ai-alert'));
     });
   }
   async function loadSettings() {
     const ctrl = replaceController('settings'); try { const data = await request('settings', { signal: ctrl.signal }); if (ctrl.signal.aborted) return; settings = data;
       Object.assign(featureNames, Object.fromEntries((data.features || []).map(f => [f.id, f.name]))); if ($('feature').options.length === 1) (data.features || []).forEach(f => { const option = node('option', f.name); option.value = f.id; $('feature').append(option); }); (data.models || []).forEach(addModel); (data.prices.items || []).forEach(p => addModel(p.model));
-      $('notice').textContent = data.durable ? '用量从功能上线后开始记录；费用为按配置单价计算的估算。共享日次数上限已移除，各功能的每日请求上限填 0 表示不限。' : '当前未连接持久化 AI 记录库，新的 AI 付费调用已停用。';
+      $('notice').textContent = data.durable ? '' : 'AI 记录库连接异常，付费调用已停用。'; $('notice').hidden = data.durable;
+
       if (!policyDirty && !busySettings) renderPolicies(data.policies || []); if (!pricesDirty && !busySettings) renderPrices(data.prices); alerts(data);
-    } catch (error) { if (error.name !== 'AbortError') $('notice').textContent = '配置读取失败，请点击查询重试；已显示数据保留。'; }
+    } catch (error) { if (error.name !== 'AbortError') { $('notice').hidden = false; $('notice').textContent = '配置读取失败，请点击查询重试；已显示数据保留。'; } }
   }
   function numberInput(value, min, max, step) { const input = node('input'); input.type = 'number'; input.min = min; input.max = max; if (Number(min) > 0) input.required = true; input.step = step || '1'; if (value != null) input.value = value; else input.placeholder = '未知'; input.dataset.adminInput = 'ai_settings'; return input; }
   function renderPolicies(controls) {
@@ -238,21 +244,38 @@
   async function openDetail(id) { modalTaskID = id; if (detailController) detailController.abort(); detailController = new AbortController(); $('detail').replaceChildren(node('p', '正在读取…', 'hint')); modal.show(); await loadDetail(id, detailController.signal); }
   async function loadDetail(id, signal) {
     try { const t = await request('tasks/' + encodeURIComponent(id), { signal }); if (signal.aborted || modalTaskID !== id) return; const root = $('detail'); root.replaceChildren(); const grid = node('div', null, 'ai-detail-grid');
-      const fields = [['任务编号', t.id], ['功能', feature(t.feature)], ['触发', (t.mode === 'manual' ? '手动' : '自动') + ' · ' + t.actor + ' · ' + t.reason], ['模型', t.provider + ' / ' + t.model], ['状态', (states[t.status] || t.status) + ' · ' + (stages[t.stage] || t.stage)], ['结果去向', adoptions[t.adoption] || t.adoption], ['创建 / 开始', dateTime(t.created_at) + ' / ' + dateTime(t.started_at)], ['结束 / 总耗时', dateTime(t.finished_at) + ' / ' + seconds(t.finished_at ? t.duration_ms : Date.now() - new Date(t.created_at).getTime())], ['规则版本', t.rule_version], ['输入版本', t.input_version], ['失败说明', t.error || '—'], ['输入摘要', t.input_summary || '—']]; fields.forEach(([label, value]) => { const field = node('div', null, 'ai-detail-field'); field.append(node('strong', label), node('span', value)); grid.append(field); }); root.append(grid, objectLink(t));
-      const actions = node('div', null, 'ai-detail-actions'); taskActions(t, actions); if (t.retry_of) actions.append(button('查看原任务', () => openDetail(t.retry_of))); if (t.retry_task_id) actions.append(button('查看重试任务', () => openDetail(t.retry_task_id))); root.append(actions);
-      const scroll = node('div', null, 'table-responsive'), table = node('table', null, 'data ai-request-table'); const head = node('thead'), hr = node('tr'); ['阶段', '开始时间', '状态 / 错误', '耗时', '输入 / 输出 / 缓存 Token', '预估费用 / 价格版本'].forEach(text => hr.append(node('th', text))); head.append(hr); table.append(head); const body = node('tbody'); (t.calls || []).forEach(call => { const row = node('tr'); [stages[call.kind] || call.kind, dateTime(call.started_at), (states[call.status] || call.status) + (call.http_status ? ' · HTTP ' + call.http_status : '') + (call.error_code ? ' · ' + (errorNames[call.error_code] || call.error_code) : ''), seconds(call.duration_ms), [call.input_tokens, call.output_tokens, call.cached_tokens].map(v => v == null ? '未知' : n(v)).join(' / '), (call.estimated_cny == null ? '未知' : '≈ ¥' + amount(call.estimated_cny)) + ' · ' + (call.price_version ? 'v' + call.price_version : '未配置')].forEach(text => row.append(node('td', text))); if(call.price_snapshot){const price=call.price_snapshot,detail=node('details'),summary=node('summary','当时单价');detail.append(summary);[['输入',price.input_per_million],['缓存命中',price.cached_per_million],['输出',price.output_per_million],['搜索/次',price.search_per_call]].forEach(([label,value])=>detail.append(node('p',label+'：'+(value==null?'未知':amount(value))+' 元'+(label==='搜索/次'?' / 次':' / 百万 Token'),'hint')));row.lastChild.append(detail);} body.append(row); }); table.append(body); scroll.append(table); root.append(node('h3', '请求明细'), scroll);
-      if (t.result) { root.append(node('h3', '生成结果')); const output = node('pre', null, 'ai-detail-result'); let result; try { result = JSON.parse(t.result); output.textContent = JSON.stringify(result, null, 2); } catch (_) { output.textContent = t.result; } root.append(output);
+      const fields = [['功能', feature(t.feature)], ['模型', t.model], ['触发', (t.mode === 'manual' ? '手动' : '自动') + ' · ' + t.actor], ['状态', states[t.status] || t.status], ['时间', dateTime(t.created_at)], ['耗时', seconds(t.finished_at ? t.duration_ms : Date.now() - new Date(t.created_at).getTime())]];
+      fields.forEach(([label, value]) => { const field = node('div', null, 'ai-detail-field'); field.append(node('strong', label), node('span', value)); grid.append(field); }); root.append(grid, objectLink(t));
+      if (t.error) root.append(node('p', t.error, 'ai-alert'));
+      if (t.adoption && t.adoption !== 'not_generated') root.append(node('p', '结果：' + (adoptions[t.adoption] || t.adoption), 'hint'));
+      const actions = node('div', null, 'ai-detail-actions'); taskActions(t, actions, true); if (t.retry_of) actions.append(button('查看原任务', () => openDetail(t.retry_of))); if (t.retry_task_id) actions.append(button('查看重试任务', () => openDetail(t.retry_task_id))); root.append(actions);
+      const technical = node('details', null, 'ai-disclosure'); technical.append(node('summary', '请求与技术明细'));
+      [['任务编号', t.id], ['触发原因', t.reason], ['执行阶段', stages[t.stage] || t.stage], ['规则版本', t.rule_version], ['输入版本', t.input_version], ['输入摘要', t.input_summary]].forEach(([label, value]) => { if (value) technical.append(node('p', label + '：' + value, 'hint')); });
+      const scroll = node('div', null, 'table-responsive'), table = node('table', null, 'data ai-request-table'); const head = node('thead'), hr = node('tr'); ['阶段', '开始时间', '状态 / 错误', '耗时', '输入 / 输出 / 缓存 Token', '预估费用 / 价格版本'].forEach(text => hr.append(node('th', text))); head.append(hr); table.append(head); const body = node('tbody'); (t.calls || []).forEach(call => { const row = node('tr'); [stages[call.kind] || call.kind, dateTime(call.started_at), (states[call.status] || call.status) + (call.http_status ? ' · HTTP ' + call.http_status : '') + (call.error_code ? ' · ' + (errorNames[call.error_code] || call.error_code) : ''), seconds(call.duration_ms), [call.input_tokens, call.output_tokens, call.cached_tokens].map(v => v == null ? '未知' : n(v)).join(' / '), (call.estimated_cny == null ? '未知' : '≈ ¥' + amount(call.estimated_cny)) + ' · ' + (call.price_version ? 'v' + call.price_version : '未配置')].forEach(text => row.append(node('td', text))); if(call.price_snapshot){const price=call.price_snapshot,detail=node('details'),summary=node('summary','当时单价');detail.append(summary);[['输入',price.input_per_million],['缓存命中',price.cached_per_million],['输出',price.output_per_million],['搜索/次',price.search_per_call]].forEach(([label,value])=>detail.append(node('p',label+'：'+(value==null?'未知':amount(value))+' 元'+(label==='搜索/次'?' / 次':' / 百万 Token'),'hint')));row.lastChild.append(detail);} body.append(row); }); table.append(body); scroll.append(table); technical.append(scroll);
+      if (t.result) {
+        let result; try { result = JSON.parse(t.result); } catch (_) { /* Preserve non-JSON historical output below. */ }
+        const output = node('pre', null, 'ai-detail-result'); output.textContent = result ? JSON.stringify(result, null, 2) : t.result;
+        technical.append(node('h3', '完整结果'), output);
+        if (result && (result.description || result.shape_label || result.decision_summary)) {
+          root.append(node('h3', '生成内容'));
+          if (result.description) root.append(node('p', result.description, 'ai-result-text'));
+          if (result.shape_label) root.append(node('p', '图案：' + result.shape_label));
+          if (result.decision_summary) root.append(node('p', result.decision_summary, 'ai-result-text'));
+        } else root.append(node('p', '生成结果可展开下方明细查看。', 'hint'));
         if (t.feature === 'track_description' && t.status === 'success' && t.adoption !== 'applied' && result && result.description && result.source_version && can('tracks', true)) {
           const input = node('textarea'); input.className = 'form-control'; input.rows = 4; input.maxLength = 4000; input.value = result.description; input.setAttribute('aria-label', '待确认的路线说明'); const msg = node('p', '可修改建议后单独保存路线说明，其他字段不变。', 'hint');
           const apply = button('一键代入并保存路线说明', async () => { if (!input.value.trim()) return; apply.disabled = true; try { const response = await fetch('/admin/api/tracks/' + encodeURIComponent(t.object_id) + '/description', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, signal, body: JSON.stringify({ description: input.value.trim(), source_version: result.source_version, task_id: t.id }) }); const data = await response.json(); if (!response.ok || !data.data || !data.data.saved) throw new Error(data.error || '保存结果未确认，请核实'); msg.textContent = '路线说明已保存。'; apply.remove(); refresh(false); } catch (error) { if (!signal.aborted) msg.textContent = error.message; } finally { apply.disabled = false; } }, 'tracks'); root.append(input, msg, apply);
         }
       }
+      root.append(technical);
     } catch (error) { if (!signal.aborted) $('detail').replaceChildren(node('p', error.message, 'text-danger'), button('重试读取', () => loadDetail(id, signal))); }
   }
   $('detailModal').addEventListener('hidden.bs.modal', () => { modalTaskID = ''; if (detailController) detailController.abort(); $('detail').replaceChildren(); });
   function refresh(reset) { if (reset) { cursor = ''; nextCursor = ''; history = []; page = 1; } $('pageError').textContent = ''; loadTasks(); loadStatistics(); loadActive(false); loadSettings(); loadQuotas(true); }
-  $('period').addEventListener('change', () => { setPeriod(); refresh(true); }); ['from', 'to'].forEach(id => $(id).addEventListener('change', () => { $('period').value = 'custom'; refresh(true); })); ['feature', 'provider', 'model', 'mode', 'status', 'adoption'].forEach(id => $(id).addEventListener('change', () => refresh(true))); $('q').addEventListener('keydown', event => { if (event.key === 'Enter') refresh(true); }); $('refresh').addEventListener('click', () => refresh(true)); $('prev').addEventListener('click', () => { cursor = history.pop() || ''; page--; loadTasks(); }); $('next').addEventListener('click', () => { if (!nextCursor) return; history.push(cursor); cursor = nextCursor; page++; loadTasks(); }); $('moreActive').addEventListener('click', () => loadActive(true));
+  $('period').addEventListener('change', () => { setPeriod(); refresh(true); }); ['from', 'to'].forEach(id => $(id).addEventListener('change', () => { $('period').value = 'custom'; setPeriod(); refresh(true); })); ['feature', 'provider', 'model', 'mode', 'status', 'adoption'].forEach(id => $(id).addEventListener('change', () => { updateFilterSummary(); refresh(true); })); $('q').addEventListener('keydown', event => { if (event.key === 'Enter') refresh(true); }); $('refresh').addEventListener('click', () => refresh(true)); $('prev').addEventListener('click', () => { cursor = history.pop() || ''; page--; loadTasks(); }); $('next').addEventListener('click', () => { if (!nextCursor) return; history.push(cursor); cursor = nextCursor; page++; loadTasks(); }); $('moreActive').addEventListener('click', () => loadActive(true));
   $('reloadSettings').addEventListener('click', async () => { if (busySettings) return; if ((policyDirty || pricesDirty) && !await AdminUI.confirm({title:'重新载入配置',message:'将放弃尚未保存的预算和价格修改，读取服务端最新配置。'})) return; policyDirty=false; pricesDirty=false; await loadSettings(); });
+  $('clearFilters').addEventListener('click', () => { ['provider', 'mode', 'status', 'adoption'].forEach(id => { $(id).value = ''; }); updateFilterSummary(); refresh(true); });
+  $('usageDetails').addEventListener('toggle', () => { if ($('usageDetails').open && statistics) drawCharts(statistics); });
   $('refreshQuota').addEventListener('click',()=>loadQuotas(true));
   let refreshTicks=0;
   const timer = setInterval(() => { if (document.hidden || !$('autoRefresh').checked) return; loadActive(false); loadQuotas(false); if(++refreshTicks%3===0){if(!statisticsLoading)loadStatistics();if(!tasksLoading)loadTasks();} }, 5000);
