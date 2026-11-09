@@ -56,7 +56,7 @@ type kimiSearchResponse struct {
 type kimiCompletionResponse struct {
 	Choices []struct {
 		FinishReason string `json:"finish_reason"`
-		Message struct {
+		Message      struct {
 			Content string `json:"content"`
 		} `json:"message"`
 	} `json:"choices"`
@@ -127,7 +127,7 @@ func (g *KimiScenicSpotDescriptionGenerator) Generate(ctx context.Context, spot 
 		"temperature": 1,
 		// K2.6 reasoning tokens share the completion budget with its answer.
 		// The prompt caps the final description, so leave ample room for reasoning.
-		"max_tokens":  32768,
+		"max_tokens": 32768,
 	})
 	if err != nil {
 		return "", err
@@ -167,12 +167,12 @@ func (g *KimiScenicSpotDescriptionGenerator) postJSON(ctx context.Context, endpo
 		return err
 	}
 	defer response.Body.Close()
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return kimiResponseError(response)
+	}
 	responseBody, err := io.ReadAll(io.LimitReader(response.Body, 2<<20))
 	if err != nil {
 		return err
-	}
-	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return fmt.Errorf("HTTP %d: %s", response.StatusCode, strings.TrimSpace(string(responseBody)))
 	}
 	if err := json.Unmarshal(responseBody, output); err != nil {
 		return fmt.Errorf("decode response: %w", err)

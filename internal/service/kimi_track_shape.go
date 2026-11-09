@@ -34,7 +34,7 @@ type TrackShapeGenerator interface {
 }
 
 func (g *KimiTrackNarrativeGenerator) GenerateShape(ctx context.Context, facts, imagePath string) (*TrackShapeResult, error) {
-	text, err := g.complete(ctx, facts, imagePath, trackshape.Prompt+trackshape.ShapeOnlyOutput, 0.6, true)
+	text, err := g.complete(ctx, facts, imagePath, trackshape.Prompt+trackshape.ShapeOnlyOutput, true)
 	if err != nil {
 		return nil, err
 	}

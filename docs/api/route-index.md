@@ -27,8 +27,8 @@
 | 轨迹详情（含默认路线说明、收藏状态及可选主景区） | GET | `/track/:track_id/detail` | 是 | [track.md](track.md#3-轨迹详情)、[主景区标签](track.md#主景区标签) |
 | 静态轨迹预览图片 | GET | `/track/:track_id/previews/:variant?v=<source_version>` | 是 | [track.md](track.md#静态轨迹预览图) |
 | 历史预览待补列表 | GET | `/track/preview-backfill/list` | 是 | [track.md](track.md#历史轨迹预览补齐devmode) |
-| 历史路线说明待补列表 / GPS | GET | `/track/description-backfill/list`, `/track/description-backfill/:track_id/data` | 是 | [track.md](track.md#历史路线说明补齐devmode) |
-| 历史路线说明补齐 | POST | `/track/description-backfill/:track_id/complete` | 是 | [track.md](track.md#历史路线说明补齐devmode) |
+| 旧客户端历史路线说明待补列表 / GPS（当前 Android 已移除入口） | GET | `/track/description-backfill/list`, `/track/description-backfill/:track_id/data` | 是 | [track.md](track.md#历史路线说明补齐devmode) |
+| 旧客户端历史路线说明补齐（当前 Android 已移除入口） | POST | `/track/description-backfill/:track_id/complete` | 是 | [track.md](track.md#历史路线说明补齐devmode) |
 | 历史预览原始 GPS | GET | `/track/preview-backfill/:track_id/data` | 是 | [track.md](track.md#历史轨迹预览补齐devmode) |
 | 历史预览四图上传地址 | POST | `/track/preview-backfill/:track_id/prepare` | 是 | [track.md](track.md#历史轨迹预览补齐devmode) |
 | 历史预览四图提交 | POST | `/track/preview-backfill/:track_id/complete` | 是 | [track.md](track.md#历史轨迹预览补齐devmode) |
@@ -172,3 +172,7 @@
 
 后台地域筛选：`GET /admin/api/users`（用户查看）支持 `province_code`；`GET /admin/api/scenic-spots`（景点查看）支持 `province_code` / `city_code`，见 [admin-regions.md](admin-regions.md)。
 - `POST /admin/api/tracks/:track_id/labels/generate`：轨迹写权限，AI 形象建议，不直接保存，见 admin-tracks.md。
+
+- `POST /admin/api/tracks/:track_id/description/generate`：轨迹写权限，手动联网生成候选说明，返回来源与 source_version，不直接写轨迹，见 [后台协议](admin-tracks.md#路线说明与-ai-联网填写)。
+
+- `PUT /admin/api/tracks/:track_id/description`：轨迹写权限，候选区“一键代入并保存”，校验 source_version 并只保存说明，见 [后台协议](admin-tracks.md#路线说明与-ai-联网填写)。

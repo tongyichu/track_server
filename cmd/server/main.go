@@ -593,10 +593,10 @@ func main() {
 
 	var trackNarrativeSvc *service.TrackNarrativeService
 	_, narrativeMemoryFallback := trackRepo.(*repository.InMemoryTrackRepository)
-	if cfg.TrackNarrativeEnabled && !narrativeMemoryFallback && cfg.MoonshotAPIKey != "" && trackMapRepo != nil && trackPlaceRepo != nil && previewCache != nil {
+	if !narrativeMemoryFallback && cfg.MoonshotAPIKey != "" && trackMapRepo != nil && trackPlaceRepo != nil && previewCache != nil {
 		trackNarrativeSvc = service.NewTrackNarrativeService(trackRepo, trackMapRepo, trackPlaceRepo, trackSvc,
 			service.NewKimiTrackNarrativeGenerator(cfg.MoonshotAPIKey, cfg.TrackNarrativeModel), cfg.TrackNarrativeModel, cfg.TrackNarrativeDailyBudget)
-		log.Printf("track narrative configured: model=%s scheduler_enabled=%t", cfg.TrackNarrativeModel, cfg.SchedulerEnabled)
+		log.Printf("track narrative configured: model=%s automatic_enabled=%t scheduler_enabled=%t", cfg.TrackNarrativeModel, cfg.TrackNarrativeEnabled, cfg.SchedulerEnabled)
 	}
 
 	var h *server.Hertz
@@ -698,7 +698,7 @@ func main() {
 		danmakuJob := jobs.NewDanmakuCleanup(companionRepo, cfg.DanmakuRetentionDays, cfg.DanmakuCleanupCron)
 		companionAutoCloseJob := jobs.NewCompanionAutoClose(companionSvc)
 		schedulerJobs := []scheduler.Job{danmakuJob, companionAutoCloseJob}
-		if trackNarrativeSvc != nil {
+		if trackNarrativeSvc != nil && cfg.TrackNarrativeEnabled {
 			schedulerJobs = append(schedulerJobs, jobs.NewTrackNarrative(trackNarrativeSvc, cfg.TrackNarrativeCron))
 		}
 		if trackMapIndexSvc != nil {

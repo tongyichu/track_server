@@ -23,6 +23,9 @@
 | `source_tag` | string | 轨迹来源/运营标签；允许值为空字符串或 `manual_seed`（人工录入冷启动轨迹）；普通列表摘要不返回该字段 |
 | `coordinate_system` | string | 坐标系，例如 `WGS84` / `GCJ02` / `BD09` |
 | `title` | string | 轨迹标题 |
+| `description` | string | 服务端默认路线说明；当前 Android 普通上传省略，AI 后台生成后由详情/创建/更新响应返回，缺失时不本地生成；投稿说明独立保存 |
+| `description_source` | string | `auto`（兼容旧客户端）/ `manual` / `ai`；人工说明不被自动生成覆盖 |
+| `description_rule_version` | int | 兼容旧客户端自动说明规则的版本，默认0；不代表服务端 AI 规则版本 |
 | `labels` | array | 统一展示标签，固定顺序 featured/sport/scenic_spot/shape；缺项省略，无标签返回 []；元素 `{type,value:boolean,code?,name,name_en?,theme_color?,theme_color_dark?}`，详见 [轨迹标签](track.md#统一轨迹标签-labels) |
 | `shape_label` | string | 可选具象形象标签，例如“玫瑰花”“兔子”；详情及推荐、搜索、我的轨迹、收藏、喜欢列表摘要均返回，空值省略；最多32个 Unicode 字符，不代表运动类型或路线难度 |
 | `is_featured` | boolean | 推荐、搜索、我的轨迹及收藏列表摘要中的精品标识；仅投稿当前已审核通过时为 true，false 也明确返回 |

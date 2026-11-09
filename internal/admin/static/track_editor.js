@@ -158,10 +158,126 @@
           onScenicSpotRefresh: refreshScenicSpot
         }) : null;
         const assets = trackAssets(trackID, track);
+        function setupRouteDescription(view) {
+          const input = view.form.elements.description;
+          const oldGroup = input.parentNode;
+          const group = document.createElement('div'); group.className = oldGroup.className + ' admin-track-description';
+          oldGroup.replaceWith(group);
+          input.setAttribute('aria-label', '路线说明');
+          const heading = document.createElement('div'); heading.className = 'admin-track-description-heading';
+          const title = document.createElement('span'); title.textContent = '路线说明'; heading.appendChild(title);
+          const hint = document.createElement('p'); hint.className = 'text-secondary mb-0 mt-1';
+          hint.textContent = readOnly || isDeleted ? '当前已保存的路线说明。' : 'AI 建议会先展示在下方，确认后可单独代入并保存。';
+          hint.setAttribute('role', 'status'); hint.setAttribute('aria-live', 'polite');
+          group.append(heading, input, hint);
+          if (readOnly || isDeleted) return;
+          const button = document.createElement('button'); button.type = 'button'; button.className = 'btn btn-sm btn-outline-primary';
+          button.textContent = 'AI 联网填写'; button.setAttribute('aria-label', 'AI 联网填写'); heading.appendChild(button);
+          const candidateArea = document.createElement('section'); candidateArea.className = 'admin-track-description-candidate'; candidateArea.hidden = true;
+          const candidateTitle = document.createElement('strong'); candidateTitle.textContent = 'AI 建议说明';
+          const candidateInput = document.createElement('textarea'); candidateInput.className = 'form-control'; candidateInput.rows = 3; candidateInput.maxLength = 4000;
+          candidateInput.setAttribute('aria-label', 'AI 建议说明');
+          const sources = document.createElement('div'); sources.className = 'admin-track-description-sources';
+          const actions = document.createElement('div'); actions.className = 'admin-track-description-actions';
+          const apply = document.createElement('button'); apply.type = 'button'; apply.className = 'btn btn-sm btn-primary';
+          apply.textContent = '一键代入并保存'; apply.setAttribute('aria-label', '一键代入并保存');
+          const note = document.createElement('span'); note.className = 'text-secondary'; note.textContent = '只保存路线说明，其他未保存的修改会保留。';
+          actions.append(apply, note); candidateArea.append(candidateTitle, candidateInput, sources, actions); group.appendChild(candidateArea);
+          let revision = 0, candidateVersion = '', generating = false, applying = false;
+          view.form.addEventListener('input', function () { revision++; });
+          view.form.addEventListener('change', function () { revision++; });
+          function updateButtons() {
+            button.disabled = generating || applying;
+            button.textContent = generating ? '正在联网生成…' : 'AI 联网填写';
+            apply.disabled = generating || applying || !candidateVersion || !candidateInput.value.trim();
+            apply.textContent = applying ? '正在保存…' : '一键代入并保存';
+          }
+          candidateInput.addEventListener('input', updateButtons);
+          button.addEventListener('click', async function (event) {
+            event.preventDefault();
+            if (generating || applying || view.signal.aborted) return;
+            const originalRevision = revision;
+            const originalSpot = trackPayload.scenic_spot_id;
+            const originalForm = new URLSearchParams(new FormData(view.form)).toString();
+            generating = true; updateButtons(); hint.textContent = '正在检索地点背景并结合轨迹资料生成建议…';
+            try {
+              const response = await fetch('/admin/api/tracks/' + encodeURIComponent(trackID) + '/description/generate', { method: 'POST', signal: view.signal });
+              const result = await response.json();
+              if (!response.ok) throw new Error(result.error || 'AI 联网填写失败');
+              if (view.signal.aborted || !group.isConnected) return;
+              if (revision !== originalRevision || trackPayload.scenic_spot_id !== originalSpot || new URLSearchParams(new FormData(view.form)).toString() !== originalForm) {
+                hint.textContent = '生成期间资料有修改，本次建议未覆盖草稿。请保存资料后重新生成。';
+                return;
+              }
+              const data = result.data || {};
+              if (!String(data.description || '').trim() || !data.source_version) throw new Error('AI 未返回有效建议，原说明已保留');
+              candidateInput.value = data.description; candidateVersion = data.source_version;
+              candidateArea.hidden = false; sources.replaceChildren();
+              hint.textContent = '建议已生成，原说明未变；可编辑建议，确认后点击“一键代入并保存”。';
+              const sourceList = Array.isArray(data.sources) ? data.sources : [];
+              if (sourceList.length) {
+                const caption = document.createElement('span'); caption.textContent = '检索参考来源：'; sources.appendChild(caption);
+                sourceList.forEach(function (source) {
+                  let url;
+                  try { url = new URL(source.url); } catch (_) { return; }
+                  if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password) return;
+                  const link = document.createElement('a'); link.href = url.href; link.target = '_blank'; link.rel = 'noopener noreferrer';
+                  link.textContent = source.title || url.hostname; sources.appendChild(link);
+                });
+              }
+            } catch (error) {
+              if (!view.signal.aborted && error.name !== 'AbortError') hint.textContent = error.message || 'AI 联网填写失败，原说明已保留';
+            } finally {
+              generating = false;
+              if (!view.signal.aborted) updateButtons();
+            }
+          });
+          apply.addEventListener('click', async function (event) {
+            event.preventDefault();
+            if (generating || applying || !candidateVersion || !candidateInput.value.trim() || view.signal.aborted) return;
+            const description = candidateInput.value.trim();
+            const original = input.value;
+            applying = true; updateButtons(); hint.textContent = '正在单独保存路线说明…';
+            let responseReceived = false;
+            try {
+              const response = await fetch('/admin/api/tracks/' + encodeURIComponent(trackID) + '/description', {
+                method: 'PUT', headers: { 'Content-Type': 'application/json' }, signal: view.signal,
+                body: JSON.stringify({ description: description, source_version: candidateVersion })
+              });
+              const result = await response.json(); responseReceived = true;
+              if (!response.ok) throw new Error(result.error || '路线说明保存失败');
+              if (!result.data || result.data.saved !== true) throw new Error('保存结果未确认，请重新打开轨迹核实');
+              track.description = result.data.description; track.description_source = 'manual'; track.description_rule_version = 0;
+              candidateVersion = '';
+              if (view.signal.aborted || !group.isConnected) return;
+              candidateArea.hidden = true;
+              if (input.value === original) {
+                input.value = track.description;
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                hint.textContent = '路线说明已代入并保存，其他未保存的修改保持原样。';
+              } else {
+                hint.textContent = 'AI 说明已保存；你刚编辑的说明草稿仍保留在输入框中，可另行保存。';
+              }
+              if (typeof options.onSaved === 'function') {
+                try { await options.onSaved(); }
+                catch (_) { if (!view.signal.aborted) hint.textContent += ' 列表刷新失败，请稍后刷新。'; }
+              }
+            } catch (error) {
+              if (!view.signal.aborted && error.name !== 'AbortError') {
+                hint.textContent = responseReceived ? error.message : '保存结果未确认，请重新打开轨迹核实；建议内容已保留。';
+              }
+            } finally {
+              applying = false;
+              if (!view.signal.aborted) updateButtons();
+            }
+          });
+          updateButtons();
+        }
         return {
           title: (readOnly ? '查看轨迹 ' : '编辑轨迹 ') + trackID,
           readOnly: readOnly,
           onReady: function (view) {
+            setupRouteDescription(view);
             if (Array.isArray(options.cities)) return;
             const select = view.form.elements.city_code;
             const hint = document.createElement('span'); hint.className = 'text-secondary d-block mt-1';
@@ -233,7 +349,7 @@
             labelBadges = document.createElement('div'); labelBadges.className = 'd-flex flex-wrap gap-2 mb-2';
             renderLabelBadges();
             content.appendChild(labelBadges);
-            const states = { waiting: '等待自动生成', running: '正在生成', ready: '生成完成，等待写入', complete: '自动生成已完成（无明确形象时不打标）', retry: '等待重试', failed: '自动生成失败', not_queued: '未进入自动任务', unconfigured: 'AI 未配置' };
+            const states = { historical: '历史轨迹，未自动生成，可手动填写', waiting: '等待自动生成', running: '正在生成', ready: '生成完成，等待写入', complete: '自动生成已完成（无明确形象时不打标）', retry: '等待重试', failed: '自动生成失败', not_queued: '未进入自动任务', unconfigured: 'AI 未配置' };
             const status = document.createElement('p'); status.className = 'text-secondary mb-2';
             const generation = trackPayload.label_generation || {};
             status.textContent = (states[generation.status] || '状态暂不可用') + (generation.attempts ? '，已尝试 ' + generation.attempts + ' 次' : '') + (generation.reason ? '：' + generation.reason : '');
@@ -311,7 +427,7 @@
             { name: 'track_type', label: '轨迹类型', type: 'select', value: track.track_type, options: typeFields, onChange: assets.setTrackType },
             { name: 'source_tag', label: '来源标签', type: 'select', value: track.source_tag, options: sourceFields },
             { name: 'coordinate_system', label: '坐标系', type: 'select', value: track.coordinate_system, options: coordinateFields, onChange: function (value) { if (mapPreview) mapPreview.setCoordinateSystem(value); } },
-            { name: 'description', label: '轨迹描述', type: 'textarea', value: track.description, maxLength: 4000, full: true },
+            { name: 'description', label: '路线说明', type: 'textarea', value: track.description, maxLength: 4000, full: true },
             { name: 'start_time', label: '开始时间', type: 'datetime-local', value: timeValue(track.start_time), required: true },
             { name: 'end_time', label: '结束时间', type: 'datetime-local', value: timeValue(track.end_time) },
             { name: 'distance', label: '距离（米）', type: 'number', value: track.distance, min: 0, step: 'any' },
@@ -361,7 +477,9 @@
       session_id: values.session_id, title: values.title, city_code: values.city_code,
       shape_label: values.shape_label !== (track.shape_label || '') ? values.shape_label : undefined,
       locate_addr: values.locate_addr, track_type: values.track_type, source_tag: values.source_tag,
-      coordinate_system: values.coordinate_system, description: values.description, start_time: values.start_time,
+      coordinate_system: values.coordinate_system,
+      description: values.description !== (track.description || '') ? values.description : undefined,
+      start_time: values.start_time,
       end_time: values.end_time, distance: Number(values.distance || 0), duration: Number(values.duration || 0),
       calories_burned: Number(values.calories_burned || 0), elevation_gain: Number(values.elevation_gain || 0),
       avg_speed_kmh: Number(values.avg_speed_kmh || 0), status: Number(values.status)

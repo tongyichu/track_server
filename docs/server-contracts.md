@@ -94,7 +94,7 @@
 - 搜索列表 `GET /api/v1/track/search/list` 的可选 `city_code`、`track_type` 使用存储值精确匹配；空值不过滤对应字段，两个条件可组合。筛选条件必须下沉到 Repository 查询并参与游标分页，不能在 Service 取回一页后再过滤；MySQL / Mongo 搜索查询索引分别为 `idx_track_search_city`、`idx_track_search_type`，运动类型筛选不对历史中文值做转换。
 - 轨迹 `locate_addr` 最大长度为 255 字符，对应 `track_records.locate_addr VARCHAR(255)`；修改该字段长度时同步更新 `mysql.sql`、`internal/repository/mysql.go` 与 `docs/api/track.md`。
 - 轨迹 `source_tag` 是来源/运营标签，对应 `track_records.source_tag VARCHAR(64)`；业务接口只允许空字符串或 `manual_seed`（人工录入冷启动轨迹），更新接口仅在原值为空时补写，普通列表摘要不返回该字段；修改该字段口径时同步更新 `internal/service/track_service.go`、`mysql.sql` 与 `docs/api/track.md`。
-- 轨迹 `description` 是客户端依据完整 GPS 轨迹生成的默认路线说明，存于 MySQL `track_records.route_description` / Mongo `description`，详情与创建/更新响应下发。`description_source` 区分 `auto/manual`，`description_rule_version` 记录生成规则版本；存量缺失元数据按 `auto/v0`，当前 Android 生成版本为 1。上传只允许自动来源升级规则版本；DevMode 历史补齐查询空说明或版本落后的自动说明，完成时对说明、来源、规则版本和 GPS 相关事实做 CAS，绝不覆盖 manual。投稿允许编辑的文案独立存于投稿记录。字段变更同步 `internal/models/track.go`、MySQL 建表/迁移、三种仓储、`internal/service/track_service.go` 与 `docs/api/track.md`。
+- 轨迹 `description` 为服务端默认路线说明，普通 Android 创建/更新不再携带、本地不生成兜底；存于 MySQL `track_records.route_description` / Mongo `description`，详情与创建/更新响应下发。AI 综合运动数据、位置/城市、labels、景区和可信投稿后台生成，更新条件见 `docs/track-narrative.md`。`description_source` 区分 `auto/manual/ai`，人工内容始终保护；`description_rule_version` 保留兼容旧客户端 auto 规则（最高1），不代表服务端 AI 规则版本。旧版说明补齐 API 保留兼容，当前 Android 已移除该入口及算法。投稿可编辑说明独立保存在投稿记录，不覆盖默认说明；尚未定义新的投稿辅助生成流程。
 - 首页地图模式的轨迹空间索引由 `track_map_index` 后台任务异步构建：轨迹完成接口只写入 `track_map_index_jobs`，不得在请求主链路同步下载 OSS raw track 或解析轨迹点；后台下载 raw track 必须通过 `OSS_INTERNAL_ENDPOINT` 内网域名，未配置时失败重试且不回退公网；raw track 解析支持 JSON / GeoJSON / KML / KMZ。路线组由 `track_route_group` 离线任务基于 `track_geo_indexes` 聚合生成并写入 `track_route_groups.area_id`，默认每天 04:00 执行。
 - 地图查询 `/track-map/view` 与 `/track-map/groups` 支持显式 `track_type=all`，由 `TrackMapService.buildFilter` 转为空类型过滤；未传/空值继续默认 hiking，兼容旧客户端。all 仅为查询哨兵，禁止写入轨迹/地图索引或跨类型合并 RouteGroup；城市/区域气泡汇总多种类型且返回空 track_type，具体路线组保留真实类型。MySQL 区域 SQL 必须按 area_id/网格合并，不再额外按 track_type 拆同 ID 气泡，与 Mongo/内存保持一致；协议见 `docs/api/track-map.md`、`track_map.md`。
 - 地图区县兜底来自 `internal/maparea/districts.json` 与 `catalog.json`，覆盖 DataV 全国索引的末级行政区域（区县优先，无下辖区县的城市及台湾省级边界兜底）；同 ID 人工覆盖保留生成 geometry。通过 `cmd/update-map-districts` 批量生成，`districts.manifest.json` 记录索引/边界来源摘要与覆盖清单，缺边界或删除既有 ID 时生成失败；数据更新后由 `track_route_group` 重聚合更新存量归属。`track_place` 后台任务默认每分钟扫描存量/新增空间索引，用高德普通逆地理编码AOI识别景区，不依赖高阶边界权限；准入类型放宽为风景名胜/公园（11xxxx）与自然地名（1904xx 山系/湖泊），环线矩形召回 types=110000|190400；供应商分类归一为景区/公园/山系/湖泊四类，山系/湖泊等开放自然地物边界不稳定，自动识别只进 candidate 候选队列由人工确认，不自动归属；规则 v3 的5个等距样本至少2个命中同一景区，不要求连续，最高票并列不强选；源未变的旧 matched 保留。无采样主归属且无并列时，track_place_ring.go / track_place_search.go 从完整 GPS 提取近闭合子路径并用普通矩形搜索分页召回景点，再判断 POI 是否在圈内；子路径长度至少100米，闭合点距离不超过子路径长度15%（下限25米、上限150米）。父子候选合并后唯一才自动归属；围住多个独立景点时保存为 candidate，仅进入后台确认队列，不下发客户端主景点；超过100候选时不强选。地图聚合 place_match_method 改为 track_relation。开启后旧手工景区矩形不再参与自动归属。Google适配器仅建立附近地点关联，不将viewport或邻近结果当成真实边界；需要独立服务端Key及适用的内容暂存配置，默认关闭Google内容持久化。
@@ -153,7 +153,7 @@
 
 - `internal/{models,repository,service,handler}/permission_snapshot.go` 负责 JWT 账号 + 安装实例全量快照；启动时按用户仓储选择 MySQL/Mongo/内存，初始化失败只禁用快照接口，不静默转内存。表/集合为 `user_permission_snapshots`，按 sequence 单调替换，收到时间由服务端生成；未知权限键、分类、状态必须兼容。协议见 `docs/api/permission-snapshots.md`。
 
-- AI 路线说明自动任务仅在持久仓储、预览缓存、Moonshot key 与 scheduler 就绪时启用；首次水位排除未变更历史记录。复用现有索引和一张方图，不重复解析 KMZ；输入摘要去重、持久缓存、分布式租约和每日预算，条件更新保护人工说明/形象。`description_source=ai` 不进入客户端 auto 补齐。
+- AI 路线说明自动任务仅在持久仓储、预览缓存、Moonshot key 与 scheduler 就绪时启用；首次水位排除未变更历史记录。复用现有索引和一张方图，不重复解析 KMZ；输入摘要去重、持久缓存、分布式租约和每日预算，条件更新保护人工说明/形象。`description_source=ai` 不进入旧客户端 auto 补齐。说明规则纳入 labels 的语义变化，v5使用第一人称和数据提炼的定性感受、不列运动数字；AI 自己写回的图案排除触发指纹，人工图案与清空参与指纹且约束说明；历史轨迹首次只记事实基线，后续有事实变化才生成，详见 `docs/track-narrative.md`。
 
 
 ## 景区 A 级与标签文案
@@ -176,3 +176,5 @@
 ## 搜索路线里程
 
 搜索列表的min_distance_m（含）/max_distance_m（不含）由handler解析、service验证，在MySQL/Mongo/memory搜索和总数统计前使用相同过滤，保持原游标排序。启用范围时排除未知或非正/非有限里程，未传时保持旧行为。GET /track/search/options属于业务JWT只读接口，返回version=1与服务端维护的各类型分段；客户端不在旧接口上伪造筛选。不新增schema，不改变发现页/象形轨迹/地图查询，完整协议见docs/api/track.md搜索章节。
+
+- 后台单条路线说明入口 `track_description_admin.go` / `kimi_track_description.go`：复用 narrative 租约、预算与预览，显式联网检索后只返回独立候选及来源/source_version，不修改原说明、图案或触发历史批处理；候选区“一键代入并保存”调用独立PUT与三仓储CAS，只保存说明并标记manual/v0，其他表单草稿不提交。自动开关只影响巡检，手动入口在配置就绪时保留。完整协议见 `docs/api/admin-tracks.md`。
