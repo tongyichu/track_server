@@ -189,7 +189,7 @@
       root.append(metric('任务数', n(data.tasks), n(data.success) + ' 成功 · ' + n(data.failed) + ' 失败'), metric('请求次数', n(data.requests), '包含联网搜索与生成'), metric('消耗 Token', data.usage_known ? n(data.input_tokens + data.output_tokens) : '暂无记录', data.usage_known ? '已返回的用量' : '等待模型返回用量'), metric('预估费用', data.cost_known ? '¥' + amount(data.estimated_cny) : '暂无估算', data.cost_known ? '仅含已知费用' : '可在设置中配置单价'));
       $('statHint').textContent = $('period').selectedOptions[0].textContent;
       renderBreakdown(data);
-      (data.models || []).forEach(row => addModel(row.key.split(' / ').slice(1).join(' / '))); if ($('usageDetails').open) drawCharts(data); }
+      (data.models || []).forEach(row => addModel(row.key.split(' / ').slice(1).join(' / '))); drawCharts(data); }
 
     catch (error) { if (error.name !== 'AbortError') $('statHint').textContent = '统计读取失败，请点击查询重试'; }
     finally {if(controllers.statistics===ctrl)statisticsLoading=false;}
@@ -201,7 +201,7 @@
   }
   function addModel(value) { if (value && !Array.from($('model').options).some(option => option.value === value)) { const option = node('option', value); option.value = value; $('model').append(option); } }
   async function drawCharts(data) {
-    try { const ec = await AdminAssets.loadCharts(); if (statistics !== data || !$('usageDetails').open) return; ['trend', 'featuresChart', 'modelsChart'].forEach(id => { if (!charts.has(id)) charts.set(id, ec.init($(id))); });
+    try { const ec = await AdminAssets.loadCharts(); if (statistics !== data) return; ['trend', 'featuresChart', 'modelsChart'].forEach(id => { if (!charts.has(id)) charts.set(id, ec.init($(id))); });
       const days = data.days || []; const trend = AdminChartStyle.bars(days.map(row => ({ name: row.key, value: row.tasks })), data.tasks, { unit: '项' }); if (days.length > 10) trend.dataZoom = [{ type: 'inside', yAxisIndex: 0, start: Math.max(0, 100 - 1000 / days.length), end: 100 }]; charts.get('trend').setOption(trend, true);
       const features = (data.features || []).map(row => ({ name: feature(row.key), value: row.tasks })); charts.get('featuresChart').setOption(AdminChartStyle.ring(features, data.tasks, '任务总数', '项'), true); AdminChartStyle.legend($('featuresLegend'), features);
       const models = (data.models || []).map(row => ({ name: row.key, value: row.input_tokens + row.output_tokens })); charts.get('modelsChart').setOption(AdminChartStyle.bars(models, data.input_tokens + data.output_tokens, { unit: 'Token', labelWidth: 150 }), true);
@@ -275,7 +275,6 @@
   $('period').addEventListener('change', () => { setPeriod(); refresh(true); }); ['from', 'to'].forEach(id => $(id).addEventListener('change', () => { $('period').value = 'custom'; setPeriod(); refresh(true); })); ['feature', 'provider', 'model', 'mode', 'status', 'adoption'].forEach(id => $(id).addEventListener('change', () => { updateFilterSummary(); refresh(true); })); $('q').addEventListener('keydown', event => { if (event.key === 'Enter') refresh(true); }); $('refresh').addEventListener('click', () => refresh(true)); $('prev').addEventListener('click', () => { cursor = history.pop() || ''; page--; loadTasks(); }); $('next').addEventListener('click', () => { if (!nextCursor) return; history.push(cursor); cursor = nextCursor; page++; loadTasks(); }); $('moreActive').addEventListener('click', () => loadActive(true));
   $('reloadSettings').addEventListener('click', async () => { if (busySettings) return; if ((policyDirty || pricesDirty) && !await AdminUI.confirm({title:'重新载入配置',message:'将放弃尚未保存的预算和价格修改，读取服务端最新配置。'})) return; policyDirty=false; pricesDirty=false; await loadSettings(); });
   $('clearFilters').addEventListener('click', () => { ['provider', 'mode', 'status', 'adoption'].forEach(id => { $(id).value = ''; }); updateFilterSummary(); refresh(true); });
-  $('usageDetails').addEventListener('toggle', () => { if ($('usageDetails').open && statistics) drawCharts(statistics); });
   $('refreshQuota').addEventListener('click',()=>loadQuotas(true));
   let refreshTicks=0;
   const timer = setInterval(() => { if (document.hidden || !$('autoRefresh').checked) return; loadActive(false); loadQuotas(false); if(++refreshTicks%3===0){if(!statisticsLoading)loadStatistics();if(!tasksLoading)loadTasks();} }, 5000);
