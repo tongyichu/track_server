@@ -741,6 +741,9 @@ func main() {
 		if trackPlaceSvc.Enabled() {
 			schedulerJobs = append(schedulerJobs, jobs.NewTrackPlace(trackPlaceSvc, cfg.TrackPlaceCron))
 		}
+		if scenicSpotCatalogSvc.PhotoSyncEnabled() {
+			schedulerJobs = append(schedulerJobs, jobs.NewScenicPhotos(scenicSpotCatalogSvc))
+		}
 		if analyticsSvc != nil && cfg.AnalyticsEnabled {
 			schedulerJobs = append(schedulerJobs, jobs.NewAnalyticsSync(analyticsSvc, cfg.AnalyticsSyncCron))
 		}

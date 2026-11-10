@@ -202,3 +202,7 @@ DevMode 客户端经业务 JWT 调用 `/track/preview-backfill/list`、`/:track_
 
 ### 动态纠错配置
 `internal/service/feedback_correction.go` 提供服务端默认选项、配置校验和提交快照；业务 `GET /feedback/correction-options` 仅下发启用项，后台 `/admin/api/feedback-correction-config` 全量读取/按 version 条件保存。`FeedbackRepository.GetCorrectionConfig/SaveCorrectionConfig` 在 `internal/repository/feedback_correction.go` 实现三种仓储，MySQL 启动补建 `feedback_correction_config` 与 `user_feedbacks.correction_json`。客户端提交稳定 option ID 和 track ID，名称与真实轨迹标题由服务端读取并保存快照；改名/停用不能改写历史反馈，停用项提交返回 409。仅配置不存在时使用服务端默认值，全停用不能恢复默认；客户端不得硬编码业务选项。协议见 `docs/api/feedback.md`，后台入口见 `internal/admin/AGENTS.md`。
+
+## 景点图片后台同步
+
+启动时在持久景点仓储与地点服务可用的情况下注册scenic_photos（每分钟），由ScenicSpotCatalogService.SyncPhotosOnce轮转补齐新景点及存量缺图，将供应商图片下载压缩到本站，再通过既有景点版本CAS更新照片。任务游标/逐景点租约/负缓存与退避使用现有TrackPlaceRepository；MySQL、Mongo和内存仓储接口不变，内存降级不启动同步。详情、发现列表和标签读取不调用供应商、下载图片或核验来源ID；图片鉴权沿用原静态资源入口。详细边界见[景点图片独立巡检](track-place-discovery.md#景点图片独立巡检)。

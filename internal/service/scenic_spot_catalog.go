@@ -159,6 +159,7 @@ func (s *ScenicSpotCatalogService) SavePhotos(ctx context.Context, operator, id 
 	}
 	v := *old
 	v.Photos = append([]models.ScenicSpotPhoto(nil), photos...)
+	v.PhotosEdited = true
 	v.Version++
 	v.ManualEdited = true
 	v.UpdatedAt, v.UpdatedBy = time.Now(), operator
@@ -350,6 +351,9 @@ func (s *ScenicSpotCatalogService) BackfillProviderContent(ctx context.Context, 
 		}
 		var incomingPhotos []models.ScenicSpotPhoto
 		for _, photo := range preview.Photos {
+			if spot.PhotosEdited {
+				break
+			}
 			if len(spot.Photos)+len(incomingPhotos) >= 30 || strings.TrimSpace(photo.URL) == "" {
 				break
 			}
@@ -455,6 +459,7 @@ func (s *ScenicSpotCatalogService) Create(ctx context.Context, operator string, 
 		return nil, err
 	}
 	v.Photos = photos
+	v.PhotosEdited = len(photos) > 0
 	v.Status = models.ScenicSpotActive
 	v.ManualEdited = true
 	v.Version = 1
@@ -511,6 +516,7 @@ func (s *ScenicSpotCatalogService) Update(ctx context.Context, operator, id stri
 	v.Status = old.Status
 	v.ManualEdited = true
 	v.MergedInto = old.MergedInto
+	v.PhotosEdited = old.PhotosEdited || !sameScenicPhotoList(v.Photos, old.Photos)
 	v.CreatedAt = old.CreatedAt
 	v.CreatedBy = old.CreatedBy
 	v.Version = expected + 1
@@ -1281,6 +1287,9 @@ func (s *ScenicSpotCatalogService) PrimarySpots(ctx context.Context, trackIDs []
 		}
 		item := &models.TrackPrimaryScenicSpot{ID: spot.ID, Name: spot.Name, ScenicGrade: spot.ScenicGrade, Category: spot.Category, Description: spot.Description, Address: spot.Address, Sources: spot.Sources}
 		for _, photo := range spot.Photos {
+			if !ownedScenicPhotoURL(photo.URL) {
+				continue
+			}
 			item.Photos = append(item.Photos, models.TrackScenicSpotPhoto{URL: photo.URL, Title: photo.Caption, Author: photo.Attribution, AuthorURL: photo.AttributionURL, SourceURL: photo.SourceURL})
 		}
 		for _, source := range spot.Sources {

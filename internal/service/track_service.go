@@ -754,13 +754,7 @@ func (s *TrackService) GetTrackDetail(ctx context.Context, trackID string) (*mod
 			}
 		}
 	}
-	if s.scenicCatalog != nil {
-		_ = s.scenicCatalog.RefreshExpiredSources(ctx, track.ID)
-	}
 	s.fillTrackPrimaryScenicSpot(ctx, track)
-	if s.places != nil {
-		s.places.ScenicSpotDetails(ctx, track.PrimaryScenicSpot)
-	}
 	track.Labels = buildTrackLabels(track.ShapeLabel, track.TrackType, track.PrimaryScenicSpot, track.Submission != nil && track.Submission.Status == models.TrackSubmissionStatusApproved)
 	track.PreviewImages = trackPreviewURLs(track.ID, track.PreviewImages)
 	return track, nil

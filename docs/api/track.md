@@ -6,8 +6,8 @@
 
 以下接口均需业务 JWT，使用标准 `{ "code": 0, "data": ... }` 响应。
 
-- `GET /api/v1/track/discover/scenic-spots?city_code=CN000118&limit=30&cursor=<next_cursor>`：返回当前城市状态为 `active` 的景点，包含轨迹关联到该城市的景点；不传城市时返回全部。按关联的公开、已完成且有原始文件的轨迹数降序排列，同数时按景点 ID 升序排列。`items` 每项含 `id`、`name`、`cover_url`，可选 `description`、`source_url`；景点详情页用这些字段展示封面和介绍。`cover_url` 优先采用景点 `photos[0].url`，缺失时回退景点封面。`limit` 默认 20、最大 50；`has_more` 与不透明的 `next_cursor` 供横向列表继续加载，游标包含排序锚点。
-- 景点列表新增可选 `photos` 数组，按目录原顺序返回全部非空图片：`[{"url":"/api/v1/static/scenic_spots/<id>/photo.jpg","title":"照片说明","author":"作者","author_url":"https://example.com/author","source_url":"https://example.com/source"}]`；无图返回 `[]`。字段投影与 `primary_scenic_spot.photos` 一致，自有图片携带业务 JWT，外部图片沿用 source_url 作为 Referer。只读取现有目录，不调用地图供应商，不改变封面选择及分页。Android 详情取前 3 张每 3 秒叠化，相册每行 3 张展示全部；旧服务端未提供 photos 或空数组时回退 cover_url。
+- `GET /api/v1/track/discover/scenic-spots?city_code=CN000118&limit=30&cursor=<next_cursor>`：返回当前城市状态为 `active` 的景点，包含轨迹关联到该城市的景点；不传城市时返回全部。按关联的公开、已完成且有原始文件的轨迹数降序排列，同数时按景点 ID 升序排列。`items` 每项含 `id`、`name`、`cover_url`，可选 `description`、`source_url`；景点详情页用这些字段展示封面和介绍。`cover_url` 优先采用第一张本站图片，缺失时兼容未人工清空的本站封面；尚未同步的供应商外链不作为封面。`limit` 默认 20、最大 50；`has_more` 与不透明的 `next_cursor` 供横向列表继续加载，游标包含排序锚点。
+- 景点列表新增可选 `photos` 数组，按目录原顺序返回已同步到本站的图片：`[{"url":"/api/v1/static/scenic_spots/<id>/photo.jpg","title":"照片说明","author":"作者","author_url":"https://example.com/author","source_url":"https://example.com/source"}]`；无图返回 `[]`。字段投影与 `primary_scenic_spot.photos` 一致，图片携带业务 JWT；source_url仅保留来源说明。景点列表、景点详情和轨迹详情统一只读目录的本站图片，不临时请求供应商或下载图片，未同步时返回空相册/占位，不返回外链兜底；后台任务独立补齐，刷新后取得新图。分页规则不变。Android 详情取前 3 张每 3 秒叠化，相册每行 3 张展示全部；旧服务端未提供 photos 或空数组时回退 cover_url。
 - 景点列表每项及轨迹详情/摘要的 `primary_scenic_spot` 可选返回 `scenic_grade`，值为 `"1A"`、`"2A"`、`"3A"`、`"4A"`、`"5A"`。未知或人工清空时省略，客户端应隐藏等级，不能将其解释为“未评级”。等级读取已保存目录，不增加供应商请求；旧客户端可忽略，旧数据无需迁移。
 - `GET /api/v1/track/discover/scenic-spots/:spot_id/tracks?limit=20&cursor=<next_cursor>`：返回状态为 `active` 的景点真实关联的公开、已完成且有原始文件的轨迹摘要；归档、合并或不存在返回 404。按关联轨迹 ID 排序，`next_cursor` 是已消费的关联轨迹 ID。首页（无 `cursor`）返回 `total_count`，为该景点公开可见轨迹总数，供详情页“相关轨迹(N)”标题展示；翻页响应不再重复返回。
 - `GET /api/v1/track/discover/routes?city_code=CN000118&label_type=featured&limit=20&cursor=<next_cursor>`：当前城市的精品/景区/图形路线。`city_code`必填（兼容稳定region_id与既有城市编码），`label_type`必填且仅支持 `featured`、`scenic_spot`、`shape`；`track_type`可选，省略表示全部。缺城市或标签非法400，limit默认20、最大50。只返回公开、已完成且有原始轨迹文件的摘要，按 `(start_time DESC,id DESC)` 游标分页，响应 `items/has_more/next_cursor`，不返回未筛选的总数。
@@ -1197,3 +1197,9 @@ GET /track/activity/records?track_type=hiking，业务JWT、仅本人、响应no
 MySQL/Mongo/memory同步实现PersonalRecordsRepository，每指标在存储侧选各原始类型最大值及最新并列项，再一次FindByIDs批量取少量获纪录轨迹，service归一类型后比较。复用toSummaries和trackPreviewURLs构造鉴权预览路由，不调用BuildTrackSummaries中的旧资源缓存下载，不拉取GPS、不生成地图、不逐项补详情，无新表字段。
 
 Android将云端纪录与当前账号已完成且未上传本机轨迹按同一类型/指标/并列规则比较，已上传本地副本不重复参与。客户端仅展示distance/elevation/duration，忽略steps纪录；格子图同样移除运动步数，采集、存储、详情及接口兼容字段保持不变。页面类型筛选统一作用于纪录卡，全部类型跨组取各指标最高纪录，不另加筛选。纪录纵向每行一项，左侧指标和大数值/小单位，中间轨迹title（最多两行）及日期，右侧4:3静态轨迹预览；不展示城市或运动类型，不设单项背景框，行间细分隔线、末项无分隔线。空title回退未命名路线，不新增地区目录读取或定位请求。复用日夜预览和本机截图，不读取GPS或生成地图，缺图用占位图。时长按小时/分钟（不足一分钟按秒）显示。适用但缺失指标显示“—”且不可点击，不适用指标隐藏，整张无纪录时显示空态；真实纪录整行进入详情。接口和其余指标统计规则不变。首次失败或旧服务端404明确仅有本机未上传纪录，已有成功结果时保留并提示刷新失败，不使用示例数据伪装完整历史。
+
+## 景点图片后台同步
+
+景点照片由scenic_photos定时任务从既有有效来源取回并保存到本站，列表与轨迹详情均不触发外部详情/图片或来源ID核验。照片仍以原photos结构返回，url为/api/v1/static/scenic_spots/下的受JWT保护地址，保留作者及来源信息；描述只取已保存目录资料。没有本站图时保持缺图，不把供应商URL当作已同步图片。存量高德/Google外链由后台逐批迁移，新景点自动进入同一轮转，不依赖打开后台管理页。
+
+后台管理新增服务端维护的photos_edited标记，独立图片保存及实际改变相册的完整保存会设置，主动删图、清空、调整顺序不被自动补图覆盖；旧记录缺该标记按未标记解释，不追溯猜测历史人工意图。该标记不进入App响应，修改文字且空相册的null/[]差异不会误标记。存储仍为既有景点JSON，MySQL/Mongo/内存共用相同业务CAS，无新表和接口。

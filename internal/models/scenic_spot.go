@@ -25,6 +25,7 @@ type ScenicSpot struct {
 	Address                   string             `json:"address,omitempty" bson:"address,omitempty"`
 	CoverURL                  string             `json:"cover_url,omitempty" bson:"cover_url,omitempty"`
 	Photos                    []ScenicSpotPhoto  `json:"photos,omitempty" bson:"photos,omitempty"`
+	PhotosEdited              bool               `json:"photos_edited,omitempty" bson:"photos_edited,omitempty"`
 	Sources                   []ScenicSpotSource `json:"sources,omitempty" bson:"sources,omitempty"`
 	Status                    string             `json:"status" bson:"status"`
 	ManualEdited              bool               `json:"manual_edited,omitempty" bson:"manual_edited,omitempty"`

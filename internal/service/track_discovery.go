@@ -203,21 +203,22 @@ func (s *TrackService) DiscoverSpots(ctx context.Context, cityCode, cursor strin
 	end := min(start+limit, len(ranked))
 	for _, item := range ranked[start:end] {
 		spot := item.spot
-		cover := spot.CoverURL
-		source := ""
-		if len(spot.Photos) > 0 && strings.TrimSpace(spot.Photos[0].URL) != "" {
-			cover = spot.Photos[0].URL
-			source = spot.Photos[0].SourceURL
-		}
+		cover, source := "", ""
 		photos := make([]models.TrackScenicSpotPhoto, 0, len(spot.Photos))
 		for _, photo := range spot.Photos {
-			if strings.TrimSpace(photo.URL) == "" {
+			if !ownedScenicPhotoURL(photo.URL) {
 				continue
+			}
+			if cover == "" {
+				cover, source = photo.URL, photo.SourceURL
 			}
 			photos = append(photos, models.TrackScenicSpotPhoto{
 				URL: photo.URL, Title: photo.Caption, Author: photo.Attribution,
 				AuthorURL: photo.AttributionURL, SourceURL: photo.SourceURL,
 			})
+		}
+		if cover == "" && !spot.PhotosEdited && ownedScenicPhotoURL(spot.CoverURL) {
+			cover = spot.CoverURL
 		}
 		page.Items = append(page.Items, DiscoverSpot{ID: spot.ID, Name: spot.Name, ScenicGrade: spot.ScenicGrade, Description: spot.Description, CoverURL: cover, SourceURL: source, Photos: photos})
 	}

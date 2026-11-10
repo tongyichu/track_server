@@ -374,56 +374,6 @@ func safePlaceCode(code string) string {
 	return code
 }
 
-// ScenicSpotDetails reads provider content only for a track detail response. Provider
-// descriptions, photo references and media URLs are never persisted.
-func (s *TrackPlaceService) ScenicSpotDetails(ctx context.Context, spot *models.TrackPrimaryScenicSpot) {
-	if spot == nil {
-		return
-	}
-	if len(spot.Sources) > 0 {
-		for _, source := range spot.Sources {
-			if source.Status != "active" || source.ProviderID == "" {
-				continue
-			}
-			if spot.Address != "" && spot.Description != "" && len(spot.Photos) >= 3 {
-				break
-			}
-			candidate := &models.TrackPrimaryScenicSpot{TrackID: spot.TrackID, ID: spot.ID, Provider: source.Provider, ProviderID: source.ProviderID, Category: spot.Category}
-			if source.Provider == "amap" {
-				s.amapScenicDetails(ctx, candidate)
-			} else if source.Provider == "google" {
-				s.googleScenicDetails(ctx, candidate)
-			}
-			if spot.Address == "" {
-				spot.Address = candidate.Address
-			}
-			if spot.Description == "" {
-				spot.Description = candidate.Description
-			}
-			if spot.Category == "" {
-				spot.Category = candidate.Category
-			}
-			for _, photo := range candidate.Photos {
-				if len(spot.Photos) >= 3 {
-					break
-				}
-				spot.Photos = append(spot.Photos, photo)
-			}
-		}
-		return
-	}
-	if spot.ProviderID == "" || spot.Provider == "" {
-		return
-	}
-	if spot.Provider == "amap" {
-		s.amapScenicDetails(ctx, spot)
-		return
-	}
-	if spot.Provider == "google" {
-		s.googleScenicDetails(ctx, spot)
-	}
-}
-
 func (s *TrackPlaceService) reserveScenicCall(ctx context.Context, provider string) bool {
 	budget := s.cfg.AMapDailyBudget
 	if provider == "google" {

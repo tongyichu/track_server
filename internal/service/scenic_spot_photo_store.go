@@ -13,8 +13,10 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -28,7 +30,7 @@ import (
 
 const scenicPhotoMaxBytes = 8 << 20
 
-// Only explicit catalog writes/backfills use this store; reads never fetch media.
+// Catalog writes and background synchronization use this store; reads never fetch media.
 type ScenicSpotPhotoStore struct {
 	root   string
 	client *http.Client
@@ -48,19 +50,41 @@ func NewScenicSpotPhotoStore(staticRoot string) *ScenicSpotPhotoStore {
 	}
 }
 
-func allowedScenicPhotoURL(raw string) bool {
-	canonical := safeAMapPhotoURL(raw)
-	if canonical == "" || !strings.HasPrefix(raw, "https://") {
-		return false
+func ownedScenicPhotoURL(raw string) bool {
+	u, err := url.Parse(raw)
+	return err == nil && u.Scheme == "" && u.Host == "" && strings.HasPrefix(path.Clean(u.Path), "/api/v1/static/scenic_spots/") && u.Path == path.Clean(u.Path)
+}
+
+func safeScenicPhotoURL(raw string) string {
+	if canonical := safeAMapPhotoURL(raw); canonical != "" {
+		u, err := url.Parse(canonical)
+		if err == nil && (u.Port() == "" || u.Port() == "443") {
+			return canonical
+		}
 	}
-	req, err := http.NewRequest(http.MethodGet, canonical, nil)
-	return err == nil && (req.URL.Port() == "" || req.URL.Port() == "443")
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || u.Scheme != "https" || u.User != nil || (u.Port() != "" && u.Port() != "443") {
+		return ""
+	}
+	host := strings.ToLower(u.Hostname())
+	if host != "googleusercontent.com" && !strings.HasSuffix(host, ".googleusercontent.com") {
+		return ""
+	}
+	return u.String()
+}
+
+func allowedScenicPhotoURL(raw string) bool {
+	return strings.HasPrefix(raw, "https://") && safeScenicPhotoURL(raw) != ""
 }
 
 func scenicPhotoCachePath(source string) string {
 	// Include the encoding policy in the key so future policy changes cannot reuse old files.
 	sum := sha256.Sum256([]byte("webp-q75-landscape1024-portrait720-v1\n" + source))
-	return filepath.Join("scenic_spots", "amap", hex.EncodeToString(sum[:])+".webp")
+	provider := "amap"
+	if u, err := url.Parse(source); err == nil && (u.Hostname() == "googleusercontent.com" || strings.HasSuffix(u.Hostname(), ".googleusercontent.com")) {
+		provider = "google"
+	}
+	return filepath.Join("scenic_spots", provider, hex.EncodeToString(sum[:])+".webp")
 }
 
 func scenicPhotoCachedURL(source string) string {
@@ -83,7 +107,7 @@ func validScenicPhotoFile(name string) bool {
 
 func (s *ScenicSpotPhotoStore) cache(ctx context.Context, source string) (string, error) {
 	if !allowedScenicPhotoURL(source) {
-		return "", errors.New("仅支持下载高德景点图片")
+		return "", errors.New("仅支持下载已接入地图供应商的景点图片")
 	}
 	dst := filepath.Join(s.root, scenicPhotoCachePath(source))
 	url := scenicPhotoCachedURL(source)
@@ -129,19 +153,19 @@ func (s *ScenicSpotPhotoStore) download(ctx context.Context, source, dst string)
 	}
 	response, err := s.client.Do(req)
 	if err != nil {
-		return errors.New("高德景点图片下载失败或超时")
+		return errors.New("景点图片下载失败或超时")
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK || response.ContentLength > scenicPhotoMaxBytes {
-		return errors.New("高德景点图片下载失败或超过8MiB")
+		return errors.New("景点图片下载失败或超过8MiB")
 	}
 	raw, err := io.ReadAll(io.LimitReader(response.Body, scenicPhotoMaxBytes+1))
 	if err != nil || len(raw) == 0 || len(raw) > scenicPhotoMaxBytes {
-		return errors.New("高德景点图片内容无效或超过8MiB")
+		return errors.New("景点图片内容无效或超过8MiB")
 	}
 	config, format, err := image.DecodeConfig(bytes.NewReader(raw))
 	if err != nil || (format != "jpeg" && format != "png" && format != "webp") || config.Width <= 0 || config.Height <= 0 || config.Width > 12000 || config.Height > 12000 || int64(config.Width)*int64(config.Height) > 24000000 {
-		return errors.New("高德景点图片格式或尺寸无效")
+		return errors.New("景点图片格式或尺寸无效")
 	}
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return errors.New("景点图片目录创建失败")
@@ -206,7 +230,7 @@ func (s *ScenicSpotPhotoStore) localize(ctx context.Context, photos []models.Sce
 			defer wg.Done()
 			for index := range jobs {
 				photo := &result[index]
-				source := safeAMapPhotoURL(photo.URL)
+				source := safeScenicPhotoURL(photo.URL)
 				if source == "" {
 					continue
 				}
@@ -237,7 +261,7 @@ func (s *ScenicSpotPhotoStore) localize(ctx context.Context, photos []models.Sce
 func (s *ScenicSpotCatalogService) localizePhotosForWrite(ctx context.Context, photos []models.ScenicSpotPhoto) ([]models.ScenicSpotPhoto, error) {
 	localized, _, failed := s.photoStore.localize(ctx, photos)
 	if failed > 0 {
-		return nil, invalidScenicSpot("高德图片下载压缩失败，请重试；已保存图片未改变")
+		return nil, invalidScenicSpot("供应商图片下载压缩失败，请重试；已保存图片未改变")
 	}
 	return localized, nil
 }
