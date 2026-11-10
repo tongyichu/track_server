@@ -159,7 +159,6 @@ func (s *TrackService) ListLikedTracks(ctx context.Context, userID int64, input 
 		for i, t := range tracks {
 			cacheCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			if s.screenshotCache != nil {
-				summaries[i].TrackScreenshotURL = s.screenshotCache.EnsureCached(cacheCtx, userID, t.ID, t.TrackScreenshotURL)
 				if t.TrackNoMapBgScreenshotURL != "" {
 					summaries[i].TrackNoMapBgScreenshotURL = s.screenshotCache.EnsureCached(cacheCtx, userID, t.ID+"_no_map_bg", t.TrackNoMapBgScreenshotURL)
 				}
@@ -217,7 +216,6 @@ func (s *TrackService) ListLikedTracks(ctx context.Context, userID int64, input 
 			Collected:                 s.Collected,
 			CollectCount:              s.CollectCount,
 			NavigateCount:             s.NavigateCount,
-			TrackScreenshotURL:        s.TrackScreenshotURL,
 			PreviewImages:             s.PreviewImages,
 			TrackNoMapBgScreenshotURL: s.TrackNoMapBgScreenshotURL,
 			RawTrackURL:               s.RawTrackURL,

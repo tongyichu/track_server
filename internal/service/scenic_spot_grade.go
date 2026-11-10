@@ -31,6 +31,13 @@ func normalizeScenicGrade(raw string) string {
 	return string(rune('0'+len(match[2]))) + "A"
 }
 
+func scenicSpotGradeRank(grade string) int {
+	if normalized := normalizeScenicGrade(grade); normalized != "" {
+		return int(normalized[0] - '0')
+	}
+	return 0
+}
+
 func scenicGradeFromKeytag(raw string) string {
 	grade := ""
 	for _, label := range scenicGradeSeparators.Split(raw, -1) {

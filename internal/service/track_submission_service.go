@@ -442,9 +442,6 @@ func (s *TrackSubmissionService) DecorateSummaries(ctx context.Context, summarie
 		item.IsFeatured, item.Title, item.FeaturedDescription = true, sub.Title, sub.Description
 		item.Labels = buildTrackLabels(item.ShapeLabel, item.TrackType, item.PrimaryScenicSpot, true)
 		defaultCoverURL := item.PreviewImages.LandscapeDayURL
-		if defaultCoverURL == "" {
-			defaultCoverURL = item.TrackScreenshotURL
-		}
 		item.FeaturedCoverURL = defaultCoverURL
 		if len(sub.Images) > 0 && sub.Images[0] != nil && s.imageCache != nil {
 			cacheCtx, cancel := context.WithTimeout(ctx, 5*time.Second)

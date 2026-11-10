@@ -92,16 +92,13 @@ func (h *Handler) ListScenicSpots(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 	f.VisibleOnly = f.Status == ""
-	items, total, err := h.scenicSpotSvc.List(ctx, f)
+	page, err := h.scenicSpotSvc.ListRanked(ctx, f)
 	if err != nil {
 		h.scenicSpotServiceError(c, err)
 		return
 	}
-	metadata, err := h.enrichScenicSpotCities(ctx, items)
-	if err != nil {
-		h.scenicSpotServiceError(c, err)
-		return
-	}
+	items := page.Items
+	metadata := scenicSpotCities(items, page.TrackStatistics)
 	type listItem struct {
 		*models.ScenicSpot
 		RelatedTrackCount int64 `json:"related_track_count"`
@@ -109,10 +106,6 @@ func (h *Handler) ListScenicSpots(ctx context.Context, c *app.RequestContext) {
 	listItems := make([]listItem, 0, len(items))
 	for _, spot := range items {
 		listItems = append(listItems, listItem{ScenicSpot: spot, RelatedTrackCount: metadata[spot.ID].TrackCount})
-	}
-	next := ""
-	if len(items) > 0 {
-		next = items[len(items)-1].ID
 	}
 	var responseItems any = listItems
 	if view == "summary" {
@@ -127,7 +120,7 @@ func (h *Handler) ListScenicSpots(ctx context.Context, c *app.RequestContext) {
 		}
 		responseItems = summaries
 	}
-	c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"items": responseItems, "total": total, "next_cursor": next, "has_more": len(items) == f.Limit}})
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"items": responseItems, "total": page.Total, "next_cursor": page.NextCursor, "has_more": page.HasMore}})
 }
 
 type scenicSpotListSummary struct {
@@ -170,6 +163,10 @@ func (h *Handler) enrichScenicSpotCities(ctx context.Context, spots []*models.Sc
 	if err != nil {
 		return nil, err
 	}
+	return scenicSpotCities(spots, statistics), nil
+}
+
+func scenicSpotCities(spots []*models.ScenicSpot, statistics map[string]*repository.ScenicSpotTrackStatistics) map[string]scenicSpotListMetadata {
 	options := config.CityOptions()
 	byCode := make(map[string]config.CityOption, len(options))
 	for _, option := range options {
@@ -225,7 +222,7 @@ func (h *Handler) enrichScenicSpotCities(ctx context.Context, spots []*models.Sc
 		sort.Strings(meta.CityLabels)
 		metadata[spot.ID] = meta
 	}
-	return metadata, nil
+	return metadata
 }
 func (h *Handler) GetScenicSpotStatistics(ctx context.Context, c *app.RequestContext) {
 	if !h.scenicSpotServiceReady(c) {

@@ -407,9 +407,6 @@ func messageTrackView(user int64, id string, t *models.Track) *models.MessageTra
 		v.Available = true
 		v.Title = t.Title
 		v.PreviewURL = t.PreviewImages.LandscapeDayURL
-		if v.PreviewURL == "" {
-			v.PreviewURL = t.TrackScreenshotURL
-		}
 	}
 	return v
 }

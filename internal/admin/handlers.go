@@ -116,6 +116,12 @@ type updateTrackBody struct {
 }
 
 func applyAdminTrackUpdate(track *models.Track, body updateTrackBody) error {
+	if body.StartTime != nil || body.EndTime != nil || body.Distance != nil || body.Duration != nil || body.CaloriesBurned != nil || body.ElevationGain != nil || body.AvgSpeedKmh != nil {
+		return errors.New("轨迹文件中的开始/结束时间、时长、距离、热量、爬升和平均速度为只读数据")
+	}
+	if body.TrackScreenshotURL != nil {
+		return errors.New("旧版截图已停用，请使用 preview_images")
+	}
 	previousDescription := track.Description
 	if body.ShapeLabel != nil {
 		label := strings.TrimSpace(*body.ShapeLabel)
@@ -153,7 +159,7 @@ func applyAdminTrackUpdate(track *models.Track, body updateTrackBody) error {
 		{&track.SourceTag, body.SourceTag, 64, "source_tag"}, {&track.CoordinateSystem, body.CoordinateSystem, 32, "coordinate_system"},
 		{&track.Title, body.Title, 128, "title"}, {&track.Description, body.Description, 4000, "description"},
 		{&track.DescriptionSource, body.DescriptionSource, 16, "description_source"}, {&track.RawTrackURL, body.RawTrackURL, 255, "raw_track_url"},
-		{&track.TrackScreenshotURL, body.TrackScreenshotURL, 255, "track_screenshot_url"}, {&track.TrackNoMapBgScreenshotURL, body.TrackNoMapBgScreenshotURL, 255, "track_no_map_bg_screenshot_url"},
+		{&track.TrackNoMapBgScreenshotURL, body.TrackNoMapBgScreenshotURL, 255, "track_no_map_bg_screenshot_url"},
 	} {
 		if err := setString(field.dst, field.src, field.max, field.name); err != nil {
 			return err
@@ -175,41 +181,6 @@ func applyAdminTrackUpdate(track *models.Track, body updateTrackBody) error {
 		}
 		track.DescriptionRuleVersion = *body.DescriptionRuleVersion
 	}
-	if body.StartTime != nil {
-		value, err := parseAdminTrackTime(*body.StartTime, false)
-		if err != nil {
-			return err
-		}
-		track.StartTime = value
-	}
-	if body.EndTime != nil {
-		value, err := parseAdminTrackTime(*body.EndTime, true)
-		if err != nil {
-			return err
-		}
-		track.EndTime = value
-	}
-	if body.StartTime != nil && track.StartTime.IsZero() {
-		return errors.New("start_time is required")
-	}
-	if body.Distance != nil {
-		if *body.Distance < 0 {
-			return errors.New("distance must be non-negative")
-		}
-		track.Distance = *body.Distance
-	}
-	if body.Duration != nil {
-		track.Duration = *body.Duration
-	}
-	if body.CaloriesBurned != nil {
-		if *body.CaloriesBurned < 0 {
-			return errors.New("calories_burned must be non-negative")
-		}
-		track.CaloriesBurned = *body.CaloriesBurned
-	}
-	if body.ElevationGain != nil {
-		track.ElevationGain = *body.ElevationGain
-	}
 	if body.IsRunning != nil {
 		track.IsRunning = *body.IsRunning
 	}
@@ -218,12 +189,6 @@ func applyAdminTrackUpdate(track *models.Track, body updateTrackBody) error {
 			return errors.New("status must be 1 or 2; use delete action to remove a track")
 		}
 		track.Status = *body.Status
-	}
-	if body.AvgSpeedKmh != nil {
-		if *body.AvgSpeedKmh < 0 {
-			return errors.New("avg_speed_kmh must be non-negative")
-		}
-		track.AvgSpeedKmh = *body.AvgSpeedKmh
 	}
 	if body.PreviewImages != nil {
 		for _, item := range []struct {

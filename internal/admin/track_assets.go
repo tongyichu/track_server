@@ -39,8 +39,6 @@ func (h *Handler) GetTrackAsset(ctx context.Context, c *app.RequestContext) {
 	switch asset {
 	case "raw":
 		source, cache = track.RawTrackURL, h.rawTrackCache
-	case "legacy":
-		source, cache = track.TrackScreenshotURL, h.screenshotCache
 	case "no_map":
 		source, cache = track.TrackNoMapBgScreenshotURL, h.screenshotCache
 	case "square_day", "square_night", "landscape_day", "landscape_night":

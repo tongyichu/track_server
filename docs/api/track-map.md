@@ -70,7 +70,7 @@ GET /api/v1/track-map/view?latitude=22.3000&longitude=114.1700&radius_m=10000&tr
         },
         "cover_track": {
           "track_id": "NO.00000001",
-          "track_screenshot_url": "/api/v1/static/screenshots/NO.00000001.jpg"
+          "preview_images": {}
         }
       }
     ]
@@ -193,7 +193,7 @@ Authorization: Bearer <token>
         },
         "cover_track": {
           "track_id": "NO.00000001",
-          "track_screenshot_url": "/api/v1/static/screenshots/NO.00000001.jpg"
+          "preview_images": {}
         }
       }
     ]
@@ -251,7 +251,6 @@ Authorization: Bearer <token>
         "collected": false,
         "collect_count": 0,
         "navigate_count": 0,
-        "track_screenshot_url": "/api/v1/static/screenshots/NO.00000001.jpg",
         "track_no_map_bg_screenshot_url": "",
         "raw_track_url": "/api/v1/static/raw_tracks/NO.00000001.dat"
       }
@@ -290,3 +289,5 @@ GET /api/v1/track-map/groups/RG.00000001/introduction.html?lang=english&is_dark=
 ```
 
 仅已发布的路线介绍可访问。页面支持 `lang=english` 切换英文、`is_dark=true` 切换夜间模式；未知路线组、未配置介绍或草稿状态均返回 `404`。接口返回的 `introduction_url` 携带内容版本 `v`，用于缓存失效。
+
+地图代表轨迹`cover_track`使用`preview_images`新版四图及可选`cover_url`（投稿封面），不再返回旧版`track_screenshot_url`。

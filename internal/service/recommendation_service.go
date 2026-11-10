@@ -783,7 +783,7 @@ func contentQuality(track *models.Track, approved bool) float64 {
 	if strings.TrimSpace(track.LocateAddr) != "" {
 		value += 0.15
 	}
-	if track.TrackScreenshotURL != "" || track.TrackNoMapBgScreenshotURL != "" {
+	if track.PreviewImages.LandscapeDayURL != "" || track.PreviewImages.SquareDayURL != "" || track.TrackNoMapBgScreenshotURL != "" {
 		value += 0.25
 	}
 	if track.Distance > 0 && track.Duration > 0 {

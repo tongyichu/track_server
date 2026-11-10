@@ -170,17 +170,25 @@ func (s *ScenicSpotCatalogService) SavePhotos(ctx context.Context, operator, id 
 	return &v, nil
 }
 func (s *ScenicSpotCatalogService) List(ctx context.Context, f repository.ScenicSpotListFilter) ([]*models.ScenicSpot, int64, error) {
+	f, err := s.prepareListFilter(ctx, f)
+	if err != nil {
+		return nil, 0, err
+	}
+	return s.spots.ListScenicSpots(ctx, f)
+}
+
+func (s *ScenicSpotCatalogService) prepareListFilter(ctx context.Context, f repository.ScenicSpotListFilter) (repository.ScenicSpotListFilter, error) {
 	if !s.Enabled() {
-		return nil, 0, errors.New("scenic spot catalog unavailable")
+		return f, errors.New("scenic spot catalog unavailable")
 	}
 	if len(f.CityCodes) > 0 {
 		ids, err := repository.ScenicSpotIDsByTrackCities(ctx, s.spots, s.tracks, f.CityCodes)
 		if err != nil {
-			return nil, 0, err
+			return f, err
 		}
 		f.RelatedCitySpotIDs = ids
 	}
-	return s.spots.ListScenicSpots(ctx, f)
+	return f, nil
 }
 
 type ScenicSpotProviderContentBackfillResult struct {

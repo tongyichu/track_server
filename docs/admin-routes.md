@@ -142,4 +142,6 @@ AI 使用完整协议见 [admin-ai](api/admin-ai.md)，运行与计费边界见 
 
 ### 景点列表摘要
 
-`GET /admin/api/scenic-spots?view=summary`沿用景点查看权限，返回目录所需的编号、名称、等级、省市展示名、图片数、人工/自动类型及关联轨迹数，不返回分类、简介、照片URL或来源明细。不传view仍返回原完整条目；查看详情继续用既有单条接口。分页和筛选规则及字段见[省市筛选协议](api/admin-regions.md#景点目录轻量摘要)。
+`GET /admin/api/scenic-spots?view=summary`沿用景点查看权限，返回目录所需的编号、名称、等级、省市展示名、图片数、人工/自动类型及关联轨迹数，不返回分类、简介、照片URL或来源明细。完整列表与摘要均先按景区等级5A→1A→未知、同级关联轨迹数降序、同数ID升序全局排序后分页，计数与按钮口径一致，末页不误报更多。不传view仍返回原完整条目；查看详情继续用既有单条接口。分页和筛选规则及字段见[省市筛选协议](api/admin-regions.md#景点目录轻量摘要)。
+
+共享轨迹编辑弹窗统一分区与只读文件指标见[轨迹详情协议](api/admin-tracks.md#编辑字段与坐标预览)。PUT拒绝start_time/end_time/distance/duration/calories_burned/elevation_gain/avg_speed_kmh及旧版track_screenshot_url，地图浮窗附近结果归入景点识别区。

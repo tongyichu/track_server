@@ -42,19 +42,16 @@
     const canvas = document.createElement('div'); canvas.className = 'admin-track-map-canvas';
     const selection = document.createElement('div'); selection.className = 'admin-track-map-poi'; selection.hidden = true;
     selection.setAttribute('aria-live', 'polite');
-    if (options.canAssignScenicSpot) {
-      const hint = document.createElement('p'); hint.className = 'text-secondary mb-2';
-      hint.textContent = '点击地图景点，在地图下方设置标签；未点中时可从附近景点中选择。';
-      body.appendChild(hint);
-    }
-    body.append(note, canvas, selection); section.append(heading, body);
+    body.append(note, canvas); section.append(heading, body);
+    note.hidden = true;
+    selection.addEventListener('click', event => event.stopPropagation());
 
     const controller = new AbortController();
     let disposed = false, map = null, amap = null, overlays = [], variants = null;
     let selected = options.coordinateSystem || '', changed = false, fitted = false, fitTimer = null, observer = null;
     let currentSpot = options.primaryScenicSpot || null, expectedSpotID = options.scenicSpotID;
     let placeSearch = null, selectionSequence = 0, lookupTimer = null, clickTimer = null, assigning = false;
-    let lastHotspotAt = 0, selectionMarker = null;
+    let lastHotspotAt = 0, selectionMarker = null, infoWindow = null;
 
     function poiPosition(value) {
       if (!value) return null;
@@ -71,14 +68,21 @@
       const code = typeof result === 'string' ? result : result && result.info;
       return typeof code === 'string' && /^[A-Z][A-Z0-9_]{1,79}$/.test(code) && code !== 'OK' ? '（' + code + '）' : '';
     }
-    function beginSelection(title) {
+    function beginSelection(title, position) {
       const sequence = ++selectionSequence;
       clearTimeout(lookupTimer); clearTimeout(clickTimer);
       selection.replaceChildren(); selection.hidden = false;
       const name = document.createElement('strong'); name.textContent = title;
       const detail = document.createElement('p'); detail.className = 'text-secondary';
-      selection.append(name, detail);
+      const close = document.createElement('button'); close.type = 'button'; close.className = 'btn-close'; close.setAttribute('aria-label', '关闭景点浮窗');
+      close.addEventListener('click', () => { selectionSequence++; clearTimeout(lookupTimer); if (infoWindow) infoWindow.close(); });
+      selection.append(close, name, detail);
+      if (position) openSelection(position);
       return { name, detail, current: () => !disposed && sequence === selectionSequence };
+    }
+    function openSelection(position) {
+      if (!infoWindow) infoWindow = new amap.InfoWindow({ isCustom: true, content: selection, offset: new amap.Pixel(0, -16), autoMove: true });
+      infoWindow.open(map, position);
     }
     function markSelection(position, name) {
       if (selectionMarker) map.remove(selectionMarker);
@@ -128,19 +132,20 @@
     async function selectPOI(event) {
       if (disposed || assigning || !event || !map || !options.canAssignScenicSpot) return;
       const id = String(event.id || '').trim();
-      const position = poiPosition(event.lnglat || event.location);
+      let position = poiPosition(event.lnglat || event.location);
       if (!id) { if (position) searchNearby(position); return; }
-      const { name, detail, current } = beginSelection(plainText(event.name) || '地图景点');
+      const { name, detail, current } = beginSelection(plainText(event.name) || '地图景点', position);
       if (position) markSelection(position, name.textContent);
       detail.textContent = '正在读取景点资料…';
       const button = document.createElement('button'); button.type = 'button'; button.className = 'btn btn-sm btn-primary';
       button.dataset.adminWrite = 'tracks'; button.textContent = '设为该轨迹景点标签'; button.disabled = true;
-      selection.appendChild(button);
-      const nearby = document.createElement('button'); nearby.type = 'button'; nearby.className = 'btn btn-sm btn-outline-secondary ms-2'; nearby.textContent = '查看附近景点';
+      const actions = document.createElement('div'); actions.className = 'admin-track-poi-actions'; selection.appendChild(actions);
+      actions.appendChild(button);
+      const nearby = document.createElement('button'); nearby.type = 'button'; nearby.className = 'btn btn-sm btn-outline-secondary'; nearby.textContent = '附近景点';
       nearby.addEventListener('click', () => searchNearby(position));
-      if (position) selection.appendChild(nearby);
-      const retryDetails = document.createElement('button'); retryDetails.type = 'button'; retryDetails.className = 'btn btn-sm btn-outline-secondary ms-2'; retryDetails.textContent = '重试资料'; retryDetails.hidden = true;
-      retryDetails.addEventListener('click', () => selectPOI(event)); selection.appendChild(retryDetails);
+      nearby.disabled = !position; actions.appendChild(nearby);
+      const retryDetails = document.createElement('button'); retryDetails.type = 'button'; retryDetails.className = 'btn btn-sm btn-outline-secondary'; retryDetails.textContent = '重试资料'; retryDetails.hidden = true;
+      retryDetails.addEventListener('click', () => selectPOI(event)); actions.appendChild(retryDetails);
       const failed = message => {
         if (current()) { detail.textContent = message; retryDetails.hidden = false; }
       };
@@ -165,12 +170,11 @@
             failed('景点资料缺少名称或坐标，请选择其他景点。'); return;
           }
           retryDetails.hidden = true;
+          position = point; nearby.disabled = false;
           name.textContent = poi.name;
           markSelection(point, poi.name);
-          detail.textContent = [plainText(poi.type), plainText(poi.address)].filter(Boolean).join(' · ');
-          const scope = document.createElement('p'); scope.className = 'text-secondary';
-          scope.textContent = isCurrentPOI(id) ? '这是当前轨迹的景点标签。' : currentSpot ? '立即替换当前景点标签：' + (currentSpot.name || currentSpot.id) : '设置后立即生效。';
-          selection.insertBefore(scope, button);
+          openSelection(point);
+          detail.textContent = plainText(poi.address) || '暂无地址';
           button.disabled = isCurrentPOI(id);
           if (button.disabled) button.textContent = '当前景点标签';
           button.addEventListener('click', () => assignPOI({ id: id, name: poi.name, category: plainText(poi.type), address: plainText(poi.address), position: point }, button, detail));
@@ -179,39 +183,34 @@
     }
     async function searchNearby(position) {
       if (disposed || assigning || !position || !map || !options.canAssignScenicSpot) return;
-      const { detail, current } = beginSelection('选择附近景点');
-      detail.textContent = '正在查询点击位置附近的景点…';
-      markSelection(position, '点击位置');
-      const retrySearch = document.createElement('button'); retrySearch.type = 'button'; retrySearch.className = 'btn btn-sm btn-outline-secondary'; retrySearch.textContent = '重新查询'; retrySearch.hidden = true;
-      retrySearch.addEventListener('click', () => searchNearby(position)); selection.appendChild(retrySearch);
+      const sequence = ++selectionSequence;
+      const current = () => !disposed && sequence === selectionSequence;
+      clearTimeout(lookupTimer); clearTimeout(clickTimer);
+      if (infoWindow) infoWindow.close();
+      markSelection(position, '附近景点查询位置');
+      const publish = state => {
+        if (current() && typeof options.onNearbyResults === 'function') options.onNearbyResults(Object.assign({
+          retry: () => searchNearby(position),
+          select: poi => { if (!disposed) { section.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); selectPOI(poi); } }
+        }, state));
+      };
+      publish({ loading: true });
       try {
         const PlaceSearch = await loadPlaceSearch(amap);
         if (!current()) return;
         const nearbySearch = new PlaceSearch({ pageSize: 8, pageIndex: 1, extensions: 'all', type: '110000' });
-        lookupTimer = setTimeout(() => {
-          if (current()) { detail.textContent = '附近景点查询超时，请重试。'; retrySearch.hidden = false; }
-        }, 15000);
+        lookupTimer = setTimeout(() => publish({ error: '附近景点查询超时，请重试。' }), 15000);
         nearbySearch.searchNearBy('', position, 1500, (status, result) => {
           if (!current()) return;
           clearTimeout(lookupTimer);
           const pois = status === 'complete' && result && result.poiList && result.poiList.pois;
           const candidates = Array.isArray(pois) ? pois.filter(poi => plainText(poi.id).trim() && plainText(poi.name).trim() && poiPosition(poi.location)) : [];
-          if (!candidates.length) {
-            detail.textContent = status === 'complete' || status === 'no_data' ? '附近未找到景点，请放大地图后重新点选。' : '附近景点查询失败' + lookupFailure(result) + '，请重试。';
-            retrySearch.hidden = false; return;
+          if (!candidates.length && status !== 'complete' && status !== 'no_data') {
+            publish({ error: '附近景点查询失败' + lookupFailure(result) + '，请重试。' }); return;
           }
-          detail.textContent = '请选择目标景点，再点击设置按钮。';
-          const list = document.createElement('div'); list.className = 'admin-track-map-poi-list';
-          candidates.forEach(poi => {
-            const item = document.createElement('button'); item.type = 'button'; item.className = 'btn btn-sm btn-outline-secondary';
-            item.textContent = poi.name; item.title = [plainText(poi.type), plainText(poi.address)].filter(Boolean).join(' · ');
-            item.addEventListener('click', () => selectPOI(poi)); list.appendChild(item);
-          });
-          selection.insertBefore(list, retrySearch);
+          publish({ items: candidates });
         });
-      } catch (error) {
-        if (current()) { detail.textContent = error.message; retrySearch.hidden = false; }
-      }
+      } catch (error) { publish({ error: error.message }); }
     }
     function onHotspotClick(event) {
       lastHotspotAt = Date.now(); clearTimeout(clickTimer);
@@ -239,7 +238,7 @@
       if (disposed) return;
       const source = normalize(selected);
       const points = variants ? variants[source] : (!changed && geo ? geo.simplified_polyline : []);
-      if (variants) note.textContent = points ? (selected ? '按 ' + selected + ' 预览；点击“保存修改”后生效。' : '未设置坐标系，按历史默认 GCJ02 预览。') : '当前历史坐标系不支持预览，请选择 WGS84、GCJ02 或 BD09。';
+      if (variants) { note.textContent = points ? '' : '当前历史坐标系不支持预览，请选择 WGS84、GCJ02 或 BD09。'; note.hidden = !!points; }
       if (!map) return;
       if (overlays.length) map.remove(overlays);
       overlays = [];
@@ -255,7 +254,7 @@
     }
     async function loadVariants() {
       retry.hidden = true;
-      note.textContent = '正在准备坐标系预览…';
+      note.textContent = '正在准备坐标系预览…'; note.hidden = false;
       try {
         const response = await fetch('/admin/api/tracks/' + encodeURIComponent(options.trackID) + '/map-preview', { signal: controller.signal });
         const payload = await response.json();
@@ -266,9 +265,10 @@
       } catch (error) {
         if (disposed) return;
         note.textContent = '坐标系预览加载失败：' + error.message + (changed ? '。' : '；暂显示已有索引。');
-        retry.hidden = false;
+        retry.hidden = false; note.hidden = false;
       }
     }
+    section.setCoordinateControl = function (group) { group.classList.add('admin-track-coordinate'); heading.insertBefore(group, retry); };
     section.setCoordinateSystem = function (value) {
       selected = value; changed = true;
       if (!variants) note.textContent = retry.hidden ? '正在准备所选坐标系预览…' : '预览加载失败，请点击“重试预览”。';
@@ -278,6 +278,7 @@
     section.dispose = function () {
       disposed = true; selectionSequence++; controller.abort(); clearTimeout(fitTimer); clearTimeout(lookupTimer); clearTimeout(clickTimer);
       if (observer) observer.disconnect();
+      if (infoWindow) infoWindow.close();
       if (placeSearch) placeSearch.clear();
       if (map) map.destroy();
     };

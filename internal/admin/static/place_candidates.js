@@ -35,6 +35,30 @@
     let busy = false, sequence = 0;
     const controller = new AbortController();
     let disposed = false;
+    const nearby = document.createElement('div'); nearby.className = 'admin-track-nearby'; nearby.hidden = true; root.appendChild(nearby);
+    root.showNearby = function (state) {
+      if (disposed) return;
+      nearby.replaceChildren(); nearby.hidden = false;
+      const title = document.createElement('h4'); title.textContent = '地图附近景点'; nearby.appendChild(title);
+      if (state.loading || state.error || !(state.items || []).length) {
+        const note = document.createElement('p'); note.className = 'text-secondary';
+        note.textContent = state.loading ? '正在查询附近景点…' : state.error || '附近未找到景点，请换个位置查询。'; nearby.appendChild(note);
+      }
+      (state.items || []).forEach(poi => {
+        const row = document.createElement('div'); row.className = 'admin-track-candidate';
+        const info = document.createElement('div'); info.className = 'admin-track-candidate-info';
+        const name = document.createElement('strong'); name.textContent = poi.name;
+        const address = document.createElement('div'); address.className = 'text-secondary'; address.textContent = typeof poi.address === 'string' && poi.address || '暂无地址';
+        const select = document.createElement('button'); select.type = 'button'; select.className = 'btn btn-sm btn-outline-primary'; select.textContent = '地图点选';
+        select.addEventListener('click', () => { if (!disposed) state.select(poi); });
+        info.append(name, address); row.append(info, select); nearby.appendChild(row);
+      });
+      if (state.error) {
+        const retry = document.createElement('button'); retry.type = 'button'; retry.className = 'btn btn-sm btn-outline-secondary'; retry.textContent = '重新查询';
+        retry.addEventListener('click', () => { if (!disposed) state.retry(); }); nearby.appendChild(retry);
+      }
+      if (state.loading) nearby.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    };
     function fetchData(path, options) { return request(path, Object.assign({}, options, { signal: controller.signal })); }
 
     function setPrimarySpot(spot) {

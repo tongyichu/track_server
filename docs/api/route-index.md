@@ -176,8 +176,8 @@
 | 后台轨迹类型与贡献用户前十（天/周/月） | GET | `/admin/api/tracks/statistics` | 轨迹查看 | [admin-tracks.md](admin-tracks.md#轨迹类型与用户贡献统计) |
 | 后台轨迹坐标系预览 | GET | `/admin/api/tracks/:track_id/map-preview` | 轨迹查看 | [admin-tracks.md](admin-tracks.md#编辑字段与坐标预览) |
 | 后台批量导入轨迹（逐文件结果含轨迹表格摘要） | POST | `/admin/api/tracks/import` | 轨迹操作 | [admin-tracks.md](admin-tracks.md) |
-| 后台轨迹详情（只读归属用户名，起止时间按北京时间显示和编辑） | GET | `/admin/api/tracks/:track_id` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |
-| 后台轨迹图片与原始文件下载 | GET | `/admin/api/tracks/:track_id/assets/:asset` | 轨迹查看 | [admin-tracks.md](admin-tracks.md#详情资源展示与下载) |
+| 后台轨迹详情（归属和文件指标只读，时间按北京时间显示） | GET | `/admin/api/tracks/:track_id` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |
+| 后台轨迹新版四图与原始文件下载（legacy资源已停用） | GET | `/admin/api/tracks/:track_id/assets/:asset` | 轨迹查看 | [admin-tracks.md](admin-tracks.md#详情资源展示与下载) |
 | 单条轨迹重新识别 | POST | `/admin/api/tracks/:track_id/place-refresh` | 轨迹操作 | [admin-tracks.md](admin-tracks.md) |
 | 地图 POI 设置轨迹景点标签 | POST | `/admin/api/tracks/:track_id/scenic-spot` | 轨迹及景点操作 | [admin-tracks.md](admin-tracks.md#地图点选景点标签) |
 | 轨迹地图高德配置 / 服务代理 | GET | `/admin/api/tracks/map-config`、`/admin/api/tracks/amap-service/*filepath` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |
@@ -188,7 +188,7 @@
 
 纠错协议扩展（现有路由）：`GET /feedback/correction-options` 与后台配置接口支持双语问题解释/填写提示；`GET /admin/api/feedbacks` 支持 kind/track_id/correction_option_id 仓储筛选；后台反馈详情支持 handled_by/track_change，状态更新支持 outcome/revision；`PUT /admin/api/tracks/:track_id` 可选 source_feedback_id。详见 [feedback.md](feedback.md#纠错体验与处理结果扩展)，权限仍由既有路由映射及跨模块校验执行。
 
-后台地域筛选：`GET /admin/api/users`（用户查看）支持 `province_code`；`GET /admin/api/scenic-spots`（景点查看）支持 `province_code` / `city_code` 及目录轻量 `view=summary`（省市、等级、图片数等，不传图片和简介），见 [admin-regions.md](admin-regions.md)。
+后台地域筛选：`GET /admin/api/users`（用户查看）支持 `province_code`；`GET /admin/api/scenic-spots`（景点查看）支持 `province_code` / `city_code` 及目录轻量 `view=summary`（省市、等级、图片数等，不传图片和简介）；景点完整列表与摘要均按景区等级降序、同级关联轨迹数降序、同数ID升序在分页前全局排序，见 [admin-regions.md](admin-regions.md)。
 - `POST /admin/api/tracks/:track_id/labels/generate`：轨迹写权限，AI 形象建议，不直接保存，见 admin-tracks.md。
 
 - `POST /admin/api/tracks/:track_id/description/generate`：轨迹写权限，手动联网生成候选说明，返回来源与 source_version，不直接写轨迹，见 [后台协议](admin-tracks.md#路线说明与-ai-联网填写)。

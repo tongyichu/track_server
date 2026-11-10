@@ -4,12 +4,10 @@
   function trackAssets(trackID, track) {
     const section = document.createElement('section');
     section.className = 'admin-track-assets';
+    const heading = document.createElement('h3'); heading.textContent = '轨迹预览'; section.appendChild(heading);
     const fileRow = document.createElement('div');
     fileRow.className = 'admin-track-file';
-    let trackType = track.track_type || '';
-    let noMapImage, noMapStage;
-    const assetURL = asset => '/admin/api/tracks/' + encodeURIComponent(trackID) + '/assets/' + asset +
-      (asset === 'no_map' ? '?track_type=' + encodeURIComponent(trackType) : '');
+    const assetURL = asset => '/admin/api/tracks/' + encodeURIComponent(trackID) + '/assets/' + asset;
     const label = document.createElement('strong');
     label.textContent = '原始轨迹文件';
     if (String(track.raw_track_url || '').trim()) {
@@ -35,11 +33,10 @@
       ['square_day', '方形日间', previews.square_day_url],
       ['square_night', '方形夜间', previews.square_night_url],
       ['landscape_day', '横版日间', previews.landscape_day_url],
-      ['landscape_night', '横版夜间', previews.landscape_night_url],
-      ['legacy', '旧版截图', track.track_screenshot_url],
-      ['no_map', '无地图截图', track.track_no_map_bg_screenshot_url]
+      ['landscape_night', '横版夜间', previews.landscape_night_url]
     ].forEach(function (asset) {
       const figure = document.createElement('figure');
+      if (asset[0].startsWith('square')) figure.className = 'admin-track-preview-square';
       const caption = document.createElement('figcaption');
       caption.textContent = asset[1];
       const stage = document.createElement('div');
@@ -63,7 +60,6 @@
           stage.replaceChildren(error, retry);
         });
         stage.appendChild(image);
-        if (asset[0] === 'no_map') { noMapImage = image; noMapStage = stage; }
       } else {
         stage.textContent = '无';
       }
@@ -71,14 +67,30 @@
       grid.appendChild(figure);
     });
     section.appendChild(grid);
-    section.setTrackType = function (value) {
-      trackType = value;
-      if (noMapImage) {
-        noMapStage.replaceChildren(noMapImage);
-        noMapImage.src = assetURL('no_map');
-      }
-    };
     return section;
+  }
+
+  function trackMetrics(track) {
+    const section = document.createElement('section'); section.className = 'admin-track-metrics';
+    const title = document.createElement('h3'); title.textContent = '轨迹数据';
+    const list = document.createElement('dl');
+    const time = value => value && !String(value).startsWith('0001-') ? AdminTime.dateTime(value, '—') : '—';
+    const number = (value, unit) => value == null || !Number.isFinite(Number(value)) ? '—' : Number(value).toLocaleString('zh-CN', { maximumFractionDigits: 2 }) + unit;
+    [
+      ['开始时间', time(track.start_time)],
+      ['结束时间', time(track.end_time)],
+      ['时长', number(track.duration, ' 秒')],
+      ['距离', number(track.distance == null ? null : track.distance / 1000, ' 公里')],
+      ['热量', number(track.calories_burned, ' 千卡')],
+      ['爬升', number(track.elevation_gain, ' 米')],
+      ['平均速度', number(track.avg_speed_kmh, ' 公里/小时')]
+    ].forEach(([label, value]) => {
+      const group = document.createElement('div');
+      const term = document.createElement('dt'); term.textContent = label;
+      const detail = document.createElement('dd'); detail.textContent = value;
+      group.append(term, detail); list.appendChild(group);
+    });
+    section.append(title, list); return section;
   }
 
   async function openTrackEditor(trackID, options) {
@@ -108,12 +120,10 @@
         const coordinateFields = [{ value: '', label: '未设置' }, { value: 'WGS84', label: 'WGS84（GPS / 国际坐标）' }, { value: 'GCJ02', label: 'GCJ02（高德 / 国内坐标）' }, { value: 'BD09', label: 'BD09（百度坐标）' }];
         if (track.source_tag && !sourceFields.some(item => item.value === track.source_tag)) sourceFields.push({ value: track.source_tag, label: '历史值（' + track.source_tag + '）' });
         if (track.coordinate_system && !coordinateFields.some(item => item.value === track.coordinate_system)) coordinateFields.push({ value: track.coordinate_system, label: '历史值（' + track.coordinate_system + '）' });
-        function timeValue(value) {
-          return AdminTime.toInput(value);
-        }
         isDeleted = track.status === 0;
         const labelAbort = new AbortController();
         let labelBadges = null, placeCandidates = null, mapPreview = null;
+        let detailLayout, workoutFields, shapeFields;
         function renderLabelBadges() {
           if (!labelBadges) return;
           labelBadges.replaceChildren();
@@ -151,7 +161,8 @@
           scenicSpotID: trackPayload.scenic_spot_id, primaryScenicSpot: track.primary_scenic_spot,
           canAssignScenicSpot: !readOnly && !isDeleted && window.AdminAccess.can('scenic_spots', true) && typeof trackPayload.scenic_spot_id === 'string',
           onScenicSpotAssigned: async function (data) { updateScenicSpot(data); await notifyScenicSpotChanged(); },
-          onScenicSpotRefresh: refreshScenicSpot
+          onScenicSpotRefresh: refreshScenicSpot,
+          onNearbyResults: function (state) { if (placeCandidates) placeCandidates.showNearby(state); }
         }) : null;
         const assets = trackAssets(trackID, track);
         function setupRouteDescription(view) {
@@ -273,7 +284,24 @@
           title: (readOnly ? '查看轨迹 ' : '编辑轨迹 ') + trackID,
           readOnly: readOnly,
           onReady: function (view) {
+            view.form.prepend(detailLayout);
+            detailLayout.classList.add('full');
+            workoutFields.appendChild(view.form.elements.track_type.parentNode);
+            shapeFields.appendChild(view.form.elements.shape_label.parentNode);
+            if (mapPreview) mapPreview.setCoordinateControl(view.form.elements.coordinate_system.parentNode);
+            const basic = document.createElement('section'); basic.className = 'admin-track-basic full';
+            const basicTitle = document.createElement('h3'); basicTitle.textContent = '基本信息';
+            const basicFields = document.createElement('div'); basicFields.className = 'admin-track-basic-fields';
+            ['title', 'user_name', 'city_code', 'locate_addr', 'source_tag', 'status', 'session_id'].forEach(name => {
+              const group = view.form.elements[name].parentNode;
+              if (name === 'title' || name === 'locate_addr') group.classList.add('admin-track-field-wide');
+              basicFields.appendChild(group);
+            });
+            basic.append(basicTitle, basicFields);
+            view.form.appendChild(basic);
+            const metrics = trackMetrics(track); metrics.classList.add('full'); view.form.appendChild(metrics);
             setupRouteDescription(view);
+            view.form.appendChild(view.form.elements.description.parentNode);
             if (Array.isArray(options.cities)) return;
             const select = view.form.elements.city_code;
             const hint = document.createElement('span'); hint.className = 'text-secondary d-block mt-1';
@@ -335,7 +363,7 @@
           afterFields: assets,
           beforeFields: (function () {
             const wrapper = document.createElement('div');
-            wrapper.className = 'admin-track-detail-side';
+            wrapper.className = 'admin-track-detail-side'; detailLayout = wrapper;
             const panel = document.createElement('section');
             panel.className = 'card';
             const content = document.createElement('div');
@@ -345,12 +373,19 @@
             labelBadges = document.createElement('div'); labelBadges.className = 'd-flex flex-wrap gap-2 mb-2';
             renderLabelBadges();
             content.appendChild(labelBadges);
+            const workoutSection = document.createElement('section'); workoutSection.className = 'admin-track-tag-section';
+            const workoutTitle = document.createElement('h4'); workoutTitle.textContent = '运动类型';
+            workoutFields = document.createElement('div'); workoutSection.append(workoutTitle, workoutFields);
+            const shapeSection = document.createElement('section'); shapeSection.className = 'admin-track-tag-section';
+            const shapeTitle = document.createElement('h4'); shapeTitle.textContent = '形象标签';
+            shapeFields = document.createElement('div'); shapeSection.append(shapeTitle, shapeFields);
+            content.append(workoutSection, shapeSection);
             const states = { cancelled: 'AI 自动任务已中断，可在 AI 使用中手动重试', historical: '历史轨迹，未自动生成，可手动填写', waiting: '等待自动生成', running: '正在生成', ready: '生成完成，等待写入', complete: '自动生成已完成（无明确形象时不打标）', retry: '等待重试', failed: '自动生成失败', not_queued: '未进入自动任务', unconfigured: 'AI 未配置' };
             const status = document.createElement('p'); status.className = 'text-secondary mb-2';
             const generation = trackPayload.label_generation || {};
             status.textContent = (states[generation.status] || '状态暂不可用') + (generation.attempts ? '，已尝试 ' + generation.attempts + ' 次' : '') + (generation.reason ? '：' + generation.reason : '');
-            content.appendChild(status);
-            const diagnosis = document.createElement('div'); diagnosis.className = 'mb-2'; content.appendChild(diagnosis);
+            shapeSection.appendChild(status);
+            const diagnosis = document.createElement('div'); diagnosis.className = 'mb-2'; shapeSection.appendChild(diagnosis);
             function showDiagnosis(value) {
               diagnosis.replaceChildren();
               if (!value) return;
@@ -376,11 +411,8 @@
               const names = { cancelled: 'AI 复核已中断', pending: '等待复核', running: '正在复核', retry: '等待重试', reviewed: '已复核，等待保存经验', learned: '已纳入识别经验', disputed: '图像依据不足，未采纳为经验', stale: '资料已变化，样例已失效', failed: '复核失败', unavailable: '状态读取失败' };
               const note = document.createElement('p'); note.className = 'text-secondary mb-2';
               note.textContent = '人工标注学习：' + (names[learning.status] || learning.status) + (learning.review ? '。依据：' + learning.review.evidence + '。经验：' + learning.review.lesson : '');
-              content.appendChild(note);
+              shapeSection.appendChild(note);
             }
-            const help = document.createElement('p'); help.className = 'text-secondary mb-2';
-            help.textContent = '形象可在下方人工编辑或用 AI 生成。精品随投稿审核生效；运动类型在表单修改，景点可在地图点选或确认候选后立即关联。AI 基于已保存资料和一张方图，生成后需保存才生效。';
-            content.appendChild(help);
             if (!readOnly && !isDeleted) {
               const button = document.createElement('button'); button.type = 'button'; button.className = 'btn btn-outline-primary'; button.textContent = 'AI 生成形象';
               button.addEventListener('click', async function () {
@@ -405,12 +437,12 @@
                   if (error.name !== 'AbortError') { status.textContent = error.message; window.AdminUI.alert(error.message, 'danger'); }
                 } finally { button.disabled = false; }
               });
-              content.appendChild(button);
+              shapeSection.appendChild(button);
             }
             panel.appendChild(content); wrapper.appendChild(panel);
             placeCandidates = window.AdminTrackPlaceCandidates.create(trackID, { readOnly: readOnly || isDeleted,
               onChanged: async function () { await refreshScenicSpot(); await notifyScenicSpotChanged(); }, cityNames: cityNames, track: track });
-            wrapper.appendChild(placeCandidates);
+            content.appendChild(placeCandidates);
             if (mapPreview) wrapper.appendChild(mapPreview);
             return wrapper;
           })(),
@@ -421,17 +453,10 @@
             { name: 'title', label: '轨迹标题', value: track.title, maxLength: 128 },
             { name: 'city_code', label: '城市', type: 'select', value: track.city_code, options: cityFields },
             { name: 'locate_addr', label: '位置描述', value: track.locate_addr, maxLength: 512 },
-            { name: 'track_type', label: '轨迹类型', type: 'select', value: track.track_type, options: typeFields, onChange: assets.setTrackType },
+            { name: 'track_type', label: '运动类型', type: 'select', value: track.track_type, options: typeFields },
             { name: 'source_tag', label: '来源标签', type: 'select', value: track.source_tag, options: sourceFields },
             { name: 'coordinate_system', label: '坐标系', type: 'select', value: track.coordinate_system, options: coordinateFields, onChange: function (value) { if (mapPreview) mapPreview.setCoordinateSystem(value); } },
             { name: 'description', label: '路线说明', type: 'textarea', value: track.description, maxLength: 4000, full: true },
-            { name: 'start_time', label: '开始时间（北京时间）', type: 'datetime-local', value: timeValue(track.start_time), required: true },
-            { name: 'end_time', label: '结束时间（北京时间）', type: 'datetime-local', value: timeValue(track.end_time) },
-            { name: 'distance', label: '距离（米）', type: 'number', value: track.distance, min: 0, step: 'any' },
-            { name: 'duration', label: '时长（秒）', type: 'number', value: track.duration, min: 0 },
-            { name: 'calories_burned', label: '消耗热量（千卡）', type: 'number', value: track.calories_burned, min: 0, step: 'any' },
-            { name: 'elevation_gain', label: '累计爬升（米）', type: 'number', value: track.elevation_gain },
-            { name: 'avg_speed_kmh', label: '平均速度（公里/小时）', type: 'number', value: track.avg_speed_kmh, min: 0, step: 'any' },
             { name: 'status', label: '可见状态', type: 'select', value: track.status, options: [{ value: 1, label: '正常' }, { value: 2, label: '私密' }] }
           ]
         };
@@ -477,13 +502,9 @@
       locate_addr: values.locate_addr, track_type: values.track_type, source_tag: values.source_tag,
       coordinate_system: values.coordinate_system,
       description: values.description !== (track.description || '') ? values.description : undefined,
-      distance: Number(values.distance || 0), duration: Number(values.duration || 0),
-      calories_burned: Number(values.calories_burned || 0), elevation_gain: Number(values.elevation_gain || 0),
-      avg_speed_kmh: Number(values.avg_speed_kmh || 0), status: Number(values.status)
+      status: Number(values.status)
     };
     try {
-      body.start_time = values.start_time === AdminTime.toInput(track.start_time) ? track.start_time : AdminTime.fromInput(values.start_time);
-      body.end_time = values.end_time === AdminTime.toInput(track.end_time) ? track.end_time : AdminTime.fromInput(values.end_time);
       const response = await fetch('/admin/api/tracks/' + encodeURIComponent(trackID), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (!response.ok) {
         let message = '保存失败: ' + response.status;

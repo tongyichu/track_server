@@ -190,7 +190,6 @@ func (s *TrackMapService) ListGroupTracks(ctx context.Context, userID int64, gro
 		cacheCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		if s.trackSvc.screenshotCache != nil {
 			for i, track := range tracks {
-				summaries[i].TrackScreenshotURL = s.trackSvc.screenshotCache.EnsureCached(cacheCtx, track.UserID, track.ID, track.TrackScreenshotURL)
 				if track.TrackNoMapBgScreenshotURL != "" {
 					summaries[i].TrackNoMapBgScreenshotURL = s.trackSvc.screenshotCache.EnsureCached(cacheCtx, track.UserID, track.ID+"_no_map_bg", track.TrackNoMapBgScreenshotURL)
 				}
@@ -256,21 +255,16 @@ func (s *TrackMapService) routeGroupItem(ctx context.Context, group *models.Trac
 			MaxLatitude:  group.MaxLat,
 			MaxLongitude: group.MaxLng,
 		},
-		CoverTrack: &models.TrackMapCoverTrack{TrackID: track.ID},
+		CoverTrack: &models.TrackMapCoverTrack{TrackID: track.ID, PreviewImages: trackPreviewURLs(track.ID, track.PreviewImages)},
 		RawTrackID: track.ID,
 		Track:      track,
 	}
 	if introduction != nil {
 		item.IntroductionURL = mapRouteIntroductionURL(group.GroupID, introduction.ContentVersion)
 	}
-	if s.trackSvc != nil && s.trackSvc.screenshotCache != nil && track.TrackScreenshotURL != "" {
-		cacheCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
-		item.CoverTrack.TrackScreenshotURL = s.trackSvc.screenshotCache.EnsureCached(cacheCtx, track.UserID, track.ID, track.TrackScreenshotURL)
-		cancel()
-	}
 	if s.trackSvc != nil && s.trackSvc.submissions != nil {
 		if sub, subErr := s.trackSvc.submissions.PublicForTrack(ctx, track.ID); subErr == nil && sub != nil && len(sub.Images) > 0 && sub.Images[0] != nil && sub.Images[0].URL != "" {
-			item.CoverTrack.TrackScreenshotURL = sub.Images[0].URL
+			item.CoverTrack.CoverURL = sub.Images[0].URL
 		}
 	}
 	return item, nil
@@ -340,15 +334,10 @@ func (s *TrackMapService) legacyRouteGroupItem(ctx context.Context, index *model
 			MaxLatitude:  index.MaxLat,
 			MaxLongitude: index.MaxLng,
 		},
-		CoverTrack:     &models.TrackMapCoverTrack{TrackID: track.ID},
+		CoverTrack:     &models.TrackMapCoverTrack{TrackID: track.ID, PreviewImages: trackPreviewURLs(track.ID, track.PreviewImages)},
 		RawTrackID:     track.ID,
 		SourceGeoIndex: index,
 		Track:          track,
-	}
-	if s.trackSvc != nil && s.trackSvc.screenshotCache != nil && track.TrackScreenshotURL != "" {
-		cacheCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
-		item.CoverTrack.TrackScreenshotURL = s.trackSvc.screenshotCache.EnsureCached(cacheCtx, track.UserID, track.ID, track.TrackScreenshotURL)
-		cancel()
 	}
 	return item, nil
 }

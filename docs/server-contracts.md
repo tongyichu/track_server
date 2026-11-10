@@ -180,3 +180,7 @@
 搜索列表的min_distance_m（含）/max_distance_m（不含）由handler解析、service验证，在MySQL/Mongo/memory搜索和总数统计前使用相同过滤，保持原游标排序。启用范围时排除未知或非正/非有限里程，未传时保持旧行为。GET /track/search/options属于业务JWT只读接口，返回version=1与服务端维护的各类型分段；客户端不在旧接口上伪造筛选。不新增schema，不改变发现页/象形轨迹/地图查询，完整协议见docs/api/track.md搜索章节。
 
 - 后台单条路线说明入口 `track_description_admin.go` / `kimi_track_description.go`：复用 narrative 租约、预算与预览，显式联网检索后只返回独立候选及来源/source_version，不修改原说明、图案或触发历史批处理；候选区“一键代入并保存”调用独立PUT与三仓储CAS，只保存说明并标记manual/v0，其他表单草稿不提交。自动开关只影响巡检，手动入口在配置就绪时保留。完整协议见 `docs/api/admin-tracks.md`。
+
+## 普通轨迹旧版截图停用
+
+普通轨迹以preview_images为唯一地图预览来源；业务不消费TrackScreenshotURL，模型历史成员仅供数据库/源码兼容且json隐藏，创建/更新不接收旧字段、不预热或缓存、不回退。地图代表轨迹改传preview_images与cover_url，私信/投稿/质量评分使用新版图。SVG轨迹线及Companion房间合成图为独立资源，保持各自用途。本轮不删除历史数据库列或OSS对象。后台文件指标只读及共享详情布局见docs/api/admin-tracks.md。

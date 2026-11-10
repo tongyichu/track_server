@@ -56,7 +56,7 @@ type Track struct {
 	CaloriesBurned            float64                  `json:"calories_burned" bson:"calories_burned"`                               // CaloriesBurned 是热量消耗，单位千卡。
 	ElevationGain             int                      `json:"elevation_gain" bson:"elevation_gain"`                                 // ElevationGain 是累计爬升，单位米。
 	RawTrackURL               string                   `json:"raw_track_url" bson:"raw_track_url"`                                   // RawTrackURL 是原始轨迹点文件在对象存储中的地址。
-	TrackScreenshotURL        string                   `json:"track_screenshot_url" bson:"track_screenshot_url"`                     // TrackScreenshotURL 是轨迹截图文件在对象存储中的地址。
+	TrackScreenshotURL        string                   `json:"-" bson:"track_screenshot_url"`                                        // Storage compatibility only; legacy screenshots are no longer consumed.
 	TrackNoMapBgScreenshotURL string                   `json:"track_no_map_bg_screenshot_url" bson:"track_no_map_bg_screenshot_url"` // TrackNoMapBgScreenshotURL 是“无地图背景的轨迹路线截图”文件在对象存储中的地址。
 	IsRunning                 bool                     `json:"is_running" bson:"is_running"`                                         // IsRunning 表示轨迹是否仍处于进行中。
 	Status                    TrackStatus              `json:"status" bson:"status"`                                                 // Status 是轨迹状态：0-删除，1-正常，2-私密。
@@ -106,7 +106,7 @@ type TrackSummary struct {
 	Collected                 bool                          `json:"collected"`                      // Collected 表示当前鉴权用户是否已收藏该轨迹。
 	CollectCount              int64                         `json:"collect_count"`                  // CollectCount 是轨迹被收藏的总数。
 	NavigateCount             int64                         `json:"navigate_count"`                 // NavigateCount 是该轨迹被其他用户用于导航的次数。
-	TrackScreenshotURL        string                        `json:"track_screenshot_url"`           // TrackScreenshotURL 是服务器本地缓存的轨迹截图可下载 URL。
+	TrackScreenshotURL        string                        `json:"-"`                              // Retained for source compatibility; not returned to clients.
 	TrackNoMapBgScreenshotURL string                        `json:"track_no_map_bg_screenshot_url"` // TrackNoMapBgScreenshotURL 是服务器本地缓存的“无地图背景轨迹截图”可下载 URL。
 	RawTrackURL               string                        `json:"raw_track_url"`                  // RawTrackURL 是服务器本地缓存的原始轨迹文件可下载 URL。
 	IsFeatured                bool                          `json:"is_featured"`                    // IsFeatured 表示轨迹投稿已审核通过。
@@ -149,7 +149,7 @@ type CollectedTrackSummary struct {
 	Collected                 bool                    `json:"collected"`
 	CollectCount              int64                   `json:"collect_count"`
 	NavigateCount             int64                   `json:"navigate_count"`
-	TrackScreenshotURL        string                  `json:"track_screenshot_url"`
+	TrackScreenshotURL        string                  `json:"-"`
 	TrackNoMapBgScreenshotURL string                  `json:"track_no_map_bg_screenshot_url"`
 	RawTrackURL               string                  `json:"raw_track_url"`
 }
@@ -218,7 +218,7 @@ type MyTrackSummary struct {
 	Collected                 bool                    `json:"collected"`                      // Collected 是当前鉴权用户是否已收藏该轨迹。
 	CollectCount              int64                   `json:"collect_count"`                  // CollectCount 是轨迹被收藏的总数。
 	NavigateCount             int64                   `json:"navigate_count"`                 // NavigateCount 是该轨迹被其他用户用于导航的次数。
-	TrackScreenshotURL        string                  `json:"track_screenshot_url"`           // TrackScreenshotURL 是服务器本地缓存的轨迹截图可下载 URL。
+	TrackScreenshotURL        string                  `json:"-"`                              // Retained for source compatibility; not returned to clients.
 	TrackNoMapBgScreenshotURL string                  `json:"track_no_map_bg_screenshot_url"` // TrackNoMapBgScreenshotURL 是服务器本地缓存的“无地图背景轨迹截图”可下载 URL。
 	RawTrackURL               string                  `json:"raw_track_url"`                  // RawTrackURL 是服务器本地缓存的原始轨迹文件可下载 URL。
 	Submission                *TrackSubmissionSummary `json:"submission,omitempty"`           // Submission 是当前用户自己的投稿状态摘要。
@@ -429,8 +429,10 @@ type TrackMapQueryFilter struct {
 
 // TrackMapCoverTrack is a lightweight representative track payload.
 type TrackMapCoverTrack struct {
-	TrackID            string `json:"track_id"`
-	TrackScreenshotURL string `json:"track_screenshot_url"`
+	PreviewImages      TrackPreviewImages `json:"preview_images"`
+	CoverURL           string             `json:"cover_url,omitempty"`
+	TrackID            string             `json:"track_id"`
+	TrackScreenshotURL string             `json:"-"`
 }
 
 // TrackMapRouteGroupItem is the route-level item returned to map clients.

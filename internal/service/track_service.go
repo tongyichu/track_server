@@ -96,11 +96,6 @@ func (s *TrackService) decorateTrackAssets(ctx context.Context, track *models.Tr
 	// 把 OSS 地址字段覆盖为服务端本地可下载 URL，客户端无需处理 OSS 鉴权。
 	// 未命中缓存时同步兜底拉取（带超时），失败则字段返回空串。
 	// STS 下载凭证使用轨迹归属用户的 userID 申请。
-	if s.screenshotCache != nil && track.TrackScreenshotURL != "" {
-		cacheCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		track.TrackScreenshotURL = s.screenshotCache.EnsureCached(cacheCtx, track.UserID, track.ID, track.TrackScreenshotURL)
-		cancel()
-	}
 	if s.rawTrackCache != nil && track.RawTrackURL != "" {
 		cacheCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		track.RawTrackURL = s.rawTrackCache.EnsureCached(cacheCtx, track.UserID, track.ID, track.RawTrackURL)
@@ -141,9 +136,9 @@ type CreateTrackInput struct {
 	CaloriesBurned            *float64                   `json:"calories_burned"`
 	ElevationGain             *int                       `json:"elevation_gain"`
 	RawTrackURL               *string                    `json:"raw_track_url"`
-	TrackScreenshotURL        *string                    `json:"track_screenshot_url"`
+	TrackScreenshotURL        *string                    `json:"-"`
 	TrackNoMapBgScreenshotURL *string                    `json:"track_no_map_bg_screenshot_url"`
-	LegacyScreenshotURL       *string                    `json:"screenshot_url,omitempty"`
+	LegacyScreenshotURL       *string                    `json:"-"`
 	IsRunning                 *bool                      `json:"is_running"`
 	AvgSpeedKmh               *float64                   `json:"avg_speed_kmh"`
 }
@@ -156,9 +151,6 @@ func (in *CreateTrackInput) normalize() {
 	if in.Description != nil {
 		v := strings.TrimSpace(*in.Description)
 		in.Description = &v
-	}
-	if in.TrackScreenshotURL == nil && in.LegacyScreenshotURL != nil {
-		in.TrackScreenshotURL = in.LegacyScreenshotURL
 	}
 	if in.SessionID != nil {
 		v := strings.TrimSpace(*in.SessionID)
@@ -254,9 +246,9 @@ type TrackInfoPatch struct {
 	CaloriesBurned            *float64                   `json:"calories_burned"`
 	ElevationGain             *int                       `json:"elevation_gain"`
 	RawTrackURL               *string                    `json:"raw_track_url"`
-	TrackScreenshotURL        *string                    `json:"track_screenshot_url"`
+	TrackScreenshotURL        *string                    `json:"-"`
 	TrackNoMapBgScreenshotURL *string                    `json:"track_no_map_bg_screenshot_url"`
-	LegacyScreenshotURL       *string                    `json:"screenshot_url,omitempty"`
+	LegacyScreenshotURL       *string                    `json:"-"`
 	AvgSpeedKmh               *float64                   `json:"avg_speed_kmh"`
 }
 
@@ -271,9 +263,6 @@ func (p *TrackInfoPatch) normalize() {
 	if p.Description != nil {
 		v := strings.TrimSpace(*p.Description)
 		p.Description = &v
-	}
-	if p.TrackScreenshotURL == nil && p.LegacyScreenshotURL != nil {
-		p.TrackScreenshotURL = p.LegacyScreenshotURL
 	}
 	if p.SessionID != nil {
 		v := strings.TrimSpace(*p.SessionID)
@@ -301,9 +290,7 @@ func (p TrackInfoPatch) empty() bool {
 		p.CaloriesBurned == nil &&
 		p.ElevationGain == nil &&
 		p.RawTrackURL == nil &&
-		p.TrackScreenshotURL == nil &&
 		p.TrackNoMapBgScreenshotURL == nil &&
-		p.LegacyScreenshotURL == nil &&
 		p.AvgSpeedKmh == nil
 }
 
@@ -648,9 +635,6 @@ func (s *TrackService) CreateTrack(ctx context.Context, userID int64, input Crea
 	if input.RawTrackURL != nil {
 		track.RawTrackURL = *input.RawTrackURL
 	}
-	if input.TrackScreenshotURL != nil {
-		track.TrackScreenshotURL = *input.TrackScreenshotURL
-	}
 	if input.TrackNoMapBgScreenshotURL != nil {
 		track.TrackNoMapBgScreenshotURL = *input.TrackNoMapBgScreenshotURL
 	}
@@ -664,16 +648,6 @@ func (s *TrackService) CreateTrack(ctx context.Context, userID int64, input Crea
 		return nil, err
 	}
 	s.enqueueTrackMapIndex(ctx, track)
-	// 异步预热截图到服务端本地缓存目录，供 ListRecommend 等接口后续直接下发本地 URL。
-	// 失败不影响主流程，且仅在配置了缓存服务时触发。
-	if s.screenshotCache != nil && track.TrackScreenshotURL != "" {
-		src := track.TrackScreenshotURL
-		if err := s.screenshotCache.RemoveTempCached(track.ID); err != nil {
-			return nil, err
-		}
-		s.screenshotCache.PrefetchAsync(userID, track.ID, src)
-		track.TrackScreenshotURL = s.screenshotCache.GuessLocalURL(track.ID, src)
-	}
 	// 同理异步预热原始轨迹文件。
 	if s.rawTrackCache != nil && track.RawTrackURL != "" {
 		src := track.RawTrackURL
@@ -933,49 +907,16 @@ func (s *TrackService) ListRecommend(ctx context.Context, userID int64, input Li
 // Recommendation sessions use this method so ranking and pagination are not changed by presentation enrichment.
 func (s *TrackService) BuildTrackSummaries(ctx context.Context, userID int64, tracks []*models.Track) ([]*models.TrackSummary, error) {
 	summaries := toSummaries(tracks)
-	// 填充服务器本地可下载截图 URL：
-	// - 命中本地缓存则直接返回本地 URL
-	// - 未命中则兜底拉取一次（同步，带 5 秒超时），失败则返回空串，不阻塞列表返回其它字段
-	// - userID<=0（未登录游客）时无法申请 STS 读凭证，只尝试本地命中，不主动下载
-	// 排查日志（轻量）：若列表返回的 track_screenshot_url 为空，输出汇总计数，避免逐条日志刷屏。
-	var (
-		srcEmptySS, resEmptySS int
-	)
-	if s.screenshotCache == nil && s.rawTrackCache == nil {
-		// cache 服务未启用时，两个字段会一直为空。
-		if len(tracks) > 0 {
-			log.Printf("[ListRecommend][asset] cache_disabled user_id=%d tracks=%d", userID, len(tracks))
-		}
-	} else {
+	if s.screenshotCache != nil || s.rawTrackCache != nil {
 		for i, t := range tracks {
 			cacheCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-			if s.screenshotCache != nil {
-				if t.TrackScreenshotURL == "" {
-					srcEmptySS++
-				} else {
-					local := s.screenshotCache.EnsureCached(cacheCtx, userID, t.ID, t.TrackScreenshotURL)
-					summaries[i].TrackScreenshotURL = local
-					if local == "" {
-						resEmptySS++
-					}
-				}
-				// 无地图背景轨迹截图：使用不同 cache key，避免与 track_screenshot_url 文件名冲突。
-				if t.TrackNoMapBgScreenshotURL != "" {
-					local := s.screenshotCache.EnsureCached(cacheCtx, userID, t.ID+"_no_map_bg", t.TrackNoMapBgScreenshotURL)
-					summaries[i].TrackNoMapBgScreenshotURL = local
-				}
+			if s.screenshotCache != nil && t.TrackNoMapBgScreenshotURL != "" {
+				summaries[i].TrackNoMapBgScreenshotURL = s.screenshotCache.EnsureCached(cacheCtx, userID, t.ID+"_no_map_bg", t.TrackNoMapBgScreenshotURL)
 			}
-			if s.rawTrackCache != nil {
-				if t.RawTrackURL != "" {
-					local := s.rawTrackCache.EnsureCached(cacheCtx, userID, t.ID, t.RawTrackURL)
-					summaries[i].RawTrackURL = local
-				}
+			if s.rawTrackCache != nil && t.RawTrackURL != "" {
+				summaries[i].RawTrackURL = s.rawTrackCache.EnsureCached(cacheCtx, userID, t.ID, t.RawTrackURL)
 			}
 			cancel()
-		}
-		// 仅在出现“源为空 / 结果为空”时打汇总日志，避免正常请求刷屏。
-		if srcEmptySS > 0 || resEmptySS > 0 {
-			log.Printf("[ListRecommend][asset] summary user_id=%d tracks=%d screenshot_src_empty=%d screenshot_result_empty=%d", userID, len(tracks), srcEmptySS, resEmptySS)
 		}
 	}
 	if err := s.fillTrackSummaryExtras(ctx, userID, summaries); err != nil {
@@ -1011,12 +952,11 @@ func (s *TrackService) ListMyTracks(ctx context.Context, userID int64, input Lis
 		return nil, err
 	}
 	summaries := toMySummaries(tracks)
-	// 与推荐/搜索列表保持一致：填充资源本地 URL（截图/无地图背景截图/原始轨迹）。
+	// 与推荐/搜索列表保持一致：填充资源本地 URL（无地图背景轨迹图/原始轨迹）。
 	if s.screenshotCache != nil || s.rawTrackCache != nil {
 		for i, t := range tracks {
 			cacheCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			if s.screenshotCache != nil {
-				summaries[i].TrackScreenshotURL = s.screenshotCache.EnsureCached(cacheCtx, userID, t.ID, t.TrackScreenshotURL)
 				if t.TrackNoMapBgScreenshotURL != "" {
 					summaries[i].TrackNoMapBgScreenshotURL = s.screenshotCache.EnsureCached(cacheCtx, userID, t.ID+"_no_map_bg", t.TrackNoMapBgScreenshotURL)
 				}
@@ -1167,7 +1107,6 @@ func (s *TrackService) SearchTracks(ctx context.Context, userID int64, input Sea
 		for i, t := range tracks {
 			cacheCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			if s.screenshotCache != nil {
-				summaries[i].TrackScreenshotURL = s.screenshotCache.EnsureCached(cacheCtx, userID, t.ID, t.TrackScreenshotURL)
 				if t.TrackNoMapBgScreenshotURL != "" {
 					summaries[i].TrackNoMapBgScreenshotURL = s.screenshotCache.EnsureCached(cacheCtx, userID, t.ID+"_no_map_bg", t.TrackNoMapBgScreenshotURL)
 				}
@@ -1338,7 +1277,6 @@ func (s *TrackService) ListCollectedTracks(ctx context.Context, userID int64, in
 		for i, t := range tracks {
 			cacheCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			if s.screenshotCache != nil {
-				summaries[i].TrackScreenshotURL = s.screenshotCache.EnsureCached(cacheCtx, userID, t.ID, t.TrackScreenshotURL)
 				if t.TrackNoMapBgScreenshotURL != "" {
 					summaries[i].TrackNoMapBgScreenshotURL = s.screenshotCache.EnsureCached(cacheCtx, userID, t.ID+"_no_map_bg", t.TrackNoMapBgScreenshotURL)
 				}
@@ -1396,7 +1334,6 @@ func (s *TrackService) ListCollectedTracks(ctx context.Context, userID int64, in
 			Collected:                 s.Collected,
 			CollectCount:              s.CollectCount,
 			NavigateCount:             s.NavigateCount,
-			TrackScreenshotURL:        s.TrackScreenshotURL,
 			PreviewImages:             s.PreviewImages,
 			TrackNoMapBgScreenshotURL: s.TrackNoMapBgScreenshotURL,
 			RawTrackURL:               s.RawTrackURL,
@@ -1509,7 +1446,6 @@ func (s *TrackService) UpdateTrackInfo(ctx context.Context, userID int64, trackI
 
 	updated := false
 	updatedRaw := false
-	updatedScreenshot := false
 	updatedNoMapBgScreenshot := false
 	if patch.ShapeLabel != nil && track.ShapeLabel != *patch.ShapeLabel {
 		track.ShapeLabel = *patch.ShapeLabel
@@ -1593,11 +1529,6 @@ func (s *TrackService) UpdateTrackInfo(ctx context.Context, userID int64, trackI
 		updated = true
 		updatedRaw = true
 	}
-	if patch.TrackScreenshotURL != nil && track.TrackScreenshotURL == "" {
-		track.TrackScreenshotURL = *patch.TrackScreenshotURL
-		updated = true
-		updatedScreenshot = true
-	}
 	if patch.TrackNoMapBgScreenshotURL != nil && track.TrackNoMapBgScreenshotURL == "" {
 		track.TrackNoMapBgScreenshotURL = *patch.TrackNoMapBgScreenshotURL
 		updated = true
@@ -1641,11 +1572,6 @@ func (s *TrackService) UpdateTrackInfo(ctx context.Context, userID int64, trackI
 
 	// 轨迹资源链接字段对客户端下发本地可下载 URL（并触发异步预热）。
 	if s.screenshotCache != nil {
-		if updatedScreenshot {
-			src := track.TrackScreenshotURL
-			s.screenshotCache.PrefetchAsync(userID, track.ID, src)
-			track.TrackScreenshotURL = s.screenshotCache.GuessLocalURL(track.ID, src)
-		}
 		if updatedNoMapBgScreenshot {
 			key := track.ID + "_no_map_bg"
 			src := track.TrackNoMapBgScreenshotURL

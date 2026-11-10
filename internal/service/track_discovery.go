@@ -55,13 +55,6 @@ func encodeDiscoverSpotCursor(grade int, count int64, id string) string {
 	return base64.RawURLEncoding.EncodeToString(data)
 }
 
-func discoverSpotGradeRank(grade string) int {
-	if normalized := normalizeScenicGrade(grade); normalized != "" {
-		return int(normalized[0] - '0')
-	}
-	return 0
-}
-
 func (s *TrackService) DiscoverSpotTracks(ctx context.Context, userID int64, spotID, rawCursor string, limit int) (*models.TrackSummaryPage, error) {
 	if s.scenicCatalog == nil || !s.scenicCatalog.Enabled() {
 		return nil, repository.ErrNotFound
@@ -191,7 +184,7 @@ func (s *TrackService) DiscoverSpots(ctx context.Context, cityCode, cursor strin
 			if stats := counts[spot.ID]; stats != nil {
 				count = stats.TrackCount
 			}
-			ranked = append(ranked, rankedSpot{spot: spot, grade: discoverSpotGradeRank(spot.ScenicGrade), count: count})
+			ranked = append(ranked, rankedSpot{spot: spot, grade: scenicSpotGradeRank(spot.ScenicGrade), count: count})
 		}
 		if len(spots) < filter.Limit {
 			break

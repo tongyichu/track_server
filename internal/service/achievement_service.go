@@ -344,7 +344,7 @@ func achievementTrackXP(track *models.Track) int64 {
 	if track.RawTrackURL != "" {
 		qualityXP += 20
 	}
-	if track.TrackScreenshotURL != "" || track.TrackNoMapBgScreenshotURL != "" {
+	if track.PreviewImages.LandscapeDayURL != "" || track.PreviewImages.SquareDayURL != "" || track.TrackNoMapBgScreenshotURL != "" {
 		qualityXP += 10
 	}
 	if track.SessionID != "" {
