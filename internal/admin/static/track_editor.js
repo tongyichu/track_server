@@ -109,11 +109,7 @@
         if (track.source_tag && !sourceFields.some(item => item.value === track.source_tag)) sourceFields.push({ value: track.source_tag, label: '历史值（' + track.source_tag + '）' });
         if (track.coordinate_system && !coordinateFields.some(item => item.value === track.coordinate_system)) coordinateFields.push({ value: track.coordinate_system, label: '历史值（' + track.coordinate_system + '）' });
         function timeValue(value) {
-          if (!value) return '';
-          const date = new Date(value);
-          if (Number.isNaN(date.getTime())) return '';
-          const pad = number => String(number).padStart(2, '0');
-          return date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate()) + 'T' + pad(date.getHours()) + ':' + pad(date.getMinutes());
+          return AdminTime.toInput(value);
         }
         isDeleted = track.status === 0;
         const labelAbort = new AbortController();
@@ -429,8 +425,8 @@
             { name: 'source_tag', label: '来源标签', type: 'select', value: track.source_tag, options: sourceFields },
             { name: 'coordinate_system', label: '坐标系', type: 'select', value: track.coordinate_system, options: coordinateFields, onChange: function (value) { if (mapPreview) mapPreview.setCoordinateSystem(value); } },
             { name: 'description', label: '路线说明', type: 'textarea', value: track.description, maxLength: 4000, full: true },
-            { name: 'start_time', label: '开始时间', type: 'datetime-local', value: timeValue(track.start_time), required: true },
-            { name: 'end_time', label: '结束时间', type: 'datetime-local', value: timeValue(track.end_time) },
+            { name: 'start_time', label: '开始时间（北京时间）', type: 'datetime-local', value: timeValue(track.start_time), required: true },
+            { name: 'end_time', label: '结束时间（北京时间）', type: 'datetime-local', value: timeValue(track.end_time) },
             { name: 'distance', label: '距离（米）', type: 'number', value: track.distance, min: 0, step: 'any' },
             { name: 'duration', label: '时长（秒）', type: 'number', value: track.duration, min: 0 },
             { name: 'calories_burned', label: '消耗热量（千卡）', type: 'number', value: track.calories_burned, min: 0, step: 'any' },
@@ -481,12 +477,13 @@
       locate_addr: values.locate_addr, track_type: values.track_type, source_tag: values.source_tag,
       coordinate_system: values.coordinate_system,
       description: values.description !== (track.description || '') ? values.description : undefined,
-      start_time: values.start_time,
-      end_time: values.end_time, distance: Number(values.distance || 0), duration: Number(values.duration || 0),
+      distance: Number(values.distance || 0), duration: Number(values.duration || 0),
       calories_burned: Number(values.calories_burned || 0), elevation_gain: Number(values.elevation_gain || 0),
       avg_speed_kmh: Number(values.avg_speed_kmh || 0), status: Number(values.status)
     };
     try {
+      body.start_time = values.start_time === AdminTime.toInput(track.start_time) ? track.start_time : AdminTime.fromInput(values.start_time);
+      body.end_time = values.end_time === AdminTime.toInput(track.end_time) ? track.end_time : AdminTime.fromInput(values.end_time);
       const response = await fetch('/admin/api/tracks/' + encodeURIComponent(trackID), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (!response.ok) {
         let message = '保存失败: ' + response.status;

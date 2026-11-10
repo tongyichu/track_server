@@ -13,9 +13,7 @@
     return String(value == null ? '' : value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
   function timeText(value) {
-    if (!value || String(value).startsWith('0001-')) return '—';
-    var date = new Date(value);
-    return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString('zh-CN', { hour12: false });
+    return AdminTime.dateTime(value);
   }
   function statusText(value) { return statusLabels[value] || '未知状态'; }
   function badge(text, color) { return '<span class="badge ' + (color || 'bg-secondary-lt') + '">' + esc(text) + '</span>'; }

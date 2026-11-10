@@ -4,7 +4,7 @@
   const pending = new Map(), cards = [];
   function number(value) { return Number(value || 0).toLocaleString('zh-CN'); }
   function date(value) {
-    return new Date(value).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
+    return AdminTime.short(value, true);
   }
   function read(period) {
     if (!pending.has(period)) {

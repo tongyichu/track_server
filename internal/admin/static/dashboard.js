@@ -113,7 +113,7 @@
     setText('reviewOver72', formatNumber(review.pending_over_72h));
     setText('approvalRate', (number(review.approval_rate) * 100).toFixed(1) + '%');
     setText('avgReviewHours', formatDurationHours(review.avg_review_hours));
-    setText('oldestPending', review.oldest_pending ? new Date(review.oldest_pending).toLocaleString('zh-CN') : '暂无积压');
+    setText('oldestPending', AdminTime.dateTime(review.oldest_pending, '暂无积压'));
   }
 
   function renderReviewChart(review) {
@@ -284,8 +284,8 @@
       setText('pendingSubmissions', formatNumber(metrics.pending_submissions));
       setText('pendingFeedback', formatNumber(metrics.pending_feedback));
       setText('activeCompanions', formatNumber(metrics.active_companions));
-      setText('rangeHint', new Date(data.range.start).toLocaleDateString('zh-CN') + ' 至今');
-      setText('updatedAt', '数据更新时间：' + new Date(data.updated_at).toLocaleString('zh-CN'));
+      setText('rangeHint', AdminTime.date(data.range.start) + ' 至今');
+      setText('updatedAt', '数据更新时间：' + AdminTime.dateTime(data.updated_at));
       renderReviewMetrics(data.review);
       renderFeedbackMetrics(data.feedback);
       renderContentMetrics(data.content);

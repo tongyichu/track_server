@@ -14,7 +14,7 @@
 | 按客户端ID恢复发送结果 | GET | `/messages/conversations/:peer_id/messages/by-client/:client_id` | JWT | [messages](messages.md#私信) |
 | 会话已读 / 拉黑或解除 | POST / PUT | `/messages/conversations/:peer_id/read`, `/messages/conversations/:peer_id/block` | JWT | [messages](messages.md#私信) |
 | 消息模块MQTT凭证 | POST | `/messages/mqtt/credentials` | JWT | [messages](messages.md#实时连接) |
-| 后台通知分页 / 新建 | GET / POST | `/admin/api/announcements` | announcements 读/写 | [messages](messages.md#活动通知管理) |
+| 后台通知分页 / 新建（按北京时间编辑发布时刻） | GET / POST | `/admin/api/announcements` | announcements 读/写 | [messages](messages.md#活动通知管理) |
 | 后台通知详情 / 修改撤回 | GET / PUT | `/admin/api/announcements/:notice_id` | announcements 读/写 | [messages](messages.md#活动通知管理) |
 | 后台 AI 实时配额 / 独立调整 | GET / PUT | `/admin/api/ai/quotas`, `/admin/api/ai/policies/:feature/quota` | AI 使用读取 / AI 配置操作及读取 | [admin-ai](admin-ai.md#实时配额与独立调整) |
 | 后台 AI 任务列表 / 统计 / 设置读取 | GET | `/admin/api/ai/tasks`, `/admin/api/ai/statistics`, `/admin/api/ai/settings` | AI 使用读取 | [admin-ai](admin-ai.md) |
@@ -176,7 +176,7 @@
 | 后台轨迹类型与贡献用户前十（天/周/月） | GET | `/admin/api/tracks/statistics` | 轨迹查看 | [admin-tracks.md](admin-tracks.md#轨迹类型与用户贡献统计) |
 | 后台轨迹坐标系预览 | GET | `/admin/api/tracks/:track_id/map-preview` | 轨迹查看 | [admin-tracks.md](admin-tracks.md#编辑字段与坐标预览) |
 | 后台批量导入轨迹（逐文件结果含轨迹表格摘要） | POST | `/admin/api/tracks/import` | 轨迹操作 | [admin-tracks.md](admin-tracks.md) |
-| 后台轨迹详情（含只读归属用户名） | GET | `/admin/api/tracks/:track_id` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |
+| 后台轨迹详情（只读归属用户名，起止时间按北京时间显示和编辑） | GET | `/admin/api/tracks/:track_id` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |
 | 后台轨迹图片与原始文件下载 | GET | `/admin/api/tracks/:track_id/assets/:asset` | 轨迹查看 | [admin-tracks.md](admin-tracks.md#详情资源展示与下载) |
 | 单条轨迹重新识别 | POST | `/admin/api/tracks/:track_id/place-refresh` | 轨迹操作 | [admin-tracks.md](admin-tracks.md) |
 | 地图 POI 设置轨迹景点标签 | POST | `/admin/api/tracks/:track_id/scenic-spot` | 轨迹及景点操作 | [admin-tracks.md](admin-tracks.md#地图点选景点标签) |

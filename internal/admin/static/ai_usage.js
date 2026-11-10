@@ -8,7 +8,7 @@
   const errorNames = { insufficient_balance: 'API 余额不足', invalid_parameters: '调用参数不兼容', authentication_failed: '凭证无效', provider_denied: '服务商拒绝', rate_limited: '调用限流', provider_unavailable: '服务商暂不可用', provider_request_failed: '供应商请求失败', network_or_response_error: '网络或响应异常', cancelled_or_timeout: '中断或超时', not_sent: '未发出请求', result_not_recorded: '执行中断，未取得最终响应记录' };
   const n = value => Number(value || 0).toLocaleString('zh-CN');
   const amount = value => Number(value || 0).toLocaleString('zh-CN', { maximumFractionDigits: 6 });
-  const dateTime = value => value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '—';
+  const dateTime = value => AdminTime.dateTime(value);
   const seconds = value => (Number(value || 0) / 1000).toFixed(1) + ' 秒';
   const feature = value => featureNames[value] || value;
   const node = (tag, text, className) => { const el = document.createElement(tag); if (text != null) el.textContent = String(text); if (className) el.className = className; return el; };
@@ -17,7 +17,7 @@
   let policyDirty = false, pricesDirty = false, busySettings = false;
   const controllers = {}, charts = new Map(), operations = new Set();
   const modal = new tabler.Modal($('detailModal'));
-  function localDate(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  function localDate(d) { return AdminTime.date(d); }
   let quotaLoading = false, quotaSnapshot = null, tasksLoading = false, statisticsLoading = false;
   const quotaNodes = new Map(), quotaDrafts = new Map(), controlPolicies = new Map();
   async function loadQuotas(force) {
@@ -105,7 +105,7 @@
   function setPeriod() {
     const custom = $('period').value === 'custom'; $('customDates').hidden = !custom;
     if (custom) return;
-    const today = new Date(), from = new Date(today); from.setDate(from.getDate() - (Number($('period').value) || 1) + 1); $('from').value = localDate(from); $('to').value = localDate(today);
+    const today = localDate(new Date()); $('from').value = AdminTime.shiftDate(today, -(Number($('period').value) || 1) + 1); $('to').value = today;
   }
   function updateFilterSummary() {
     const selected = ['provider', 'mode', 'status', 'adoption'].map(id => $(id).selectedOptions[0]).filter(option => option.value).map(option => option.textContent);

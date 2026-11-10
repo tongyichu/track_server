@@ -14,7 +14,7 @@
     return payload.data;
   }
   function cell(row, value) { const td = document.createElement('td'); td.textContent = value; row.appendChild(td); return td; }
-  function time(value) { return value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '—'; }
+  function time(value) { return AdminTime.dateTime(value); }
   function showError(element, message) { element.textContent = message; element.hidden = !message; }
 
   async function load() {

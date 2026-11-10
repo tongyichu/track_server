@@ -254,7 +254,7 @@ func parseAdminTrackTime(raw string, allowEmpty bool) (time.Time, error) {
 		return value, nil
 	}
 	for _, layout := range []string{"2006-01-02T15:04:05", "2006-01-02T15:04"} {
-		if value, err := time.ParseInLocation(layout, raw, time.Local); err == nil {
+		if value, err := time.ParseInLocation(layout, raw, time.FixedZone("Asia/Shanghai", 8*60*60)); err == nil {
 			return value, nil
 		}
 	}
@@ -395,7 +395,7 @@ func (h *Handler) GetDashboard(ctx context.Context, c *app.RequestContext) {
 		c.JSON(http.StatusInternalServerError, utils.H{"error": "dashboard statistics not configured"})
 		return
 	}
-	now := time.Now()
+	now := time.Now().In(time.FixedZone("Asia/Shanghai", 8*60*60))
 	start, previousStart, previousEnd, trendStart, period := dashboardPeriodBounds(now, strings.TrimSpace(string(c.Query("period"))))
 	trendEnd := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 0, 1)
 	if h.dashboardStatsRepo != nil {
@@ -845,7 +845,7 @@ func (h *Handler) GetAdminCompanionStatistics(ctx context.Context, c *app.Reques
 		c.JSON(http.StatusInternalServerError, utils.H{"error": "companion statistics not configured"})
 		return
 	}
-	now := time.Now()
+	now := time.Now().In(time.FixedZone("Asia/Shanghai", 8*60*60))
 	start, previousStart, previousEnd, _, period := dashboardPeriodBounds(now, strings.TrimSpace(string(c.Query("period"))))
 	statistics, err := h.dashboardStatsRepo.GetAdminCompanionStatistics(ctx, models.AdminDashboardQuery{
 		Start: start, End: now, PreviousStart: previousStart, PreviousEnd: previousEnd, Now: now,

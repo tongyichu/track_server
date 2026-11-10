@@ -92,7 +92,7 @@ func (h *Handler) UpdateUserProfile(ctx context.Context, c *app.RequestContext) 
 	}
 	if body.Birthday != "" {
 		birthday, err := time.Parse(time.DateOnly, body.Birthday)
-		if err != nil || birthday.Format(time.DateOnly) != body.Birthday || body.Birthday < "1900-01-01" || body.Birthday > time.Now().Format(time.DateOnly) {
+		if err != nil || birthday.Format(time.DateOnly) != body.Birthday || body.Birthday < "1900-01-01" || body.Birthday > time.Now().In(time.FixedZone("Asia/Shanghai", 8*60*60)).Format(time.DateOnly) {
 			c.JSON(http.StatusBadRequest, utils.H{"error": "invalid birthday"})
 			return
 		}

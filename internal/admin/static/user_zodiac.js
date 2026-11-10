@@ -7,8 +7,7 @@
   const labels = {aries:'白羊座',taurus:'金牛座',gemini:'双子座',cancer:'巨蟹座',leo:'狮子座',virgo:'处女座',libra:'天秤座',scorpio:'天蝎座',sagittarius:'射手座',capricorn:'摩羯座',aquarius:'水瓶座',pisces:'双鱼座'};
   const starts = [[120,'aquarius'],[219,'pisces'],[321,'aries'],[420,'taurus'],[521,'gemini'],[621,'cancer'],[723,'leo'],[823,'virgo'],[923,'libra'],[1023,'scorpio'],[1122,'sagittarius'],[1222,'capricorn']];
   function today() {
-    const d = new Date();
-    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    return AdminTime.date(new Date());
   }
   function zodiac(birthday) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(birthday) || birthday < '1900-01-01' || birthday > today()) return '';

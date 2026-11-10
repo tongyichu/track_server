@@ -28,8 +28,7 @@
     return node;
   }
   function time(value) {
-    var date = new Date(value);
-    return value && !isNaN(date.getTime()) ? date.toLocaleString() : '未知';
+    return AdminTime.dateTime(value, '未知');
   }
   function badge(item) {
     var color = 'secondary', state = '未知';

@@ -5,9 +5,7 @@
       .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
   function fmtTime(s) {
-    if (!s || String(s).startsWith('0001-')) return '—';
-    var date = new Date(s);
-    return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString('zh-CN', { hour12: false });
+    return AdminTime.dateTime(s);
   }
   var labels = {
     active: '进行中', ended: '已结束', public: '公开', private: '私密',

@@ -156,7 +156,7 @@
         });
         const footer = document.createElement('div'); footer.className = 'admin-track-candidates-heading mt-3';
         const identified = document.createElement('span'); identified.className = 'text-secondary';
-        const date = new Date(data.updated_at); identified.textContent = Number.isNaN(date.getTime()) ? '' : '识别时间：' + date.toLocaleString('zh-CN', { hour12: false });
+        const time = AdminTime.dateTime(data.updated_at, ''); identified.textContent = time ? '识别时间：' + time : '';
         footer.appendChild(identified);
         if (canWrite) {
           const dismiss = document.createElement('button'); dismiss.type = 'button'; dismiss.className = 'btn btn-sm btn-outline-secondary'; dismiss.textContent = '忽略本次候选'; dismiss.dataset.adminWrite = 'tracks';

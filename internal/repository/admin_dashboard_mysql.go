@@ -413,19 +413,20 @@ func (r *mysqlAdminDashboardRepository) loadCompanion(ctx context.Context, q mod
 }
 
 func (r *mysqlAdminDashboardRepository) loadDaily(ctx context.Context, q models.AdminDashboardQuery, result *models.AdminDashboardStatistics) error {
-	rows, err := r.db.QueryContext(ctx, `
-		SELECT 'new_user',DATE_FORMAT(created_at,'%Y-%m-%d'),COUNT(*) FROM users WHERE created_at>=? AND created_at<? GROUP BY 2
-		UNION ALL SELECT 'active_user',DATE_FORMAT(created_at,'%Y-%m-%d'),COUNT(DISTINCT user_id) FROM login_log WHERE created_at>=? AND created_at<? GROUP BY 2
-		UNION ALL SELECT 'track',DATE_FORMAT(created_at,'%Y-%m-%d'),COUNT(*) FROM track_records WHERE created_at>=? AND created_at<? AND `+completedTrackSQL+` GROUP BY 2
-		UNION ALL SELECT 'collection',DATE_FORMAT(created_at,'%Y-%m-%d'),COUNT(*) FROM track_collects WHERE created_at>=? AND created_at<? GROUP BY 2
-		UNION ALL SELECT 'navigation',DATE_FORMAT(created_at,'%Y-%m-%d'),COUNT(*) FROM track_navigations WHERE created_at>=? AND created_at<? GROUP BY 2
-		UNION ALL SELECT 'like',DATE_FORMAT(created_at,'%Y-%m-%d'),COUNT(*) FROM track_likes WHERE created_at>=? AND created_at<? GROUP BY 2
-		UNION ALL SELECT 'comment',DATE_FORMAT(created_at,'%Y-%m-%d'),COUNT(*) FROM track_comments WHERE created_at>=? AND created_at<? AND deleted=0 GROUP BY 2
-		UNION ALL SELECT 'companion',DATE_FORMAT(started_at,'%Y-%m-%d'),COUNT(*) FROM companion_sessions WHERE started_at>=? AND started_at<? GROUP BY 2`,
-		q.TrendStart, q.TrendEnd, q.TrendStart, q.TrendEnd, q.TrendStart, q.TrendEnd,
-		q.TrendStart, q.TrendEnd, q.TrendStart, q.TrendEnd, q.TrendStart, q.TrendEnd,
-		q.TrendStart, q.TrendEnd, q.TrendStart, q.TrendEnd,
-	)
+	query, args := mysqlAdminDailyQuery(q.TrendStart, q.TrendEnd, []mysqlAdminDailySource{
+		{"new_user", "users", "created_at", "COUNT(*)", ""},
+		{"active_user", "login_log", "created_at", "COUNT(DISTINCT user_id)", ""},
+		{"track", "track_records", "created_at", "COUNT(*)", completedTrackSQL},
+		{"collection", "track_collects", "created_at", "COUNT(*)", ""},
+		{"navigation", "track_navigations", "created_at", "COUNT(*)", ""},
+		{"like", "track_likes", "created_at", "COUNT(*)", ""},
+		{"comment", "track_comments", "created_at", "COUNT(*)", "deleted=0"},
+		{"companion", "companion_sessions", "started_at", "COUNT(*)", ""},
+	})
+	if query == "" {
+		return nil
+	}
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("dashboard daily metrics: %w", err)
 	}

@@ -6,7 +6,7 @@
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
   function fmtTime(s) {
-    return esc((s || '').replace('T', ' ').slice(0, 19));
+    return esc(AdminTime.dateTime(s));
   }
   var TRACK_TYPES = [
     { type: 'hiking', name: '徒步', icon: 'mingcute-hiking-line-v1.svg', color: '#00875A' },

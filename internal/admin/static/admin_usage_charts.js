@@ -4,11 +4,7 @@
   const charts = new Map(), maps = [];
   function esc(value) { return String(value == null ? '' : value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
   function date(value, hourly) {
-    const parsed = new Date(value);
-    if (Number.isNaN(parsed.getTime())) return '—';
-    const options = { timeZone: 'Asia/Shanghai', month: '2-digit', day: '2-digit', hour12: false };
-    if (hourly) { options.hour = '2-digit'; options.minute = '2-digit'; }
-    return parsed.toLocaleString('zh-CN', options);
+    return AdminTime.short(value, hourly);
   }
   function chart(id) {
     if (!window.echarts) throw new Error('图表组件暂不可用');

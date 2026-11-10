@@ -6,8 +6,8 @@
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
-  function fmtTime(s) {
-    return esc((s || '').replace('T', ' ').slice(0, 19));
+  function fmtTime(value) {
+    return esc(AdminTime.dateTime(value));
   }
   function genderText(value) {
     return value === 'male' ? '男' : (value === 'female' ? '女' : '-');

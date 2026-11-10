@@ -1,41 +1,28 @@
-# 消息模块开发交接（2026-11-10）
+# 后台时间与时区修复交接（2026-11-10）
 
 ## Original Plan And Steps
 
-- 用户批准消息中心、系统/活动通知运营、陌生人回复前首条限制、文字+轨迹私信、拉黑/解除和时间、分页未读，以及仅消息模块内MQTT。
+用户反馈 foxcoder 刚操作后的最近活跃显示为12:50:43，并要求排查后台所有同类问题、记录到AGENTS，避免再漏时区转换。
 
 ## Current Step
 
-- 完成track-server-backup首版代码和协议/表结构文档；尚未提交、推送或部署，不修改canonical track_server并发工作。Android首版在android-track-backup，Debug已生成，但小米3e7cd913未连接。
-- 新入口 internal/service/messages.go/message_direct.go/message_announcements.go/message_realtime.go、handler/messages.go、models/messages.go、repository/messages*.go。完整API docs/api/messages.md、架构/恢复/上线边界docs/messages.md。
+本轮代码、协议和项目规则已修改，用户随后已明确授权部署；本次从main/3b3fbf3（最近活跃功能）继续发布该功能显示问题及同类调用点修复。最终提交、镜像和生产健康状态以本次部署回执为准，不能将实现交接时的未部署状态当作最终生产状态。原消息模块交接完整保留在history_handoff/HANDOFF-20261110-210838.md，本文不重新认定其独立验收状态。
 
 ## Resolved Problems
 
-- JWT私信/未读/通知/互动接口、发送账号限制、MySQL/Mongo/memory一致CAS仓储及索引；生产消息持久化初始化失败503，不用内存假确认成功。
-- 私信thread内保存完整Pending日志后按确定ID写dm并清日志；崩溃由worker/读/重试修复。同client_id内容指纹校验，服务端seq单调，来信已读游标与全局cutoff不回退。双方拉黑阻止收发但保留历史，已注销对象可解除原拉黑。
-- MQTT沿用EMQX回调/发布客户端、签名secret，独立msgv1凭证15分钟，仅本人及通知主题订阅，禁止发布/通配符。QoS1只推刷新信号，持久化pending重投；私信双端同步。20秒广播心跳，App45秒无信号降级；每小时清过期凭证，不清聊天。
-- 后台新增announcements模块及活动&通知页：独立权限/同源/审计、字符串用户ID、CAS、草稿/预览/定时/即时/撤回、选填HTTPS H5、全部/指定受众。使用Tabler对话框，重复详情/保存确认去重，取消旧请求、关闭忽略旧响应，textContent防注入。
-- 通知App公开DTO不带受众ID/操作者；注册前历史无未读，编辑不重新置未读，撤回隐藏。评论/赞/收藏/关注在原操作成功后幂等追加并支持取消隐藏。
-
-## Problems
-
-- 互动事件与旧业务操作为两次仓储写入，并非跨库原子，进程在两次写入间退出有漏通知窗口；已在docs/messages.md明确，不把它描述成私信事务保证。不上线前历史互动回填。
-- agents-md-generator校验仍报告原仓库超长文件及空全局入口规则；本轮新增messages已拆分，不再有新增超长文件。仅更新根索引，不扩大规则授权。
-
-## Remaining Problems
-
-- 尚未部署，不能声称生产消息联通或业务流程验收通过。两账号首条限制/回复/互关、轨迹失效、拉黑及时间、重启/重试、MQTT生命周期、分页已读、后台受众/定时/编辑/撤回/权限均待人工检查。
-
-## Next Work
-
-- 明确部署授权后沿用android-track-release：同步实际发布仓库、提交推送、构建部署，再确认生产存储/EMQX发布链路及后台模块权限。当前不自动发布。
+- 已只读核对线上foxcoder：last_active_at=2026-11-10 12:50:43.784747 UTC，对应北京时间20:50:43.784747。MySQL驱动loc为默认UTC，数据正常，旧users.js截断RFC3339导致显示少8小时；未改数据库记录。
+- runtime.js新增共享AdminTime，assets.go原有注入链保证其先于页面脚本执行。后台用户/权限快照、账号/审计/登录菜单、发布/更新日志、反馈、埋点、路线组、同行/位置/弹幕、投稿、AI使用/价格、工作台、景点/候选及图表统一显示北京时间。
+- 通知定时发布/到期和轨迹起止时间按北京时间双向转换，未编辑时间保留原始值和精度。AI日期筛选、北京今日、未来生日校验及后台日周月窗口明确时区，纯日期/游标/时长保留原语义。
+- MySQL工作台每日趋势及兼容用户/上传趋势改用admin_daily_mysql.go按自然日边界批量UNION ALL聚合，不再直接DATE_FORMAT原始DATETIME；所有边界按time.Time交驱动转换，与连接实际存储时区一致。Mongo/内存兼容聚合按传入窗口时区归日，无表结构/接口方法变更。
+- 根及internal/admin/AGENTS.md已记录不变量、共享入口和列表/详情/输入/保存/跨日/统计分桶静态核对项；细则见docs/admin-ui.md#时间与时区，相关API文档和route-index已同步。
 
 ## Verification Evidence
 
-- go build ./...通过，announcements.js/shell.js/audit_log.js的node --check通过。
-- 公告HTML 28个ID无重复且JS直接引用齐全；mysql.sql与运行时MessageRecordsSchema一致，git diff --check通过。
-- Android :app:assembleDebug通过，未运行单元/集成/race/API/UI测试或启动数据库/容器，未写入线上业务数据。
+- go build ./...通过（最后一次包含仓储按日聚合修复）。21个变更JS的node --check通过，后续改动的runtime.js及announcements.js已重新通过语法检查；git diff --check通过。
+- 未新增或运行单元/集成/race/API/UI测试，未启动额外环境。列表、输入保存、跨日及统计的功能/性能验收由用户手动完成，未声称已实测。
+- agents-md-generator检查无规则内容/引用警告，仍报10个HEAD中已存在的超长源文件；全局/Users/foxcoder/.codex/AGENTS.md存在但为空。检查记录：/private/tmp/track-admin-time-audit.md；完整输出：/private/tmp/track-admin-time-agents-check.json。本轮不扩大为全仓拆分或修改全局规则。
 
-## Conversation Summary
+## Remaining Problems And Next Work
 
-- 用户讨论消息页完整形态并批准开工，要求消息模块内共享连接、离开关闭，普通页红点非实时；杀App后应恢复完整服务端历史、未读和聊天。实现保存与提醒分离，以HTTP存储和序号补拉保障历史，MQTT仅作刷新提醒，不把同行延长到整个App。
+- 用户已要求部署，沿用android-track-release服务端流程：同步、Go构建、明确路径提交推送、确认远端提交，再构建镜像/生产更新并核对内外网健康。本次仅部署服务端，不操作客户端发布或安装。
+- 功能/UI手动核对重点：UTC/偏移显示同一北京时刻、跨北京零点、非北京时间浏览器、空/零/非法值、通知与轨迹输入往返、未编辑秒/小数秒保留、凌晨统计归日。

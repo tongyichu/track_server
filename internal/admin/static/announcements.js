@@ -5,7 +5,7 @@
   const editor = new tabler.Modal($('noticeEditor'), { backdrop: 'static', keyboard: false });
   let editorVisible = false, editorClosing = false, leavePromise = null, saveGate = false;
   let current = null, detailGeneration = 0, detailController = null, saving = false, baseline = '';
-  const date = value => value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '立即';
+  const date = value => AdminTime.dateTime(value, value ? '—' : '立即');
   const kind = value => value === 'activity' ? '活动消息' : '系统消息';
   const status = notice => notice.status === 'draft' ? '草稿' : notice.status === 'withdrawn' ? '已撤回' : new Date(notice.publish_at) > new Date() ? '待定时发布' : '已发布';
   async function api(path, options = {}) {
@@ -40,12 +40,15 @@
     } catch (error) { if (!controller.signal.aborted) $('noticeListError').textContent = error.message; }
     finally { if (generation === listGeneration) { $('refreshNotices').disabled = false; $('moreNotices').disabled = false; } }
   }
-  function localDate(value) { if (!value) return ''; const d = new Date(value); if (!Number.isFinite(d.getTime())) return ''; const pad = n => String(n).padStart(2, '0'); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes()); }
+  function localDate(value) { return AdminTime.toInput(value); }
+  function inputTime(value, original) { return value && value === localDate(original) ? original : AdminTime.fromInput(value); }
   function snapshot() { return JSON.stringify(['noticeKind', 'noticeTitle', 'noticeBody', 'noticeURL', 'noticeAudience', 'noticeUsers', 'noticePublishAt', 'noticeExpiresAt'].map(id => $(id).value)); }
   function preview() {
     $('noticeUsersLabel').hidden = $('noticeAudience').value !== 'users';
     $('previewKind').textContent = kind($('noticeKind').value); $('previewTitle').textContent = $('noticeTitle').value || '通知标题';
-    $('previewBody').textContent = $('noticeBody').value || '通知正文'; $('previewTime').textContent = $('noticePublishAt').value ? date($('noticePublishAt').value) : '立即';
+    $('previewBody').textContent = $('noticeBody').value || '通知正文';
+    try { $('previewTime').textContent = $('noticePublishAt').value ? date(inputTime($('noticePublishAt').value, current?.publish_at)) : '立即'; }
+    catch (_) { $('previewTime').textContent = '请输入有效的北京时间'; }
     $('previewLink').textContent = $('noticeURL').value.trim() ? '点击卡片打开 H5' : '';
   }
   function bind(notice) {
@@ -92,7 +95,8 @@
     const controller = new AbortController(); detailController = controller; const timeout = setTimeout(() => controller.abort(), 30000);
     try {
       const notice = { ...owner, kind: $('noticeKind').value, title: $('noticeTitle').value.trim(), body: $('noticeBody').value.trim(), h5_url: $('noticeURL').value.trim(), status: nextStatus, target_user_ids: targets,
-        publish_at: owner?.status === 'published' || owner?.status === 'withdrawn' ? owner.publish_at : $('noticePublishAt').value ? new Date($('noticePublishAt').value).toISOString() : new Date().toISOString(), expires_at: $('noticeExpiresAt').value ? new Date($('noticeExpiresAt').value).toISOString() : null };
+        publish_at: owner?.status === 'published' || owner?.status === 'withdrawn' ? owner.publish_at : inputTime($('noticePublishAt').value, owner?.publish_at) || new Date().toISOString(),
+        expires_at: inputTime($('noticeExpiresAt').value, owner?.expires_at) || null };
       const result = await api(owner.id ? '/' + encodeURIComponent(owner.id) : '', { method: owner.id ? 'PUT' : 'POST', signal: controller.signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ expected_version: owner.revision || 0, notice }) });
       if (current !== owner) return; bind(result); await load();
     } catch (error) { if (current === owner) $('noticeSaveError').textContent = error.name === 'AbortError' ? '保存超时，请刷新核对后重试' : error.message; }

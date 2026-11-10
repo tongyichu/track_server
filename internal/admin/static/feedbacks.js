@@ -387,7 +387,7 @@
   }
 
   function fmtTime(s) {
-    return esc((s || '').replace('T', ' ').slice(0, 19));
+    return esc(AdminTime.dateTime(s));
   }
 
   function esc(s) {

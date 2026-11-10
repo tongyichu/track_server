@@ -537,7 +537,7 @@ func (r *InMemoryTrackRepository) ListAdminDailyUploadCounts(_ context.Context, 
 	counts := make(map[string]int64)
 	for _, track := range r.tracks {
 		if isAdminUploadedTrack(track, start, end) {
-			counts[track.CreatedAt.In(time.Local).Format("2006-01-02")]++
+			counts[track.CreatedAt.In(start.Location()).Format("2006-01-02")]++
 		}
 	}
 	return sortedAdminDailyCounts(counts), nil
@@ -764,7 +764,7 @@ func (r *InMemoryUserRepository) ListAdminDailyUserCounts(_ context.Context, sta
 	counts := make(map[string]int64)
 	for _, user := range r.users {
 		if user != nil && !user.CreatedAt.Before(start) && user.CreatedAt.Before(end) {
-			counts[user.CreatedAt.In(time.Local).Format("2006-01-02")]++
+			counts[user.CreatedAt.In(start.Location()).Format("2006-01-02")]++
 		}
 	}
 	return sortedAdminDailyCounts(counts), nil

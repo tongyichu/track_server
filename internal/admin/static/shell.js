@@ -151,8 +151,7 @@
     document.getElementById('accountMenuName').textContent = identity.display_name || identity.username;
     document.getElementById('accountMenuRole').textContent = identity.role === 'admin' ? '管理员' : '操作员';
     const lastLogin = identity.account && identity.account.last_login_at;
-    const lastLoginDate = lastLogin ? new Date(lastLogin) : null;
-    document.getElementById('accountMenuLastLogin').textContent = lastLoginDate && !Number.isNaN(lastLoginDate.getTime()) ? lastLoginDate.toLocaleString('zh-CN', { hour12: false }) : '—';
+    document.getElementById('accountMenuLastLogin').textContent = AdminTime.dateTime(lastLogin);
     const role = document.getElementById('adminRole');
     role.textContent = identity.role === 'admin' ? '管理员' : '操作员';
     role.className = 'badge ' + (identity.role === 'admin' ? 'bg-purple-lt' : 'bg-blue-lt');

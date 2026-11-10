@@ -601,7 +601,7 @@ func (r *MongoTrackRepository) CountAdminUploadUsersBetween(ctx context.Context,
 }
 
 func (r *MongoTrackRepository) ListAdminDailyUploadCounts(ctx context.Context, start, end time.Time) ([]models.AdminDailyCount, error) {
-	timezone := time.Now().Format("-07:00")
+	timezone := start.Format("-07:00")
 	cur, err := r.collection.Aggregate(ctx, mongo.Pipeline{
 		{{Key: "$match", Value: adminMongoTrackUploadFilter(start, end)}},
 		{{Key: "$group", Value: bson.M{"_id": bson.M{"$dateToString": bson.M{"date": "$created_at", "format": "%Y-%m-%d", "timezone": timezone}}, "count": bson.M{"$sum": 1}}}},
@@ -928,7 +928,7 @@ func (r *MongoUserRepository) CountAdminUsersBetween(ctx context.Context, start,
 }
 
 func (r *MongoUserRepository) ListAdminDailyUserCounts(ctx context.Context, start, end time.Time) ([]models.AdminDailyCount, error) {
-	timezone := time.Now().Format("-07:00")
+	timezone := start.Format("-07:00")
 	cur, err := r.collection.Aggregate(ctx, mongo.Pipeline{
 		{{Key: "$match", Value: bson.M{"created_at": bson.M{"$gte": start, "$lt": end}}}},
 		{{Key: "$group", Value: bson.M{"_id": bson.M{"$dateToString": bson.M{"date": "$created_at", "format": "%Y-%m-%d", "timezone": timezone}}, "count": bson.M{"$sum": 1}}}},

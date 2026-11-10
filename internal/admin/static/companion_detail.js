@@ -7,9 +7,7 @@
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
   function fmtTime(s) {
-    if (!s) return '';
-    if (String(s).startsWith('0001-')) return '';
-    return esc(String(s).replace('T', ' ').slice(0, 19));
+    return esc(AdminTime.dateTime(s));
   }
   function fmtBool(v) { return v ? '是' : '否'; }
 

@@ -201,8 +201,8 @@
       ['强制升级', it.force_update ? '是' : '否'],
       ['状态', it.status || ''],
       ['发布人', it.operator_name || '—'],
-      ['创建时间', (it.created_at || '').replace('T', ' ').slice(0, 19)],
-      ['更新时间', (it.updated_at || '').replace('T', ' ').slice(0, 19)],
+      ['创建时间', AdminTime.dateTime(it.created_at)],
+      ['更新时间', AdminTime.dateTime(it.updated_at)],
       ['包大小', formatSize(it.package_size)],
       ['包 MD5', it.package_md5 || '—'],
     ];
@@ -265,7 +265,7 @@
         '<td>' + (it.force_update ? '是' : '否') + '</td>' +
         '<td>' + esc(it.status) + '</td>' +
         '<td>' + esc(it.operator_name || '') + '</td>' +
-        '<td>' + esc((it.updated_at || '').replace('T', ' ').slice(0, 19)) + '</td>' +
+        '<td>' + esc(AdminTime.dateTime(it.updated_at)) + '</td>' +
         '<td>' + formatSize(it.package_size) + '</td>' +
         '<td class="release-notes-cell"></td>' +
         '<td class="row-actions"></td>';
@@ -336,7 +336,7 @@
         version.textContent = it.version_name || '';
         const meta = document.createElement('span');
         meta.className = 'changelog-entry-meta';
-        const time = (it.created_at || '').replace('T', ' ').slice(0, 19);
+        const time = AdminTime.dateTime(it.created_at);
         meta.textContent = [it.operator_name, time].filter(Boolean).join(' · ');
         head.append(version, meta);
         const notes = document.createElement('div');

@@ -20,6 +20,7 @@
 - 前端文件放 internal/admin/static/，复用现有 go:embed，不加第二套；路由和 fetch 固定 /admin，变更必须两端同步。业务静态资源由后台 session 代理，不用 App JWT 地址或暴露原始投稿 OSS URL。
 - APK 经后台 upload-package 本机上传并解析包版本，发布表单固定 Android；不改回浏览器 OSS 直传。发布记录删除不删除独立 changelog。
 - 组件使用内置 Tabler/ECharts、shell.js/ui.js/style.css；不新增 CDN 或复制导航/组件外观。新增页面加载 vendor/tabler.min.css → style.css，脚本按 vendor/tabler.min.js → shell.js → ui.js → 页面脚本。
+- 时间展示与输入统一复用 `static/runtime.js` 的 `AdminTime`，固定 Asia/Shanghai（北京时间）；不得直接截断 RFC3339、依赖浏览器/进程默认时区或硬加8小时。datetime-local 回填及提交显式双向转换，未编辑时间保留原值与精度；纯日期、游标和时长不当作待转换的展示时刻。修改时间相关代码须静态检查列表、详情、输入回填/保存、跨日筛选及统计分桶，见 [时间约定](../../docs/admin-ui.md#时间与时区)。
 - 用户约定（2026-11-04）：后台同类图表统一沿用用户管理页的配色、环形图/图例、细柱底轨、字体与留白，复用 static/admin_chart_style.js 和既有统计卡片样式，不在页面另写一套视觉配置；统计区默认紧凑，具体规范见 [图表统一规范](../../docs/admin-ui.md#图表统一规范)。
 - 主列表/筛选/详情基础信息不得等待图表、地图或外部回填；图表用 AdminAssets.loadCharts() 异步加载。动态资源用 AdminAssets.url()，保留内容版本、ETag、公共静态缓存与私有 no-store 隔离。
 - 列表批量/去重查询，资源 I/O 限并发、超时和取消；不逐行无限 goroutine。MutationObserver 只处理受影响子树且避免递归；只读锁在新增/更新控件时恢复。快筛选忽略旧响应、失败保留上次数据。

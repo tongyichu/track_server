@@ -2430,23 +2430,7 @@ func (r *MySQLTrackRepository) CountAdminUploadUsersBetween(ctx context.Context,
 }
 
 func (r *MySQLTrackRepository) ListAdminDailyUploadCounts(ctx context.Context, start, end time.Time) ([]models.AdminDailyCount, error) {
-	rows, err := r.db.QueryContext(ctx, `SELECT DATE_FORMAT(created_at, '%Y-%m-%d'), COUNT(*) FROM track_records
-		WHERE created_at >= ? AND created_at < ? AND deleted_at IS NULL AND status <> ?
-		AND is_running = 0 AND raw_track_url IS NOT NULL AND raw_track_url <> ''
-		GROUP BY DATE_FORMAT(created_at, '%Y-%m-%d') ORDER BY 1`, start, end, models.TrackStatusDeleted)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := make([]models.AdminDailyCount, 0)
-	for rows.Next() {
-		var item models.AdminDailyCount
-		if err := rows.Scan(&item.Date, &item.Count); err != nil {
-			return nil, err
-		}
-		items = append(items, item)
-	}
-	return items, rows.Err()
+	return listMySQLAdminDailyCounts(ctx, r.db, start, end, mysqlAdminDailySource{"track", "track_records", "created_at", "COUNT(*)", completedTrackSQL})
 }
 
 func (r *MySQLTrackWaypointRepository) Create(ctx context.Context, waypoint *models.TrackWaypoint) error {
@@ -2903,21 +2887,7 @@ func (r *MySQLUserRepository) CountAdminUsersBetween(ctx context.Context, start,
 }
 
 func (r *MySQLUserRepository) ListAdminDailyUserCounts(ctx context.Context, start, end time.Time) ([]models.AdminDailyCount, error) {
-	rows, err := r.db.QueryContext(ctx, `SELECT DATE_FORMAT(created_at, '%Y-%m-%d'), COUNT(*) FROM users
-		WHERE created_at >= ? AND created_at < ? GROUP BY DATE_FORMAT(created_at, '%Y-%m-%d') ORDER BY 1`, start, end)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := make([]models.AdminDailyCount, 0)
-	for rows.Next() {
-		var item models.AdminDailyCount
-		if err := rows.Scan(&item.Date, &item.Count); err != nil {
-			return nil, err
-		}
-		items = append(items, item)
-	}
-	return items, rows.Err()
+	return listMySQLAdminDailyCounts(ctx, r.db, start, end, mysqlAdminDailySource{"new_user", "users", "created_at", "COUNT(*)", ""})
 }
 
 type MySQLAccountRestrictionRepository struct{ db *sql.DB }

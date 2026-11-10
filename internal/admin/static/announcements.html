@@ -13,8 +13,8 @@
 <label class="form-label">H5链接（选填）<input id="noticeURL" class="form-control" type="url" placeholder="https://"></label>
 <label class="form-label">接收范围<select id="noticeAudience" class="form-select"><option value="all">全部用户</option><option value="users">指定用户</option></select></label>
 <label id="noticeUsersLabel" class="form-label" hidden>用户ID<textarea id="noticeUsers" class="form-control" rows="2" placeholder="多个ID用空格或逗号分隔"></textarea></label>
-<label class="form-label">发布时间<input id="noticePublishAt" class="form-control" type="datetime-local"><small class="text-secondary">留空则发布时立即发送</small></label>
-<label class="form-label">活动结束时间（选填）<input id="noticeExpiresAt" class="form-control" type="datetime-local"></label>
+<label class="form-label">发布时间（北京时间）<input id="noticePublishAt" class="form-control" type="datetime-local"><small class="text-secondary">留空则发布时立即发送</small></label>
+<label class="form-label">活动结束时间（北京时间，选填）<input id="noticeExpiresAt" class="form-control" type="datetime-local"></label>
 </div><aside class="notice-preview"><div class="text-secondary mb-3">客户端预览</div><div class="notice-preview-meta"><span id="previewKind">系统消息</span><small id="previewTime"></small></div><article class="notice-preview-card"><strong id="previewTitle"></strong><p id="previewBody"></p><small id="previewLink" class="text-secondary"></small></article></aside></div>
 <p id="noticeSaveError" class="text-danger" role="status"></p><div class="notice-footer"><button type="button" id="withdrawNotice" class="btn btn-outline-danger" data-admin-write="announcements" hidden>撤回通知</button><span id="noticeSavedState" class="text-secondary"></span><div class="notice-footer-actions"><button type="button" id="saveNoticeDraft" class="btn btn-outline-primary" data-admin-write="announcements">保存草稿</button><button type="submit" id="publishNotice" class="btn btn-primary" data-admin-write="announcements">发布通知</button></div></div></form></div></div></div>
 <script src="/admin/static/vendor/tabler.min.js"></script><script src="/admin/static/shell.js"></script><script src="/admin/static/ui.js"></script><script src="/admin/static/announcements.js"></script></body></html>
