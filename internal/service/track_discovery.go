@@ -15,6 +15,7 @@ type DiscoverSpot struct {
 	ID          string                        `json:"id"`
 	Name        string                        `json:"name"`
 	ScenicGrade string                        `json:"scenic_grade,omitempty"`
+	TrackCount  int64                         `json:"track_count"`
 	Description string                        `json:"description,omitempty"`
 	CoverURL    string                        `json:"cover_url"`
 	SourceURL   string                        `json:"source_url,omitempty"`
@@ -28,6 +29,7 @@ type DiscoverSpotsPage struct {
 }
 
 type discoverSpotCursor struct {
+	GradeRank  *int   `json:"grade_rank,omitempty"`
 	TrackCount int64  `json:"track_count"`
 	ID         string `json:"id"`
 }
@@ -41,15 +43,23 @@ func decodeDiscoverSpotCursor(raw string) (*discoverSpotCursor, error) {
 		return nil, invalidArg("invalid cursor")
 	}
 	var cursor discoverSpotCursor
-	if json.Unmarshal(data, &cursor) != nil || cursor.ID == "" || cursor.TrackCount < 0 {
+	if json.Unmarshal(data, &cursor) != nil || cursor.ID == "" || cursor.TrackCount < 0 ||
+		(cursor.GradeRank != nil && (*cursor.GradeRank < 0 || *cursor.GradeRank > 5)) {
 		return nil, invalidArg("invalid cursor")
 	}
 	return &cursor, nil
 }
 
-func encodeDiscoverSpotCursor(count int64, id string) string {
-	data, _ := json.Marshal(discoverSpotCursor{TrackCount: count, ID: id})
+func encodeDiscoverSpotCursor(grade int, count int64, id string) string {
+	data, _ := json.Marshal(discoverSpotCursor{GradeRank: &grade, TrackCount: count, ID: id})
 	return base64.RawURLEncoding.EncodeToString(data)
+}
+
+func discoverSpotGradeRank(grade string) int {
+	if normalized := normalizeScenicGrade(grade); normalized != "" {
+		return int(normalized[0] - '0')
+	}
+	return 0
 }
 
 func (s *TrackService) DiscoverSpotTracks(ctx context.Context, userID int64, spotID, rawCursor string, limit int) (*models.TrackSummaryPage, error) {
@@ -156,6 +166,7 @@ func (s *TrackService) DiscoverSpots(ctx context.Context, cityCode, cursor strin
 	}
 	type rankedSpot struct {
 		spot  *models.ScenicSpot
+		grade int
 		count int64
 	}
 	ranked := make([]rankedSpot, 0)
@@ -180,7 +191,7 @@ func (s *TrackService) DiscoverSpots(ctx context.Context, cityCode, cursor strin
 			if stats := counts[spot.ID]; stats != nil {
 				count = stats.TrackCount
 			}
-			ranked = append(ranked, rankedSpot{spot: spot, count: count})
+			ranked = append(ranked, rankedSpot{spot: spot, grade: discoverSpotGradeRank(spot.ScenicGrade), count: count})
 		}
 		if len(spots) < filter.Limit {
 			break
@@ -188,6 +199,9 @@ func (s *TrackService) DiscoverSpots(ctx context.Context, cityCode, cursor strin
 		filter.Cursor = spots[len(spots)-1].ID
 	}
 	sort.Slice(ranked, func(i, j int) bool {
+		if ranked[i].grade != ranked[j].grade {
+			return ranked[i].grade > ranked[j].grade
+		}
 		if ranked[i].count != ranked[j].count {
 			return ranked[i].count > ranked[j].count
 		}
@@ -195,7 +209,23 @@ func (s *TrackService) DiscoverSpots(ctx context.Context, cityCode, cursor strin
 	})
 	start := 0
 	if anchor != nil {
+		// Old cursors did not carry a grade; recover it from the same visible catalog.
+		if anchor.GradeRank == nil {
+			for _, item := range ranked {
+				if item.spot.ID == anchor.ID {
+					grade := item.grade
+					anchor.GradeRank = &grade
+					break
+				}
+			}
+			if anchor.GradeRank == nil {
+				return nil, invalidArg("cursor expired; reload scenic spots")
+			}
+		}
 		start = sort.Search(len(ranked), func(i int) bool {
+			if ranked[i].grade != *anchor.GradeRank {
+				return ranked[i].grade < *anchor.GradeRank
+			}
 			return ranked[i].count < anchor.TrackCount ||
 				(ranked[i].count == anchor.TrackCount && ranked[i].spot.ID > anchor.ID)
 		})
@@ -220,12 +250,12 @@ func (s *TrackService) DiscoverSpots(ctx context.Context, cityCode, cursor strin
 		if cover == "" && !spot.PhotosEdited && ownedScenicPhotoURL(spot.CoverURL) {
 			cover = spot.CoverURL
 		}
-		page.Items = append(page.Items, DiscoverSpot{ID: spot.ID, Name: spot.Name, ScenicGrade: spot.ScenicGrade, Description: spot.Description, CoverURL: cover, SourceURL: source, Photos: photos})
+		page.Items = append(page.Items, DiscoverSpot{ID: spot.ID, Name: spot.Name, ScenicGrade: spot.ScenicGrade, TrackCount: item.count, Description: spot.Description, CoverURL: cover, SourceURL: source, Photos: photos})
 	}
 	page.HasMore = end < len(ranked)
 	if page.HasMore {
 		last := ranked[end-1]
-		page.NextCursor = encodeDiscoverSpotCursor(last.count, last.spot.ID)
+		page.NextCursor = encodeDiscoverSpotCursor(last.grade, last.count, last.spot.ID)
 	}
 	return page, nil
 }

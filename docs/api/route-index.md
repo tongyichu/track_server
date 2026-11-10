@@ -29,7 +29,7 @@
 | 后台景点状态调整（详情删除按 archived 归档） | POST | `/admin/api/scenic-spots/:spot_id/status` | 后台景点写权限 | [track-place-discovery.md](../track-place-discovery.md#后台景点删除归档) |
 | 后台景点等级编辑与详情 | GET / PUT | `/admin/api/scenic-spots/:spot_id` | 后台景点读/写权限 | [景区等级采集与下发](../track-place-discovery.md#景区等级采集与下发) |
 | 存量景点资料、等级补采及高德图片下载压缩 | POST | `/admin/api/scenic-spots/provider-content/backfill` | 后台景点写权限 | [景区等级采集](../track-place-discovery.md#景区等级采集与下发)、[图片本地存储](../track-place-discovery.md#高德景点图片本地存储) |
-| 发现景点列表（含本站 photos 相册、scenic_grade） | GET | `/track/discover/scenic-spots` | 是 | [track.md](track.md#发现页与年度活动图表) |
+| 发现景点列表（含本站 photos 相册、scenic_grade、track_count；等级优先、同级按轨迹数降序分页） | GET | `/track/discover/scenic-spots` | 是 | [track.md](track.md#发现页与年度活动图表) |
 | 当前城市精品/景区/图形路线（城市、标签、运动类型筛选后分页） | GET | `/track/discover/routes` | 是 | [track.md](track.md#发现页与年度活动图表) |
 | 当前城市图形标签完整计数（可按运动类型筛选） | GET | `/track/discover/shape-labels` | 是 | [track.md](track.md#发现页与年度活动图表) |
 | 上报设备权限快照 | PUT | `/user/permission-snapshot` | 是 | [permission-snapshots.md](permission-snapshots.md) |
