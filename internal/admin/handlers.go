@@ -1193,14 +1193,7 @@ func (h *Handler) ListUsers(ctx context.Context, c *app.RequestContext) {
 	for _, u := range items {
 		userIDs = append(userIDs, u.ID)
 	}
-	lastLoginTimes := make(map[int64]time.Time, len(items))
-	if h.dashboardStatsRepo != nil {
-		lastLoginTimes, err = h.dashboardStatsRepo.GetAdminUserLastLoginTimes(ctx, userIDs)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
-			return
-		}
-	}
+	lastActiveTimes := h.adminUserLastActiveTimes(ctx, userIDs)
 	if selectedLevel == levelOptions[0].Level {
 		for _, id := range userIDs {
 			if _, found := levels[id]; !found {
@@ -1228,21 +1221,21 @@ func (h *Handler) ListUsers(ctx context.Context, c *app.RequestContext) {
 	h.decorateAdminUserAvatars(ctx, items)
 	rows := make([]utils.H, 0, len(items))
 	for _, u := range items {
-		var lastLoginAt interface{}
-		if value, ok := lastLoginTimes[u.ID]; ok {
-			lastLoginAt = value
+		var lastActiveAt interface{}
+		if value, ok := lastActiveTimes[u.ID]; ok {
+			lastActiveAt = value
 		}
 		row := utils.H{
-			"id":            strconv.FormatInt(u.ID, 10),
-			"nickname":      u.Nickname,
-			"avatar_url":    u.AvatarURL,
-			"gender":        u.Gender,
-			"province_name": u.ProvinceName,
-			"city_name":     u.CityName,
-			"is_internal":   u.IsInternal,
-			"phone":         u.Phone,
-			"created_at":    u.CreatedAt,
-			"last_login_at": lastLoginAt,
+			"id":             strconv.FormatInt(u.ID, 10),
+			"nickname":       u.Nickname,
+			"avatar_url":     u.AvatarURL,
+			"gender":         u.Gender,
+			"province_name":  u.ProvinceName,
+			"city_name":      u.CityName,
+			"is_internal":    u.IsInternal,
+			"phone":          u.Phone,
+			"created_at":     u.CreatedAt,
+			"last_active_at": lastActiveAt,
 		}
 		row["level"] = nil
 		if level, ok := levels[u.ID]; ok {

@@ -17,6 +17,7 @@ type LoginHandler struct {
 	loginSvc       *service.LoginService
 	achievementSvc *service.AchievementService
 	appReleaseSvc  *service.AppReleaseService
+	userSvc        *service.UserService
 	blacklist      *middleware.TokenBlacklist
 }
 
@@ -45,8 +46,9 @@ func (h *LoginHandler) SetAppReleaseService(appReleaseSvc *service.AppReleaseSer
 	h.appReleaseSvc = appReleaseSvc
 }
 
-// recordClientActivity 在登录成功后绑定用户记录设备活跃；失败不影响登录响应。
+// recordClientActivity records account/device activity; failures do not fail login.
 func (h *LoginHandler) recordClientActivity(ctx context.Context, c *app.RequestContext, userID int64) {
+	h.userSvc.RecordActivity(ctx, userID)
 	if h.appReleaseSvc == nil {
 		return
 	}

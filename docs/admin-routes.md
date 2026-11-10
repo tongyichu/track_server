@@ -51,8 +51,8 @@
 | GET | `/admin/api/releases/upload-token` | 鉴权 | 旧 OSS 直传 STS 凭证接口，前端不再使用 |
 | GET | `/admin/api/releases/client-statistics` | 鉴权 | 客户端活跃统计：`days=7|30`，版本/机型/系统版本分布、按日版本活跃趋势与最新发布版本渗透概况（含低于强升线设备数） |
 | GET | `/admin/api/static/*filepath` | 鉴权 | 后台静态资源代理，从 `<LogDir>/static/` 读取头像等资源；后台页面不要直接访问需业务 JWT 的 `/api/v1/static/*` |
-| GET | `/admin/api/users` | 用户查看 | 用户列表，支持 `title` 昵称模糊搜索、`is_internal` / `province_code` / `city_code` / `gender` / `level` / `restricted` 组合筛选及 cursor 翻页；旧 `zodiac_sign` 参数兼容。等级按现有 XP 规则计算后在 total/分页前筛选，返回权威 `level_options`；当前页批量补 `last_login_at`、`level`、`follower_count`，行不返回星座/限制详情。见 [列表协议](api/admin-users.md#列表) |
-| GET | `/admin/api/users/:user_id` | 用户查看 | 用户资料、生日派生星座、只读手机号/所在地及受保护背景图入口；见 [资料协议](api/admin-users.md) |
+| GET | `/admin/api/users` | 用户查看 | 用户列表，支持 `title` 昵称模糊搜索、`is_internal` / `province_code` / `city_code` / `gender` / `level` / `restricted` 组合筛选及 cursor 翻页；旧 `zodiac_sign` 参数兼容。等级按现有 XP 规则计算后在 total/分页前筛选，返回权威 `level_options`；当前页批量补 `last_active_at`、`level`、`follower_count`，行不返回星座/限制详情。见 [列表协议](api/admin-users.md#列表) |
+| GET | `/admin/api/users/:user_id` | 用户查看 | 用户资料、最近活跃、生日派生星座、只读手机号/所在地及受保护背景图入口；见 [资料协议](api/admin-users.md) |
 | PUT | `/admin/api/users/:user_id` | 用户操作 | 编辑昵称、签名、性别、生日与 `is_internal`；显式提交手机号返回400 |
 | GET | `/admin/api/users/:user_id/overview` | 用户查看 | 独立读取关注数、粉丝数、获赞数与完整级别，使用原有规则，不结算奖励 |
 | GET | `/admin/api/users/:user_id/background` | 用户查看 | 代理读取该用户已设置的背景图，不下发原始 OSS URL，不允许指定任意图片源 |

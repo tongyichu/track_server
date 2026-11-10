@@ -61,6 +61,7 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 	userHandler := NewUserHandler(deps.UserService)
 	loginHandler := NewLoginHandler(deps.LoginService, deps.TokenBlacklist, deps.AchievementService)
 	loginHandler.SetAppReleaseService(deps.AppReleaseService)
+	loginHandler.userSvc = deps.UserService
 	ossHandler := NewOSSHandler(deps.OSSTokenService)
 	appReleaseHandler := NewAppReleaseHandler(deps.AppReleaseService)
 	appReleaseOpsHandler := NewAppReleaseOpsHandler(deps.AppReleaseService, deps.StaticRoot, deps.OpsInternalToken)
@@ -128,7 +129,7 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 	}
 
 	// authenticated routes
-	auth := api.Group("", middleware.JWTAuthMiddleware(deps.LoginService, deps.TokenBlacklist), middleware.AccountRestrictionMiddleware(deps.AccountRestrictionService))
+	auth := api.Group("", middleware.JWTAuthMiddleware(deps.LoginService, deps.TokenBlacklist), middleware.UserActivityMiddleware(deps.UserService), middleware.AccountRestrictionMiddleware(deps.AccountRestrictionService))
 	messages := &MessageHandler{svc: deps.MessageService}
 	auth.GET("/messages/summary", messages.Summary)
 	auth.GET("/messages/notices", messages.Notices)

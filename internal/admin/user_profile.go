@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -20,22 +21,23 @@ import (
 )
 
 type adminUserProfileResponse struct {
-	ID            string    `json:"id"`
-	Nickname      string    `json:"nickname"`
-	AvatarURL     string    `json:"avatar_url"`
-	Signature     string    `json:"signature"`
-	BackgroundURL string    `json:"background_url"`
-	ZodiacSign    string    `json:"zodiac_sign"`
-	Phone         string    `json:"phone"`
-	Gender        string    `json:"gender"`
-	Birthday      string    `json:"birthday"`
-	ProvinceCode  string    `json:"province_code"`
-	ProvinceName  string    `json:"province_name"`
-	CityCode      string    `json:"city_code"`
-	CityName      string    `json:"city_name"`
-	IsInternal    bool      `json:"is_internal"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	ID            string     `json:"id"`
+	Nickname      string     `json:"nickname"`
+	AvatarURL     string     `json:"avatar_url"`
+	Signature     string     `json:"signature"`
+	BackgroundURL string     `json:"background_url"`
+	ZodiacSign    string     `json:"zodiac_sign"`
+	Phone         string     `json:"phone"`
+	Gender        string     `json:"gender"`
+	Birthday      string     `json:"birthday"`
+	ProvinceCode  string     `json:"province_code"`
+	ProvinceName  string     `json:"province_name"`
+	CityCode      string     `json:"city_code"`
+	CityName      string     `json:"city_name"`
+	IsInternal    bool       `json:"is_internal"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
+	LastActiveAt  *time.Time `json:"last_active_at"`
 }
 
 func (h *Handler) GetUserProfile(ctx context.Context, c *app.RequestContext) {
@@ -143,6 +145,10 @@ func (h *Handler) adminUserProfile(ctx context.Context, user *models.User) *admi
 	if strings.TrimSpace(user.BackgroundURL) != "" {
 		backgroundURL = "/admin/api/users/" + strconv.FormatInt(user.ID, 10) + "/background"
 	}
+	var lastActiveAt *time.Time
+	if at, ok := h.adminUserLastActiveTimes(ctx, []int64{user.ID})[user.ID]; ok {
+		lastActiveAt = &at
+	}
 	return &adminUserProfileResponse{
 		ID: strconv.FormatInt(user.ID, 10), Nickname: user.Nickname, AvatarURL: rewriteAdminStaticURL(user.AvatarURL),
 		BackgroundURL: backgroundURL, ZodiacSign: service.ZodiacSignFromBirthday(user.Birthday),
@@ -150,7 +156,23 @@ func (h *Handler) adminUserProfile(ctx context.Context, user *models.User) *admi
 		ProvinceCode: user.ProvinceCode, ProvinceName: user.ProvinceName,
 		CityCode: user.CityCode, CityName: user.CityName, IsInternal: user.IsInternal,
 		CreatedAt: user.CreatedAt, UpdatedAt: user.UpdatedAt,
+		LastActiveAt: lastActiveAt,
 	}
+}
+
+func (h *Handler) adminUserLastActiveTimes(ctx context.Context, userIDs []int64) map[int64]time.Time {
+	repo, ok := h.userRepo.(repository.UserActivityRepository)
+	if !ok || len(userIDs) == 0 {
+		return nil
+	}
+	readCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+	defer cancel()
+	values, err := repo.GetUserLastActiveTimes(readCtx, userIDs)
+	if err != nil {
+		log.Printf("admin user activity unavailable: %v", err)
+		return nil
+	}
+	return values
 }
 
 func writeAdminUserProfileError(c *app.RequestContext, err error) {

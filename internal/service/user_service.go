@@ -33,6 +33,7 @@ var (
 
 // UserService provides business logic related to user profile and settings.
 type UserService struct {
+	activity        userActivityWindow
 	messages        *MessageService
 	likes           repository.TrackLikeRepository
 	users           repository.UserRepository

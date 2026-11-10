@@ -449,7 +449,7 @@
       detailForm.elements.is_internal.checked = !!user.is_internal;
       document.getElementById('userDetailLocation').value = locationText(user);
       document.getElementById('userDetailName').textContent = user.nickname || '未设置昵称';
-      document.getElementById('userDetailMeta').textContent = '注册  ' + fmtTime(user.created_at) + '\n更新  ' + fmtTime(user.updated_at);
+      document.getElementById('userDetailMeta').textContent = '注册  ' + fmtTime(user.created_at) + '\n最近活跃  ' + (user.last_active_at ? fmtTime(user.last_active_at) : '—') + '\n资料更新  ' + fmtTime(user.updated_at);
       if (user.avatar_url) document.getElementById('userDetailAvatar').src = user.avatar_url;
       backgroundURL = user.background_url || ''; loadBackground(); renderBirthday(user.zodiac_sign);
       profileReady = true; profileFields.disabled = false; detailSave.disabled = false; renderRestriction();
@@ -553,7 +553,7 @@
           '<td>' + esc(genderText(it.gender)) + '</td>' +
           '<td><span class="admin-user-city-cell">' + esc(locationText(it)) + '</span></td>' +
           '<td>' + (it.follower_count == null ? '—' : esc(number(it.follower_count).toLocaleString())) + '</td>' +
-          '<td>' + (it.last_login_at ? fmtTime(it.last_login_at) : '—') + '</td>' +
+          '<td>' + (it.last_active_at ? fmtTime(it.last_active_at) : '—') + '</td>' +
           '<td><div class="admin-user-actions"><button data-action="detail" data-user-id="' + esc(it.id) + '">查看详情</button>' + '</div></td>';
         tbody.appendChild(tr);
       });

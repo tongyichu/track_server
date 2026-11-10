@@ -590,6 +590,7 @@ func (r *InMemoryTrackWaypointRepository) ListByTrackID(_ context.Context, track
 type InMemoryUserRepository struct {
 	mu                  sync.RWMutex
 	users               map[int64]*models.User
+	lastActive          map[int64]time.Time
 	accountRestrictions *InMemoryAccountRestrictionRepository
 }
 
