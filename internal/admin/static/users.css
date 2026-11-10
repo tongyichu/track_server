@@ -1,4 +1,4 @@
-.admin-user-table { min-width: 860px; }
+.admin-user-table { min-width: 980px; }
 .admin-user-name { display: flex; align-items: center; gap: 7px; min-width: 0; }
 .admin-user-name > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .admin-user-level { display: inline-flex; align-items: center; flex-shrink: 0; padding: 3px 7px; border-radius: 5px; background: rgba(var(--tblr-primary-rgb), .1); color: var(--tblr-link-color); font-size: 11px; font-weight: 600; line-height: 1.3; white-space: nowrap; }

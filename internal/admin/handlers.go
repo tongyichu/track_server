@@ -1193,7 +1193,7 @@ func (h *Handler) ListUsers(ctx context.Context, c *app.RequestContext) {
 	for _, u := range items {
 		userIDs = append(userIDs, u.ID)
 	}
-	lastActiveTimes := h.adminUserLastActiveTimes(ctx, userIDs)
+	activityStats := h.adminUserActivityStats(ctx, userIDs)
 	if selectedLevel == levelOptions[0].Level {
 		for _, id := range userIDs {
 			if _, found := levels[id]; !found {
@@ -1222,8 +1222,10 @@ func (h *Handler) ListUsers(ctx context.Context, c *app.RequestContext) {
 	rows := make([]utils.H, 0, len(items))
 	for _, u := range items {
 		var lastActiveAt interface{}
-		if value, ok := lastActiveTimes[u.ID]; ok {
-			lastActiveAt = value
+		var activeDays7D interface{}
+		if stats, ok := activityStats[u.ID]; ok {
+			lastActiveAt = stats.LastActiveAt
+			activeDays7D = stats.ActiveDays7D
 		}
 		row := utils.H{
 			"id":             strconv.FormatInt(u.ID, 10),
@@ -1236,6 +1238,7 @@ func (h *Handler) ListUsers(ctx context.Context, c *app.RequestContext) {
 			"phone":          u.Phone,
 			"created_at":     u.CreatedAt,
 			"last_active_at": lastActiveAt,
+			"active_days_7d": activeDays7D,
 		}
 		row["level"] = nil
 		if level, ok := levels[u.ID]; ok {

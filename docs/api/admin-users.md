@@ -4,7 +4,7 @@
 
 ## 列表
 
-`GET /admin/api/users` 支持昵称、内部人员、省市、性别、用户等级、限制状态和游标筛选。页面以“用户等级”替换星座筛选，传入精确 `level`；不传表示全部等级，非法等级返回400。旧 `zodiac_sign` 查询参数继续兼容。列表行展示用户、手机号、性别、所在城市、粉丝数、最近活跃和详情入口；头像保留内部人员角标，昵称旁只显示 `Lv.N`。
+`GET /admin/api/users` 支持昵称、内部人员、省市、性别、用户等级、限制状态和游标筛选。页面以“用户等级”替换星座筛选，传入精确 `level`；不传表示全部等级，非法等级返回400。旧 `zodiac_sign` 查询参数继续兼容。列表行展示用户、手机号、性别、所在城市、粉丝数、最近活跃、近7天活跃天数和详情入口；头像保留内部人员角标，昵称旁只显示 `Lv.N`。
 
 行响应包含 `level`（整数）及 `follower_count`（整数）。未按等级筛选时，级别读取失败为 `null`，页面隐藏标签，不伪造 Lv.1；粉丝数读取失败为 `null`，页面显示“—”，无粉丝时为0。响应 `data.level_options` 取权威等级定义（`level/name/xp`），供筛选项使用，级别名不进入列表行。列表不下发 `zodiac_sign` 和 `account_restriction`，这两项在详情展示。`next_cursor.id` 使用字符串，保持完整 int64 精度。
 
@@ -18,17 +18,27 @@
 
 接口保留带时区的时间值；用户管理页复用 `runtime.js` 的 `AdminTime` 按 `Asia/Shanghai` 显示最近活跃、注册、资料更新和限制到期时间，格式为 `YYYY-MM-DD HH:mm:ss`，不受浏览器本地时区影响。不得直接截断 RFC3339 的 `Z`/偏移，也不调整数据库历史时间来补偿显示。空值或无效值显示“—”。通用约定见[后台时间与时区](../admin-ui.md#时间与时区)。
 
-`UserService.RecordActivity` 在单进程内按用户约一分钟限频（有界缓存），每次写入最多等待500ms，失败只记日志、不影响业务响应，下一限频窗口可重试；不新增请求、心跳或无限后台任务。多设备按同一用户合并，三种仓储只接受更晚时间。该值可能包含后台业务请求，不能用于判断用户此刻在线、前台停留时长或离线阅读；缓存淘汰或服务重启可提前再次写入。
+`UserService.RecordActivity` 在单进程内按用户约一分钟限频（有界缓存），跨北京时间零点后首次活跃直接通过限频，避免新一天漏记。每次写入最多等待500ms，失败只记日志、不影响业务响应，下一限频窗口可重试；不新增请求、心跳或无限后台任务。多设备按同一用户合并，三种仓储的最近活跃只接受更晚时间。该值可能包含后台业务请求，不能用于判断用户此刻在线、前台停留时长或离线阅读；缓存淘汰或服务重启可提前再次写入。
 
 MySQL 启动幂等补充 `users.last_active_at DATETIME(6) NULL`；Mongo 同名字段、内存独立映射，实现 `UserActivityRepository`。当前页用一次批量查询，详情用相同读取口径；读取失败或尚未采集为 `null`，页面显示“—”，不阻断基础资料。不用登录日志、设备绑定或 `updated_at` 回填历史活跃时间。字段仅在后台接口中下发，不进入 App 用户/他人主页响应。
 
+## 近7天活跃天数
+
+列表和用户详情增量返回 `active_days_7d`：整数0～7，表示按北京时间计算的今天及前6个自然日中，实际记录过活跃的日期数。同一用户同一天不论请求次数、设备或服务重启只计1天；未来日期与窗口外日期不计。与最近活跃复用同一登录成功/已认证业务请求采集口径，可能包含后台业务活动，后台 session 查看、编辑和匿名升级检查不计入。
+
+数值0表示该窗口没有已采集日期；读取失败/仓储未实现时为 `null`，页面显示“—”，不伪造成0。只有最近活跃时间无法重建逐日历史，因此从本功能启用后开始累计，不以登录日志、资料更新时间或旧 `last_active_at` 补算；刚上线前7天的结果可能仅覆盖启用后的部分日期。列表列标题提示统计窗口及启用后累计，详情使用相同口径。
+
+MySQL 启动幂等创建 `user_activity_days(user_id BIGINT,active_date DATE,PRIMARY KEY(user_id,active_date))`，自然日按字符串传参，不让连接时区再次转换日期。最近活跃与日去重在同一事务中写入，按主键去重，多设备/重试幂等；后续新日期写入时清理该用户窗口外日期。Mongo 使用用户文档内 `activity_days` 日期集合及单文档更新管道（MongoDB 4.2+），内存使用独立日期集合，并在写入时清理旧日期；读取均严格限定当前7个自然日。不存在的用户不因活跃采集创建资料或关系。
+
+`GetUserActivityStats` 按当前页用户一次批量读取最近活跃和日期计数：MySQL 为主键范围 LEFT JOIN 聚合，Mongo 为投影读取，内存持读锁批量汇总；没有逐行请求或全量用户历史扫描。详情复用该方法，500ms读取超时、失败只影响活跃显示，不阻断基础资料。字段只在后台 users 查看权限下下发，不进入业务用户 API，无新路由。
+
 ## 资料读取与保存
 
-`GET /admin/api/users/:user_id` 返回 `id/nickname/avatar_url/signature/background_url/gender/birthday/zodiac_sign/phone/province_code/province_name/city_code/city_name/is_internal/created_at/updated_at/last_active_at`。
+`GET /admin/api/users/:user_id` 返回 `id/nickname/avatar_url/signature/background_url/gender/birthday/zodiac_sign/phone/province_code/province_name/city_code/city_name/is_internal/created_at/updated_at/last_active_at/active_days_7d`。
 
 - `background_url` 非空时固定为该用户的 `/admin/api/users/:user_id/background`，不暴露原始 OSS 地址。
 - `zodiac_sign` 由服务端根据生日派生；未填写/无效日期为空串。后台选择生日时即时预览标签，保存只提交生日。边界规则见 [用户星座](user.md#星座派生规则)，图标和明暗配色复用 Android 客户端 MingCute 资源，许可随静态资源分发。
-- 手机号、所在地、头像、背景图、互动数据、级别与最近活跃只读。详情分别显示“注册”“最近活跃”“资料更新”；`updated_at` 是用户资料/账号记录更新时间，修改资料、所在地或令牌版本均可能改变，不能当作最近活跃。
+- 手机号、所在地、头像、背景图、互动数据、级别、最近活跃及近7天活跃天数只读。详情分别显示“注册”“最近活跃”“近7天活跃”“资料更新”；`updated_at` 是用户资料/账号记录更新时间，修改资料、所在地或令牌版本均可能改变，不能当作最近活跃。
 
 `PUT /admin/api/users/:user_id` 只保存 `nickname/signature/gender/birthday/is_internal`。昵称 1–20 字、签名最多100字；生日格式、范围与原实现相同。任何显式 `phone` 字段（含空串或 null）均返回400，数据库中的手机号保留原值。其余只读展示信息不随表单提交。
 

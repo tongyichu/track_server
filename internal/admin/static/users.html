@@ -66,14 +66,16 @@
         <label>账号限制 <select id="restrictedFilter" class="form-select"><option value="">全部</option><option value="true">已限制</option><option value="false">正常</option></select></label>
         <button id="searchBtn" class="btn btn-primary">搜索</button>
       </div>
+      <div class="table-responsive">
       <table class="data admin-user-table">
         <thead>
           <tr>
-            <th>用户</th><th>手机号</th><th>性别</th><th>所在城市</th><th>粉丝数</th><th title="北京时间；最近一次 App 活动时间，约一分钟精度，可能包含后台活动">最近活跃</th><th>操作</th>
+            <th>用户</th><th>手机号</th><th>性别</th><th>所在城市</th><th>粉丝数</th><th title="北京时间；最近一次 App 活动时间，约一分钟精度，可能包含后台活动">最近活跃</th><th title="按北京时间统计今天及前6天，每天最多计1天；启用后累计，历史不补算">近7天活跃天数</th><th>操作</th>
           </tr>
         </thead>
         <tbody id="userList"></tbody>
       </table>
+      </div>
       <div class="admin-pagination">
         <span class="hint" id="pageHint" role="status" aria-live="polite"></span>
         <div><button id="prevBtn" class="btn btn-outline-secondary" type="button" disabled>上一页</button><button id="nextBtn" class="btn btn-outline-secondary" type="button" disabled>下一页</button></div>

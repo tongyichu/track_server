@@ -38,6 +38,7 @@ type adminUserProfileResponse struct {
 	CreatedAt     time.Time  `json:"created_at"`
 	UpdatedAt     time.Time  `json:"updated_at"`
 	LastActiveAt  *time.Time `json:"last_active_at"`
+	ActiveDays7D  *int       `json:"active_days_7d"`
 }
 
 func (h *Handler) GetUserProfile(ctx context.Context, c *app.RequestContext) {
@@ -146,8 +147,10 @@ func (h *Handler) adminUserProfile(ctx context.Context, user *models.User) *admi
 		backgroundURL = "/admin/api/users/" + strconv.FormatInt(user.ID, 10) + "/background"
 	}
 	var lastActiveAt *time.Time
-	if at, ok := h.adminUserLastActiveTimes(ctx, []int64{user.ID})[user.ID]; ok {
-		lastActiveAt = &at
+	var activeDays7D *int
+	if stats, ok := h.adminUserActivityStats(ctx, []int64{user.ID})[user.ID]; ok {
+		lastActiveAt = stats.LastActiveAt
+		activeDays7D = &stats.ActiveDays7D
 	}
 	return &adminUserProfileResponse{
 		ID: strconv.FormatInt(user.ID, 10), Nickname: user.Nickname, AvatarURL: rewriteAdminStaticURL(user.AvatarURL),
@@ -157,17 +160,18 @@ func (h *Handler) adminUserProfile(ctx context.Context, user *models.User) *admi
 		CityCode: user.CityCode, CityName: user.CityName, IsInternal: user.IsInternal,
 		CreatedAt: user.CreatedAt, UpdatedAt: user.UpdatedAt,
 		LastActiveAt: lastActiveAt,
+		ActiveDays7D: activeDays7D,
 	}
 }
 
-func (h *Handler) adminUserLastActiveTimes(ctx context.Context, userIDs []int64) map[int64]time.Time {
+func (h *Handler) adminUserActivityStats(ctx context.Context, userIDs []int64) map[int64]models.UserActivityStats {
 	repo, ok := h.userRepo.(repository.UserActivityRepository)
 	if !ok || len(userIDs) == 0 {
 		return nil
 	}
 	readCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
 	defer cancel()
-	values, err := repo.GetUserLastActiveTimes(readCtx, userIDs)
+	values, err := repo.GetUserActivityStats(readCtx, userIDs, time.Now())
 	if err != nil {
 		log.Printf("admin user activity unavailable: %v", err)
 		return nil

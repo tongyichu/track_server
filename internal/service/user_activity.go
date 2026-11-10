@@ -29,7 +29,10 @@ func (s *UserService) RecordActivity(ctx context.Context, userID int64) {
 	now := time.Now()
 	w := &s.activity
 	w.mu.Lock()
-	if now.Sub(w.attempts[userID]) < userActivityInterval {
+	previous := w.attempts[userID]
+	// Midnight starts a new activity date even when the previous touch was less than a minute ago.
+	zone := time.FixedZone("Asia/Shanghai", 8*60*60)
+	if now.Sub(previous) < userActivityInterval && now.In(zone).Format(time.DateOnly) == previous.In(zone).Format(time.DateOnly) {
 		w.mu.Unlock()
 		return
 	}

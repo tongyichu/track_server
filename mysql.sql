@@ -22,6 +22,13 @@ CREATE TABLE `users` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户基础资料表';
 
 
+CREATE TABLE `user_activity_days` (
+    `user_id` BIGINT NOT NULL,
+    `active_date` DATE NOT NULL COMMENT '北京时间自然日',
+    PRIMARY KEY (`user_id`, `active_date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户近七天活跃日期';
+
+
 CREATE TABLE `user_account_restrictions` (
                                              `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
                                              `user_id` BIGINT NOT NULL COMMENT '被限制用户ID',

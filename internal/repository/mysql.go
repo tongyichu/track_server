@@ -64,6 +64,7 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 			updated_at DATETIME(6) NOT NULL,
 			INDEX idx_users_updated_at (updated_at)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
+		userActivityDaysSchema,
 		`CREATE TABLE IF NOT EXISTS user_account_restrictions (
 			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
 			user_id BIGINT NOT NULL COMMENT '被限制用户ID',

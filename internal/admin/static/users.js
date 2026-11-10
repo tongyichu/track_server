@@ -9,6 +9,9 @@
   function fmtTime(value) {
     return esc(AdminTime.dateTime(value));
   }
+  function activeDaysText(value) {
+    return Number.isInteger(value) && value >= 0 && value <= 7 ? value + ' 天' : '—';
+  }
   function genderText(value) {
     return value === 'male' ? '男' : (value === 'female' ? '女' : '-');
   }
@@ -449,7 +452,7 @@
       detailForm.elements.is_internal.checked = !!user.is_internal;
       document.getElementById('userDetailLocation').value = locationText(user);
       document.getElementById('userDetailName').textContent = user.nickname || '未设置昵称';
-      document.getElementById('userDetailMeta').textContent = '注册  ' + fmtTime(user.created_at) + '\n最近活跃  ' + (user.last_active_at ? fmtTime(user.last_active_at) : '—') + '\n资料更新  ' + fmtTime(user.updated_at);
+      document.getElementById('userDetailMeta').textContent = '注册  ' + fmtTime(user.created_at) + '\n最近活跃  ' + (user.last_active_at ? fmtTime(user.last_active_at) : '—') + '\n近7天活跃  ' + activeDaysText(user.active_days_7d) + '\n资料更新  ' + fmtTime(user.updated_at);
       if (user.avatar_url) document.getElementById('userDetailAvatar').src = user.avatar_url;
       backgroundURL = user.background_url || ''; loadBackground(); renderBirthday(user.zodiac_sign);
       profileReady = true; profileFields.disabled = false; detailSave.disabled = false; renderRestriction();
@@ -524,7 +527,7 @@
     totalHint.textContent = '';
     pageHint.textContent = '正在加载…';
     tbody.setAttribute('aria-busy', 'true');
-    tbody.innerHTML = '<tr><td colspan="7">正在加载用户…</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8">正在加载用户…</td></tr>';
     try {
       var resp = await fetch('/admin/api/users?' + params.toString());
       var body = await resp.json();
@@ -554,16 +557,17 @@
           '<td><span class="admin-user-city-cell">' + esc(locationText(it)) + '</span></td>' +
           '<td>' + (it.follower_count == null ? '—' : esc(number(it.follower_count).toLocaleString())) + '</td>' +
           '<td>' + (it.last_active_at ? fmtTime(it.last_active_at) : '—') + '</td>' +
+          '<td>' + activeDaysText(it.active_days_7d) + '</td>' +
           '<td><div class="admin-user-actions"><button data-action="detail" data-user-id="' + esc(it.id) + '">查看详情</button>' + '</div></td>';
         tbody.appendChild(tr);
       });
-      if (!items.length) tbody.innerHTML = '<tr><td colspan="7">暂无符合条件的用户</td></tr>';
+      if (!items.length) tbody.innerHTML = '<tr><td colspan="8">暂无符合条件的用户</td></tr>';
       nextBtn.disabled = !lastNextCursor;
       pageHint.textContent = '第 ' + (pageIndex + 1) + ' 页 · 本页 ' + items.length + ' 个用户';
       totalHint.textContent = '共 ' + totalCount.toLocaleString() + ' 个用户';
     } catch (error) {
       if (request !== listRequest) return;
-      tbody.innerHTML = '<tr><td colspan="7">加载失败：' + esc(error.message) + '。请点击“刷新”重试。</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8">加载失败：' + esc(error.message) + '。请点击“刷新”重试。</td></tr>';
       pageHint.textContent = '加载失败';
     } finally {
       if (request === listRequest) {
