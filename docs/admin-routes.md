@@ -15,6 +15,9 @@
 |------|------|------|------|
 | GET | `/admin/`、`/admin` | 公开 | 302 跳转 `/admin/login.html` |
 | GET | `/admin/login.html` | 公开 | 登录页 |
+| GET | `/admin/announcements.html` | announcements读取 | 活动&通知页 |
+| GET / POST | `/admin/api/announcements` | announcements读/写 | 通知分页或新建 |
+| GET / PUT | `/admin/api/announcements/:notice_id` | announcements读/写 | 通知详情、修改或撤回，CAS保存 |
 | GET | `/admin/index.html` | 会话 | 管理首页，服务端返回 HTML 前校验会话 |
 | GET | `/admin/dashboard.html` | 会话 | 响应式运营工作台，服务端返回 HTML 前校验会话 |
 | GET | `/admin/more.html` | 会话 | 移动端低频功能入口，服务端返回 HTML 前校验会话 |

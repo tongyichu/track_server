@@ -709,3 +709,19 @@ CREATE TABLE IF NOT EXISTS ai_usage_tasks (
 CREATE TABLE IF NOT EXISTS ai_usage_state (
  state_key VARCHAR(160) NOT NULL PRIMARY KEY, revision BIGINT NOT NULL, payload JSON NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Durable inbox, private messages, announcement receipts and MQTT delivery journal.
+CREATE TABLE IF NOT EXISTS message_records (
+ id VARCHAR(160) NOT NULL PRIMARY KEY, kind VARCHAR(24) NOT NULL,
+ user_id BIGINT NOT NULL DEFAULT 0, peer_id BIGINT NOT NULL DEFAULT 0,
+ thread_id VARCHAR(100) NOT NULL DEFAULT '', seq BIGINT NOT NULL DEFAULT 0,
+ created_at DATETIME(6) NOT NULL, active BOOLEAN NOT NULL DEFAULT TRUE,
+ pending BOOLEAN NOT NULL DEFAULT FALSE, flag_a BOOLEAN NOT NULL DEFAULT FALSE,
+ flag_b BOOLEAN NOT NULL DEFAULT FALSE, targets JSON NOT NULL,
+ revision BIGINT NOT NULL, payload JSON NOT NULL,
+ INDEX idx_messages_kind(kind,created_at,id),
+ INDEX idx_messages_user(kind,user_id,created_at,id),
+ INDEX idx_messages_peer(kind,peer_id,created_at,id),
+ INDEX idx_messages_thread(kind,thread_id,seq),
+ INDEX idx_messages_delivery(pending,created_at,id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

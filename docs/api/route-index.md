@@ -4,6 +4,18 @@
 
 | 接口 | 方法 | 路径 | 需要认证 | 文档 |
 | --- | --- | --- | --- | --- |
+| 消息未读汇总 | GET | `/messages/summary` | JWT | [messages](messages.md#摘要与已读) |
+| 通知列表 / 已读 | GET / POST | `/messages/notices`, `/messages/notices/read` | JWT | [messages](messages.md#通知与互动) |
+| 互动分页 / 已读 | GET / POST | `/messages/interactions`, `/messages/interactions/read` | JWT | [messages](messages.md#通知与互动) |
+| 全部已读 | POST | `/messages/read-all` | JWT | [messages](messages.md#摘要与已读) |
+| 私信会话 / 黑名单 | GET | `/messages/conversations`, `/messages/blacklist` | JWT | [messages](messages.md#私信) |
+| 会话元信息 | GET | `/messages/conversations/:peer_id` | JWT | [messages](messages.md#私信) |
+| 私信历史 / 增量 / 发送 | GET / POST | `/messages/conversations/:peer_id/messages` | JWT，发送检查账号限制 | [messages](messages.md#私信) |
+| 按客户端ID恢复发送结果 | GET | `/messages/conversations/:peer_id/messages/by-client/:client_id` | JWT | [messages](messages.md#私信) |
+| 会话已读 / 拉黑或解除 | POST / PUT | `/messages/conversations/:peer_id/read`, `/messages/conversations/:peer_id/block` | JWT | [messages](messages.md#私信) |
+| 消息模块MQTT凭证 | POST | `/messages/mqtt/credentials` | JWT | [messages](messages.md#实时连接) |
+| 后台通知分页 / 新建 | GET / POST | `/admin/api/announcements` | announcements 读/写 | [messages](messages.md#活动通知管理) |
+| 后台通知详情 / 修改撤回 | GET / PUT | `/admin/api/announcements/:notice_id` | announcements 读/写 | [messages](messages.md#活动通知管理) |
 | 后台 AI 实时配额 / 独立调整 | GET / PUT | `/admin/api/ai/quotas`, `/admin/api/ai/policies/:feature/quota` | AI 使用读取 / AI 配置操作及读取 | [admin-ai](admin-ai.md#实时配额与独立调整) |
 | 后台 AI 任务列表 / 统计 / 设置读取 | GET | `/admin/api/ai/tasks`, `/admin/api/ai/statistics`, `/admin/api/ai/settings` | AI 使用读取 | [admin-ai](admin-ai.md) |
 | 后台 AI 任务详情 | GET | `/admin/api/ai/tasks/:task_id` | AI 使用读取 | [admin-ai](admin-ai.md) |

@@ -33,6 +33,7 @@ var (
 
 // UserService provides business logic related to user profile and settings.
 type UserService struct {
+	messages        *MessageService
 	likes           repository.TrackLikeRepository
 	users           repository.UserRepository
 	tracks          repository.TrackRepository
@@ -397,7 +398,11 @@ func (s *UserService) FollowUser(ctx context.Context, followerUserID int64, foll
 	if _, err := s.users.FindByID(ctx, followeeUserID); err != nil {
 		return err
 	}
-	return s.follows.AddFollow(ctx, followerUserID, followeeUserID)
+	if err := s.follows.AddFollow(ctx, followerUserID, followeeUserID); err != nil {
+		return err
+	}
+	s.notifyFollow(ctx, followerUserID, followeeUserID, true)
+	return nil
 }
 
 func (s *UserService) UnfollowUser(ctx context.Context, followerUserID int64, followeeUserID int64) error {
@@ -407,7 +412,11 @@ func (s *UserService) UnfollowUser(ctx context.Context, followerUserID int64, fo
 	if s.follows == nil {
 		return errors.New("follow repository not configured")
 	}
-	return s.follows.RemoveFollow(ctx, followerUserID, followeeUserID)
+	if err := s.follows.RemoveFollow(ctx, followerUserID, followeeUserID); err != nil {
+		return err
+	}
+	s.notifyFollow(ctx, followerUserID, followeeUserID, false)
+	return nil
 }
 
 func (s *UserService) IsFollowing(ctx context.Context, followerUserID int64, followeeUserID int64) (bool, error) {

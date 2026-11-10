@@ -66,6 +66,7 @@ func main() {
 	var scenicSpotRepo repository.ScenicSpotRepository
 	var trackSubmissionRepo repository.TrackSubmissionRepository
 	var recommendationRepo repository.RecommendationRepository
+	var messageRepo repository.MessageRepository
 	var aiUsageRepo repository.AIUsageRepository
 	var aiDurable bool
 	var adminAccountStorage admin.AccountStorage
@@ -136,6 +137,12 @@ func main() {
 				adminCancel()
 				if err != nil {
 					log.Printf("admin account storage unavailable; admin authentication will be disabled")
+				}
+				messages, messageErr := repository.NewMySQLMessageRepository(ctx, db)
+				if messageErr != nil {
+					log.Printf("message storage unavailable; messaging disabled: %v", messageErr)
+				} else {
+					messageRepo = messages
 				}
 				aiRepo, aiErr := repository.NewMySQLAIUsageRepository(ctx, db)
 				if aiErr != nil {
@@ -213,6 +220,12 @@ func main() {
 			}
 			placeIndexCancel()
 			trackPlaceRepo = mongoPlaceRepo
+			messages, messageErr := repository.NewMongoMessageRepository(ctx, db)
+			if messageErr != nil {
+				log.Printf("message storage unavailable; messaging disabled: %v", messageErr)
+			} else {
+				messageRepo = messages
+			}
 			aiRepo, aiErr := repository.NewMongoAIUsageRepository(ctx, db)
 			if aiErr != nil {
 				log.Printf("AI usage storage unavailable; new AI billing disabled")
@@ -349,6 +362,11 @@ func main() {
 	likeSvc := service.NewTrackLikeService(likeRepo, trackRepo)
 	commentSvc := service.NewCommentService(commentRepo, trackRepo, userSvc)
 	commentSvc.SetRestrictions(accountRestrictionSvc)
+	messageSvc := service.NewMessageService(messageRepo, userRepo, trackRepo, followRepo, accountRestrictionSvc)
+	trackSvc.SetMessageService(messageSvc)
+	userSvc.SetMessageService(messageSvc)
+	likeSvc.SetMessageService(messageSvc)
+	commentSvc.SetMessageService(messageSvc)
 	loginSvc := service.NewLoginService(userRepo, loginLogRepo, cfg.WechatAppID, cfg.WechatAppSecret, cfg.JWTSecret)
 	if appReleaseChangelogRepo == nil {
 		appReleaseChangelogRepo = repository.NewInMemoryAppReleaseChangelogRepository()
@@ -396,6 +414,9 @@ func main() {
 			log.Printf("companion control publisher enabled: %s", publisherBrokerURL)
 		}
 	}
+
+	messageSvc.SetRealtime(companionSvc, messageRepo != nil)
+	go messageSvc.RunMessageDelivery(ctx)
 
 	// 初始化本地资源缓存服务：把客户端上传到 OSS 的轨迹截图 / 原始轨迹文件，按需同步到服务器本地，
 	// 供列表/详情接口返回一个服务端可直接下载的 URL。
@@ -666,6 +687,7 @@ func main() {
 	defer tokenBlacklist.Close()
 
 	handler.RegisterRoutes(h, handler.Deps{
+		MessageService:             messageSvc,
 		RegionService:              regionSvc,
 		PermissionSnapshotService:  permissionSnapshotSvc,
 		TrackService:               trackSvc,
@@ -692,6 +714,7 @@ func main() {
 
 	// 后台账号独立持久化；环境变量仅用于首次初始化，数据库降级不放开后台鉴权。
 	adminModule := admin.NewModule(cfg.AdminAccounts, appReleaseSvc, ossTokenSvc, staticRoot, userRepo, trackRepo, collectRepo, trackMapRepo, companionRepo, analyticsRepo, userSvc, feedbackSvc, accountRestrictionSvc, trackRouteGroupSvc, adminAccountStorage)
+	adminModule.Handler.SetMessageService(messageSvc)
 	if err := adminModule.ConfigureEmailRecovery(admin.SMTPConfig{Host: cfg.AdminSMTPHost, Port: cfg.AdminSMTPPort, Username: cfg.AdminSMTPUsername, Password: cfg.AdminSMTPPassword, From: cfg.AdminSMTPFrom, TLSMode: cfg.AdminSMTPTLSMode}); err != nil {
 		log.Print("admin email recovery unavailable: check account storage and SMTP configuration")
 	}

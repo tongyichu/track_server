@@ -15,8 +15,9 @@ type TrackLikeStatus struct {
 	CanLike bool `json:"can_like"`
 }
 type TrackLikeService struct {
-	likes  repository.TrackLikeRepository
-	tracks repository.TrackRepository
+	messages *MessageService
+	likes    repository.TrackLikeRepository
+	tracks   repository.TrackRepository
 }
 
 func NewTrackLikeService(likes repository.TrackLikeRepository, tracks repository.TrackRepository) *TrackLikeService {
@@ -58,6 +59,7 @@ func (s *TrackLikeService) Set(ctx context.Context, viewer int64, trackID string
 	if err := s.likes.SetLike(ctx, viewer, trackID, liked); err != nil {
 		return nil, err
 	}
+	s.notifyLike(ctx, viewer, trackID, liked)
 	status, err := s.Status(ctx, viewer, trackID)
 	if !liked && errors.Is(err, repository.ErrNotFound) {
 		return &TrackLikeStatus{}, nil

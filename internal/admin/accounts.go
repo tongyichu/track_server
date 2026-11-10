@@ -29,6 +29,7 @@ type PermissionModule struct {
 }
 
 var permissionModules = []PermissionModule{
+	{"announcements", "活动&通知", "/admin/announcements.html"},
 	{"dashboard", "工作台", "/admin/dashboard.html"},
 	{"track_submissions", "投稿审核", "/admin/track_submissions.html"},
 	{"tracks", "轨迹管理", "/admin/tracks.html"},

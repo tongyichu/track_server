@@ -110,6 +110,7 @@ var companionEventTypes = map[string]struct{}{
 
 // CompanionService 实现“同行”控制面的业务逻辑。
 type CompanionService struct {
+	messages         *MessageService
 	repo             repository.CompanionRepository
 	users            repository.UserRepository
 	tracks           repository.TrackRepository
@@ -570,6 +571,9 @@ func (s *CompanionService) IssueMQTTCredentials(ctx context.Context, userID int6
 
 // AuthenticateMQTTConnection validates EMQX HTTP AuthN callbacks.
 func (s *CompanionService) AuthenticateMQTTConnection(ctx context.Context, in CompanionMQTTAuthInput) CompanionMQTTAuthResult {
+	if strings.HasPrefix(in.Username, messageMQTTPrincipal) && s.messages != nil {
+		return s.messages.authenticateMessageMQTT(ctx, in)
+	}
 	if err := s.requireMQTTConfigured(); err != nil {
 		return CompanionMQTTAuthResult{Result: "deny"}
 	}
@@ -584,6 +588,9 @@ func (s *CompanionService) AuthenticateMQTTConnection(ctx context.Context, in Co
 
 // AuthorizeMQTTOperation validates EMQX HTTP AuthZ callbacks.
 func (s *CompanionService) AuthorizeMQTTOperation(ctx context.Context, in CompanionMQTTACLInput) CompanionMQTTACLResult {
+	if strings.HasPrefix(in.Username, messageMQTTPrincipal) && s.messages != nil {
+		return s.messages.authorizeMessageMQTT(ctx, in)
+	}
 	if err := s.requireMQTTConfigured(); err != nil {
 		return CompanionMQTTACLResult{Result: "deny"}
 	}

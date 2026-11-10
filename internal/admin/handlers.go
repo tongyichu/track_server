@@ -36,6 +36,7 @@ import (
 
 // Handler 聚合管理后台需要的业务依赖。
 type Handler struct {
+	messages              *service.MessageService
 	ai                    *ai.Manager
 	aiModels              []string
 	regionSvc             *regions.Service

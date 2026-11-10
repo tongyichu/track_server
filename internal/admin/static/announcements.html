@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>时光轨迹 - 控制台</title>
+<link rel="stylesheet" href="/admin/static/vendor/tabler.min.css"><link rel="stylesheet" href="/admin/static/style.css"><link rel="stylesheet" href="/admin/static/announcements.css"></head>
+<body><header class="topbar"></header><main class="container">
+<section class="panel card card-body"><div class="notice-heading"><h1>活动&amp;通知</h1><div><button id="refreshNotices" class="btn btn-outline-secondary">刷新</button> <button id="newNotice" class="btn btn-primary" data-admin-write="announcements">新建通知</button></div></div>
+<p id="noticeListError" class="text-danger" role="status"></p><div class="table-responsive"><table class="table table-vcenter"><thead><tr><th>类型</th><th>标题</th><th>接收范围</th><th>发布时间</th><th>状态</th><th></th></tr></thead><tbody id="noticeRows"></tbody></table></div><button id="moreNotices" class="btn btn-outline-secondary" hidden>加载更多</button></section>
+</main>
+<div id="noticeEditor" class="modal fade" tabindex="-1" aria-labelledby="noticeEditorTitle" aria-hidden="true"><div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content"><form id="noticeForm" class="notice-dialog"><div class="notice-heading"><h2 id="noticeEditorTitle">新建通知</h2><button type="button" id="closeNotice" class="btn-close" aria-label="关闭"></button></div>
+<div class="notice-columns"><div class="notice-fields" data-admin-fields="announcements">
+<label class="form-label">消息类型<select id="noticeKind" class="form-select"><option value="system">系统消息</option><option value="activity">活动消息</option></select></label>
+<label class="form-label">标题<input id="noticeTitle" class="form-control" maxlength="100" required></label>
+<label class="form-label">正文<textarea id="noticeBody" class="form-control" rows="8" maxlength="8000" required></textarea></label>
+<label class="form-label">H5链接（选填）<input id="noticeURL" class="form-control" type="url" placeholder="https://"></label>
+<label class="form-label">接收范围<select id="noticeAudience" class="form-select"><option value="all">全部用户</option><option value="users">指定用户</option></select></label>
+<label id="noticeUsersLabel" class="form-label" hidden>用户ID<textarea id="noticeUsers" class="form-control" rows="2" placeholder="多个ID用空格或逗号分隔"></textarea></label>
+<label class="form-label">发布时间<input id="noticePublishAt" class="form-control" type="datetime-local"><small class="text-secondary">留空则发布时立即发送</small></label>
+<label class="form-label">活动结束时间（选填）<input id="noticeExpiresAt" class="form-control" type="datetime-local"></label>
+</div><aside class="notice-preview"><div class="text-secondary mb-3">客户端预览</div><div class="notice-preview-meta"><span id="previewKind">系统消息</span><small id="previewTime"></small></div><article class="notice-preview-card"><strong id="previewTitle"></strong><p id="previewBody"></p><small id="previewLink" class="text-secondary"></small></article></aside></div>
+<p id="noticeSaveError" class="text-danger" role="status"></p><div class="notice-footer"><button type="button" id="withdrawNotice" class="btn btn-outline-danger" data-admin-write="announcements" hidden>撤回通知</button><span id="noticeSavedState" class="text-secondary"></span><div class="notice-footer-actions"><button type="button" id="saveNoticeDraft" class="btn btn-outline-primary" data-admin-write="announcements">保存草稿</button><button type="submit" id="publishNotice" class="btn btn-primary" data-admin-write="announcements">发布通知</button></div></div></form></div></div></div>
+<script src="/admin/static/vendor/tabler.min.js"></script><script src="/admin/static/shell.js"></script><script src="/admin/static/ui.js"></script><script src="/admin/static/announcements.js"></script></body></html>

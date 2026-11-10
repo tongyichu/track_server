@@ -29,6 +29,7 @@ type CommentUpload struct {
 	Credential *OSSTemporaryCredential `json:"credential"`
 }
 type CommentService struct {
+	messages     *MessageService
 	repo         repository.CommentRepository
 	tracks       repository.TrackRepository
 	users        *UserService
@@ -164,6 +165,7 @@ func (s *CommentService) Create(ctx context.Context, user int64, trackID string,
 		if old.TrackID != trackID || old.RequestHash != fingerprint {
 			return nil, repository.ErrCommentConflict
 		}
+		s.notifyComment(ctx, user, track, old, true)
 		return s.one(ctx, user, track, old)
 	}
 	if !errors.Is(err, repository.ErrNotFound) {
@@ -196,10 +198,12 @@ func (s *CommentService) Create(ctx context.Context, user int64, trackID string,
 			if existing.TrackID != trackID || existing.RequestHash != fingerprint {
 				return nil, repository.ErrCommentConflict
 			}
+			s.notifyComment(ctx, user, track, existing, true)
 			return s.one(ctx, user, track, existing)
 		}
 		return nil, err
 	}
+	s.notifyComment(ctx, user, track, result, true)
 	return s.one(ctx, user, track, result)
 }
 func (s *CommentService) Delete(ctx context.Context, user int64, trackID, id string) (int64, error) {
@@ -207,9 +211,12 @@ func (s *CommentService) Delete(ctx context.Context, user int64, trackID, id str
 	if user <= 0 {
 		return 0, repository.ErrForbidden
 	}
-	_, err := s.repo.Apply(ctx, repository.CommentMutation{Action: "delete", TrackID: trackID, UserID: user, CommentID: id})
+	deleted, err := s.repo.Apply(ctx, repository.CommentMutation{Action: "delete", TrackID: trackID, UserID: user, CommentID: id})
 	if err != nil {
 		return 0, err
+	}
+	if track, lookupErr := s.tracks.FindByID(ctx, trackID); lookupErr == nil {
+		s.notifyComment(ctx, user, track, deleted, false)
 	}
 	return s.repo.Total(ctx, trackID)
 }
@@ -230,6 +237,7 @@ func (s *CommentService) React(ctx context.Context, user int64, trackID, id stri
 	if err != nil {
 		return nil, err
 	}
+	s.notifyCommentReaction(ctx, user, c, reaction == 1)
 	return s.one(ctx, user, track, c)
 }
 func (s *CommentService) Page(ctx context.Context, user int64, trackID, rootID, cursor string, limit int) (*CommentPage, error) {

@@ -14,6 +14,7 @@ import (
 
 // Deps groups all handler dependencies.
 type Deps struct {
+	MessageService             *service.MessageService
 	RegionService              *regions.Service
 	PermissionSnapshotService  *service.PermissionSnapshotService
 	CommentService             *service.CommentService
@@ -128,6 +129,22 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 
 	// authenticated routes
 	auth := api.Group("", middleware.JWTAuthMiddleware(deps.LoginService, deps.TokenBlacklist), middleware.AccountRestrictionMiddleware(deps.AccountRestrictionService))
+	messages := &MessageHandler{svc: deps.MessageService}
+	auth.GET("/messages/summary", messages.Summary)
+	auth.GET("/messages/notices", messages.Notices)
+	auth.POST("/messages/notices/read", messages.ReadNotices)
+	auth.GET("/messages/interactions", messages.Interactions)
+	auth.POST("/messages/interactions/read", messages.ReadInteractions)
+	auth.POST("/messages/read-all", messages.ReadAll)
+	auth.GET("/messages/conversations", messages.Conversations)
+	auth.GET("/messages/blacklist", messages.Blacklist)
+	auth.GET("/messages/conversations/:peer_id", messages.Conversation)
+	auth.GET("/messages/conversations/:peer_id/messages", messages.Messages)
+	auth.GET("/messages/conversations/:peer_id/messages/by-client/:client_id", messages.Sent)
+	auth.POST("/messages/conversations/:peer_id/messages", messages.Send)
+	auth.POST("/messages/conversations/:peer_id/read", messages.ReadConversation)
+	auth.PUT("/messages/conversations/:peer_id/block", messages.Block)
+	auth.POST("/messages/mqtt/credentials", messages.Credentials)
 	auth.GET("/regions/catalog", NewRegionHandler(deps.RegionService).GetCatalog)
 
 	// 静态资源下载（需要登录）

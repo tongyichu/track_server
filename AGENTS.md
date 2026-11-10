@@ -37,6 +37,7 @@ Go/Hertz 轨迹服务，调用链为 middleware → handler → service → repo
 | 地图索引/路线组/景点/坐标 | [契约](docs/server-contracts.md)、[索引流程](docs/server-flows.md#首页地图索引流程)、[地图方案](track_map.md)、[景点识别](docs/track-place-discovery.md)、[边界维护](internal/maparea/README.md) |
 | 推荐/归因/埋点/离线任务 | [推荐方案](track_recommendation.md)、[埋点方案](track_analytics.md)、[契约](docs/server-contracts.md)、[流程](docs/server-flows.md) |
 | AI 路线说明与形象反馈 | [运行边界](docs/track-narrative.md)、[形象技能](skills/track-shape-label/SKILL.md)；共享规则调整同步版本，不用独立提示词脚本替代真实接口验收 |
+| 消息中心、私信、未读、活动通知与独立MQTT | [消息协议](docs/api/messages.md)、[持久化与生命周期](docs/messages.md)；消息存储不可用时拒绝确认发送，不套用易失内存降级 |
 | 管理后台 | 先读 [internal/admin/AGENTS.md](internal/admin/AGENTS.md) |
 | 存量标题回填 | [操作说明](docs/backfill-track-titles.md)，默认只生成计划，应用需原值条件匹配，不自动建表或降级内存 |
 | 历史任务恢复 | [HANDOFF](docs/handoff/HANDOFF.md) |

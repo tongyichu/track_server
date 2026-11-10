@@ -23,6 +23,7 @@ import (
 
 // TrackService provides business logic around track lifecycle and statistics.
 type TrackService struct {
+	messages        *MessageService
 	comments        repository.CommentRepository
 	likes           repository.TrackLikeRepository
 	tracks          repository.TrackRepository
@@ -1743,12 +1744,20 @@ func (s *TrackService) CollectTrack(ctx context.Context, userID int64, trackID s
 	if _, err := s.tracks.FindByID(ctx, trackID); err != nil {
 		return err
 	}
-	return s.collects.AddCollect(ctx, userID, trackID)
+	if err := s.collects.AddCollect(ctx, userID, trackID); err != nil {
+		return err
+	}
+	s.notifyTrackRelation(ctx, "collect", userID, trackID, true)
+	return nil
 }
 
 // UncollectTrack removes a collection for user-track pair.
 func (s *TrackService) UncollectTrack(ctx context.Context, userID int64, trackID string) error {
-	return s.collects.RemoveCollect(ctx, userID, trackID)
+	if err := s.collects.RemoveCollect(ctx, userID, trackID); err != nil {
+		return err
+	}
+	s.notifyTrackRelation(ctx, "collect", userID, trackID, false)
+	return nil
 }
 
 // updateTrackMetrics recomputes distance, duration, ascent and average speed based on points.

@@ -21,6 +21,7 @@ type restrictedRoute struct {
 }
 
 var accountRestrictedRoutes = []restrictedRoute{
+	{method: http.MethodPost, prefix: "/api/v1/messages/conversations/", suffix: "/messages", message: "账号已被限制，暂时不能发送私信"},
 	{method: http.MethodPost, path: "/api/v1/track/preview-backfill/clear", message: service.AccountRestrictionMessageUpload},
 	{method: http.MethodPost, prefix: "/api/v1/track/preview-backfill/", suffix: "/prepare", message: service.AccountRestrictionMessageUpload},
 	{method: http.MethodPost, prefix: "/api/v1/track/preview-backfill/", suffix: "/complete", message: service.AccountRestrictionMessageUpload},
