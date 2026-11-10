@@ -466,6 +466,7 @@ func main() {
 		trackSvc.SetAvatarCache(avatarCache)
 		userSvc.SetAvatarCache(avatarCache)
 		companionSvc.SetAvatarCache(avatarCache)
+		messageSvc.SetAvatarCache(avatarCache)
 		log.Printf("avatar cache enabled: %s", avatarCacheDir)
 	}
 

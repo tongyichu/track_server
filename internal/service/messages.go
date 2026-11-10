@@ -25,6 +25,7 @@ type MessageService struct {
 	follows      repository.FollowRepository
 	restrictions *AccountRestrictionService
 	companion    *CompanionService
+	avatarCache  *AssetCacheService
 	durable      bool
 }
 
@@ -302,7 +303,7 @@ func (s *MessageService) ListInteractions(ctx context.Context, user int64, categ
 		return nil, err
 	}
 	for _, v := range out.Items {
-		v.Actor = messageUserView(v.ActorID, people[v.ActorID])
+		v.Actor = s.messageUserView(ctx, v.ActorID, people[v.ActorID])
 		if v.TrackID != "" {
 			v.Track = messageTrackView(user, v.TrackID, tracks[v.TrackID])
 		}
@@ -392,14 +393,6 @@ func (s *MessageService) EmitInteraction(ctx context.Context, kind string, actor
 		}
 	}
 	return repository.ErrConflict
-}
-func messageUserView(id int64, u *models.User) models.MessageUser {
-	v := models.MessageUser{ID: id, Nickname: "用户已注销"}
-	if u != nil {
-		v.Nickname = u.Nickname
-		v.AvatarURL = u.AvatarURL
-	}
-	return v
 }
 func messageTrackView(user int64, id string, t *models.Track) *models.MessageTrack {
 	v := &models.MessageTrack{ID: id, Title: "轨迹已不可用"}

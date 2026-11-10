@@ -64,7 +64,7 @@ func (s *MessageService) conversationView(ctx context.Context, user int64, row *
 	if peerID == user {
 		peerID = thread.B
 	}
-	v := &models.MessageConversation{Peer: messageUserView(peerID, peer), Last: thread.Last, Unread: unread, Blocked: messageOwnBlocked(thread, user) != nil, BlockedAt: messageOwnBlocked(thread, user), CanSend: true}
+	v := &models.MessageConversation{Peer: s.messageUserView(ctx, peerID, peer), Last: thread.Last, Unread: unread, Blocked: messageOwnBlocked(thread, user) != nil, BlockedAt: messageOwnBlocked(thread, user), CanSend: true}
 	if v.Last != nil {
 		copy := *v.Last
 		letters := []rune(copy.Text)
