@@ -70,6 +70,7 @@
 | 我的轨迹列表（含精品标识、当前用户收藏状态及总数） | GET | `/track/my/list` | 是 | [track.md](track.md#9-我的轨迹列表) |
 | 用户主页已传轨迹 | GET | `/user/:user_id/tracks` | 是 | [user.md](user.md#个人主页轨迹列表) |
 | 用户主页收藏轨迹 | GET | `/user/:user_id/collections` | 是 | [user.md](user.md#个人主页轨迹列表) |
+| 他人主页喜欢的公开轨迹 | GET | `/user/:user_id/likes` | 是 | [user.md](user.md#喜欢的轨迹) |
 | 获取用户详情 | GET | `/user/:user_id/detail` | 是 | [user.md](user.md#10-获取用户详情) |
 | 更新轨迹信息（可补充默认路线说明） | PUT | `/track/:track_id/update` | 是 | [track.md](track.md#11-更新轨迹信息) |
 | 删除轨迹 | DELETE | `/track/:track_id` | 是 | [track.md](track.md#12-删除轨迹) |

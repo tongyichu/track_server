@@ -124,3 +124,71 @@ func (s *TrackService) ListProfileCollections(ctx context.Context, viewerID, tar
 	page.Items, err = s.BuildTrackSummaries(ctx, viewerID, tracks)
 	return page, err
 }
+
+func (s *TrackService) ListProfileLikes(ctx context.Context, viewerID, targetID int64, input ListMyTracksInput) (*ProfileTrackPage, error) {
+	if err := s.requireProfileUser(ctx, viewerID, targetID); err != nil {
+		return nil, err
+	}
+	if s.likes == nil {
+		return nil, errors.New("track like repository not configured")
+	}
+	anchor, err := decodeTrackCollectCursor(input.Cursor)
+	if err != nil {
+		return nil, err
+	}
+	limit := normalizeTrackPageLimit(input.Limit)
+	page := &ProfileTrackPage{Items: []*models.TrackSummary{}}
+	tracks := make([]*models.Track, 0, limit)
+	var scan, lastIncluded *models.TrackLikeCursor
+	// Count and page the same visible set in bounded batches. Private/stale likes
+	// cannot terminate a page early or leak into another user's profile.
+	for {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		records, err := s.likes.ListLikedByUser(ctx, targetID, scan, 200)
+		if err != nil {
+			return nil, err
+		}
+		if len(records) == 0 {
+			break
+		}
+		ids := make([]string, 0, len(records))
+		for _, record := range records {
+			ids = append(ids, record.TrackID)
+		}
+		byID, err := s.tracks.FindByIDs(ctx, ids)
+		if err != nil {
+			return nil, err
+		}
+		for _, record := range records {
+			track := byID[record.TrackID]
+			if track == nil || track.Status != models.TrackStatusNormal || track.IsRunning {
+				continue
+			}
+			page.TotalCount++
+			if anchor != nil && (record.CreatedAt.After(anchor.CreatedAt) || record.CreatedAt.Equal(anchor.CreatedAt) && record.TrackID >= anchor.TrackID) {
+				continue
+			}
+			if len(tracks) == limit {
+				page.HasMore = true
+				continue
+			}
+			tracks = append(tracks, track)
+			lastIncluded = &models.TrackLikeCursor{CreatedAt: record.CreatedAt, TrackID: record.TrackID}
+		}
+		last := records[len(records)-1]
+		scan = &models.TrackLikeCursor{CreatedAt: last.CreatedAt, TrackID: last.TrackID}
+		if len(records) < 200 {
+			break
+		}
+	}
+	if page.HasMore && lastIncluded != nil {
+		page.NextCursor, err = encodeTrackCollectCursor(lastIncluded.CreatedAt, lastIncluded.TrackID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	page.Items, err = s.BuildTrackSummaries(ctx, viewerID, tracks)
+	return page, err
+}

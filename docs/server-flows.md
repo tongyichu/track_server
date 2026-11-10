@@ -206,3 +206,7 @@ DevMode 客户端经业务 JWT 调用 `/track/preview-backfill/list`、`/:track_
 ## 景点图片后台同步
 
 启动时在持久景点仓储与地点服务可用的情况下注册scenic_photos（每分钟），由ScenicSpotCatalogService.SyncPhotosOnce轮转补齐新景点及存量缺图，将供应商图片下载压缩到本站，再通过既有景点版本CAS更新照片。任务游标/逐景点租约/负缓存与退避使用现有TrackPlaceRepository；MySQL、Mongo和内存仓储接口不变，内存降级不启动同步。详情、发现列表和标签读取不调用供应商、下载图片或核验来源ID；图片鉴权沿用原静态资源入口。详细边界见[景点图片独立巡检](track-place-discovery.md#景点图片独立巡检)。
+
+## 客态个人页喜欢列表
+
+GET /user/:user_id/likes → 业务JWT → TrackHandler.ListProfileLikes → TrackService.ListProfileLikes。目标用户必须存在，使用目标ID读取点赞关系，批量取轨迹并过滤不可见项；按点赞时间与ID组成游标，所有互动状态按浏览者ID装饰。与客态已传/收藏复用认证、错误、摘要和资源处理，不开放私密轨迹、获赞明细或点赞人名单。接口及分页说明见[用户主页](api/user.md#喜欢的轨迹)。

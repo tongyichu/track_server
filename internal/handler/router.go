@@ -290,6 +290,7 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 
 	auth.GET("/user/:user_id/tracks", trackHandler.ListProfileTracks)
 	auth.GET("/user/:user_id/collections", trackHandler.ListProfileCollections)
+	auth.GET("/user/:user_id/likes", trackHandler.ListProfileLikes)
 	auth.POST("/user/:user_id/follow", userHandler.FollowUser)
 	auth.DELETE("/user/:user_id/follow", userHandler.UnfollowUser)
 	auth.GET("/user/:user_id/follow/status", userHandler.GetFollowStatus)

@@ -14,14 +14,18 @@ import (
 )
 
 func (h *TrackHandler) ListProfileTracks(ctx context.Context, c *app.RequestContext) {
-	h.listProfileTracks(ctx, c, false)
+	h.listProfileTracks(ctx, c, "tracks")
 }
 
 func (h *TrackHandler) ListProfileCollections(ctx context.Context, c *app.RequestContext) {
-	h.listProfileTracks(ctx, c, true)
+	h.listProfileTracks(ctx, c, "collections")
 }
 
-func (h *TrackHandler) listProfileTracks(ctx context.Context, c *app.RequestContext, collections bool) {
+func (h *TrackHandler) ListProfileLikes(ctx context.Context, c *app.RequestContext) {
+	h.listProfileTracks(ctx, c, "likes")
+}
+
+func (h *TrackHandler) listProfileTracks(ctx context.Context, c *app.RequestContext, kind string) {
 	meta := middleware.GetRequestMeta(c)
 	if meta == nil || meta.AuthUserID <= 0 {
 		c.JSON(http.StatusUnauthorized, utils.H{"error": "unauthorized"})
@@ -42,7 +46,9 @@ func (h *TrackHandler) listProfileTracks(ctx context.Context, c *app.RequestCont
 	}
 	input := service.ListMyTracksInput{Cursor: string(c.Query("cursor")), Limit: limit}
 	var page *service.ProfileTrackPage
-	if collections {
+	if kind == "likes" {
+		page, err = h.trackSvc.ListProfileLikes(ctx, meta.AuthUserID, targetID, input)
+	} else if kind == "collections" {
 		page, err = h.trackSvc.ListProfileCollections(ctx, meta.AuthUserID, targetID, input)
 	} else {
 		page, err = h.trackSvc.ListProfileTracks(ctx, meta.AuthUserID, targetID, input)
