@@ -481,6 +481,14 @@ MySQL 启动时幂等补充并扩宽 `users.province_code VARCHAR(16)`、`users.
 
 返回该用户收藏中仍可公开查看的轨迹，排除不存在、已删除、私密和进行中的轨迹。按收藏时间倒序，使用收藏时间和轨迹 ID 组成的游标。遇到失效收藏会继续查找后续可见记录，避免空页造成错误的列表结束。
 
+### 喜欢的轨迹
+
+`GET /api/v1/user/:user_id/likes?limit=20&cursor=<next_cursor>`
+
+返回该用户点赞过且当前可公开查看的轨迹，过滤不存在、删除、私密和进行中记录。按点赞时间及轨迹ID倒序，游标规则与喜欢列表一致。列表归属由路径user_id决定，交互字段liked/collected始终按JWT浏览者计算，不能把“他喜欢”当成“我已点赞”。
+
+使用已有三种点赞仓储的ListLikedByUser及轨迹批量FindByIDs，分页与total_count在同一可见集合上计算，遇到失效记录继续扫描。每批200条，总数扫描只做批量查询且可取消，仅最终页组装摘要，不逐条请求轨迹详情或状态；不新建关系、表或仓储接口。
+
 ### 共同响应与错误
 
 ```json
@@ -495,9 +503,9 @@ MySQL 启动时幂等补充并扩宽 `users.province_code VARCHAR(16)`、`users.
 ```
 
 - `items` 使用 `TrackSummary`，含作者资料、资源 URL、收藏/使用总数以及 `collected`；空列表固定为 `[]`。
-- `collected` 表示**当前浏览者**是否收藏，不表示主页所属用户的收藏状态。收藏列表中该字段也可能为 `false`。
+- `liked` / `collected` 表示**当前浏览者**是否点赞/收藏，不表示主页所属用户的状态。喜欢或收藏列表中对应字段也可能为 `false`。
 - `total_count` 仅统计本接口可见记录，与当前列表口径一致，不直接使用用户详情中可能包含私密轨迹的 `track_count`。
-- `limit` 默认 20、最大 50；`cursor` 原样透传，两个接口的游标不能混用。仅 `has_more=true` 时提供 `next_cursor`。
+- `limit` 默认 20、最大 50；`cursor` 原样透传，不同列表及不同用户的游标不能混用。仅 `has_more=true` 时提供 `next_cursor`。
 - 缺少或无效 Token 返回 401；非法 `user_id`、`limit` 或 `cursor` 返回 400；目标用户不存在返回 404；已存在用户没有记录时返回 200 和空列表。
 - 无数据库 schema 变更；MySQL、Mongo 和内存仓储均支持。先部署服务端，再发布客态主页客户端。
 

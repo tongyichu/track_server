@@ -39,6 +39,10 @@
 - 列表剔除删除/私密/进行中轨迹；`total_count` 只统计当前可见记录。
 - items 字段与收藏列表摘要一致，包含浏览者视角的 `liked` / `like_count` / `collected` / `collect_count` / `comment_count` / `can_comment` / `is_featured` / `primary_scenic_spot` 等。
 
+## 他人主页喜欢的轨迹
+
+`GET /user/:user_id/likes`需业务JWT，按目标用户的点赞关系列出公开、已结束的轨迹，返回TrackSummary和精确可见total_count；liked/collected按当前浏览者解释。详情见[user.md](user.md#喜欢的轨迹)。点赞人名单与个人获赞逐条查询仍不提供。
+
 ## 现有响应新增字段
 
 - 轨迹详情、推荐/搜索、本人列表、主页轨迹/收藏列表的摘要增加 `liked`（bool）、`like_count`（int64）。本人列表的 `liked` 也按浏览者计算，可以为 `true`。
