@@ -201,11 +201,11 @@
   }
   function addModel(value) { if (value && !Array.from($('model').options).some(option => option.value === value)) { const option = node('option', value); option.value = value; $('model').append(option); } }
   async function drawCharts(data) {
-    try { const ec = await AdminAssets.loadCharts(); if (statistics !== data) return; ['trend', 'featuresChart', 'modelsChart'].forEach(id => { if (!charts.has(id)) charts.set(id, ec.init($(id))); });
+    try { await AdminAssets.loadCharts(); if (statistics !== data) return; const ec = window.echarts; ['trend', 'featuresChart', 'modelsChart'].forEach(id => { if (!charts.has(id)) charts.set(id, ec.init($(id))); });
       const days = data.days || []; const trend = AdminChartStyle.bars(days.map(row => ({ name: row.key, value: row.tasks })), data.tasks, { unit: '项' }); if (days.length > 10) trend.dataZoom = [{ type: 'inside', yAxisIndex: 0, start: Math.max(0, 100 - 1000 / days.length), end: 100 }]; charts.get('trend').setOption(trend, true);
       const features = (data.features || []).map(row => ({ name: feature(row.key), value: row.tasks })); charts.get('featuresChart').setOption(AdminChartStyle.ring(features, data.tasks, '任务总数', '项'), true); AdminChartStyle.legend($('featuresLegend'), features);
       const models = (data.models || []).map(row => ({ name: row.key, value: row.input_tokens + row.output_tokens })); charts.get('modelsChart').setOption(AdminChartStyle.bars(models, data.input_tokens + data.output_tokens, { unit: 'Token', labelWidth: 150 }), true);
-    } catch (_) { if (statistics === data) $('statHint').textContent += ' · 图表加载失败，查询可重试'; }
+    } catch (error) { if (statistics === data) { console.warn('[AIUsage] chart rendering failed', error); $('statHint').textContent = $('period').selectedOptions[0].textContent + ' · 图表加载失败，查询可重试'; } }
   }
   function alerts(data) {
     const root = $('alerts'); root.replaceChildren(); const rows = (data.today_usage || {}).features || [];
