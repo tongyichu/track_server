@@ -30,9 +30,9 @@
 
 通知公开字段为 `id/kind/title/body/h5_url/publish_at/expires_at/unread`；`kind=system|activity`。不向 App 返回指定接收人 ID、管理员、草稿状态等后台字段。只有已发布、到时间且本人属于接收范围的通知可见；撤回即隐藏。注册前通知可在历史中查看，但不产生未读；编辑已发布内容不重新置未读。结束时间是活动提示，过期通知仍保留展示，客户端禁用 H5 跳转。
 
-互动字段为 `id/kind/actor_id/actor/track_id/comment_id/text/created_at/unread/track`。actor 为 `id/nickname/avatar_url`；track 为 `id/title/preview_url/available`。失效或不可访问轨迹返回 available=false，不能借通知读取轨迹详情。全部包含 comment/reply/like/collect/comment_like/follow；评论包含 comment/reply；赞和收藏包含 like/collect/comment_like。自己的操作不通知自己；同一关系取消后隐藏，重新建立复用事件而不刷新增未读。此版本仅从上线后的业务操作生成，不追溯全量历史互动。
+互动字段为 `id/kind/actor_id/actor/track_id/comment_id/text/created_at/unread/track`。actor 为 `id/nickname/avatar_url`；track 为 `id/title/preview_url/available/distance/duration/author/city_code/city_name`。distance 单位米、duration 单位秒，author 为轨迹所属运动用户的 `id/nickname/avatar_url`（与互动 actor、私信发送者独立）；city_name 沿用地区目录映射，缺失时省略。失效或不可访问轨迹返回 available=false，不能借通知读取轨迹详情。全部包含 comment/reply/like/collect/comment_like/follow；评论包含 comment/reply；赞和收藏包含 like/collect/comment_like。自己的操作不通知自己；同一关系取消后隐藏，重新建立复用事件而不刷新增未读。此版本仅从上线后的业务操作生成，不追溯全量历史互动。
 
-消息卡片的 `track.preview_url` 与轨迹列表共用带源版本的鉴权预览地址 `/api/v1/track/:track_id/previews/landscape_day?v=...`，不直接返回私有 OSS 原图。客户端补全相对地址并携带业务 JWT；图片读取沿用轨迹可见性、源版本校验和缓存填充。无预览时返回空字符串。该规则覆盖互动通知、私信发送响应和历史消息，历史消息在读取时重新组装，无需重发。
+消息卡片的 `track.preview_url` 与轨迹列表共用带源版本的鉴权预览地址 `/api/v1/track/:track_id/previews/landscape_day?v=...`，不直接返回私有 OSS 原图。客户端补全相对地址并携带业务 JWT；图片读取沿用轨迹可见性、源版本校验和缓存填充。无预览时返回空字符串。该规则覆盖互动通知、私信发送响应和历史消息，历史消息在读取时重新组装，无需重发。landscape_day 原图及客户端聊天预览均为4:3；轨迹及作者按页批量读取，同一页相同作者复用头像结果，不逐条查询详情。轨迹不可见或失效时仅保留不可用卡片标识，不返回作者、城市和有效预览，指标为0，客户端须按 available 隐藏这些字段。
 
 ## 私信
 
@@ -56,7 +56,7 @@
 
 消息字段：`id/client_id/thread_id/seq/sender_id/receiver_id/text/track_id/track/created_at`。客户端生成8～80字节唯一 client_id（推荐 UUID），必须先本地落盘再发送；相同双方、发送者、client_id 和内容重复提交返回同一条，内容不同409。同一会话服务端 seq 单调递增，排序/去重以 seq/id 为准，不依赖设备时钟。
 
-文字 trim 后最多1000个字符；文字和轨迹不能同时为空；轨迹须为已公开且已结束。文字加轨迹算一条消息。陌生人发起方在对方回复前最多一条；互相关注免此限制；对方回复后正常聊天。连续同发送者间隔至少1秒；受限账号禁止发送。两人任意一方拉黑即暂停双向发送，拒绝的消息不存储；历史保留，本人拉黑后从本人普通私信列表及未读汇总排除，转入小黑屋；推进本人已有消息已读，解除后继续原会话，不补发拉黑期间被拒内容。拉黑时间以服务端为准，可查看和解除已注销用户的既有拉黑记录。
+文字 trim 后最多1000个字符；文字和轨迹不能同时为空；轨迹须为已公开且已结束。文字加轨迹算一条消息；Android 的分享选择直接提交 text 为空、track_id 有值的独立卡片，不等待补充文字，不携带客户端提供的作者或运动指标。陌生人发起方在对方回复前最多一条；互相关注免此限制；对方回复后正常聊天。连续同发送者间隔至少1秒；受限账号禁止发送。两人任意一方拉黑即暂停双向发送，拒绝的消息不存储；历史保留，本人拉黑后从本人普通私信列表及未读汇总排除，转入小黑屋；推进本人已有消息已读，解除后继续原会话，不补发拉黑期间被拒内容。拉黑时间以服务端为准，可查看和解除已注销用户的既有拉黑记录。
 
 消息列表无 after_seq 时返回最近一页（items 仍按 seq 正序）；向上翻页使用 next_cursor。增量 after_seq 可为0，items 正序，has_more 表示后方还有，继续使用本页最大 seq；增量不返回 next_cursor。不得同时混用两类游标。已读 through_seq 限制在已有序号内，并推进到不超过该序号的实际来信；只向前推进。
 

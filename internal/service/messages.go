@@ -298,14 +298,14 @@ func (s *MessageService) ListInteractions(ctx context.Context, user int64, categ
 	if err != nil {
 		return nil, err
 	}
-	tracks, err := s.tracks.FindByIDs(ctx, trackIDs)
+	tracks, err := s.messageTrackViews(ctx, user, trackIDs)
 	if err != nil {
 		return nil, err
 	}
 	for _, v := range out.Items {
 		v.Actor = s.messageUserView(ctx, v.ActorID, people[v.ActorID])
 		if v.TrackID != "" {
-			v.Track = messageTrackView(user, v.TrackID, tracks[v.TrackID])
+			v.Track = tracks[v.TrackID]
 		}
 	}
 	return out, nil
@@ -394,16 +394,6 @@ func (s *MessageService) EmitInteraction(ctx context.Context, kind string, actor
 	}
 	return repository.ErrConflict
 }
-func messageTrackView(user int64, id string, t *models.Track) *models.MessageTrack {
-	v := &models.MessageTrack{ID: id, Title: "轨迹已不可用"}
-	if t != nil && t.Status != models.TrackStatusDeleted && (t.Status == models.TrackStatusNormal || t.UserID == user) {
-		v.Available = true
-		v.Title = t.Title
-		v.PreviewURL = trackPreviewURLs(t.ID, t.PreviewImages).LandscapeDayURL
-	}
-	return v
-}
-
 func (s *MessageService) Summary(ctx context.Context, user int64) (*models.InboxSummary, error) {
 	out := &models.InboxSummary{Cutoff: messageNow()}
 	filter, err := s.interactionFilter(ctx, user, "all", true)

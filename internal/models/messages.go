@@ -32,10 +32,15 @@ type MessageUser struct {
 	AvatarURL string `json:"avatar_url"`
 }
 type MessageTrack struct {
-	ID         string `json:"id"`
-	Title      string `json:"title"`
-	PreviewURL string `json:"preview_url"`
-	Available  bool   `json:"available"`
+	ID         string       `json:"id"`
+	Title      string       `json:"title"`
+	PreviewURL string       `json:"preview_url"`
+	Available  bool         `json:"available"`
+	Distance   float64      `json:"distance"`
+	Duration   uint32       `json:"duration"`
+	Author     *MessageUser `json:"author,omitempty"`
+	CityCode   string       `json:"city_code,omitempty"`
+	CityName   string       `json:"city_name,omitempty"`
 }
 type DirectMessage struct {
 	ID          string        `json:"id"`

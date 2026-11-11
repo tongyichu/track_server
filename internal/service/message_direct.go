@@ -525,13 +525,13 @@ func (s *MessageService) decorateDirect(ctx context.Context, user int64, items [
 	if len(ids) == 0 {
 		return nil
 	}
-	tracks, err := s.tracks.FindByIDs(ctx, ids)
+	tracks, err := s.messageTrackViews(ctx, user, ids)
 	if err != nil {
 		return err
 	}
 	for _, v := range items {
 		if v.TrackID != "" {
-			v.Track = messageTrackView(user, v.TrackID, tracks[v.TrackID])
+			v.Track = tracks[v.TrackID]
 		}
 	}
 	return nil

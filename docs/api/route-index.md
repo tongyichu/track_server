@@ -11,7 +11,7 @@
 | 私信会话 / 黑名单（头像复用本站缓存） | GET | `/messages/conversations`, `/messages/blacklist` | JWT | [messages](messages.md#私信) |
 | 会话元信息（含本站头像地址） | GET | `/messages/conversations/:peer_id` | JWT | [messages](messages.md#私信) |
 | 单方删除聊天记录 | DELETE | `/messages/conversations/:peer_id` | JWT，允许受限账号清除本人历史 | [messages](messages.md#私信) |
-| 私信历史 / 增量 / 发送 | GET / POST | `/messages/conversations/:peer_id/messages` | JWT，发送检查账号限制 | [messages](messages.md#私信) |
+| 私信历史 / 增量 / 发送（轨迹卡片含运动用户、指标与城市） | GET / POST | `/messages/conversations/:peer_id/messages` | JWT，发送检查账号限制 | [messages](messages.md#私信) |
 | 按客户端ID恢复发送结果 | GET | `/messages/conversations/:peer_id/messages/by-client/:client_id` | JWT | [messages](messages.md#私信) |
 | 会话已读 / 拉黑或解除 | POST / PUT | `/messages/conversations/:peer_id/read`, `/messages/conversations/:peer_id/block` | JWT | [messages](messages.md#私信) |
 | 消息模块MQTT凭证 | POST | `/messages/mqtt/credentials` | JWT | [messages](messages.md#实时连接) |
