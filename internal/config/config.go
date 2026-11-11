@@ -63,6 +63,9 @@ type Config struct {
 	TrackTypes         []string // 客户端可选运动类型列表，默认：徒步/跑步/爬山/骑行/自驾。
 
 	EMQXBrokerURL                    string
+	EMQXManagementURL                string
+	EMQXManagementAPIKey             string
+	EMQXManagementAPISecret          string
 	EMQXWebsocketURL                 string
 	EMQXClientBrokerURL              string
 	EMQXClientWebsocketURL           string
@@ -210,6 +213,9 @@ func Load() *Config {
 		JWTSecret:                        getEnv("JWT_SECRET", "track_server_default_jwt_secret"),
 		TrackTypes:                       ParseTrackTypes(os.Getenv("TRACK_TYPES")),
 		EMQXBrokerURL:                    getEnv("EMQX_BROKER_URL", ""),
+		EMQXManagementURL:                os.Getenv("EMQX_MANAGEMENT_URL"),
+		EMQXManagementAPIKey:             os.Getenv("EMQX_MANAGEMENT_API_KEY"),
+		EMQXManagementAPISecret:          os.Getenv("EMQX_MANAGEMENT_API_SECRET"),
 		EMQXWebsocketURL:                 getEnv("EMQX_WEBSOCKET_URL", ""),
 		EMQXClientBrokerURL:              getEnv("EMQX_CLIENT_BROKER_URL", ""),
 		EMQXClientWebsocketURL:           getEnv("EMQX_CLIENT_WEBSOCKET_URL", ""),

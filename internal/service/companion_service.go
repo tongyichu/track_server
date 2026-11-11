@@ -110,6 +110,7 @@ var companionEventTypes = map[string]struct{}{
 
 // CompanionService 实现“同行”控制面的业务逻辑。
 type CompanionService struct {
+	realtime         *RealtimeMonitor
 	messages         *MessageService
 	repo             repository.CompanionRepository
 	users            repository.UserRepository
@@ -156,6 +157,7 @@ type CompanionControlEvent struct {
 
 // CompanionMQTTControlPublisherOptions defines server-side MQTT publishing options.
 type CompanionMQTTControlPublisherOptions struct {
+	Monitor        *RealtimeMonitor
 	BrokerURL      string
 	ClientID       string
 	Username       string
@@ -164,6 +166,7 @@ type CompanionMQTTControlPublisherOptions struct {
 }
 
 type mqttCompanionControlPublisher struct {
+	monitor        *RealtimeMonitor
 	client         mqtt.Client
 	publishTimeout time.Duration
 }
@@ -463,6 +466,7 @@ const (
 
 // NewMQTTCompanionControlPublisher creates a best-effort MQTT publisher for companion control events.
 func NewMQTTCompanionControlPublisher(opts CompanionMQTTControlPublisherOptions) (CompanionControlPublisher, error) {
+	opts.Monitor.Connection(false, false)
 	brokerURL := normalizeCompanionMQTTBrokerURL(opts.BrokerURL)
 	if brokerURL == "" {
 		return nil, errors.New("companion mqtt broker_url is required")
@@ -488,6 +492,8 @@ func NewMQTTCompanionControlPublisher(opts CompanionMQTTControlPublisherOptions)
 	mqttOpts.SetOrderMatters(false)
 	mqttOpts.SetWriteTimeout(publishTimeout)
 	mqttOpts.SetConnectTimeout(publishTimeout)
+	mqttOpts.SetOnConnectHandler(func(mqtt.Client) { opts.Monitor.Connection(true, false) })
+	mqttOpts.SetConnectionLostHandler(func(mqtt.Client, error) { opts.Monitor.Connection(false, true) })
 	if username := strings.TrimSpace(opts.Username); username != "" {
 		mqttOpts.SetUsername(username)
 		mqttOpts.SetPassword(opts.Password)
@@ -495,15 +501,25 @@ func NewMQTTCompanionControlPublisher(opts CompanionMQTTControlPublisherOptions)
 	client := mqtt.NewClient(mqttOpts)
 	token := client.Connect()
 	if !token.WaitTimeout(publishTimeout) {
+		client.Disconnect(0)
+		opts.Monitor.Connection(false, true)
 		return nil, errors.New("mqtt control publisher connect timeout")
 	}
 	if err := token.Error(); err != nil {
+		client.Disconnect(0)
+		opts.Monitor.Connection(false, true)
 		return nil, err
 	}
-	return &mqttCompanionControlPublisher{client: client, publishTimeout: publishTimeout}, nil
+	return &mqttCompanionControlPublisher{client: client, publishTimeout: publishTimeout, monitor: opts.Monitor}, nil
 }
 
-func (p *mqttCompanionControlPublisher) Publish(ctx context.Context, topic string, payload []byte) error {
+func (p *mqttCompanionControlPublisher) Publish(ctx context.Context, topic string, payload []byte) (err error) {
+	started := time.Now()
+	defer func() {
+		if p != nil {
+			p.monitor.Published(topic, time.Since(started), err)
+		}
+	}()
 	if p == nil || p.client == nil {
 		return errors.New("mqtt control publisher not configured")
 	}
@@ -570,7 +586,12 @@ func (s *CompanionService) IssueMQTTCredentials(ctx context.Context, userID int6
 }
 
 // AuthenticateMQTTConnection validates EMQX HTTP AuthN callbacks.
-func (s *CompanionService) AuthenticateMQTTConnection(ctx context.Context, in CompanionMQTTAuthInput) CompanionMQTTAuthResult {
+func (s *CompanionService) AuthenticateMQTTConnection(ctx context.Context, in CompanionMQTTAuthInput) (result CompanionMQTTAuthResult) {
+	defer func() {
+		if result.Result == "deny" {
+			s.realtime.Denied("auth", in.Username, in.ClientID)
+		}
+	}()
 	if strings.HasPrefix(in.Username, messageMQTTPrincipal) && s.messages != nil {
 		return s.messages.authenticateMessageMQTT(ctx, in)
 	}
@@ -587,7 +608,12 @@ func (s *CompanionService) AuthenticateMQTTConnection(ctx context.Context, in Co
 }
 
 // AuthorizeMQTTOperation validates EMQX HTTP AuthZ callbacks.
-func (s *CompanionService) AuthorizeMQTTOperation(ctx context.Context, in CompanionMQTTACLInput) CompanionMQTTACLResult {
+func (s *CompanionService) AuthorizeMQTTOperation(ctx context.Context, in CompanionMQTTACLInput) (result CompanionMQTTACLResult) {
+	defer func() {
+		if result.Result == "deny" {
+			s.realtime.Denied("acl", in.Username, in.ClientID)
+		}
+	}()
 	if strings.HasPrefix(in.Username, messageMQTTPrincipal) && s.messages != nil {
 		return s.messages.authorizeMessageMQTT(ctx, in)
 	}

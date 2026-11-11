@@ -1,5 +1,6 @@
 (function () {
   const pageMeta = {
+    '/admin/realtime.html': ['实时通信', '消息提醒、同行连接与近期异常'],
     '/admin/index.html': ['发布管理', '安装包上传、版本发布与历史版本管理'],
     '/admin/users.html': ['用户管理', '查看用户资料并管理账号限制'],
     '/admin/tracks.html': ['轨迹管理', '查看、修正或删除用户轨迹'],

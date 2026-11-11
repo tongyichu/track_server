@@ -38,6 +38,7 @@ var permissionModules = []PermissionModule{
 	{"users", "用户管理", "/admin/users.html"},
 	{"route_groups", "地图模式", "/admin/route_groups.html"},
 	{"companions", "与友同行", "/admin/companions.html"},
+	{"realtime", "实时通信", "/admin/realtime.html"},
 	{"feedbacks", "反馈与纠错", "/admin/feedbacks.html"},
 	{"releases", "App 发布", "/admin/index.html"},
 	{"analytics", "埋点同步", "/admin/analytics.html"},

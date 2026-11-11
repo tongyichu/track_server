@@ -13,7 +13,7 @@
     'dashboard.html': 'dashboard', 'track_submissions.html': 'track_submissions', 'tracks.html': 'tracks',
     'scenic_spots.html': 'scenic_spots', 'regions.html': 'regions', 'users.html': 'users', 'route_groups.html': 'route_groups',
     'companions.html': 'companions', 'companion_detail.html': 'companions', 'feedbacks.html': 'feedbacks',
-    'announcements.html': 'announcements', 'ai_usage.html': 'ai_usage', 'index.html': 'releases', 'analytics.html': 'analytics', 'accounts.html': 'accounts'
+    'announcements.html': 'announcements', 'realtime.html': 'realtime', 'ai_usage.html': 'ai_usage', 'index.html': 'releases', 'analytics.html': 'analytics', 'accounts.html': 'accounts'
   };
   function linkModule(link) {
     const url = new URL(link.getAttribute('href'), location.origin);
@@ -86,6 +86,7 @@
     { href: '/admin/companions.html', label: '与友同行', icon: 'friends' },
     { href: '/admin/feedbacks.html', label: '反馈与纠错', icon: 'message-report' },
     { href: '/admin/announcements.html', label: '活动&通知', icon: 'message-report' },
+    { href: '/admin/realtime.html', label: '实时通信', icon: 'cloud-upload' },
     { href: '/admin/index.html', label: '发布管理', icon: 'package' },
     { href: '/admin/ai_usage.html', label: 'AI 使用', icon: 'robot' },
     { href: '/admin/analytics.html', label: '埋点同步', icon: 'cloud-upload' },

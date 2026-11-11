@@ -157,6 +157,7 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	g.GET("/companion_detail.html", serveAdminPage(m.Auth, "static/companion_detail.html"))
 	g.GET("/feedbacks.html", serveAdminPage(m.Auth, "static/feedbacks.html"))
 	g.GET("/announcements.html", serveAdminPage(m.Auth, "static/announcements.html"))
+	g.GET("/realtime.html", serveAdminPage(m.Auth, "static/realtime.html"))
 	g.GET("/ai_usage.html", serveAdminPage(m.Auth, "static/ai_usage.html"))
 	g.GET("/analytics.html", serveAdminPage(m.Auth, "static/analytics.html"))
 	g.GET("/accounts.html", serveAdminPage(m.Auth, "static/accounts.html"))
@@ -174,6 +175,9 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 
 	// 鉴权 API
 	api := g.Group("/api", m.Auth.AuthMiddleware())
+	api.GET("/realtime/summary", m.Handler.RealtimeSummary)
+	api.GET("/realtime/clients", m.Handler.RealtimeClients)
+	api.GET("/realtime/events", m.Handler.RealtimeEvents)
 	api.GET("/announcements", m.Handler.ListAnnouncements)
 	api.POST("/announcements", m.Handler.SaveAnnouncement)
 	api.GET("/announcements/:notice_id", m.Handler.GetAnnouncement)

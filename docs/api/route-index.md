@@ -4,6 +4,7 @@
 
 | 接口 | 方法 | 路径 | 需要认证 | 文档 |
 | --- | --- | --- | --- | --- |
+| 后台实时通信统计、连接与近期异常 | GET | `/admin/api/realtime/summary`, `/admin/api/realtime/clients`, `/admin/api/realtime/events` | 后台session，realtime查看权限 | [admin-realtime](admin-realtime.md) |
 | 消息未读汇总 | GET | `/messages/summary` | JWT | [messages](messages.md#摘要与已读) |
 | 通知列表 / 已读 | GET / POST | `/messages/notices`, `/messages/notices/read` | JWT | [messages](messages.md#通知与互动) |
 | 互动分页 / 已读 | GET / POST | `/messages/interactions`, `/messages/interactions/read` | JWT | [messages](messages.md#通知与互动) |

@@ -129,6 +129,7 @@ func (s *MessageService) RunMessageDelivery(ctx context.Context) {
 				heartbeat, stop := context.WithTimeout(work, 3*time.Second)
 				if s.companion.publisher.Publish(heartbeat, s.announcementTopic(), messageJSON(map[string]string{"event": "inbox_heartbeat"})) == nil {
 					lastHeartbeat = messageNow()
+					s.companion.realtime.Heartbeat()
 				}
 				stop()
 			}

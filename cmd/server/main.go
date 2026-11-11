@@ -392,12 +392,15 @@ func main() {
 		CredentialTTL:    time.Duration(cfg.CompanionMQTTCredentialTTLSecond) * time.Second,
 		CredentialSecret: cfg.CompanionMQTTCredentialSecret,
 	})
+	realtimeMonitor := service.NewRealtimeMonitor()
+	companionSvc.SetRealtimeMonitor(realtimeMonitor)
 	if cfg.EMQXBrokerURL != "" || cfg.EMQXWebsocketURL != "" {
 		publisherBrokerURL := cfg.EMQXBrokerURL
 		if publisherBrokerURL == "" {
 			publisherBrokerURL = cfg.EMQXWebsocketURL
 		}
 		controlPublisher, err := service.NewMQTTCompanionControlPublisher(service.CompanionMQTTControlPublisherOptions{
+			Monitor:        realtimeMonitor,
 			BrokerURL:      publisherBrokerURL,
 			ClientID:       cfg.CompanionMQTTPublisherClientID,
 			Username:       cfg.CompanionMQTTPublisherUsername,
@@ -716,6 +719,7 @@ func main() {
 	// 后台账号独立持久化；环境变量仅用于首次初始化，数据库降级不放开后台鉴权。
 	adminModule := admin.NewModule(cfg.AdminAccounts, appReleaseSvc, ossTokenSvc, staticRoot, userRepo, trackRepo, collectRepo, trackMapRepo, companionRepo, analyticsRepo, userSvc, feedbackSvc, accountRestrictionSvc, trackRouteGroupSvc, adminAccountStorage)
 	adminModule.Handler.SetMessageService(messageSvc)
+	adminModule.Handler.SetRealtime(realtimeMonitor, service.NewRealtimeBroker(cfg.EMQXManagementURL, cfg.EMQXManagementAPIKey, cfg.EMQXManagementAPISecret))
 	if err := adminModule.ConfigureEmailRecovery(admin.SMTPConfig{Host: cfg.AdminSMTPHost, Port: cfg.AdminSMTPPort, Username: cfg.AdminSMTPUsername, Password: cfg.AdminSMTPPassword, From: cfg.AdminSMTPFrom, TLSMode: cfg.AdminSMTPTLSMode}); err != nil {
 		log.Print("admin email recovery unavailable: check account storage and SMTP configuration")
 	}

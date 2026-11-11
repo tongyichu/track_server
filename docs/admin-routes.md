@@ -13,6 +13,7 @@
 
 | 方法 | 路径 | 鉴权 | 说明 |
 |------|------|------|------|
+| GET | `/admin/realtime.html`、`/admin/api/realtime/summary`、`/admin/api/realtime/clients`、`/admin/api/realtime/events` | realtime 查看权限 | 实时通信观测、实际连接与近期异常，只读；见 [协议](api/admin-realtime.md) |
 | GET | `/admin/`、`/admin` | 公开 | 302 跳转 `/admin/login.html` |
 | GET | `/admin/login.html` | 公开 | 登录页 |
 | GET | `/admin/announcements.html` | announcements读取 | 活动&通知页 |

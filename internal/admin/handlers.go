@@ -36,6 +36,8 @@ import (
 
 // Handler 聚合管理后台需要的业务依赖。
 type Handler struct {
+	realtime              *service.RealtimeMonitor
+	realtimeBroker        *service.RealtimeBroker
 	messages              *service.MessageService
 	ai                    *ai.Manager
 	aiModels              []string
