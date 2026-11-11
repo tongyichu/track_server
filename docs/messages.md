@@ -9,13 +9,13 @@
 
 ## 实现入口
 
-App/后台接口见 [messages API](api/messages.md)。路由在 internal/handler/router.go；服务在 internal/service/messages.go、message_announcements.go、message_realtime.go；三种仓储在 internal/repository/messages*.go；后台入口 internal/admin/announcements.go、static/announcements.*。不新增邮件、推送服务或第三方数据库。
+App/后台接口见 [messages API](api/messages.md)。路由在 internal/handler/router.go；服务在 internal/service/messages.go、message_direct.go、message_sent.go、message_tracks.go、message_announcements.go、message_realtime.go；三种仓储在 internal/repository/messages*.go；后台入口 internal/admin/announcements.go、static/announcements.*。不新增邮件、推送服务或第三方数据库。
 
 message_records 同时存储 thread、dm、notice、notice_read、user_state、mqtt_session 和互动事件。kind/user/peer/thread/seq/created_at 是可检索字段，payload 保存私有版本化对象；通知接收目标使用字符串 ID 数组。MySQL DATETIME(6)、Mongo at_micros 和 memory 保持微秒游标精度，避免同毫秒分页丢项。关联用户/轨迹按页批量查询；会话列表不逐条查询互相关注，仅详情/发送检查配额。
 
 消息用户头像组装在 `internal/service/message_users.go`，启动时注入与个人页共用的 AssetCacheService。OSS 头像按用户 ID 复用本地缓存和并发下载去重，未同步成功时返回本站默认头像，避免客户端直连私有原图收到403；不新增用户详情请求、不修改消息载荷或用户资料，三种仓储共用相同响应组装。
 
-轨迹卡片由 `messageTrackView` 共用 `trackPreviewURLs` 生成日间横版鉴权预览地址，保留原图源版本；不直连私有 OSS，不在消息查询中下载图片或逐条读取轨迹详情。发送、历史与互动通知共用该组装，旧消息无需改写，图片读取继续由已有 TrackPreviewFile 校验可见性并填充缓存。
+轨迹卡片由 `messageTrackViews` 共用 `trackPreviewURLs` 生成日间4:3横版鉴权预览地址，保留原图源版本；不直连私有 OSS，不在消息查询中下载图片或逐条读取轨迹详情。发送、历史与互动通知共用该组装，按页批量读取轨迹及去重的运动用户，返回里程、耗时、作者和目录城市；作者头像沿用 messageUserView 的本站缓存，同页同作者只组装一次。不可见轨迹不返回作者及城市等详情。旧消息无需改写，图片读取继续由已有 TrackPreviewFile 校验可见性并填充缓存。
 
 ## 持久化与恢复
 
@@ -23,7 +23,9 @@ message_records 同时存储 thread、dm、notice、notice_read、user_state、m
 
 dm 落盘后标 pending，worker 每秒扫描，QoS1 发布刷新提示后按 revision 清 pending。发送/清除之间崩溃会重复提醒，客户端通过 HTTP seq/id 去重。数据库提交与 MQTT 不做分布式事务，MQTT不是历史消息存储。worker 每轮15秒预算、单次发布3秒，失败保留pending；每小时只清理过期 MQTT 凭证，不清私信历史。
 
-Android按账号缓存最近60条、草稿与待发项，发送前同步提交磁盘并保留 client_id。杀 App 重进先查 by-client；已接收则归并，明确404且允许发送时按原 ID 自动恢复，其他失败保留可重试项。客户端缓存不替代服务端历史。退出账号清本人消息缓存，HTTP请求捕获账号/token并检查响应身份，禁止旧响应更新新账号。
+thread 的 clear_a/clear_b 为双方独立的历史清除序号，和拉黑 flag_a/flag_b 一起作为可检索顶层字段；清除操作复用 thread CAS，先补齐 Pending，再推进本人边界及已读，不删除 dm、不重置序号、配额或对方历史。MySQL 启动检测并补充缺失的 clear_a/clear_b（BIGINT NOT NULL DEFAULT 0），升级失败则消息模块关闭，不能降级确认发送；mysql.sql 与新表 DDL 保持一致。Mongo 旧文档缺少 clear 字段按0解释，memory 使用同一边界；普通会话的可见性在分页和计数前过滤，历史/增量也按本人边界过滤，by-client 与重复发送防止旧消息重新出现。小黑屋人数独立统计本人拉黑 thread，不参与未读。
+
+Android按账号缓存最近60条、草稿、清除边界与待发项，发送前同步提交磁盘并保留 client_id。杀 App 重进先查 by-client；已接收则归并，明确404且允许发送时按原 ID 自动恢复，其他失败保留可重试项。客户端缓存不替代服务端历史。退出账号清本人消息缓存，HTTP请求捕获账号/token并检查响应身份，禁止旧响应更新新账号。
 
 评论、赞、收藏、关注的通知在原业务写成功后幂等追加，失败记录日志且不反转原操作；它们和原业务仓储不是跨库原子事务，进程恰好在两次写入之间退出存在漏通知窗口。第一版不回填上线前互动。不要把此边界描述为与私信同等级的事务保证。
 
@@ -31,7 +33,7 @@ Android按账号缓存最近60条、草稿与待发项，发送前同步提交�
 
 ## 未读与提醒
 
-服务端保留事件已读标志、通知逐条阅读记录、双方会话 read_seq，以及本人全局 all_read_at。摘要现场查询有效事件/通知并按会话批量统计来信，设备重启、多设备重复读不会使游标回退。全局已读按请求携带 cutoff，保护稍后到达的新消息。
+服务端保留事件已读标志、通知逐条阅读记录、双方会话 read_seq，以及本人全局 all_read_at。摘要现场查询有效事件/通知并按会话批量统计来信，设备重启、多设备重复读不会使游标回退。全局已读按请求携带 cutoff，保护稍后到达的新消息。本人拉黑的会话从普通会话与私信未读汇总排除，拉黑时将已有消息标记已读；解除后保留未清除的历史。单方删除和拉黑/解除均排队发送刷新信号，由各设备 HTTP 获取权威状态。
 
 MQTT独立于同行房间，复用 broker、签名密钥和发布客户端，使用仅订阅 msgv1 凭证。服务端每20秒发送共享轻量心跳，客户端45秒无信号时同样启用兜底，避免只有Broker连接正常而发布链路失效时长期收不到更新。客户端消息模块持有单一连接，页面间共用，背景或离开关闭。会话内部的历史补拉永远可通过HTTP完成，离线期间不依赖 MQTT retain/队列。普通页面红点只在约定时机更新；消息页内通知通过HTTP刷新，暂时无MQTT时12秒兜底，不做全App常驻连接或系统推送。
 
@@ -39,4 +41,4 @@ MQTT独立于同行房间，复用 broker、签名密钥和发布客户端，使
 
 需要先部署Server再安装含新入口客户端；此前老Server会对新接口返回404，不能据此判断客户端聊天已联通。沿用现有 EMQX 内部回调配置及同行发布客户端；需确认 broker 回调走当前 auth/ACL 服务且 msgv1没有额外拦截。无需新增环境变量。管理账号需具备 announcements 模块权限；不静默扩大已有普通管理员权限。
 
-默认验证只做 go build ./...、JS语法、XML/差量静态检查以及 Android编译安装和启动。用户人工检查：两账号陌生人首条/回复/互关、文字加轨迹、双方拉黑及解除/时间、分页/未读分界、杀App后完整历史/未读与待发恢复、断网重连去重、账号切换、回桌面断连、评论精确跳转、通知指定受众/定时/编辑/撤回、后台只读/并发修改和日夜模式。未跑业务流程前不宣称端到端通过。
+默认验证只做 go build ./...、JS语法、XML/差量静态检查以及 Android编译安装和启动。用户人工检查：两账号陌生人首条/回复/互关、长按单方删除（对方历史保留、新消息重现、跨设备不回填）、小黑屋入口人数/名单/解除、选中轨迹直接发送独立4:3卡片、收藏轨迹显示实际作者/指标/城市、失败重试及已有文字草稿保留、历史文字加轨迹兼容、双方拉黑及解除/时间、分页/未读分界、杀App后完整历史/未读与待发恢复、断网重连去重、账号切换、回桌面断连、评论精确跳转、通知指定受众/定时/编辑/撤回、后台只读/并发修改和日夜模式。未跑业务流程前不宣称端到端通过。

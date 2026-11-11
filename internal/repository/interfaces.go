@@ -269,6 +269,8 @@ type UserRepository interface {
 	FindByPhone(ctx context.Context, phone string) (*models.User, error)
 	FindByNickname(ctx context.Context, nickname string) (*models.User, error)
 	Update(ctx context.Context, u *models.User) error
+	// BindPhone atomically claims a verified phone; another owner returns ErrAlreadyExists.
+	BindPhone(ctx context.Context, userID int64, phone string) error
 	UpdateLocation(ctx context.Context, userID int64, location models.UserLocation) error
 	UpdateInternal(ctx context.Context, userID int64, isInternal bool) error
 	// ListAll 返回全量用户列表（按 created_at desc, id desc）。

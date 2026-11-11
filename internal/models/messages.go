@@ -19,6 +19,8 @@ type MessageRecord struct {
 	Pending   bool            `json:"-" bson:"pending"`
 	FlagA     bool            `json:"-" bson:"flag_a"`
 	FlagB     bool            `json:"-" bson:"flag_b"`
+	ClearA    int64           `json:"-" bson:"clear_a"`
+	ClearB    int64           `json:"-" bson:"clear_b"`
 	Targets   []string        `json:"targets" bson:"targets"`
 	Revision  int64           `json:"revision" bson:"revision"`
 	Payload   json.RawMessage `json:"payload" bson:"payload"`
@@ -30,10 +32,15 @@ type MessageUser struct {
 	AvatarURL string `json:"avatar_url"`
 }
 type MessageTrack struct {
-	ID         string `json:"id"`
-	Title      string `json:"title"`
-	PreviewURL string `json:"preview_url"`
-	Available  bool   `json:"available"`
+	ID         string       `json:"id"`
+	Title      string       `json:"title"`
+	PreviewURL string       `json:"preview_url"`
+	Available  bool         `json:"available"`
+	Distance   float64      `json:"distance"`
+	Duration   uint32       `json:"duration"`
+	Author     *MessageUser `json:"author,omitempty"`
+	CityCode   string       `json:"city_code,omitempty"`
+	CityName   string       `json:"city_name,omitempty"`
 }
 type DirectMessage struct {
 	ID          string        `json:"id"`
@@ -66,14 +73,15 @@ type StoredDirectMessage struct {
 	RequestHash string        `json:"request_hash"`
 }
 type MessageConversation struct {
-	ReadSeq   int64          `json:"read_seq"`
-	Peer      MessageUser    `json:"peer"`
-	Last      *DirectMessage `json:"last,omitempty"`
-	Unread    int64          `json:"unread"`
-	Blocked   bool           `json:"blocked"`
-	BlockedAt *time.Time     `json:"blocked_at,omitempty"`
-	CanSend   bool           `json:"can_send"`
-	SendHint  string         `json:"send_hint,omitempty"`
+	ReadSeq        int64          `json:"read_seq"`
+	ClearedThrough int64          `json:"cleared_through"`
+	Peer           MessageUser    `json:"peer"`
+	Last           *DirectMessage `json:"last,omitempty"`
+	Unread         int64          `json:"unread"`
+	Blocked        bool           `json:"blocked"`
+	BlockedAt      *time.Time     `json:"blocked_at,omitempty"`
+	CanSend        bool           `json:"can_send"`
+	SendHint       string         `json:"send_hint,omitempty"`
 }
 type InboxInteraction struct {
 	ID        string        `json:"id"`
@@ -126,16 +134,22 @@ type MessagePage[T any] struct {
 	NextCursor string `json:"next_cursor,omitempty"`
 }
 type InboxSummary struct {
-	System        int64                `json:"system"`
-	Private       int64                `json:"private"`
-	Comments      int64                `json:"comments"`
-	Reactions     int64                `json:"reactions"`
-	Interactions  int64                `json:"interactions"`
-	Total         int64                `json:"total"`
-	SystemLatest  *AnnouncementPreview `json:"system_latest,omitempty"`
-	PrivateLatest *MessageConversation `json:"private_latest,omitempty"`
-	Cutoff        time.Time            `json:"cutoff"`
+	System         int64                `json:"system"`
+	BlacklistCount int64                `json:"blacklist_count"`
+	Private        int64                `json:"private"`
+	Comments       int64                `json:"comments"`
+	Reactions      int64                `json:"reactions"`
+	Interactions   int64                `json:"interactions"`
+	Total          int64                `json:"total"`
+	SystemLatest   *AnnouncementPreview `json:"system_latest,omitempty"`
+	PrivateLatest  *MessageConversation `json:"private_latest,omitempty"`
+	Cutoff         time.Time            `json:"cutoff"`
 }
 type MessageUserState struct {
 	AllReadAt time.Time `json:"all_read_at"`
+}
+
+// MessageClearResult is the caller-only history boundary; the peer retains their history.
+type MessageClearResult struct {
+	ClearedThrough int64 `json:"cleared_through"`
 }

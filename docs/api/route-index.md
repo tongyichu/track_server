@@ -10,7 +10,8 @@
 | 全部已读 | POST | `/messages/read-all` | JWT | [messages](messages.md#摘要与已读) |
 | 私信会话 / 黑名单（头像复用本站缓存） | GET | `/messages/conversations`, `/messages/blacklist` | JWT | [messages](messages.md#私信) |
 | 会话元信息（含本站头像地址） | GET | `/messages/conversations/:peer_id` | JWT | [messages](messages.md#私信) |
-| 私信历史 / 增量 / 发送 | GET / POST | `/messages/conversations/:peer_id/messages` | JWT，发送检查账号限制 | [messages](messages.md#私信) |
+| 单方删除聊天记录 | DELETE | `/messages/conversations/:peer_id` | JWT，允许受限账号清除本人历史 | [messages](messages.md#私信) |
+| 私信历史 / 增量 / 发送（轨迹卡片含运动用户、指标与城市） | GET / POST | `/messages/conversations/:peer_id/messages` | JWT，发送检查账号限制 | [messages](messages.md#私信) |
 | 按客户端ID恢复发送结果 | GET | `/messages/conversations/:peer_id/messages/by-client/:client_id` | JWT | [messages](messages.md#私信) |
 | 会话已读 / 拉黑或解除 | POST / PUT | `/messages/conversations/:peer_id/read`, `/messages/conversations/:peer_id/block` | JWT | [messages](messages.md#私信) |
 | 消息模块MQTT凭证 | POST | `/messages/mqtt/credentials` | JWT | [messages](messages.md#实时连接) |
@@ -76,6 +77,7 @@
 | 删除轨迹 | DELETE | `/track/:track_id` | 是 | [track.md](track.md#12-删除轨迹) |
 | 用户已收藏轨迹列表（含精品标识、当前用户收藏状态及总数） | GET | `/track/collected/list` | 是 | [collect-navigation.md](collect-navigation.md#13-用户已收藏轨迹列表) |
 | 更新个人信息（含背景图、性别、生日） | PUT | `/user/profile/update` | 是 | [user.md](user.md#14-更新个人信息) |
+| 绑定或更换本人手机号（短信验证、唯一占用） | PUT | `/user/profile/phone` | JWT，检查账号限制 | [user.md](user.md#绑定或更换手机号) |
 | 更新最近确认所在地 | PUT | `/user/profile/location` | 是 | [user.md](user.md#更新最近确认所在地) |
 | 获取地区目录（支持版本检查） | GET | `/regions/catalog` | 是 | [regions.md](regions.md) |
 | 关注用户 | POST | `/user/:user_id/follow` | 是 | [user.md](user.md#42-关注用户) |

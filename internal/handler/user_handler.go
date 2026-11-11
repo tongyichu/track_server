@@ -11,19 +11,23 @@ import (
 	"github.com/cloudwego/hertz/pkg/common/utils"
 
 	"github.com/tongyichu/track_server/internal/middleware"
+	"github.com/tongyichu/track_server/internal/models"
 	"github.com/tongyichu/track_server/internal/repository"
 	"github.com/tongyichu/track_server/internal/service"
 )
 
 // UserHandler handles HTTP requests related to user profile and settings.
 type UserHandler struct {
-	userSvc *service.UserService
+	userSvc  *service.UserService
+	loginSvc *service.LoginService
 }
 
 // NewUserHandler creates a new UserHandler.
 func NewUserHandler(userSvc *service.UserService) *UserHandler {
 	return &UserHandler{userSvc: userSvc}
 }
+
+func (h *UserHandler) SetLoginService(loginSvc *service.LoginService) { h.loginSvc = loginSvc }
 
 // GetUserDetail handles GET /api/user/:user_id/detail
 func (h *UserHandler) GetUserDetail(ctx context.Context, c *app.RequestContext) {
@@ -209,25 +213,55 @@ func (h *UserHandler) UpdateProfile(ctx context.Context, c *app.RequestContext) 
 
 // UpdatePhone handles PUT /api/user/profile/phone
 func (h *UserHandler) UpdatePhone(ctx context.Context, c *app.RequestContext) {
-	userID, err := parseRequiredUserID(string(c.Query("user_id")))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, utils.H{"error": err.Error()})
+	userID, ok := h.authUserID(c)
+	if !ok {
 		return
+	}
+	if raw := string(c.Query("user_id")); raw != "" {
+		requested, err := parseRequiredUserID(raw)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, utils.H{"error": err.Error()})
+			return
+		}
+		if requested != userID {
+			c.JSON(http.StatusForbidden, utils.H{"error": "只能修改本人手机号"})
+			return
+		}
 	}
 	var body struct {
 		Phone string `json:"phone"`
+		Code  string `json:"code"`
 	}
 	data, err := c.Body()
-	if err != nil || json.Unmarshal(data, &body) != nil || body.Phone == "" {
-		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid phone payload"})
+	if err != nil || json.Unmarshal(data, &body) != nil || body.Code == "" {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "phone and code are required"})
+		return
+	}
+	if h.loginSvc == nil {
+		c.JSON(http.StatusServiceUnavailable, utils.H{"error": "login service unavailable"})
+		return
+	}
+	if err := h.loginSvc.ConsumeSMSCode(body.Phone, body.Code); err != nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": err.Error()})
 		return
 	}
 	user, err := h.userSvc.UpdatePhone(ctx, userID, body.Phone)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		status, message := http.StatusInternalServerError, "手机号绑定失败，请稍后重试"
+		switch {
+		case errors.Is(err, repository.ErrAlreadyExists):
+			status, message = http.StatusConflict, "该手机号已绑定其他账号"
+		case errors.Is(err, repository.ErrPhoneConstraintUnavailable):
+			status, message = http.StatusServiceUnavailable, err.Error()
+		case errors.Is(err, repository.ErrNotFound):
+			status, message = http.StatusNotFound, "账号不存在"
+		case errors.Is(err, models.ErrInvalidPhone):
+			status, message = http.StatusBadRequest, err.Error()
+		}
+		c.JSON(status, utils.H{"error": message})
 		return
 	}
-	c.JSON(http.StatusOK, user)
+	c.JSON(http.StatusOK, successResponse(service.NewUserProfileResponse(user)))
 }
 
 // UpdateClientLanguage handles PUT /api/user/profile/client_language

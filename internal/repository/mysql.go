@@ -57,6 +57,8 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
  city_name VARCHAR(64) NOT NULL DEFAULT '',
  is_internal TINYINT(1) NOT NULL DEFAULT 0,
 			phone VARCHAR(32) NOT NULL DEFAULT '',
+            phone_key VARCHAR(32) GENERATED ALWAYS AS (NULLIF(TRIM(phone), '')) STORED,
+            UNIQUE KEY uk_users_phone_key (phone_key),
 			client_language VARCHAR(64) NOT NULL DEFAULT '',
 			token_version BIGINT NOT NULL DEFAULT 1,
 			last_active_at DATETIME(6) NULL,
@@ -2528,8 +2530,21 @@ type MySQLUserRepository struct{ db *sql.DB }
 func NewMySQLUserRepository(db *sql.DB) *MySQLUserRepository { return &MySQLUserRepository{db: db} }
 
 func (r *MySQLUserRepository) CreateIfNotExists(ctx context.Context, u *models.User) (*models.User, error) {
-	// Fast path: if already exists, return it.
+	if u.Phone != "" {
+		phone, err := models.NormalizePhone(u.Phone)
+		if err != nil {
+			return nil, err
+		}
+		u.Phone = phone
+		if err := r.requirePhoneConstraint(ctx); err != nil {
+			return nil, err
+		}
+	}
+	// Fast path: an ID collision must not authenticate a different phone.
 	if existing, err := r.FindByID(ctx, u.ID); err == nil {
+		if u.Phone != "" && existing.Phone != u.Phone {
+			return nil, ErrAlreadyExists
+		}
 		return existing, nil
 	} else if !errors.Is(err, ErrNotFound) {
 		return nil, err
@@ -2546,12 +2561,16 @@ func (r *MySQLUserRepository) CreateIfNotExists(ctx context.Context, u *models.U
 	}
 	_, err := r.db.ExecContext(ctx,
 		`INSERT INTO users (id, nickname, avatar_url, signature, background_url, gender, birthday, province_code, province_name, city_code, city_name, is_internal, phone, client_language, token_version, created_at, updated_at)
-			 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-			 ON DUPLICATE KEY UPDATE id=id`,
+			 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		u.ID, u.Nickname, nullableStringValue(u.AvatarURL), nullableStringValue(u.Signature), nullableStringValue(u.BackgroundURL), u.Gender, u.Birthday, u.ProvinceCode, u.ProvinceName, u.CityCode, u.CityName, u.IsInternal, u.Phone, u.ClientLanguage, u.TokenVersion, u.CreatedAt, u.UpdatedAt,
 	)
 	if err != nil {
-		return nil, err
+		if errors.Is(phoneWriteError(err), ErrAlreadyExists) {
+			if existing, readErr := r.FindByID(ctx, u.ID); readErr == nil && (u.Phone == "" || existing.Phone == u.Phone) {
+				return existing, nil
+			}
+		}
+		return nil, phoneWriteError(err)
 	}
 	return r.FindByID(ctx, u.ID)
 }
@@ -2641,35 +2660,35 @@ func (r *MySQLUserRepository) FindByIDs(ctx context.Context, ids []int64) (map[i
 }
 
 func (r *MySQLUserRepository) FindByPhone(ctx context.Context, phone string) (*models.User, error) {
-	row := r.db.QueryRowContext(ctx,
-		`SELECT id, nickname, avatar_url, signature, background_url, gender, birthday, province_code, province_name, city_code, city_name, is_internal, phone, client_language, token_version, created_at, updated_at FROM users WHERE phone=? LIMIT 1`,
-		phone,
-	)
-	var (
-		u          models.User
-		avatarURL  sql.NullString
-		signature  sql.NullString
-		background sql.NullString
-	)
-	if err := row.Scan(&u.ID, &u.Nickname, &avatarURL, &signature, &background, &u.Gender, &u.Birthday, &u.ProvinceCode, &u.ProvinceName, &u.CityCode, &u.CityName, &u.IsInternal, &u.Phone, &u.ClientLanguage, &u.TokenVersion, &u.CreatedAt, &u.UpdatedAt); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrNotFound
-		}
+	phone, err := models.NormalizePhone(phone)
+	if err != nil {
 		return nil, err
 	}
-	if avatarURL.Valid {
-		u.AvatarURL = avatarURL.String
+	rows, err := r.db.QueryContext(ctx, `SELECT id FROM users WHERE phone=? LIMIT 2`, phone)
+	if err != nil {
+		return nil, err
 	}
-	if background.Valid {
-		u.BackgroundURL = background.String
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		ids = append(ids, id)
 	}
-	if signature.Valid {
-		u.Signature = signature.String
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return nil, err
 	}
-	if u.TokenVersion <= 0 {
-		u.TokenVersion = 1
+	if len(ids) == 0 {
+		return nil, ErrNotFound
 	}
-	return &u, nil
+	if len(ids) > 1 {
+		return nil, ErrPhoneAmbiguous
+	}
+	return r.FindByID(ctx, ids[0])
 }
 
 func (r *MySQLUserRepository) FindByNickname(ctx context.Context, nickname string) (*models.User, error) {
@@ -2710,8 +2729,8 @@ func (r *MySQLUserRepository) Update(ctx context.Context, u *models.User) error 
 	}
 	u.UpdatedAt = time.Now()
 	res, err := r.db.ExecContext(ctx,
-		`UPDATE users SET nickname=?, avatar_url=?, signature=?, background_url=?, gender=?, birthday=?, is_internal=?, phone=?, client_language=?, token_version=?, updated_at=? WHERE id=?`,
-		u.Nickname, nullableStringValue(u.AvatarURL), nullableStringValue(u.Signature), nullableStringValue(u.BackgroundURL), u.Gender, u.Birthday, u.IsInternal, u.Phone, u.ClientLanguage, u.TokenVersion, u.UpdatedAt, u.ID,
+		`UPDATE users SET nickname=?, avatar_url=?, signature=?, background_url=?, gender=?, birthday=?, is_internal=?, client_language=?, token_version=?, updated_at=? WHERE id=?`,
+		u.Nickname, nullableStringValue(u.AvatarURL), nullableStringValue(u.Signature), nullableStringValue(u.BackgroundURL), u.Gender, u.Birthday, u.IsInternal, u.ClientLanguage, u.TokenVersion, u.UpdatedAt, u.ID,
 	)
 	if err != nil {
 		return err

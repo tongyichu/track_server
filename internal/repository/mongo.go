@@ -709,9 +709,41 @@ func NewMongoUserRepository(collection *mongo.Collection) *MongoUserRepository {
 	return &MongoUserRepository{collection: collection}
 }
 
-// CreateIfNotExists is not implemented in this demo and returns an error.
-func (r *MongoUserRepository) CreateIfNotExists(context.Context, *models.User) (*models.User, error) {
-	return nil, errors.New("MongoUserRepository.CreateIfNotExists not implemented")
+func (r *MongoUserRepository) CreateIfNotExists(ctx context.Context, u *models.User) (*models.User, error) {
+	if u.Phone != "" {
+		phone, err := models.NormalizePhone(u.Phone)
+		if err != nil {
+			return nil, err
+		}
+		u.Phone = phone
+		if err := r.requirePhoneConstraint(ctx); err != nil {
+			return nil, err
+		}
+	}
+	if existing, err := r.FindByID(ctx, u.ID); err == nil {
+		if u.Phone != "" && existing.Phone != u.Phone {
+			return nil, ErrAlreadyExists
+		}
+		return existing, nil
+	} else if !errors.Is(err, ErrNotFound) {
+		return nil, err
+	}
+	if u.CreatedAt.IsZero() {
+		u.CreatedAt = time.Now()
+	}
+	u.UpdatedAt = u.CreatedAt
+	if u.TokenVersion <= 0 {
+		u.TokenVersion = 1
+	}
+	if _, err := r.collection.InsertOne(ctx, u); err != nil {
+		if mongo.IsDuplicateKeyError(err) {
+			if existing, readErr := r.FindByID(ctx, u.ID); readErr == nil && (u.Phone == "" || existing.Phone == u.Phone) {
+				return existing, nil
+			}
+		}
+		return nil, phoneWriteError(err)
+	}
+	return cloneUser(u), nil
 }
 
 // FindByID is not implemented in this demo and returns an error.
@@ -745,20 +777,35 @@ func (r *MongoUserRepository) FindByIDs(ctx context.Context, ids []int64) (map[i
 }
 
 func (r *MongoUserRepository) FindByPhone(ctx context.Context, phone string) (*models.User, error) {
-	var user models.User
-	err := r.collection.FindOne(ctx, bson.M{"phone": phone}).Decode(&user)
-	if errors.Is(err, mongo.ErrNoDocuments) {
-		return nil, ErrNotFound
-	}
+	phone, err := models.NormalizePhone(phone)
 	if err != nil {
 		return nil, err
 	}
-	return &user, nil
+	rows, err := r.collection.Find(ctx, bson.M{"phone": phone}, options.Find().SetLimit(2))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close(ctx)
+	var users []*models.User
+	if err := rows.All(ctx, &users); err != nil {
+		return nil, err
+	}
+	if len(users) == 0 {
+		return nil, ErrNotFound
+	}
+	if len(users) > 1 {
+		return nil, ErrPhoneAmbiguous
+	}
+	return cloneUser(users[0]), nil
 }
 
-// FindByNickname is not implemented in this demo and returns an error.
-func (r *MongoUserRepository) FindByNickname(context.Context, string) (*models.User, error) {
-	return nil, errors.New("MongoUserRepository.FindByNickname not implemented")
+func (r *MongoUserRepository) FindByNickname(ctx context.Context, nickname string) (*models.User, error) {
+	var user models.User
+	err := r.collection.FindOne(ctx, bson.M{"nickname": nickname}).Decode(&user)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return nil, ErrNotFound
+	}
+	return &user, err
 }
 
 func (r *MongoUserRepository) Update(ctx context.Context, user *models.User) error {
@@ -768,7 +815,7 @@ func (r *MongoUserRepository) Update(ctx context.Context, user *models.User) err
 	user.UpdatedAt = time.Now()
 	result, err := r.collection.UpdateOne(ctx, bson.M{"_id": user.ID}, bson.M{"$set": bson.M{
 		"nickname": user.Nickname, "avatar_url": user.AvatarURL, "signature": user.Signature,
-		"background_url": user.BackgroundURL, "gender": user.Gender, "phone": user.Phone,
+		"background_url": user.BackgroundURL, "gender": user.Gender,
 		"birthday":        user.Birthday,
 		"is_internal":     user.IsInternal,
 		"client_language": user.ClientLanguage, "token_version": user.TokenVersion, "updated_at": user.UpdatedAt,

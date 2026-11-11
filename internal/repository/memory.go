@@ -615,13 +615,28 @@ func (r *InMemoryUserRepository) SetAccountRestrictionRepository(restrictions *I
 
 // CreateIfNotExists creates the user if it does not exist.
 func (r *InMemoryUserRepository) CreateIfNotExists(_ context.Context, u *models.User) (*models.User, error) {
+	if u.Phone != "" {
+		phone, err := models.NormalizePhone(u.Phone)
+		if err != nil {
+			return nil, err
+		}
+		u.Phone = phone
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if existing, ok := r.users[u.ID]; ok {
 		if existing.TokenVersion <= 0 {
 			existing.TokenVersion = 1
 		}
-		return existing, nil
+		if u.Phone != "" && existing.Phone != u.Phone {
+			return nil, ErrAlreadyExists
+		}
+		return cloneUser(existing), nil
+	}
+	for _, existing := range r.users {
+		if u.Phone != "" && existing.Phone == u.Phone {
+			return nil, ErrAlreadyExists
+		}
 	}
 	if u.CreatedAt.IsZero() {
 		u.CreatedAt = time.Now()
@@ -630,8 +645,8 @@ func (r *InMemoryUserRepository) CreateIfNotExists(_ context.Context, u *models.
 		u.TokenVersion = 1
 	}
 	u.UpdatedAt = u.CreatedAt
-	r.users[u.ID] = u
-	return u, nil
+	r.users[u.ID] = cloneUser(u)
+	return cloneUser(u), nil
 }
 
 // FindByID finds a user by id.
@@ -642,10 +657,7 @@ func (r *InMemoryUserRepository) FindByID(_ context.Context, id int64) (*models.
 	if !ok {
 		return nil, ErrNotFound
 	}
-	if u.TokenVersion <= 0 {
-		u.TokenVersion = 1
-	}
-	return u, nil
+	return cloneUser(u), nil
 }
 
 func (r *InMemoryUserRepository) FindByIDs(_ context.Context, ids []int64) (map[int64]*models.User, error) {
@@ -663,17 +675,25 @@ func (r *InMemoryUserRepository) FindByIDs(_ context.Context, ids []int64) (map[
 
 // FindByPhone finds a user by phone.
 func (r *InMemoryUserRepository) FindByPhone(_ context.Context, phone string) (*models.User, error) {
+	phone, err := models.NormalizePhone(phone)
+	if err != nil {
+		return nil, err
+	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+	var found *models.User
 	for _, u := range r.users {
 		if u.Phone == phone {
-			if u.TokenVersion <= 0 {
-				u.TokenVersion = 1
+			if found != nil {
+				return nil, ErrPhoneAmbiguous
 			}
-			return u, nil
+			found = u
 		}
 	}
-	return nil, ErrNotFound
+	if found == nil {
+		return nil, ErrNotFound
+	}
+	return cloneUser(found), nil
 }
 
 // FindByNickname finds a user by nickname.
@@ -682,10 +702,7 @@ func (r *InMemoryUserRepository) FindByNickname(_ context.Context, nickname stri
 	defer r.mu.RUnlock()
 	for _, u := range r.users {
 		if u.Nickname == nickname {
-			if u.TokenVersion <= 0 {
-				u.TokenVersion = 1
-			}
-			return u, nil
+			return cloneUser(u), nil
 		}
 	}
 	return nil, ErrNotFound
@@ -702,12 +719,13 @@ func (r *InMemoryUserRepository) Update(_ context.Context, u *models.User) error
 	if u.TokenVersion <= 0 {
 		u.TokenVersion = 1
 	}
+	u.Phone = existing.Phone
 	u.ProvinceCode = existing.ProvinceCode
 	u.ProvinceName = existing.ProvinceName
 	u.CityCode = existing.CityCode
 	u.CityName = existing.CityName
 	u.UpdatedAt = time.Now()
-	r.users[u.ID] = u
+	r.users[u.ID] = cloneUser(u)
 	return nil
 }
 
