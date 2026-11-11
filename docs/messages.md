@@ -15,6 +15,8 @@ message_records 同时存储 thread、dm、notice、notice_read、user_state、m
 
 消息用户头像组装在 `internal/service/message_users.go`，启动时注入与个人页共用的 AssetCacheService。OSS 头像按用户 ID 复用本地缓存和并发下载去重，未同步成功时返回本站默认头像，避免客户端直连私有原图收到403；不新增用户详情请求、不修改消息载荷或用户资料，三种仓储共用相同响应组装。
 
+轨迹卡片由 `messageTrackView` 共用 `trackPreviewURLs` 生成日间横版鉴权预览地址，保留原图源版本；不直连私有 OSS，不在消息查询中下载图片或逐条读取轨迹详情。发送、历史与互动通知共用该组装，旧消息无需改写，图片读取继续由已有 TrackPreviewFile 校验可见性并填充缓存。
+
 ## 持久化与恢复
 
 私信一次发送先 CAS 更新双方 thread：写入服务端单调 seq、Last 和完整 Pending 日志。日志成功即具备恢复依据，随后按确定 ID 插入 dm，并 CAS 清除日志。并发发送重试读取最新版本；同 client_id 的内容指纹不同拒绝。中途断开/进程退出后，下一次会话查询、发送、客户端结果核对或后台 worker 会幂等补齐。读取 pending 不覆盖其他更新；清日志冲突时由后续修复继续，不删除已经接受的消息。

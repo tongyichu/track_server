@@ -399,7 +399,7 @@ func messageTrackView(user int64, id string, t *models.Track) *models.MessageTra
 	if t != nil && t.Status != models.TrackStatusDeleted && (t.Status == models.TrackStatusNormal || t.UserID == user) {
 		v.Available = true
 		v.Title = t.Title
-		v.PreviewURL = t.PreviewImages.LandscapeDayURL
+		v.PreviewURL = trackPreviewURLs(t.ID, t.PreviewImages).LandscapeDayURL
 	}
 	return v
 }

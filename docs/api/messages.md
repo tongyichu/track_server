@@ -32,6 +32,8 @@
 
 互动字段为 `id/kind/actor_id/actor/track_id/comment_id/text/created_at/unread/track`。actor 为 `id/nickname/avatar_url`；track 为 `id/title/preview_url/available`。失效或不可访问轨迹返回 available=false，不能借通知读取轨迹详情。全部包含 comment/reply/like/collect/comment_like/follow；评论包含 comment/reply；赞和收藏包含 like/collect/comment_like。自己的操作不通知自己；同一关系取消后隐藏，重新建立复用事件而不刷新增未读。此版本仅从上线后的业务操作生成，不追溯全量历史互动。
 
+消息卡片的 `track.preview_url` 与轨迹列表共用带源版本的鉴权预览地址 `/api/v1/track/:track_id/previews/landscape_day?v=...`，不直接返回私有 OSS 原图。客户端补全相对地址并携带业务 JWT；图片读取沿用轨迹可见性、源版本校验和缓存填充。无预览时返回空字符串。该规则覆盖互动通知、私信发送响应和历史消息，历史消息在读取时重新组装，无需重发。
+
 ## 私信
 
 | 方法 | 路径 | 参数或请求 |
