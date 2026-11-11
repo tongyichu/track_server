@@ -110,9 +110,6 @@ func (s *LoginService) GetUserTokenVersion(ctx context.Context, userID int64) (i
 	}
 	user, err := s.users.FindByID(ctx, userID)
 	if err != nil {
-		if errors.Is(err, repository.ErrNotFound) {
-			return defaultTokenVersion, nil
-		}
 		return 0, err
 	}
 	return normalizeTokenVersion(user.TokenVersion), nil
@@ -183,8 +180,9 @@ func (s *LoginService) ValidateCaptcha(captchaID, captchaCode string) bool {
 }
 
 func (s *LoginService) SendSMSCode(ctx context.Context, phone, captchaID, captchaCode string) (string, error) {
-	if phone == "" {
-		return "", errors.New("phone is required")
+	phone, err := models.NormalizePhone(phone)
+	if err != nil {
+		return "", err
 	}
 	if captchaID == "" || captchaCode == "" {
 		return "", errors.New("captcha_id and captcha_code are required")
@@ -212,21 +210,30 @@ func (s *LoginService) SendSMSCode(ctx context.Context, phone, captchaID, captch
 	return code, nil
 }
 
-func (s *LoginService) LoginBySMS(ctx context.Context, phone, code, ip, deviceID, platform string) (*LoginResult, error) {
-	if phone == "" || code == "" {
-		return nil, errors.New("phone and code are required")
+// ConsumeSMSCode verifies and consumes a code under one lock for login and binding.
+func (s *LoginService) ConsumeSMSCode(phone, code string) error {
+	phone, err := models.NormalizePhone(phone)
+	if err != nil {
+		return err
 	}
-
-	s.mu.RLock()
-	entry, ok := s.smsCodes[phone]
-	s.mu.RUnlock()
-	if !ok || entry.code != code || time.Now().After(entry.expiresAt) {
-		return nil, errors.New("invalid or expired verification code")
-	}
-
 	s.mu.Lock()
+	defer s.mu.Unlock()
+	entry, ok := s.smsCodes[phone]
+	if code == "" || !ok || entry.code != code || time.Now().After(entry.expiresAt) {
+		return errors.New("invalid or expired verification code")
+	}
 	delete(s.smsCodes, phone)
-	s.mu.Unlock()
+	return nil
+}
+
+func (s *LoginService) LoginBySMS(ctx context.Context, phone, code, ip, deviceID, platform string) (*LoginResult, error) {
+	phone, err := models.NormalizePhone(phone)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.ConsumeSMSCode(phone, code); err != nil {
+		return nil, err
+	}
 
 	user, err := s.users.FindByPhone(ctx, phone)
 	if err != nil {
@@ -249,6 +256,11 @@ func (s *LoginService) LoginBySMS(ctx context.Context, phone, code, ip, deviceID
 			Phone:    phone,
 			Nickname: nickname,
 		})
+		if errors.Is(err, repository.ErrAlreadyExists) {
+			// A concurrent registration may already own this phone. An unrelated
+			// generated ID collision must never log in that other account.
+			user, err = s.users.FindByPhone(ctx, phone)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -258,8 +270,7 @@ func (s *LoginService) LoginBySMS(ctx context.Context, phone, code, ip, deviceID
 		}
 	}
 	if user.Phone != phone {
-		user.Phone = phone
-		_ = s.users.Update(ctx, user)
+		return nil, repository.ErrConflict
 	}
 
 	_ = s.loginLogs.Create(ctx, &models.LoginLog{

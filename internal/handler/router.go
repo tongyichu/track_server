@@ -59,6 +59,7 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 	mapAreaHandler := NewMapAreaHandler(maparea.DefaultCatalog())
 	mapRouteIntroductionHandler := NewMapRouteIntroductionHandler(deps.TrackMapService)
 	userHandler := NewUserHandler(deps.UserService)
+	userHandler.SetLoginService(deps.LoginService)
 	loginHandler := NewLoginHandler(deps.LoginService, deps.TokenBlacklist, deps.AchievementService)
 	loginHandler.SetAppReleaseService(deps.AppReleaseService)
 	loginHandler.userSvc = deps.UserService

@@ -76,6 +76,7 @@
 | 删除轨迹 | DELETE | `/track/:track_id` | 是 | [track.md](track.md#12-删除轨迹) |
 | 用户已收藏轨迹列表（含精品标识、当前用户收藏状态及总数） | GET | `/track/collected/list` | 是 | [collect-navigation.md](collect-navigation.md#13-用户已收藏轨迹列表) |
 | 更新个人信息（含背景图、性别、生日） | PUT | `/user/profile/update` | 是 | [user.md](user.md#14-更新个人信息) |
+| 绑定或更换本人手机号（短信验证、唯一占用） | PUT | `/user/profile/phone` | JWT，检查账号限制 | [user.md](user.md#绑定或更换手机号) |
 | 更新最近确认所在地 | PUT | `/user/profile/location` | 是 | [user.md](user.md#更新最近确认所在地) |
 | 获取地区目录（支持版本检查） | GET | `/regions/catalog` | 是 | [regions.md](regions.md) |
 | 关注用户 | POST | `/user/:user_id/follow` | 是 | [user.md](user.md#42-关注用户) |

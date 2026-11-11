@@ -740,12 +740,14 @@ func (s *UserService) UpdateSignature(ctx context.Context, userID int64, sig str
 
 // UpdatePhone updates user's phone.
 func (s *UserService) UpdatePhone(ctx context.Context, userID int64, phone string) (*models.User, error) {
-	user, err := s.users.FindByID(ctx, userID)
+	phone, err := models.NormalizePhone(phone)
 	if err != nil {
 		return nil, err
 	}
-	user.Phone = phone
-	return user, s.users.Update(ctx, user)
+	if err := s.users.BindPhone(ctx, userID, phone); err != nil {
+		return nil, err
+	}
+	return s.users.FindByID(ctx, userID)
 }
 
 // UpdateClientLanguage updates user's client language.

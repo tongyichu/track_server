@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -10,6 +11,8 @@ import (
 	"github.com/cloudwego/hertz/pkg/common/utils"
 
 	"github.com/tongyichu/track_server/internal/middleware"
+	"github.com/tongyichu/track_server/internal/models"
+	"github.com/tongyichu/track_server/internal/repository"
 	"github.com/tongyichu/track_server/internal/service"
 )
 
@@ -101,7 +104,16 @@ func (h *LoginHandler) LoginBySMS(ctx context.Context, c *app.RequestContext) {
 
 	result, err := h.loginSvc.LoginBySMS(ctx, body.Phone, body.Code, ip, meta.DeviceID, meta.Platform)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, utils.H{"error": err.Error()})
+		status := http.StatusUnauthorized
+		switch {
+		case errors.Is(err, models.ErrInvalidPhone):
+			status = http.StatusBadRequest
+		case errors.Is(err, repository.ErrPhoneAmbiguous):
+			status = http.StatusConflict
+		case errors.Is(err, repository.ErrPhoneConstraintUnavailable):
+			status = http.StatusServiceUnavailable
+		}
+		c.JSON(status, utils.H{"error": err.Error()})
 		return
 	}
 	h.recordClientActivity(ctx, c, result.UserID)

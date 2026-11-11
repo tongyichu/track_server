@@ -12,6 +12,8 @@ CREATE TABLE `users` (
  `city_name` varchar(64) NOT NULL DEFAULT '' COMMENT '最近确认所在地城市名称，仅本人可读',
  `is_internal` tinyint(1) NOT NULL DEFAULT 0 COMMENT '是否内部人员，仅后台管理可见和编辑',
                           `phone` varchar(32) NOT NULL DEFAULT '' COMMENT '用户手机号',
+                          `phone_key` varchar(32) GENERATED ALWAYS AS (NULLIF(TRIM(`phone`), '')) STORED,
+                          UNIQUE KEY `uk_users_phone_key` (`phone_key`),
                           `client_language` varchar(64) NOT NULL DEFAULT '' COMMENT '客户端语言',
                           `token_version` bigint NOT NULL DEFAULT '1' COMMENT '登录令牌版本号',
                           `last_active_at` datetime(6) DEFAULT NULL COMMENT '最近认证App业务请求时间',
