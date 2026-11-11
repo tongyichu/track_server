@@ -13,7 +13,7 @@
 
 ## 摘要与已读
 
-`GET /messages/summary` 返回 `system/private/comments/reactions/interactions/total` 未读条数、`cutoff`、可选 `system_latest`（id/title/publish_at）和 `private_latest`（会话摘要）。`total=system+private+interactions`；comments/reactions 是 interactions 的子集，不能重复相加。
+`GET /messages/summary` 返回 `system/private/comments/reactions/interactions/total` 未读条数、`cutoff`、可选 `system_latest`（id/title/publish_at）和 `private_latest`（会话摘要），另有 `blacklist_count` 表示本人小黑屋人数（包含无消息的既有拉黑记录，不计入未读）。`total=system+private+interactions`；comments/reactions 是 interactions 的子集，不能重复相加。
 
 `POST /messages/read-all` 请求 `{"cutoff":"<摘要的cutoff>"}`，仅清除该时间及之前的未读，较晚新消息保留。服务端拒绝未来时间；游标单调不回退。清未读不删除历史。
 
@@ -38,22 +38,25 @@
 
 | 方法 | 路径 | 参数或请求 |
 | --- | --- | --- |
-| GET | `/messages/conversations` | `cursor/limit`，最近消息倒序 |
-| GET | `/messages/blacklist` | `cursor/limit`，仅本人拉黑记录 |
+| GET | `/messages/conversations` | `cursor/limit`，最近消息倒序；分页前排除本人拉黑或无清除边界之后消息的会话 |
+| GET | `/messages/blacklist` | `cursor/limit`，小黑屋名单，仅本人拉黑记录 |
 | GET | `/messages/conversations/:peer_id` | 会话元信息，可用于尚无消息的访客聊天 |
+| DELETE | `/messages/conversations/:peer_id` | 无请求体，仅清除本人截至当前序号的历史，返回 `{cleared_through:N}` |
 | GET | `/messages/conversations/:peer_id/messages` | `cursor=seq:N` 读取 N 之前的历史；不带游标取最近；`after_seq=N` 取增量 |
 | POST | `/messages/conversations/:peer_id/messages` | `{client_id,text,track_id}` |
 | GET | `/messages/conversations/:peer_id/messages/by-client/:client_id` | 查询本账号向该对方已提交的消息，用于结果不明恢复 |
 | POST | `/messages/conversations/:peer_id/read` | `{through_seq:N}` |
 | PUT | `/messages/conversations/:peer_id/block` | `{blocked:true|false}` |
 
-会话字段：`peer/last/unread/blocked/blocked_at/can_send/send_hint/read_seq`。blocked/blocked_at 仅表示本人主动拉黑状态，不泄露对方黑名单详情。last 仅供预览，文字最多120字；完整正文从消息列表读取。read_seq 含全部已读的有效边界。
+会话字段：`peer/last/unread/blocked/blocked_at/can_send/send_hint/read_seq/cleared_through`。blocked/blocked_at 仅表示本人主动拉黑状态，不泄露对方黑名单详情。last 仅供预览，文字最多120字；完整正文从消息列表读取。read_seq 含全部已读的有效边界且不低于本人 cleared_through。last 已被本人清除时省略。
+
+删除聊天记录为单方逻辑清除：CAS 保存本人 `cleared_through` 并推进本人已读，保留对方历史、全部 seq、幂等记录与陌生人发送配额，不物理删除 dm。已有 pending 先可靠补齐再确定边界；并发消息按 CAS 成功的边界划分。会话/摘要排除已清空会话，历史、增量均只返回 seq 大于本人边界的消息；本人 by-client 查询被清除的消息返回404，原 client_id 重提返回409，避免旧待发重试恢复已删消息。之后的新消息可让会话重新出现，换设备仍沿用服务端边界。删除及解除拉黑允许受限账号执行。
 
 `peer` 与互动消息 `actor` 的 `avatar_url` 使用同一头像缓存：OSS 原图由服务端复用已有头像下载器同步，命中后返回 `/api/v1/static/avatars/...`，不把未签名的私有 OSS 地址交给客户端；空头像、同步失败或缓存未启用时回退本站默认头像。已有本站静态地址与非 OSS 外部头像保留，用户已注销时沿用空头像。覆盖摘要里的最近私信、会话列表、会话详情和黑名单；客户端统一补全相对地址，不需要逐项查询个人资料。此转换只影响响应，不修改用户资料或消息历史。
 
 消息字段：`id/client_id/thread_id/seq/sender_id/receiver_id/text/track_id/track/created_at`。客户端生成8～80字节唯一 client_id（推荐 UUID），必须先本地落盘再发送；相同双方、发送者、client_id 和内容重复提交返回同一条，内容不同409。同一会话服务端 seq 单调递增，排序/去重以 seq/id 为准，不依赖设备时钟。
 
-文字 trim 后最多1000个字符；文字和轨迹不能同时为空；轨迹须为已公开且已结束。文字加轨迹算一条消息。陌生人发起方在对方回复前最多一条；互相关注免此限制；对方回复后正常聊天。连续同发送者间隔至少1秒；受限账号禁止发送。两人任意一方拉黑即暂停双向发送，拒绝的消息不存储；历史保留，解除后继续原会话，不补发拉黑期间被拒内容。拉黑时间以服务端为准，可查看和解除已注销用户的既有拉黑记录。
+文字 trim 后最多1000个字符；文字和轨迹不能同时为空；轨迹须为已公开且已结束。文字加轨迹算一条消息。陌生人发起方在对方回复前最多一条；互相关注免此限制；对方回复后正常聊天。连续同发送者间隔至少1秒；受限账号禁止发送。两人任意一方拉黑即暂停双向发送，拒绝的消息不存储；历史保留，本人拉黑后从本人普通私信列表及未读汇总排除，转入小黑屋；推进本人已有消息已读，解除后继续原会话，不补发拉黑期间被拒内容。拉黑时间以服务端为准，可查看和解除已注销用户的既有拉黑记录。
 
 消息列表无 after_seq 时返回最近一页（items 仍按 seq 正序）；向上翻页使用 next_cursor。增量 after_seq 可为0，items 正序，has_more 表示后方还有，继续使用本页最大 seq；增量不返回 next_cursor。不得同时混用两类游标。已读 through_seq 限制在已有序号内，并推进到不超过该序号的实际来信；只向前推进。
 

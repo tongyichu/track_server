@@ -17,7 +17,8 @@ const MessageRecordsSchema = `CREATE TABLE IF NOT EXISTS message_records (
  thread_id VARCHAR(100) NOT NULL DEFAULT '', seq BIGINT NOT NULL DEFAULT 0,
  created_at DATETIME(6) NOT NULL, active BOOLEAN NOT NULL DEFAULT TRUE,
  pending BOOLEAN NOT NULL DEFAULT FALSE, flag_a BOOLEAN NOT NULL DEFAULT FALSE,
- flag_b BOOLEAN NOT NULL DEFAULT FALSE, targets JSON NOT NULL,
+ flag_b BOOLEAN NOT NULL DEFAULT FALSE, clear_a BIGINT NOT NULL DEFAULT 0,
+ clear_b BIGINT NOT NULL DEFAULT 0, targets JSON NOT NULL,
  revision BIGINT NOT NULL, payload JSON NOT NULL,
  INDEX idx_messages_kind(kind,created_at,id),
  INDEX idx_messages_user(kind,user_id,created_at,id),
@@ -52,17 +53,31 @@ func NewMySQLMessageRepository(ctx context.Context, db *sql.DB) (*MySQLMessageRe
 	if _, err := db.ExecContext(ctx, MessageRecordsSchema); err != nil {
 		return nil, err
 	}
+	for _, column := range []string{"clear_a", "clear_b"} {
+		var count int
+		if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='message_records' AND COLUMN_NAME=?`, column).Scan(&count); err != nil {
+			return nil, err
+		}
+		if count == 0 {
+			if _, err := db.ExecContext(ctx, "ALTER TABLE message_records ADD COLUMN "+column+" BIGINT NOT NULL DEFAULT 0"); err != nil {
+				var duplicate *mysql.MySQLError
+				if !errors.As(err, &duplicate) || duplicate.Number != 1060 {
+					return nil, err
+				}
+			}
+		}
+	}
 	return &MySQLMessageRepository{db}, nil
 }
 
-const messageColumns = "m.id,m.kind,m.user_id,m.peer_id,m.thread_id,m.seq,m.created_at,m.active,m.pending,m.flag_a,m.flag_b,m.targets,m.revision,m.payload"
+const messageColumns = "m.id,m.kind,m.user_id,m.peer_id,m.thread_id,m.seq,m.created_at,m.active,m.pending,m.flag_a,m.flag_b,m.clear_a,m.clear_b,m.targets,m.revision,m.payload"
 
 type messageScanner interface{ Scan(...any) error }
 
 func scanMessageRecord(row messageScanner) (*models.MessageRecord, error) {
 	v := &models.MessageRecord{}
 	var targets, raw []byte
-	err := row.Scan(&v.ID, &v.Kind, &v.UserID, &v.PeerID, &v.ThreadID, &v.Seq, &v.CreatedAt, &v.Active, &v.Pending, &v.FlagA, &v.FlagB, &targets, &v.Revision, &raw)
+	err := row.Scan(&v.ID, &v.Kind, &v.UserID, &v.PeerID, &v.ThreadID, &v.Seq, &v.CreatedAt, &v.Active, &v.Pending, &v.FlagA, &v.FlagB, &v.ClearA, &v.ClearB, &targets, &v.Revision, &raw)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -112,9 +127,9 @@ func (r *MySQLMessageRepository) PutMessageRecord(ctx context.Context, v *models
 	if err != nil {
 		return err
 	}
-	args := []any{v.Kind, v.UserID, v.PeerID, v.ThreadID, v.Seq, v.CreatedAt.UTC(), v.Active, v.Pending, v.FlagA, v.FlagB, string(raw), v.Revision, string(v.Payload), v.ID}
+	args := []any{v.Kind, v.UserID, v.PeerID, v.ThreadID, v.Seq, v.CreatedAt.UTC(), v.Active, v.Pending, v.FlagA, v.FlagB, v.ClearA, v.ClearB, string(raw), v.Revision, string(v.Payload), v.ID}
 	if expected == 0 {
-		_, err = r.db.ExecContext(ctx, `INSERT INTO message_records(kind,user_id,peer_id,thread_id,seq,created_at,active,pending,flag_a,flag_b,targets,revision,payload,id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, args...)
+		_, err = r.db.ExecContext(ctx, `INSERT INTO message_records(kind,user_id,peer_id,thread_id,seq,created_at,active,pending,flag_a,flag_b,clear_a,clear_b,targets,revision,payload,id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, args...)
 		var duplicate *mysql.MySQLError
 		if errors.As(err, &duplicate) && duplicate.Number == 1062 {
 			return ErrConflict
@@ -122,7 +137,7 @@ func (r *MySQLMessageRepository) PutMessageRecord(ctx context.Context, v *models
 		return err
 	}
 	args = append(args, expected)
-	result, err := r.db.ExecContext(ctx, `UPDATE message_records SET kind=?,user_id=?,peer_id=?,thread_id=?,seq=?,created_at=?,active=?,pending=?,flag_a=?,flag_b=?,targets=?,revision=?,payload=? WHERE id=? AND revision=?`, args...)
+	result, err := r.db.ExecContext(ctx, `UPDATE message_records SET kind=?,user_id=?,peer_id=?,thread_id=?,seq=?,created_at=?,active=?,pending=?,flag_a=?,flag_b=?,clear_a=?,clear_b=?,targets=?,revision=?,payload=? WHERE id=? AND revision=?`, args...)
 	if err != nil {
 		return err
 	}
@@ -197,6 +212,10 @@ func messageSQLFilter(f MessageFilter) (string, []any) {
 	if f.BlockedBy > 0 {
 		q = append(q, "((m.user_id=? AND m.flag_a=TRUE) OR (m.peer_id=? AND m.flag_b=TRUE))")
 		args = append(args, f.BlockedBy, f.BlockedBy)
+	}
+	if f.VisibleTo > 0 {
+		q = append(q, "((m.user_id=? AND m.flag_a=FALSE AND m.seq>m.clear_a) OR (m.peer_id=? AND m.flag_b=FALSE AND m.seq>m.clear_b))")
+		args = append(args, f.VisibleTo, f.VisibleTo)
 	}
 	if f.Audience != "" {
 		q = append(q, "(COALESCE(JSON_LENGTH(m.targets),0)=0 OR JSON_CONTAINS(m.targets,?))")

@@ -27,6 +27,7 @@ type MessageFilter struct {
 	UnreadOnly            bool
 	HasMessages           bool
 	BlockedBy             int64
+	VisibleTo             int64
 	Audience              string
 	ExcludeNoticeReadUser int64
 	Limit                 int
@@ -101,6 +102,9 @@ func messageMatches(r *models.MessageRecord, f MessageFilter) bool {
 		return false
 	}
 	if f.BlockedBy > 0 && !(r.UserID == f.BlockedBy && r.FlagA || r.PeerID == f.BlockedBy && r.FlagB) {
+		return false
+	}
+	if f.VisibleTo > 0 && !(r.UserID == f.VisibleTo && !r.FlagA && r.Seq > r.ClearA || r.PeerID == f.VisibleTo && !r.FlagB && r.Seq > r.ClearB) {
 		return false
 	}
 	if f.Audience != "" && len(r.Targets) > 0 {

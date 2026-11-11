@@ -133,6 +133,12 @@ func messageMongoFilter(f MessageFilter) bson.M {
 	if f.BlockedBy > 0 {
 		parts = append(parts, bson.M{"$or": bson.A{bson.M{"user_id": f.BlockedBy, "flag_a": true}, bson.M{"peer_id": f.BlockedBy, "flag_b": true}}})
 	}
+	if f.VisibleTo > 0 {
+		parts = append(parts, bson.M{"$or": bson.A{
+			bson.M{"user_id": f.VisibleTo, "flag_a": bson.M{"$ne": true}, "$expr": bson.M{"$gt": bson.A{"$seq", bson.M{"$ifNull": bson.A{"$clear_a", int64(0)}}}}},
+			bson.M{"peer_id": f.VisibleTo, "flag_b": bson.M{"$ne": true}, "$expr": bson.M{"$gt": bson.A{"$seq", bson.M{"$ifNull": bson.A{"$clear_b", int64(0)}}}}},
+		}})
+	}
 	if f.Audience != "" {
 		parts = append(parts, bson.M{"$or": bson.A{bson.M{"targets": f.Audience}, bson.M{"targets": bson.M{"$size": 0}}, bson.M{"targets": nil}}})
 	}

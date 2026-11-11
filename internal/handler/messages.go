@@ -158,6 +158,19 @@ func (h *MessageHandler) Conversations(ctx context.Context, c *app.RequestContex
 	v, err := h.svc.ListConversations(ctx, user, string(c.Query("cursor")), messageLimit(c), false)
 	messageResponse(c, v, err)
 }
+func (h *MessageHandler) ClearConversation(ctx context.Context, c *app.RequestContext) {
+	user := h.viewer(c)
+	if user == 0 {
+		return
+	}
+	peer := messagePeer(c)
+	if peer == 0 {
+		return
+	}
+	result, err := h.svc.ClearConversation(ctx, user, peer)
+	messageResponse(c, result, err)
+}
+
 func (h *MessageHandler) Blacklist(ctx context.Context, c *app.RequestContext) {
 	user := h.viewer(c)
 	if user == 0 {

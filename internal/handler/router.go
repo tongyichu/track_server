@@ -141,6 +141,7 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 	auth.GET("/messages/conversations", messages.Conversations)
 	auth.GET("/messages/blacklist", messages.Blacklist)
 	auth.GET("/messages/conversations/:peer_id", messages.Conversation)
+	auth.DELETE("/messages/conversations/:peer_id", messages.ClearConversation)
 	auth.GET("/messages/conversations/:peer_id/messages", messages.Messages)
 	auth.GET("/messages/conversations/:peer_id/messages/by-client/:client_id", messages.Sent)
 	auth.POST("/messages/conversations/:peer_id/messages", messages.Send)

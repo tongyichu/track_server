@@ -438,7 +438,7 @@ func (s *MessageService) Summary(ctx context.Context, user int64) (*models.Inbox
 	}
 	var cursor string
 	for {
-		f := repository.MessageFilter{Kinds: []string{"thread"}, UserID: user, EitherUser: true, HasMessages: true, Limit: 200}
+		f := repository.MessageFilter{Kinds: []string{"thread"}, UserID: user, EitherUser: true, HasMessages: true, VisibleTo: user, Limit: 200}
 		if err = messageApplyCursor(&f, cursor); err != nil {
 			return nil, err
 		}
@@ -464,6 +464,10 @@ func (s *MessageService) Summary(ctx context.Context, user int64) (*models.Inbox
 	}
 	if len(conversations.Items) > 0 {
 		out.PrivateLatest = conversations.Items[0]
+	}
+	out.BlacklistCount, err = s.repo.CountMessageRecords(ctx, repository.MessageFilter{Kinds: []string{"thread"}, BlockedBy: user})
+	if err != nil {
+		return nil, err
 	}
 	out.Total = out.System + out.Private + out.Interactions
 	return out, nil

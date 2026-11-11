@@ -12,22 +12,25 @@ func (s *MessageService) FindSentDirect(ctx context.Context, user, peer int64, c
 	if len(clientID) < 8 || len(clientID) > 80 {
 		return nil, invalidArg("invalid client ID")
 	}
-	row, thread, err := s.getThread(ctx, user, peer)
+	threadRow, thread, err := s.getThread(ctx, user, peer)
 	if err != nil {
 		return nil, err
 	}
 	if thread.Pending != nil {
-		if err = s.flushThread(ctx, row, thread); err != nil {
+		if err = s.flushThread(ctx, threadRow, thread); err != nil {
 			return nil, err
 		}
 	}
 	id := "D." + messageHash(fmt.Sprintf("%d:%d:%s", user, peer, clientID))
-	row, err = s.repo.GetMessageRecord(ctx, id)
+	row, err := s.repo.GetMessageRecord(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 	if row.Kind != "dm" || row.ThreadID != messageThreadID(user, peer) || row.PeerID != user {
 		return nil, repository.ErrForbidden
+	}
+	if row.Seq <= messageOwnClear(threadRow, user) {
+		return nil, repository.ErrNotFound
 	}
 	var stored models.StoredDirectMessage
 	if err = json.Unmarshal(row.Payload, &stored); err != nil {
