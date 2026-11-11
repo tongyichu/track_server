@@ -16,6 +16,7 @@ const (
 
 // TrackPoint represents a single sampled GPS point on a track.
 type TrackPoint struct {
+	SegmentID int       `json:"segment_id,omitempty" bson:"segment_id,omitempty"`
 	Index     int       `json:"index" bson:"index"`         // Index 是轨迹点在序列中的顺序。
 	Latitude  float64   `json:"latitude" bson:"latitude"`   // Latitude 是纬度。
 	Longitude float64   `json:"longitude" bson:"longitude"` // Longitude 是经度。
@@ -26,6 +27,7 @@ type TrackPoint struct {
 // Track aggregates persisted fields of track_records.
 // Points is transient field kept for existing service logic.
 type Track struct {
+	RecordingTimeline         *RecordingTimeline       `json:"recording_timeline,omitempty" bson:"recording_timeline,omitempty"`
 	StepCount                 *int64                   `json:"step_count,omitempty" bson:"step_count,omitempty"`
 	Labels                    []TrackLabel             `json:"labels" bson:"-"`
 	ShapeLabel                string                   `json:"shape_label,omitempty" bson:"shape_label,omitempty"`

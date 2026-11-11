@@ -351,6 +351,7 @@ func parseKMLPoints(data []byte) ([]models.TrackPoint, error) {
 	stack := make([]string, 0, 16)
 	var points []models.TrackPoint
 	var whens []time.Time
+	segmentID := -1
 
 	for {
 		token, err := decoder.Token()
@@ -362,6 +363,9 @@ func parseKMLPoints(data []byte) ([]models.TrackPoint, error) {
 		}
 		switch t := token.(type) {
 		case xml.StartElement:
+			if t.Name.Local == "Track" || t.Name.Local == "LineString" {
+				segmentID++
+			}
 			stack = append(stack, t.Name.Local)
 		case xml.EndElement:
 			if len(stack) > 0 {
@@ -378,13 +382,18 @@ func parseKMLPoints(data []byte) ([]models.TrackPoint, error) {
 			}
 			switch {
 			case current == "coordinates" && hasXMLAncestor(stack, "LineString"):
-				points = append(points, parseKMLCoordinates(text, len(points))...)
+				segment := parseKMLCoordinates(text, len(points))
+				for i := range segment {
+					segment[i].SegmentID = max(segmentID, 0)
+				}
+				points = append(points, segment...)
 			case current == "when" && hasXMLAncestor(stack, "Track"):
 				if ts, ok := parseKMLWhen(text); ok {
 					whens = append(whens, ts)
 				}
 			case current == "coord" && hasXMLAncestor(stack, "Track"):
 				if p, ok := parseKMLCoord(text, len(points)); ok {
+					p.SegmentID = max(segmentID, 0)
 					points = append(points, p)
 				}
 			}
@@ -578,17 +587,25 @@ func defaultTrackMapType(trackType string) string {
 }
 
 func simplifyTrackPoints(points []models.TrackPoint, maxPoints int) []models.TrackPoint {
-	if maxPoints <= 0 || len(points) <= maxPoints {
+	if maxPoints <= 1 || len(points) <= maxPoints {
 		return append([]models.TrackPoint(nil), points...)
 	}
-	out := make([]models.TrackPoint, 0, maxPoints)
+	keep := map[int]bool{0: true, len(points) - 1: true}
+	for i := 1; i < len(points); i++ {
+		if points[i].SegmentID != points[i-1].SegmentID {
+			keep[i-1] = true
+			keep[i] = true
+		}
+	}
 	step := float64(len(points)-1) / float64(maxPoints-1)
 	for i := 0; i < maxPoints; i++ {
-		idx := int(math.Round(float64(i) * step))
-		if idx >= len(points) {
-			idx = len(points) - 1
+		keep[int(math.Round(float64(i)*step))] = true
+	}
+	out := make([]models.TrackPoint, 0, len(keep))
+	for i, point := range points {
+		if keep[i] {
+			out = append(out, point)
 		}
-		out = append(out, points[idx])
 	}
 	return out
 }

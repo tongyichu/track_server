@@ -139,6 +139,7 @@ func (r *MongoTrackRepository) Update(ctx context.Context, t *models.Track) erro
 			"avg_speed_kmh":                  t.AvgSpeedKmh,
 			"elevation_gain":                 t.ElevationGain,
 			"step_count":                     t.StepCount,
+			"recording_timeline":             t.RecordingTimeline,
 			"raw_track_url":                  t.RawTrackURL,
 			"track_screenshot_url":           t.TrackScreenshotURL,
 			"track_no_map_bg_screenshot_url": t.TrackNoMapBgScreenshotURL,
@@ -179,7 +180,11 @@ func (r *MongoTrackRepository) BackfillMissingCalories(ctx context.Context) (int
 		if err := cursor.Decode(&track); err != nil {
 			return 0, err
 		}
-		calories := models.CalculateTrackCalories(track.TrackType, track.Duration)
+		duration := track.Duration
+		if track.RecordingTimeline != nil {
+			duration = uint32(track.RecordingTimeline.RecordedMillis() / 1000)
+		}
+		calories := models.CalculateTrackCalories(track.TrackType, duration)
 		if calories <= 0 {
 			continue
 		}

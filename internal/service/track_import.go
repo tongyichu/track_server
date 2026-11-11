@@ -219,6 +219,9 @@ func importTrackNominalSpeedKmh(trackType string) float64 {
 func importTrackDistance(points []models.TrackPoint) float64 {
 	var total float64
 	for i := 1; i < len(points); i++ {
+		if points[i].SegmentID != points[i-1].SegmentID {
+			continue
+		}
 		total += haversineMeters(points[i-1].Latitude, points[i-1].Longitude, points[i].Latitude, points[i].Longitude)
 	}
 	return total
@@ -252,6 +255,9 @@ func importTrackTimeRange(points []models.TrackPoint) (time.Time, time.Time) {
 func importTrackElevationGain(points []models.TrackPoint) int {
 	var gain float64
 	for i := 1; i < len(points); i++ {
+		if points[i].SegmentID != points[i-1].SegmentID {
+			continue
+		}
 		delta := points[i].Elevation - points[i-1].Elevation
 		if delta > 0 && delta < 500 {
 			gain += delta
@@ -316,23 +322,33 @@ func prepareImportUpload(file ImportTrackFile, points []models.TrackPoint) (stri
 func writeImportKMZ(kmzPath string, points []models.TrackPoint) error {
 	var kml strings.Builder
 	kml.WriteString("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
-	kml.WriteString("<kml xmlns=\"http://www.opengis.net/kml/2.2\" xmlns:gx=\"http://www.google.com/kml/ext/2.2\"><Document><Placemark><gx:Track>\n")
-	withTime := true
-	for _, p := range points {
-		if p.Timestamp.IsZero() {
-			withTime = false
-			break
+	kml.WriteString("<kml xmlns=\"http://www.opengis.net/kml/2.2\" xmlns:gx=\"http://www.google.com/kml/ext/2.2\"><Document>\n")
+	for start := 0; start < len(points); {
+		end := start + 1
+		for end < len(points) && points[end].SegmentID == points[start].SegmentID {
+			end++
 		}
-	}
-	if withTime {
-		for _, p := range points {
-			kml.WriteString("<when>" + p.Timestamp.UTC().Format(time.RFC3339) + "</when>\n")
+		segment := points[start:end]
+		kml.WriteString("<Placemark><gx:Track>\n")
+		withTime := true
+		for _, p := range segment {
+			if p.Timestamp.IsZero() {
+				withTime = false
+				break
+			}
 		}
+		if withTime {
+			for _, p := range segment {
+				kml.WriteString("<when>" + p.Timestamp.UTC().Format(time.RFC3339Nano) + "</when>\n")
+			}
+		}
+		for _, p := range segment {
+			fmt.Fprintf(&kml, "<gx:coord>%.7f %.7f %.1f</gx:coord>\n", p.Longitude, p.Latitude, p.Elevation)
+		}
+		kml.WriteString("</gx:Track></Placemark>\n")
+		start = end
 	}
-	for _, p := range points {
-		fmt.Fprintf(&kml, "<gx:coord>%.7f %.7f %.1f</gx:coord>\n", p.Longitude, p.Latitude, p.Elevation)
-	}
-	kml.WriteString("</gx:Track></Placemark></Document></kml>\n")
+	kml.WriteString("</Document></kml>\n")
 
 	out, err := os.Create(kmzPath)
 	if err != nil {

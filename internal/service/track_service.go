@@ -117,6 +117,7 @@ func descriptionSourceIsAuto(source string) bool { return source == "" || source
 
 // CreateTrackInput describes optional fields accepted by track creation.
 type CreateTrackInput struct {
+	RecordingTimeline         *models.RecordingTimeline  `json:"recording_timeline"`
 	StepCount                 *int64                     `json:"step_count"`
 	ShapeLabel                *string                    `json:"shape_label"`
 	PreviewImages             *models.TrackPreviewImages `json:"preview_images"`
@@ -167,6 +168,9 @@ func (in *CreateTrackInput) normalize() {
 }
 
 func (in CreateTrackInput) validate() error {
+	if err := in.validateRecordingTimeline(); err != nil {
+		return err
+	}
 	if err := validateTrackShapeLabel(in.ShapeLabel); err != nil {
 		return err
 	}
@@ -380,7 +384,11 @@ func ensureTrackCalories(track *models.Track) bool {
 	if track == nil || track.CaloriesBurned > 0 {
 		return false
 	}
-	calories := models.CalculateTrackCalories(track.TrackType, track.Duration)
+	duration := track.Duration
+	if track.RecordingTimeline != nil {
+		duration = uint32(track.RecordingTimeline.RecordedMillis() / 1000)
+	}
+	calories := models.CalculateTrackCalories(track.TrackType, duration)
 	if calories <= 0 {
 		return false
 	}
@@ -640,6 +648,16 @@ func (s *TrackService) CreateTrack(ctx context.Context, userID int64, input Crea
 	}
 	if input.AvgSpeedKmh != nil {
 		track.AvgSpeedKmh = *input.AvgSpeedKmh
+	}
+	if input.RecordingTimeline != nil {
+		track.RecordingTimeline = input.RecordingTimeline.Clone()
+		track.Duration = track.RecordingTimeline.SelectedSeconds()
+		track.CaloriesBurned = models.CalculateTrackCalories(track.TrackType, uint32(track.RecordingTimeline.RecordedMillis()/1000))
+		if track.Duration > 0 {
+			track.AvgSpeedKmh = track.Distance / float64(track.Duration) * 3.6
+		} else {
+			track.AvgSpeedKmh = 0
+		}
 	}
 	ensureTrackCalories(track)
 	// 到这里 track.ID 已经是最终可落库的业务 ID，格式固定为 `NO.` + 8 位 base36 编码。
@@ -1495,28 +1513,28 @@ func (s *TrackService) UpdateTrackInfo(ctx context.Context, userID int64, trackI
 		track.CoordinateSystem = *patch.CoordinateSystem
 		updated = true
 	}
-	if patch.Distance != nil && track.Distance == 0 {
+	if patch.Distance != nil && track.Distance == 0 && track.RecordingTimeline == nil {
 		track.Distance = *patch.Distance
 		updated = true
 	}
-	if patch.Duration != nil && track.Duration == 0 {
+	if patch.Duration != nil && track.Duration == 0 && track.RecordingTimeline == nil {
 		track.Duration = *patch.Duration
 		updated = true
 	}
-	if patch.CaloriesBurned != nil && track.CaloriesBurned == 0 {
+	if patch.CaloriesBurned != nil && track.CaloriesBurned == 0 && track.RecordingTimeline == nil {
 		track.CaloriesBurned = *patch.CaloriesBurned
 		updated = true
 	}
-	if patch.ElevationGain != nil && track.ElevationGain == 0 {
+	if patch.ElevationGain != nil && track.ElevationGain == 0 && track.RecordingTimeline == nil {
 		track.ElevationGain = *patch.ElevationGain
 		updated = true
 	}
-	if patch.StepCount != nil && track.StepCount == nil {
+	if patch.StepCount != nil && track.StepCount == nil && track.RecordingTimeline == nil {
 		steps := *patch.StepCount
 		track.StepCount = &steps
 		updated = true
 	}
-	if patch.AvgSpeedKmh != nil && track.AvgSpeedKmh == 0 {
+	if patch.AvgSpeedKmh != nil && track.AvgSpeedKmh == 0 && track.RecordingTimeline == nil {
 		track.AvgSpeedKmh = *patch.AvgSpeedKmh
 		updated = true
 	}

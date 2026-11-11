@@ -52,6 +52,9 @@ func newTrackPlaceRing(index *models.TrackGeoIndex) *trackPlaceRing {
 		if !validMapLatLng(p.Latitude, p.Longitude) {
 			return nil
 		}
+		if i > 0 && p.SegmentID != points[i-1].SegmentID {
+			return nil
+		}
 		if i > 0 {
 			cumulative[i] = cumulative[i-1] + haversineMeters(points[i-1].Latitude, points[i-1].Longitude, p.Latitude, p.Longitude)
 		}
