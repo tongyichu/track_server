@@ -131,7 +131,7 @@ func (b *RealtimeBroker) read(ctx context.Context) ([]RealtimeClient, bool, erro
 		if resp.StatusCode != 200 {
 			resp.Body.Close()
 			if resp.StatusCode == 401 || resp.StatusCode == 403 {
-				return nil, false, errors.New("EMQX 管理接口鉴权失败，请检查只读 API Key")
+				return nil, false, errors.New("EMQX 管理接口鉴权失败，请检查管理 API Key")
 			}
 			return nil, false, errors.New("EMQX 管理接口暂不可用")
 		}

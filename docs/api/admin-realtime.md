@@ -36,9 +36,9 @@ EMQX_MANAGEMENT_API_KEY=
 EMQX_MANAGEMENT_API_SECRET=
 ```
 
-使用 EMQX 单独创建的只读管理 API Key，优先使用内网或 HTTPS。URL 必须能从服务端进程或容器访问，容器内的127.0.0.1并不指向宿主机。不要复用 Dashboard 登录密码、App 临时 MQTT 凭证或 MQTT 发布账号。这些值不得提交到 Git，也不会下发到页面。缺任意配置时保留页面、进程观测和持久化统计，实际连接区域显示未接入；HTTP 401/403 标注管理接口鉴权失败，不影响原有 MQTT 收发。
+使用 EMQX 单独创建的后台专用 API Key，优先使用内网或 HTTPS；发行版支持 API Key 角色时选择 viewer。EMQX 5.8 社区版的 Key API 未提供可核验的只读角色，按普通专用 Key 管理，由本服务只调用 GET /clients；应用仅查询并不等于 Broker 原生权限受限。URL 必须能从服务端进程或容器访问，容器内的127.0.0.1并不指向宿主机。不要复用 Dashboard 登录密码、App 临时 MQTT 凭证或 MQTT 发布账号。这些值不得提交到 Git，也不会下发到页面。缺任意配置时保留页面、进程观测和持久化统计，实际连接区域显示未接入；HTTP 401/403 标注管理接口鉴权失败，不影响原有 MQTT 收发。
 
-对接依据：[EMQX REST API 鉴权与 v5 路径](https://docs.emqx.com/en/emqx/latest/guides/api.html)、[客户端查询字段](https://docs.emqx.com/en/cloud/latest/api/clients_v5.html)。当前实现面向自托管 EMQX v5 的 page/limit 分页接口，不自动修改 Broker 规则或申请管理凭证。
+对接依据：[EMQX REST API 鉴权与 v5 路径](https://docs.emqx.com/en/emqx/latest/guides/api.html)、[客户端查询字段](https://docs.emqx.com/en/cloud/latest/api/clients_v5.html)。5.8.6 的角色字段仅企业版提供，见 [对应版本 API 源码](https://github.com/emqx/emqx/blob/v5.8.6/apps/emqx_management/src/emqx_mgmt_api_api_keys.erl)。当前实现面向自托管 EMQX v5 的 page/limit 分页接口，不自动修改 Broker 规则或申请管理凭证。
 
 ## 入口与验证
 
