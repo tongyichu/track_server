@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tongyichu/track_server/internal/models"
 	"github.com/tongyichu/track_server/internal/repository"
 )
 
@@ -56,7 +57,8 @@ func (s *TrackService) ActivityCalendar(ctx context.Context, userID int64, timez
 		return nil, err
 	}
 	days := make(map[string]*ActivityDay)
-	result := &ActivityCalendar{StartDate: from.Format("2006-01-02"), EndDate: today.Format("2006-01-02"), TrackType: selected, MetricsVersion: 1, Days: make([]ActivityDay, 0)}
+	durationMillisByDate := make(map[string]int64)
+	result := &ActivityCalendar{StartDate: from.Format("2006-01-02"), EndDate: today.Format("2006-01-02"), TrackType: selected, MetricsVersion: 2, Days: make([]ActivityDay, 0)}
 	for _, record := range records {
 		code := normalizeTrackTypeCode(record.TrackType)
 		if code == "" {
@@ -65,29 +67,53 @@ func (s *TrackService) ActivityCalendar(ctx context.Context, userID int64, timez
 		if selected != "" && selected != code {
 			continue
 		}
-		date := record.StartTime.In(loc).Format("2006-01-02")
-		day := days[date]
-		if day == nil {
-			day = &ActivityDay{Date: date}
-			days[date] = day
+		slices := []models.RecordingInterval{{StartMillis: record.StartTime.UnixMilli(),
+			EndMillis: record.StartTime.UnixMilli() + max(record.Duration, 0)*1000,
+			Kind:      "recording", Distance: record.Distance, ElevationGain: record.ElevationGain}}
+		if record.StepCount != nil {
+			slices[0].Steps = *record.StepCount
 		}
-		day.Count++
-		result.TotalCount++
-		if record.Distance > 0 && !math.IsNaN(record.Distance) && !math.IsInf(record.Distance, 0) {
-			day.DistanceMeters += record.Distance
+		if record.RecordingTimeline != nil {
+			slices = record.RecordingTimeline.CalendarSlices(loc)
 		}
-		day.DurationSeconds += max(record.Duration, 0)
-		day.ElevationGainMeters += max(record.ElevationGain, 0)
-		if record.StepCount != nil && *record.StepCount >= 0 && code != "driving" && code != "riding" {
-			if day.StepCount == nil {
-				day.StepCount = new(int64)
+		countedDates := make(map[string]bool)
+		for _, slice := range slices {
+			moment := time.UnixMilli(slice.StartMillis)
+			if moment.Before(from) || !moment.Before(until) {
+				continue
 			}
-			*day.StepCount += *record.StepCount
-			day.StepTrackCount++
+			date := moment.In(loc).Format("2006-01-02")
+			day := days[date]
+			if day == nil {
+				day = &ActivityDay{Date: date}
+				days[date] = day
+			}
+			if !countedDates[date] {
+				day.Count++
+				if record.StepCount != nil && *record.StepCount >= 0 && code != "driving" && code != "riding" {
+					day.StepTrackCount++
+				}
+				countedDates[date] = true
+			}
+			if slice.Distance > 0 && !math.IsNaN(slice.Distance) && !math.IsInf(slice.Distance, 0) {
+				day.DistanceMeters += slice.Distance
+			}
+			durationMillisByDate[date] += max(slice.EndMillis-slice.StartMillis, 0)
+			day.ElevationGainMeters += max(slice.ElevationGain, 0)
+			if record.StepCount != nil && *record.StepCount >= 0 && code != "driving" && code != "riding" {
+				if day.StepCount == nil {
+					day.StepCount = new(int64)
+				}
+				*day.StepCount += max(slice.Steps, 0)
+			}
+		}
+		if len(countedDates) > 0 {
+			result.TotalCount++
 		}
 	}
 	for date := from; !date.After(today); date = date.AddDate(0, 0, 1) {
 		if day := days[date.Format("2006-01-02")]; day != nil {
+			day.DurationSeconds = durationMillisByDate[day.Date] / 1000
 			result.Days = append(result.Days, *day)
 		}
 	}

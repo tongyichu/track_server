@@ -134,6 +134,7 @@ CREATE TABLE `track_records` (
                                  `calories_burned` decimal(10,2) DEFAULT '0.00' COMMENT '热量消耗(千卡)',
                                  `elevation_gain` int DEFAULT '0' COMMENT '累计爬升(米)',
                                  `step_count` bigint DEFAULT NULL COMMENT '实际记录步数，NULL为未采集',
+                                 `recording_timeline` json DEFAULT NULL COMMENT '录制分段、暂停和计时口径，版本化JSON',
                                  `raw_track_url` varchar(255) COMMENT '指向对象存储中原始轨迹点文件(JSON/GeoJSON)的URL',
                                  `track_screenshot_url` varchar(255) COMMENT '轨迹截图文件在对象存储中的地址',
                                  `track_no_map_bg_screenshot_url` varchar(255) COMMENT '没有地图背景的轨迹路线截图URI',

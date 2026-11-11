@@ -24,7 +24,7 @@
 | 后台 AI 中断 / 重试 | POST | `/admin/api/ai/tasks/:task_id/cancel`, `/admin/api/ai/tasks/:task_id/retry` | AI 任务操作及 AI 读取，重试另需源业务操作 | [admin-ai](admin-ai.md) |
 | 后台 AI 策略（请求上限0不限） / 价格 | PUT | `/admin/api/ai/policies/:feature`, `/admin/api/ai/prices` | AI 配置操作及 AI 读取 | [admin-ai](admin-ai.md) |
 | 本人全部历史运动类型分布（次数/时长/里程/爬升） | GET | `/track/activity/type-distribution` | 是 | [运动类型分布](track.md#运动类型分布) |
-| 本人年度活动指标（可按运动类型筛选） | GET | `/track/activity/calendar` | 是 | [年度活动指标](track.md#年度活动指标) |
+| 本人年度活动指标（类型筛选、跨天记录分日） | GET | `/track/activity/calendar` | 是 | [年度活动指标](track.md#年度活动指标) |
 | 本人全部历史个人纪录（含轨迹预览） | GET | `/track/activity/records` | 是 | [个人纪录](track.md#个人纪录) |
 | 本人全部历史探索足迹 | GET | `/track/activity/footprint` | 是 | [探索统计](track-footprint.md#全国探索统计) |
 | 本人省份/城市足迹卡片与总数 | GET | `/track/activity/footprint/tracks` | 是 | [对应轨迹](track-footprint.md#对应轨迹列表) |
@@ -41,7 +41,7 @@
 | 后台用户资料读取 / 编辑（手机号只读） | GET / PUT | `/admin/api/users/:user_id` | 后台 users 读 / 写权限 | [admin-users.md](admin-users.md#资料读取与保存) |
 | 后台用户互动数据与级别 | GET | `/admin/api/users/:user_id/overview` | 后台 users 读取权限 | [admin-users.md](admin-users.md#互动数据与级别) |
 | 后台用户背景图 | GET | `/admin/api/users/:user_id/background` | 后台 users 读取权限 | [admin-users.md](admin-users.md#背景图) |
-| 创建轨迹（含可选默认路线说明） | POST | `/track/create` | 是 | [track.md](track.md#1-创建轨迹) |
+| 创建轨迹（含跨天时间线、可选默认路线说明） | POST | `/track/create` | 是 | [track.md](track.md#1-创建轨迹) |
 | 推荐轨迹列表（个性化 Feed Session，支持 `city_code` 筛选） | GET | `/track/recommend/list` | 是 | [track.md](track.md#2-推荐轨迹列表) |
 | 轨迹详情（含默认路线说明、收藏状态及可选主景区） | GET | `/track/:track_id/detail` | 是 | [track.md](track.md#3-轨迹详情)、[主景区标签](track.md#主景区标签) |
 | 静态轨迹预览图片 | GET | `/track/:track_id/previews/:variant?v=<source_version>` | 是 | [track.md](track.md#静态轨迹预览图) |

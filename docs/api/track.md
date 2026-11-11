@@ -32,13 +32,13 @@
 
 `GET /track/activity/calendar?timezone=Asia%2FShanghai&track_type=hiking`需要业务JWT，仅查询当前用户。`track_type`可省略表示全部类型，不传`all`，有值时按稳定code筛选；归一已知别名后统计，保留历史未知类型。时间范围仍为最近375个当地自然日，客户端从连续12个月的首月第一个周日起展示。默认时区、非法时区400、公开/私密/已完成/有原始文件等边界与原日历一致。
 
-响应新增`metrics_version:1`和回显`track_type`（全部为`""`）。`days`每项为：
+响应返回`metrics_version:2`和回显`track_type`（全部为`""`）。`days`每项为：
 
 ```json
 {"date":"2026-11-04","count":2,"distance_meters":12800.5,"duration_seconds":7200,"elevation_gain_meters":600,"step_count":15000,"step_track_count":1}
 ```
 
-里程单位米、时长秒、爬升米；非法/负数指标不参与累计。步数为真实记录的非负值之和，未采集为`null`，`step_track_count`是有步数的活动数；自驾和骑行不计步数。仅有部分活动记录步数时，客户端明确只统计有记录的运动。无活动日期不列出；日期按当地开始时间归组、升序返回。旧`count`和`total_count`兼容保留。MySQL/Mongo/memory单次读取限定时段的指标投影后聚合，不加载GPS或逐项补详情；数据库错误正常返回错误。
+里程单位米、时长秒、爬升米；非法/负数指标不参与累计。步数为真实记录的非负值之和，未采集为`null`，`step_track_count`是有步数的活动数；自驾和骑行不计步数。仅有部分活动记录步数时，客户端明确只统计有记录的运动。无活动日期不列出，日期升序返回。有 `recording_timeline` 的新录制按实际记录片段和请求时区分日累计距离、记录时长、爬升和步数；`paused`/`interrupted` 不贡献活动日或运动指标，即使主时长选择含暂停。单日 `count` 为当天有记录的去重轨迹数，同一轨迹多段不重复；`total_count` 为整个窗口内的去重轨迹数，因此跨天时不等于各日 `count` 相加。无 timeline 的历史记录保留按开始日归集的旧语义，不推测暂停或重写历史数据。MySQL/Mongo/memory单次读取限定时段的指标投影后聚合，不加载GPS或逐项补详情；数据库错误正常返回错误。
 
 创建轨迹及所有者补全更新新增可选`step_count`非负64位整数，省略或null表示未知，不覆盖已保存的步数；更新仅填原值缺失。详情可返回该字段，旧客户端可忽略。MySQL新增可空BIGINT列并通过启动schema检查补建，`mysql.sql`同步；Mongo保存同名可选字段，memory保持同一语义。Android上传本机已记录的正步数，0且无法确认采集状态的历史记录保留未知；不从距离估算，也不伪造历史步数。
 
@@ -193,7 +193,7 @@ Authorization: Bearer <token>
 |------|------|------|------|
 | `title` | string | 否 | 轨迹标题，默认 `新的轨迹` |
 | `description` | string | 否 | 兼容旧客户端的默认路线说明，最多 `1000` 字符；当前 Android 普通上传省略，由服务端 AI 异步生成；详情接口返回 |
-| `session_id` | string | 否 | 关联的同行会话 ID；参加同行结束后上传个人轨迹时传同一个 `session_id`，用于把本次同行内多人轨迹串联起来 |
+| `session_id` | string | 否 | 同行传同行会话 ID；个人运动传首次开始时生成并持久保存的 UUID。已完成轨迹按当前用户与该 ID 幂等，恢复和重试不得换 ID |
 | `city_code` | string | 否 | 城市 Code（标识轨迹所属城市） |
 | `locate_addr` | string | 否 | 轨迹的具体位置信息，最大长度 `255` 字符 |
 | `track_type` | string | 否 | 轨迹类型，使用 `/track/types` 返回的英文 `type`：`hiking` / `running` / `climbing` / `riding` / `driving`；服务端兼容历史中文名输入，但入库会归一为英文 code |
@@ -202,7 +202,8 @@ Authorization: Bearer <token>
 | `start_time` | string | 否 | 开始时间，RFC3339/ISO8601 格式 |
 | `end_time` | string | 否 | 结束时间，RFC3339/ISO8601 格式，必须 `>= start_time` |
 | `distance` | number | 否 | 距离（米），必须 `>= 0` |
-| `duration` | int | 否 | 时长（秒），必须 `>= 0` |
+| `duration` | int | 否 | 主时长（秒），必须 `>= 0`；有 `recording_timeline` 时由其计时选择计算 |
+| `recording_timeline` | object | 否 | 已完成个人运动的分段、暂停与计时口径，见下文；详情原样返回该结构 |
 | `calories_burned` | number | 否 | 热量消耗（千卡），必须 `>= 0`；未传或为 `0` 且 `duration > 0` 时，服务端按运动类型 MET、默认体重 65kg 和时长兜底计算 |
 | `elevation_gain` | int | 否 | 累计爬升（米），必须 `>= 0` |
 | `raw_track_url` | string | 否 | 原始轨迹文件 OSS 地址（建议传 OSS HTTP URL，可带签名参数；轨迹地图索引支持 JSON/GeoJSON/KML/KMZ） |
@@ -210,6 +211,29 @@ Authorization: Bearer <token>
 | `preview_images` | object | 否 | 四张轨迹预览图片 OSS 地址，见上方静态轨迹预览协议 |
 | `is_running` | bool | 否 | 是否进行中，默认 `true`；当为 `true` 或未传时，当前用户不能已处于 active 同行中 |
 | `avg_speed_kmh` | number | 否 | 平均速度（km/h），必须 `>= 0` |
+
+### 跨天录制时间线
+
+`recording_timeline` 为可选增量字段；省略时保持旧协议。仅 `is_running=false` 且提供起止时间时接受，版本固定为 `1`。所有时间为 Unix 毫秒，区间必须有序、首尾相接，并与 RFC3339 的实际起止时刻一致。最多8192个区间、总跨度最多10×366天；服务端校验非负/有限数值及里程、步数合计，不接受暂停段携带运动指标。
+
+```json
+{
+  "version": 1,
+  "include_pauses": false,
+  "intervals": [
+    {"segment_id":0,"start_ms":1794355200000,"end_ms":1794376800000,"kind":"recording","distance_m":18000,"elevation_gain_m":600,"steps":24000},
+    {"segment_id":1,"start_ms":1794376800000,"end_ms":1794412800000,"kind":"paused","distance_m":0,"elevation_gain_m":0,"steps":0},
+    {"segment_id":2,"start_ms":1794412800000,"end_ms":1794427200000,"kind":"recording","distance_m":12000,"elevation_gain_m":300,"steps":16000}
+  ]
+}
+```
+
+- `kind` 为 `recording`、`paused`、`interrupted`。正常记录期间的 GPS 暂缺仍属于 recording；进程停止后的未采集区间属于 interrupted，不能补造轨迹。
+- `include_pauses=false` 时 `duration` 是 recording 区间时长之和；为 true 时是整场开始到结束的总历时，含暂停/中断。`end_time` 始终是实际结束时刻，不能用开始时间加扣除暂停后的 duration 反推。
+- 服务端基于 timeline 计算主时长、对应平均速度和仅记录期间的热量；暂停过夜不产生热量。普通补全更新不改已带 timeline 的运动指标。
+- recording 区间可按录制时区的自然日切片；同一次连续记录的日切片使用相同 segment_id。客户端按定位点时间分配每日距离，跨午夜的一条边按时间比例分配；跨时区查询再按区间重叠比例切分。步数在每个实际记录段内按时长分配到日期，不估算未知历史步数。
+- 原始 KMZ 用多个 Placemark/gx:Track，GPX 用多个 trkseg 保存真实分段。时间线可跨天，暂停前后禁止用直线补距离或爬升。地图索引解析保留 segment_id，预览补图点也返回该字段。
+- 先部署兼容服务端，再发布新客户端；旧服务端会忽略未知字段，不能据此认定云端已保存时间线。
 
 ### 响应
 

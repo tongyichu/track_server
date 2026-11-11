@@ -148,6 +148,7 @@ func (r *InMemoryTrackRepository) Create(_ context.Context, t *models.Track) err
 	}
 	t.UpdatedAt = t.CreatedAt
 	clone := *t
+	clone.RecordingTimeline = t.RecordingTimeline.Clone()
 	r.tracks[t.ID] = &clone
 	return nil
 }
@@ -161,6 +162,7 @@ func (r *InMemoryTrackRepository) Update(_ context.Context, t *models.Track) err
 	}
 	t.UpdatedAt = time.Now()
 	clone := *t
+	clone.RecordingTimeline = t.RecordingTimeline.Clone()
 	r.tracks[t.ID] = &clone
 	return nil
 }
@@ -174,7 +176,11 @@ func (r *InMemoryTrackRepository) BackfillMissingCalories(_ context.Context) (in
 		if track.CaloriesBurned > 0 || track.Duration == 0 {
 			continue
 		}
-		calories := models.CalculateTrackCalories(track.TrackType, track.Duration)
+		duration := track.Duration
+		if track.RecordingTimeline != nil {
+			duration = uint32(track.RecordingTimeline.RecordedMillis() / 1000)
+		}
+		calories := models.CalculateTrackCalories(track.TrackType, duration)
 		if calories <= 0 {
 			continue
 		}
@@ -193,6 +199,7 @@ func (r *InMemoryTrackRepository) FindByID(_ context.Context, id string) (*model
 		return nil, ErrNotFound
 	}
 	clone := *t
+	clone.RecordingTimeline = t.RecordingTimeline.Clone()
 	return &clone, nil
 }
 
@@ -204,6 +211,7 @@ func (r *InMemoryTrackRepository) FindCompletedBySessionID(_ context.Context, us
 		if track != nil && track.UserID == userID && track.SessionID == sessionID && !track.IsRunning && track.DeletedAt.IsZero() {
 			if latest == nil || track.CreatedAt.After(latest.CreatedAt) {
 				copy := *track
+				copy.RecordingTimeline = track.RecordingTimeline.Clone()
 				latest = &copy
 			}
 		}
@@ -221,6 +229,7 @@ func (r *InMemoryTrackRepository) FindByIDs(_ context.Context, ids []string) (ma
 	for _, id := range ids {
 		if track, ok := r.tracks[id]; id != "" && ok && track != nil {
 			clone := *track
+			clone.RecordingTimeline = track.RecordingTimeline.Clone()
 			result[id] = &clone
 		}
 	}

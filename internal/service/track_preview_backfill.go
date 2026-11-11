@@ -48,6 +48,7 @@ type PreviewBackfillInput struct {
 }
 
 type PreviewBackfillPoint struct {
+	SegmentID int     `json:"segment_id,omitempty"`
 	Latitude  float64 `json:"latitude"`
 	Longitude float64 `json:"longitude"`
 }
@@ -231,7 +232,7 @@ func (s *TrackService) previewBackfillDataForTrack(ctx context.Context, t *model
 		return nil, invalidArg("raw track has no GPS points")
 	}
 	for _, point := range points {
-		result.Points = append(result.Points, PreviewBackfillPoint{Latitude: point.Latitude, Longitude: point.Longitude})
+		result.Points = append(result.Points, PreviewBackfillPoint{Latitude: point.Latitude, Longitude: point.Longitude, SegmentID: point.SegmentID})
 	}
 	return result, nil
 }
