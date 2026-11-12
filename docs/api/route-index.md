@@ -177,7 +177,7 @@
 | 申请邮件找回 | POST | `/admin/api/password-recovery/request` | 否 | [admin-accounts.md](admin-accounts.md) |
 | 验证邮件并重新设置密码 | POST | `/admin/api/password-recovery/complete` | 否 | [admin-accounts.md](admin-accounts.md) |
 | 最近后台操作日志（可选 username 精确筛选） | GET | `/admin/api/audit-logs` | 管理员 session | [admin-accounts.md](admin-accounts.md) |
-| 后台轨迹列表（含 missing 缺项筛选） | GET | `/admin/api/tracks` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |
+| 后台轨迹列表（运动类型/省市/缺项筛选及各缺项计数） | GET | `/admin/api/tracks` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |
 | 后台轨迹类型与贡献用户前十（天/周/月） | GET | `/admin/api/tracks/statistics` | 轨迹查看 | [admin-tracks.md](admin-tracks.md#轨迹类型与用户贡献统计) |
 | 后台轨迹坐标系预览 | GET | `/admin/api/tracks/:track_id/map-preview` | 轨迹查看 | [admin-tracks.md](admin-tracks.md#编辑字段与坐标预览) |
 | 后台批量导入轨迹（逐文件结果含轨迹表格摘要） | POST | `/admin/api/tracks/import` | 轨迹操作 | [admin-tracks.md](admin-tracks.md) |

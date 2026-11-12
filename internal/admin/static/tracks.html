@@ -98,13 +98,14 @@
     </section>
     <section class="panel">
       <h2>轨迹列表 <span class="hint" id="totalHint"></span></h2>
-      <div class="row admin-toolbar track-toolbar">
+      <div class="admin-toolbar track-toolbar">
         <label>标题搜索 <input id="titleFilter" class="form-control" type="search" placeholder="输入轨迹标题关键词" /></label>
         <label>用户名搜索 <input id="userNameFilter" class="form-control" type="search" placeholder="输入用户名关键词" /></label>
+        <label>运动类型 <select id="trackTypeFilter" class="form-select" disabled><option value="">全部运动类型</option></select></label>
         <label>省份 <select id="provinceFilter" class="form-select"><option value="">全部省份</option></select></label>
         <label>城市 <select id="cityFilter" class="form-select"><option value="">全部城市</option></select></label>
         <label>状态 <select id="statusFilter" class="form-select"><option value="">全部状态</option><option value="1">公开</option><option value="2">私密</option><option value="0">已下架</option></select></label>
-        <label>资料缺项 <select id="missingFilter" class="form-select"><option value="">全部</option><option value="any">任意缺项</option><option value="place_candidate">待确认景点</option><option value="scenic_spot">未关联景点</option><option value="description">缺简介</option><option value="city">缺城市</option><option value="previews">缺预览图</option></select></label>
+        <label>资料缺项 <select id="missingFilter" class="form-select"><option value="">全部</option><option value="place_candidate">待确认景点</option><option value="scenic_spot">未关联景点</option><option value="description">缺简介</option><option value="city">缺城市</option><option value="previews">缺预览图</option></select></label>
         <button id="searchBtn" class="btn btn-primary">搜索</button>
         <button id="refreshBtn" class="btn btn-outline-secondary">刷新</button>
         <button id="prevBtn" class="btn btn-outline-secondary" disabled>上一页</button>
@@ -112,6 +113,8 @@
         <span class="hint" id="pageHint"></span>
       </div>
       <p id="missingHint" class="hint" hidden></p>
+      <p id="missingCountsError" class="text-secondary" role="status" hidden>部分缺项数量暂不可用，请刷新重试。</p>
+      <p id="trackListError" class="text-danger" role="status" hidden></p>
       <div class="table-responsive">
       <table class="data table">
         <thead>
@@ -131,6 +134,7 @@
   <script src="/admin/static/place_candidates.js"></script>
   <script src="/admin/static/track_map_preview.js"></script>
   <script src="/admin/static/track_editor.js"></script>
+<script src="/admin/static/region_picker.js"></script>
   <script src="/admin/static/tracks.js"></script>
   <script src="/admin/static/admin_chart_style.js"></script>
   <script src="/admin/static/track_statistics.js"></script>

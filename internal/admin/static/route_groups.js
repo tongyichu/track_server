@@ -565,6 +565,7 @@
       });
       provinceSelect.innerHTML = '<option value="">全部省份</option>' + provinceOptions;
       renderCityOptions('');
+      AdminRegionPicker.enhance(provinceSelect, citySelect, items);
     } catch (_) { /* 省市目录不可用时保留“全部”，不阻塞路线组管理。 */ }
   }
 

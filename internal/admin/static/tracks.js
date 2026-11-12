@@ -68,11 +68,26 @@
   var searchBtn = document.getElementById('searchBtn');
   var titleFilter = document.getElementById('titleFilter');
   var userNameFilter = document.getElementById('userNameFilter');
+  var trackTypeFilter = document.getElementById('trackTypeFilter');
   var cityFilter = document.getElementById('cityFilter');
   var provinceFilter = document.getElementById('provinceFilter');
   var statusFilter = document.getElementById('statusFilter');
   var missingFilter = document.getElementById('missingFilter');
   var pageRequest = 0;
+  var pageController = null;
+  var renderedTrackRows = new Map();
+  var trackTypeOptionsKey = '';
+  var missingCountsKey = '';
+  var missingLabels = { '': '全部', place_candidate: '待确认景点', scenic_spot: '未关联景点', description: '缺简介', city: '缺城市', previews: '缺预览图' };
+  function renderMissingCounts(counts) {
+    Array.from(missingFilter.options).forEach(function (option) {
+      var value = counts && counts[option.value || 'all'];
+      var count = typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value.toLocaleString() : '—';
+      var label = missingLabels[option.value] + '（' + count + '）';
+      if (option.textContent !== label) option.textContent = label;
+    });
+  }
+  var trackListError = document.getElementById('trackListError');
   var pageHint = document.getElementById('pageHint');
   var totalHint = document.getElementById('totalHint');
 
@@ -85,6 +100,7 @@
   searchBtn.addEventListener('click', resetSearch);
   titleFilter.addEventListener('keydown', function (event) { if (event.key === 'Enter') resetSearch(); });
   userNameFilter.addEventListener('keydown', function (event) { if (event.key === 'Enter') resetSearch(); });
+  trackTypeFilter.addEventListener('change', resetSearch);
   cityFilter.addEventListener('change', resetSearch);
   provinceFilter.addEventListener('change', function () {
     populateCityOptions(cityOptions, provinceFilter.value);
@@ -105,9 +121,48 @@
     loadPage();
   });
 
+  function populateTrackTypeOptions(types) {
+    if (!Array.isArray(types)) return;
+    var key = JSON.stringify(types);
+    if (key === trackTypeOptionsKey) return;
+    var selected = trackTypeFilter.value;
+    var options = [new Option('全部运动类型', '')];
+    types.forEach(function (type) {
+      if (!type.code || !type.name) return;
+      typeNameByCode[type.code] = type.name;
+      options.push(new Option(type.name, type.code));
+    });
+    trackTypeFilter.replaceChildren.apply(trackTypeFilter, options);
+    trackTypeFilter.value = options.some(function (option) { return option.value === selected; }) ? selected : '';
+    trackTypeFilter.disabled = options.length <= 1;
+    trackTypeOptionsKey = key;
+  }
+
+  function renderTrackRows(items) {
+    var rows = items.map(function (item) {
+      var markup = trackCells(item), cached = renderedTrackRows.get(item.id);
+      if (cached && cached.markup === markup) return cached.row;
+      var row = document.createElement('tr'); row.innerHTML = markup;
+      renderedTrackRows.set(item.id, { markup: markup, row: row }); return row;
+    });
+    var ids = new Set(items.map(function (item) { return item.id; }));
+    renderedTrackRows.forEach(function (_, id) { if (!ids.has(id)) renderedTrackRows.delete(id); });
+    if (!rows.length) {
+      var empty = document.createElement('tr'), cell = document.createElement('td');
+      cell.colSpan = 8; cell.textContent = '当前筛选条件下暂无轨迹'; empty.appendChild(cell); rows.push(empty);
+    }
+    var wanted = new Set(rows);
+    Array.from(tbody.children).forEach(function (row) { if (!wanted.has(row)) row.remove(); });
+    rows.forEach(function (row, index) { if (tbody.children[index] !== row) tbody.insertBefore(row, tbody.children[index] || null); });
+  }
+
   async function loadPage() {
     var request = ++pageRequest;
-    var hints = { any: '任一资料项缺失或存在待确认景点的轨迹都会列出。', scenic_spot: '未关联景点包含正常的非景区轨迹，可结合其他条件筛选。', previews: '四种日夜预览图中任意一张缺失，即视为预览图不完整。' };
+    if (pageController) pageController.abort();
+    var controller = new AbortController(); pageController = controller;
+    prevBtn.disabled = true; nextBtn.disabled = true;
+    trackListError.hidden = true; trackListError.textContent = '';
+    var hints = { scenic_spot: '未关联景点包含正常的非景区轨迹，可结合其他条件筛选。', previews: '四种日夜预览图中任意一张缺失，即视为预览图不完整。' };
     var hint = document.getElementById('missingHint');
     hint.textContent = hints[missingFilter.value] || '';
     hint.hidden = !hint.textContent;
@@ -115,41 +170,45 @@
     params.set('limit', String(pageSize));
     if (titleFilter.value.trim()) params.set('title', titleFilter.value.trim());
     if (userNameFilter.value.trim()) params.set('user_name', userNameFilter.value.trim());
+    if (trackTypeFilter.value) params.set('track_type', trackTypeFilter.value);
     if (provinceFilter.value) params.set('province_code', provinceFilter.value);
     if (cityFilter.value) params.set('city_code', cityFilter.value);
     if (statusFilter.value) params.set('status', statusFilter.value);
+    var countsKey = params.toString();
+    if (missingCountsKey !== countsKey) { renderMissingCounts(null); document.getElementById('missingCountsError').hidden = true; }
     if (missingFilter.value) params.set('missing', missingFilter.value);
     var cur = cursorStack[pageIndex];
     if (cur) {
       params.set('cursor_start_time', cur.start_time);
       params.set('cursor_id', String(cur.id));
     }
-    var resp = await fetch('/admin/api/tracks?' + params.toString());
-    if (request !== pageRequest) return;
-    if (!resp.ok) {
-      tbody.innerHTML = '<tr><td colspan="8">加载失败: ' + resp.status + '</td></tr>';
-      return;
-    }
-    var data = ((await resp.json()).data) || {};
-    if (request !== pageRequest) return;
-    var items = data.items || [];
-    totalCount = data.total || 0;
-    lastNextCursor = data.next_cursor || null;
-
-    tbody.innerHTML = '';
-    items.forEach(function (it) {
-      var tr = document.createElement('tr');
-      tr.innerHTML = trackCells(it);
-      tbody.appendChild(tr);
-    });
-
-    prevBtn.disabled = pageIndex <= 0;
-    nextBtn.disabled = !lastNextCursor;
-    pageHint.textContent = '第 ' + (pageIndex + 1) + ' 页（' + items.length + ' 条）';
-    totalHint.textContent = statusFilter.value === '0'
-      ? '共 ' + totalCount + ' 条已下架轨迹'
-      : '共 ' + totalCount + ' 条轨迹（不含已下架）';
+    try {
+      var resp = await fetch('/admin/api/tracks?' + params.toString(), { signal: controller.signal });
+      var payload = await resp.json().catch(function () { return {}; });
+      if (request !== pageRequest || controller.signal.aborted) return;
+      if (!resp.ok) throw new Error(payload.error || String(resp.status));
+      var data = payload.data || {}, items = data.items || [];
+      populateTrackTypeOptions(data.track_types);
+      renderMissingCounts(data.missing_counts);
+      missingCountsKey = countsKey;
+      document.getElementById('missingCountsError').hidden = !data.missing_counts_unavailable;
+      totalCount = data.total || 0;
+      lastNextCursor = data.next_cursor || null;
+      renderTrackRows(items);
+      prevBtn.disabled = pageIndex <= 0;
+      nextBtn.disabled = !lastNextCursor;
+      pageHint.textContent = '第 ' + (pageIndex + 1) + ' 页（' + items.length + ' 条）';
+      totalHint.textContent = statusFilter.value === '0'
+        ? '共 ' + totalCount + ' 条已下架轨迹'
+        : '共 ' + totalCount + ' 条轨迹（不含已下架）';
+    } catch (error) {
+      if (request !== pageRequest || controller.signal.aborted) return;
+      trackListError.textContent = '加载失败，已保留上次列表；请搜索或刷新重试：' + (error.message || error);
+      trackListError.hidden = false;
+    } finally { if (request === pageRequest) pageController = null; }
   }
+
+  window.addEventListener('pagehide', function () { if (pageController) pageController.abort(); });
 
   async function handleTrackEdit(ev) {
     var editBtn = ev.target && ev.target.closest ? ev.target.closest('.js-edit-track') : null;
@@ -230,6 +289,7 @@
       data.filter(function (item) { return item.level === 'province'; })
         .forEach(function (item) { provinceFilter.add(new Option(item.name, item.code)); });
       populateCityOptions(data, '');
+      AdminRegionPicker.enhance(provinceFilter, cityFilter, data);
       return data;
     } catch (err) {
       AdminUI.alert('城市列表加载失败: ' + (err.message || err), 'danger');

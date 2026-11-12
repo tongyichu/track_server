@@ -2332,10 +2332,7 @@ func (r *MySQLTrackRepository) ListAdminTracksByTitle(ctx context.Context, title
 	return items, total, nil
 }
 
-func (r *MySQLTrackRepository) ListAdminTracks(ctx context.Context, filter AdminTrackListFilter, cursor *models.TrackListCursor, limit int) ([]*models.Track, int64, error) {
-	if limit <= 0 {
-		limit = 20
-	}
+func adminTrackSQLBase(filter AdminTrackListFilter) (string, []any) {
 	// 默认排除已删除；显式筛选「已删除」时改为只看 status=0 的记录。
 	base := `FROM track_records WHERE deleted_at IS NULL AND status <> ?`
 	args := []any{models.TrackStatusDeleted}
@@ -2350,6 +2347,10 @@ func (r *MySQLTrackRepository) ListAdminTracks(ctx context.Context, filter Admin
 	if filter.Title != "" {
 		base += ` AND title LIKE ? ESCAPE '!'`
 		args = append(args, "%"+escapeAdminLike(filter.Title)+"%")
+	}
+	if filter.TrackType != "" {
+		base += ` AND track_type = ?`
+		args = append(args, filter.TrackType)
 	}
 	if filter.CityCode != "" {
 		codes := config.CityCodeCandidates(filter.CityCode)
@@ -2371,7 +2372,8 @@ func (r *MySQLTrackRepository) ListAdminTracks(ctx context.Context, filter Admin
 	}
 	if filter.UserIDs != nil {
 		if len(filter.UserIDs) == 0 {
-			return []*models.Track{}, 0, nil
+			base += " AND FALSE"
+			return base, args
 		}
 		placeholders := strings.TrimRight(strings.Repeat("?,", len(filter.UserIDs)), ",")
 		base += ` AND user_id IN (` + placeholders + `)`
@@ -2379,6 +2381,14 @@ func (r *MySQLTrackRepository) ListAdminTracks(ctx context.Context, filter Admin
 			args = append(args, id)
 		}
 	}
+	return base, args
+}
+
+func (r *MySQLTrackRepository) ListAdminTracks(ctx context.Context, filter AdminTrackListFilter, cursor *models.TrackListCursor, limit int) ([]*models.Track, int64, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	base, args := adminTrackSQLBase(filter)
 	var total int64
 	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) `+base, args...).Scan(&total); err != nil {
 		return nil, 0, err

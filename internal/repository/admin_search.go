@@ -10,6 +10,39 @@ import (
 	"github.com/tongyichu/track_server/internal/models"
 )
 
+func adminTrackMatchesBase(track *models.Track, filter AdminTrackListFilter, userIDs map[int64]struct{}, cityCodes map[string]struct{}) bool {
+	wantDeleted := filter.Status != nil && *filter.Status == models.TrackStatusDeleted
+	if track == nil {
+		return false
+	}
+	if wantDeleted != (track.Status == models.TrackStatusDeleted) {
+		return false
+	}
+	if filter.Title != "" && !strings.Contains(strings.ToLower(track.Title), strings.ToLower(filter.Title)) {
+		return false
+	}
+	if filter.TrackType != "" && track.TrackType != filter.TrackType {
+		return false
+	}
+	if filter.CityCode != "" && !sameRegionCode(track.CityCode, filter.CityCode) {
+		return false
+	}
+	if filter.CityCode == "" && len(cityCodes) > 0 {
+		if _, ok := cityCodes[config.CanonicalCityCode(track.CityCode)]; !ok {
+			return false
+		}
+	}
+	if filter.Status != nil && track.Status != *filter.Status {
+		return false
+	}
+	if filter.UserIDs != nil {
+		if _, ok := userIDs[track.UserID]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
 func (r *InMemoryTrackRepository) ListAdminTracks(_ context.Context, filter AdminTrackListFilter, cursor *models.TrackListCursor, limit int) ([]*models.Track, int64, error) {
 	if limit <= 0 {
 		limit = 20
@@ -29,34 +62,11 @@ func (r *InMemoryTrackRepository) ListAdminTracks(_ context.Context, filter Admi
 	for _, code := range filter.CityCodes {
 		cityCodes[config.CanonicalCityCode(code)] = struct{}{}
 	}
-	wantDeleted := filter.Status != nil && *filter.Status == models.TrackStatusDeleted
 	items := make([]*models.Track, 0)
 	var total int64
 	for _, track := range r.tracks {
-		if track == nil {
+		if !adminTrackMatchesBase(track, filter, userIDs, cityCodes) {
 			continue
-		}
-		if wantDeleted != (track.Status == models.TrackStatusDeleted) {
-			continue
-		}
-		if filter.Title != "" && !strings.Contains(strings.ToLower(track.Title), strings.ToLower(filter.Title)) {
-			continue
-		}
-		if filter.CityCode != "" && !sameRegionCode(track.CityCode, filter.CityCode) {
-			continue
-		}
-		if filter.CityCode == "" && len(cityCodes) > 0 {
-			if _, ok := cityCodes[config.CanonicalCityCode(track.CityCode)]; !ok {
-				continue
-			}
-		}
-		if filter.Status != nil && track.Status != *filter.Status {
-			continue
-		}
-		if filter.UserIDs != nil {
-			if _, ok := userIDs[track.UserID]; !ok {
-				continue
-			}
 		}
 		if !adminTrackMatchesMissing(track, filter.Missing, linked[track.ID], candidates[track.ID]) {
 			continue

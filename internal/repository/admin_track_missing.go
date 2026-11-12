@@ -109,14 +109,7 @@ func adminMongoEmptyTrackField(field string) bson.M {
 	return bson.M{"$or": bson.A{bson.M{field: nil}, bson.M{field: primitive.Regex{Pattern: `^\s*$`}}}}
 }
 
-func (r *MongoTrackRepository) listAdminTracksWithMissing(ctx context.Context, base bson.M, filter AdminTrackListFilter, cursor *models.TrackListCursor, limit int) ([]*models.Track, int64, error) {
-	pipeline := mongo.Pipeline{{{Key: "$match", Value: base}}}
-	if filter.Missing == "any" || filter.Missing == "scenic_spot" {
-		pipeline = append(pipeline,
-			bson.D{{Key: "$lookup", Value: bson.M{"from": "track_scenic_spot_links", "localField": "_id", "foreignField": "_id", "as": "_admin_links"}}},
-			bson.D{{Key: "$lookup", Value: bson.M{"from": "scenic_spots", "localField": "_admin_links.scenic_spot_id", "foreignField": "_id", "as": "_admin_spots"}}},
-		)
-	}
+func adminTrackMissingMongoConditions(filter AdminTrackListFilter) map[string]bson.M {
 	previewConditions := bson.A{}
 	for _, field := range []string{"square_day_url", "square_night_url", "landscape_day_url", "landscape_night_url"} {
 		previewConditions = append(previewConditions, adminMongoEmptyTrackField("preview_images."+field))
@@ -125,13 +118,24 @@ func (r *MongoTrackRepository) listAdminTracksWithMissing(ctx context.Context, b
 	for _, id := range filter.PlaceCandidateTrackIDs {
 		ids = append(ids, id)
 	}
-	conditions := map[string]bson.M{
+	return map[string]bson.M{
 		"description":     adminMongoEmptyTrackField("description"),
 		"city":            adminMongoEmptyTrackField("city_code"),
 		"previews":        {"$or": previewConditions},
 		"place_candidate": {"_id": bson.M{"$in": ids}},
 		"scenic_spot":     {"_admin_spots": bson.M{"$not": bson.M{"$elemMatch": bson.M{"status": models.ScenicSpotActive}}}},
 	}
+}
+
+func (r *MongoTrackRepository) listAdminTracksWithMissing(ctx context.Context, base bson.M, filter AdminTrackListFilter, cursor *models.TrackListCursor, limit int) ([]*models.Track, int64, error) {
+	pipeline := mongo.Pipeline{{{Key: "$match", Value: base}}}
+	if filter.Missing == "any" || filter.Missing == "scenic_spot" {
+		pipeline = append(pipeline,
+			bson.D{{Key: "$lookup", Value: bson.M{"from": "track_scenic_spot_links", "localField": "_id", "foreignField": "_id", "as": "_admin_links"}}},
+			bson.D{{Key: "$lookup", Value: bson.M{"from": "scenic_spots", "localField": "_admin_links.scenic_spot_id", "foreignField": "_id", "as": "_admin_spots"}}},
+		)
+	}
+	conditions := adminTrackMissingMongoConditions(filter)
 	condition := conditions[filter.Missing]
 	if filter.Missing == "any" {
 		condition = bson.M{"$or": bson.A{conditions["description"], conditions["city"], conditions["previews"], conditions["scenic_spot"], conditions["place_candidate"]}}
