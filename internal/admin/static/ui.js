@@ -296,7 +296,7 @@
   function enhanceButton(button) {
     if (button.matches('.scenic-photo-picker, .region-photo-picker, .admin-photo-picker, .admin-photo-remove, .admin-photo-download')) return;
     if (button.hasAttribute('data-period') || button.hasAttribute('data-stat-period') || button.classList.contains('btn-close') || button.matches('.dropdown-item, [data-bs-toggle="dropdown"]')) return;
-    if (button.closest('.region-country-bar, .region-tree')) return;
+    if (button.closest('.region-country-bar, .region-tree, .admin-region-field, .admin-region-popup')) return;
     button.classList.add('btn');
     if (Array.from(button.classList).some(function (name) { return /^btn-(primary|secondary|success|danger|warning|info|light|dark|outline)/.test(name); })) return;
     const id = button.id || '';
