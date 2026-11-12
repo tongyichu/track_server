@@ -182,8 +182,13 @@ func messageSQLFilter(f MessageFilter) (string, []any) {
 		args = append(args, f.Before.UTC(), f.Before.UTC(), f.BeforeID)
 	}
 	if !f.After.IsZero() {
-		q = append(q, "m.created_at>?")
-		args = append(args, f.After.UTC())
+		if f.AfterID != "" {
+			q = append(q, "(m.created_at>? OR (m.created_at=? AND m.id>?))")
+			args = append(args, f.After.UTC(), f.After.UTC(), f.AfterID)
+		} else {
+			q = append(q, "m.created_at>?")
+			args = append(args, f.After.UTC())
+		}
 	}
 	if !f.MaxTime.IsZero() {
 		q = append(q, "m.created_at<=?")

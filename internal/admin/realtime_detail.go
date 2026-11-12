@@ -11,18 +11,19 @@ import (
 	"github.com/tongyichu/track_server/internal/service"
 )
 
-func (h *Handler) RealtimeClientDetail(ctx context.Context, c *app.RequestContext) {
+func (h *Handler) realtimeClient(ctx context.Context, c *app.RequestContext) (*service.RealtimeClient, service.RealtimeClientsSnapshot) {
+	empty := service.RealtimeClientsSnapshot{}
 	if !h.realtimeReady(c) {
-		return
+		return nil, empty
 	}
 	clientID := strings.TrimSpace(string(c.Query("client_id")))
 	if clientID == "" || len(clientID) > 200 {
 		c.JSON(400, utils.H{"error": "客户端ID无效"})
-		return
+		return nil, empty
 	}
 	if h.realtimeBroker == nil {
 		c.JSON(503, utils.H{"error": "EMQX 管理接口未初始化"})
-		return
+		return nil, empty
 	}
 	snapshot := h.realtimeBroker.Snapshot(ctx)
 	var client *service.RealtimeClient
@@ -38,6 +39,14 @@ func (h *Handler) RealtimeClientDetail(ctx context.Context, c *app.RequestContex
 		} else {
 			c.JSON(404, utils.H{"error": "该连接已不在 Broker 保留的会话中，请刷新列表"})
 		}
+		return nil, empty
+	}
+	return client, snapshot
+}
+
+func (h *Handler) RealtimeClientDetail(ctx context.Context, c *app.RequestContext) {
+	client, snapshot := h.realtimeClient(ctx, c)
+	if client == nil {
 		return
 	}
 	work, cancel := context.WithTimeout(ctx, 3*time.Second)
@@ -45,16 +54,9 @@ func (h *Handler) RealtimeClientDetail(ctx context.Context, c *app.RequestContex
 	items := []service.RealtimeMessage{}
 	kind := "direct"
 	if client.Module == "messages" {
-		user, err := strconv.ParseInt(client.UserID, 10, 64)
-		if err != nil || h.messages == nil {
-			c.JSON(503, utils.H{"error": "消息内容暂不可用"})
-			return
-		}
-		items, err = h.messages.RealtimeDirectMessages(work, user)
-		if err != nil {
-			c.JSON(503, utils.H{"error": "消息内容暂不可用，请重试"})
-			return
-		}
+		h.realtimeChatResponse(work, c, client, snapshot)
+		return
+
 	} else {
 		kind = "danmaku"
 		// Room content keeps the same permission boundary as the companion detail page.

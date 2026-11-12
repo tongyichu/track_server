@@ -123,8 +123,21 @@
       }
       renderMetadata(item, sample.at, sample.status);
       const direct = item.module === 'messages';
-      content.append(metadata, node('h3', direct ? '最近私信' : '最近房间弹幕', 'realtime-detail-title'));
-      content.append(node('p', direct ? '该用户全部设备最近30条私信，含发送与接收。正文来自业务存储；MQTT 仅发送刷新提醒，记录不代表此连接已收取或已读。' : '所在房间最近30条弹幕，含其他成员发送的内容。记录来自业务存储，不代表此连接已收取；定位和控制事件不在此列表中。', 'text-secondary small'));
+      if (direct) {
+        const layout = node('div', null, 'rt-chat-layout'), sidebar = node('aside', null, 'rt-chat-sidebar'), chatHost = node('section', null, 'rt-chat-panel');
+        sidebar.append(node('h3', '连接信息', 'realtime-detail-title'), metadata); layout.append(sidebar, chatHost);
+        let chat;
+        const stop = () => chat?.stop();
+        return AdminUI.form({ title: '消息连接详情', wide: true, className: 'realtime-chat-dialog', readOnly: true, waitForHidden: true, cancelText: '关闭', beforeFields: layout, fields: [],
+          onReady({ signal }) {
+            chat = RealtimeChat.mount({ host: chatHost, sidebar, item, signal, api, onMetadata: renderMetadata });
+            closeDetail = stop; refreshDetail = () => chat.refresh();
+          },
+          onClosed() { stop(); if (closeDetail === stop) { closeDetail = null; refreshDetail = null; } }
+        });
+      }
+      content.append(metadata, node('h3', '最近房间弹幕', 'realtime-detail-title'));
+      content.append(node('p', '所在房间最近30条弹幕，含其他成员发送的内容。记录来自业务存储，不代表此连接已收取；定位和控制事件不在此列表中。', 'text-secondary small'));
       const toolbar = node('div', null, 'realtime-heading mb-2'), status = node('span', '正在加载内容…', 'text-secondary small'), refresh = node('button', '刷新消息', 'btn btn-sm btn-outline-secondary');
       refresh.type = 'button'; toolbar.append(status, refresh);
       const messages = node('div', null, 'realtime-messages'); content.append(toolbar, messages);
@@ -148,12 +161,12 @@
                 const fragment = document.createDocumentFragment();
                 for (const message of data.items || []) {
                   const article = node('article', null, 'realtime-message');
-                  const direction = direct ? (message.sender_id === item.user_id ? '发送给 ' + message.receiver_id : '收到来自 ' + message.sender_id) : '用户 ' + message.sender_id;
+                  const direction = '用户 ' + message.sender_id;
                   article.append(node('div', direction + ' · ' + date(message.created_at), 'text-secondary small'), node('p', message.content || (message.track_id ? '分享轨迹' : '（无文本内容）')));
                   if (message.track_id) article.append(node('small', '轨迹：' + message.track_id, 'text-secondary'));
                   fragment.append(article);
                 }
-                if (!data.items?.length) fragment.append(node('p', direct ? '暂无私信记录' : '暂无房间弹幕', 'text-secondary'));
+                if (!data.items?.length) fragment.append(node('p', '暂无房间弹幕', 'text-secondary'));
                 messages.replaceChildren(fragment); rendered = key;
               }
               status.textContent = '最近 ' + data.items.length + ' 条 · ' + date(new Date().toISOString()) + ' 更新';

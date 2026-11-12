@@ -107,7 +107,11 @@ func messageMongoFilter(f MessageFilter) bson.M {
 		parts = append(parts, bson.M{"$or": bson.A{bson.M{"at_micros": bson.M{"$lt": f.Before.UnixMicro()}}, bson.M{"at_micros": f.Before.UnixMicro(), "_id": bson.M{"$lt": f.BeforeID}}}})
 	}
 	if !f.After.IsZero() {
-		parts = append(parts, bson.M{"at_micros": bson.M{"$gt": f.After.UnixMicro()}})
+		if f.AfterID != "" {
+			parts = append(parts, bson.M{"$or": bson.A{bson.M{"at_micros": bson.M{"$gt": f.After.UnixMicro()}}, bson.M{"at_micros": f.After.UnixMicro(), "_id": bson.M{"$gt": f.AfterID}}}})
+		} else {
+			parts = append(parts, bson.M{"at_micros": bson.M{"$gt": f.After.UnixMicro()}})
+		}
 	}
 	if !f.MaxTime.IsZero() {
 		parts = append(parts, bson.M{"at_micros": bson.M{"$lte": f.MaxTime.UnixMicro()}})

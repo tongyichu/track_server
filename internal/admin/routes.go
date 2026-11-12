@@ -178,6 +178,8 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	api.GET("/realtime/summary", m.Handler.RealtimeSummary)
 	api.GET("/realtime/clients", m.Handler.RealtimeClients)
 	api.GET("/realtime/clients/detail", m.Handler.RealtimeClientDetail)
+	api.GET("/realtime/clients/conversations", m.Handler.RealtimeChat)
+	api.GET("/realtime/clients/messages", m.Handler.RealtimeChat)
 	api.GET("/realtime/events", m.Handler.RealtimeEvents)
 	api.GET("/announcements", m.Handler.ListAnnouncements)
 	api.POST("/announcements", m.Handler.SaveAnnouncement)

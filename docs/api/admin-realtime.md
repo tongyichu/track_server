@@ -6,7 +6,9 @@
 | --- | --- | --- |
 | GET | `/summary` | `{runtime,backlog,at}`；业务数据库统计独立于 EMQX 管理 API |
 | GET | `/clients` | `module=messages|companions`、`state=connected|disconnected`、`q`、`page`；每页30 |
-| GET | `/clients/detail` | `client_id` 精确匹配 Broker 采样中的连接，返回连接信息与最近30条业务消息；同行内容另需 `companions` 查看权限 |
+| GET | `/clients/detail` | `client_id` 精确匹配 Broker 采样连接；消息连接返回联系人与账号全部私信首屏；同行返回最近30条弹幕，另需 `companions` 查看权限 |
+| GET | `/clients/conversations` | `client_id`、`cursor?`；按最近消息时间倒序分页对话，每页30 |
+| GET | `/clients/messages` | `client_id`、`peer_id?`、`cursor?`、`after?` / `after_seq?`；默认账号全部私信，可按联系人筛选，每页30 |
 | GET | `/events` | `module`、`q`、`page`；每页30，最新异常优先 |
 
 成功返回 `{code:0,data:...}`；非法筛选400，未登录401，无权限403，依赖不可用503，内部错误不返回原始上游错误或凭证。用户ID、异常ID为字符串。q 最多200字节，用于用户ID精确匹配或客户端/同行房间ID包含匹配，不按昵称查询。
@@ -29,14 +31,33 @@ status 为 ok / partial / stale / unavailable / unconfigured。未配置或从�
 
 ## 连接详情与消息内容
 
-连接列表的“详情”先展示该行的基础信息，再独立加载内容；内容失败不影响已展示的连接信息，可重试。订阅数、排队消息、断开时间等辅助字段收进详情。顶部保留发布连接、在线连接、待补发提醒、发布失败四项，其余进程统计与口径说明放在“更多运行信息”。连接列表与近期异常为两个常驻区块，筛选、分页、错误状态独立。
+顶部保留发布连接、在线连接、待补发提醒、发布失败四项，其余运行信息折叠。连接列表、近期异常为两个独立区块，各自筛选与分页。详情先展示基础连接信息，再独立加载正文。
 
-`GET /clients/detail?client_id=...` 不接受浏览器指定用户或房间：先从 Broker 采样精确找到连接，再使用其 user_id / session_id 读取存储内容。client_id 必填、最多200字节；完整新采样中已无该连接返回404；未接入、未采样或部分采样中找不到时返回503。成功响应为 `{client,status,sampled_at,content_kind,items}`；client 与连接列表字段相同，采样失败沿用已有 stale 标记。items 按时间倒序，元素为 `{id,sender_id,receiver_id?,content,track_id?,created_at}`，所有身份和消息ID均为字符串。
+消息连接对应整个账号，默认展示“账号私信消息流”，同时包含与不同联系人的收发记录。桌面左侧为连接信息、“全部私信”与联系人筛选，右侧为统一时间流；每条记录明确显示发送方 → 接收方的头像、昵称、字符串用户ID、发出/收到标签和北京时间，不用单段对话的左右气泡暗示连接归属。点击联系人只是筛选该账号与此人的往来，可随时返回全部；自动刷新不会切换筛选对象。
 
-- `content_kind=direct`：在 realtime 查看权限内，只读查询该连接用户参与的最近30条已存储、active 的私信，包含发送与接收、覆盖该账号全部设备。显示正文、收发用户ID及分享轨迹ID，不返回持久化 payload、请求指纹、临时凭证或用户状态。消息库不可用返回503，不回退内存。
-- `content_kind=danmaku`：读取该连接所在房间最近30条已存储弹幕，包含其他成员内容；保留同行详情原有边界，额外校验 companions 查看权限，缺失返回403。定位、presence、控制事件和原始 MQTT payload 不在此列表中。
+默认打开账号最新30条并定位底部；向上翻阅、在顶部向下拉或点击历史按钮加载更早消息，补到顶部时保留阅读锚点。自动刷新只追加增量，阅读历史时保留位置并显示“回到最新消息”，不替换无变化的记录行。窄屏改为上下布局，联系人横向排列。
 
-这些是账号/房间维度的业务存储记录，可能早于当前连接建立时间，不能作为此客户端实际收发、Broker 排队内容或用户已读的凭证。MQTT 消息提醒仅携带刷新事件和记录标识，私信正文不经过 MQTT；此功能不抓包、不新增 payload 日志，不修改已读、投递、房间或消息状态。详情内容查询数据库预算3秒，不增加仓储方法或逐条用户查询。
+所有详情接口先根据 `client_id` 精确匹配 Broker 采样，再确定连接用户；不接受浏览器指定连接所属用户或房间。client_id 必填、最多200字节。完整新采样中已无连接返回404；未接入、未采样或部分采样中找不到返回503。消息分页接口仅接受 messages 连接，同行连接访问分页接口返回400。每次请求重查后台 session 的 realtime 查看权限，响应 no-store；所有用户ID、消息ID和序号均为字符串。
+
+### 消息连接响应与分页
+
+三个消息接口均包含 `{client,status,sampled_at,content_kind:"direct",people}`。`people` 按字符串用户ID索引，值仅含 `{id,nickname,avatar_url}`；当前响应涉及的用户按页去重并批量读取。头像只使用已存在的本站缓存或默认头像，不触发远程补齐、不返回原始 OSS URL；通过 `/admin/api/static/avatars/*` 或 `default_avatars/*` 的 realtime 查看权限读取，缺失或加载失败回退占位头像。
+
+- `/clients/detail` 额外返回 `conversations`、`peer_id`、`messages`。conversations 是最近对话首页，peer_id 为最近对话的联系人；无对话时 peer_id 为空、消息列表为空。
+- `/clients/conversations?client_id=...&cursor=...` 额外返回 `conversations:{items,has_more,next_cursor?}`。每项 `{peer_id,content,created_at}`，content 是最多80字的最新消息摘要。沿用 thread 的 `(created_at,id)` 严格游标，筛选后取31条并返回30条，包含该账号仍在业务库中的对话记录。
+- `/clients/messages?client_id=...` 默认返回该账号所有联系人的 active 存储私信：`peer_id` 为空，`messages:{items,has_more,next_cursor?,latest_cursor}`。首次按 `(created_at,id)` 倒序取最近30条，再正序返回。items 每项 `{id,seq,sender_id,receiver_id,content,track_id?,created_at}`；seq 仅为所属会话内序号，不能跨联系人排序。所有返回消息的双方均纳入本页用户资料批量查询。
+- 全部私信的历史请求传不透明 `cursor`，严格查询更早的 `(created_at,id)`；增量请求传 `after=latest_cursor`，严格按更大的复合边界正序读取，避免同微秒不同联系人记录被时间单字段筛掉。空账号的 latest_cursor 为 `origin`，后续增量从最早记录开始。MySQL、Mongo、memory 的 MessageFilter.AfterID 保持一致，未传 AfterID 的既有 After 语义不变；没有表结构改动。不能同时传历史与增量游标。
+- 只有指定 `peer_id` 时才筛选该账号与某联系人的会话，验证 thread 的双方归属，找不到返回404；此模式按会话 seq 正序返回，增量边界为 `latest_seq`。
+- 联系人筛选的历史请求传 `cursor=seq:<最早序号>`，严格查询更早的30条；has_more 和 next_cursor 表示是否还有更早记录。非法、非正数或溢出游标返回400。
+- 联系人筛选的增量请求传 `after_seq=<最新已加载序号>`，从该序号之后按 seq 正序返回最早30条；has_more 表示本批后仍有新记录，latest_seq 是本批已返回的最大序号。客户端连续追赶最多5批，更多内容留到后续刷新；不会直接跳到最新30条而遗漏中间消息。after_seq 须为非负 int64 文本，不能同时传历史游标；全部私信模式拒绝 after_seq，联系人筛选模式拒绝 after，避免混用游标。全部私信和联系人筛选两种模式均最多连续追赶5批。
+
+不调用 App 的 ListConversations/ListDirect，因为这些接口可能补齐发送日志或读取用户已读状态；后台始终通过独立只读投影查询，不刷新 pending 日志、不清除历史、不修改已读、投递或房间状态。当前消息库不可用返回503，不回退内存。每次业务查询预算3秒，复用三种仓储筛选与排序接口，新增向后复合边界字段 AfterID，不新增仓储方法，也不逐条补用户详情。
+
+### 同行内容与观测范围
+
+同行详情保持 `{client,status,sampled_at,content_kind:"danmaku",items}`，按时间倒序返回房间最近30条弹幕，items 为 `{id,sender_id,content,created_at}`。房间内容沿用同行详情边界，额外校验 companions 查看权限；缺失返回403。
+
+展示内容是账号/房间维度的业务存储记录，可能早于当前连接建立时间，也可能包含用户在客户端清除显示边界前的存储记录，不能证明某个客户端实际收发、Broker 排队内容或用户已读。MQTT 消息提醒仅携带刷新事件和记录标识，正文不经过 MQTT；后台不抓包、不新增 payload 日志。定位、presence 和控制事件不在聊天面板中。
 
 ## 配置
 
@@ -54,6 +75,6 @@ EMQX_MANAGEMENT_API_SECRET=
 
 ## 入口与验证
 
-观测在 `internal/service/realtime_monitor.go`，Broker 只读适配在 `realtime_broker.go`，消息待处理统计和只读私信投影在 `realtime_backlog.go`；注入于 `cmd/server/main.go`，API 为 `internal/admin/realtime.go`、`realtime_detail.go`，页面复用现有 Tabler、shell/ui、AdminTime 及嵌入资源版本缓存。
+观测在 `internal/service/realtime_monitor.go`，Broker 只读适配在 `realtime_broker.go`，消息待处理统计在 `realtime_backlog.go`、只读联系人/账号私信流/头像投影在 `realtime_chat.go`；注入于 `cmd/server/main.go`，API 为 `internal/admin/realtime.go`、`realtime_detail.go`、`realtime_chat.go`，页面复用现有 Tabler、shell/ui、AdminTime 及嵌入资源版本缓存。
 
-页面每15秒独立刷新统计、两个列表和已打开的详情内容，可关闭自动刷新；详情另提供“刷新消息”。隐藏/离开/关闭详情取消对应请求，10秒请求期限，快筛忽略旧响应，失败保留列表和可恢复分页，相同内容不替换现有行。默认仅 Go 构建、JS语法和差量检查；实际 Broker、权限（包括同行内容的额外权限）、筛选分页、断线/恢复、详情收发方向/空态/失败重试、采样上限和窄屏视觉由用户人工验收。
+页面每15秒独立刷新统计、两个列表和已打开的详情内容，可关闭自动刷新；详情另提供“刷新消息”。隐藏/离开/关闭详情取消对应请求，10秒请求期限，快筛忽略旧响应，失败保留列表和可恢复分页，相同内容不替换现有行。默认仅 Go 构建、JS语法和差量检查；实际 Broker、权限（包括同行内容的额外权限）、筛选分页、断线/恢复、全部联系人混合收发、联系人分页与筛选切换、双方头像/昵称、历史锚点、增量追赶、收发方向/空态/失败重试、采样上限和窄屏视觉由用户人工验收。

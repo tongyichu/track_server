@@ -2,43 +2,10 @@ package service
 
 import (
 	"context"
-	"encoding/json"
-	"strconv"
 	"time"
 
-	"github.com/tongyichu/track_server/internal/models"
 	"github.com/tongyichu/track_server/internal/repository"
 )
-
-type RealtimeMessage struct {
-	ID         string    `json:"id"`
-	SenderID   string    `json:"sender_id"`
-	ReceiverID string    `json:"receiver_id,omitempty"`
-	Content    string    `json:"content"`
-	TrackID    string    `json:"track_id,omitempty"`
-	CreatedAt  time.Time `json:"created_at"`
-}
-
-// RealtimeDirectMessages reads stored content without changing read or delivery state.
-func (s *MessageService) RealtimeDirectMessages(ctx context.Context, user int64) ([]RealtimeMessage, error) {
-	if !s.Enabled() || !s.durable || user <= 0 {
-		return nil, repository.ErrForbidden
-	}
-	rows, err := s.repo.ListMessageRecords(ctx, repository.MessageFilter{Kinds: []string{"dm"}, UserID: user, EitherUser: true, ActiveOnly: true, Limit: 30})
-	if err != nil {
-		return nil, err
-	}
-	items := make([]RealtimeMessage, 0, len(rows))
-	for _, row := range rows {
-		var stored models.StoredDirectMessage
-		if err := json.Unmarshal(row.Payload, &stored); err != nil {
-			return nil, err
-		}
-		v := stored.Message
-		items = append(items, RealtimeMessage{ID: row.ID, SenderID: strconv.FormatInt(v.SenderID, 10), ReceiverID: strconv.FormatInt(v.ReceiverID, 10), Content: v.Text, TrackID: v.TrackID, CreatedAt: row.CreatedAt})
-	}
-	return items, nil
-}
 
 func (s *CompanionService) SetRealtimeMonitor(m *RealtimeMonitor) { s.realtime = m }
 

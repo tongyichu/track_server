@@ -116,7 +116,7 @@ func (a *Authenticator) authorize(ctx context.Context, c *app.RequestContext, se
 		var modules []string
 		switch category {
 		case "avatars", "default_avatars":
-			modules = []string{"users", "tracks", "track_submissions", "scenic_spots", "companions", "feedbacks", "route_groups"}
+			modules = []string{"users", "tracks", "track_submissions", "scenic_spots", "companions", "feedbacks", "route_groups", "realtime"}
 		case "screenshots":
 			if strings.HasPrefix(path.Base(rel), "companion_") {
 				modules = []string{"companions"}

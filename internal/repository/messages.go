@@ -19,6 +19,7 @@ type MessageFilter struct {
 	Before                time.Time
 	BeforeID              string
 	After                 time.Time
+	AfterID               string
 	MaxTime               time.Time
 	BeforeSeq             int64
 	AfterSeq              int64
@@ -89,7 +90,7 @@ func messageMatches(r *models.MessageRecord, f MessageFilter) bool {
 	if !f.Before.IsZero() && (r.CreatedAt.After(f.Before) || r.CreatedAt.Equal(f.Before) && r.ID >= f.BeforeID) {
 		return false
 	}
-	if !f.After.IsZero() && !r.CreatedAt.After(f.After) {
+	if !f.After.IsZero() && (r.CreatedAt.Before(f.After) || r.CreatedAt.Equal(f.After) && (f.AfterID == "" || r.ID <= f.AfterID)) {
 		return false
 	}
 	if !f.MaxTime.IsZero() && r.CreatedAt.After(f.MaxTime) {
