@@ -37,10 +37,15 @@
         related.add(selected.id);
         for (const { data: edge } of edges.values()) if (edge.source === selected.id || edge.target === selected.id) { related.add(edge.source); related.add(edge.target); }
       }
-      for (const [id, entry] of nodes) { entry.root.classList.toggle('is-muted', !!selected && !related.has(id)); entry.root.classList.toggle('is-selected', related.has(id)); }
+      for (const [id, entry] of nodes) {
+        const active = selected?.kind === 'node' && selected.id === id;
+        entry.root.classList.toggle('is-muted', !!selected && !related.has(id)); entry.root.classList.toggle('is-selected', active);
+        entry.root.setAttribute('aria-pressed', String(active));
+      }
       for (const [id, entry] of edges) {
         const active = selected?.kind === 'edge' ? selected.id === id : selected?.kind === 'node' && (entry.data.source === selected.id || entry.data.target === selected.id);
         entry.root.classList.toggle('is-selected', !!active); entry.root.classList.toggle('is-muted', !!selected && !active);
+        entry.hit.setAttribute('aria-pressed', String(selected?.kind === 'edge' && selected.id === id));
       }
     }
     function select(kind, id) {
@@ -54,14 +59,17 @@
     }
     function nodeEntry(n) {
       const group = svg('g', { class: 'rt-graph-node', role: 'button', tabindex: 0 });
-      const title = svg('title'), halo = svg('circle', { r: 25, class: 'rt-graph-halo' }), circle = svg('circle', { r: 20, class: 'rt-graph-surface' });
+      const title = svg('title'), underlay = svg('circle', { r: 20, class: 'rt-graph-underlay', 'aria-hidden': true });
+      const artwork = svg('g', { class: 'rt-graph-avatar' }), circle = svg('circle', { r: 20, class: 'rt-graph-surface' });
+      const border = svg('circle', { r: 20, class: 'rt-graph-border', 'aria-hidden': true });
       const initial = svg('text', { y: 5, 'text-anchor': 'middle', class: 'rt-graph-initial' });
       const clipID = prefix + (++nodeNumber), clip = svg('clipPath', { id: clipID }); clip.append(svg('circle', { r: 20 })); defs.append(clip);
       const image = svg('image', { x: -20, y: -20, width: 40, height: 40, 'clip-path': 'url(#' + clipID + ')' });
       image.addEventListener('error', () => image.setAttribute('visibility', 'hidden'));
       const label = svg('text', { y: 40, 'text-anchor': 'middle', class: 'rt-graph-label' });
       const count = svg('text', { y: 56, 'text-anchor': 'middle', class: 'rt-graph-count' });
-      group.append(title, halo, circle, initial, image, label, count); nodeLayer.append(group);
+      // Keep the backing opaque when fading the artwork so graph lines never show through an avatar.
+      artwork.append(circle, initial, image); group.append(title, underlay, artwork, border, label, count); nodeLayer.append(group);
       group.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); select('node', n.id); } });
       group.addEventListener('pointerdown', event => {
         if (event.button !== 0) return;
@@ -91,7 +99,7 @@
     function edgeEntry(edge) {
       const group = svg('g', { class: 'rt-graph-edge' }), title = svg('title'), path = svg('path', { class: 'rt-graph-line' });
       const hit = svg('path', { class: 'rt-graph-hit', role: 'button', tabindex: 0 });
-      hit.append(title); group.append(path, hit); edgeLayer.append(group); activate(hit, () => select('edge', edge.id));
+      hit.append(title); group.append(hit, path); edgeLayer.append(group); activate(hit, () => select('edge', edge.id));
       return { root: group, path, hit, title, data: edge };
     }
     function fit() {
