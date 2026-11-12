@@ -112,10 +112,12 @@ type AdminTrackTitleSearchRepository interface {
 // AdminTrackListFilterRepository provides the combined server-side filters used by the admin track list.
 type AdminTrackListFilterRepository interface {
 	ListAdminTracks(ctx context.Context, filter AdminTrackListFilter, cursor *models.TrackListCursor, limit int) ([]*models.Track, int64, error)
+	CountAdminTrackMissing(ctx context.Context, filter AdminTrackListFilter) (map[string]int64, error)
 }
 
 type AdminTrackListFilter struct {
-	Title string
+	Title     string
+	TrackType string
 	// CityCode 单城市精确筛选；CityCodes 为省份展开的城市集合，两者同时存在时取交集语义中的 CityCode 优先。
 	CityCode               string
 	CityCodes              []string

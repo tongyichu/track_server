@@ -183,6 +183,7 @@
       filterRegions = cities;
       cities.filter(function (item) { return item.level === 'province'; }).forEach(function (item) { provinceFilter.add(new Option(item.name, item.code)); });
       populateFilterCities();
+      AdminRegionPicker.enhance(provinceFilter, cityFilter, cities);
     } catch (error) {
       AdminUI.alert('城市列表加载失败: ' + (error.message || error), 'danger');
     }

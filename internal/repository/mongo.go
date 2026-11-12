@@ -494,16 +494,16 @@ func (r *MongoTrackRepository) ListAdminTracksByTitle(ctx context.Context, title
 	return items, total, err
 }
 
-func (r *MongoTrackRepository) ListAdminTracks(ctx context.Context, filter AdminTrackListFilter, cursor *models.TrackListCursor, limit int) ([]*models.Track, int64, error) {
-	if limit <= 0 {
-		limit = 20
-	}
+func adminTrackMongoBase(filter AdminTrackListFilter) bson.M {
 	query := bson.M{"status": bson.M{"$ne": models.TrackStatusDeleted}}
 	if filter.Status != nil && *filter.Status == models.TrackStatusDeleted {
 		query = bson.M{"status": models.TrackStatusDeleted}
 	}
 	if filter.Title != "" {
 		query["title"] = primitive.Regex{Pattern: regexp.QuoteMeta(filter.Title), Options: "i"}
+	}
+	if filter.TrackType != "" {
+		query["track_type"] = filter.TrackType
 	}
 	if filter.CityCode != "" {
 		query["city_code"] = bson.M{"$in": config.CityCodeCandidates(filter.CityCode)}
@@ -514,11 +514,16 @@ func (r *MongoTrackRepository) ListAdminTracks(ctx context.Context, filter Admin
 		query["status"] = *filter.Status
 	}
 	if filter.UserIDs != nil {
-		if len(filter.UserIDs) == 0 {
-			return []*models.Track{}, 0, nil
-		}
 		query["user_id"] = bson.M{"$in": filter.UserIDs}
 	}
+	return query
+}
+
+func (r *MongoTrackRepository) ListAdminTracks(ctx context.Context, filter AdminTrackListFilter, cursor *models.TrackListCursor, limit int) ([]*models.Track, int64, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	query := adminTrackMongoBase(filter)
 	if filter.Missing != "" {
 		return r.listAdminTracksWithMissing(ctx, query, filter, cursor, limit)
 	}

@@ -1351,6 +1351,19 @@ func (h *Handler) ListTracks(ctx context.Context, c *app.RequestContext) {
 	}
 	limit := parseAdminListLimit(string(c.Query("limit")))
 	title := strings.TrimSpace(string(c.Query("title")))
+	trackType := strings.TrimSpace(string(c.Query("track_type")))
+	trackTypes := make([]utils.H, 0, len(config.DefaultTrackTypeConfigs))
+	validType := trackType == ""
+	for _, item := range config.DefaultTrackTypeConfigs {
+		trackTypes = append(trackTypes, utils.H{"code": item.Type, "name": item.Name})
+		if item.Type == trackType {
+			validType = true
+		}
+	}
+	if !validType {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid track_type"})
+		return
+	}
 	userName := strings.TrimSpace(string(c.Query("user_name")))
 	cityCode := strings.TrimSpace(string(c.Query("city_code")))
 	statusRaw := strings.TrimSpace(string(c.Query("status")))
@@ -1424,17 +1437,22 @@ func (h *Handler) ListTracks(ctx context.Context, c *app.RequestContext) {
 		c.JSON(http.StatusInternalServerError, utils.H{"error": "track list filters not configured"})
 		return
 	}
-	filter := repository.AdminTrackListFilter{Title: title, CityCode: cityCode, Status: status, UserIDs: matchedUserIDs, Missing: missing}
+	filter := repository.AdminTrackListFilter{Title: title, TrackType: trackType, CityCode: cityCode, Status: status, UserIDs: matchedUserIDs, Missing: missing}
 	if cityCode == "" && provinceCode != "" {
 		filter.CityCodes = adminCityCodesOfProvince(provinceCode)
 	}
-	if (missing == "any" || missing == "place_candidate") && h.trackPlaceSvc != nil {
+	candidateCountsUnavailable := false
+	if h.trackPlaceSvc != nil {
 		candidateIDs, err := h.trackPlaceSvc.PendingPlaceCandidateTrackIDs(ctx)
 		if err != nil {
-			h.trackPlaceServiceError(c, err)
-			return
+			if missing == "any" || missing == "place_candidate" {
+				h.trackPlaceServiceError(c, err)
+				return
+			}
+			candidateCountsUnavailable = true
+		} else {
+			filter.PlaceCandidateTrackIDs = candidateIDs
 		}
-		filter.PlaceCandidateTrackIDs = candidateIDs
 	}
 	if userName == "" {
 		filter.UserIDs = nil
@@ -1443,6 +1461,10 @@ func (h *Handler) ListTracks(ctx context.Context, c *app.RequestContext) {
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
 		return
+	}
+	missingCounts, missingCountsErr := trackSearch.CountAdminTrackMissing(ctx, filter)
+	if candidateCountsUnavailable {
+		delete(missingCounts, "place_candidate")
 	}
 	h.decorateAdminTrackAssetURLs(ctx, items)
 	userIDs := make([]int64, 0, len(items))
@@ -1491,9 +1513,12 @@ func (h *Handler) ListTracks(ctx context.Context, c *app.RequestContext) {
 			CityName: config.CityNameByCode(config.CanonicalCityCode(item.CityCode))})
 	}
 	resp := utils.H{
-		"items":    listItems,
-		"total":    total,
-		"has_more": len(items) == limit,
+		"items":                      listItems,
+		"total":                      total,
+		"has_more":                   len(items) == limit,
+		"track_types":                trackTypes,
+		"missing_counts":             missingCounts,
+		"missing_counts_unavailable": missingCountsErr != nil || candidateCountsUnavailable,
 	}
 	if len(items) == limit {
 		last := items[len(items)-1]

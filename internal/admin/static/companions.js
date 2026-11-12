@@ -168,6 +168,7 @@
   loadRegions().then(function (regions) {
     populateProvinceOptions(regions);
     populateCityOptions(regions, '');
+    AdminRegionPicker.enhance(provinceFilter, cityFilter, regions, { label: '发起人所在地' });
   }).catch(function () { /* 省市选项加载失败时保留输入筛选可用 */ });
   provinceFilter.addEventListener('change', function () {
     loadRegions().then(function (regions) { populateCityOptions(regions, provinceFilter.value); }).catch(function () {});
@@ -202,6 +203,7 @@
     ownerNameFilter.value = '';
     selectType('');
     provinceFilter.value = '';
+    cityFilter.value = '';
     loadRegions().then(function (regions) { populateCityOptions(regions, ''); }).catch(function () {});
     resetSearch();
   });
