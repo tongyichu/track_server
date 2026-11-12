@@ -89,3 +89,9 @@ go build ./...、node --check、git diff --check及后台HTML控件引用静态�
 - Go build ./... 通过；realtime_graph/network/chat/main及ui.js均通过 node --check，git diff --check 通过。已静态检查HTML结构、控件ID与嵌入资源路径；未启动额外环境、未新增或运行单元/接口/UI测试，实际权限、Broker断开/重连、窄屏与视觉由用户手动验收。
 - 交互预览位于 /Users/foxcoder/work/realtime-network-preview.html，复用真实关系图渲染器，明确标注示例数据，支持私信/房间切换、点击线和模拟小林下线。示例不写入真实页面或后端。
 - 本轮未提交、推送或部署；此前通知详情固定顶部/底部的HTML/CSS及流程文档改动仍保留。现有根/admin AGENTS 的只读、资源、三仓储和验证约束适用，无需修改规则。
+
+## 私信连线详情改为气泡对话（2026-11-12）
+
+- 用户要求选中线段后的详情参照客户端聊天界面。仅修改 track-server-backup 的 realtime_chat.js / realtime.css：锁定双方的连线详情使用左右气泡、发送者头像和昵称、居中北京时间（相邻消息间隔5分钟显示），支持长文本换行和已有轨迹分享内容。连线源用户固定在右侧，另一用户在左侧；账号全部私信及联系人筛选仍保留原时间流。
+- 沿用默认底部最新消息、历史分页阅读锚点、增量更新、关闭/切换取消请求与只读语义；未增加接口、数据结构、依赖或配置，现有根/admin AGENTS 入口和边界无需调整。协议与工作流已同步。
+- go build ./...、node --check internal/admin/static/realtime_chat.js、git diff --check 通过；未新增或运行测试，实际桌面/窄屏与视觉由用户手动验收。本次气泡改动未提交、推送或部署，基于此前已部署的 d850da1。

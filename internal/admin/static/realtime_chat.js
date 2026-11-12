@@ -23,9 +23,9 @@
     contactPanel.append(el('h3', '按联系人筛选', 'realtime-detail-title'), allContacts, contacts, contactsError, moreContacts); if (!locked) sidebar.append(contactPanel);
     const heading = el('div', null, 'rt-chat-heading'), identity = el('div', null, 'rt-chat-identity'), refresh = button('刷新消息');
     heading.append(identity, refresh);
-    const feed = el('div', null, 'rt-chat-feed'); feed.tabIndex = 0; feed.setAttribute('aria-label', '账号私信消息流，向上翻阅历史记录');
+    const feed = el('div', null, locked ? 'rt-chat-feed rt-dialog-feed' : 'rt-chat-feed'); feed.tabIndex = 0; feed.setAttribute('aria-label', locked ? '双方私信对话，向上翻阅历史消息' : '账号私信消息流，向上翻阅历史记录');
     const older = button('下拉查看更早消息', 'btn btn-sm btn-outline-secondary rt-chat-history'), messages = el('div', null, 'rt-chat-messages');
-    const placeholder = el('p', '正在加载消息流…', 'rt-chat-placeholder text-secondary'); messages.append(placeholder); feed.append(older, messages);
+    const placeholder = el('p', locked ? '正在加载对话…' : '正在加载消息流…', 'rt-chat-placeholder text-secondary'); messages.append(placeholder); feed.append(older, messages);
     const status = el('span', '', 'text-secondary small'), newest = button('回到最新消息'); newest.hidden = true;
     const footer = el('div', null, 'rt-chat-footer'); footer.append(status, newest);
     host.append(heading, feed, footer, el('p', locked ? '双方全部设备的存储私信；查看不会标记已读。' : '只读查看账号全部设备的存储私信；查看不会标记已读。', 'text-secondary small rt-chat-note'));
@@ -98,7 +98,32 @@
       allContacts.classList.toggle('active', !peer); allContacts.setAttribute('aria-pressed', String(!peer));
       renderHeading(); controls();
     }
+    function messageContent(message, className) {
+      const content = el('div', null, className);
+      content.append(el('p', message.content || (message.track_id ? '分享轨迹' : '（无文本内容）')));
+      if (message.track_id) { const track = el('div', null, 'rt-chat-track'); track.append(el('strong', '分享轨迹'), el('small', message.track_id)); content.append(track); }
+      return content;
+    }
+    function dialogueNode(message) {
+      const own = message.sender_id === item.user_id, author = person(message.sender_id);
+      const article = el('article', null, 'rt-dialog-message' + (own ? ' is-outgoing' : ''));
+      const time = el('time', AdminTime.dateTime(message.created_at), 'rt-dialog-time text-secondary'); time.dateTime = message.created_at;
+      const row = el('div', null, 'rt-dialog-row'), body = el('div', null, 'rt-dialog-body');
+      const name = el('span', author.nickname, 'rt-dialog-name text-secondary'); name.title = author.nickname + ' · ' + author.id;
+      const bubble = messageContent(message, 'rt-dialog-bubble'); bubble.title = AdminTime.dateTime(message.created_at);
+      body.append(name, bubble); row.append(avatar(author), body); article.append(time, row); return article;
+    }
+    function syncDialogueTimes() {
+      let previous = null;
+      for (const row of messages.children) {
+        const time = row.querySelector('.rt-dialog-time'); if (!time) continue;
+        const current = Date.parse(time.dateTime);
+        time.hidden = previous != null && Number.isFinite(current) && Number.isFinite(previous) && current >= previous && current - previous < 5 * 60 * 1000;
+        previous = current;
+      }
+    }
     function messageNode(message) {
+      if (locked) return dialogueNode(message);
       const own = message.sender_id === item.user_id;
       const article = el('article', null, 'rt-stream-message'), top = el('div', null, 'rt-stream-top');
       const direction = el('span', own ? '发出' : '收到', 'badge ' + (own ? 'bg-blue-lt' : 'bg-green-lt'));
@@ -110,10 +135,7 @@
         text.append(el('strong', current.nickname), el('small', current.id, 'text-secondary'));
         identity.append(avatar(current), text); route.append(identity);
       }
-      const content = el('div', null, 'rt-stream-content');
-      content.append(el('p', message.content || (message.track_id ? '分享轨迹' : '（无文本内容）')));
-      if (message.track_id) { const track = el('div', null, 'rt-chat-track'); track.append(el('strong', '分享轨迹'), el('small', message.track_id)); content.append(track); }
-      article.append(top, route, content); return article;
+      article.append(top, route, messageContent(message, 'rt-stream-content')); return article;
     }
     function bottom() { feed.scrollTop = feed.scrollHeight; newest.hidden = true; }
     function mergeMessages(page, mode) {
@@ -130,6 +152,7 @@
         if (old) old.row.replaceWith(row); else { fragment.append(row); inserted++; }
       }
       if (mode === 'older') messages.prepend(fragment); else messages.append(fragment);
+      if (locked) syncDialogueTimes();
       if (mode !== 'newer') { nextCursor = page.next_cursor || ''; hasOlder = page.has_more; }
       if (mode !== 'older') { if (page.latest_seq) latestSeq = page.latest_seq; if (page.latest_cursor) latestCursor = page.latest_cursor; }
       chatReady = true; older.textContent = hasOlder ? '下拉查看更早消息' : '已到最早消息';
@@ -151,7 +174,7 @@
     async function initialize() {
       if (initializing || disposed || document.hidden) return;
       const epoch = lifecycle;
-      initializing = true; controls(); status.textContent = '正在加载消息流…'; status.className = 'text-secondary small';
+      initializing = true; controls(); status.textContent = locked ? '正在加载对话…' : '正在加载消息流…'; status.className = 'text-secondary small';
       try {
         const data = await request('initial', 'clients/detail?' + new URLSearchParams({ client_id: item.client_id, peer_id: initialPeer })); if (!data) return;
         receive(data); initialized = true; setPeer(data.peer_id); renderContacts(data.conversations, true); mergeMessages(data.messages, 'initial'); renderHeading();
