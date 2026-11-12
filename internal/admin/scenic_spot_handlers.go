@@ -62,7 +62,7 @@ func (h *Handler) ListScenicSpots(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 	view := strings.TrimSpace(string(c.Query("view")))
-	if view != "" && view != "summary" {
+	if view != "" && view != "summary" && view != "picker" {
 		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid scenic spot list view"})
 		return
 	}
@@ -92,6 +92,41 @@ func (h *Handler) ListScenicSpots(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 	f.VisibleOnly = f.Status == ""
+	if view == "picker" {
+		if f.Query == "" || utf8.RuneCountInString(f.Query) > 160 || f.Status != "" || f.Missing != "" {
+			c.JSON(http.StatusBadRequest, utils.H{"error": "picker requires a name query and active scenic spots"})
+			return
+		}
+		// Name lookup needs only one bounded catalog page, without ranking all
+		// matches or reading their related-track statistics.
+		limit := min(f.Limit, 20)
+		f.Limit = limit + 1
+		items, _, err := h.scenicSpotSvc.List(ctx, f)
+		if err != nil {
+			h.scenicSpotServiceError(c, err)
+			return
+		}
+		hasMore := len(items) > limit
+		if hasMore {
+			items = items[:limit]
+		}
+		metadata := scenicSpotCities(items, nil)
+		type pickerItem struct {
+			ID         string   `json:"id"`
+			Name       string   `json:"name"`
+			CityLabels []string `json:"related_city_labels"`
+		}
+		picks := make([]pickerItem, 0, len(items))
+		next := ""
+		for _, spot := range items {
+			picks = append(picks, pickerItem{ID: spot.ID, Name: spot.Name, CityLabels: metadata[spot.ID].CityLabels})
+		}
+		if hasMore {
+			next = items[len(items)-1].ID
+		}
+		c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"items": picks, "has_more": hasMore, "next_cursor": next}})
+		return
+	}
 	page, err := h.scenicSpotSvc.ListRanked(ctx, f)
 	if err != nil {
 		h.scenicSpotServiceError(c, err)

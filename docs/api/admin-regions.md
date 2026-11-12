@@ -20,7 +20,7 @@ MySQL、Mongo、内存实现均在总数统计及游标分页前应用地域条�
 
 ### 景点目录轻量摘要
 
-目录页请求 `GET /admin/api/scenic-spots?view=summary`。不传view保留原完整条目响应；非空且非summary返回400。总数、地域和缺项筛选范围不变，排序及游标遵循上方景点管理约定，沿用景点查看权限及no-store。
+目录页请求 `GET /admin/api/scenic-spots?view=summary`，不传view保留完整条目，总数、地域/缺项筛选及全局排序/游标不变。另提供手动关联用view=picker：q必填且≤160字符，仅active、禁止status/missing，最多20项，按ID游标读取单页，返回items（id/name/related_city_labels）、has_more、next_cursor，不返回total或统计、不全局排名、不读关联轨迹。均沿用景点查看权限和no-store；其他view返回400。详见[手动录入景点](admin-tracks.md#手动录入景点)。
 
 summary条目仅包含：
 

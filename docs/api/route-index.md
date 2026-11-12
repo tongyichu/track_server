@@ -181,10 +181,10 @@
 | 后台轨迹类型与贡献用户前十（天/周/月） | GET | `/admin/api/tracks/statistics` | 轨迹查看 | [admin-tracks.md](admin-tracks.md#轨迹类型与用户贡献统计) |
 | 后台轨迹坐标系预览 | GET | `/admin/api/tracks/:track_id/map-preview` | 轨迹查看 | [admin-tracks.md](admin-tracks.md#编辑字段与坐标预览) |
 | 后台批量导入轨迹（逐文件结果含轨迹表格摘要） | POST | `/admin/api/tracks/import` | 轨迹操作 | [admin-tracks.md](admin-tracks.md) |
-| 后台轨迹详情（归属和文件指标只读，时间按北京时间显示） | GET | `/admin/api/tracks/:track_id` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |
+| 后台轨迹详情（含图案/景点AI状态快照；归属和文件指标只读） | GET | `/admin/api/tracks/:track_id` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |
 | 后台轨迹预览与原始文件下载（raw支持metadata=1元信息；legacy已停用） | GET | `/admin/api/tracks/:track_id/assets/:asset` | 轨迹查看 | [admin-tracks.md](admin-tracks.md#详情资源展示与下载) |
 | 单条轨迹重新识别 | POST | `/admin/api/tracks/:track_id/place-refresh` | 轨迹操作 | [admin-tracks.md](admin-tracks.md) |
-| 地图 POI 设置轨迹景点标签 | POST | `/admin/api/tracks/:track_id/scenic-spot` | 轨迹及景点操作 | [admin-tracks.md](admin-tracks.md#地图点选景点标签) |
+| 地图POI / 目录选择 / 人工名称设置轨迹景点标签 | POST | `/admin/api/tracks/:track_id/scenic-spot` | 轨迹及景点操作 | [地图点选](admin-tracks.md#地图点选景点标签)、[手动录入](admin-tracks.md#手动录入景点) |
 | 轨迹地图高德配置 / 服务代理 | GET | `/admin/api/tracks/map-config`、`/admin/api/tracks/amap-service/*filepath` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |
 | 单条轨迹景点候选 | GET | `/admin/api/tracks/:track_id/place-candidates` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |
 | 轨迹景点候选队列（兼容） | GET | `/admin/api/place-candidates` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |
@@ -201,3 +201,5 @@
 - `PUT /admin/api/tracks/:track_id/description`：轨迹写权限，候选区“一键代入并保存”，校验 source_version 并只保存说明，见 [后台协议](admin-tracks.md#路线说明与-ai-联网填写)。
 
 活动通知已有GET/POST/PUT路由不变，本轮扩展覆盖方式、定时状态与发布轮次；App通知ID按不透明发布轮次原样回传，协议见[messages](messages.md#活动通知管理)。
+
+后台景点名称选择器：GET `/admin/api/scenic-spots?view=picker&q=名称`（景点查看），单页最多20个active名称、按ID游标，不参与目录全局排名，不读取轨迹统计；见[手动录入景点](admin-tracks.md#手动录入景点)。

@@ -1577,6 +1577,7 @@ func (h *Handler) GetTrack(ctx context.Context, c *app.RequestContext) {
 	var labelGeneration interface{}
 	var labelGenerationReady bool
 	var geoIndex *models.TrackGeoIndex
+	var placeRecognitionStatus string
 	var reads sync.WaitGroup
 	read := func(fn func()) {
 		reads.Add(1)
@@ -1620,9 +1621,16 @@ func (h *Handler) GetTrack(ctx context.Context, c *app.RequestContext) {
 	})
 	read(func() {
 		if h.trackMapRepo != nil {
-			if index, err := h.trackMapRepo.FindTrackGeoIndex(ctx, track.ID); err == nil {
+			index, err := h.trackMapRepo.FindTrackGeoIndex(ctx, track.ID)
+			if err == nil {
 				geoIndex = index
+			} else if !errors.Is(err, repository.ErrNotFound) {
+				// A failed read is unknown, rather than a queued/no-result state.
+				return
 			}
+		}
+		if status, err := h.trackPlaceSvc.AdminRecognitionStatus(ctx, track.ID, geoIndex); err == nil {
+			placeRecognitionStatus = status
 		}
 	})
 	reads.Wait()
@@ -1635,6 +1643,9 @@ func (h *Handler) GetTrack(ctx context.Context, c *app.RequestContext) {
 	}
 	if labelGenerationReady {
 		data["label_generation"] = labelGeneration
+	}
+	if placeRecognitionStatus != "" {
+		data["place_recognition_status"] = placeRecognitionStatus
 	}
 	if geoIndex != nil && geoIndex.SimplifiedPolylineJSON != "" {
 		data["geo"] = utils.H{

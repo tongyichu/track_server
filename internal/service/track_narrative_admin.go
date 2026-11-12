@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/tongyichu/track_server/internal/ai"
@@ -116,7 +117,7 @@ func (s *TrackNarrativeService) lastShapePreview(ctx context.Context, id string)
 
 func (s *TrackNarrativeService) AdminStatus(ctx context.Context, id string) (interface{}, error) {
 	if s == nil {
-		return map[string]string{"status": "unconfigured"}, nil
+		return map[string]string{"status": "unconfigured", "shape_recognition_status": "waiting"}, nil
 	}
 	var state narrativeState
 	if err := s.readState(ctx, "narrative:track:"+id, &state); err != nil {
@@ -138,5 +139,23 @@ func (s *TrackNarrativeService) AdminStatus(ctx context.Context, id string) (int
 			reason = "等待后台轮转或可用调用额度"
 		}
 	}
-	return map[string]interface{}{"status": status, "reason": reason, "attempts": state.Attempts, "first_seen": state.FirstSeen, "next_attempt": state.NextAttempt, "learning": s.shapeLearningStatus(ctx, id), "shape_preview": s.lastShapePreview(ctx, id)}, nil
+	shapeStatus := "waiting"
+	switch status {
+	case "running":
+		if state.NextAttempt.After(time.Now()) {
+			shapeStatus = "running"
+		}
+	case "ready":
+		shapeStatus = "running"
+	case "complete":
+		// A completed task can have skipped a manually locked shape. Only an
+		// AI-owned result proves that recognition actually finished.
+		if state.OwnsShape {
+			shapeStatus = "found"
+			if strings.TrimSpace(state.LastShape) == "" {
+				shapeStatus = "not_found"
+			}
+		}
+	}
+	return map[string]interface{}{"status": status, "shape_recognition_status": shapeStatus, "reason": reason, "attempts": state.Attempts, "first_seen": state.FirstSeen, "next_attempt": state.NextAttempt, "learning": s.shapeLearningStatus(ctx, id), "shape_preview": s.lastShapePreview(ctx, id)}, nil
 }

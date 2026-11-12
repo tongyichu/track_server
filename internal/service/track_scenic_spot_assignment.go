@@ -18,6 +18,8 @@ type TrackMapScenicSpotInput struct {
 	Address        string  `json:"address"`
 	Latitude       float64 `json:"latitude"`
 	Longitude      float64 `json:"longitude"`
+	ScenicSpotID   string  `json:"scenic_spot_id"`
+	ManualName     string  `json:"manual_name"`
 	ExpectedSpotID *string `json:"expected_spot_id"`
 }
 
@@ -25,6 +27,9 @@ type TrackMapScenicSpotInput struct {
 func (s *ScenicSpotCatalogService) AssignTrackMapScenicSpot(ctx context.Context, operator, trackID string, input TrackMapScenicSpotInput) (*models.ScenicSpot, error) {
 	if input.ExpectedSpotID == nil {
 		return nil, invalidScenicSpot("expected_spot_id is required")
+	}
+	if input.ScenicSpotID != "" || input.ManualName != "" {
+		return s.assignTrackManualScenicSpot(ctx, operator, trackID, input)
 	}
 	input.ProviderID = strings.TrimSpace(input.ProviderID)
 	if input.ProviderID == "" || len(input.ProviderID) > 512 || strings.TrimSpace(input.Name) == "" {

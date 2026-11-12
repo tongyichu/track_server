@@ -325,7 +325,7 @@ Kimi 景点简介使用 `MOONSHOT_API_KEY` 和可选的 `KIMI_SCENIC_DESCRIPTION
 - `permission_snapshot.go` 提供用户详情的设备快照读取，路由 `/users/:user_id/permission-snapshots` 归属 users 读取权限。`static/user_permissions.js` 在设备权限首次展开时独立异步加载，关闭/切用户取消旧请求；按安装实例显示机型、版本、采集和收到时间，非实时状态。已开启绿色、未开启红色、未知/不适用灰色，普通系统权限折叠；未知项用 textContent 安全显示，禁止把无上报视为关闭。
 ## 标签管理入口补充
 
-共享 track_editor.js 展示统一 labels 和 label_generation，提供 AI 形象建议及人工 shape_label 输入。POST /admin/api/tracks/:track_id/labels/generate 属 tracks 写权限，复用 TrackNarrativeService 租约和日预算，只填表不落库，保存仍用原 PUT。关闭弹窗取消请求，异步结果不覆盖后来输入。精品、运动、景点沿用原权威来源，不接受独立 labels 写入。实现见 track_labels.go 和 service/track_narrative_admin.go。
+共享track_editor.js将标签收为三行单值：运动类型下拉，图案/景点当前名＋小浮层。图案可人工填写/清除，随原PUT保存并保留人工学习保护；景点可选候选、目录搜索、确认新名称后创建关联或地图点选，操作立即写入、保留其他草稿。详情新增只读shape_recognition_status/place_recognition_status，映射“AI等待查询/AI正在查询/AI没有查到”，有名称优先。两类手动AI按钮与诊断展示移除，生成/刷新API及自动上传后台任务保留。目录view=picker只查最多20项，300ms防抖和10秒超时/取消，双权限与expected_spot_id CAS沿用原景点关联接口；不新增仓储或表结构。协议见docs/api/admin-tracks.md。
 
 
 ### 景点详情删除与景区等级
