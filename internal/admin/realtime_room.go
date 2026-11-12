@@ -56,12 +56,25 @@ func (h *Handler) RealtimeRoom(ctx context.Context, c *app.RequestContext) {
 		c.JSON(503, utils.H{"error": "位置快照暂不可用，请重试"})
 		return
 	}
-	danmakus, err := h.companionRepo.ListDanmakusBySessionID(work, sessionID, 30)
+	danmakus, err := h.companionRepo.ListDanmakusBySessionID(work, sessionID, 201)
 	if err != nil {
 		c.JSON(503, utils.H{"error": "房间弹幕暂不可用，请重试"})
 		return
 	}
-	ids := []int64{}
+	messagesLimited := len(danmakus) > 200
+	if messagesLimited {
+		danmakus = danmakus[:200]
+	}
+	events, err := h.companionRepo.ListEventsBySessionID(work, sessionID, nil, 101, false)
+	if err != nil {
+		c.JSON(503, utils.H{"error": "房间事件暂不可用，请重试"})
+		return
+	}
+	eventsLimited := len(events) > 100
+	if eventsLimited {
+		events = events[:100]
+	}
+	ids := []int64{room.OwnerUserID}
 	items := []utils.H{}
 	for _, member := range members {
 		id := strconv.FormatInt(member.UserID, 10)
@@ -77,6 +90,16 @@ func (h *Handler) RealtimeRoom(ctx context.Context, c *app.RequestContext) {
 		ids = append(ids, message.UserID)
 		messages = append(messages, service.RealtimeMessage{ID: strconv.FormatInt(message.ID, 10), SenderID: strconv.FormatInt(message.UserID, 10), Content: message.Content, CreatedAt: message.CreatedAt})
 	}
+	eventItems := []utils.H{}
+	for _, event := range events {
+		ids = append(ids, event.OwnerUserID)
+		targetID := ""
+		if event.TargetUserID > 0 {
+			targetID = strconv.FormatInt(event.TargetUserID, 10)
+			ids = append(ids, event.TargetUserID)
+		}
+		eventItems = append(eventItems, utils.H{"id": strconv.FormatInt(event.ID, 10), "owner_user_id": strconv.FormatInt(event.OwnerUserID, 10), "target_user_id": targetID, "event_type": event.EventType, "title": event.Title, "content": event.Content, "event_time": event.EventTime, "created_at": event.CreatedAt})
+	}
 	if h.messages == nil {
 		c.JSON(503, utils.H{"error": "成员用户资料暂不可用"})
 		return
@@ -90,5 +113,5 @@ func (h *Handler) RealtimeRoom(ctx context.Context, c *app.RequestContext) {
 		person.AvatarURL = rewriteAdminStaticURL(person.AvatarURL)
 		people[id] = person
 	}
-	c.JSON(200, utils.H{"code": 0, "data": utils.H{"room": utils.H{"session_id": room.SessionID, "title": room.Title, "owner_id": strconv.FormatInt(room.OwnerUserID, 10), "status": room.Status, "started_at": room.StartedAt}, "members": items, "positions": points, "messages": messages, "people": people, "sampled_at": snapshot.SampledAt, "status": snapshot.Status}})
+	c.JSON(200, utils.H{"code": 0, "data": utils.H{"room": utils.H{"session_id": room.SessionID, "title": room.Title, "owner_id": strconv.FormatInt(room.OwnerUserID, 10), "status": room.Status, "started_at": room.StartedAt}, "members": items, "positions": points, "messages": messages, "events": eventItems, "messages_limited": messagesLimited, "events_limited": eventsLimited, "people": people, "sampled_at": snapshot.SampledAt, "status": snapshot.Status}})
 }

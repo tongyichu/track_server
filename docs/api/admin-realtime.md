@@ -47,7 +47,11 @@ status 为 ok / partial / stale / unavailable / unconfigured。未配置或从�
 
 点击私信连线在右侧显示双方的只读气泡对话，参照客户端聊天页：连线源用户在右侧浅蓝气泡、另一用户在左侧普通气泡，每条展示发送者头像与昵称，时间居中并按相邻消息5分钟间隔分组（北京时间，悬停气泡可查看每条时间）。初始传 peer_id 并锁定对象，不展示其他联系人的过滤控件；默认定位底部最新消息，保留历史分页、增量刷新与阅读锚点。右侧打开期间若代表连接变化但用户仍在线，更新代表 client_id；所选节点/边消失时关闭并取消详情请求。点击用户可查看身份、在线连接数及独立连接诊断。
 
-点击同行房间/连线/成员在右侧打开房间详情。`GET /network/room` 先检验当前采样中该房间至少一条在线同行连接，再查询房间及成员；有效完整样本中房间已不在线返回409，未采样/部分采样/旧样本无法确认时返回503。成功响应 `{room,members,positions,messages,people,sampled_at,status}`：room 仅含 session_id/title/owner_id/status/started_at，成员仅含 user_id/role/member_status/connections/last_seen_at；positions 按用户字符串ID索引，包含坐标、明确坐标系和 recorded_at，表示位置快照，不宣称实时定位。messages 为最近30条存储弹幕，people 为批量读取的头像昵称；不返回 MQTT principal、凭证或房间加入 token。复用既有同行仓储，底层能力不可用明确返回503。
+点击同行房间中心或房间连线，在右侧打开群聊式时间流：弹幕使用发送者头像、昵称和气泡，已存储关键事件使用提示卡，标注关联成员及“房主上报”，按事件发生时间与弹幕创建时间合并排序，默认定位最新记录。点击成员头像则打开此人在当前房间的个人事件列表，包含本人发送的弹幕、target_user_id 为本人的关键事件，以及无关联成员且由本人上报的事件；不把房主上报的所有其他成员事件归给房主本人。个人列表展示每条时间，房间时间流按相邻记录5分钟间隔显示居中时间，均为北京时间。刷新复用记录并保留阅读锚点，未在底部时提供“回到最新”；房间信息、成员资格和最新位置快照折叠展示，不将快照伪造为位置历史。
+
+`GET /network/room` 先检验当前采样中该房间至少一条在线同行连接，再查询房间及成员；有效完整样本中房间已不在线返回409，未采样/部分采样/旧样本无法确认时返回503。成功响应 `{room,members,positions,messages,events,messages_limited,events_limited,people,sampled_at,status}`：room 仅含 session_id/title/owner_id/status/started_at，成员仅含 user_id/role/member_status/connections/last_seen_at；positions 按用户字符串ID索引，包含坐标、明确坐标系和 recorded_at，表示位置快照，不宣称实时定位。messages 为最近最多200条存储弹幕，events 为最近最多100条已存储关键事件，分别额外查询一条判断 limited；页面明确显示本次载入范围和截断，个人列表仅筛选这些已加载的房间记录，不宣称全量历史。每次刷新使用最新有界记录窗口，失败保留上次内容。
+
+events 每条为 `{id,owner_user_id,target_user_id,event_type,title,content,event_time,created_at}`，所有ID为字符串，未关联成员的 target_user_id 为空字符串。七类关键事件为 member_left / member_disconnected / member_reconnected / notice_sent / checkpoint_reached / risk_reported / custom，仅展示业务库中房主已上报的记录，不推测未持久化的 MQTT 控制消息、连接历史或所有状态变更。people 包含成员、弹幕发送者、事件上报者与关联成员的头像昵称，按唯一ID集合批量查询；不返回事件 metadata/client_event_id、MQTT principal、凭证或房间加入 token。复用既有同行仓储方法，MySQL/内存按现有查询语义读取；Mongo 既有弹幕/事件方法未实现时明确返回503，不伪造空记录。
 
 图及其详情使用 realtime 查看权限，同行图与房间详情额外要求 companions 查看权限；服务端 permissions.go 和 handler 均校验，不能只隐藏按钮。每次业务读取预算3秒，前端请求10秒超时；关闭/切换/页面隐藏取消工作，失败保留已加载内容，不修改已读、投递、房间或用户状态。
 

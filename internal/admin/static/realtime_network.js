@@ -22,58 +22,17 @@
         active = { type: 'direct', edgeID: n.id, item, stop: () => chat.stop(), refresh: () => chat.refresh(), dispose: () => lifetime.abort() };
       } else if (mode === 'companions') {
         const room = n.kind === 'membership' ? byID.get(n.source) : n;
-        if (active?.type === 'room' && active.sessionID === room.session_id) return;
-        open(room.kind === 'room' ? room.label : '同行房间'); showRoom(room.session_id);
+        if (!room) return;
+        const userID = n.kind === 'user' ? n.user_id : '';
+        if (active?.type === 'room' && active.sessionID === room.session_id && active.userID === userID) return;
+        open(userID ? n.label + ' · 个人事件' : room.label + ' · 群聊与事件');
+        active = RealtimeRoom.mount({ host: paneBody, sessionID: room.session_id, userID, api, onTitle(title) { paneTitle.textContent = title; } });
       } else {
         open(n.label);
         const info = el('dl', null, 'realtime-detail-meta rt-network-node-meta');
         for (const [label, value] of [['用户', n.label], ['用户ID', n.user_id], ['在线连接', n.connections], ['采样时间', AdminTime.dateTime(data.sampled_at)]]) info.append(el('dt', label), el('dd', value));
         paneBody.append(info, el('p', '点击相连的线，查看双方私信往来。', 'text-secondary small'), button('查看连接详情', () => showConnection(client(n))));
       }
-    }
-    function showRoom(sessionID) {
-      const status = el('p', '正在加载房间…', 'text-secondary small'), content = el('div'), refresh = button('刷新房间', () => detail.refresh());
-      paneBody.append(status, refresh, content);
-      let request, version = 0, busy = false, disposed = false, rendered = null;
-      const detail = {
-        type: 'room', sessionID,
-        stop() { request?.abort(); version++; busy = false; refresh.disabled = false; },
-        dispose() { disposed = true; this.stop(); },
-        async refresh() {
-          if (busy || disposed || document.hidden) return;
-          busy = true; refresh.disabled = true; const currentVersion = ++version, task = new AbortController(); request = task;
-          let timedOut = false; const timeout = setTimeout(() => { timedOut = true; task.abort(); }, 10000);
-          try {
-            const data = await api('network/room?' + new URLSearchParams({ session_id: sessionID }), task.signal);
-            if (disposed || task.signal.aborted || currentVersion !== version) return;
-            paneTitle.textContent = data.room.title || '同行房间';
-            const fingerprint = JSON.stringify([data.room, data.members, data.positions, data.messages, data.people]);
-            if (fingerprint !== rendered) {
-              const fragment = document.createDocumentFragment();
-              fragment.append(el('p', data.room.session_id, 'text-secondary small'), el('h3', '成员与位置快照', 'realtime-detail-title'));
-              for (const member of data.members) {
-                const person = data.people[member.user_id], position = data.positions[member.user_id], row = el('article', null, 'rt-network-member');
-                row.append(el('strong', (person?.nickname || member.user_id) + (member.role === 'owner' ? ' · 房主' : '')), el('small', member.user_id, 'text-secondary'));
-                const state = { joined: '已加入', left: '已离开', kicked: '已移出', ended: '已结束' }[member.member_status] || member.member_status;
-                row.append(el('small', state + ' · ' + (member.connections ? member.connections + ' 条在线连接' : '未采样到在线连接'), 'text-secondary'));
-                if (position) row.append(el('small', position.coordinate_system + ' · ' + Number(position.latitude).toFixed(5) + ', ' + Number(position.longitude).toFixed(5) + ' · ' + AdminTime.dateTime(position.recorded_at), 'text-secondary'));
-                else row.append(el('small', '暂无位置快照', 'text-secondary'));
-                fragment.append(row);
-              }
-              fragment.append(el('h3', '最近房间弹幕', 'realtime-detail-title'));
-              for (const message of data.messages) {
-                const row = el('article', null, 'rt-network-member'); row.append(el('small', (data.people[message.sender_id]?.nickname || message.sender_id) + ' · ' + AdminTime.dateTime(message.created_at), 'text-secondary'), el('p', message.content)); fragment.append(row);
-              }
-              if (!data.messages.length) fragment.append(el('p', '暂无弹幕', 'text-secondary small'));
-              content.replaceChildren(fragment); rendered = fingerprint;
-            }
-            status.className = 'text-secondary small'; status.textContent = '连接采样：' + AdminTime.dateTime(data.sampled_at) + (data.status === 'stale' ? '（上次采样）' : '');
-          } catch (error) {
-            if (!disposed && currentVersion === version && (timedOut || !task.signal.aborted)) { status.className = 'text-danger small'; status.textContent = (timedOut ? '房间查询超时' : error.message) + (rendered ? '，保留上次内容' : ''); }
-          } finally { clearTimeout(timeout); if (currentVersion === version) { busy = false; refresh.disabled = false; } }
-        }
-      };
-      active = detail; detail.refresh();
     }
     async function refresh(force = false) {
       if (document.hidden || loading && !force) return;
@@ -89,7 +48,7 @@
         $('networkEmpty').textContent = !data.sampled_at ? '连接数据尚未就绪' : mode === 'messages' ? '当前没有在线的消息提醒用户' : '当前没有在线的同行成员';
         $('networkCount').textContent = data.sampled_at ? mode === 'messages' ? users.length + ' 位用户 · ' + data.edges.length + ' 条私信关系' : rooms.length + ' 个房间 · ' + users.length + ' 个成员节点' : '在线状态未知';
         $('networkStatus').textContent = [data.message, data.sampled_at ? (data.status === 'stale' ? '上次采样：' : '采样：') + AdminTime.dateTime(data.sampled_at) : '', data.limited ? '局部展示：最多200个用户节点、50个房间、400条私信关系' : ''].filter(Boolean).join(' · ');
-        $('networkNote').textContent = mode === 'messages' ? '节点为在线账号，线为双方已有的私信关系。点击线查看往来；最后一条连接断开后，节点和相关连线在下次成功采样后移除。' : '每个房间独立成组，连线表示连接所属房间；只绘制已采样的在线成员，不同房间之间没有连线。';
+        $('networkNote').textContent = mode === 'messages' ? '节点为在线账号，线为双方已有的私信关系。点击线查看往来；最后一条连接断开后，节点和相关连线在下次成功采样后移除。' : '每个房间独立成组。点房间或连线查看群聊与关键事件，点成员头像查看此人在本房间的事件列表；只绘制已采样的在线成员。';
         const selected = chart.selection();
         if (active?.type === 'direct' && selected?.value?.source) {
           const source = data.nodes.find(n => n.id === selected.value.source); if (source) active.item.client_id = source.client_id;

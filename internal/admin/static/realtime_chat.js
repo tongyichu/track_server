@@ -235,5 +235,5 @@
     renderHeading(); initialize();
     return { refresh: refreshAll, stop };
   }
-  window.RealtimeChat = { mount };
+  window.RealtimeChat = { mount, avatar };
 }());
