@@ -3,7 +3,7 @@
   // Describe only facts available in historical method/path records.
   const rules = [
     ['POST', 'announcements', '创建活动或系统通知', '活动&通知', '是否已发布以通知状态及发布时间为准。'],
-    ['PUT', 'announcements/:notice', '更新活动或系统通知', '通知 {notice}', '可能涉及编辑、发布或撤回；具体状态以通知详情为准。'],
+    ['PUT', 'announcements/:notice', '更新活动或系统通知', '通知 {notice}', '可能涉及编辑、定时安排、取消定时、发布或撤回；具体状态与发布轮次以通知详情为准。'],
     ['POST', 'ai/tasks/:task/cancel', '请求中断 AI 任务', 'AI 任务 {task}', '请求成功仅代表已登记中断；最终结果以 AI 使用页为准，已发生的消耗不会撤回。'],
     ['POST', 'ai/tasks/:task/retry', '创建 AI 重试任务', 'AI 任务 {task}', '重新读取当前资料，可能产生新的消耗；完成情况见关联重试任务。'],
     ['PUT', 'ai/policies/:feature/quota', '调整 AI 每日请求配额', 'AI 功能 {feature}', '只调整请求上限，0表示不限；不清空用量，不修改暂停或并发配置。'],

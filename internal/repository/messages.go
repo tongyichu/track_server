@@ -31,6 +31,9 @@ type MessageFilter struct {
 	VisibleTo             int64
 	Audience              string
 	ExcludeNoticeReadUser int64
+	NoticeRegisteredAt    time.Time
+	NoticeUnreadOnly      bool
+	NoticeReadAfter       time.Time
 	Limit                 int
 	Asc                   bool
 }
@@ -46,6 +49,29 @@ type MessageRepository interface {
 }
 
 func MessageNoticeReadKey(user int64, id string) string { return messageReadKey(user, id) }
+func MessageNoticeClientID(r *models.MessageRecord) string {
+	if r.NoticeRound > 0 {
+		return r.ID + "~" + strconv.FormatInt(r.NoticeRound, 10)
+	}
+	return r.ID
+}
+
+func MessageNoticeEligible(r *models.MessageRecord, registered time.Time) bool {
+	if r.NoticeMode == "once" && r.CreatedAt.Before(registered) {
+		return false
+	}
+	return r.NoticeMode != "persistent" || r.NoticeUntilMicros == 0 || registered.UnixMicro() < r.NoticeUntilMicros
+}
+
+func MessageNoticeUnread(r *models.MessageRecord, registered, readAfter, now time.Time) bool {
+	if !MessageNoticeEligible(r, registered) {
+		return false
+	}
+	if r.NoticeMode == "persistent" {
+		return (r.NoticeUntilMicros == 0 || now.UnixMicro() < r.NoticeUntilMicros) && (r.CreatedAt.After(readAfter) || registered.After(readAfter))
+	}
+	return r.CreatedAt.After(readAfter) && r.CreatedAt.After(registered)
+}
 func messageReadKey(user int64, id string) string {
 	return fmtMessageUser("read.notice.", user) + "." + id
 }
@@ -64,6 +90,12 @@ func messageLimit(f MessageFilter) int {
 	return f.Limit
 }
 func messageMatches(r *models.MessageRecord, f MessageFilter) bool {
+	if !f.NoticeRegisteredAt.IsZero() && !MessageNoticeEligible(r, f.NoticeRegisteredAt) {
+		return false
+	}
+	if f.NoticeUnreadOnly && !MessageNoticeUnread(r, f.NoticeRegisteredAt, f.NoticeReadAfter, f.MaxTime) {
+		return false
+	}
 	if len(f.Kinds) > 0 {
 		found := false
 		for _, k := range f.Kinds {
@@ -173,7 +205,7 @@ func (r *MemoryMessageRepository) matches(v *models.MessageRecord, f MessageFilt
 	if !messageMatches(v, f) {
 		return false
 	}
-	return f.ExcludeNoticeReadUser <= 0 || r.rows[messageReadKey(f.ExcludeNoticeReadUser, v.ID)] == nil
+	return f.ExcludeNoticeReadUser <= 0 || r.rows[messageReadKey(f.ExcludeNoticeReadUser, MessageNoticeClientID(v))] == nil
 }
 func (r *MemoryMessageRepository) ListMessageRecords(ctx context.Context, f MessageFilter) ([]*models.MessageRecord, error) {
 	if err := ctx.Err(); err != nil {

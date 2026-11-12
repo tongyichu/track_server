@@ -146,6 +146,23 @@ func messageMongoFilter(f MessageFilter) bson.M {
 	if f.Audience != "" {
 		parts = append(parts, bson.M{"$or": bson.A{bson.M{"targets": f.Audience}, bson.M{"targets": bson.M{"$size": 0}}, bson.M{"targets": nil}}})
 	}
+	if !f.NoticeRegisteredAt.IsZero() {
+		parts = append(parts,
+			bson.M{"$or": bson.A{bson.M{"notice_mode": bson.M{"$ne": "once"}}, bson.M{"at_micros": bson.M{"$gte": f.NoticeRegisteredAt.UnixMicro()}}}},
+			bson.M{"$or": bson.A{bson.M{"notice_mode": bson.M{"$ne": "persistent"}}, bson.M{"notice_until": bson.M{"$in": bson.A{nil, int64(0)}}}, bson.M{"notice_until": bson.M{"$gt": f.NoticeRegisteredAt.UnixMicro()}}}},
+		)
+	}
+	if f.NoticeUnreadOnly {
+		persistent := bson.A{bson.M{"notice_mode": "persistent"}, bson.M{"$or": bson.A{bson.M{"notice_until": bson.M{"$in": bson.A{nil, int64(0)}}}, bson.M{"notice_until": bson.M{"$gt": f.MaxTime.UnixMicro()}}}}}
+		if !f.NoticeRegisteredAt.After(f.NoticeReadAfter) {
+			persistent = append(persistent, bson.M{"at_micros": bson.M{"$gt": f.NoticeReadAfter.UnixMicro()}})
+		}
+		cutoff := f.NoticeReadAfter
+		if f.NoticeRegisteredAt.After(cutoff) {
+			cutoff = f.NoticeRegisteredAt
+		}
+		parts = append(parts, bson.M{"$or": bson.A{bson.M{"$and": persistent}, bson.M{"notice_mode": bson.M{"$ne": "persistent"}, "at_micros": bson.M{"$gt": cutoff.UnixMicro()}}}})
+	}
 	if len(parts) == 0 {
 		return bson.M{}
 	}
@@ -154,7 +171,7 @@ func messageMongoFilter(f MessageFilter) bson.M {
 func messageMongoPipeline(f MessageFilter) mongo.Pipeline {
 	p := mongo.Pipeline{bson.D{{Key: "$match", Value: messageMongoFilter(f)}}}
 	if f.ExcludeNoticeReadUser > 0 {
-		p = append(p, bson.D{{Key: "$lookup", Value: bson.M{"from": "message_records", "let": bson.M{"receipt": bson.M{"$concat": bson.A{fmtMessageUser("read.notice.", f.ExcludeNoticeReadUser) + ".", "$_id"}}}, "pipeline": bson.A{bson.M{"$match": bson.M{"$expr": bson.M{"$eq": bson.A{"$_id", "$$receipt"}}}}}, "as": "_read"}}}, bson.D{{Key: "$match", Value: bson.M{"_read": bson.M{"$size": 0}}}})
+		p = append(p, bson.D{{Key: "$lookup", Value: bson.M{"from": "message_records", "let": bson.M{"receipt": bson.M{"$concat": bson.A{fmtMessageUser("read.notice.", f.ExcludeNoticeReadUser) + ".", "$_id", bson.M{"$cond": bson.A{bson.M{"$gt": bson.A{bson.M{"$ifNull": bson.A{"$notice_round", 0}}, 0}}, bson.M{"$concat": bson.A{"~", bson.M{"$toString": "$notice_round"}}}, ""}}}}}, "pipeline": bson.A{bson.M{"$match": bson.M{"$expr": bson.M{"$eq": bson.A{"$_id", "$$receipt"}}}}}, "as": "_read"}}}, bson.D{{Key: "$match", Value: bson.M{"_read": bson.M{"$size": 0}}}})
 	}
 	return p
 }

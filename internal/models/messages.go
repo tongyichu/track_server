@@ -7,23 +7,26 @@ import (
 
 // MessageRecord keeps queryable routing fields separate from private, versioned payloads.
 type MessageRecord struct {
-	AtMicros  int64           `json:"-" bson:"at_micros"`
-	ID        string          `json:"id" bson:"_id"`
-	Kind      string          `json:"kind" bson:"kind"`
-	UserID    int64           `json:"user_id,string" bson:"user_id"`
-	PeerID    int64           `json:"peer_id,string" bson:"peer_id"`
-	ThreadID  string          `json:"thread_id" bson:"thread_id"`
-	Seq       int64           `json:"seq" bson:"seq"`
-	CreatedAt time.Time       `json:"created_at" bson:"created_at"`
-	Active    bool            `json:"active" bson:"active"`
-	Pending   bool            `json:"-" bson:"pending"`
-	FlagA     bool            `json:"-" bson:"flag_a"`
-	FlagB     bool            `json:"-" bson:"flag_b"`
-	ClearA    int64           `json:"-" bson:"clear_a"`
-	ClearB    int64           `json:"-" bson:"clear_b"`
-	Targets   []string        `json:"targets" bson:"targets"`
-	Revision  int64           `json:"revision" bson:"revision"`
-	Payload   json.RawMessage `json:"payload" bson:"payload"`
+	AtMicros          int64           `json:"-" bson:"at_micros"`
+	ID                string          `json:"id" bson:"_id"`
+	Kind              string          `json:"kind" bson:"kind"`
+	UserID            int64           `json:"user_id,string" bson:"user_id"`
+	PeerID            int64           `json:"peer_id,string" bson:"peer_id"`
+	ThreadID          string          `json:"thread_id" bson:"thread_id"`
+	Seq               int64           `json:"seq" bson:"seq"`
+	CreatedAt         time.Time       `json:"created_at" bson:"created_at"`
+	Active            bool            `json:"active" bson:"active"`
+	Pending           bool            `json:"-" bson:"pending"`
+	FlagA             bool            `json:"-" bson:"flag_a"`
+	FlagB             bool            `json:"-" bson:"flag_b"`
+	ClearA            int64           `json:"-" bson:"clear_a"`
+	ClearB            int64           `json:"-" bson:"clear_b"`
+	Targets           []string        `json:"targets" bson:"targets"`
+	Revision          int64           `json:"revision" bson:"revision"`
+	Payload           json.RawMessage `json:"payload" bson:"payload"`
+	NoticeMode        string          `json:"-" bson:"notice_mode"`
+	NoticeRound       int64           `json:"-" bson:"notice_round"`
+	NoticeUntilMicros int64           `json:"-" bson:"notice_until"`
 }
 
 type MessageUser struct {
@@ -96,20 +99,36 @@ type InboxInteraction struct {
 	Unread    bool          `json:"unread"`
 }
 type Announcement struct {
-	ID            string     `json:"id"`
-	Revision      int64      `json:"revision"`
-	Kind          string     `json:"kind"`
-	Title         string     `json:"title"`
-	Body          string     `json:"body"`
-	H5URL         string     `json:"h5_url"`
-	Status        string     `json:"status"`
-	TargetUserIDs []string   `json:"target_user_ids"`
-	PublishAt     time.Time  `json:"publish_at"`
-	ExpiresAt     *time.Time `json:"expires_at,omitempty"`
-	CreatedAt     time.Time  `json:"created_at"`
-	UpdatedAt     time.Time  `json:"updated_at"`
-	UpdatedBy     string     `json:"updated_by"`
-	Unread        bool       `json:"unread"`
+	ID             string                `json:"id"`
+	Revision       int64                 `json:"revision"`
+	Kind           string                `json:"kind"`
+	Title          string                `json:"title"`
+	Body           string                `json:"body"`
+	H5URL          string                `json:"h5_url"`
+	Status         string                `json:"status"`
+	TargetUserIDs  []string              `json:"target_user_ids"`
+	PublishAt      time.Time             `json:"publish_at"`
+	ExpiresAt      *time.Time            `json:"expires_at,omitempty"`
+	CreatedAt      time.Time             `json:"created_at"`
+	UpdatedAt      time.Time             `json:"updated_at"`
+	UpdatedBy      string                `json:"updated_by"`
+	Unread         bool                  `json:"unread"`
+	DeliveryMode   string                `json:"delivery_mode"`
+	PublishMode    string                `json:"publish_mode"`
+	DeliveryEndsAt *time.Time            `json:"delivery_ends_at,omitempty"`
+	PublishRound   int64                 `json:"publish_round"`
+	PublishedAt    *time.Time            `json:"published_at,omitempty"`
+	History        []AnnouncementHistory `json:"history,omitempty"`
+}
+
+type AnnouncementHistory struct {
+	Action    string    `json:"action"`
+	At        time.Time `json:"at"`
+	Actor     string    `json:"actor"`
+	Round     int64     `json:"round"`
+	Revision  int64     `json:"revision"`
+	PublishAt time.Time `json:"publish_at"`
+	Title     string    `json:"title"`
 }
 
 // App responses exclude operator identity, audience IDs and editable state.

@@ -198,3 +198,5 @@
 - `POST /admin/api/tracks/:track_id/description/generate`：轨迹写权限，手动联网生成候选说明，返回来源与 source_version，不直接写轨迹，见 [后台协议](admin-tracks.md#路线说明与-ai-联网填写)。
 
 - `PUT /admin/api/tracks/:track_id/description`：轨迹写权限，候选区“一键代入并保存”，校验 source_version 并只保存说明，见 [后台协议](admin-tracks.md#路线说明与-ai-联网填写)。
+
+活动通知已有GET/POST/PUT路由不变，本轮扩展覆盖方式、定时状态与发布轮次；App通知ID按不透明发布轮次原样回传，协议见[messages](messages.md#活动通知管理)。

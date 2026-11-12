@@ -28,7 +28,12 @@
 | GET | `/messages/interactions` | `category=all|comments|reactions`、`cursor/limit` |
 | POST | `/messages/interactions/read` | `{ids:["E.…"]}`，最多100个，只能标记本人事件 |
 
-通知公开字段为 `id/kind/title/body/h5_url/publish_at/expires_at/unread`；`kind=system|activity`。不向 App 返回指定接收人 ID、管理员、草稿状态等后台字段。只有已发布、到时间且本人属于接收范围的通知可见；撤回即隐藏。注册前通知可在历史中查看，但不产生未读；编辑已发布内容不重新置未读。结束时间是活动提示，过期通知仍保留展示，客户端禁用 H5 跳转。
+通知公开字段为 `id/kind/title/body/h5_url/publish_at/expires_at/unread`；`kind=system|activity`。不向 App 返回指定接收人 ID、管理员、草稿状态等后台字段。只有已上线、本人属于接收范围且符合覆盖规则的通知可见；撤回即隐藏。新通知ID为不透明的发布轮次标识，客户端必须原样保存、去重并提交已读，不得拆分或拼接。重新发布生成新轮次ID；普通内容修改不换ID、不重新置未读。延迟提交旧轮次已读不会清除当前轮次未读，已读和摘要统计使用相同资格规则。
+
+- `once` 一次性通知：仅发布时间时已注册的目标用户可见，离线后返回仍可拉取。
+- `persistent` 持续公告：覆盖目标范围内在停止发放时间前注册的用户，包括发布后新注册者；有效期内每人每轮提醒一次。停止发放后不再新增未读，也不向之后注册的用户展示；此前符合资格的用户可保留历史。长期有效时停止时间为空。全局全部已读的cutoff同时考虑公告发布时间与新用户注册时刻。
+- 原有未设置覆盖方式的通知保持旧语义：注册前通知可在历史中查看，但不产生未读；原ID及阅读标记保留。撤回后重新发布才使用新规则。
+- `expires_at` 仍表示活动结束，过期历史保留、客户端禁用H5跳转；它与持续公告的停止发放时间互不替代。此功能不新增系统通知栏或离线推送。
 
 互动字段为 `id/kind/actor_id/actor/track_id/comment_id/text/created_at/unread/track`。actor 为 `id/nickname/avatar_url`；track 为 `id/title/preview_url/available/distance/duration/author/city_code/city_name`。distance 单位米、duration 单位秒，author 为轨迹所属运动用户的 `id/nickname/avatar_url`（与互动 actor、私信发送者独立）；city_name 沿用地区目录映射，缺失时省略。失效或不可访问轨迹返回 available=false，不能借通知读取轨迹详情。全部包含 comment/reply/like/collect/comment_like/follow；评论包含 comment/reply；赞和收藏包含 like/collect/comment_like。自己的操作不通知自己；同一关系取消后隐藏，重新建立复用事件而不刷新增未读。此版本仅从上线后的业务操作生成，不追溯全量历史互动。
 
@@ -72,9 +77,17 @@ Android 仅在消息模块可见时连接，内部页面切换共享连接；离
 
 页面 `/admin/announcements.html`，模块 `announcements`，读写权限独立。路由：GET/POST `/admin/api/announcements`、GET/PUT `/admin/api/announcements/:notice_id`。列表 cursor/limit 同上；保存请求 `{expected_version:0,notice:{…}}`，创建0、修改传最新 revision。
 
-notice 字段：`kind/title/body/h5_url/status/target_user_ids/publish_at/expires_at`。标题1～100字、正文1～8000字、H5选填且只接受无账号密码的 HTTPS；接收范围为空数组表示全部，指定 ID 最多1000且服务端批量验证存在。操作者、创建/修改时间、ID及revision由服务端写入。
+notice 可编辑字段：`kind/title/body/h5_url/status/target_user_ids/publish_mode/publish_at/delivery_mode/delivery_ends_at/expires_at`。标题1～100字、正文1～8000字、H5选填且只接受无账号密码的 HTTPS；接收范围为空数组表示全部，指定 ID 最多1000且服务端批量验证存在。操作者、创建/修改时间、ID及revision由服务端写入。
 
-status 为 draft/published/withdrawn。草稿可编辑、预览；published+未来时间为定时发布，否则立即发布。第一次发布过去时间自动归当前时间。已发布内容可编辑，但发布时间与接收范围固定，不能退回草稿；可撤回，撤回不可直接重发，需新建。已有阅读标记不因编辑丢失。并发修改 CAS 冲突409后重开核对；审计沿用后台统一写请求流程。
+status 为 `draft/scheduled/published/withdrawn/expired`，expired仅由调度器写入，其他状态由保存接口提交。`delivery_mode=once|persistent`，创建时缺省once；`publish_mode=immediate|scheduled`，立即发布由服务端取当前时刻，定时发布必须提供未来的publish_at，过期时间返回400，不自动改成立即发布。兼容旧调用方：未传publish_mode但published带未来时间时转为scheduled。
+
+- 待发布：可修改内容、范围、覆盖方式和时间；提交draft取消定时并保留草稿，也可选择立即上线。同一待发布安排修改保留发布轮次。
+- 已上线：可普通编辑内容及活动结束时间，不更改发布时间、接收范围、覆盖方式或停止发放时间；普通编辑保留发布轮次和阅读标记。修改发布安排须先撤回。
+- 已撤回：可以继续编辑、存草稿，再立即或定时发布；不要求新建通知。重新发布增加发布轮次并重新允许未读提醒。
+- 持续公告：delivery_ends_at为空表示长期有效，否则须晚于publish_at。一次性通知不使用该字段。活动expires_at单独校验晚于publish_at。
+- 只读返回字段：publish_round、published_at（实际上线时刻）、history（详情最近50条操作记录，含操作/时间/操作者/轮次/revision/预定时间/标题）；客户端提交这些字段不被信任，服务端从已有记录衍生。全部操作记录与状态在同一CAS中持久保存，列表不携带history。后台ID稳定，App轮次ID不作为后台编辑ID。
+- 定时任务每秒扫描持久化的notice_schedule，不依赖MQTT连接；到期以revision CAS转为published并进入刷新投递队列。重启补处理未到期失效的任务，超过停止发放时间或活动结束时间的任务转expired且不发提醒。受众截止仍取预定publish_at，published_at记录实际执行时刻。竞争的编辑/取消/激活只有一个revision写入成功，冲突409后重开核对。审计沿用后台统一写请求流程。
+- 旧published+未来时间记录仍按既有到点可见语义工作；后台可识别为待发布并改期或取消，首次修改后转入新调度流程。
 
 后台通知列表/预览及发布时间、活动结束时间输入框统一使用北京时间，表单回填与提交显式双向转换；API 保持带时区的 RFC3339，未编辑时间保留原始精度，浏览器时区不影响定时发布时刻。统一约定见[后台时间与时区](../admin-ui.md#时间与时区)。
 
