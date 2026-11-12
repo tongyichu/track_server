@@ -31,7 +31,7 @@
 
     function sync() {
       const p = data.find(item => item.code === province.value), c = data.find(item => item.code === city.value);
-      toggle.textContent = c ? (p && p.code !== c.code ? p.name + ' / ' : '') + c.name : p ? p.name + ' / 全省' : allowAll ? '全部地区' : '选择省份 / 城市';
+      toggle.textContent = c ? (p && p.code !== c.code ? p.name + ' / ' : '') + c.name : p ? p.name + ' / 全部' : allowAll ? '全部地区' : '选择省份 / 城市';
       toggle.setAttribute('aria-label', label.textContent + '：' + toggle.textContent);
       toggle.disabled = province.disabled || !data.length;
       if (toggle.disabled) close(false);
@@ -51,7 +51,7 @@
       const changed = province.value !== provinceCode || city.value !== cityCode;
       province.value = provinceCode;
       const cities = data.filter(item => item.level === 'city' && (!provinceCode || item.province_code === provinceCode));
-      city.replaceChildren(new Option(provinceCode ? '全省' : '全部', ''));
+      city.replaceChildren(new Option('全部', ''));
       cities.forEach(item => city.add(new Option(item.name, item.code)));
       city.disabled = false; city.value = cityCode;
       sync(); close(true);
@@ -75,7 +75,7 @@
       cities.heading.textContent = current ? current.name : '全部省份';
       cities.list.setAttribute('aria-label', cities.heading.textContent + '城市');
       cities.list.replaceChildren(); cities.list.scrollTop = 0;
-      option(cities.list, code ? '全省' : '全部', province.value === code && !city.value, () => commit(code, ''));
+      option(cities.list, '全部', province.value === code && !city.value, () => commit(code, ''));
       data.filter(item => item.level === 'city' && (!code || item.province_code === code)).forEach(item => {
         const parent = !code && data.find(region => region.code === item.province_code);
         option(cities.list, (parent && parent.name !== item.name ? parent.name + ' / ' : '') + item.name, city.value === item.code, () => commit(code, item.code));
