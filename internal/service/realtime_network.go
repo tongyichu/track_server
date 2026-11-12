@@ -17,6 +17,8 @@ type RealtimeNetworkNode struct {
 	Connections int    `json:"connections"`
 	ClientID    string `json:"client_id,omitempty"`
 	SessionID   string `json:"session_id,omitempty"`
+	OwnerID     string `json:"owner_id,omitempty"`
+	Role        string `json:"role,omitempty"`
 }
 
 type RealtimeNetworkEdge struct {

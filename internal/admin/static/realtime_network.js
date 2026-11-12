@@ -21,7 +21,7 @@
         const chat = RealtimeChat.mount({ host, sidebar, item, signal: lifetime.signal, api, initialPeer: b.user_id, locked: true, onMetadata() {} });
         active = { type: 'direct', edgeID: n.id, item, stop: () => chat.stop(), refresh: () => chat.refresh(), dispose: () => lifetime.abort() };
       } else if (mode === 'companions') {
-        const room = n.kind === 'membership' ? byID.get(n.source) : n;
+        const room = n;
         if (!room) return;
         const userID = n.kind === 'user' ? n.user_id : '';
         if (active?.type === 'room' && active.sessionID === room.session_id && active.userID === userID) return;
@@ -48,7 +48,7 @@
         $('networkEmpty').textContent = !data.sampled_at ? '连接数据尚未就绪' : mode === 'messages' ? '当前没有在线的消息提醒用户' : '当前没有在线的同行成员';
         $('networkCount').textContent = data.sampled_at ? mode === 'messages' ? users.length + ' 位用户 · ' + data.edges.length + ' 条私信关系' : rooms.length + ' 个房间 · ' + users.length + ' 个成员节点' : '在线状态未知';
         $('networkStatus').textContent = [data.message, data.sampled_at ? (data.status === 'stale' ? '上次采样：' : '采样：') + AdminTime.dateTime(data.sampled_at) : '', data.limited ? '局部展示：最多200个用户节点、50个房间、400条私信关系' : ''].filter(Boolean).join(' · ');
-        $('networkNote').textContent = mode === 'messages' ? '节点为在线账号，线为双方已有的私信关系。点击线查看往来；最后一条连接断开后，节点和相关连线在下次成功采样后移除。' : '每个房间独立成组。点房间或连线查看群聊与关键事件，点成员头像查看此人在本房间的事件列表；只绘制已采样的在线成员。';
+        $('networkNote').textContent = mode === 'messages' ? '节点为在线账号，线为双方已有的私信关系。点击线查看往来；最后一条连接断开后，节点和相关连线在下次成功采样后移除。' : '每个大圈是一个房间，圈内头像为在线成员，房主带专属标签。点大圈查看群聊与关键事件，点头像查看个人事件；可拖动整个房间，成员头像限在所属圈内拖动。';
         const selected = chart.selection();
         if (active?.type === 'direct' && selected?.value?.source) {
           const source = data.nodes.find(n => n.id === selected.value.source); if (source) active.item.client_id = source.client_id;

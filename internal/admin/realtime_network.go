@@ -116,6 +116,7 @@ func (h *Handler) RealtimeNetwork(ctx context.Context, c *app.RequestContext) {
 		limited = limited || !complete
 	} else {
 		titles := map[string]string{}
+		owners := map[string]string{}
 		roomIDs := make([]string, 0, len(rooms))
 		for id := range rooms {
 			roomIDs = append(roomIDs, id)
@@ -134,17 +135,20 @@ func (h *Handler) RealtimeNetwork(ctx context.Context, c *app.RequestContext) {
 			}
 			for _, s := range sessions {
 				titles[s.SessionID] = s.Title
+				owners[s.SessionID] = strconv.FormatInt(s.OwnerUserID, 10)
 			}
 		}
-		for _, n := range nodes {
-			edges = append(edges, service.RealtimeNetworkEdge{ID: "membership:" + n.ID, Source: "room:" + n.SessionID, Target: n.ID, Kind: "membership"})
+		for i := range nodes {
+			if owner := owners[nodes[i].SessionID]; owner != "" && owner == nodes[i].UserID {
+				nodes[i].Role = "owner"
+			}
 		}
 		for _, id := range roomIDs {
 			title := titles[id]
 			if title == "" {
 				title = "同行房间"
 			}
-			nodes = append(nodes, service.RealtimeNetworkNode{ID: "room:" + id, Kind: "room", Label: title, SessionID: id})
+			nodes = append(nodes, service.RealtimeNetworkNode{ID: "room:" + id, Kind: "room", Label: title, SessionID: id, OwnerID: owners[id]})
 		}
 	}
 	data["nodes"], data["edges"], data["total_users"], data["total_rooms"] = nodes, edges, len(allUsers), len(allRooms)

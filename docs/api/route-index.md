@@ -5,7 +5,7 @@
 | 接口 | 方法 | 路径 | 需要认证 | 文档 |
 | --- | --- | --- | --- | --- |
 | 后台实时通信统计、连接与近期异常 | GET | `/admin/api/realtime/summary`, `/admin/api/realtime/clients`, `/admin/api/realtime/events` | 后台session，realtime查看权限 | [admin-realtime](admin-realtime.md) |
-| 在线私信关系图 / 同行房间群聊与成员事件 | GET | `/admin/api/realtime/network`, `/admin/api/realtime/network/room` | 后台session，realtime查看权限；同行网络与房间详情另需companions查看权限 | [admin-realtime](admin-realtime.md#在线关系图) |
+| 在线私信关系图 / 同行房间圈选、群聊与成员事件 | GET | `/admin/api/realtime/network`, `/admin/api/realtime/network/room` | 后台session，realtime查看权限；同行网络与房间详情另需companions查看权限 | [admin-realtime](admin-realtime.md#在线关系图) |
 | 后台连接详情与账号私信流 | GET | `/admin/api/realtime/clients/detail`, `/admin/api/realtime/clients/conversations`, `/admin/api/realtime/clients/messages` | 后台session，realtime查看权限；房间弹幕另需companions查看权限 | [admin-realtime](admin-realtime.md#连接详情与消息内容) |
 | 消息未读汇总 | GET | `/messages/summary` | JWT | [messages](messages.md#摘要与已读) |
 | 通知列表 / 已读 | GET / POST | `/messages/notices`, `/messages/notices/read` | JWT | [messages](messages.md#通知与互动) |

@@ -42,7 +42,8 @@
 .rt-graph-underlay{fill:var(--tblr-bg-surface-secondary);pointer-events:none}
 .rt-graph-border{fill:none;stroke:transparent;stroke-width:3;pointer-events:none;vector-effect:non-scaling-stroke}
 .rt-graph-surface{fill:var(--tblr-bg-surface);stroke:var(--tblr-border-color);stroke-width:1.5}
-.rt-graph-node.is-room .rt-graph-surface{fill:var(--tblr-primary-lt);stroke:var(--tblr-primary)}
+.rt-graph-owner rect{fill:var(--tblr-primary)}
+.rt-graph-owner text{fill:var(--tblr-primary-fg,#fff);font-size:9px;font-weight:600}
 .rt-graph-initial{fill:var(--tblr-primary);font-size:15px}
 .rt-graph-label{fill:var(--tblr-body-color);font-size:calc(12px / var(--rt-graph-scale,1))}
 .rt-graph-count{fill:var(--tblr-secondary);font-size:calc(11px / var(--rt-graph-scale,1))}
@@ -51,7 +52,13 @@
 .rt-graph-edge.is-muted .rt-graph-line{opacity:.12}
 .rt-graph-edge.is-selected .rt-graph-line,.rt-graph-hit:focus-visible+.rt-graph-line{stroke:var(--tblr-primary);stroke-width:3;opacity:1}
 .rt-graph-node.is-selected .rt-graph-border,.rt-graph-node:focus-visible .rt-graph-border{stroke:var(--tblr-primary)}
-.rt-graph-node.is-muted .rt-graph-avatar,.rt-graph-node.is-muted .rt-graph-label,.rt-graph-node.is-muted .rt-graph-count{opacity:.22}
-.rt-graph-room-region{fill:var(--tblr-primary-lt);fill-opacity:.35;stroke:var(--tblr-border-color);stroke-width:1;stroke-dasharray:5 6}
+.rt-graph-node.is-muted .rt-graph-avatar,.rt-graph-node.is-muted .rt-graph-label,.rt-graph-node.is-muted .rt-graph-count,.rt-graph-node.is-muted .rt-graph-owner{opacity:.22}
+.rt-graph-room{cursor:grab;outline:none}
+.rt-graph-room:active{cursor:grabbing}
+.rt-graph-room>.rt-graph-label{font-size:12px}
+.rt-graph-room>.rt-graph-count{font-size:11px}
+.rt-graph-room-region{fill:var(--tblr-primary);fill-opacity:.035;stroke:var(--tblr-primary);stroke-opacity:.35;stroke-width:1.5;vector-effect:non-scaling-stroke}
+.rt-graph-room.is-selected .rt-graph-room-region,.rt-graph-room:focus-visible .rt-graph-room-region{fill-opacity:.1;stroke-opacity:1;stroke-width:2.5}
+.rt-graph-room.is-muted{opacity:.28}
 @media(max-width:1100px){.rt-network-shell.has-detail{grid-template-columns:minmax(0,1fr)}.rt-network-detail{max-height:620px}.rt-network-canvas{height:500px}}
 @media(max-width:767px){.rt-network-toolbar{gap:10px}.rt-network-search{flex-basis:100%;order:1}.rt-network-canvas{height:440px}.rt-network-detail-body{padding:12px}.rt-network-gesture{font-size:11px}}

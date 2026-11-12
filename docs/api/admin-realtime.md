@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | GET | `/summary` | `{runtime,backlog,at}`；业务数据库统计独立于 EMQX 管理 API |
 | GET | `/network` | `module=messages|companions`；在线用户的私信关系 / 按房间归组的在线成员；companions 另需同行查看权限 |
-| GET | `/network/room` | `session_id`；当前采样在线房间的成员、位置快照和最近30条弹幕，另需同行查看权限 |
+| GET | `/network/room` | `session_id`；当前采样在线房间的成员、位置快照、最近200条弹幕及最多100条关键事件，另需同行查看权限 |
 | GET | `/clients` | `module=messages|companions`、`state=connected|disconnected`、`q`、`page`；每页30 |
 | GET | `/clients/detail` | `client_id` 精确匹配 Broker 采样连接；消息连接返回联系人与账号全部私信首屏；同行返回最近30条弹幕，另需 `companions` 查看权限 |
 | GET | `/clients/conversations` | `client_id`、`cursor?`；按最近消息时间倒序分页对话，每页30 |
@@ -40,14 +40,14 @@ status 为 ok / partial / stale / unavailable / unconfigured。未配置或从�
 `GET /network` 返回 `{module,status,message,sampled_at,complete,limited?,total_users,total_rooms,nodes,edges}`。未采样时总数为 null，不伪造0；状态和时间口径继承 Broker 快照。采样失败沿用旧快照，页面明确显示上次采样；网络查询失败保留上一张图。节点/连线只基于样本，不把凭证数量或 presence 声明当作实际 Broker 在线连接。正常情况15秒刷新；下线移除以随后一次成功采样为准，不宣称即时断连推送。
 
 - **消息提醒**：只取 `connected=true,module=messages` 的连接；同一用户按 user_id 合并为一个节点，节点ID为字符串用户ID，connections 为该用户采样在线连接数，client_id 只作为诊断/详情查询的当前代表连接。用户最后一条连接断开后，从实时图移除节点与相关边；重连换 client_id 不改变节点身份。边来自双方均在本图用户集合中的 active thread 且 seq>0，表示双方已有私信往来；同时在线不自动连线，也不把每条消息画成一条边。边ID为稳定会话ID，不代表设备直连或特定客户端已收消息。
-- **与友同行**：按 Broker principal 的 session_id 分组，每个房间是中心节点 `room:<session>`；用户节点为 `member:<session>:<user>`，同一用户在不同房间不会把房间串起来。连接线表示采样连接所属房间，图中只绘制在线连接成员；成员业务资格以房间详情的 member_status 为准。房间名称按当前图的 session_id 集合批量查询，查不到名称显示“同行房间”，可点击查看完整房间ID。
-- nodes 字段为 `{id,kind,user_id?,label,avatar_url?,connections,client_id?,session_id?}`。edges 为 `{id,source,target,kind,last_at?}`，kind 为 direct / membership；last_at 为会话最近记录时间。全部身份/连接/房间ID保持字符串。
+- **与友同行**：按 Broker principal 的 session_id 分组，`room:<session>` 仅作为房间描述，由前端绘制可选择的大圈，不绘制中心头像/“房”字节点或成员连线，edges 固定为空数组。用户节点为 `member:<session>:<user>`，同一用户在不同房间不会把房间串起来。只绘制在线成员，按网格排列在所属圈内；圈顶部显示房间名称与已展示在线成员数。可拖动整个圈，单独拖动头像时限制在所属圈内。选择大圈时加深填充与边框颜色，房间内成员保持清晰、其他房间淡化；选择成员头像时显示个人高亮边框，同房间成员保持清晰。房间名称与房主ID按当前图的 session_id 集合一次批量查询，房主在线头像附“房主”小标签，房主不在线时不补造离线节点。查不到房间资料时使用“同行房间”且不推测房主；成员业务资格仍以房间详情的 member_status 为准。
+- nodes 字段为 `{id,kind,user_id?,label,avatar_url?,connections,client_id?,session_id?,owner_id?,role?}`；room 描述含字符串 owner_id，房主 user 节点 role 为 owner（其他用户省略），均来自已查询的会话 owner_user_id。消息 edges 为 `{id,source,target,kind:"direct",last_at?}`，last_at 为会话最近记录时间；同行不再返回 membership 边。全部身份/连接/房间ID保持字符串。
 
-每图最多200个用户/成员节点、50个房间中心节点和400条私信关系，超过上限明确标注局部展示，不能把局部图当作全站完整关系；搜索只定位当前已展示的昵称/用户ID/房间ID。所有符合采样条件的用户/房间总数在截断前去重计算；图内的用户资料按页批量读取，私信关系在仓储通过 Participants 同时约束双方后再取401条判断上限，禁止逐个用户读取会话。房间名称通过 AdminCompanionListFilter.SessionIDs 在仓储过滤和总数/分页前限定，nil 保持原有不限制语义，空集合返回空；MySQL/Mongo/memory 三实现同步，无新增仓储方法或表结构。
+每图最多200个用户/成员节点、50个房间描述和400条私信关系，超过上限明确标注局部展示，不能把局部图当作全站完整关系；搜索只定位当前已展示的昵称/用户ID/房间ID，按房间ID定位会选中对应大圈。所有符合采样条件的用户/房间总数在截断前去重计算；图内的用户资料按页批量读取，私信关系在仓储通过 Participants 同时约束双方后再取401条判断上限，禁止逐个用户读取会话。房间名称和房主通过 AdminCompanionListFilter.SessionIDs 在仓储过滤和总数/分页前限定，nil 保持原有不限制语义，空集合返回空；MySQL/Mongo/memory 三实现同步，无新增仓储方法或表结构。
 
 点击私信连线在右侧显示双方的只读气泡对话，参照客户端聊天页：连线源用户在右侧浅蓝气泡、另一用户在左侧普通气泡，每条展示发送者头像与昵称，时间居中并按相邻消息5分钟间隔分组（北京时间，悬停气泡可查看每条时间）。初始传 peer_id 并锁定对象，不展示其他联系人的过滤控件；默认定位底部最新消息，保留历史分页、增量刷新与阅读锚点。右侧打开期间若代表连接变化但用户仍在线，更新代表 client_id；所选节点/边消失时关闭并取消详情请求。点击用户可查看身份、在线连接数及独立连接诊断。
 
-点击同行房间中心或房间连线，在右侧打开群聊式时间流：弹幕使用发送者头像、昵称和气泡，已存储关键事件使用提示卡，标注关联成员及“房主上报”，按事件发生时间与弹幕创建时间合并排序，默认定位最新记录。点击成员头像则打开此人在当前房间的个人事件列表，包含本人发送的弹幕、target_user_id 为本人的关键事件，以及无关联成员且由本人上报的事件；不把房主上报的所有其他成员事件归给房主本人。个人列表展示每条时间，房间时间流按相邻记录5分钟间隔显示居中时间，均为北京时间。刷新复用记录并保留阅读锚点，未在底部时提供“回到最新”；房间信息、成员资格和最新位置快照折叠展示，不将快照伪造为位置历史。
+点击同行房间大圈，在右侧打开群聊式时间流：弹幕使用发送者头像、昵称和气泡，已存储关键事件使用提示卡，标注关联成员及“房主上报”，按事件发生时间与弹幕创建时间合并排序，默认定位最新记录。点击成员头像则打开此人在当前房间的个人事件列表，包含本人发送的弹幕、target_user_id 为本人的关键事件，以及无关联成员且由本人上报的事件；不把房主上报的所有其他成员事件归给房主本人。个人列表展示每条时间，房间时间流按相邻记录5分钟间隔显示居中时间，均为北京时间。刷新复用记录并保留阅读锚点，未在底部时提供“回到最新”；房间信息、成员资格和最新位置快照折叠展示，不将快照伪造为位置历史。
 
 `GET /network/room` 先检验当前采样中该房间至少一条在线同行连接，再查询房间及成员；有效完整样本中房间已不在线返回409，未采样/部分采样/旧样本无法确认时返回503。成功响应 `{room,members,positions,messages,events,messages_limited,events_limited,people,sampled_at,status}`：room 仅含 session_id/title/owner_id/status/started_at，成员仅含 user_id/role/member_status/connections/last_seen_at；positions 按用户字符串ID索引，包含坐标、明确坐标系和 recorded_at，表示位置快照，不宣称实时定位。messages 为最近最多200条存储弹幕，events 为最近最多100条已存储关键事件，分别额外查询一条判断 limited；页面明确显示本次载入范围和截断，个人列表仅筛选这些已加载的房间记录，不宣称全量历史。每次刷新使用最新有界记录窗口，失败保留上次内容。
 
