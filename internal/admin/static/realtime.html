@@ -2,11 +2,11 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>时光轨迹 - 控制台</title>
-  <link rel="stylesheet" href="/admin/static/vendor/tabler.min.css"><link rel="stylesheet" href="/admin/static/style.css"><link rel="stylesheet" href="/admin/static/realtime.css">
+  <link rel="stylesheet" href="/admin/static/vendor/tabler.min.css"><link rel="stylesheet" href="/admin/static/style.css"><link rel="stylesheet" href="/admin/static/realtime.css"><link rel="stylesheet" href="/admin/static/realtime_network.css">
 </head>
 <body>
 <header class="topbar"></header>
-<main class="container">
+<main class="container wide">
   <section class="panel card card-body">
     <div class="realtime-heading">
       <h1>实时通信</h1>
@@ -33,6 +33,22 @@
     </details>
   </section>
   <section class="panel card card-body">
+    <div class="realtime-heading"><h2>连接网络</h2><span id="networkCount" class="text-secondary small">正在读取在线用户</span></div>
+    <div class="rt-network-toolbar">
+      <div class="btn-group" aria-label="网络类型"><button id="messagesNetwork" type="button" class="btn btn-outline-primary active" aria-pressed="true">消息提醒</button><button id="companionsNetwork" type="button" class="btn btn-outline-primary" aria-pressed="false" data-admin-read="companions">与友同行</button></div>
+      <form id="networkSearch" class="rt-network-search"><input id="networkQuery" class="form-control" aria-label="搜索图中的用户或房间" placeholder="搜索昵称 / 用户ID / 房间ID" maxlength="200"><button class="btn btn-outline-secondary" type="submit">定位</button></form>
+      <div class="btn-group" aria-label="关系图缩放"><button id="networkZoomOut" class="btn btn-outline-secondary" type="button" aria-label="缩小关系图">−</button><button id="networkZoomIn" class="btn btn-outline-secondary" type="button" aria-label="放大关系图">＋</button><button id="networkFit" class="btn btn-outline-secondary" type="button">适应画布</button></div>
+    </div>
+    <p id="networkError" class="text-danger small" role="status"></p>
+    <div id="networkShell" class="rt-network-shell">
+      <div class="rt-network-stage"><div id="networkCanvas" class="rt-network-canvas"></div><div id="networkEmpty" class="rt-network-empty text-secondary">正在加载关系图…</div><span class="rt-network-gesture text-secondary">拖动节点或画布 · 滚轮缩放</span></div>
+      <aside id="networkDetail" class="rt-network-detail" hidden><div class="rt-network-detail-heading"><strong id="networkDetailTitle"></strong><button id="networkClose" class="btn-close" type="button" aria-label="关闭关系详情"></button></div><div id="networkDetailBody" class="rt-network-detail-body"></div></aside>
+    </div>
+    <p id="networkNote" class="text-secondary small mt-2 mb-1">节点为在线账号，线为双方已有的私信关系。点击连线查看往来记录。</p>
+    <p id="networkStatus" class="text-secondary small mb-0" role="status"></p>
+  </section>
+  <details class="rt-network-diagnostics"><summary>连接诊断与近期异常</summary>
+  <section class="panel card card-body">
     <div class="realtime-heading"><h2>连接列表</h2><span id="brokerStatus" class="text-secondary small" role="status">正在读取连接信息</span></div>
     <form id="clientsFilters" class="realtime-toolbar">
       <label>业务<select id="clientsModule" class="form-select"><option value="">全部</option><option value="messages">消息提醒</option><option value="companions">与友同行</option></select></label>
@@ -56,7 +72,8 @@
     <div class="realtime-pagination"><button id="eventsPrev" class="btn btn-outline-secondary" type="button" disabled>上一页</button><span id="eventsPage" class="text-secondary"></span><button id="eventsNext" class="btn btn-outline-secondary" type="button" disabled>下一页</button></div>
     <p class="text-secondary small mb-0 mt-2">鉴权 / 权限拒绝中的用户为请求申报身份，未经确认。客户端断连原因历史尚未采集。</p>
   </section>
+  </details>
 </main>
-<script src="/admin/static/vendor/tabler.min.js"></script><script src="/admin/static/shell.js"></script><script src="/admin/static/ui.js"></script><script src="/admin/static/realtime_chat.js"></script><script src="/admin/static/realtime.js"></script>
+<script src="/admin/static/vendor/tabler.min.js"></script><script src="/admin/static/shell.js"></script><script src="/admin/static/ui.js"></script><script src="/admin/static/realtime_chat.js"></script><script src="/admin/static/realtime_graph.js"></script><script src="/admin/static/realtime_network.js"></script><script src="/admin/static/realtime.js"></script>
 </body>
 </html>

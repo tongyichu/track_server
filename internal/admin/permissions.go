@@ -140,6 +140,9 @@ func (a *Authenticator) authorize(ctx context.Context, c *app.RequestContext, se
 	if strings.HasPrefix(route, "/admin/api/scenic-spots/") && (strings.Contains(route, "/tracks") || strings.HasSuffix(route, "/track-search")) {
 		allowed = allowed && account.allows("tracks", write)
 	}
+	if route == "/admin/api/realtime/network/room" || route == "/admin/api/realtime/network" && string(c.Query("module")) == "companions" {
+		allowed = allowed && account.allows("companions", false)
+	}
 	if route == "/admin/api/tracks/:track_id/scenic-spot" {
 		allowed = allowed && account.allows("scenic_spots", true)
 	}

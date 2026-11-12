@@ -78,6 +78,12 @@ func (r *MongoCompanionRepository) ListAdminCompanions(ctx context.Context, filt
 		limit = 20
 	}
 	conditions := bson.A{}
+	if filter.SessionIDs != nil {
+		if len(filter.SessionIDs) == 0 {
+			return []*models.CompanionSession{}, 0, nil
+		}
+		conditions = append(conditions, bson.M{"session_id": bson.M{"$in": filter.SessionIDs}})
+	}
 	if filter.Title != "" {
 		conditions = append(conditions, bson.M{"title": primitive.Regex{Pattern: regexp.QuoteMeta(filter.Title), Options: "i"}})
 	}

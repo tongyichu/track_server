@@ -176,6 +176,8 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	// 鉴权 API
 	api := g.Group("/api", m.Auth.AuthMiddleware())
 	api.GET("/realtime/summary", m.Handler.RealtimeSummary)
+	api.GET("/realtime/network", m.Handler.RealtimeNetwork)
+	api.GET("/realtime/network/room", m.Handler.RealtimeRoom)
 	api.GET("/realtime/clients", m.Handler.RealtimeClients)
 	api.GET("/realtime/clients/detail", m.Handler.RealtimeClientDetail)
 	api.GET("/realtime/clients/conversations", m.Handler.RealtimeChat)

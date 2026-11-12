@@ -273,6 +273,16 @@ func (r *InMemoryUserRepository) ListAdminUsers(_ context.Context, filter AdminU
 }
 
 func (r *InMemoryCompanionRepository) ListAdminCompanions(_ context.Context, filter AdminCompanionListFilter, cursor *models.CompanionSessionListCursor, limit int) ([]*models.CompanionSession, int64, error) {
+	var sessionSet map[string]bool
+	if filter.SessionIDs != nil {
+		if len(filter.SessionIDs) == 0 {
+			return []*models.CompanionSession{}, 0, nil
+		}
+		sessionSet = make(map[string]bool, len(filter.SessionIDs))
+		for _, id := range filter.SessionIDs {
+			sessionSet[id] = true
+		}
+	}
 	if limit <= 0 {
 		limit = 20
 	}
@@ -293,6 +303,9 @@ func (r *InMemoryCompanionRepository) ListAdminCompanions(_ context.Context, fil
 	var total int64
 	for _, session := range r.sessions {
 		if session == nil {
+			continue
+		}
+		if sessionSet != nil && !sessionSet[session.SessionID] {
 			continue
 		}
 		if needle != "" && !strings.Contains(strings.ToLower(session.Title), needle) {

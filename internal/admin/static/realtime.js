@@ -192,10 +192,11 @@
     $(name + 'Prev').addEventListener('click', () => { const state = lists[name]; if (!state.loading && state.page > 1) load(name, { page: state.page - 1, filters: state.filters }); });
     $(name + 'Next').addEventListener('click', () => { const state = lists[name]; if (!state.loading && state.hasMore) load(name, { page: state.page + 1, filters: state.filters }); });
   }
-  function refreshAll() { summary(); load('clients'); load('events'); refreshDetail?.(); }
+  const network = RealtimeNetwork.mount({ api, showConnection: showDetail });
+  function refreshAll() { network.refresh(); summary(); load('clients'); load('events'); refreshDetail?.(); }
   $('realtimeRefresh').addEventListener('click', refreshAll);
   function schedule() { clearInterval(interval); if ($('realtimeAuto').checked && !document.hidden) interval = setInterval(refreshAll, 15000); }
-  function stopRequests() { summaryController?.abort(); for (const state of Object.values(lists)) state.controller?.abort(); closeDetail?.(); }
+  function stopRequests() { network.stop(); summaryController?.abort(); for (const state of Object.values(lists)) state.controller?.abort(); closeDetail?.(); }
   $('realtimeAuto').addEventListener('change', schedule);
   document.addEventListener('visibilitychange', () => { if (document.hidden) stopRequests(); else refreshAll(); schedule(); });
   window.addEventListener('pagehide', () => { clearInterval(interval); stopRequests(); });
