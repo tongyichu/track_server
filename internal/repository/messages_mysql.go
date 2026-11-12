@@ -155,6 +155,16 @@ func (r *MySQLMessageRepository) PutMessageRecord(ctx context.Context, v *models
 func messageSQLFilter(f MessageFilter) (string, []any) {
 	q := []string{"1=1"}
 	args := []any{}
+	if len(f.Participants) > 0 {
+		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(f.Participants)), ",")
+		q = append(q, "m.user_id IN ("+placeholders+")", "m.peer_id IN ("+placeholders+")")
+		for _, id := range f.Participants {
+			args = append(args, id)
+		}
+		for _, id := range f.Participants {
+			args = append(args, id)
+		}
+	}
 	if len(f.Kinds) > 0 {
 		q = append(q, "m.kind IN ("+strings.TrimSuffix(strings.Repeat("?,", len(f.Kinds)), ",")+")")
 		for _, k := range f.Kinds {

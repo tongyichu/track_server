@@ -14,6 +14,7 @@
 | 方法 | 路径 | 鉴权 | 说明 |
 |------|------|------|------|
 | GET | `/admin/realtime.html`、`/admin/api/realtime/summary`、`/admin/api/realtime/clients`、`/admin/api/realtime/events` | realtime 查看权限 | 实时通信观测、实际连接与近期异常，只读；见 [协议](api/admin-realtime.md) |
+| GET | `/admin/api/realtime/network`、`/admin/api/realtime/network/room` | realtime 查看权限；同行网络及房间详情另需 companions 查看权限 | 在线用户私信连线、按房间隔离的同行网络及只读房间详情；见 [网络协议](api/admin-realtime.md#在线关系图) |
 | GET | `/admin/api/realtime/clients/detail` | realtime 查看权限；房间弹幕另需 companions 查看权限 | 采样连接详情、联系人与账号私信流首屏 / 房间弹幕，业务存储记录；见 [详情协议](api/admin-realtime.md#连接详情与消息内容) |
 | GET | `/admin/api/realtime/clients/conversations`、`/admin/api/realtime/clients/messages` | realtime 查看权限 | 联系人分页、全部私信流 / 单联系人筛选的历史与增量，头像与昵称批量投影；见 [详情协议](api/admin-realtime.md#消息连接响应与分页) |
 | GET | `/admin/`、`/admin` | 公开 | 302 跳转 `/admin/login.html` |

@@ -14,6 +14,7 @@ type MessageFilter struct {
 	Kinds                 []string
 	UserID                int64
 	EitherUser            bool
+	Participants          []int64
 	ThreadID              string
 	ThreadsAfter          map[string]int64
 	Before                time.Time
@@ -90,6 +91,16 @@ func messageLimit(f MessageFilter) int {
 	return f.Limit
 }
 func messageMatches(r *models.MessageRecord, f MessageFilter) bool {
+	if len(f.Participants) > 0 {
+		user, peer := false, false
+		for _, id := range f.Participants {
+			user = user || r.UserID == id
+			peer = peer || r.PeerID == id
+		}
+		if !user || !peer {
+			return false
+		}
+	}
 	if !f.NoticeRegisteredAt.IsZero() && !MessageNoticeEligible(r, f.NoticeRegisteredAt) {
 		return false
 	}

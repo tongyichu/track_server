@@ -83,6 +83,9 @@ func (r *MongoMessageRepository) PutMessageRecord(ctx context.Context, v *models
 }
 func messageMongoFilter(f MessageFilter) bson.M {
 	parts := bson.A{}
+	if len(f.Participants) > 0 {
+		parts = append(parts, bson.M{"user_id": bson.M{"$in": f.Participants}}, bson.M{"peer_id": bson.M{"$in": f.Participants}})
+	}
 	if len(f.Kinds) > 0 {
 		parts = append(parts, bson.M{"kind": bson.M{"$in": f.Kinds}})
 	}

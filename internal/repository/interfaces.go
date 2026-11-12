@@ -156,8 +156,9 @@ type AdminCompanionListRepository interface {
 }
 
 type AdminCompanionListFilter struct {
-	Title     string
-	TrackType string
+	SessionIDs []string
+	Title      string
+	TrackType  string
 	// OwnerIDs 限制发起人范围（昵称/省市筛选解析结果）；nil 表示不限制，非 nil 空切片表示无匹配。
 	OwnerIDs []int64
 }

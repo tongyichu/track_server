@@ -254,6 +254,16 @@ func (r *MySQLCompanionRepository) ListAdminCompanions(ctx context.Context, filt
 	}
 	where := ` WHERE 1=1`
 	args := []any{}
+	if filter.SessionIDs != nil {
+		if len(filter.SessionIDs) == 0 {
+			return []*models.CompanionSession{}, 0, nil
+		}
+		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(filter.SessionIDs)), ",")
+		where += ` AND companion_sessions.session_id IN (` + placeholders + `)`
+		for _, id := range filter.SessionIDs {
+			args = append(args, id)
+		}
+	}
 	if filter.Title != "" {
 		where += ` AND companion_sessions.title LIKE ? ESCAPE '!'`
 		args = append(args, "%"+escapeAdminLike(filter.Title)+"%")

@@ -16,11 +16,11 @@
     }
     return root;
   }
-  function mount({ host, sidebar, item, signal, api, onMetadata }) {
+  function mount({ host, sidebar, item, signal, api, onMetadata, initialPeer = '', locked = false }) {
     const contactPanel = el('section', null, 'rt-chat-contacts');
     const allContacts = button('全部私信', 'btn btn-sm btn-outline-secondary rt-stream-all'), contacts = el('div', null, 'rt-chat-contact-list'), moreContacts = button('更多联系人'), contactsError = el('p', '', 'text-danger small');
     contactsError.setAttribute('role', 'status');
-    contactPanel.append(el('h3', '按联系人筛选', 'realtime-detail-title'), allContacts, contacts, contactsError, moreContacts); sidebar.append(contactPanel);
+    contactPanel.append(el('h3', '按联系人筛选', 'realtime-detail-title'), allContacts, contacts, contactsError, moreContacts); if (!locked) sidebar.append(contactPanel);
     const heading = el('div', null, 'rt-chat-heading'), identity = el('div', null, 'rt-chat-identity'), refresh = button('刷新消息');
     heading.append(identity, refresh);
     const feed = el('div', null, 'rt-chat-feed'); feed.tabIndex = 0; feed.setAttribute('aria-label', '账号私信消息流，向上翻阅历史记录');
@@ -28,9 +28,9 @@
     const placeholder = el('p', '正在加载消息流…', 'rt-chat-placeholder text-secondary'); messages.append(placeholder); feed.append(older, messages);
     const status = el('span', '', 'text-secondary small'), newest = button('回到最新消息'); newest.hidden = true;
     const footer = el('div', null, 'rt-chat-footer'); footer.append(status, newest);
-    host.append(heading, feed, footer, el('p', '只读查看账号全部设备的存储私信；查看不会标记已读。', 'text-secondary small rt-chat-note'));
+    host.append(heading, feed, footer, el('p', locked ? '双方全部设备的存储私信；查看不会标记已读。' : '只读查看账号全部设备的存储私信；查看不会标记已读。', 'text-secondary small rt-chat-note'));
     const people = new Map(), conversations = new Map(), contactRows = new Map(), messageRows = new Map();
-    const active = new Map(); let peer = '', latestSeq = '0', latestCursor = 'origin', nextCursor = '', hasOlder = false, nextContacts = '', hasContacts = false;
+    const active = new Map(); let peer = initialPeer, latestSeq = '0', latestCursor = 'origin', nextCursor = '', hasOlder = false, nextContacts = '', hasContacts = false;
     let initialized = false, initializing = false, chatReady = false, chatBusy = false, contactsBusy = false, selection = 0, lifecycle = 0, disposed = false, headingKey = null;
     const person = id => people.get(id) || { id, nickname: '用户 ' + id, avatar_url: '' };
     function controls() { refresh.disabled = initializing || chatBusy; older.disabled = !chatReady || chatBusy || !hasOlder; moreContacts.disabled = initializing || contactsBusy || !hasContacts; }
@@ -64,7 +64,7 @@
         text.append(el('strong', '账号私信消息流'), el('small', owner.nickname + ' · 全部联系人', 'text-secondary'));
         identity.append(avatar(owner), text); return;
       }
-      const current = person(peer), text = el('div'); text.append(el('strong', current.nickname), el('small', '仅筛选与此人的往来记录', 'text-secondary'));
+      const current = person(peer), text = el('div'); text.append(el('strong', current.nickname), el('small', locked ? '双方私信往来' : '仅筛选与此人的往来记录', 'text-secondary'));
       identity.append(avatar(current), text);
     }
     function renderContacts(page, append) {
@@ -153,7 +153,7 @@
       const epoch = lifecycle;
       initializing = true; controls(); status.textContent = '正在加载消息流…'; status.className = 'text-secondary small';
       try {
-        const data = await request('initial', 'clients/detail?' + new URLSearchParams({ client_id: item.client_id })); if (!data) return;
+        const data = await request('initial', 'clients/detail?' + new URLSearchParams({ client_id: item.client_id, peer_id: initialPeer })); if (!data) return;
         receive(data); initialized = true; setPeer(data.peer_id); renderContacts(data.conversations, true); mergeMessages(data.messages, 'initial'); renderHeading();
         status.textContent = messageRows.size ? '向上翻阅历史消息' : '暂无私信记录';
       } catch (error) { status.textContent = error.message; status.className = 'text-danger small'; messages.replaceChildren(el('p', '加载失败，可点击“刷新消息”重试', 'rt-chat-placeholder text-secondary')); }
@@ -196,7 +196,7 @@
     function refreshAll() {
       if (disposed || document.hidden) return;
       if (!initialized) { initialize(); return; }
-      loadContacts(false); loadMessages(chatReady ? 'newer' : 'initial');
+      if (!locked) loadContacts(false); loadMessages(chatReady ? 'newer' : 'initial');
     }
     let lastTop = 0, touchY = null;
     feed.addEventListener('scroll', () => {

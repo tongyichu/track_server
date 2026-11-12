@@ -65,9 +65,6 @@ func (h *Handler) realtimeChatResponse(ctx context.Context, c *app.RequestContex
 	}
 	if !conversationsOnly {
 		peerText := string(c.Query("peer_id"))
-		if !messagesOnly {
-			peerText = ""
-		}
 		data["peer_id"] = peerText
 		var page *service.RealtimeChatPage
 		cursor := ""
