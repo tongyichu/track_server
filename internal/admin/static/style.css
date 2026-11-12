@@ -990,9 +990,9 @@ table.admin-audit-table { width: 100%; min-width: 900px; table-layout: fixed; }
 .admin-region-label{font-size:12px;color:var(--tblr-secondary-color);font-weight:500}
 .admin-region-control{position:relative;min-width:0;width:100%}
 .admin-region-toggle{width:100%;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--tblr-body-color);cursor:pointer}
-.admin-region-toggle.is-clearable{padding-right:62px}
+.admin-region-toggle.is-clearable{padding-right:40px;background-image:none}
 .admin-region-toggle:disabled{cursor:default}
-.admin-region-clear{position:absolute;right:30px;top:50%;transform:translateY(-50%);display:grid;place-items:center;width:24px;height:24px;padding:0;border:0;border-radius:4px;background:transparent;color:var(--tblr-secondary-color);font-size:18px;line-height:1;cursor:pointer}
+.admin-region-clear{position:absolute;right:6px;top:50%;transform:translateY(-50%);display:grid;place-items:center;width:24px;height:24px;padding:0;border:0;border-radius:4px;background:transparent;color:var(--tblr-secondary-color);font-size:18px;line-height:1;cursor:pointer}
 .admin-region-clear:hover{background:var(--tblr-bg-surface-secondary);color:var(--tblr-body-color)}
 .admin-region-clear:focus-visible{outline:2px solid var(--tblr-primary)}
 .admin-region-clear[hidden]{display:none!important}
