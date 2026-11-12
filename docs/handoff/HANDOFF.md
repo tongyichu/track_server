@@ -1,3 +1,11 @@
+# 后台轨迹缺项数字统一显示未知的修复（2026-11-12）
+
+用户反馈轨迹列表资料缺项筛选的数字全是“—”。静态定位到 adminTrackMissingSQL 的简介条件错误使用 MySQL 不存在的 description 列；表结构、启动补列及读写路径实际使用 route_description，而 Mongo 才使用 description。CountAdminTrackMissing 一次聚合全部缺项，始终包含此条件，因此整组统计失败；直接 missing=description 或 any 也会受影响。现已将共享 MySQL 条件修正为 route_description，同时修复计数和缺简介/任意缺项兼容筛选，不修改其他仓储字段、数据库或接口协议。handler 增加统计失败日志，保留列表继续返回与缺失显示未知的降级语义，避免静默吞错。
+
+无需调整 AGENTS，既有三仓储及筛选计数约束适用，字段映射说明已补充 admin-tracks.md。go build ./... 与 git diff --check 通过。用户随后要求部署，已同步远端，无新增远端提交；本轮修复纳入服务端发布提交，最终推送和部署结果以 Git、镜像、容器及健康检查记录为准。生产数字需部署后人工确认，未运行自动化业务测试或查询生产数据库，不发布 App。
+
+原交接如下：
+
 # 后台用户最近活跃时 App 版本（2026-11-12）
 
 用户要求后台用户列表行显示最近活跃时使用的 App 版本名称。Android 现有 ApiClient 已发送 X-Client-Version=BuildConfig.VERSION_NAME，无需客户端修改。服务端沿用登录成功与业务 JWT 非静态请求的 RecordActivity 入口，把请求版本与 last_active_at 同次持久化为 last_active_app_version，维持按用户约一分钟限频、跨北京时间零点立即采集和500ms best-effort 写入。版本 trim 后最多32字符，非法UTF-8/控制字符/超长值按未知；较新请求缺失版本时清空旧值，不拿其他设备或匿名升级/权限快照推测回填，不改变资料 updated_at。

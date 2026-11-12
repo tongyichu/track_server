@@ -76,7 +76,7 @@ func adminTrackMissingSQL(filter AdminTrackListFilter) (string, []any) {
 		return "", nil
 	}
 	conditions := map[string]string{
-		"description":     "COALESCE(description,'') REGEXP '^[[:space:]]*$'",
+		"description":     "COALESCE(route_description,'') REGEXP '^[[:space:]]*$'",
 		"city":            "COALESCE(city_code,'') REGEXP '^[[:space:]]*$'",
 		"scenic_spot":     `NOT EXISTS (SELECT 1 FROM track_scenic_spot_links l JOIN scenic_spots s ON s.spot_id=l.spot_id WHERE l.track_id=track_records.id AND s.status='active')`,
 		"place_candidate": "FALSE",

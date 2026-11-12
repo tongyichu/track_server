@@ -1466,6 +1466,9 @@ func (h *Handler) ListTracks(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 	missingCounts, missingCountsErr := trackSearch.CountAdminTrackMissing(ctx, filter)
+	if missingCountsErr != nil {
+		log.Printf("admin track missing counts unavailable: %v", missingCountsErr)
+	}
 	if candidateCountsUnavailable {
 		delete(missingCounts, "place_candidate")
 	}
