@@ -17,14 +17,14 @@ const userActivityDaysSchema = `CREATE TABLE IF NOT EXISTS user_activity_days (
 	PRIMARY KEY (user_id, active_date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户近七天活跃日期';`
 
-func (r *MySQLUserRepository) TouchUserActivity(ctx context.Context, userID int64, at time.Time) error {
+func (r *MySQLUserRepository) TouchUserActivity(ctx context.Context, userID int64, at time.Time, appVersion string) error {
 	first, day := userActivityDateWindow(at)
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	if _, err := tx.ExecContext(ctx, `UPDATE users SET last_active_at=? WHERE id=? AND (last_active_at IS NULL OR last_active_at<?)`, at, userID, at); err != nil {
+	if _, err := tx.ExecContext(ctx, `UPDATE users SET last_active_at=?,last_active_app_version=? WHERE id=? AND (last_active_at IS NULL OR last_active_at<?)`, at, appVersion, userID, at); err != nil {
 		return err
 	}
 	// SELECT prevents activity rows from creating nonexistent users; the key deduplicates devices/retries.
@@ -53,9 +53,9 @@ func (r *MySQLUserRepository) GetUserActivityStats(ctx context.Context, userIDs 
 		args = append(args, id)
 	}
 	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(userIDs)), ",")
-	rows, err := r.db.QueryContext(ctx, `SELECT u.id,u.last_active_at,COUNT(d.user_id)
+	rows, err := r.db.QueryContext(ctx, `SELECT u.id,u.last_active_at,u.last_active_app_version,COUNT(d.user_id)
 		FROM users u LEFT JOIN user_activity_days d ON d.user_id=u.id AND d.active_date>=? AND d.active_date<=?
-		WHERE u.id IN (`+placeholders+`) GROUP BY u.id,u.last_active_at`, args...)
+		WHERE u.id IN (`+placeholders+`) GROUP BY u.id,u.last_active_at,u.last_active_app_version`, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -64,7 +64,7 @@ func (r *MySQLUserRepository) GetUserActivityStats(ctx context.Context, userIDs 
 		var id int64
 		var last sql.NullTime
 		var stats models.UserActivityStats
-		if err := rows.Scan(&id, &last, &stats.ActiveDays7D); err != nil {
+		if err := rows.Scan(&id, &last, &stats.LastActiveAppVersion, &stats.ActiveDays7D); err != nil {
 			return nil, err
 		}
 		if last.Valid && !last.Time.IsZero() {

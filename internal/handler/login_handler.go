@@ -51,11 +51,16 @@ func (h *LoginHandler) SetAppReleaseService(appReleaseSvc *service.AppReleaseSer
 
 // recordClientActivity records account/device activity; failures do not fail login.
 func (h *LoginHandler) recordClientActivity(ctx context.Context, c *app.RequestContext, userID int64) {
-	h.userSvc.RecordActivity(ctx, userID)
+	meta := middleware.GetRequestMeta(c)
+	var appVersion string
+	if meta != nil {
+		appVersion = meta.ClientVersion
+	}
+	h.userSvc.RecordActivity(ctx, userID, appVersion)
 	if h.appReleaseSvc == nil {
 		return
 	}
-	h.appReleaseSvc.RecordClientActivity(ctx, middleware.GetRequestMeta(c), userID, 0)
+	h.appReleaseSvc.RecordClientActivity(ctx, meta, userID, 0)
 }
 
 func (h *LoginHandler) GetCaptcha(ctx context.Context, c *app.RequestContext) {

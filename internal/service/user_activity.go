@@ -3,8 +3,11 @@ package service
 import (
 	"context"
 	"log"
+	"strings"
 	"sync"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/tongyichu/track_server/internal/repository"
 )
@@ -18,7 +21,7 @@ type userActivityWindow struct {
 }
 
 // RecordActivity is best effort; activity writes never change profile updated_at.
-func (s *UserService) RecordActivity(ctx context.Context, userID int64) {
+func (s *UserService) RecordActivity(ctx context.Context, userID int64, appVersion string) {
 	if s == nil || userID <= 0 || ctx.Err() != nil {
 		return
 	}
@@ -56,7 +59,11 @@ func (s *UserService) RecordActivity(ctx context.Context, userID int64) {
 	w.mu.Unlock()
 	writeCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
 	defer cancel()
-	if err := repo.TouchUserActivity(writeCtx, userID, now); err != nil {
+	appVersion = strings.TrimSpace(appVersion)
+	if !utf8.ValidString(appVersion) || utf8.RuneCountInString(appVersion) > 32 || strings.IndexFunc(appVersion, unicode.IsControl) >= 0 {
+		appVersion = ""
+	}
+	if err := repo.TouchUserActivity(writeCtx, userID, now, appVersion); err != nil {
 		log.Printf("record user activity failed: %v", err)
 	}
 }

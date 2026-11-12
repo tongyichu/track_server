@@ -14,13 +14,15 @@ func UserActivityMiddleware(users *service.UserService) app.HandlerFunc {
 	return func(ctx context.Context, c *app.RequestContext) {
 		meta := GetRequestMeta(c)
 		var userID int64
+		var appVersion string
 		if meta != nil {
 			userID = meta.AuthUserID
+			appVersion = meta.ClientVersion
 		}
 		c.Next(ctx)
 		if userID <= 0 || strings.HasPrefix(string(c.Path()), "/api/v1/static/") || c.Response.StatusCode() >= http.StatusInternalServerError || c.Response.StatusCode() == http.StatusUnauthorized {
 			return
 		}
-		users.RecordActivity(ctx, userID)
+		users.RecordActivity(ctx, userID, appVersion)
 	}
 }

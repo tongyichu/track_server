@@ -39,7 +39,7 @@
 | 上报设备权限快照 | PUT | `/user/permission-snapshot` | 是 | [permission-snapshots.md](permission-snapshots.md) |
 | 后台查看用户设备权限 | GET | `/admin/api/users/:user_id/permission-snapshots` | 后台 users 读取权限 | [permission-snapshots.md](permission-snapshots.md) |
 | 后台用户画像与规范化城市归属统计 | GET | `/admin/api/users/statistics` | 后台 users 读取权限 | [用户地域统计](admin-regions.md#用户地域统计) |
-| 后台用户列表（最近活跃、近7天活跃天数、等级筛选、批量级别与粉丝数） | GET | `/admin/api/users` | 后台 users 读取权限 | [admin-users.md](admin-users.md#列表) |
+| 后台用户列表（最近活跃及当时 App 版本、近7天活跃天数、等级筛选、批量级别与粉丝数） | GET | `/admin/api/users` | 后台 users 读取权限 | [admin-users.md](admin-users.md#列表) |
 | 后台用户资料读取 / 编辑（手机号只读） | GET / PUT | `/admin/api/users/:user_id` | 后台 users 读 / 写权限 | [admin-users.md](admin-users.md#资料读取与保存) |
 | 后台用户互动数据与级别 | GET | `/admin/api/users/:user_id/overview` | 后台 users 读取权限 | [admin-users.md](admin-users.md#互动数据与级别) |
 | 后台用户背景图 | GET | `/admin/api/users/:user_id/background` | 后台 users 读取权限 | [admin-users.md](admin-users.md#背景图) |

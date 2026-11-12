@@ -62,6 +62,7 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 			client_language VARCHAR(64) NOT NULL DEFAULT '',
 			token_version BIGINT NOT NULL DEFAULT 1,
 			last_active_at DATETIME(6) NULL,
+			last_active_app_version VARCHAR(32) NOT NULL DEFAULT '',
 			created_at DATETIME(6) NOT NULL,
 			updated_at DATETIME(6) NOT NULL,
 			INDEX idx_users_updated_at (updated_at)
@@ -4025,6 +4026,7 @@ func ensureMySQLUserProfileColumns(ctx context.Context, db *sql.DB) error {
 		{"city_name", "city_name VARCHAR(64) NOT NULL DEFAULT ''"},
 		{"is_internal", "is_internal TINYINT(1) NOT NULL DEFAULT 0"},
 		{"last_active_at", "last_active_at DATETIME(6) NULL COMMENT '最近认证App业务请求时间'"},
+		{"last_active_app_version", "last_active_app_version VARCHAR(32) NOT NULL DEFAULT '' COMMENT '最近活跃请求的App版本名'"},
 	} {
 		var count int
 		if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='users' AND COLUMN_NAME=?`, column.name).Scan(&count); err != nil {

@@ -1189,23 +1189,26 @@ func (h *Handler) ListUsers(ctx context.Context, c *app.RequestContext) {
 	rows := make([]utils.H, 0, len(items))
 	for _, u := range items {
 		var lastActiveAt interface{}
+		var lastActiveAppVersion *string
 		var activeDays7D interface{}
 		if stats, ok := activityStats[u.ID]; ok {
 			lastActiveAt = stats.LastActiveAt
+			lastActiveAppVersion = adminUserActivityVersion(stats)
 			activeDays7D = stats.ActiveDays7D
 		}
 		row := utils.H{
-			"id":             strconv.FormatInt(u.ID, 10),
-			"nickname":       u.Nickname,
-			"avatar_url":     u.AvatarURL,
-			"gender":         u.Gender,
-			"province_name":  u.ProvinceName,
-			"city_name":      u.CityName,
-			"is_internal":    u.IsInternal,
-			"phone":          u.Phone,
-			"created_at":     u.CreatedAt,
-			"last_active_at": lastActiveAt,
-			"active_days_7d": activeDays7D,
+			"id":                      strconv.FormatInt(u.ID, 10),
+			"nickname":                u.Nickname,
+			"avatar_url":              u.AvatarURL,
+			"gender":                  u.Gender,
+			"province_name":           u.ProvinceName,
+			"city_name":               u.CityName,
+			"is_internal":             u.IsInternal,
+			"phone":                   u.Phone,
+			"created_at":              u.CreatedAt,
+			"last_active_at":          lastActiveAt,
+			"last_active_app_version": lastActiveAppVersion,
+			"active_days_7d":          activeDays7D,
 		}
 		row["level"] = nil
 		if level, ok := levels[u.ID]; ok {

@@ -9,7 +9,8 @@ import (
 
 // UserActivityRepository stores authenticated App activity independently of profile updates.
 type UserActivityRepository interface {
-	TouchUserActivity(ctx context.Context, userID int64, at time.Time) error
+	// Time and request version advance together; a newer request with no version clears the old value.
+	TouchUserActivity(ctx context.Context, userID int64, at time.Time, appVersion string) error
 	GetUserLastActiveTimes(ctx context.Context, userIDs []int64) (map[int64]time.Time, error)
 	GetUserActivityStats(ctx context.Context, userIDs []int64, now time.Time) (map[int64]models.UserActivityStats, error)
 }

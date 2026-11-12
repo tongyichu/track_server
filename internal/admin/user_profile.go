@@ -21,24 +21,25 @@ import (
 )
 
 type adminUserProfileResponse struct {
-	ID            string     `json:"id"`
-	Nickname      string     `json:"nickname"`
-	AvatarURL     string     `json:"avatar_url"`
-	Signature     string     `json:"signature"`
-	BackgroundURL string     `json:"background_url"`
-	ZodiacSign    string     `json:"zodiac_sign"`
-	Phone         string     `json:"phone"`
-	Gender        string     `json:"gender"`
-	Birthday      string     `json:"birthday"`
-	ProvinceCode  string     `json:"province_code"`
-	ProvinceName  string     `json:"province_name"`
-	CityCode      string     `json:"city_code"`
-	CityName      string     `json:"city_name"`
-	IsInternal    bool       `json:"is_internal"`
-	CreatedAt     time.Time  `json:"created_at"`
-	UpdatedAt     time.Time  `json:"updated_at"`
-	LastActiveAt  *time.Time `json:"last_active_at"`
-	ActiveDays7D  *int       `json:"active_days_7d"`
+	ID                   string     `json:"id"`
+	Nickname             string     `json:"nickname"`
+	AvatarURL            string     `json:"avatar_url"`
+	Signature            string     `json:"signature"`
+	BackgroundURL        string     `json:"background_url"`
+	ZodiacSign           string     `json:"zodiac_sign"`
+	Phone                string     `json:"phone"`
+	Gender               string     `json:"gender"`
+	Birthday             string     `json:"birthday"`
+	ProvinceCode         string     `json:"province_code"`
+	ProvinceName         string     `json:"province_name"`
+	CityCode             string     `json:"city_code"`
+	CityName             string     `json:"city_name"`
+	IsInternal           bool       `json:"is_internal"`
+	CreatedAt            time.Time  `json:"created_at"`
+	UpdatedAt            time.Time  `json:"updated_at"`
+	LastActiveAt         *time.Time `json:"last_active_at"`
+	LastActiveAppVersion *string    `json:"last_active_app_version"`
+	ActiveDays7D         *int       `json:"active_days_7d"`
 }
 
 func (h *Handler) GetUserProfile(ctx context.Context, c *app.RequestContext) {
@@ -147,9 +148,11 @@ func (h *Handler) adminUserProfile(ctx context.Context, user *models.User) *admi
 		backgroundURL = "/admin/api/users/" + strconv.FormatInt(user.ID, 10) + "/background"
 	}
 	var lastActiveAt *time.Time
+	var lastActiveAppVersion *string
 	var activeDays7D *int
 	if stats, ok := h.adminUserActivityStats(ctx, []int64{user.ID})[user.ID]; ok {
 		lastActiveAt = stats.LastActiveAt
+		lastActiveAppVersion = adminUserActivityVersion(stats)
 		activeDays7D = &stats.ActiveDays7D
 	}
 	return &adminUserProfileResponse{
@@ -159,9 +162,17 @@ func (h *Handler) adminUserProfile(ctx context.Context, user *models.User) *admi
 		ProvinceCode: user.ProvinceCode, ProvinceName: user.ProvinceName,
 		CityCode: user.CityCode, CityName: user.CityName, IsInternal: user.IsInternal,
 		CreatedAt: user.CreatedAt, UpdatedAt: user.UpdatedAt,
-		LastActiveAt: lastActiveAt,
-		ActiveDays7D: activeDays7D,
+		LastActiveAt:         lastActiveAt,
+		LastActiveAppVersion: lastActiveAppVersion,
+		ActiveDays7D:         activeDays7D,
 	}
+}
+
+func adminUserActivityVersion(stats models.UserActivityStats) *string {
+	if stats.LastActiveAt == nil || stats.LastActiveAt.IsZero() || strings.TrimSpace(stats.LastActiveAppVersion) == "" {
+		return nil
+	}
+	return &stats.LastActiveAppVersion
 }
 
 func (h *Handler) adminUserActivityStats(ctx context.Context, userIDs []int64) map[int64]models.UserActivityStats {

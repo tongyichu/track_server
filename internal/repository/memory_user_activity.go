@@ -9,7 +9,7 @@ import (
 
 var _ UserActivityRepository = (*InMemoryUserRepository)(nil)
 
-func (r *InMemoryUserRepository) TouchUserActivity(ctx context.Context, userID int64, at time.Time) error {
+func (r *InMemoryUserRepository) TouchUserActivity(ctx context.Context, userID int64, at time.Time, appVersion string) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -23,6 +23,10 @@ func (r *InMemoryUserRepository) TouchUserActivity(ctx context.Context, userID i
 	}
 	if at.After(r.lastActive[userID]) {
 		r.lastActive[userID] = at
+		if r.lastActiveVersions == nil {
+			r.lastActiveVersions = make(map[int64]string)
+		}
+		r.lastActiveVersions[userID] = appVersion
 	}
 	if r.activityDays == nil {
 		r.activityDays = make(map[int64]map[string]struct{})
@@ -55,6 +59,7 @@ func (r *InMemoryUserRepository) GetUserActivityStats(ctx context.Context, userI
 		stats := models.UserActivityStats{}
 		if at, ok := r.lastActive[id]; ok && !at.IsZero() {
 			stats.LastActiveAt = &at
+			stats.LastActiveAppVersion = r.lastActiveVersions[id]
 		}
 		for day := range r.activityDays[id] {
 			if day >= first && day <= today {

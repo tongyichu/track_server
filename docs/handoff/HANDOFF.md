@@ -1,3 +1,15 @@
+# 后台用户最近活跃时 App 版本（2026-11-12）
+
+用户要求后台用户列表行显示最近活跃时使用的 App 版本名称。Android 现有 ApiClient 已发送 X-Client-Version=BuildConfig.VERSION_NAME，无需客户端修改。服务端沿用登录成功与业务 JWT 非静态请求的 RecordActivity 入口，把请求版本与 last_active_at 同次持久化为 last_active_app_version，维持按用户约一分钟限频、跨北京时间零点立即采集和500ms best-effort 写入。版本 trim 后最多32字符，非法UTF-8/控制字符/超长值按未知；较新请求缺失版本时清空旧值，不拿其他设备或匿名升级/权限快照推测回填，不改变资料 updated_at。
+
+UserActivityRepository 的 TouchUserActivity 增加版本参数，MySQL 条件 UPDATE、Mongo 同阶段管道、内存同锁只在活跃时间更新时成对更新版本；Mongo 对客户端字符串用 $literal。MySQL 启动幂等补 users.last_active_app_version VARCHAR(32) NOT NULL DEFAULT ''，mysql.sql 同步；现有活跃日期集合及7天计数规则不变。当前页 GetUserActivityStats 一次批量补充，后台 users 列表与详情新增可空 last_active_app_version，未知/读取失败返回null，不进入业务 User/他人主页响应，无新路由或权限。
+
+用户列表在最近活跃时间下方展示次级文字 App 1.0.27，缺失时不渲染版本行；详情同样仅在有值时显示只读“活跃时版本”，不提交保存。版本经转义、长文本省略并可悬浮读全，仍为8列表格。列表加载/失败保留原行，成功按字符串用户ID复用未变行，避免刷新时整表清空。文档同步 admin-users、route-index、admin-workflows 和 server-contracts。现有 AGENTS 覆盖权限、私有数据、三仓储及列表性能边界，无需改规则。
+
+go build ./...、node --check users.js、git diff --check 通过；未新增或运行单元/接口/集成/UI测试，功能由用户人工验收。待部署后用户再次已认证活跃才补齐版本；多设备/升级、缺失头、旧记录、读取失败及只读展示为人工验收重点。用户随后要求部署并明确缺失版本不展示占位，已同步上述展示约定；本轮纳入服务端发布提交，最终推送与部署状态以 Git、镜像摘要、容器及健康检查记录为准，不发布 App。
+
+原交接如下：
+
 # 地区输入框清除图标替换下拉箭头（2026-11-12）
 
 用户指出“×”应替换下拉箭头，而不是并排显示。style.css 的 is-clearable 状态现隐藏 form-select 背景箭头，把清除按钮移至原箭头位置，并缩小文字右侧预留空间；无选择或无清除能力时恢复原下拉箭头。沿用已有 sync 状态和独立按钮，不改变选择、清空、禁用或键盘事件。组件规范同步更新，无接口、数据或规则边界变化，不需要调整 AGENTS。用户随后要求同步并部署，远端无新增提交，本次调整纳入服务端发布提交；最终推送和部署结果以 Git、镜像及健康检查记录为准，不发布 App。

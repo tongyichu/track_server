@@ -12,6 +12,9 @@
   function activeDaysText(value) {
     return Number.isInteger(value) && value >= 0 && value <= 7 ? value + ' 天' : '—';
   }
+  function activeAppVersionText(value) {
+    return typeof value === 'string' && value.trim() ? 'App ' + value.trim() : '';
+  }
   function genderText(value) {
     return value === 'male' ? '男' : (value === 'female' ? '女' : '-');
   }
@@ -453,7 +456,8 @@
       detailForm.elements.is_internal.checked = !!user.is_internal;
       document.getElementById('userDetailLocation').value = locationText(user);
       document.getElementById('userDetailName').textContent = user.nickname || '未设置昵称';
-      document.getElementById('userDetailMeta').textContent = '注册  ' + fmtTime(user.created_at) + '\n最近活跃  ' + (user.last_active_at ? fmtTime(user.last_active_at) : '—') + '\n近7天活跃  ' + activeDaysText(user.active_days_7d) + '\n资料更新  ' + fmtTime(user.updated_at);
+      var activeVersion = activeAppVersionText(user.last_active_app_version);
+      document.getElementById('userDetailMeta').textContent = '注册  ' + fmtTime(user.created_at) + '\n最近活跃  ' + (user.last_active_at ? fmtTime(user.last_active_at) : '—') + (activeVersion ? '\n活跃时版本  ' + activeVersion : '') + '\n近7天活跃  ' + activeDaysText(user.active_days_7d) + '\n资料更新  ' + fmtTime(user.updated_at);
       if (user.avatar_url) document.getElementById('userDetailAvatar').src = user.avatar_url;
       backgroundURL = user.background_url || ''; loadBackground(); renderBirthday(user.zodiac_sign);
       profileReady = true; profileFields.disabled = false; detailSave.disabled = false; renderRestriction();
@@ -525,10 +529,9 @@
     }
     prevBtn.disabled = nextBtn.disabled = true;
     lastNextCursor = null;
-    totalHint.textContent = '';
     pageHint.textContent = '正在加载…';
     tbody.setAttribute('aria-busy', 'true');
-    tbody.innerHTML = '<tr><td colspan="8">正在加载用户…</td></tr>';
+    if (!tbody.querySelector('tr[data-user-id]')) tbody.innerHTML = '<tr><td colspan="8">正在加载用户…</td></tr>';
     try {
       var resp = await fetch('/admin/api/users?' + params.toString());
       var body = await resp.json();
@@ -545,31 +548,40 @@
         levelFilter.value = selectedLevel;
       }
 
-      tbody.innerHTML = '';
+      var existing = new Map(Array.from(tbody.querySelectorAll('tr[data-user-id]')).map(function (row) { return [row.dataset.userId, row]; }));
+      var rows = [];
       items.forEach(function (it) {
         var avatar = it.avatar_url
           ? '<img class="admin-user-avatar" src="' + esc(it.avatar_url) + '" alt="" />'
           : '<span class="admin-user-avatar admin-user-avatar-empty" aria-hidden="true">👤</span>';
         avatar = '<span class="admin-user-avatar-wrap">' + avatar + (it.is_internal ? '<span class="admin-user-inner-badge">inner</span>' : '') + '</span>';
-        var tr = document.createElement('tr');
-        tr.innerHTML = '<td><div class="admin-user-identity">' + avatar + '<span class="admin-user-name"><span>' + esc(it.nickname) + '</span>' + (Number.isInteger(it.level) && it.level > 0 ? '<span class="admin-user-level">Lv.' + it.level + '</span>' : '') + '</span></div></td>' +
+        var id = String(it.id), tr = existing.get(id) || document.createElement('tr');
+        var activeVersion = activeAppVersionText(it.last_active_app_version);
+        var markup = '<td><div class="admin-user-identity">' + avatar + '<span class="admin-user-name"><span>' + esc(it.nickname) + '</span>' + (Number.isInteger(it.level) && it.level > 0 ? '<span class="admin-user-level">Lv.' + it.level + '</span>' : '') + '</span></div></td>' +
           '<td>' + esc(it.phone || '') + '</td>' +
           '<td>' + esc(genderText(it.gender)) + '</td>' +
           '<td><span class="admin-user-city-cell">' + esc(locationText(it)) + '</span></td>' +
           '<td>' + (it.follower_count == null ? '—' : esc(number(it.follower_count).toLocaleString())) + '</td>' +
-          '<td>' + (it.last_active_at ? fmtTime(it.last_active_at) : '—') + '</td>' +
+          '<td><span class="admin-user-active-time">' + (it.last_active_at ? fmtTime(it.last_active_at) : '—') + '</span>' + (activeVersion ? '<small class="admin-user-active-version" title="最近活跃时版本：' + esc(activeVersion) + '">' + esc(activeVersion) + '</small>' : '') + '</td>' +
           '<td>' + activeDaysText(it.active_days_7d) + '</td>' +
           '<td><div class="admin-user-actions"><button data-action="detail" data-user-id="' + esc(it.id) + '">查看详情</button>' + '</div></td>';
-        tbody.appendChild(tr);
+        tr.dataset.userId = id;
+        if (tr.dataset.markup !== markup) { tr.innerHTML = markup; tr.dataset.markup = markup; }
+        rows.push(tr);
       });
-      if (!items.length) tbody.innerHTML = '<tr><td colspan="8">暂无符合条件的用户</td></tr>';
+      if (!rows.length) {
+        var empty = document.createElement('tr'); empty.innerHTML = '<td colspan="8">暂无符合条件的用户</td>'; rows.push(empty);
+      }
+      var wanted = new Set(rows);
+      Array.from(tbody.children).forEach(function (row) { if (!wanted.has(row)) row.remove(); });
+      rows.forEach(function (row, index) { if (tbody.children[index] !== row) tbody.insertBefore(row, tbody.children[index] || null); });
       nextBtn.disabled = !lastNextCursor;
       pageHint.textContent = '第 ' + (pageIndex + 1) + ' 页 · 本页 ' + items.length + ' 个用户';
       totalHint.textContent = '共 ' + totalCount.toLocaleString() + ' 个用户';
     } catch (error) {
       if (request !== listRequest) return;
-      tbody.innerHTML = '<tr><td colspan="8">加载失败：' + esc(error.message) + '。请点击“刷新”重试。</td></tr>';
-      pageHint.textContent = '加载失败';
+      if (!tbody.querySelector('tr[data-user-id]')) tbody.innerHTML = '<tr><td colspan="8">加载失败：' + esc(error.message) + '。请点击“刷新”重试。</td></tr>';
+      pageHint.textContent = '加载失败：' + error.message + '。请点击“刷新”重试。';
     } finally {
       if (request === listRequest) {
         tbody.removeAttribute('aria-busy');
