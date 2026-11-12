@@ -123,6 +123,7 @@ func (s *MessageService) RunMessageDelivery(ctx context.Context) {
 				}
 				lastPrune = messageNow()
 			}
+			s.activateScheduledAnnouncements(work)
 			s.repairPending(work)
 			s.deliverPending(work)
 			if s.companion != nil && s.companion.publisher != nil && time.Since(lastHeartbeat) >= 20*time.Second && work.Err() == nil {

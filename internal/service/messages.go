@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/tongyichu/track_server/internal/models"
@@ -141,19 +142,17 @@ func messagePageLimit(limit int) int {
 
 func (s *MessageService) noticeFilter(ctx context.Context, user int64, unread bool) (repository.MessageFilter, error) {
 	f := repository.MessageFilter{Kinds: []string{"notice"}, ActiveOnly: true, Audience: strconv.FormatInt(user, 10), MaxTime: messageNow()}
+	profile, err := s.users.FindByID(ctx, user)
+	if err != nil {
+		return f, err
+	}
+	state, err := s.userState(ctx, user)
+	if err != nil {
+		return f, err
+	}
+	f.NoticeRegisteredAt, f.NoticeReadAfter = profile.CreatedAt, state.AllReadAt
 	if unread {
-		state, err := s.userState(ctx, user)
-		if err != nil {
-			return f, err
-		}
-		profile, err := s.users.FindByID(ctx, user)
-		if err != nil {
-			return f, err
-		}
-		f.After = state.AllReadAt
-		if profile.CreatedAt.After(f.After) {
-			f.After = profile.CreatedAt
-		}
+		f.NoticeUnreadOnly = true
 		f.ExcludeNoticeReadUser = user
 	}
 	return f, nil
@@ -175,17 +174,9 @@ func (s *MessageService) ListNotices(ctx context.Context, user int64, cursor str
 	rows, more, next := messagePageRows(rows, limit)
 	keys := make([]string, len(rows))
 	for i, row := range rows {
-		keys[i] = repository.MessageNoticeReadKey(user, row.ID)
+		keys[i] = repository.MessageNoticeReadKey(user, repository.MessageNoticeClientID(row))
 	}
 	marks, err := s.repo.GetMessageRecords(ctx, keys)
-	if err != nil {
-		return nil, err
-	}
-	state, err := s.userState(ctx, user)
-	if err != nil {
-		return nil, err
-	}
-	profile, err := s.users.FindByID(ctx, user)
 	if err != nil {
 		return nil, err
 	}
@@ -196,7 +187,8 @@ func (s *MessageService) ListNotices(ctx context.Context, user int64, cursor str
 			return nil, err
 		}
 		v.Revision = row.Revision
-		v.Unread = row.CreatedAt.After(state.AllReadAt) && row.CreatedAt.After(profile.CreatedAt) && marks[repository.MessageNoticeReadKey(user, row.ID)] == nil
+		v.ID = repository.MessageNoticeClientID(row)
+		v.Unread = repository.MessageNoticeUnread(row, f.NoticeRegisteredAt, f.NoticeReadAfter, f.MaxTime) && marks[repository.MessageNoticeReadKey(user, v.ID)] == nil
 		out.Items = append(out.Items, &models.AnnouncementView{ID: v.ID, Kind: v.Kind, Title: v.Title, Body: v.Body, H5URL: v.H5URL, PublishAt: v.PublishAt, ExpiresAt: v.ExpiresAt, Unread: v.Unread})
 	}
 	return out, nil
@@ -205,14 +197,25 @@ func (s *MessageService) ReadNotices(ctx context.Context, user int64, ids []stri
 	if len(ids) > 100 {
 		return invalidArg("too many notice IDs")
 	}
-	rows, err := s.repo.GetMessageRecords(ctx, ids)
+	baseIDs := make([]string, len(ids))
+	for i, id := range ids {
+		baseIDs[i] = id
+		if index := strings.LastIndexByte(id, '~'); index >= 0 {
+			baseIDs[i] = id[:index]
+		}
+	}
+	rows, err := s.repo.GetMessageRecords(ctx, baseIDs)
+	if err != nil {
+		return err
+	}
+	profile, err := s.users.FindByID(ctx, user)
 	if err != nil {
 		return err
 	}
 	now := messageNow()
-	for _, id := range ids {
-		row := rows[id]
-		if row == nil || row.Kind != "notice" || !row.Active || row.CreatedAt.After(now) {
+	for index, id := range ids {
+		row := rows[baseIDs[index]]
+		if row == nil || row.Kind != "notice" || !row.Active || row.CreatedAt.After(now) || id != repository.MessageNoticeClientID(row) || !repository.MessageNoticeEligible(row, profile.CreatedAt) {
 			continue
 		}
 		allowed := len(row.Targets) == 0

@@ -730,6 +730,8 @@ CREATE TABLE IF NOT EXISTS message_records (
  pending BOOLEAN NOT NULL DEFAULT FALSE, flag_a BOOLEAN NOT NULL DEFAULT FALSE,
  flag_b BOOLEAN NOT NULL DEFAULT FALSE,
  clear_a BIGINT NOT NULL DEFAULT 0, clear_b BIGINT NOT NULL DEFAULT 0, targets JSON NOT NULL,
+ notice_mode VARCHAR(16) NOT NULL DEFAULT '', notice_round BIGINT NOT NULL DEFAULT 0,
+ notice_until BIGINT NOT NULL DEFAULT 0,
  revision BIGINT NOT NULL, payload JSON NOT NULL,
  INDEX idx_messages_kind(kind,created_at,id),
  INDEX idx_messages_user(kind,user_id,created_at,id),
