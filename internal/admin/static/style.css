@@ -989,13 +989,19 @@ table.admin-audit-table { width: 100%; min-width: 900px; table-layout: fixed; }
 .admin-region-field{display:flex;flex-direction:column;gap:5px;min-width:180px;flex:0 1 210px}
 .admin-region-label{font-size:12px;color:var(--tblr-secondary-color);font-weight:500}
 .admin-region-toggle{width:100%;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--tblr-body-color)}
-.admin-region-popup{position:fixed;z-index:1800;display:flex;flex-direction:column;padding:10px;background:var(--tblr-bg-surface);border:1px solid var(--tblr-border-color);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.16)}
+.admin-region-popup{position:fixed;z-index:1800;display:grid;grid-template-columns:minmax(112px,2fr) minmax(140px,3fr);padding:0;background:var(--tblr-bg-surface);border:1px solid var(--tblr-border-color);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.12);overflow:hidden}
 .admin-region-popup[hidden]{display:none!important}
-.admin-region-heading{display:flex;align-items:center;gap:10px;flex:none;padding:2px 2px 10px}
-.admin-region-options{display:flex;flex-direction:column;overflow-y:auto;min-height:0;overscroll-behavior:contain}
-.admin-region-option{border:0;background:transparent;color:var(--tblr-body-color);text-align:left;padding:9px 12px;border-radius:5px;flex:none;overflow-wrap:anywhere}
-.admin-region-option:hover,.admin-region-option:focus-visible{background:var(--tblr-bg-surface-secondary)}
+.admin-region-column{display:flex;flex-direction:column;min-height:0;min-width:0}
+.admin-region-column+.admin-region-column{border-left:1px solid var(--tblr-border-color)}
+.admin-region-column-title{flex:none;padding:10px 12px 7px;color:var(--tblr-secondary-color);font-size:12px;line-height:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.admin-region-options{display:flex;flex:1;flex-direction:column;overflow-y:auto;min-height:0;padding:0 4px 4px;overscroll-behavior:contain;scrollbar-width:thin}
+.admin-region-option{position:relative;flex:none;min-width:0;min-height:36px;border:0;background:transparent;color:var(--tblr-body-color);text-align:left;padding:7px 9px;border-radius:4px;font-size:13px;line-height:22px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.admin-region-province{padding-right:25px}
+.admin-region-province::after{content:"";position:absolute;right:11px;top:15px;width:5px;height:5px;border-top:1px solid currentColor;border-right:1px solid currentColor;transform:rotate(45deg);opacity:.55}
+.admin-region-option:hover,.admin-region-province.is-browsing{background:var(--tblr-bg-surface-secondary)}
+.admin-region-option:focus-visible{outline:2px solid var(--tblr-primary);outline-offset:-2px}
 .admin-region-option[aria-pressed=true]{background:var(--tblr-primary-lt);color:var(--tblr-primary);font-weight:600}
+@media(pointer:coarse){.admin-region-option{min-height:42px;padding-block:10px}}
 .companion-search .admin-region-label{display:none}
 .companion-search .admin-region-toggle{width:100%}
 .scenic-new-city-fields .admin-region-field{grid-column:1/-1;width:min(420px,100%)}
