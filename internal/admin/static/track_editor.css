@@ -1,6 +1,7 @@
 .admin-track-editor .modal-header, .admin-track-editor .modal-footer { padding: 12px 16px; }
 .admin-track-editor .modal-body { padding: 16px; }
-.admin-track-editor .admin-dialog-form { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 12px; }
+.admin-track-editor .admin-dialog-form { display: flex; flex-direction: column; gap: 16px; }
+.admin-track-editor [hidden] { display: none !important; }
 .admin-track-editor .form-label { min-width: 0; font-size: 12px; line-height: 1.4; }
 .admin-track-editor .form-control { min-width: 0; min-height: 32px; margin-top: 4px; padding: 6px 9px; font-size: 13px; }
 .admin-track-editor textarea.form-control { min-height: 56px; }
@@ -10,14 +11,14 @@
 .admin-track-editor .admin-track-description-candidate { margin-top: 12px; padding: 12px; border: 1px solid var(--tblr-border-color); border-radius: 8px; background: var(--tblr-bg-surface-secondary); }
 .admin-track-editor .admin-track-description-candidate .form-control { min-height: 88px; }
 .admin-track-editor .admin-track-description-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 10px; font-weight: normal; }
-.admin-track-editor .admin-track-detail-side { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
+.admin-track-editor .admin-track-detail-side { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); align-items: start; gap: 16px; margin-bottom: 0; }
 .admin-track-editor .admin-track-detail-side > * { min-width: 0; margin-bottom: 0; }
 .admin-track-editor .admin-track-detail-side .card-body { padding: 12px; font-size: 12px; }
 .admin-track-editor .admin-track-detail-side .card-title { margin-bottom: 8px; font-size: 15px; }
 .admin-track-editor .admin-track-candidates { padding: 12px; }
-.admin-track-editor .admin-track-map { display: flex; flex-direction: column; grid-column: 2; grid-row: 1; padding: 12px; border: 1px solid var(--tblr-border-color); border-radius: 10px; }
-.admin-track-editor .admin-track-map-body { display: flex; flex: 1; flex-direction: column; font-size: 12px; }
-.admin-track-editor .admin-track-map-canvas { flex: 1; height: auto; min-height: 220px; }
+.admin-track-editor .admin-track-map { display: flex; flex-direction: column; align-self: start; grid-column: 2; grid-row: 1; padding: 12px; border: 1px solid var(--tblr-border-color); border-radius: 10px; }
+.admin-track-editor .admin-track-map-body { display: flex; flex: none; flex-direction: column; min-height: 0; font-size: 12px; }
+.admin-track-editor .admin-track-map-canvas { flex: 0 0 320px; height: 320px; min-height: 0; max-height: 320px; }
 .admin-track-map-poi { position: relative; width: 280px; max-width: 70vw; padding: 14px; border: 1px solid var(--tblr-border-color); border-radius: 10px; background: var(--tblr-bg-surface); box-shadow: 0 6px 24px #0003; color: var(--tblr-body-color); overflow-wrap: anywhere; font-size: 12px; }
 .admin-track-map-poi .btn-close { position: absolute; top: 8px; right: 8px; width: 10px; height: 10px; }
 .admin-track-map-poi strong { padding-right: 18px; }
@@ -25,49 +26,60 @@
 .admin-track-map-poi p { margin-bottom: 8px; }
 .admin-track-map-poi .btn { white-space: normal; }
 .admin-track-map-poi-list { display: flex; flex-wrap: wrap; gap: 6px; max-height: 140px; overflow-y: auto; }
-.admin-track-assets { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--tblr-border-color); }
-.admin-track-file { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-size: 13px; }
+.admin-track-editor .admin-track-content-grid { display: grid; grid-template-columns: minmax(0, 1fr) 248px; align-items: start; gap: 16px; }
+.admin-track-editor .admin-track-main, .admin-track-editor .admin-track-assets { min-width: 0; margin: 0; padding: 16px; border: 1px solid var(--tblr-border-color); border-radius: 10px; background: var(--tblr-bg-surface); }
+.admin-track-editor .admin-track-assets { padding: 12px; }
+.admin-track-file { display: flex; align-items: flex-start; gap: 8px; margin-top: 14px; font-size: 13px; }
+.admin-track-file-info { display: flex; flex: 1; flex-direction: column; gap: 3px; min-width: 0; overflow-wrap: anywhere; }
+.admin-track-file-info > .btn { align-self: flex-start; padding: 0; }
 .admin-track-download { display: inline-flex; align-items: center; justify-content: center; padding: 5px; }
-.admin-track-preview-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); gap: 10px; }
+.admin-track-preview-grid { display: grid; grid-template-columns: minmax(0, 1fr); max-width: 240px; }
 .admin-track-preview-grid figure { min-width: 0; margin: 0; }
 .admin-track-preview-grid figcaption { margin-bottom: 5px; color: var(--tblr-secondary-color); font-size: 12px; }
-.admin-track-preview-image { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; height: auto; aspect-ratio: 4 / 3; overflow: hidden; border: 1px solid var(--tblr-border-color); border-radius: 6px; background: var(--tblr-bg-surface-secondary); color: var(--tblr-secondary-color); font-size: 13px; }
+.admin-track-preview-image { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; height: auto; aspect-ratio: 1; overflow: hidden; border: 1px solid var(--tblr-border-color); border-radius: 6px; background: var(--tblr-bg-surface-secondary); color: var(--tblr-secondary-color); font-size: 13px; }
 .admin-track-preview-image img { display: block; width: 100%; height: 100%; object-fit: contain; cursor: zoom-in; }
-@media (max-width: 1199px) {
-  .admin-track-editor .admin-dialog-form { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-}
 @media (max-width: 991px) {
   .admin-track-editor .admin-track-detail-side { grid-template-columns: minmax(0, 1fr); }
+  .admin-track-editor .admin-track-content-grid { grid-template-columns: minmax(0, 1fr); }
   .admin-track-editor .admin-track-map { grid-column: auto; grid-row: auto; }
-  .admin-track-editor .admin-track-map-canvas { height: 240px; flex: auto; }
+  .admin-track-editor .admin-track-map-canvas { flex-basis: 240px; height: 240px; max-height: 240px; }
 }
-@media (max-width: 767px) {
-  .admin-track-editor .admin-dialog-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .admin-track-editor .admin-dialog-form .full { grid-column: 1 / -1; }
-}
-@media (max-width: 480px) {
-  .admin-track-editor .admin-dialog-form { grid-template-columns: minmax(0, 1fr); }
-}
-
 .admin-track-editor .admin-dialog-form > .full { grid-column: 1 / -1; }
 .admin-track-editor .admin-track-tag-section { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--tblr-border-color); }
 .admin-track-editor .admin-track-tag-section h4, .admin-track-editor .admin-track-candidates h3, .admin-track-editor .admin-track-nearby h4 { margin: 0 0 8px; font-size: 13px; }
 .admin-track-editor .admin-track-tag-section .form-label { display: block; }
 .admin-track-editor .admin-track-tag-section .form-control { width: 100%; }
+.admin-track-editor .admin-track-tag-heading, .admin-track-pattern-control { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px; }
+.admin-track-editor .admin-track-tag-heading { margin-bottom: 8px; }
+.admin-track-editor .admin-track-tag-heading h4 { margin: 0; }
+.admin-track-pattern-control { justify-content: flex-start; }
+.admin-track-label-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.admin-track-label-tag.btn { max-width: 100%; min-height: 28px; padding: 4px 10px; border-radius: 999px; font-size: 12px; white-space: normal; overflow-wrap: anywhere; }
+.admin-track-editor .admin-track-label-tag.is-selected { color: var(--tblr-primary); border-color: var(--tblr-primary); background: var(--tblr-primary-lt); }
+.admin-track-editor .admin-track-pattern-input { max-width: 280px; margin-top: 8px; }
+.admin-track-pattern-status { margin: 8px 0 0; font-size: 12px; }
+.admin-track-pattern-details { margin-top: 8px; color: var(--tblr-secondary-color); font-size: 12px; }
+.admin-track-pattern-details > summary { cursor: pointer; }
+.admin-track-pattern-details[open] { max-height: 200px; overflow-y: auto; }
 .admin-track-editor .admin-track-candidates { margin-top: 12px; padding: 12px 0 0; border: 0; border-top: 1px solid var(--tblr-border-color); border-radius: 0; }
+.admin-track-candidates [hidden] { display: none !important; }
+.admin-track-place-tags { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 6px; max-height: 180px; overflow-y: auto; }
+.admin-track-place-tag.btn { max-width: 100%; min-height: 28px; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 500; white-space: normal; overflow-wrap: anywhere; text-align: left; }
+.admin-track-primary-spot { margin: 0 0 8px; }
+.admin-track-primary-spot .admin-track-spot-tag { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
 .admin-track-editor .admin-track-nearby { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--tblr-border-color); }
 .admin-track-editor .admin-track-map > .admin-track-candidates-heading { justify-content: flex-start; flex-wrap: wrap; gap: 8px; }
 .admin-track-editor .admin-track-coordinate { display: flex; align-items: center; gap: 6px; margin: 0 0 0 auto; }
 .admin-track-editor .admin-track-coordinate .form-control { width: auto; max-width: 210px; margin-top: 0; }
 .admin-track-editor .admin-track-metrics { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--tblr-border-color); }
 .admin-track-editor .admin-track-metrics h3 { margin: 0 0 10px; font-size: 15px; }
-.admin-track-editor .admin-track-metrics dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 0; }
+.admin-track-editor .admin-track-metrics dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0; }
 .admin-track-editor .admin-track-metrics dt { color: var(--tblr-secondary-color); font-size: 12px; font-weight: 400; }
 .admin-track-editor .admin-track-metrics dd { margin: 4px 0 0; font-size: 14px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 
-.admin-track-editor .admin-track-basic { padding-top: 14px; border-top: 1px solid var(--tblr-border-color); }
+.admin-track-editor .admin-track-basic { padding: 0; border: 0; }
 .admin-track-editor .admin-track-basic h3, .admin-track-assets h3 { margin: 0 0 12px; font-size: 15px; }
-.admin-track-editor .admin-track-basic-fields { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.admin-track-editor .admin-track-basic-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .admin-track-editor .admin-track-basic-fields .form-label { margin: 0; }
 .admin-track-editor .admin-track-field-wide { grid-column: span 2; }
 .admin-track-editor .admin-track-description { margin-top: 4px; padding-top: 14px; border-top: 1px solid var(--tblr-border-color); }
@@ -76,9 +88,11 @@
 .admin-track-poi-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 @media (max-width: 767px) {
   .admin-track-editor .admin-track-basic-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-track-editor .admin-track-metrics dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 480px) {
   .admin-track-editor .admin-track-basic-fields { grid-template-columns: minmax(0, 1fr); }
   .admin-track-editor .admin-track-field-wide { grid-column: auto; }
   .admin-track-editor .admin-track-coordinate { margin-left: 0; flex-wrap: wrap; }
+  .admin-track-editor .admin-track-metrics dl > div:nth-child(-n+2) { grid-column: 1 / -1; }
 }

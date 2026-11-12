@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  function trackAssets(trackID, track) {
+  function trackAssets(trackID, track, signal) {
     const section = document.createElement('section');
     section.className = 'admin-track-assets';
     const heading = document.createElement('h3'); heading.textContent = '轨迹预览'; section.appendChild(heading);
@@ -18,22 +18,42 @@
       download.title = '下载原始轨迹文件';
       download.setAttribute('aria-label', '下载原始轨迹文件');
       download.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 16v4h14v-4"/></svg>';
-      fileRow.append(download, label);
+      const info = document.createElement('div'); info.className = 'admin-track-file-info';
+      const metadata = document.createElement('span'); metadata.className = 'text-secondary'; metadata.setAttribute('role', 'status');
+      const retry = document.createElement('button'); retry.type = 'button'; retry.className = 'btn btn-sm btn-link'; retry.textContent = '重试'; retry.hidden = true;
+      info.append(label, metadata, retry); fileRow.append(download, info);
+      let loading = false;
+      section.loadMetadata = async function () {
+        if (loading || signal.aborted) return;
+        loading = true; retry.hidden = true; metadata.textContent = '正在读取文件信息…';
+        const controller = new AbortController(), cancel = () => controller.abort();
+        signal.addEventListener('abort', cancel, { once: true });
+        const timer = setTimeout(cancel, 25000);
+        try {
+          const response = await fetch(assetURL('raw') + '?metadata=1', { signal: controller.signal });
+          const result = await response.json();
+          if (!response.ok) throw new Error('文件信息读取失败');
+          const data = result.data || {}, bytes = data.file_size;
+          if (typeof bytes !== 'number' || !Number.isFinite(bytes) || bytes < 0) throw new Error('文件大小无效');
+          const units = ['B', 'KB', 'MB', 'GB']; let size = bytes, unit = 0;
+          while (size >= 1024 && unit < units.length - 1) { size /= 1024; unit++; }
+          if (!signal.aborted) metadata.textContent = (data.file_type || '未知类型') + ' · ' + size.toLocaleString('zh-CN', { maximumFractionDigits: unit ? 2 : 0 }) + ' ' + units[unit];
+        } catch (_) {
+          if (!signal.aborted) { metadata.textContent = '文件信息读取失败'; retry.hidden = false; }
+        } finally { clearTimeout(timer); signal.removeEventListener('abort', cancel); loading = false; }
+      };
+      retry.addEventListener('click', section.loadMetadata);
     } else {
       const missing = document.createElement('span');
       missing.className = 'text-secondary';
       missing.textContent = '缺失';
       fileRow.append(label, missing);
     }
-    section.appendChild(fileRow);
     const grid = document.createElement('div');
     grid.className = 'admin-track-preview-grid';
     const previews = track.preview_images || {};
     [
-      ['square_day', '方形日间', previews.square_day_url],
-      ['square_night', '方形夜间', previews.square_night_url],
-      ['landscape_day', '横版日间', previews.landscape_day_url],
-      ['landscape_night', '横版夜间', previews.landscape_night_url]
+      ['square_day', '1:1 日间', previews.square_day_url]
     ].forEach(function (asset) {
       const figure = document.createElement('figure');
       if (asset[0].startsWith('square')) figure.className = 'admin-track-preview-square';
@@ -66,7 +86,7 @@
       figure.append(caption, stage);
       grid.appendChild(figure);
     });
-    section.appendChild(grid);
+    section.append(grid, fileRow);
     return section;
   }
 
@@ -91,6 +111,26 @@
       group.append(term, detail); list.appendChild(group);
     });
     section.append(title, list); return section;
+  }
+
+  function labelChoices(input, choices, editable, label) {
+    const tags = document.createElement('div'); tags.className = 'admin-track-label-tags';
+    tags.setAttribute('role', 'group'); tags.setAttribute('aria-label', label);
+    choices.forEach(item => {
+      const button = document.createElement('button'); button.type = 'button'; button.className = 'btn btn-sm btn-outline-secondary admin-track-label-tag';
+      button.textContent = item.label; button.title = item.label; button.disabled = !editable || input.disabled;
+      const selected = input.value === String(item.value);
+      button.classList.toggle('is-selected', selected); button.setAttribute('aria-pressed', String(selected));
+      if (editable) button.dataset.adminWrite = 'tracks';
+      button.addEventListener('click', () => {
+        if (!editable || input.disabled || input.value === String(item.value)) return;
+        input.value = item.value;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      tags.appendChild(button);
+    });
+    return tags;
   }
 
   async function openTrackEditor(trackID, options) {
@@ -127,11 +167,11 @@
         function renderLabelBadges() {
           if (!labelBadges) return;
           labelBadges.replaceChildren();
-          (track.labels || []).filter(label => label.value !== false).forEach(label => {
+          (track.labels || []).filter(label => label.value !== false && !['sport', 'shape', 'scenic_spot'].includes(label.type)).forEach(label => {
             const badge = document.createElement('span'); badge.className = 'badge bg-secondary-lt';
             badge.textContent = label.name || label.type; labelBadges.appendChild(badge);
           });
-          if (!labelBadges.childElementCount) labelBadges.textContent = '暂无标签';
+          labelBadges.hidden = !labelBadges.childElementCount;
         }
         function updateScenicSpot(data) {
           if (labelAbort.signal.aborted) return;
@@ -164,7 +204,7 @@
           onScenicSpotRefresh: refreshScenicSpot,
           onNearbyResults: function (state) { if (placeCandidates) placeCandidates.showNearby(state); }
         }) : null;
-        const assets = trackAssets(trackID, track);
+        const assets = trackAssets(trackID, track, labelAbort.signal);
         function setupRouteDescription(view) {
           const input = view.form.elements.description;
           const oldGroup = input.parentNode;
@@ -286,9 +326,35 @@
           onReady: function (view) {
             view.form.prepend(detailLayout);
             detailLayout.classList.add('full');
-            workoutFields.appendChild(view.form.elements.track_type.parentNode);
-            shapeFields.appendChild(view.form.elements.shape_label.parentNode);
+            const editable = !readOnly && !isDeleted;
+            const workout = view.form.elements.track_type;
+            workout.parentNode.hidden = true; workoutFields.appendChild(workout.parentNode);
+            const workoutTags = document.createElement('div'); workoutFields.appendChild(workoutTags);
+            const renderWorkout = () => workoutTags.replaceChildren(labelChoices(workout, typeFields, editable, '运动标签'));
+            workout.addEventListener('change', renderWorkout); renderWorkout();
+            const pattern = view.form.elements.shape_label, patternGroup = pattern.parentNode;
+            pattern.setAttribute('aria-label', '图案标签'); patternGroup.hidden = true; patternGroup.classList.add('admin-track-pattern-input');
+            Array.from(patternGroup.childNodes).forEach(node => { if (node.nodeType === Node.TEXT_NODE) node.remove(); });
+            const patternControl = document.createElement('div'); patternControl.className = 'admin-track-pattern-control';
+            const patternTags = document.createElement('div'); patternControl.appendChild(patternTags);
+            const renderPattern = () => {
+              const choices = [{ value: '', label: '无图案' }];
+              const values = new Set([track.shape_label, shapeCandidate && shapeCandidate.label, pattern.value].filter(value => typeof value === 'string' && value.trim()));
+              values.forEach(value => choices.push({ value: value, label: value }));
+              patternTags.replaceChildren(labelChoices(pattern, choices, editable, '图案标签'));
+            };
+            pattern.addEventListener('input', renderPattern); pattern.addEventListener('change', renderPattern); renderPattern();
+            if (editable) {
+              const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'btn btn-sm btn-link'; edit.textContent = '手动填写';
+              edit.setAttribute('aria-expanded', 'false'); edit.dataset.adminWrite = 'tracks';
+              edit.addEventListener('click', () => { patternGroup.hidden = !patternGroup.hidden; edit.setAttribute('aria-expanded', String(!patternGroup.hidden)); if (!patternGroup.hidden) pattern.focus(); });
+              patternControl.appendChild(edit);
+            }
+            shapeFields.append(patternControl, patternGroup);
             if (mapPreview) mapPreview.setCoordinateControl(view.form.elements.coordinate_system.parentNode);
+            const layout = document.createElement('div'); layout.className = 'admin-track-content-grid full';
+            const main = document.createElement('div'); main.className = 'admin-track-main';
+            layout.append(main, assets); view.form.appendChild(layout);
             const basic = document.createElement('section'); basic.className = 'admin-track-basic full';
             const basicTitle = document.createElement('h3'); basicTitle.textContent = '基本信息';
             const basicFields = document.createElement('div'); basicFields.className = 'admin-track-basic-fields';
@@ -298,10 +364,11 @@
               basicFields.appendChild(group);
             });
             basic.append(basicTitle, basicFields);
-            view.form.appendChild(basic);
-            const metrics = trackMetrics(track); metrics.classList.add('full'); view.form.appendChild(metrics);
+            main.appendChild(basic);
+            const metrics = trackMetrics(track); main.appendChild(metrics);
             setupRouteDescription(view);
-            view.form.appendChild(view.form.elements.description.parentNode);
+            main.appendChild(view.form.elements.description.parentNode);
+            if (assets.loadMetadata) assets.loadMetadata();
             if (Array.isArray(options.cities)) return;
             const select = view.form.elements.city_code;
             const hint = document.createElement('span'); hint.className = 'text-secondary d-block mt-1';
@@ -374,23 +441,28 @@
             renderLabelBadges();
             content.appendChild(labelBadges);
             const workoutSection = document.createElement('section'); workoutSection.className = 'admin-track-tag-section';
-            const workoutTitle = document.createElement('h4'); workoutTitle.textContent = '运动类型';
+            const workoutTitle = document.createElement('h4'); workoutTitle.textContent = '运动标签';
             workoutFields = document.createElement('div'); workoutSection.append(workoutTitle, workoutFields);
             const shapeSection = document.createElement('section'); shapeSection.className = 'admin-track-tag-section';
-            const shapeTitle = document.createElement('h4'); shapeTitle.textContent = '形象标签';
-            shapeFields = document.createElement('div'); shapeSection.append(shapeTitle, shapeFields);
+            const shapeHeading = document.createElement('div'); shapeHeading.className = 'admin-track-tag-heading';
+            const shapeTitle = document.createElement('h4'); shapeTitle.textContent = '图案标签'; shapeHeading.appendChild(shapeTitle);
+            shapeFields = document.createElement('div'); shapeSection.append(shapeHeading, shapeFields);
             content.append(workoutSection, shapeSection);
-            const states = { cancelled: 'AI 自动任务已中断，可在 AI 使用中手动重试', historical: '历史轨迹，未自动生成，可手动填写', waiting: '等待自动生成', running: '正在生成', ready: '生成完成，等待写入', complete: '自动生成已完成（无明确形象时不打标）', retry: '等待重试', failed: '自动生成失败', not_queued: '未进入自动任务', unconfigured: 'AI 未配置' };
-            const status = document.createElement('p'); status.className = 'text-secondary mb-2';
+            const states = { cancelled: 'AI 自动任务已中断，可在 AI 使用中手动重试', historical: '历史轨迹，未自动生成，可手动填写', waiting: '等待自动生成', running: '正在生成', ready: '生成完成，等待写入', complete: '自动生成已完成（无明确图案时不打标）', retry: '等待重试', failed: '自动生成失败', not_queued: '未进入自动任务', unconfigured: 'AI 未配置' };
+            const status = document.createElement('p'); status.className = 'text-secondary admin-track-pattern-status'; status.hidden = true;
             const generation = trackPayload.label_generation || {};
-            status.textContent = (states[generation.status] || '状态暂不可用') + (generation.attempts ? '，已尝试 ' + generation.attempts + ' 次' : '') + (generation.reason ? '：' + generation.reason : '');
             shapeSection.appendChild(status);
-            const diagnosis = document.createElement('div'); diagnosis.className = 'mb-2'; shapeSection.appendChild(diagnosis);
+            const diagnostics = document.createElement('details'); diagnostics.className = 'admin-track-pattern-details';
+            const diagnosticsTitle = document.createElement('summary'); diagnosticsTitle.textContent = '识别详情';
+            const generationStatus = document.createElement('p'); generationStatus.className = 'text-secondary mt-2 mb-2';
+            generationStatus.textContent = (states[generation.status] || '状态暂不可用') + (generation.attempts ? '，已尝试 ' + generation.attempts + ' 次' : '') + (generation.reason ? '：' + generation.reason : '');
+            const diagnosis = document.createElement('div'); diagnosis.className = 'mb-2';
+            diagnostics.append(diagnosticsTitle, generationStatus, diagnosis); shapeSection.appendChild(diagnostics);
             function showDiagnosis(value) {
               diagnosis.replaceChildren();
               if (!value) return;
               const summary = document.createElement('p'); summary.className = 'text-secondary mb-1';
-              const outcome = { recognized: '识别到候选形象', ambiguous: '形象存在歧义', no_candidate: '未找到明确候选' };
+              const outcome = { recognized: '识别到候选图案', ambiguous: '图案存在歧义', no_candidate: '未找到明确候选' };
               const suitability = { appropriate: '适宜展示', inappropriate: '不适宜展示', undetermined: '适宜性未确定' };
               summary.textContent = (outcome[value.recognition_status] || '') + '；' + (suitability[value.appropriateness] || '') + '。' + (value.decision_summary || '');
               diagnosis.appendChild(summary);
@@ -411,33 +483,33 @@
               const names = { cancelled: 'AI 复核已中断', pending: '等待复核', running: '正在复核', retry: '等待重试', reviewed: '已复核，等待保存经验', learned: '已纳入识别经验', disputed: '图像依据不足，未采纳为经验', stale: '资料已变化，样例已失效', failed: '复核失败', unavailable: '状态读取失败' };
               const note = document.createElement('p'); note.className = 'text-secondary mb-2';
               note.textContent = '人工标注学习：' + (names[learning.status] || learning.status) + (learning.review ? '。依据：' + learning.review.evidence + '。经验：' + learning.review.lesson : '');
-              shapeSection.appendChild(note);
+              diagnostics.appendChild(note);
             }
             if (!readOnly && !isDeleted) {
-              const button = document.createElement('button'); button.type = 'button'; button.className = 'btn btn-outline-primary'; button.textContent = 'AI 生成形象';
+              const button = document.createElement('button'); button.type = 'button'; button.className = 'btn btn-sm btn-outline-primary'; button.textContent = 'AI 识别'; button.title = 'AI 识别图案';
               button.addEventListener('click', async function () {
                 const modal = wrapper.closest('.modal');
                 const input = modal && modal.querySelector('[name="shape_label"]');
                 if (!input) return;
                 const original = input.value;
                 showDiagnosis(null);
-                button.disabled = true; status.textContent = '正在分析已保存的轨迹和方形预览图…';
+                button.disabled = true; status.hidden = false; status.textContent = '正在识别图案…';
                 try {
                   const response = await fetch('/admin/api/tracks/' + encodeURIComponent(trackID) + '/labels/generate', { method: 'POST', signal: labelAbort.signal });
                   const result = await response.json();
                   if (!response.ok) throw new Error(result.error || 'AI 生成失败');
                   if (!wrapper.isConnected) return;
                   showDiagnosis(result.data.diagnosis);
-                  if (input.value !== original) { status.textContent = '你已修改形象输入，本次结果未覆盖，请重新生成或保存人工内容。'; return; }
+                  if (input.value !== original) { status.textContent = '图案已手动修改，本次结果未覆盖。'; return; }
                   input.value = result.data.shape_label || '';
                   shapeCandidate={ id:result.data.task_id || '', label:input.value };
                   input.dispatchEvent(new Event('change', { bubbles: true }));
-                  status.textContent = input.value ? '建议形象：' + input.value + '。点击保存修改后生效。' : '没有识别到明确且适宜的形象，建议留空。点击保存修改后生效。';
+                  status.textContent = input.value ? '已填入建议图案，保存后生效。' : '未识别到明确图案，保存后留空。';
                 } catch (error) {
                   if (error.name !== 'AbortError') { status.textContent = error.message; window.AdminUI.alert(error.message, 'danger'); }
                 } finally { button.disabled = false; }
               });
-              shapeSection.appendChild(button);
+              shapeHeading.appendChild(button);
             }
             panel.appendChild(content); wrapper.appendChild(panel);
             placeCandidates = window.AdminTrackPlaceCandidates.create(trackID, { readOnly: readOnly || isDeleted,
@@ -449,7 +521,7 @@
           fields: [
             { name: 'user_name', label: '归属用户名', value: trackPayload.user_name || '未知用户', readOnly: true },
             { name: 'session_id', label: '同行会话 ID', value: track.session_id },
-            { name: 'shape_label', label: '形象标签', placeholder: '明确且适宜的形象，留空表示无', value: track.shape_label || '', maxLength: 32 },
+            { name: 'shape_label', label: '图案标签', placeholder: '填写图案名称，留空表示无', value: track.shape_label || '', maxLength: 32 },
             { name: 'title', label: '轨迹标题', value: track.title, maxLength: 128 },
             { name: 'city_code', label: '城市', type: 'select', value: track.city_code, options: cityFields },
             { name: 'locate_addr', label: '位置描述', value: track.locate_addr, maxLength: 512 },

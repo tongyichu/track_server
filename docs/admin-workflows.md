@@ -28,7 +28,7 @@
 - [标签管理入口补充](#标签管理入口补充)
 
 ## 模块定位
-后台形象生成使用 `TrackShapeGenerator.GenerateShape`，经 `PreviewShape` 返回诊断而非复用路线说明生成；关闭思考模式，max_tokens=8192。`track_labels.go` 返回 `diagnosis`，共享编辑器用 textContent 展示分类/候选及结论。详情只展示同输入版本的最近诊断 `label_generation.shape_preview`，识别结果仅填表，保存才生效。接口契约见 `docs/api/admin-tracks.md`，验收不能用独立提示词脚本代替实际后台接口。
+后台形象生成使用 `TrackShapeGenerator.GenerateShape`，经 `PreviewShape` 返回诊断而非复用路线说明生成；关闭思考模式，max_tokens=8192。`track_labels.go` 返回 `diagnosis`，共享编辑器内称“图案标签”，分类/候选及结论用 textContent 放入默认折叠的“识别详情”。详情只展示同输入版本的最近诊断 `label_generation.shape_preview`，识别结果仅填表，保存才生效。运动类型和当前图案精简为名称标签，手动图案输入按需展开；资料与单张日间1:1预览采用主栏/资源侧栏布局，原始文件大小及类型异步读取既有资源接口 metadata=1，不阻断表单。接口契约见 `docs/api/admin-tracks.md`，验收不能用独立提示词脚本代替实际后台接口。
 
 轨迹形象保存成功且值变化时调用 `RecordShapeCorrection`，复核在后台执行；反馈失败或 AI 未配置返回 `learning_warning`，前端明确“轨迹已保存”。详情 `label_generation.learning` 展示状态、依据和经验；不在 HTTP 保存请求内等待模型。入口 `service/track_shape_learning.go`。
 

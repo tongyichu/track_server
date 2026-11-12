@@ -182,7 +182,7 @@
 | 后台轨迹坐标系预览 | GET | `/admin/api/tracks/:track_id/map-preview` | 轨迹查看 | [admin-tracks.md](admin-tracks.md#编辑字段与坐标预览) |
 | 后台批量导入轨迹（逐文件结果含轨迹表格摘要） | POST | `/admin/api/tracks/import` | 轨迹操作 | [admin-tracks.md](admin-tracks.md) |
 | 后台轨迹详情（归属和文件指标只读，时间按北京时间显示） | GET | `/admin/api/tracks/:track_id` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |
-| 后台轨迹新版四图与原始文件下载（legacy资源已停用） | GET | `/admin/api/tracks/:track_id/assets/:asset` | 轨迹查看 | [admin-tracks.md](admin-tracks.md#详情资源展示与下载) |
+| 后台轨迹预览与原始文件下载（raw支持metadata=1元信息；legacy已停用） | GET | `/admin/api/tracks/:track_id/assets/:asset` | 轨迹查看 | [admin-tracks.md](admin-tracks.md#详情资源展示与下载) |
 | 单条轨迹重新识别 | POST | `/admin/api/tracks/:track_id/place-refresh` | 轨迹操作 | [admin-tracks.md](admin-tracks.md) |
 | 地图 POI 设置轨迹景点标签 | POST | `/admin/api/tracks/:track_id/scenic-spot` | 轨迹及景点操作 | [admin-tracks.md](admin-tracks.md#地图点选景点标签) |
 | 轨迹地图高德配置 / 服务代理 | GET | `/admin/api/tracks/map-config`、`/admin/api/tracks/amap-service/*filepath` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |

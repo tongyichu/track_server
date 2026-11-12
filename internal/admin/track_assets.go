@@ -124,6 +124,14 @@ func (h *Handler) GetTrackAsset(ctx context.Context, c *app.RequestContext) {
 				ext = original
 			}
 		}
+		if string(c.Query("metadata")) == "1" {
+			fileType := strings.ToUpper(strings.TrimPrefix(ext, "."))
+			if fileType == "" {
+				fileType = "未知"
+			}
+			c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"file_size": info.Size(), "file_type": fileType}})
+			return
+		}
 		c.FileAttachment(file, track.ID+ext)
 		return
 	}
