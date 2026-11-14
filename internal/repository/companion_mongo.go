@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"log"
 	"regexp"
 	"time"
 
@@ -22,6 +23,17 @@ type MongoCompanionRepository struct {
 
 // NewMongoCompanionRepository constructs a Mongo-backed CompanionRepository.
 func NewMongoCompanionRepository(sessionCollection, memberCollection, positionCollection *mongo.Collection) *MongoCompanionRepository {
+	if sessionCollection != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_, err := sessionCollection.Database().Collection("companion_track_chunks").Indexes().CreateMany(ctx, []mongo.IndexModel{
+			{Keys: bson.D{{Key: "session_id", Value: 1}, {Key: "user_id", Value: 1}, {Key: "index", Value: 1}}},
+			{Keys: bson.D{{Key: "session_id", Value: 1}, {Key: "index", Value: 1}}},
+		})
+		if err != nil {
+			log.Printf("companion track indexes unavailable: %v", err)
+		}
+	}
 	return &MongoCompanionRepository{
 		sessionCollection:  sessionCollection,
 		memberCollection:   memberCollection,

@@ -377,6 +377,7 @@ func main() {
 	feedbackSvc := service.NewFeedbackService(feedbackRepo, filepath.Join(cfg.LogDir, "feedback", "images"), trackRepo)
 	companionSvc := service.NewCompanionService(companionRepo, userRepo)
 	companionSvc.SetTrackRepository(trackRepo)
+	companionSvc.SetTrackService(trackSvc)
 	clientBrokerURL := cfg.EMQXClientBrokerURL
 	if clientBrokerURL == "" {
 		clientBrokerURL = cfg.EMQXBrokerURL

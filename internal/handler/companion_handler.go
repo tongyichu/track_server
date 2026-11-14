@@ -500,6 +500,8 @@ func (h *CompanionHandler) writeError(c *app.RequestContext, err error) {
 		c.JSON(http.StatusNotFound, utils.H{"error": err.Error()})
 	case errors.Is(err, repository.ErrForbidden):
 		c.JSON(http.StatusForbidden, utils.H{"error": "forbidden"})
+	case errors.Is(err, repository.ErrConflict):
+		c.JSON(http.StatusConflict, utils.H{"error": "point batch conflicts with an accepted batch"})
 	case err != nil && err.Error() == "companion mqtt not configured":
 		c.JSON(http.StatusServiceUnavailable, utils.H{"error": err.Error()})
 	default:

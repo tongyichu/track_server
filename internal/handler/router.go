@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"path/filepath"
 	"strings"
 
 	"github.com/cloudwego/hertz/pkg/app"
@@ -116,14 +117,14 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 	// 只公开 static/release 子目录；轨迹截图、头像、原始轨迹文件仍在下方 auth.StaticFS 里鉴权访问。
 	if deps.StaticRoot != "" {
 		releaseFS := &app.FS{
-			Root: deps.StaticRoot,
+			Root: filepath.Join(deps.StaticRoot, "release"),
 			PathRewrite: func(ctx *app.RequestContext) []byte {
 				fp := ctx.Param("filepath")
 				if fp == "" {
-					return []byte("/release/")
+					return []byte("/")
 				}
 				fp = strings.TrimPrefix(fp, "/")
-				return []byte("/release/" + fp)
+				return []byte("/" + fp)
 			},
 		}
 		api.StaticFS("/static/release", releaseFS)
@@ -185,7 +186,8 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 				return []byte("/" + fp)
 			},
 		}
-		auth.StaticFS("/static", fs)
+		assets := auth.Group("", companionHandler.AuthorizeTrackAssets)
+		assets.StaticFS("/static", fs)
 	}
 
 	auth.POST("/logout", loginHandler.Logout)
@@ -204,6 +206,12 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 	auth.GET("/companion/session/:session_id/snapshot", companionHandler.GetSnapshot)
 	auth.POST("/companion/session/:session_id/leave", companionHandler.LeaveSession)
 	auth.POST("/companion/session/:session_id/end", companionHandler.EndSession)
+	auth.POST("/companion/session/:session_id/track/batch", companionHandler.UploadTrackBatch)
+	auth.POST("/companion/session/:session_id/track/complete", companionHandler.CompleteMemberTrack)
+	auth.POST("/companion/session/:session_id/track/previews", companionHandler.UpdateTrackPreviews)
+	auth.GET("/companion/session/:session_id/result", companionHandler.Result)
+	auth.GET("/companion/session/:session_id/result/:user_id/points", companionHandler.ResultPoints)
+	auth.GET("/companion/session/:session_id/result/:user_id/track", companionHandler.ResultTrack)
 	auth.PUT("/companion/session/:session_id/update", companionHandler.UpdateSessionStats)
 	auth.POST("/companion/session/:session_id/events", companionHandler.CreateEvent)
 	auth.GET("/companion/session/:session_id/events", companionHandler.ListEvents)

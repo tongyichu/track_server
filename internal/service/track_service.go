@@ -531,6 +531,10 @@ func (s *TrackService) SetTrackMapIndexService(indexSvc *TrackMapIndexService) {
 
 // CreateTrack creates a new track for a user.
 func (s *TrackService) CreateTrack(ctx context.Context, userID int64, input CreateTrackInput) (*models.Track, error) {
+	return s.createTrackAtID(ctx, userID, input, "", models.TrackStatusNormal)
+}
+
+func (s *TrackService) createTrackAtID(ctx context.Context, userID int64, input CreateTrackInput, fixedID string, status models.TrackStatus) (*models.Track, error) {
 	if userID <= 0 {
 		return nil, errors.New("userID is required")
 	}
@@ -542,7 +546,7 @@ func (s *TrackService) CreateTrack(ctx context.Context, userID int64, input Crea
 	if input.IsRunning != nil {
 		isRunning = *input.IsRunning
 	}
-	if !isRunning && input.SessionID != nil && *input.SessionID != "" {
+	if fixedID == "" && !isRunning && input.SessionID != nil && *input.SessionID != "" {
 		if idempotencyRepo, ok := s.tracks.(repository.CompletedTrackSessionRepository); ok {
 			existing, findErr := idempotencyRepo.FindCompletedBySessionID(ctx, userID, *input.SessionID)
 			if findErr == nil {
@@ -557,7 +561,11 @@ func (s *TrackService) CreateTrack(ctx context.Context, userID int64, input Crea
 	// 轨迹 ID 在创建轨迹之前先由仓储层统一分配。
 	// 这样 service 只负责组装业务对象，不关心底层是 MySQL 自增序列、Mongo 兼容实现，
 	// 还是内存仓储中的测试序列，避免把 ID 生成细节散落在业务层。
-	trackID, err := s.tracks.NextTrackID(ctx)
+	trackID := fixedID
+	var err error
+	if trackID == "" {
+		trackID, err = s.tracks.NextTrackID(ctx)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -581,7 +589,7 @@ func (s *TrackService) CreateTrack(ctx context.Context, userID int64, input Crea
 		Description: "",
 		StartTime:   startTime,
 		IsRunning:   isRunning,
-		Status:      models.TrackStatusNormal,
+		Status:      status,
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}

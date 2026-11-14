@@ -528,6 +528,7 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='埋点文件同步摘要表';`,
 	}
 
+	stmts = append(stmts, companionTrackDDL)
 	for _, stmt := range stmts {
 		if _, err := db.ExecContext(ctx, stmt); err != nil {
 			return err

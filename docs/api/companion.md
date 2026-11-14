@@ -928,3 +928,31 @@ Authorization: Bearer <token>
 - 统计数据按 `Authorization` Token 解析出的当前用户统计 `track_records`：排除删除与进行中轨迹，仅统计 `正常/私密` 轨迹。
 - 统计维度按运动类型拆分，并返回最近一个月（`month`）与最近一年（`year`）的总里程、轨迹次数、总耗时、总热量。
 
+
+
+## 同行个人轨迹结算与回放
+
+以下接口均在业务JWT鉴权组，只有该房间的参与过的成员可以查询；公开房间不代表公开成员GPS。写入者仅能补传本人的轨迹，账号限制规则与普通轨迹上传相同。旧客户端的结束、摘要、历史接口保持兼容。
+
+| 方法 | 路径 | 用途 |
+| --- | --- | --- |
+| POST | `/companion/session/:session_id/track/batch` | 上传本人的不可变点批次 |
+| POST | `/companion/session/:session_id/track/complete` | 确认本人轨迹完整并创建正式个人轨迹 |
+| POST | `/companion/session/:session_id/track/previews` | 本人补写既有四张预览，body为TrackPreviewImages |
+| GET | `/companion/session/:session_id/result` | 查询成员结算及同步状态，不返回GPS |
+| GET | `/companion/session/:session_id/result/:user_id/points?after=0` | 查询某成员的已完成轨迹点 |
+| GET | `/companion/session/:session_id/result/:user_id/track` | 从同行上下文访问该成员的正式轨迹详情 |
+
+上传批次body：`{index:1,points:[{latitude,longitude,altitude_meters,timestamp_millis,segment_id,accuracy_meters,speed_mps,bearing}]}`。点为WGS84，时间为UTC Unix毫秒；index从1连续递增，最大4096，每批1～256点，body最大128KiB。纬度限定[-85,85]、经度[-180,180]，数字必须有限；批内时间严格递增，采样时刻须在会话起止各一分钟容差内。仅已结束房间允许补传。同批同内容重试成功，同索引不同内容409；完成后不可追加新的有效批次。
+
+完成body：`{chunk_count,point_count,track:{title,start_time,end_time,distance,duration,elevation_gain,calories_burned,avg_speed_kmh,raw_track_url}}`，body最大64KiB。数量须匹配已存批次、索引连续，有点时原始轨迹URL必填。无GPS使用两个计数0及`track:{}`，不伪造个人轨迹。服务端强制绑定JWT用户、房间运动类型、WGS84、已结束状态和房间ID作为稳定session key；首次完成清单原子保留分配的正式轨迹ID，重试和并发创建均沿用该ID，进程在创建中断后也不重复生成。复用普通创建链路及后台索引/成就处理。响应`data:{complete:true,track:Track|null}`；已完成轨迹默认私密，可由本人通过原轨迹详情修改公开状态。
+
+结果响应`data:{session:CompanionSession,members:[{user_id,nickname,avatar_url,color,sync_status,track_id,distance,duration,point_count,joined_at,left_at}]}`。`sync_status`为`syncing/ready/empty/unavailable`：未确认上传完成/已可查看/确认无GPS/正式轨迹已失效。point_count为完成清单中的总点数，客户端可据此均匀缩减预览点，不改变个人详情的完整点读取；只有ready返回有效轨迹ID和指标；作者按页批量读取，轨迹按ID批量读取，不逐项查询详情。所有人完成后按正式轨迹重算房间总里程、房间起止总耗时及人数，局部更新避免覆盖并发补写的封面。
+
+点响应`data:{points:[],next_index,has_more}`，每页最多16批，后续透传next_index作为after；只读取完成清单声明的批次。无完成轨迹或已删除返回404，禁止以最后位置拼造轨迹。结果、点、同行详情响应均no-store；非成员403，目标无轨迹404。普通轨迹详情不向其他人暴露私密轨迹，同行详情通过房间成员资格授权，本人之外查看私密同行轨迹时不开放评论。原始文件静态入口也校验轨迹可见性，仅本人、公开已完成轨迹的浏览者及该私密同行轨迹的房间成员可读取，并返回private/no-store；公开安装包的文件根独立限定在release目录。
+
+持久化使用`companion_track_chunks`（MySQL/Mongo/in-memory同语义）：`session_id/user_id/chunk_index`唯一，0为不可变完成清单，正索引为点批次，保存点数、摘要及JSON。MySQL随初始化建表，mysql.sql同步；Mongo使用确定性_id并建立会话/成员/索引查询索引。正式个人轨迹继续保存在track_records，无新轨迹ID格式或全局账号代传授权。
+
+客户端原始点先按账号和房间持久化到应用私有日志，最终保存复用现有清理、地下交通校正及KMZ导出，记录WGS84原始精度/速度/方向及分段。房间结束后在应用作用域补传，批次、原始文件URL、完成回执持久化；前台定期重试，离线或进程终止后恢复，不等待全员上传才进入结算。四张预览在可见Activity后台地图宿主生成，遵循现有1024px/2x/WebP规则；切页取消生成并保留缓存，后续重试。每条请求绑定捕获账号，不把其他人的实时采样当成本人的正式轨迹。
+
+结算地图和导航栏沿用详情页样式，固定预览点击打开独立多人回放；总里程（各成员之和）、总用时（房间起止时长）并排，人数独立文案。成绩按稳定成员身份复用行，ready后整行进入对应个人轨迹详情，未完成显示同步中。回放以一条真实时间轴驱动所有人的颜色轨迹及同色头像壳锚点，支持播放/暂停/进度/倍速，晚加入后才出现，离开后停在终点，分段或长缺口不补造移动。旧记录缺时间点时只保留预览，不生成虚假时间轴。

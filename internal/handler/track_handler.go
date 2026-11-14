@@ -418,6 +418,13 @@ func (h *TrackHandler) GetTrackDetail(ctx context.Context, c *app.RequestContext
 		return
 	}
 	meta := middleware.GetRequestMeta(c)
+	if track.Status == models.TrackStatusPrivate {
+		c.Header("Cache-Control", "no-store")
+	}
+	if track.Status == models.TrackStatusDeleted || (track.Status == models.TrackStatusPrivate && (meta == nil || meta.AuthUserID != track.UserID)) {
+		c.JSON(http.StatusNotFound, utils.H{"error": "not found"})
+		return
+	}
 	if meta != nil {
 		if err := h.trackSvc.FillTrackLikeState(ctx, meta.AuthUserID, track); err != nil {
 			c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})

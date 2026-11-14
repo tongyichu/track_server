@@ -115,6 +115,7 @@ type CompanionService struct {
 	repo             repository.CompanionRepository
 	users            repository.UserRepository
 	tracks           repository.TrackRepository
+	trackService     *TrackService
 	mqtt             CompanionMQTTOptions
 	avatarCache      *AssetCacheService
 	screenshotCache  *AssetCacheService
@@ -1447,6 +1448,11 @@ func (s *CompanionService) EndSession(ctx context.Context, operatorUserID int64,
 
 // UpdateSessionStats updates owner-provided summary data after a companion session ends.
 func (s *CompanionService) UpdateSessionStats(ctx context.Context, ownerUserID int64, sessionID string, in UpdateCompanionSessionStatsInput) (*models.CompanionSession, error) {
+	defer func() {
+		if s != nil && s.trackService != nil {
+			_ = s.reconcileResultTotals(ctx, ownerUserID, sessionID)
+		}
+	}()
 	if s == nil || s.repo == nil {
 		return nil, errors.New("companion service not configured")
 	}
@@ -1502,6 +1508,9 @@ func (s *CompanionService) UpdateSessionStats(ctx context.Context, ownerUserID i
 			return nil, invalidArg("actual_participant_count must be >= 0")
 		}
 		session.ActualParticipantCount = *in.ActualParticipantCount
+	}
+	if _, err := s.authoritativeResultTotals(ctx, ownerUserID, session); err != nil {
+		return nil, err
 	}
 	if err := s.repo.UpdateSession(ctx, session); err != nil {
 		return nil, err

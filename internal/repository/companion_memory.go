@@ -20,6 +20,7 @@ type InMemoryCompanionRepository struct {
 	danmakuNextID  int64
 	events         []*models.CompanionEvent
 	eventNextID    int64
+	trackChunks    map[string]models.CompanionTrackChunk
 }
 
 // NewInMemoryCompanionRepository creates an in-memory companion repository.

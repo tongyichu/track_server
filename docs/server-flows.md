@@ -213,3 +213,12 @@ DevMode 客户端经业务 JWT 调用 `/track/preview-backfill/list`、`/:track_
 ## 客态个人页喜欢列表
 
 GET /user/:user_id/likes → 业务JWT → TrackHandler.ListProfileLikes → TrackService.ListProfileLikes。目标用户必须存在，使用目标ID读取点赞关系，批量取轨迹并过滤不可见项；按点赞时间与ID组成游标，所有互动状态按浏览者ID装饰。与客态已传/收藏复用认证、错误、摘要和资源处理，不开放私密轨迹、获赞明细或点赞人名单。接口及分页说明见[用户主页](api/user.md#喜欢的轨迹)。
+
+
+### 同行个人轨迹结算与多人回放
+
+房主结束会话只结束控制面并广播，客户端先展示本地结算，各成员自动补传自己的持久化采样。CompanionTrackJournal在手机按账号/房间保存原始点，结束后复用FinalizedTrackBuilder及KMZ导出，再分批写入companion_track_chunks；完成清单原子固定个人轨迹ID，TrackService按该ID创建本人私密轨迹，后续四图通过本人预览接口补齐。断网/进程终止后由原账号恢复，用户无需在房主手机代传成员数据。所有成员完成时仅更新汇总列，旧封面补写不阻塞结算或覆盖最终汇总。
+
+结果接口先验证本人参与资格，批量读取成员作者和正式轨迹摘要；成员轨迹点按完成清单分页，详情通过同行上下文授权，不扩大普通私密轨迹可见性。客户端使用真实时间戳统一回放，头像壳/轨迹同色，不把未知历史点生成时间信息。协议、幂等和表结构见[同行个人轨迹结算与回放](api/companion.md#同行个人轨迹结算与回放)。本功能不更改现有AGENTS的鉴权、仓储及发布边界。
+
+同行原始轨迹文件由CompanionHandler.AuthorizeTrackAssets校验轨迹归属、公开完成状态或房间成员资格及完成清单，不仅校验登录；响应private/no-store。公开安装包StaticFS的Root仅指向static/release，避免进入其他资源目录。

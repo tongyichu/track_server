@@ -740,3 +740,10 @@ CREATE TABLE IF NOT EXISTS message_records (
  INDEX idx_messages_thread(kind,thread_id,seq),
  INDEX idx_messages_delivery(pending,created_at,id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS companion_track_chunks (
+ session_id VARCHAR(64) NOT NULL, user_id BIGINT UNSIGNED NOT NULL,
+ chunk_index INT UNSIGNED NOT NULL, point_count INT UNSIGNED NOT NULL DEFAULT 0,
+ digest CHAR(64) NOT NULL, data MEDIUMTEXT NOT NULL,
+ PRIMARY KEY(session_id,user_id,chunk_index)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
