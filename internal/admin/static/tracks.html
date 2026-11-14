@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="/admin/static/vendor/tabler.min.css" />
   <link rel="stylesheet" href="/admin/static/style.css" />
   <link rel="stylesheet" href="/admin/static/track_editor.css" />
+  <link rel="stylesheet" href="/admin/static/admin_stats.css" />
 </head>
 <body>
   <header class="topbar">
@@ -30,10 +31,10 @@
 
   <main class="container wide">
     <div class="track-stat-grid">
-      <section class="panel track-stat-card admin-stat-panel" data-track-stat="types" aria-labelledby="trackTypeStatsTitle">
-        <div class="track-stat-heading">
+      <section class="panel track-stat-card admin-stat-panel admin-stats-panel" data-track-stat="types" aria-labelledby="trackTypeStatsTitle">
+        <div class="track-stat-heading admin-stats-heading">
           <h3 id="trackTypeStatsTitle">轨迹类型</h3>
-          <div class="period-tabs" role="group" aria-label="轨迹类型统计周期">
+          <div class="period-tabs admin-period-tabs" role="group" aria-label="轨迹类型统计周期">
             <button type="button" data-stat-period="day" aria-pressed="false">天</button>
             <button type="button" data-stat-period="week" aria-pressed="false">周</button>
             <button type="button" data-stat-period="month" class="active" aria-pressed="true">月</button>
@@ -47,10 +48,10 @@
           <div id="trackTypeLegend" class="admin-user-legend"></div>
         </div>
       </section>
-      <section class="panel track-stat-card admin-stat-panel" data-track-stat="contributors" aria-labelledby="trackContributorStatsTitle">
-        <div class="track-stat-heading">
+      <section class="panel track-stat-card admin-stat-panel admin-stats-panel" data-track-stat="contributors" aria-labelledby="trackContributorStatsTitle">
+        <div class="track-stat-heading admin-stats-heading">
           <h3 id="trackContributorStatsTitle">用户贡献轨迹量 Top 10</h3>
-          <div class="period-tabs" role="group" aria-label="用户贡献轨迹量统计周期">
+          <div class="period-tabs admin-period-tabs" role="group" aria-label="用户贡献轨迹量统计周期">
             <button type="button" data-stat-period="day" aria-pressed="false">天</button>
             <button type="button" data-stat-period="week" aria-pressed="false">周</button>
             <button type="button" data-stat-period="month" class="active" aria-pressed="true">月</button>
@@ -130,6 +131,7 @@
 
   <script src="/admin/static/vendor/tabler.min.js"></script>
   <script src="/admin/static/shell.js"></script>
+  <script src="/admin/static/admin_stats.js"></script>
   <script src="/admin/static/ui.js"></script>
   <script src="/admin/static/place_candidates.js"></script>
   <script src="/admin/static/track_map_preview.js"></script>

@@ -274,7 +274,7 @@
     if (panel.dataset.tablerCard === 'true') return;
     panel.dataset.tablerCard = 'true';
     panel.classList.add('card');
-    if (panel.closest('.dashboard-page')) return;
+    if (panel.closest('.dashboard-page') || panel.classList.contains('admin-stats-panel')) return;
     const title = Array.from(panel.children).find(function (child) {
       return child.tagName === 'H2' && !child.classList.contains('subhead');
     });
@@ -294,6 +294,7 @@
   }
 
   function enhanceButton(button) {
+    if (button.classList.contains('admin-metric') || button.closest('.admin-period-tabs')) return;
     if (button.matches('.scenic-photo-picker, .region-photo-picker, .admin-photo-picker, .admin-photo-remove, .admin-photo-download')) return;
     if (button.hasAttribute('data-period') || button.hasAttribute('data-stat-period') || button.classList.contains('btn-close') || button.matches('.dropdown-item, [data-bs-toggle="dropdown"]')) return;
     if (button.closest('.region-country-bar, .region-tree, .admin-region-field, .admin-region-popup')) return;

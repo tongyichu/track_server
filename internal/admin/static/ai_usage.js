@@ -182,7 +182,7 @@
 
     catch (error) { $('activeHint').textContent = error.name === 'AbortError' ? $('activeHint').textContent : '读取失败，保留上次数据'; }
   }
-  function metric(title, value, hint) { const card = node('div', null, 'ai-metric'); card.append(node('span', title), node('strong', value), node('small', hint)); return card; }
+  function metric(title, value, hint) { return AdminStats.metric({ label: title, value: value, note: hint }); }
   async function loadStatistics() {
     const ctrl = replaceController('statistics'); statisticsLoading=true;
     try { const data = await request('statistics?' + query(false), { signal: ctrl.signal }); if (ctrl.signal.aborted) return; statistics = data; const root = $('stats'); root.replaceChildren();

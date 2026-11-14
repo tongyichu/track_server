@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="/admin/static/vendor/tabler.min.css" />
   <link rel="stylesheet" href="/admin/static/style.css" />
   <link rel="stylesheet" href="/admin/static/track_submissions.css" />
+  <link rel="stylesheet" href="/admin/static/admin_stats.css" />
 </head>
 <body>
   <header class="topbar">
@@ -22,20 +23,20 @@
   <main class="container wide">
     <div class="submission-stat-sections" aria-live="polite">
       <section class="submission-stat-section">
-        <div class="submission-stat-heading"><h2>待审核队列</h2><span>用于安排当前审核优先级</span></div>
-        <div class="submission-stat-grid submission-queue-grid">
-          <article class="panel submission-stat-card"><span>当前待审核</span><strong id="submissionPending">—</strong><small>所有待审核投稿</small></article>
-          <article class="panel submission-stat-card submission-stat-warning"><span>待审核超 24 小时</span><strong id="submissionOver24">—</strong><small>需要优先处理</small></article>
-          <article class="panel submission-stat-card submission-stat-danger"><span>待审核超 72 小时</span><strong id="submissionOver72">—</strong><small>长期未处理</small></article>
+        <div class="admin-stats-heading"><h2>待审核队列</h2><span>用于安排当前审核优先级</span></div>
+        <div class="admin-metrics">
+          <article class="admin-metric" data-admin-metric="" data-label="当前待审核" data-value-id="submissionPending" data-note="所有待审核投稿"></article>
+          <article class="admin-metric" data-admin-metric="" data-label="待审核超 24 小时" data-value-id="submissionOver24" data-note="需要优先处理" data-tone="warning"></article>
+          <article class="admin-metric" data-admin-metric="" data-label="待审核超 72 小时" data-value-id="submissionOver72" data-note="长期未处理" data-tone="danger"></article>
         </div>
       </section>
       <section class="submission-stat-section">
-        <div class="submission-stat-heading"><h2>本月审核结果</h2><span>按审核完成时间统计</span></div>
-        <div class="submission-stat-grid submission-result-grid">
-          <article class="panel submission-stat-card"><span>审核通过</span><strong id="submissionApproved">—</strong><small>本月通过投稿数</small></article>
-          <article class="panel submission-stat-card"><span>审核驳回</span><strong id="submissionRejected">—</strong><small>本月驳回投稿数</small></article>
-          <article class="panel submission-stat-card"><span>通过率</span><strong id="submissionApprovalRate">—</strong><small>通过数 / 通过与驳回数</small></article>
-          <article class="panel submission-stat-card"><span>平均审核时长</span><strong id="submissionAvgHours">—</strong><small>从提交到审核完成</small></article>
+        <div class="admin-stats-heading"><h2>本月审核结果</h2><span>按审核完成时间统计</span></div>
+        <div class="admin-metrics">
+          <article class="admin-metric" data-admin-metric="" data-label="审核通过" data-value-id="submissionApproved" data-note="本月通过投稿数"></article>
+          <article class="admin-metric" data-admin-metric="" data-label="审核驳回" data-value-id="submissionRejected" data-note="本月驳回投稿数"></article>
+          <article class="admin-metric" data-admin-metric="" data-label="通过率" data-value-id="submissionApprovalRate" data-note="通过数 / 通过与驳回数"></article>
+          <article class="admin-metric" data-admin-metric="" data-label="平均审核时长" data-value-id="submissionAvgHours" data-note="从提交到审核完成"></article>
         </div>
       </section>
     </div>
@@ -67,6 +68,7 @@
   </div>
   <script src="/admin/static/vendor/tabler.min.js"></script>
   <script src="/admin/static/shell.js"></script>
+  <script src="/admin/static/admin_stats.js"></script>
   <script src="/admin/static/ui.js"></script>
   <script src="/admin/static/track_submissions.js"></script>
 </body>

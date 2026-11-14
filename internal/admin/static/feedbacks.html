@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="/admin/static/vendor/tabler.min.css" />
   <link rel="stylesheet" href="/admin/static/style.css" />
   <link rel="stylesheet" href="/admin/static/track_editor.css" />
+  <link rel="stylesheet" href="/admin/static/admin_stats.css" />
 </head>
 <body>
   <header class="topbar">
@@ -30,12 +31,12 @@
   <main class="container">
     <div class="feedback-stat-sections">
       <section class="feedback-stat-section">
-        <div class="feedback-stat-heading"><h2>处理状态</h2><span>包含意见反馈与轨迹纠错</span></div>
-        <div class="feedback-stat-grid feedback-status-grid">
-          <article class="panel feedback-stat"><span>待处理</span><strong id="statPending">—</strong></article>
-          <article class="panel feedback-stat"><span>处理中</span><strong id="statProcessing">—</strong></article>
-          <article class="panel feedback-stat"><span>已处理</span><strong id="statResolved">—</strong></article>
-          <article class="panel feedback-stat"><span>已关闭</span><strong id="statIgnored">—</strong></article>
+        <div class="admin-stats-heading"><h2>处理状态</h2><span>包含意见反馈与轨迹纠错</span></div>
+        <div class="admin-metrics">
+          <article class="admin-metric" data-admin-metric="" data-label="待处理" data-value-id="statPending"></article>
+          <article class="admin-metric" data-admin-metric="" data-label="处理中" data-value-id="statProcessing"></article>
+          <article class="admin-metric" data-admin-metric="" data-label="已处理" data-value-id="statResolved"></article>
+          <article class="admin-metric" data-admin-metric="" data-label="已关闭" data-value-id="statIgnored"></article>
         </div>
       </section>
     </div>
@@ -190,6 +191,7 @@
 
   <script src="/admin/static/vendor/tabler.min.js"></script>
   <script src="/admin/static/shell.js"></script>
+  <script src="/admin/static/admin_stats.js"></script>
   <script src="/admin/static/ui.js"></script>
   <script src="/admin/static/feedback_correction.js"></script>
   <script src="/admin/static/feedback_correction_config.js"></script>

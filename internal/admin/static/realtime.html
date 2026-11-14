@@ -3,11 +3,12 @@
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>时光轨迹 - 控制台</title>
   <link rel="stylesheet" href="/admin/static/vendor/tabler.min.css"><link rel="stylesheet" href="/admin/static/style.css"><link rel="stylesheet" href="/admin/static/realtime.css"><link rel="stylesheet" href="/admin/static/realtime_network.css">
+  <link rel="stylesheet" href="/admin/static/admin_stats.css" />
 </head>
 <body>
 <header class="topbar"></header>
 <main class="container wide">
-  <section class="panel card card-body">
+  <section class="panel card card-body admin-stats-panel">
     <div class="realtime-heading">
       <h1>实时通信</h1>
       <div class="d-flex align-items-center gap-3 flex-wrap">
@@ -15,11 +16,11 @@
         <button id="realtimeRefresh" class="btn btn-outline-secondary" type="button">刷新</button>
       </div>
     </div>
-    <div class="realtime-stats">
-      <div><span>发布连接</span><strong id="publisherState">—</strong></div>
-      <div><span>在线连接</span><strong id="onlineCount">—</strong><small id="onlineDetail">等待采样</small></div>
-      <div><span>待补发提醒</span><strong id="pendingCount">—</strong></div>
-      <div><span>发布失败</span><strong id="publishFailures">—</strong></div>
+    <div class="admin-metrics">
+      <div class="admin-metric" data-admin-metric="" data-label="发布连接" data-value-id="publisherState"></div>
+      <div class="admin-metric" data-admin-metric="" data-label="在线连接" data-value-id="onlineCount" data-note="等待采样" data-note-id="onlineDetail"></div>
+      <div class="admin-metric" data-admin-metric="" data-label="待补发提醒" data-value-id="pendingCount"></div>
+      <div class="admin-metric" data-admin-metric="" data-label="发布失败" data-value-id="publishFailures"></div>
     </div>
     <p id="summaryError" class="text-danger" role="status"></p>
     <details class="realtime-diagnostics">
@@ -74,6 +75,7 @@
   </section>
   </details>
 </main>
-<script src="/admin/static/vendor/tabler.min.js"></script><script src="/admin/static/shell.js"></script><script src="/admin/static/ui.js"></script><script src="/admin/static/realtime_chat.js"></script><script src="/admin/static/realtime_graph.js"></script><script src="/admin/static/realtime_room.js"></script><script src="/admin/static/realtime_network.js"></script><script src="/admin/static/realtime.js"></script>
+<script src="/admin/static/vendor/tabler.min.js"></script><script src="/admin/static/shell.js"></script><script src="/admin/static/admin_stats.js"></script>
+  <script src="/admin/static/ui.js"></script><script src="/admin/static/realtime_chat.js"></script><script src="/admin/static/realtime_graph.js"></script><script src="/admin/static/realtime_room.js"></script><script src="/admin/static/realtime_network.js"></script><script src="/admin/static/realtime.js"></script>
 </body>
 </html>

@@ -2,7 +2,8 @@
   let period = 'day';
   let requestVersion = 0;
   const charts = {};
-  const colors = ['#206bc4', '#2fb344', '#f59f00', '#ae3ec9', '#d63939', '#17a2b8', '#6f42c1', '#74b816'];
+  const colors = AdminChartStyle.colors;
+  let latestData = null;
 
   function number(value) {
     return Number(value || 0);
@@ -17,8 +18,8 @@
     const current = number(metric.current);
     const previous = number(metric.previous);
     const delta = current - previous;
-    if (delta === 0) return '与上一周期持平';
-    return '较上一周期 ' + (delta > 0 ? '+' : '') + formatNumber(delta);
+    if (delta === 0) return '与上期持平';
+    return '较上期 ' + (delta > 0 ? '+' : '') + formatNumber(delta);
   }
 
   function setMetric(id, metric) {
@@ -37,22 +38,28 @@
 
   function chart(id) {
     const element = document.getElementById(id);
-    if (!element || element.closest('.admin-permission-hidden')) return null;
+    if (!element || !element.clientWidth || !element.clientHeight || element.closest('.admin-permission-hidden')) return null;
     if (!charts[id]) charts[id] = echarts.init(element);
     return charts[id];
   }
 
   function chartOption(id, option) {
     const instance = chart(id);
-    if (instance) instance.setOption(option, true);
+    if (!instance) return;
+    instance.setOption(option, true);
+    const legend = document.getElementById(id + 'Legend');
+    if (legend && option.series[0].type === 'pie') {
+      const rows = option.series[0].data;
+      AdminChartStyle.legend(legend, rows, '', rows.reduce(function (sum, item) { return sum + number(item.value); }, 0), option.color);
+    }
   }
 
   function axisTooltip() {
-    return { trigger: 'axis', backgroundColor: 'rgba(17,24,39,.92)', borderWidth: 0, textStyle: { color: '#fff' } };
+    return { trigger: 'axis', confine: true, renderMode: 'richText', backgroundColor: 'rgba(17,24,39,.92)', borderWidth: 0, textStyle: { color: '#fff' } };
   }
 
   function baseGrid(bottom) {
-    return { left: 18, right: 18, top: 24, bottom: bottom || 38, containLabel: true };
+    return { left: 18, right: 18, top: 12, bottom: bottom || 26, containLabel: true };
   }
 
   function renderTrend(items) {
@@ -61,7 +68,7 @@
       color: [colors[0], colors[1], colors[2]],
       tooltip: axisTooltip(),
       legend: { data: ['活跃用户', '新增用户', '新增轨迹'], bottom: 0, itemWidth: 14, itemHeight: 8 },
-      grid: baseGrid(52),
+      grid: baseGrid(34),
       xAxis: { type: 'category', boundaryGap: false, data: items.map(function (item) { return item.date.slice(5); }), axisLine: { lineStyle: { color: '#dce1e8' } }, axisTick: { show: false } },
       yAxis: { type: 'value', minInterval: 1, splitLine: { lineStyle: { color: '#edf0f5' } } },
       series: [
@@ -81,25 +88,15 @@
       { name: '发起投稿', value: number(data.submitted) },
       { name: '审核通过', value: number(data.approved) }
     ];
-    chartOption('funnelChart', {
-      color: ['#206bc4', '#4299e1', '#2fb344', '#74b816'],
-      tooltip: { trigger: 'item', formatter: function (item) { return item.name + '：' + formatNumber(item.value) + (registered ? '<br/>注册转化率：' + (item.value / registered * 100).toFixed(1) + '%' : ''); } },
-      series: [{
-        type: 'funnel', left: '6%', top: 18, bottom: 8, width: '88%', minSize: '28%', maxSize: '100%', sort: 'descending', gap: 4,
-        label: { show: true, position: 'inside', color: '#fff', formatter: function (item) { return item.name + '  ' + formatNumber(item.value); } },
-        labelLine: { show: false }, itemStyle: { borderColor: '#fff', borderWidth: 2, borderRadius: 4 }, data: values
-      }]
-    });
+    chartOption('funnelChart', AdminChartStyle.bars(values, registered, { unit: '人', showPercent: true, labelWidth: 78 }));
   }
 
   function pieOption(items, palette) {
     items = items || [];
-    return {
-      color: palette || colors,
-      tooltip: { trigger: 'item', formatter: '{b}：{c}（{d}%）' },
-      legend: { bottom: 0, type: 'scroll', itemWidth: 12, itemHeight: 8 },
-      series: [{ type: 'pie', radius: ['48%', '70%'], center: ['50%', '43%'], minAngle: 4, avoidLabelOverlap: true, label: { show: false }, emphasis: { label: { show: true, fontWeight: 600 } }, data: items }]
-    };
+    const total = items.reduce(function (sum, item) { return sum + number(item.value); }, 0);
+    const option = AdminChartStyle.ring(items, total, '总计', '条');
+    if (palette) option.color = palette;
+    return option;
   }
 
   function distributionData(items) {
@@ -150,12 +147,8 @@
 
   function horizontalBarOption(items) {
     items = items || [];
-    return {
-      color: [colors[0]], tooltip: axisTooltip(), grid: { left: 8, right: 20, top: 10, bottom: 10, containLabel: true },
-      xAxis: { type: 'value', minInterval: 1, splitLine: { lineStyle: { color: '#edf0f5' } } },
-      yAxis: { type: 'category', inverse: true, axisTick: { show: false }, axisLine: { show: false }, data: items.map(function (item) { return item.name; }), axisLabel: { width: 92, overflow: 'truncate' } },
-      series: [{ type: 'bar', barMaxWidth: 16, itemStyle: { borderRadius: [0, 4, 4, 0] }, label: { show: true, position: 'right' }, data: items.map(function (item) { return item.value; }) }]
-    };
+    const total = items.reduce(function (sum, item) { return sum + number(item.value); }, 0);
+    return AdminChartStyle.bars(items, total, { unit: '条', labelWidth: 84 });
   }
 
   function renderContentMetrics(content) {
@@ -197,7 +190,7 @@
     trend = trend || [];
     chartOption('engagementChart', {
       color: [colors[0], colors[1], colors[3], colors[2]], tooltip: axisTooltip(),
-      legend: { data: ['收藏', '导航', '点赞', '评论'], bottom: 0, itemWidth: 14, itemHeight: 8 }, grid: baseGrid(52),
+      legend: { data: ['收藏', '导航', '点赞', '评论'], bottom: 0, itemWidth: 14, itemHeight: 8 }, grid: baseGrid(34),
       xAxis: { type: 'category', boundaryGap: false, data: trend.map(function (item) { return item.date.slice(5); }), axisTick: { show: false }, axisLine: { lineStyle: { color: '#dce1e8' } } },
       yAxis: { type: 'value', minInterval: 1, splitLine: { lineStyle: { color: '#edf0f5' } } },
       series: [
@@ -275,15 +268,13 @@
       if (current !== requestVersion) return;
       if (!response.ok) throw new Error(payload.error || ('加载失败: ' + response.status));
       const data = payload.data || {};
+      latestData = data;
       const metrics = data.metrics || {};
       setMetric('activeUsers', metrics.active_users);
       setMetric('newUsers', metrics.new_users);
       setMetric('uploadedTracks', metrics.uploaded_tracks);
       setMetric('uploadUsers', metrics.upload_users);
       setMetric('submissions', metrics.submissions);
-      setText('pendingSubmissions', formatNumber(metrics.pending_submissions));
-      setText('pendingFeedback', formatNumber(metrics.pending_feedback));
-      setText('activeCompanions', formatNumber(metrics.active_companions));
       setText('rangeHint', AdminTime.date(data.range.start) + ' 至今');
       setText('updatedAt', '数据更新时间：' + AdminTime.dateTime(data.updated_at));
       renderReviewMetrics(data.review);
@@ -296,8 +287,8 @@
       if (current !== requestVersion) return;
       renderTrend(data.trend);
       renderFunnel(data.funnel);
-      renderReviewChart(data.review);
-      renderFeedbackCharts(data.feedback);
+      if (document.getElementById('reviewBreakdown').open) renderReviewChart(data.review);
+      if (document.getElementById('feedbackBreakdown').open) renderFeedbackCharts(data.feedback);
       renderContentCharts(data.content);
       renderEngagementChart(data.engagement, data.trend);
     } catch (cause) {
@@ -310,8 +301,24 @@
   document.querySelectorAll('[data-period]').forEach(function (button) {
     button.addEventListener('click', function () {
       period = button.dataset.period;
-      document.querySelectorAll('[data-period]').forEach(function (item) { item.classList.toggle('active', item === button); });
+      document.querySelectorAll('[data-period]').forEach(function (item) { item.classList.toggle('active', item === button); item.setAttribute('aria-pressed', String(item === button)); });
       loadDashboard();
+    });
+  });
+  ['reviewBreakdown', 'feedbackBreakdown'].forEach(function (id) {
+    const details = document.getElementById(id);
+    AdminStats.onExpand(details, async function () {
+      const data = latestData;
+      if (!data) return;
+      try {
+        await AdminAssets.loadCharts();
+        if (!details.open || data !== latestData) return;
+        if (id === 'reviewBreakdown') renderReviewChart(data.review); else renderFeedbackCharts(data.feedback);
+        Object.keys(charts).forEach(function (key) { charts[key].resize(); });
+      } catch (cause) {
+        const error = document.getElementById('dashboardError');
+        error.textContent = '图表加载失败，请刷新重试'; error.classList.remove('hidden');
+      }
     });
   });
   document.getElementById('refreshDashboard').addEventListener('click', loadDashboard);

@@ -39,7 +39,8 @@
       graphic: rows.length ? [] : [{ type: 'text', left: 'center', top: 'middle', style: { text: '当前周期暂无数据', fill: '#667085', fontSize: 12 } }]
     };
   }
-  function legend(root, rows, totalLabel, total) {
+  function legend(root, rows, totalLabel, total, palette) {
+    palette = palette || colors;
     root.replaceChildren();
     function append(label, value, color, isTotal) {
       const row = document.createElement('div'), name = document.createElement('span'), count = document.createElement('strong');
@@ -49,9 +50,9 @@
       name.appendChild(document.createTextNode(label)); count.textContent = number(value).toLocaleString();
       row.append(name, count); root.appendChild(row);
     }
-    rows.forEach((item, index) => append(item.name, item.value, colors[index % colors.length], false));
+    rows.forEach((item, index) => append(item.name, item.value, palette[index % palette.length], false));
     if (totalLabel) append(totalLabel, total, '', true);
     else if (!rows.length) { const empty = document.createElement('span'); empty.className = 'hint'; empty.textContent = '暂无数据'; root.appendChild(empty); }
   }
-  window.AdminChartStyle = { ring: ring, bars: bars, legend: legend };
+  window.AdminChartStyle = { colors: colors.slice(), ring: ring, bars: bars, legend: legend };
 })();

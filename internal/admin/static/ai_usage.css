@@ -8,10 +8,6 @@
 .ai-check input{width:auto;margin:0}
 .ai-section-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px}
 .ai-section-heading h2,.ai-section-heading h3{margin:0}
-.ai-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
-.ai-metric{border:1px solid #e6e7e9;border-radius:8px;padding:12px}
-.ai-metric strong{display:block;font-size:23px;margin:5px 0;color:#182433}
-.ai-metric small{display:block;color:#667085;font-size:11px;line-height:1.5}
 .ai-disclosure{margin-top:16px}
 .ai-disclosure>summary,.ai-settings>summary{cursor:pointer;color:#206bc4;width:fit-content;max-width:100%;overflow-wrap:anywhere}
 .ai-disclosure[open]>summary{margin-bottom:14px}
@@ -65,8 +61,6 @@
 @media(max-width:767px){
 .ai-toolbar label,.ai-toolbar .ai-search{width:100%;min-width:0}
 .ai-toolbar button{flex:1}
-.ai-metrics{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-.ai-metric{padding:10px}.ai-metric strong{font-size:20px}
 .ai-charts,.ai-active,.ai-detail-grid{grid-template-columns:1fr}
 .ai-charts>div:first-child{grid-column:auto}
 .ai-table,.ai-quota-table{min-width:0;table-layout:auto}

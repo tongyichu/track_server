@@ -4,6 +4,7 @@
 <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>时光轨迹 - 控制台</title>
 <link rel="stylesheet" href="/admin/static/vendor/tabler.min.css" /><link rel="stylesheet" href="/admin/static/style.css" /><link rel="stylesheet" href="/admin/static/ai_usage.css" />
+  <link rel="stylesheet" href="/admin/static/admin_stats.css" />
 </head>
 <body>
 <header class="topbar"></header>
@@ -26,7 +27,7 @@
 </div></details>
 <p id="notice" class="text-danger" role="status" hidden></p><p id="pageError" class="text-danger" role="alert"></p>
 </section>
-<section class="panel"><h2>用量概览 <span id="statHint" class="hint"></span></h2><div id="stats" class="ai-metrics" aria-live="polite"></div><div id="alerts" role="status"></div>
+<section class="panel admin-stats-panel"><h2 class="admin-stats-heading">用量概览 <span id="statHint" class="hint"></span></h2><div id="stats" class="admin-metrics" aria-live="polite"></div><div id="alerts" role="status"></div>
 <div class="ai-charts"><div><h3>每日任务趋势</h3><div id="trend" class="ai-chart"></div></div><div><h3>按功能分布</h3><div class="ai-ring"><div id="featuresChart" class="ai-chart"></div><div id="featuresLegend" class="admin-user-legend"></div></div></div><div><h3>按模型消耗 Token</h3><div id="modelsChart" class="ai-chart"></div></div></div>
 <details id="usageDetails" class="ai-disclosure"><summary>查看用量明细</summary>
 <div class="table-responsive"><table class="data ai-breakdown-table"><thead><tr><th>功能 / 模型</th><th>任务 / 请求</th><th>成功 / 失败</th><th>输入 / 输出 Token</th><th>费用估算（已知部分）</th><th>已采用</th></tr></thead><tbody id="breakdown"></tbody></table></div>
@@ -43,5 +44,6 @@
 </div></details>
 </main>
 <div class="modal modal-blur fade" id="detailModal" tabindex="-1" aria-labelledby="detailTitle" aria-hidden="true"><div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><h2 id="detailTitle" class="modal-title">AI 任务详情</h2><button class="btn-close" type="button" data-bs-dismiss="modal" aria-label="关闭"></button></div><div class="modal-body" id="detail"></div></div></div></div>
-<script src="/admin/static/vendor/tabler.min.js"></script><script src="/admin/static/shell.js"></script><script src="/admin/static/ui.js"></script><script src="/admin/static/admin_chart_style.js"></script><script src="/admin/static/ai_usage.js"></script>
+<script src="/admin/static/vendor/tabler.min.js"></script><script src="/admin/static/shell.js"></script><script src="/admin/static/admin_stats.js"></script>
+  <script src="/admin/static/ui.js"></script><script src="/admin/static/admin_chart_style.js"></script><script src="/admin/static/ai_usage.js"></script>
 </body></html>

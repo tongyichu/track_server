@@ -6,14 +6,15 @@
   <title>时光轨迹 - 控制台</title>
   <link rel="stylesheet" href="/admin/static/vendor/tabler.min.css" />
   <link rel="stylesheet" href="/admin/static/style.css" />
+  <link rel="stylesheet" href="/admin/static/admin_stats.css" />
 </head>
 <body>
   <header class="topbar"></header>
   <main class="container wide dashboard-page">
     <div class="page-heading dashboard-heading">
-      <div><h1>运营工作台</h1><p>业务库即时指标、运营效率与内容健康概览</p></div>
+      <div><h1>运营工作台</h1><p class="admin-stats-meta" id="rangeHint"></p></div>
       <div class="dashboard-heading-actions">
-        <div class="period-tabs" role="group" aria-label="统计周期">
+        <div class="period-tabs admin-period-tabs" role="group" aria-label="统计周期">
           <button data-period="day" class="active">日</button>
           <button data-period="week">周</button>
           <button data-period="month">月</button>
@@ -24,101 +25,98 @@
 
     <div id="dashboardError" class="notice error hidden"></div>
 
-    <section class="metric-grid dashboard-metrics" aria-live="polite">
-      <article class="metric-card metric-primary" data-admin-read="users"><span>活跃用户</span><strong id="activeUsers">--</strong><small id="activeUsersDelta">正在加载</small></article>
-      <article class="metric-card" data-admin-read="users"><span>新增用户</span><strong id="newUsers">--</strong><small id="newUsersDelta">正在加载</small></article>
-      <article class="metric-card" data-admin-read="tracks"><span>新增用户轨迹</span><strong id="uploadedTracks">--</strong><small id="uploadedTracksDelta">正在加载</small></article>
-      <article class="metric-card" data-admin-read="tracks"><span>上传轨迹用户</span><strong id="uploadUsers">--</strong><small id="uploadUsersDelta">正在加载</small></article>
-      <article class="metric-card" data-admin-read="track_submissions"><span>新增投稿</span><strong id="submissions">--</strong><small id="submissionsDelta">正在加载</small></article>
-      <a class="metric-card metric-action" href="/admin/track_submissions.html?status=pending" data-admin-read="track_submissions"><span>待审核投稿</span><strong id="pendingSubmissions">--</strong><small id="pendingSubmissionHint">查看审核队列</small></a>
-      <a class="metric-card metric-action" href="/admin/feedbacks.html?status=pending" data-admin-read="feedbacks"><span>待处理反馈</span><strong id="pendingFeedback">--</strong><small id="pendingFeedbackHint">查看反馈队列</small></a>
-      <a class="metric-card metric-action" href="/admin/companions.html" data-admin-read="companions"><span>活跃同行</span><strong id="activeCompanions">--</strong><small>查看实时会话</small></a>
+    <section class="admin-metrics" aria-live="polite">
+      <article data-admin-read="users" class="admin-metric" data-admin-metric="" data-label="活跃用户" data-value-id="activeUsers" data-note="正在加载" data-note-id="activeUsersDelta"></article>
+      <article data-admin-read="users" class="admin-metric" data-admin-metric="" data-label="新增用户" data-value-id="newUsers" data-note="正在加载" data-note-id="newUsersDelta"></article>
+      <article data-admin-read="tracks" class="admin-metric" data-admin-metric="" data-label="新增轨迹" data-value-id="uploadedTracks" data-note="正在加载" data-note-id="uploadedTracksDelta"></article>
+      <article data-admin-read="tracks" class="admin-metric" data-admin-metric="" data-label="上传用户" data-value-id="uploadUsers" data-note="正在加载" data-note-id="uploadUsersDelta"></article>
+      <article data-admin-read="track_submissions" class="admin-metric" data-admin-metric="" data-label="新增投稿" data-value-id="submissions" data-note="正在加载" data-note-id="submissionsDelta"></article>
     </section>
 
     <section class="dashboard-section">
-      <div class="section-heading"><div><h2>增长与转化</h2><p>观察用户增长是否真正转化为轨迹供给和优质投稿</p></div><span class="section-range" id="rangeHint"></span></div>
+      <div class="section-heading"><div><h2>增长与转化</h2></div></div>
       <div class="dashboard-layout dashboard-layout-main">
         <article class="panel dashboard-card dashboard-card-wide" data-admin-read="users tracks">
-          <div class="dashboard-card-header"><div><h3>用户与轨迹趋势</h3><p>新增、活跃与上传趋势</p></div></div>
+          <div class="dashboard-card-header"><div><h3>用户与轨迹趋势</h3></div></div>
           <div class="dashboard-card-body"><div id="trendChart" class="dashboard-chart chart-large" role="img" aria-label="用户和轨迹趋势图"></div></div>
         </article>
         <article class="panel dashboard-card" data-admin-read="users tracks track_submissions">
-          <div class="dashboard-card-header"><div><h3>新增用户转化</h3><p>同周期新增用户 Cohort</p></div></div>
-          <div class="dashboard-card-body"><div id="funnelChart" class="dashboard-chart chart-large" role="img" aria-label="新增用户转化漏斗"></div></div>
+          <div class="dashboard-card-header"><div><h3>新增用户转化</h3></div></div>
+          <div class="dashboard-card-body"><div id="funnelChart" class="dashboard-chart chart-large" role="img" aria-label="本周期注册用户的上传、投稿及审核转化"></div></div>
         </article>
       </div>
     </section>
 
     <section class="dashboard-section">
-      <div class="section-heading"><div><h2>运营效率</h2><p>优先处理积压、超时和异常任务</p></div></div>
+      <div class="section-heading"><div><h2>运营效率</h2></div></div>
       <div class="dashboard-layout dashboard-layout-equal">
         <article class="panel dashboard-card" data-admin-read="track_submissions">
-          <div class="dashboard-card-header"><div><h3>投稿审核</h3><p>当前积压与本周期处理质量</p></div><a href="/admin/track_submissions.html?status=pending">进入审核</a></div>
+          <div class="dashboard-card-header"><div><h3>投稿审核</h3></div><a href="/admin/track_submissions.html?status=pending">进入审核</a></div>
           <div class="dashboard-card-body">
             <div class="stat-list stat-list-four">
-              <div><span>待审核</span><strong id="reviewPending">--</strong></div>
-              <div class="warning"><span>超 24 小时</span><strong id="reviewOver24">--</strong></div>
-              <div class="danger"><span>超 72 小时</span><strong id="reviewOver72">--</strong></div>
-              <div><span>通过率</span><strong id="approvalRate">--</strong></div>
+              <div class="admin-metric admin-metric-inline" data-admin-metric="" data-label="待审核" data-value-id="reviewPending"></div>
+              <div class="admin-metric admin-metric-inline" data-admin-metric="" data-label="超 24 小时" data-value-id="reviewOver24" data-tone="warning"></div>
+              <div class="admin-metric admin-metric-inline" data-admin-metric="" data-label="超 72 小时" data-value-id="reviewOver72" data-tone="danger"></div>
+              <div class="admin-metric admin-metric-inline" data-admin-metric="" data-label="通过率" data-value-id="approvalRate"></div>
             </div>
             <div class="dashboard-detail-row"><span>平均审核耗时</span><strong id="avgReviewHours">--</strong></div>
             <div class="dashboard-detail-row"><span>最早待审核</span><strong id="oldestPending">--</strong></div>
-            <div id="reviewChart" class="dashboard-chart chart-small" role="img" aria-label="审核结果分布"></div>
+            <details id="reviewBreakdown" class="admin-stat-disclosure"><summary>审核结果分布</summary><div class="dashboard-ring"><div id="reviewChart" class="dashboard-chart chart-small" role="img" aria-label="审核结果分布"></div><div id="reviewChartLegend" class="admin-user-legend"></div></div></details>
           </div>
         </article>
 
         <article class="panel dashboard-card" data-admin-read="feedbacks">
-          <div class="dashboard-card-header"><div><h3>意见反馈</h3><p>处理队列、效率和来源分布</p></div><a href="/admin/feedbacks.html">处理反馈</a></div>
+          <div class="dashboard-card-header"><div><h3>意见反馈</h3></div><a href="/admin/feedbacks.html">处理反馈</a></div>
           <div class="dashboard-card-body">
             <div class="stat-list stat-list-four">
-              <div><span>待处理</span><strong id="feedbackPending">--</strong></div>
-              <div><span>处理中</span><strong id="feedbackProcessing">--</strong></div>
-              <div class="warning"><span>超 24 小时</span><strong id="feedbackOver24">--</strong></div>
-              <div class="danger"><span>超 72 小时</span><strong id="feedbackOver72">--</strong></div>
+              <div class="admin-metric admin-metric-inline" data-admin-metric="" data-label="待处理" data-value-id="feedbackPending"></div>
+              <div class="admin-metric admin-metric-inline" data-admin-metric="" data-label="处理中" data-value-id="feedbackProcessing"></div>
+              <div class="admin-metric admin-metric-inline" data-admin-metric="" data-label="超 24 小时" data-value-id="feedbackOver24" data-tone="warning"></div>
+              <div class="admin-metric admin-metric-inline" data-admin-metric="" data-label="超 72 小时" data-value-id="feedbackOver72" data-tone="danger"></div>
             </div>
             <div class="dashboard-detail-row"><span>本周期已解决</span><strong id="feedbackResolvedPeriod">--</strong></div>
             <div class="dashboard-detail-row"><span>平均解决耗时</span><strong id="avgResolutionHours">--</strong></div>
-            <div class="split-charts"><div id="feedbackStatusChart" class="dashboard-chart chart-small"></div><div id="feedbackVersionChart" class="dashboard-chart chart-small"></div></div>
+            <details id="feedbackBreakdown" class="admin-stat-disclosure"><summary>状态与来源分布</summary><div class="split-charts"><div class="dashboard-ring"><div id="feedbackStatusChart" class="dashboard-chart chart-small" role="img" aria-label="反馈状态分布"></div><div id="feedbackStatusChartLegend" class="admin-user-legend"></div></div><div id="feedbackVersionChart" class="dashboard-chart chart-small" role="img" aria-label="反馈来源分布"></div></div></details>
           </div>
         </article>
       </div>
     </section>
 
     <section class="dashboard-section" data-admin-read="tracks">
-      <div class="section-heading"><div><h2>内容供给与质量</h2><p>查看轨迹类型、区域分布以及需要修复的数据</p></div><a class="section-link" href="/admin/tracks.html">管理轨迹</a></div>
-      <div class="quality-strip">
-        <article><span>平均距离</span><strong id="avgDistance">--</strong></article>
-        <article><span>平均时长</span><strong id="avgDuration">--</strong></article>
-        <article class="warning"><span>长时间运行中</span><strong id="staleRunning">--</strong></article>
-        <article class="warning"><span>零距离轨迹</span><strong id="zeroDistance">--</strong></article>
-        <article class="danger" data-admin-read="route_groups"><span>索引失败</span><strong id="failedMapJobs">--</strong></article>
-        <article data-admin-read="route_groups"><span>待建索引</span><strong id="pendingMapJobs">--</strong></article>
-        <article data-admin-read="route_groups"><span>有效路线组</span><strong id="activeRouteGroups">--</strong></article>
+      <div class="section-heading"><div><h2>内容供给与质量</h2></div><a class="section-link" href="/admin/tracks.html">管理轨迹</a></div>
+      <div class="quality-strip admin-metrics">
+        <article class="admin-metric" data-admin-metric="" data-label="平均距离" data-value-id="avgDistance"></article>
+        <article class="admin-metric" data-admin-metric="" data-label="平均时长" data-value-id="avgDuration"></article>
+        <article class="admin-metric" data-admin-metric="" data-label="长时间运行中" data-value-id="staleRunning" data-tone="warning"></article>
+        <article class="admin-metric" data-admin-metric="" data-label="零距离轨迹" data-value-id="zeroDistance" data-tone="warning"></article>
+        <article class="admin-metric" data-admin-metric="" data-label="索引失败" data-value-id="failedMapJobs" data-admin-read="route_groups" data-tone="danger"></article>
+        <article class="admin-metric" data-admin-metric="" data-label="待建索引" data-value-id="pendingMapJobs" data-admin-read="route_groups"></article>
+        <article class="admin-metric" data-admin-metric="" data-label="有效路线组" data-value-id="activeRouteGroups" data-admin-read="route_groups"></article>
       </div>
       <div class="dashboard-layout dashboard-layout-thirds">
-        <article class="panel dashboard-card"><div class="dashboard-card-header"><div><h3>公开状态</h3><p>本周期新增轨迹</p></div></div><div class="dashboard-card-body"><div id="trackStatusChart" class="dashboard-chart chart-medium"></div></div></article>
-        <article class="panel dashboard-card"><div class="dashboard-card-header"><div><h3>运动类型</h3><p>本周期有效上传</p></div></div><div class="dashboard-card-body"><div id="trackTypeChart" class="dashboard-chart chart-medium"></div></div></article>
-        <article class="panel dashboard-card"><div class="dashboard-card-header"><div><h3>热门城市</h3><p>按新增有效轨迹排序</p></div></div><div class="dashboard-card-body"><div id="trackCityChart" class="dashboard-chart chart-medium"></div></div></article>
+        <article class="panel dashboard-card"><div class="dashboard-card-header"><div><h3>公开状态</h3></div></div><div class="dashboard-card-body"><div class="dashboard-ring"><div id="trackStatusChart" class="dashboard-chart chart-medium" role="img" aria-label="轨迹公开状态"></div><div id="trackStatusChartLegend" class="admin-user-legend"></div></div></div></article>
+        <article class="panel dashboard-card"><div class="dashboard-card-header"><div><h3>运动类型</h3></div></div><div class="dashboard-card-body"><div class="dashboard-ring"><div id="trackTypeChart" class="dashboard-chart chart-medium" role="img" aria-label="运动类型"></div><div id="trackTypeChartLegend" class="admin-user-legend"></div></div></div></article>
+        <article class="panel dashboard-card"><div class="dashboard-card-header"><div><h3>热门城市</h3></div></div><div class="dashboard-card-body"><div id="trackCityChart" class="dashboard-chart chart-medium"></div></div></article>
       </div>
     </section>
 
     <section class="dashboard-section">
-      <div class="section-heading"><div><h2>互动与同行</h2><p>衡量内容消费效果以及同行功能使用情况</p></div></div>
+      <div class="section-heading"><div><h2>互动与同行</h2></div></div>
       <div class="dashboard-layout dashboard-layout-main">
         <article class="panel dashboard-card dashboard-card-wide" data-admin-read="tracks">
-          <div class="dashboard-card-header"><div><h3>内容互动趋势</h3><p>收藏、导航、点赞与评论</p></div></div>
+          <div class="dashboard-card-header"><div><h3>内容互动趋势</h3></div></div>
           <div class="dashboard-card-body">
             <div class="stat-list stat-list-four engagement-summary">
-              <div><span>收藏</span><strong id="engagementCollections">--</strong><small id="engagementCollectionsDelta"></small></div>
-              <div><span>导航</span><strong id="engagementNavigations">--</strong><small id="engagementNavigationsDelta"></small></div>
-              <div><span>点赞</span><strong id="engagementLikes">--</strong><small id="engagementLikesDelta"></small></div>
-              <div><span>评论</span><strong id="engagementComments">--</strong><small id="engagementCommentsDelta"></small></div>
+              <div class="admin-metric admin-metric-inline" data-admin-metric="" data-label="收藏" data-value-id="engagementCollections" data-note="" data-note-id="engagementCollectionsDelta"></div>
+              <div class="admin-metric admin-metric-inline" data-admin-metric="" data-label="导航" data-value-id="engagementNavigations" data-note="" data-note-id="engagementNavigationsDelta"></div>
+              <div class="admin-metric admin-metric-inline" data-admin-metric="" data-label="点赞" data-value-id="engagementLikes" data-note="" data-note-id="engagementLikesDelta"></div>
+              <div class="admin-metric admin-metric-inline" data-admin-metric="" data-label="评论" data-value-id="engagementComments" data-note="" data-note-id="engagementCommentsDelta"></div>
             </div>
             <div id="engagementChart" class="dashboard-chart chart-large"></div>
           </div>
         </article>
         <article class="panel dashboard-card" data-admin-read="companions">
-          <div class="dashboard-card-header"><div><h3>同行概览</h3><p>会话使用和结束情况</p></div><a href="/admin/companions.html">查看会话</a></div>
+          <div class="dashboard-card-header"><div><h3>同行概览</h3></div><a href="/admin/companions.html">查看会话</a></div>
           <div class="dashboard-card-body companion-overview">
             <div class="companion-primary"><span>当前活跃</span><strong id="companionActive">--</strong><small>个同行会话</small></div>
             <div class="dashboard-detail-row"><span>本周期新增</span><strong id="companionCreated">--</strong></div>
@@ -130,7 +128,7 @@
       </div>
 
       <article class="panel dashboard-card top-tracks-card" data-admin-read="tracks">
-        <div class="dashboard-card-header"><div><h3>热门轨迹</h3><p>按收藏、导航、点赞和评论累计互动排序</p></div></div>
+        <div class="dashboard-card-header"><div><h3>热门轨迹</h3></div></div>
         <div class="dashboard-card-body dashboard-table-wrap">
           <table class="data dashboard-table">
             <thead><tr><th>轨迹</th><th>标题</th><th>收藏</th><th>导航</th><th>点赞</th><th>评论</th><th>总互动</th></tr></thead>
@@ -144,7 +142,9 @@
   </main>
   <script src="/admin/static/vendor/tabler.min.js"></script>
   <script src="/admin/static/shell.js"></script>
+  <script src="/admin/static/admin_stats.js"></script>
   <script src="/admin/static/ui.js"></script>
+  <script src="/admin/static/admin_chart_style.js"></script>
   <script src="/admin/static/dashboard.js"></script>
 </body>
 </html>
