@@ -391,12 +391,38 @@ func (h *TrackHandler) ReportTrackNavigation(ctx context.Context, c *app.Request
 		return
 	}
 	trackID := c.Param("track_id")
-	if err := h.trackSvc.ReportTrackNavigation(ctx, meta.AuthUserID, trackID); err != nil {
+	var input struct {
+		ResultSessionID string `json:"result_session_id"`
+	}
+	if len(c.Request.Body()) > 0 {
+		if err := c.BindAndValidate(&input); err != nil {
+			c.JSON(http.StatusBadRequest, utils.H{"error": "invalid navigation report"})
+			return
+		}
+	}
+	if err := h.trackSvc.ReportTrackNavigation(ctx, meta.AuthUserID, trackID, input.ResultSessionID); err != nil {
 		status := http.StatusInternalServerError
 		switch {
 		case err.Error() == repository.ErrNotFound.Error():
 			status = http.StatusNotFound
 		case errors.As(err, new(*service.InvalidArgumentError)):
+			status = http.StatusBadRequest
+		}
+		c.JSON(status, utils.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, successResponse(utils.H{"status": "ok"}))
+}
+
+func (h *TrackHandler) DeleteNavigationResult(ctx context.Context, c *app.RequestContext) {
+	meta := middleware.GetRequestMeta(c)
+	if meta == nil || meta.AuthUserID <= 0 {
+		c.JSON(http.StatusUnauthorized, utils.H{"error": "unauthorized"})
+		return
+	}
+	if err := h.trackSvc.DeleteNavigationResult(ctx, meta.AuthUserID, c.Param("result_session_id")); err != nil {
+		status := http.StatusInternalServerError
+		if errors.As(err, new(*service.InvalidArgumentError)) {
 			status = http.StatusBadRequest
 		}
 		c.JSON(status, utils.H{"error": err.Error()})

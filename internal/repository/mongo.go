@@ -546,6 +546,16 @@ func (r *MongoTrackRepository) AdminHardDeleteTrack(ctx context.Context, trackID
 	if trackID == "" {
 		return ErrNotFound
 	}
+	var deletedTrack models.Track
+	if err := r.collection.FindOne(ctx, bson.M{"_id": trackID}).Decode(&deletedTrack); err != nil {
+		if err == mongo.ErrNoDocuments {
+			return ErrNotFound
+		}
+		return err
+	}
+	if deletedTrack.Status != models.TrackStatusDeleted {
+		return ErrConflict
+	}
 	res, err := r.collection.DeleteOne(ctx, bson.M{"_id": trackID, "status": models.TrackStatusDeleted})
 	if err != nil {
 		return err
@@ -560,6 +570,11 @@ func (r *MongoTrackRepository) AdminHardDeleteTrack(ctx context.Context, trackID
 			return ErrNotFound
 		}
 		return ErrConflict
+	}
+	if deletedTrack.SessionID != "" {
+		if err := NewMongoNavigationRepository(r.collection.Database().Collection("track_navigations")).DeleteNavigationResult(ctx, deletedTrack.UserID, deletedTrack.SessionID); err != nil {
+			return err
+		}
 	}
 	db := r.collection.Database()
 	byTrackID := bson.M{"track_id": trackID}
@@ -1241,10 +1256,8 @@ func (r *MongoNavigationRepository) CountByTrackIDs(ctx context.Context, trackID
 	if len(ids) == 0 {
 		return result, nil
 	}
-	pipeline := mongo.Pipeline{
-		bson.D{{Key: "$match", Value: bson.M{"track_id": bson.M{"$in": ids}}}},
-		bson.D{{Key: "$group", Value: bson.M{"_id": "$track_id", "count": bson.M{"$sum": 1}}}},
-	}
+	pipeline := append(mongoActiveNavigations(bson.M{"track_id": bson.M{"$in": ids}}),
+		bson.D{{Key: "$group", Value: bson.M{"_id": "$track_id", "count": bson.M{"$sum": 1}}}})
 	cursor, err := r.collection.Aggregate(ctx, pipeline)
 	if err != nil {
 		return nil, err
@@ -1267,7 +1280,9 @@ func (r *MongoNavigationRepository) ListByUserID(ctx context.Context, userID int
 	if limit <= 0 {
 		limit = 1000
 	}
-	cursor, err := r.collection.Find(ctx, bson.M{"navigator_user_id": userID}, options.Find().SetSort(bson.D{{Key: "created_at", Value: -1}, {Key: "_id", Value: -1}}).SetLimit(int64(limit)))
+	pipeline := append(mongoActiveNavigations(bson.M{"navigator_user_id": userID, "track_id": bson.M{"$ne": ""}}),
+		bson.D{{Key: "$sort", Value: bson.D{{Key: "created_at", Value: -1}, {Key: "_id", Value: -1}}}}, bson.D{{Key: "$limit", Value: int64(limit)}})
+	cursor, err := r.collection.Aggregate(ctx, pipeline)
 	if err != nil {
 		return nil, err
 	}

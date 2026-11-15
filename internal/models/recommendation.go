@@ -79,6 +79,8 @@ type RecommendationItemStats struct {
 
 // TrackNavigation is one confirmed navigation usage row from the business database.
 type TrackNavigation struct {
+	ResultSessionID string    `json:"-" bson:"result_session_id,omitempty"`
+	ResultDeleted   bool      `json:"-" bson:"result_deleted,omitempty"`
 	ID              int64     `json:"id" bson:"_id,omitempty"`
 	TrackID         string    `json:"track_id" bson:"track_id"`
 	NavigatorUserID int64     `json:"navigator_user_id" bson:"navigator_user_id"`

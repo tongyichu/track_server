@@ -377,6 +377,12 @@ type NavigationRepository interface {
 	ListByUserID(ctx context.Context, userID int64, limit int) ([]*models.TrackNavigation, error)
 }
 
+// NavigationResultRepository links a usage to its author's stable recording session.
+type NavigationResultRepository interface {
+	AddNavigationWithResult(ctx context.Context, navigatorUserID int64, trackID, resultSessionID string) error
+	DeleteNavigationResult(ctx context.Context, navigatorUserID int64, resultSessionID string) error
+}
+
 // RecommendationRepository stores immutable feed sessions and offline aggregates.
 type RecommendationRepository interface {
 	SaveFeedSession(ctx context.Context, session *models.RecommendationFeedSession) error

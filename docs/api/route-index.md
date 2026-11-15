@@ -71,6 +71,7 @@
 | 轨迹搜索列表（支持城市 / 运动类型 / 路线里程筛选） | GET | `/track/search/list` | 是 | [track.md](track.md#7-轨迹搜索列表) |
 | 搜索筛选能力及按运动类型的里程分段 | GET | `/track/search/options` | 是 | [搜索筛选配置](track.md#搜索筛选配置) |
 | 导航使用上报 | POST | `/track/:track_id/navigation/report` | 是 | [collect-navigation.md](collect-navigation.md#8-导航使用上报) |
+| 撤销本人本地跟随成果关联（幂等） | DELETE | `/track/navigation/results/:result_session_id` | JWT，允许受限账号取消 | [成果关联与删除](collect-navigation.md#本地未上传成果删除) |
 | 我的轨迹列表（含精品标识、当前用户收藏状态及总数） | GET | `/track/my/list` | 是 | [track.md](track.md#9-我的轨迹列表) |
 | 用户主页已传轨迹 | GET | `/user/:user_id/tracks` | 是 | [user.md](user.md#个人主页轨迹列表) |
 | 用户主页收藏轨迹 | GET | `/user/:user_id/collections` | 是 | [user.md](user.md#个人主页轨迹列表) |

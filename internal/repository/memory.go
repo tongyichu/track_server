@@ -15,10 +15,11 @@ import (
 
 // InMemoryTrackRepository is an in-memory implementation of TrackRepository for tests and development.
 type InMemoryTrackRepository struct {
-	mu               sync.RWMutex
-	tracks           map[string]*models.Track
-	nextTrackSeq     uint64
-	adminScenicSpots *MemoryScenicSpotRepository
+	deletedResultSessions map[string]bool
+	mu                    sync.RWMutex
+	tracks                map[string]*models.Track
+	nextTrackSeq          uint64
+	adminScenicSpots      *MemoryScenicSpotRepository
 }
 
 // InMemoryTrackWaypointRepository is an in-memory implementation of TrackWaypointRepository.
@@ -32,9 +33,11 @@ type InMemoryTrackWaypointRepository struct {
 // InMemoryNavigationRepository is an in-memory implementation of NavigationRepository.
 // It stores navigation usage as append-only records.
 type InMemoryNavigationRepository struct {
-	mu      sync.RWMutex
-	nextID  int64
-	byTrack map[string][]*models.TrackNavigation
+	byResult     map[string]*models.TrackNavigation
+	resultTracks *InMemoryTrackRepository
+	mu           sync.RWMutex
+	nextID       int64
+	byTrack      map[string][]*models.TrackNavigation
 }
 
 // InMemoryAchievementRepository is an in-memory implementation of AchievementRepository.
@@ -1252,7 +1255,10 @@ func (r *InMemoryLoginLogRepository) ListByUserID(_ context.Context, userID int6
 
 // NewInMemoryRepositories is a helper to create a full set of in-memory repositories.
 func NewInMemoryRepositories() (TrackRepository, UserRepository, CollectRepository, LoginLogRepository, NavigationRepository, AppReleaseRepository, CompanionRepository) {
-	return NewInMemoryTrackRepository(), NewInMemoryUserRepository(), NewInMemoryCollectRepository(), NewInMemoryLoginLogRepository(), NewInMemoryNavigationRepository(), NewInMemoryAppReleaseRepository(), NewInMemoryCompanionRepository()
+	tracks := NewInMemoryTrackRepository()
+	navigations := NewInMemoryNavigationRepository()
+	navigations.SetResultTracks(tracks)
+	return tracks, NewInMemoryUserRepository(), NewInMemoryCollectRepository(), NewInMemoryLoginLogRepository(), navigations, NewInMemoryAppReleaseRepository(), NewInMemoryCompanionRepository()
 }
 
 func (r *InMemoryFeedbackRepository) Create(_ context.Context, feedback *models.Feedback) error {
@@ -1444,8 +1450,13 @@ func (r *InMemoryNavigationRepository) CountByTrackIDs(_ context.Context, trackI
 
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+	resultStates := r.activeResultSessions()
 	for _, id := range uniqIDs {
-		res[id] = int64(len(r.byTrack[id]))
+		for _, row := range r.byTrack[id] {
+			if resultVisible(row, resultStates) {
+				res[id]++
+			}
+		}
 	}
 	return res, nil
 }
@@ -1453,10 +1464,11 @@ func (r *InMemoryNavigationRepository) CountByTrackIDs(_ context.Context, trackI
 func (r *InMemoryNavigationRepository) ListByUserID(_ context.Context, userID int64, limit int) ([]*models.TrackNavigation, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+	resultStates := r.activeResultSessions()
 	items := make([]*models.TrackNavigation, 0)
 	for _, rows := range r.byTrack {
 		for _, row := range rows {
-			if row != nil && row.NavigatorUserID == userID {
+			if row != nil && row.NavigatorUserID == userID && resultVisible(row, resultStates) {
 				clone := *row
 				items = append(items, &clone)
 			}

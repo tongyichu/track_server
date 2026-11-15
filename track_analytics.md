@@ -466,3 +466,7 @@ App SDK 本地队列
 | discover_track_click | 打开路线详情/评论 | source_page（discover/scenic_spot）、track_id；发现tab附带city_code/mode/track_type，景点页附带spot_id |
 
 从发现页进入的轨迹详情在既有 track_collect_click、track_collect_success、track_uncollect_success、track_collect_fail、track_navigation_click 等事件附带 discovery_source：discover_featured / discover_scenic_routes / discover_shapes / discover_search / discover_scenic；历史discover_city_routes继续兼容。列表直接收藏/取消成功复用 track_collect_success / track_uncollect_success，source_page=discover，携带track_id和discovery_source，身份取动作发生时用户。此属性只表示入口来源，不替代source_page或推荐上下文，也不将导航点击解释为导航完成。未新增逐卡曝光统计，不上报景点搜索词、图片URL或原始位置。
+
+### 跟随成果关联与撤销（2026-11-16）
+
+新客户端在本地成果成功保存后，通过导航上报的result_session_id关联作者自己的稳定运动UUID；原始点击和成功上报埋点仍表示当时发生的事件。实时navigate_count、作者被使用总数及推荐业务强反馈读取排除已删除的新关联成果：上传成果软删不计、恢复计回，彻底删除或本地成果幂等撤销永久不计。历史未关联使用记录保留，不按时间猜测补绑。旧空body上报仍非幂等；新关联有唯一键保护，客户端也不自动重试上报。后台历史事件统计不将空track_id的撤销占位当作新的导航使用，原始已发生事件不因后续删除改写。协议及迁移详见docs/api/collect-navigation.md。

@@ -488,6 +488,11 @@ func (s *TrackService) SetUserRepository(users repository.UserRepository) {
 // 独立于构造函数以避免破坏既有调用方/单测。
 func (s *TrackService) SetNavigationRepository(navigations repository.NavigationRepository) {
 	s.navigations = navigations
+	if binder, ok := navigations.(interface {
+		SetResultTracks(repository.TrackRepository)
+	}); ok {
+		binder.SetResultTracks(s.tracks)
+	}
 }
 
 // SetCompanionRepository 注入同行仓储，用于约束普通轨迹与同行同时只能参与一个。
@@ -778,7 +783,7 @@ func (s *TrackService) GetTrackMap(ctx context.Context, trackID string) (*models
 
 // ReportTrackNavigation records one navigation usage for a track.
 // 仅统计“其他用户”使用该轨迹导航的次数（自己导航自己的轨迹不计入）。
-func (s *TrackService) ReportTrackNavigation(ctx context.Context, navigatorUserID int64, trackID string) error {
+func (s *TrackService) ReportTrackNavigation(ctx context.Context, navigatorUserID int64, trackID string, resultSessionID ...string) error {
 	if navigatorUserID <= 0 {
 		return invalidArg("userID is required")
 	}
@@ -794,6 +799,17 @@ func (s *TrackService) ReportTrackNavigation(ctx context.Context, navigatorUserI
 	}
 	if track.UserID == navigatorUserID {
 		return invalidArg("cannot report navigation for your own track")
+	}
+	if len(resultSessionID) > 0 && resultSessionID[0] != "" {
+		resultSessionID[0] = strings.ToLower(resultSessionID[0])
+		if !validNavigationSessionID(resultSessionID[0]) {
+			return invalidArg("invalid result_session_id")
+		}
+		linked, ok := s.navigations.(repository.NavigationResultRepository)
+		if !ok {
+			return errors.New("navigation result storage unavailable")
+		}
+		return linked.AddNavigationWithResult(ctx, navigatorUserID, track.ID, resultSessionID[0])
 	}
 	return s.navigations.AddNavigation(ctx, navigatorUserID, track.ID)
 }

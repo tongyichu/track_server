@@ -1,3 +1,23 @@
+# 部署跟随成果关联及删除减数（2026-11-16）
+
+用户明确“部署先”，本轮仅部署track-server-backup，不安装/发布/提交客户端。main fetch后与origin/main一致，无远端合并；已审查本轮21项源码、协议、迁移及文档改动，复用相同最终源码的go build ./...成功结果，git diff --check通过，未新增或运行自动化业务测试。发布包含可选成果UUID关联上报、本人幂等撤销API、MySQL新增可空关联字段/删除标志/唯一索引及Mongo/memory同口径，软删减数、恢复计回、硬删或本地永久撤销后不计。旧空body及无关联历史计数兼容保留，不按时间猜配，不补造旧记录。列表UI无变化。
+
+下一步提交推送快照并构建镜像，按既有脚本更新生产，必须核对新镜像、新容器、真实MySQL仓储及内外健康；只读核对NO.0000001Z现有计数，不创建虚假上报/删除成果。执行结果以本轮部署记录为准。客户端新Debug包已编译通过，等待本次服务端成功后用户下一步安装指令。
+
+原交接如下：
+
+# 跟随成果关联与作者删除减数（2026-11-16）
+
+用户明确确认：跟随原轨迹生成的成果被作者删除，原轨迹被跟随数减一；恢复成果计回。列表计数仍仅准备数据不新增UI。当前在已部署3aeccdf之上实现，尚未提交/推送/部署本轮协议。客户端同时修地图自范围与到达判断，须先部署本轮Server，再安装新客户端，不能先装向旧Server发送会被忽略的关联字段。
+
+POST /track/:track_id/navigation/report新增可选result_session_id稳定运动UUID，旧空body保持非幂等累计；带UUID的新关联用作者+UUID唯一键保护，一份成果最多一条使用记录。NavigationResultRepository在MySQL/Mongo/memory三实现：上传成果按作者+session_id解析，软删/已删除时间非空不计，正常/私密保留计，恢复可计回；彻底删除保留撤销状态以免缺主记录误当未上传而复活。旧NULL/缺关联数据保留，无法可靠回溯，不按时间猜配。CountByTrackIDs、ListByUserID及MySQL作者总被使用数一致过滤，推荐读取同口径；后台历史事件排除空track_id的撤销占位，不把删除当使用事件。
+
+新增JWT本人作用域DELETE /track/navigation/results/:result_session_id，幂等撤销本地未上传成果关联；允许受限账号执行取消，不接受其他作者ID。删除先到可持久化占位，晚到的上报不能恢复计数；上传成果通过既有轨迹删除/恢复，不调永久撤销API。客户端保存成果成功后才一次上报，带UUID，删除意图持久化后删本地，失败保留待同步并按账号重试；保留原非幂等POST不自动重试约束。旧客户端空body可继续使用，但旧关联不支持自动回溯扣减。
+
+mysql.sql及启动迁移补齐track_navigations的nullable result_session_id、result_deleted与uniq_nav_result(navigator_user_id,result_session_id)，不修改原始GPS或重建历史计数。Mongo关联使用部分唯一索引并为结果会话查找建立索引；内存实现批量构造成果状态快照，覆盖软删、恢复与硬删；没有新增外部服务。现有AGENTS仍适用，API分册、route-index、契约、推荐/埋点文档同步。go build ./...（首次受沙箱缓存限制，提升后成功）、gofmt、git diff --check通过；未新增/运行单元、集成或自动化接口测试，未执行实际DDL或创建虚假导航/删除线上轨迹。最终上线和实际删除/恢复由部署及用户手动验收。
+
+原交接如下：
+
 # 部署轨迹被跟随计数数据补齐（2026-11-15）
 
 用户明确要求部署上一轮计数修复，按android-track-release只部署track-server-backup。main fetch后与origin/main一致，无需合并；本次9项源码/文档变更均属于详情Track及个人纪录摘要的navigate_count补齐、现有列表聚合统一入口与协议说明。沿用同一源码上一轮go build ./...成功结果，本轮再次检查最终diff、gofmt格式与git diff --check；未新增或运行自动化业务测试。用户明确各种列表暂不展示，本次仅准备服务端字段，客户端UI及已有未提交修改不动。

@@ -459,6 +459,10 @@ func (r *mongoAdminDashboardRepository) loadContentAndEngagement(ctx context.Con
 		}
 		currentFilter := bson.M{"created_at": mongoTimeRange(q.Start, q.End)}
 		previousFilter := bson.M{"created_at": mongoTimeRange(q.PreviousStart, q.PreviousEnd)}
+		if source.key == "navigation" {
+			filter["track_id"] = bson.M{"$ne": ""}
+			currentFilter["track_id"], previousFilter["track_id"] = bson.M{"$ne": ""}, bson.M{"$ne": ""}
+		}
 		if source.key == "comment" {
 			currentFilter["deleted"], previousFilter["deleted"] = false, false
 		}
@@ -543,7 +547,7 @@ func (r *mongoAdminDashboardRepository) loadMongoDaily(ctx context.Context, q mo
 		{"login_log", "created_at", "active_user", bson.M{}, "user_id"},
 		{"tracks", "created_at", "track", bson.M{"status": bson.M{"$ne": models.TrackStatusDeleted}, "is_running": false, "raw_track_url": bson.M{"$nin": []interface{}{nil, ""}}}, ""},
 		{"track_collects", "created_at", "collection", bson.M{}, ""},
-		{"track_navigations", "created_at", "navigation", bson.M{}, ""},
+		{"track_navigations", "created_at", "navigation", bson.M{"track_id": bson.M{"$ne": ""}}, ""},
 		{"track_likes", "created_at", "like", bson.M{}, ""},
 		{"track_comments", "created_at", "comment", bson.M{"deleted": false}, ""},
 		{"companion_sessions", "started_at", "companion", bson.M{}, ""},

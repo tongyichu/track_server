@@ -331,7 +331,7 @@ func (r *mysqlAdminDashboardRepository) loadContent(ctx context.Context, q model
 func (r *mysqlAdminDashboardRepository) loadEngagement(ctx context.Context, q models.AdminDashboardQuery, result *models.AdminDashboardStatistics) error {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT 'collection',COALESCE(SUM(created_at>=? AND created_at<?),0),COALESCE(SUM(created_at>=? AND created_at<?),0) FROM track_collects
-		UNION ALL SELECT 'navigation',COALESCE(SUM(created_at>=? AND created_at<?),0),COALESCE(SUM(created_at>=? AND created_at<?),0) FROM track_navigations
+		UNION ALL SELECT 'navigation',COALESCE(SUM(created_at>=? AND created_at<?),0),COALESCE(SUM(created_at>=? AND created_at<?),0) FROM track_navigations WHERE track_id<>''
 		UNION ALL SELECT 'like',COALESCE(SUM(created_at>=? AND created_at<?),0),COALESCE(SUM(created_at>=? AND created_at<?),0) FROM track_likes
 		UNION ALL SELECT 'comment',COALESCE(SUM(created_at>=? AND created_at<? AND deleted=0),0),COALESCE(SUM(created_at>=? AND created_at<? AND deleted=0),0) FROM track_comments`,
 		q.Start, q.End, q.PreviousStart, q.PreviousEnd,
@@ -418,7 +418,7 @@ func (r *mysqlAdminDashboardRepository) loadDaily(ctx context.Context, q models.
 		{"active_user", "login_log", "created_at", "COUNT(DISTINCT user_id)", ""},
 		{"track", "track_records", "created_at", "COUNT(*)", completedTrackSQL},
 		{"collection", "track_collects", "created_at", "COUNT(*)", ""},
-		{"navigation", "track_navigations", "created_at", "COUNT(*)", ""},
+		{"navigation", "track_navigations", "created_at", "COUNT(*)", "track_id<>''"},
 		{"like", "track_likes", "created_at", "COUNT(*)", ""},
 		{"comment", "track_comments", "created_at", "COUNT(*)", "deleted=0"},
 		{"companion", "companion_sessions", "started_at", "COUNT(*)", ""},

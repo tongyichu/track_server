@@ -164,6 +164,8 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
 			track_id VARCHAR(64) NOT NULL COMMENT '轨迹ID',
 			navigator_user_id BIGINT NOT NULL COMMENT '导航使用者用户ID',
+			result_session_id VARCHAR(64) NULL DEFAULT NULL,
+			result_deleted BOOLEAN NOT NULL DEFAULT FALSE,
 			created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT '使用时间',
 			PRIMARY KEY (id),
 			INDEX idx_nav_track (track_id),
@@ -533,6 +535,9 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 		if _, err := db.ExecContext(ctx, stmt); err != nil {
 			return err
 		}
+	}
+	if err := ensureMySQLNavigationResultColumns(ctx, db); err != nil {
+		return err
 	}
 	if err := ensureMySQLUsersPhoneColumn(ctx, db); err != nil {
 		return err
@@ -1729,6 +1734,7 @@ func (r *MySQLTrackRepository) AdminHardDeleteTrack(ctx context.Context, trackID
 		{`DELETE FROM track_submissions WHERE track_id=?`, []any{trackID}},
 		{`DELETE FROM track_waypoints WHERE track_id=?`, []any{trackID}},
 		{`DELETE FROM track_collects WHERE track_id=?`, []any{trackID}},
+		{`UPDATE track_navigations n JOIN track_records r ON r.id=? AND r.user_id=n.navigator_user_id AND r.session_id=n.result_session_id SET n.result_deleted=1`, []any{trackID}},
 		{`DELETE FROM track_navigations WHERE track_id=?`, []any{trackID}},
 		{`DELETE FROM track_map_index_jobs WHERE track_id=?`, []any{trackID}},
 		{`DELETE FROM track_geo_indexes WHERE track_id=?`, []any{trackID}},
@@ -3415,7 +3421,7 @@ func (r *MySQLNavigationRepository) CountByTrackIDs(ctx context.Context, trackID
 
 	placeholders := strings.TrimRight(strings.Repeat("?,", len(uniqIDs)), ",")
 	query := fmt.Sprintf(
-		`SELECT track_id, COUNT(*) AS cnt FROM track_navigations WHERE track_id IN (%s) GROUP BY track_id`,
+		`SELECT n.track_id, COUNT(*) AS cnt FROM track_navigations n WHERE n.track_id IN (%s) AND `+activeNavigationSQL+` GROUP BY n.track_id`,
 		placeholders,
 	)
 	args := make([]any, 0, len(uniqIDs))
@@ -3452,8 +3458,8 @@ func (r *MySQLNavigationRepository) ListByUserID(ctx context.Context, userID int
 		limit = 1000
 	}
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT id, track_id, navigator_user_id, created_at
-		 FROM track_navigations WHERE navigator_user_id=? ORDER BY created_at DESC, id DESC LIMIT ?`,
+		`SELECT n.id, n.track_id, n.navigator_user_id, n.created_at
+		 FROM track_navigations n WHERE n.navigator_user_id=? AND n.track_id<>'' AND `+activeNavigationSQL+` ORDER BY n.created_at DESC, n.id DESC LIMIT ?`,
 		userID, limit,
 	)
 	if err != nil {
@@ -3479,7 +3485,7 @@ func (r *MySQLNavigationRepository) CountByTrackOwnerUserID(ctx context.Context,
 		`SELECT COUNT(*)
 		 FROM track_navigations n
 		 JOIN track_records t ON n.track_id = t.id
-		 WHERE t.user_id=? AND t.is_running=0 AND t.status IN (?, ?)`,
+		 WHERE t.user_id=? AND t.is_running=0 AND t.status IN (?, ?) AND `+activeNavigationSQL,
 		ownerUserID, models.TrackStatusNormal, models.TrackStatusPrivate,
 	)
 	var cnt int64
