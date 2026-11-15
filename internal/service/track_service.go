@@ -696,6 +696,9 @@ func (s *TrackService) createTrackAtID(ctx context.Context, userID int64, input 
 	if err := s.fillTrackCollectSummary(ctx, userID, track); err != nil {
 		return nil, err
 	}
+	if err := s.fillTrackNavigationSummary(ctx, track); err != nil {
+		return nil, err
+	}
 	s.fillTrackPrimaryScenicSpot(ctx, track)
 	track.PreviewImages = trackPreviewURLs(track.ID, track.PreviewImages)
 	return track, nil
@@ -744,6 +747,9 @@ func (s *TrackService) GetTrackDetail(ctx context.Context, trackID string) (*mod
 		return nil, err
 	}
 	if err := s.fillTrackCollectSummary(ctx, 0, track); err != nil {
+		return nil, err
+	}
+	if err := s.fillTrackNavigationSummary(ctx, track); err != nil {
 		return nil, err
 	}
 	s.decorateTrackAssets(ctx, track)
@@ -796,6 +802,9 @@ func (s *TrackService) ReportTrackNavigation(ctx context.Context, navigatorUserI
 func (s *TrackService) GetRunningTrack(ctx context.Context, userID int64) (*models.Track, error) {
 	track, err := s.tracks.FindRunningByUserID(ctx, userID)
 	if err != nil {
+		return nil, err
+	}
+	if err := s.fillTrackNavigationSummary(ctx, track); err != nil {
 		return nil, err
 	}
 	s.decorateTrackAssets(ctx, track)
@@ -1616,6 +1625,9 @@ func (s *TrackService) UpdateTrackInfo(ctx context.Context, userID int64, trackI
 	if err := s.fillTrackCollectSummary(ctx, userID, track); err != nil {
 		return nil, err
 	}
+	if err := s.fillTrackNavigationSummary(ctx, track); err != nil {
+		return nil, err
+	}
 	s.fillTrackPrimaryScenicSpot(ctx, track)
 	track.PreviewImages = trackPreviewURLs(track.ID, track.PreviewImages)
 	return track, nil
@@ -1839,13 +1851,9 @@ func (s *TrackService) fillMyTrackSummaryExtras(ctx context.Context, userID int6
 		counts = m
 	}
 
-	navCounts := map[string]int64{}
-	if s.navigations != nil {
-		m, err := s.navigations.CountByTrackIDs(ctx, trackIDs)
-		if err != nil {
-			return err
-		}
-		navCounts = m
+	navCounts, err := s.trackNavigationCounts(ctx, trackIDs)
+	if err != nil {
+		return err
 	}
 
 	primaryScenicSpots := s.primaryScenicSpots(ctx, trackIDs)
@@ -1929,13 +1937,9 @@ func (s *TrackService) fillTrackSummaryExtrasWithAvatarCache(ctx context.Context
 		counts = m
 	}
 
-	navCounts := map[string]int64{}
-	if s.navigations != nil {
-		m, err := s.navigations.CountByTrackIDs(ctx, trackIDs)
-		if err != nil {
-			return err
-		}
-		navCounts = m
+	navCounts, err := s.trackNavigationCounts(ctx, trackIDs)
+	if err != nil {
+		return err
 	}
 
 	type userBrief struct {

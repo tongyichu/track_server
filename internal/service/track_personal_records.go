@@ -63,18 +63,23 @@ func (s *TrackService) PersonalRecords(ctx context.Context, userID int64, trackT
 		}
 	}
 	result := &models.PersonalRecords{Groups: make([]models.PersonalRecordGroup, 0, len(winners))}
+	var recordSummaries []*models.TrackSummary
 	for code, records := range winners {
 		group := models.PersonalRecordGroup{TrackType: code, Records: make([]models.PersonalRecord, 0, len(records))}
 		for _, metric := range []string{"distance", "elevation", "duration", "steps"} {
 			if t := records[metric]; t != nil {
 				// Reuse authenticated preview routes without fetching images or GPS files.
 				summary := toSummaries([]*models.Track{t})[0]
+				recordSummaries = append(recordSummaries, summary)
 				group.Records = append(group.Records, models.PersonalRecord{Metric: metric, Value: models.PersonalRecordValue(t, metric), Track: summary})
 			}
 		}
 		if len(group.Records) > 0 {
 			result.Groups = append(result.Groups, group)
 		}
+	}
+	if err := s.fillSummaryNavigationCounts(ctx, recordSummaries); err != nil {
+		return nil, err
 	}
 	sort.Slice(result.Groups, func(i, j int) bool { return result.Groups[i].TrackType < result.Groups[j].TrackType })
 	return result, nil

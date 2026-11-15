@@ -1,3 +1,23 @@
+# 部署轨迹被跟随计数数据补齐（2026-11-15）
+
+用户明确要求部署上一轮计数修复，按android-track-release只部署track-server-backup。main fetch后与origin/main一致，无需合并；本次9项源码/文档变更均属于详情Track及个人纪录摘要的navigate_count补齐、现有列表聚合统一入口与协议说明。沿用同一源码上一轮go build ./...成功结果，本轮再次检查最终diff、gofmt格式与git diff --check；未新增或运行自动化业务测试。用户明确各种列表暂不展示，本次仅准备服务端字段，客户端UI及已有未提交修改不动。
+
+下一步提交并推送当前快照，构建/推送linux/amd64镜像，再按既有生产更新脚本替换容器，核对镜像摘要、真实MySQL仓储及内外ping；最后用当前客户端身份只读核对NO.0000001Z详情确实返回navigate_count=2（如期间新增业务记录，以最新实际计数为准）。不调用导航上报接口补造或重试历史使用次数。执行实际结果以本轮部署记录为准，不把准备完成视为已上线。
+
+原交接如下：
+
+# 被跟随计数补齐详情与个人纪录，列表仅准备数据（2026-11-15）
+
+用户反馈NO.0000001Z被跟随多次但详情为0，随后要求各种轨迹列表也准备计数数据，明确“暂时不展示”。读取最新API索引/collect-navigation分册后，用小米当前登录态只读查询线上：详情确实缺少navigate_count；同一条轨迹的搜索列表摘要实际返回2，且不是当前账号本人轨迹。凭证仅在内存使用，未输出/保存；没有调用非幂等上报接口、补报历史记录或改数据库。根因是服务端models.Track没有该字段，详情无法下发，Android TrackInfo缺省0覆盖列表摘要值，累计本身已存在。
+
+models.Track增加只读navigate_count（JSON明确含0，bson排除），创建/详情/更新/当前运动响应复用导航仓储CountByTrackIDs补齐；详情调用的同行成员结果同样继承。新track_navigation_summary.go统一查询入口，已有MyTrackSummary及TrackSummary列表批量聚合也复用该入口。逐一源码核对推荐Feed/legacy、搜索、我的轨迹、收藏、喜欢、客态用户的轨迹/收藏/喜欢、发现图形/路线/景点、足迹及路线组内具体轨迹，原本都已有字段与批量装饰路径，无需重复加字段或逐项详情请求。另发现PersonalRecords只toSummaries构造摘要，navigate_count一直为默认0，现将获纪录摘要的ID去重后一次查询补齐，保留不拉GPS/图片和无业务外部请求边界。地图区域聚合/路线组封面元数据不是具体轨迹摘要，不把聚合路线数混成被跟随计数。
+
+不改计数口径、本人不计规则、非幂等上报去重/重试行为，不新增表/迁移/仓储接口。既有MySQL/Mongo/memory计数实现复用；聚合错误返回错误而非伪造0。客户端所有列表本来复用TrackInfo.navigate_count，本轮没有新增列表计数UI，也未修改客户端代码。已更新docs/api/track.md、collect-navigation.md、route-index.md及server-contracts.md；现有AGENTS仍适用无需调整。
+
+go build ./...、gofmt与git diff --check通过；按仓库约定未新增/运行单元、集成或自动化接口/UI测试，线上读取只是本条问题证据。当前修复仅在track-server-backup工作树，未提交、推送或部署；线上仍为上一轮已部署692244c（后台地图分段修复）。客户端保留之前session已有未提交改动，本轮未安装、发布或提交客户端。部署修复后，若没有新增上报，NO.0000001Z详情应与已有列表一致显示2；实际页面待用户验证。
+
+原交接如下：
+
 # 部署后台轨迹地图分段显示（2026-11-15）
 
 用户明确“部署server”，按android-track-release仅处理track-server-backup；不发布、不提交客户端（客户端仍保留本session未提交修改）。main fetch后与origin/main一致，无需合并。本次4项已审查改动均为共享轨迹地图按既有segment_id分段绘制及对应说明：暂停/中断不跨段连线，保留全局起终点、中间单点和完整视野；不修改原始文件、存储、鉴权或写接口，既有AGENTS无需调整。最终go build ./...、node --check internal/admin/static/track_map_preview.js和git diff --check通过；按约定未运行自动化业务/UI测试。

@@ -499,6 +499,8 @@ Authorization: Bearer <token>
 
 详情直接返回 `collect_count`（当前收藏用户总数）与 `collected`（当前 JWT 用户是否收藏），与列表的收藏总数口径一致，无收藏返回 0。客户端复用轨迹信息展示数量与星星状态，不需要额外请求收藏计数。收藏/取消收藏响应也返回操作后的状态和总数，见 [collect-navigation.md](collect-navigation.md)。
 
+详情同时明确返回 `navigate_count`（被其他用户成功开始并主动正常结束跟随的累计次数），无记录返回数值 `0`，不省略字段。与推荐、搜索、我的轨迹、收藏、喜欢、他人主页、发现/景点、足迹和路线组具体轨迹列表采用相同 `track_navigations` 记录及聚合口径，非按浏览者过滤。创建、更新和当前运动的轨迹响应也携带该只读字段；查询失败返回错误，不伪造为0，不将统计写入轨迹表或原始文件。客户端可先接收/保留数据，列表是否展示由客户端决定。
+
 ```json
 {
   "code": 0,
@@ -512,6 +514,7 @@ Authorization: Bearer <token>
     "description": "从起点附近出发，沿本次记录路线完成约 1.2 公里。",
     "collected": true,
     "collect_count": 12,
+    "navigate_count": 3,
     "start_time": "2026-04-20T12:00:00Z",
     "end_time": "2026-04-20T12:10:00Z",
     "distance": 1200.5,
@@ -1210,7 +1213,7 @@ GET /track/activity/records?track_type=hiking，业务JWT、仅本人、响应no
 
 只选有限正数，缺失/0/非法值不生成纪录。自驾仅距离/时长，骑行不生成步数纪录；步数只读取已保存真实值。并列取开始时间较新、再按轨迹ID较大的一条。同一轨迹可创造多个纪录，groups按code升序，无纪录返回[]。
 
-MySQL/Mongo/memory同步实现PersonalRecordsRepository，每指标在存储侧选各原始类型最大值及最新并列项，再一次FindByIDs批量取少量获纪录轨迹，service归一类型后比较。复用toSummaries和trackPreviewURLs构造鉴权预览路由，不调用BuildTrackSummaries中的旧资源缓存下载，不拉取GPS、不生成地图、不逐项补详情，无新表字段。
+MySQL/Mongo/memory同步实现PersonalRecordsRepository，每指标在存储侧选各原始类型最大值及最新并列项，再一次FindByIDs批量取少量获纪录轨迹，service归一类型后比较。复用toSummaries和trackPreviewURLs构造鉴权预览路由，不调用BuildTrackSummaries中的旧资源缓存下载，不拉取GPS、不生成地图、不逐项补详情，无新表字段。获纪录轨迹摘要的 `navigate_count` 按本次结果去重轨迹ID后一次批量查询补齐，同一轨迹获得多个纪录时计数相同；无记录明确返回0。
 
 Android将云端纪录与当前账号已完成且未上传本机轨迹按同一类型/指标/并列规则比较，已上传本地副本不重复参与。客户端仅展示distance/elevation/duration，忽略steps纪录；格子图同样移除运动步数，采集、存储、详情及接口兼容字段保持不变。页面类型筛选统一作用于纪录卡，全部类型跨组取各指标最高纪录，不另加筛选。纪录纵向每行一项，左侧指标和大数值/小单位，中间轨迹title（最多两行）及日期，右侧4:3静态轨迹预览；不展示城市或运动类型，不设单项背景框，行间细分隔线、末项无分隔线。空title回退未命名路线，不新增地区目录读取或定位请求。复用日夜预览和本机截图，不读取GPS或生成地图，缺图用占位图。时长按小时/分钟（不足一分钟按秒）显示。适用但缺失指标显示“—”且不可点击，不适用指标隐藏，整张无纪录时显示空态；真实纪录整行进入详情。接口和其余指标统计规则不变。首次失败或旧服务端404明确仅有本机未上传纪录，已有成功结果时保留并提示刷新失败，不使用示例数据伪装完整历史。
 

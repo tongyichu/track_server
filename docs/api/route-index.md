@@ -27,7 +27,7 @@
 | 后台 AI 策略（请求上限0不限） / 价格 | PUT | `/admin/api/ai/policies/:feature`, `/admin/api/ai/prices` | AI 配置操作及 AI 读取 | [admin-ai](admin-ai.md) |
 | 本人全部历史运动类型分布（次数/时长/里程/爬升） | GET | `/track/activity/type-distribution` | 是 | [运动类型分布](track.md#运动类型分布) |
 | 本人年度活动指标（类型筛选、跨天记录分日） | GET | `/track/activity/calendar` | 是 | [年度活动指标](track.md#年度活动指标) |
-| 本人全部历史个人纪录（含轨迹预览） | GET | `/track/activity/records` | 是 | [个人纪录](track.md#个人纪录) |
+| 本人全部历史个人纪录（含轨迹预览及被跟随计数） | GET | `/track/activity/records` | 是 | [个人纪录](track.md#个人纪录) |
 | 本人全部历史探索足迹 | GET | `/track/activity/footprint` | 是 | [探索统计](track-footprint.md#全国探索统计) |
 | 本人省份/城市足迹卡片与总数 | GET | `/track/activity/footprint/tracks` | 是 | [对应轨迹](track-footprint.md#对应轨迹列表) |
 | 后台景点状态调整（详情删除按 archived 归档） | POST | `/admin/api/scenic-spots/:spot_id/status` | 后台景点写权限 | [track-place-discovery.md](../track-place-discovery.md#后台景点删除归档) |
@@ -45,7 +45,7 @@
 | 后台用户背景图 | GET | `/admin/api/users/:user_id/background` | 后台 users 读取权限 | [admin-users.md](admin-users.md#背景图) |
 | 创建轨迹（含跨天时间线、可选默认路线说明） | POST | `/track/create` | 是 | [track.md](track.md#1-创建轨迹) |
 | 推荐轨迹列表（个性化 Feed Session，支持 `city_code` 筛选） | GET | `/track/recommend/list` | 是 | [track.md](track.md#2-推荐轨迹列表) |
-| 轨迹详情（含默认路线说明、收藏状态及可选主景区） | GET | `/track/:track_id/detail` | 是 | [track.md](track.md#3-轨迹详情)、[主景区标签](track.md#主景区标签) |
+| 轨迹详情（含默认路线说明、收藏状态、被跟随计数及可选主景区） | GET | `/track/:track_id/detail` | 是 | [track.md](track.md#3-轨迹详情)、[主景区标签](track.md#主景区标签) |
 | 静态轨迹预览图片 | GET | `/track/:track_id/previews/:variant?v=<source_version>` | 是 | [track.md](track.md#静态轨迹预览图) |
 | 历史预览待补列表 | GET | `/track/preview-backfill/list` | 是 | [track.md](track.md#历史轨迹预览补齐devmode) |
 | 旧客户端历史路线说明待补列表 / GPS（当前 Android 已移除入口） | GET | `/track/description-backfill/list`, `/track/description-backfill/:track_id/data` | 是 | [track.md](track.md#历史路线说明补齐devmode) |

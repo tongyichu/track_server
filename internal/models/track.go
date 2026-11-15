@@ -35,6 +35,7 @@ type Track struct {
 	PreviewImages             TrackPreviewImages       `json:"preview_images" bson:"preview_images"`
 	Collected                 bool                     `json:"collected" bson:"-"`
 	CollectCount              int64                    `json:"collect_count" bson:"-"`
+	NavigateCount             int64                    `json:"navigate_count" bson:"-"`
 	CommentCount              int64                    `json:"comment_count" bson:"-"`
 	CanComment                bool                     `json:"can_comment" bson:"-"`
 	Liked                     bool                     `json:"liked" bson:"-"`
