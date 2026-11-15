@@ -225,9 +225,19 @@
       clickTimer = setTimeout(() => searchNearby(position), 250);
     }
     const normalize = value => String(value || 'GCJ02').toUpperCase().replace(/-/g, '');
-    function pathOf(points) {
-      return (points || []).map(p => Array.isArray(p) ? [Number(p[1]), Number(p[0])] : [Number(p.longitude), Number(p.latitude)])
-        .filter(p => Number.isFinite(p[0]) && Number.isFinite(p[1]));
+    function pathsOf(points) {
+      const paths = [];
+      let path = null, segment = null;
+      for (const point of Array.isArray(points) ? points : []) {
+        const position = poiPosition(Array.isArray(point) ? [point[1], point[0]] : point && [point.longitude, point.latitude]);
+        if (!position) { path = null; segment = null; continue; }
+        const id = String(point.segment_id == null ? 0 : point.segment_id);
+        if (!path || segment !== id) {
+          path = []; paths.push(path); segment = id;
+        }
+        path.push(position);
+      }
+      return paths;
     }
     function fit() {
       if (disposed || !map || !canvas.isConnected) return;
@@ -242,12 +252,21 @@
       if (!map) return;
       if (overlays.length) map.remove(overlays);
       overlays = [];
-      const path = pathOf(points);
-      if (path.length < 2) return;
-      const polyline = new amap.Polyline({ path, strokeColor: '#2563eb', strokeWeight: 4, strokeOpacity: 0.9, lineJoin: 'round', lineCap: 'round', bubble: true });
-      const start = new amap.Marker({ position: path[0], label: { content: '起', direction: 'top' } });
-      const end = new amap.Marker({ position: path[path.length - 1], label: { content: '终', direction: 'top' } });
-      overlays = [polyline, start, end];
+      const paths = pathsOf(points);
+      if (!paths.length) return;
+      overlays = paths.filter(path => path.length > 1).map(path => new amap.Polyline({
+        path, strokeColor: '#2563eb', strokeWeight: 4, strokeOpacity: 0.9, lineJoin: 'round', lineCap: 'round', bubble: true
+      }));
+      paths.forEach((path, index) => {
+        if (path.length === 1 && index > 0 && index < paths.length - 1) {
+          overlays.push(new amap.Marker({ position: path[0], title: '轨迹点', bubble: true }));
+        }
+      });
+      overlays.push(new amap.Marker({ position: paths[0][0], label: { content: '起', direction: 'top' } }));
+      if (paths.length > 1 || paths[0].length > 1) {
+        const last = paths[paths.length - 1];
+        overlays.push(new amap.Marker({ position: last[last.length - 1], label: { content: '终', direction: 'top' } }));
+      }
       map.add(overlays);
       // 切换坐标系保留视野，便于比较同一路段的偏移。
       if (!fitted) { fitted = true; fit(); }

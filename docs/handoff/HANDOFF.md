@@ -1,3 +1,19 @@
+# 部署后台轨迹地图分段显示（2026-11-15）
+
+用户明确“部署server”，按android-track-release仅处理track-server-backup；不发布、不提交客户端（客户端仍保留本session未提交修改）。main fetch后与origin/main一致，无需合并。本次4项已审查改动均为共享轨迹地图按既有segment_id分段绘制及对应说明：暂停/中断不跨段连线，保留全局起终点、中间单点和完整视野；不修改原始文件、存储、鉴权或写接口，既有AGENTS无需调整。最终go build ./...、node --check internal/admin/static/track_map_preview.js和git diff --check通过；按约定未运行自动化业务/UI测试。
+
+下一步提交推送本次快照，构建/推送固定linux/amd64生产镜像，使用既有SSH与更新脚本替换生产容器，再核对镜像摘要、容器及内外网ping。部署实际结果以本轮执行记录为准，不将准备完成视为线上完成。后台具体轨迹展示由用户部署后手动验收。
+
+原交接如下：
+
+# 后台详情地图按轨迹段绘制（2026-11-15）
+
+用户以NO.000000CL反馈详情预览图分段而地图连续。源码核对：原文件KML/gx:Track解析、简化保留段端点、GCJ02坐标转换及map-preview响应都保留TrackPoint.segment_id；static/track_map_preview.js将完整点列表交给单条Polyline，忽略了段编号。现共享地图按连续段编号分别创建Polyline，编号变化及非法坐标处断开，缺段编号的旧点按0兼容；全局起终点只标整条轨迹首尾，中间单点段保留Marker。原文件三种坐标预览与已有索引回退共用该逻辑，视野适配与坐标切换保留原行为。
+
+未修改录制、原始文件、空间索引、鉴权或写接口；API文档仅说明已有segment_id消费规则，UI参考同步，既有AGENTS适用无需改规则。node --check、go build ./...及git diff --check通过；go构建时模块stat缓存写入有沙箱警告但最终exit0。按约定未运行自动化业务/UI测试，未读取该具体轨迹的线上原文件或声称已实测页面。未提交、推送或部署，线上NO.000000CL展示待部署后手动验收。
+
+原交接如下：
+
 # 部署后台紧凑统计与共享组件（2026-11-14）
 
 用户明确要求部署，按android-track-release仅处理track_server，不发布或提交客户端。main fetch后与origin/main一致，无远端合并；本次全部23项源码/资源/文档变更属于工作台紧凑布局与11页顶部统计组件统一，无配置、密钥、产物或业务协议改动。复用同一源码最终go build ./...成功结果，本轮再次node --check五份改动JS及git diff --check通过。下一步提交推送该快照、构建linux/amd64生产镜像，再执行现有更新脚本并核对镜像摘要、新容器和内外ping；实际结果以部署执行记录为准。
