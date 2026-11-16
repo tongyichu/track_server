@@ -30,35 +30,11 @@
   var hasLoaded = false;
 
   function trackCell(track) {
-    var cell = document.createElement('td');
-    cell.setAttribute('data-admin-read', 'tracks');
-    if (track && track.track_id && ['ready', 'deleted'].includes(track.state)) {
-      var button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'btn btn-link p-0 text-start text-wrap';
-      button.textContent = track.title || track.track_id;
-      button.addEventListener('click', function () {
-        window.AdminTrackEditor.open(track.track_id, { onSaved: load }).catch(function (error) {
-          window.AdminUI.alert('打开轨迹失败：' + (error.message || error), 'danger');
-        });
+    return window.AdminCompanionMemberTrack.cell(track, function (trackID) {
+      window.AdminTrackEditor.open(trackID, { onSaved: load }).catch(function (error) {
+        window.AdminUI.alert('打开轨迹失败：' + (error.message || error), 'danger');
       });
-      cell.appendChild(button);
-      if (track.title) {
-        var id = document.createElement('small');
-        id.className = 'd-block text-secondary'; id.textContent = track.track_id;
-        cell.appendChild(id);
-      }
-      if (track.state === 'deleted') {
-        var badge = document.createElement('span');
-        badge.className = 'badge bg-secondary-lt'; badge.textContent = '已下架';
-        cell.appendChild(badge);
-      }
-    } else {
-      var labels = { pending: '尚未上传', empty: '无有效轨迹', unavailable: '轨迹暂不可用', unknown: '读取失败' };
-      cell.className = 'text-secondary';
-      cell.textContent = track ? labels[track.state] || '状态未知' : '无查看权限';
-    }
-    return cell;
+    });
   }
 
   if (!sessionID) {

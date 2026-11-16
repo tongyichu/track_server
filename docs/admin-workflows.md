@@ -212,9 +212,9 @@ GET /admin/api/users
 
 ### 同行成员轨迹
 
-房间详情`companion_detail.html`在成员列表中展示轨迹名称及编号，点击复用`AdminTrackEditor`现有弹窗、地图、资料和文件资源；加载track_editor.css及place_candidates/track_map_preview/track_editor脚本，按既有轨迹权限区分查看和编辑。已下架但仍存在的轨迹保留链接及标记，沿用弹窗恢复/彻底删除流程；保存后刷新当前房间。成员刷新按字符串user_id复用未变化行，失败保留已有内容；12秒超时，重复刷新或离页取消请求，旧结果不覆盖新页面。
+同行列表`companions.html/js`的“查看详情”原生dialog是当前主入口，成员页展示轨迹名称及编号；旧独立页`companion_detail.html/js`保留兼容，两处共用`companion_member_track.js`的轨迹单元格。点击复用`AdminTrackEditor`现有弹窗、地图、资料和文件资源；加载track_editor.css及place_candidates/track_map_preview/track_editor脚本，按既有轨迹权限区分查看和编辑。已下架但仍存在的轨迹保留链接及标记，沿用弹窗恢复/彻底删除流程；打开轨迹前暂停关闭原生房间dialog，等待close事件后再打开共享轨迹弹窗；待轨迹弹窗完全关闭才恢复原房间、成员tab及滚动位置，实际保存/删除后才刷新。防止原生top layer遮挡共享弹窗，正常关闭房间和离页不重新弹出。成员刷新按字符串user_id复用未变化行，失败保留已有内容；12秒超时，重复刷新或离页取消请求，旧结果不覆盖新页面。
 
-`GET /admin/api/companions/:session_id`仍需companions读取权限。成员user_id改用十进制字符串，避免浏览器丢失int64精度；同时具备tracks读取权限才查询并返回`members[].track={state,track_id?,title?}`，无权限时字段省略、前端隐藏整列。state为ready/deleted/pending/empty/unavailable/unknown：已生成、已下架、尚未上传、已确认无有效轨迹、正式记录暂不可用、读取失败。以完成清单的track_id为准，批量核对轨迹作者和session_id，不按时间或位置猜测归属，不展示清单中的原始输入或轨迹点。清单与轨迹批量读取共3秒超时，失败返回成员列表及member_tracks_warning，不把错误当成无轨迹；保留有效成员的摘要。用户资料批量读取，头像复用现有4并发缓存装饰并限制3秒，不逐成员查询或串行等待头像。复用三种仓储现有ListTrackManifests/FindByIDs，不新增表或业务接口，不触发上传、结算或内容识别。
+`GET /admin/api/companions/:session_id`仍需companions读取权限。成员、房主、位置快照及弹幕中的用户ID和弹幕ID均在后台专用DTO中使用十进制字符串，避免浏览器丢失int64精度及关联昵称失配，不改业务模型；同时具备tracks读取权限才查询并返回`members[].track={state,track_id?,title?}`，无权限时字段省略、前端隐藏整列。state为ready/deleted/pending/empty/unavailable/unknown：已生成、已下架、尚未上传、已确认无有效轨迹、正式记录暂不可用、读取失败。以完成清单的track_id为准，批量核对轨迹作者和session_id，不按时间或位置猜测归属，不展示清单中的原始输入或轨迹点。清单与轨迹批量读取共3秒超时，失败返回成员列表及member_tracks_warning，不把错误当成无轨迹；保留有效成员的摘要。用户资料批量读取，头像复用现有4并发缓存装饰并限制3秒，不逐成员查询或串行等待头像。复用三种仓储现有ListTrackManifests/FindByIDs，不新增表或业务接口，不触发上传、结算或内容识别。
 
 ### 地图与同行统计
 

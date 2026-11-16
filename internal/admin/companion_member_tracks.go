@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strconv"
 
 	"github.com/tongyichu/track_server/internal/models"
 	"github.com/tongyichu/track_server/internal/repository"
@@ -13,6 +14,30 @@ type companionMemberTrack struct {
 	State   string `json:"state"`
 	TrackID string `json:"track_id,omitempty"`
 	Title   string `json:"title,omitempty"`
+}
+
+type companionDetailSession struct {
+	*models.CompanionSession
+	OwnerUserID       string `json:"owner_user_id"`
+	EndOperatorUserID string `json:"end_operator_user_id,omitempty"`
+}
+
+type companionDetailPosition struct {
+	*models.CompanionLivePosition
+	UserID string `json:"user_id"`
+}
+
+type companionDetailDanmaku struct {
+	*models.CompanionDanmaku
+	ID     string `json:"id"`
+	UserID string `json:"user_id"`
+}
+
+func companionDetailID(id int64) string {
+	if id <= 0 {
+		return ""
+	}
+	return strconv.FormatInt(id, 10)
 }
 
 // Only an exact completion-manifest, author and room match can link a member to a track.
