@@ -1,3 +1,13 @@
+# 后台同行房间详情关联成员轨迹（2026-11-17）
+
+用户要求房间详情成员列表列出各自轨迹，并点击打开对应轨迹弹窗。companion_detail.html/js新增轨迹列、名称及编号、已下架标记和刷新按钮，复用AdminTrackEditor及其地图/候选/资源依赖与CSS；有tracks写权限可编辑，无写权限沿用只读。保存后刷新当前房间；成员按字符串user_id保留未变化行，加载失败保留原内容，重复刷新/离页取消、12秒超时与旧响应隔离。
+
+GetCompanionDetail仍按companions授权，仅额外具备tracks读取权限才批量查询并返回members[].track摘要。新增companion_member_tracks.go复用三仓储既有ListTrackManifests与TrackRepository.FindByIDs，在3秒内核对完成清单、作者和房间三者一致；未上传/确认空轨迹/已下架/记录暂不可用/读取失败分开，不从时间或坐标猜测、不读取点或自动补传。轨迹查询失败不阻断基本房间数据，以unknown及member_tracks_warning提示；无权限不读取也不返回轨迹字段。成员user_id改为十进制字符串，避免浏览器int64精度丢失；资料改为批量FindByIDs，头像复用既有4并发装饰并限制3秒。未新增仓储方法、表或业务客户端接口。
+
+验证：go build ./...、node --check companion_detail.js及git diff --check通过；静态核对共享脚本/CSS依赖、轨迹列读权限和数据输出权限。默认未运行业务/接口/UI自动化，实际桌面/窄屏、只读/无权限及保存后刷新由用户验收。文档同步admin-routes、admin-workflows、companion协议与route-index；既有AGENTS跨模块权限、只读和共享编辑器边界适用，无需改规则。用户随后明确要求部署服务端；已fetch确认与origin/main一致，无远端更新需合并，复用相同源码go build成功结果，本轮再次JS语法和diff检查通过。接下来提交推送同一快照、构建推送镜像并核对新容器及内外健康检查，实际结果以部署执行回执为准，不发布App。
+
+原交接如下：
+
 # 同行元信息、房主内容共享与私密评论（2026-11-16）
 
 用户要求同行成员轨迹保留本人城市/坐标、新上传默认公开，景点和自动路线说明统一复用房主，评论入口常驻。CompleteMemberTrack补位置并以Normal创建新记录，重试不改既有私密状态；客户端携带本人城市/地址/WGS84，缺失地区从本人首批持久化GPS经既有坐标转换及本地行政边界补齐，不调用外部服务，不使用房主坐标/界面选城，不猜测无法识别地区。

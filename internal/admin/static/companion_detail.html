@@ -6,6 +6,7 @@
   <title>时光轨迹 - 控制台</title>
   <link rel="stylesheet" href="/admin/static/vendor/tabler.min.css" />
   <link rel="stylesheet" href="/admin/static/style.css" />
+  <link rel="stylesheet" href="/admin/static/track_editor.css" />
 </head>
 <body>
   <header class="topbar">
@@ -33,11 +34,12 @@
     </section>
 
     <section class="panel">
-      <h2>同行人员 <span class="hint" id="memberHint"></span></h2>
+      <h2>同行人员 <span class="hint" id="memberHint"></span> <button type="button" id="refreshMembers" class="btn btn-sm btn-outline-secondary">刷新</button></h2>
+      <p id="memberTrackWarning" class="text-warning" role="status" data-admin-read="tracks" hidden></p>
       <table class="data">
         <thead>
           <tr>
-            <th>用户ID</th><th>头像</th><th>昵称</th><th>角色</th>
+            <th>用户ID</th><th>头像</th><th>昵称</th><th data-admin-read="tracks">轨迹</th><th>角色</th>
             <th>成员状态</th><th>在线</th><th>加入时间</th><th>最后活跃</th>
           </tr>
         </thead>
@@ -75,6 +77,9 @@
   <script src="/admin/static/vendor/tabler.min.js"></script>
   <script src="/admin/static/shell.js"></script>
   <script src="/admin/static/ui.js"></script>
+  <script src="/admin/static/place_candidates.js"></script>
+  <script src="/admin/static/track_map_preview.js"></script>
+  <script src="/admin/static/track_editor.js"></script>
   <script src="/admin/static/companion_detail.js"></script>
 </body>
 </html>

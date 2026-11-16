@@ -210,6 +210,12 @@ GET /admin/api/users
 
 纠错展示以 `correction` 的提交时快照为准，不根据当前选项名称重建历史记录；旧文字格式仅保留兼容，普通反馈仅提到轨迹 ID 不应被误识别。选项通过后台配置维护稳定 ID，已有项只允许停用而非删除，新增 ID 由服务端生成；并发保存冲突时保留表单，由管理员显式重新加载，不覆盖他人配置。状态统计仍包含全部反馈。轨迹实际修改继续走既有鉴权与保存确认，读取关联轨迹不能自动提交改动。
 
+### 同行成员轨迹
+
+房间详情`companion_detail.html`在成员列表中展示轨迹名称及编号，点击复用`AdminTrackEditor`现有弹窗、地图、资料和文件资源；加载track_editor.css及place_candidates/track_map_preview/track_editor脚本，按既有轨迹权限区分查看和编辑。已下架但仍存在的轨迹保留链接及标记，沿用弹窗恢复/彻底删除流程；保存后刷新当前房间。成员刷新按字符串user_id复用未变化行，失败保留已有内容；12秒超时，重复刷新或离页取消请求，旧结果不覆盖新页面。
+
+`GET /admin/api/companions/:session_id`仍需companions读取权限。成员user_id改用十进制字符串，避免浏览器丢失int64精度；同时具备tracks读取权限才查询并返回`members[].track={state,track_id?,title?}`，无权限时字段省略、前端隐藏整列。state为ready/deleted/pending/empty/unavailable/unknown：已生成、已下架、尚未上传、已确认无有效轨迹、正式记录暂不可用、读取失败。以完成清单的track_id为准，批量核对轨迹作者和session_id，不按时间或位置猜测归属，不展示清单中的原始输入或轨迹点。清单与轨迹批量读取共3秒超时，失败返回成员列表及member_tracks_warning，不把错误当成无轨迹；保留有效成员的摘要。用户资料批量读取，头像复用现有4并发缓存装饰并限制3秒，不逐成员查询或串行等待头像。复用三种仓储现有ListTrackManifests/FindByIDs，不新增表或业务接口，不触发上传、结算或内容识别。
+
 ### 地图与同行统计
 
 后台地图模式只增加“路线空间覆盖”和“路线组规模分布”两张图；与友同行只增加“创建/结束趋势”和“参与人数分布”，使用近 1/7/30 天切换。`AdminDashboardStatisticsRepository` 的 `GetAdminMapModeStatistics` / `GetAdminCompanionUsageStatistics` 在 MySQL、Mongo、内存仓储中只读聚合；不新增表、客户端协议或业务埋点。实现位于 `internal/repository/admin_feature_statistics*.go`，模型为 `internal/models/admin_feature_statistics.go`，后台入口为 `feature_statistics.go`。地图按全量 active 路线组中心 GCJ02 坐标展示；规模按当前 member_count 分为 0、1、2–5、6–20、21 条及以上，城市去重。同行使用趋势按创建/结束各自发生时间独立计数，不以同周期结束数除以创建数作为完成率；人数分布以本周期创建的会话为 cohort，按服务端成员记录 user_id 去重，包含曾离开或移出的成员，不使用 max_members 或客户端 actual_participant_count。没有成员记录的历史会话单列未知，平均人数只计算有成员记录的会话。近 1 天为滚动 24 小时按小时分桶，7/30 天按北京时间自然日含当天补齐空桶。统一刷新保留周期，切换失败回退到上次成功周期；两页不再增加排行和重复数字卡片。

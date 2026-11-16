@@ -213,3 +213,7 @@
 ## 后台埋点归档健康
 
 后台独立会话另提供`GET /admin/api/analytics/health`（analytics读取权限），供工作台显示归档健康；与业务埋点采集接口分开，不触发同步或读取原始事件，见[后台路由](../admin-routes.md)及[同步日志流程](../admin-workflows.md#查看埋点同步摘要)。
+
+## 后台同行成员轨迹
+
+`GET /admin/api/companions/:session_id`保留companions读取权限，额外具备tracks读取权限时在members中返回正式个人轨迹摘要，供房间成员列表打开现有轨迹弹窗；成员user_id为十进制字符串，见[后台路由](../admin-routes.md)及[成员轨迹协议](companion.md#后台房间详情中的成员轨迹)。
