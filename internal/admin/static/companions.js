@@ -46,8 +46,8 @@
     s = String(s || '').trim();
     return (s.indexOf('/admin/api/static/') === 0 || s.indexOf('https://') === 0 || s.indexOf('http://') === 0) ? s : '';
   }
-  async function apiJSON(url) {
-    var response = await fetch(url);
+  async function apiJSON(url, options) {
+    var response = await fetch(url, options);
     if (response.status === 401) { window.location.href = '/admin/login.html'; throw new Error('登录已失效'); }
     var payload = await response.json().catch(function () { return {}; });
     if (!response.ok) throw new Error(payload.error || ('请求失败（' + response.status + '）'));
@@ -96,6 +96,8 @@
   var resetBtn = document.getElementById('resetBtn');
   var detailModal = document.getElementById('companionDetailModal');
   var detailRequest = 0, currentSessionID = '';
+  var detailSuspended = false;
+  var detailController = null;
 
   // 运动类型下拉（icon + 文字）
   var selectedType = '';
@@ -334,10 +336,43 @@
     return '<div class="companion-user">' + (user.avatar_url ? '<img src="' + esc(user.avatar_url) + '" alt="" class="companion-avatar" />' : '') +
       '<span><strong>' + esc(user.nickname || ('用户 ' + id)) + '</strong><small>ID ' + esc(id) + '</small></span></div>';
   }
+  function openMemberTrack(trackID, sourceButton) {
+    return AdminUI.runOnce('companion-track-editor', async function () {
+      var sessionID = currentSessionID;
+      if (!sessionID || !detailModal.open || !AdminAccess.can('tracks', false)) return;
+      var content = detailModal.querySelector('.companion-dialog-content');
+      var membersScroll = document.querySelector('#companionPanelMembers .companion-detail-table-wrap');
+      var scrollTop = content.scrollTop, memberScrollTop = membersScroll.scrollTop;
+      var changed = false;
+      detailSuspended = true;
+      await new Promise(function (resolve) {
+        detailModal.addEventListener('close', resolve, { once: true });
+        detailModal.close();
+      });
+      try {
+        await window.AdminTrackEditor.open(trackID, {
+          waitForHidden: true,
+          onSaved: function () { changed = true; },
+          onDeleted: function () { changed = true; }
+        });
+      } catch (error) {
+        AdminUI.alert('打开轨迹失败：' + (error.message || error), 'danger');
+      } finally {
+        detailSuspended = false;
+        if (currentSessionID === sessionID && detailModal.isConnected) {
+          detailModal.showModal();
+          if (changed) await loadDetail(sessionID, true);
+          content.scrollTop = scrollTop;
+          membersScroll.scrollTop = memberScrollTop;
+          if (sourceButton.isConnected) sourceButton.focus({ preventScroll: true });
+        }
+      }
+    });
+  }
   function renderCompanionDetail(data) {
     var s = data.session || {}, members = data.members || [], users = new Map();
-    members.forEach(function (m) { users.set(m.user_id, m); });
-    var owner = users.get(s.owner_user_id);
+    members.forEach(function (m) { users.set(String(m.user_id), m); });
+    var owner = users.get(String(s.owner_user_id));
     document.getElementById('companionDetailTitle').textContent = s.title || '未命名房间';
     document.getElementById('companionDetailSubtitle').textContent = '房间 ID：' + (s.session_id || '—');
     setDetailRows('companionSessionInfo', [
@@ -355,18 +390,29 @@
     ]);
     document.getElementById('companionPresenceHint').textContent = s.status === 'ended' ? '房间已结束，连接状态为最后保存的记录。' : '连接状态为最近保存的记录，点击“刷新详情”更新。';
     var memberBody = document.getElementById('companionMemberList');
-    memberBody.replaceChildren();
-    members.forEach(function (m) {
-      var tr = document.createElement('tr');
-      tr.innerHTML = '<td>' + userHTML(m, m.user_id) + '</td><td>' + esc(label(m.role)) + '</td><td>' + esc(label(m.member_status)) + '</td><td>' + badge(m.presence_status) + '</td><td>' + esc(fmtTime(m.joined_at)) + '</td><td>' + esc(fmtTime(m.last_seen_at)) + '</td>';
-      memberBody.appendChild(tr);
+    var existing = new Map(Array.from(memberBody.querySelectorAll('tr[data-user-id]')).map(function (row) { return [row.dataset.userId, row]; }));
+    memberBody.querySelectorAll('tr:not([data-user-id])').forEach(function (row) { row.remove(); });
+    members.forEach(function (m, index) {
+      var key = String(m.user_id), signature = JSON.stringify(m);
+      var tr = existing.get(key) || document.createElement('tr');
+      existing.delete(key);
+      if (tr.dataset.signature !== signature) {
+        tr.innerHTML = '<td>' + userHTML(m, m.user_id) + '</td><td>' + esc(label(m.role)) + '</td><td>' + esc(label(m.member_status)) + '</td><td>' + badge(m.presence_status) + '</td><td>' + esc(fmtTime(m.joined_at)) + '</td><td>' + esc(fmtTime(m.last_seen_at)) + '</td>';
+        tr.insertBefore(AdminCompanionMemberTrack.cell(m.track, openMemberTrack), tr.children[1]);
+        tr.dataset.userId = key; tr.dataset.signature = signature;
+      }
+      if (memberBody.children[index] !== tr) memberBody.insertBefore(tr, memberBody.children[index] || null);
     });
+    existing.forEach(function (row) { row.remove(); });
+    var trackWarning = document.getElementById('companionMemberTrackWarning');
+    trackWarning.textContent = data.member_tracks_warning || '';
+    trackWarning.hidden = !data.member_tracks_warning;
     document.getElementById('companionMemberHint').textContent = members.length;
     var positions = data.live_positions || [], positionBody = document.getElementById('companionPositionList');
     positionBody.replaceChildren();
     positions.forEach(function (p) {
       var tr = document.createElement('tr');
-      tr.innerHTML = '<td>' + userHTML(users.get(p.user_id), p.user_id) + '</td>' +
+      tr.innerHTML = '<td>' + userHTML(users.get(String(p.user_id)), p.user_id) + '</td>' +
         '<td><div class="companion-cell-stack"><span>' + esc(p.longitude) + ', ' + esc(p.latitude) + '</span><small>' + esc(p.coordinate_system || '—') + '</small></div></td>' +
         '<td><div class="companion-cell-stack"><span>' + esc(p.speed_kmh) + ' km/h</span><small>方向 ' + esc(p.heading) + '°</small></div></td>' +
         '<td><div class="companion-cell-stack"><span>精度 ' + esc(p.accuracy_m) + ' m</span><small>海拔 ' + esc(p.altitude) + ' m</small></div></td>' +
@@ -378,40 +424,46 @@
     danmakuBody.replaceChildren();
     danmakus.forEach(function (d) {
       var tr = document.createElement('tr');
-      tr.innerHTML = '<td>' + userHTML(users.get(d.user_id), d.user_id) + '</td><td class="companion-danmaku-content">' + esc(d.content) + '</td><td>' + esc(fmtTime(d.created_at)) + '</td>';
+      tr.innerHTML = '<td>' + userHTML(users.get(String(d.user_id)), d.user_id) + '</td><td class="companion-danmaku-content">' + esc(d.content) + '</td><td>' + esc(fmtTime(d.created_at)) + '</td>';
       danmakuBody.appendChild(tr);
     });
     document.getElementById('companionDanmakuHint').textContent = danmakus.length;
-    if (!members.length) showEmpty(memberBody, 6, '暂无同行成员');
+    if (!members.length) showEmpty(memberBody, AdminAccess.can('tracks', false) ? 7 : 6, '暂无同行成员');
     if (!positions.length) showEmpty(positionBody, 6, '暂无位置记录');
     if (!danmakus.length) showEmpty(danmakuBody, 3, '暂无弹幕记录');
   }
   async function loadDetail(sessionID, preserveTab) {
+    var preserveContent = preserveTab && currentSessionID === sessionID && !document.getElementById('companionDetailBody').hidden;
     var request = ++detailRequest;
+    if (detailController) detailController.abort();
+    var controller = detailController = new AbortController();
+    var timeout = setTimeout(function () { controller.abort(); }, 12000);
     currentSessionID = sessionID;
     if (!preserveTab) {
       selectTab(tabs[0]);
       document.querySelector('.companion-settings').open = false;
     }
-    document.getElementById('companionDetailTitle').textContent = '正在加载详情…';
+    if (!preserveContent) document.getElementById('companionDetailTitle').textContent = '正在加载详情…';
     document.getElementById('companionDetailSubtitle').textContent = '房间 ID：' + sessionID;
     document.getElementById('companionDetailError').hidden = true;
-    document.getElementById('companionDetailBody').hidden = true;
+    if (!preserveContent) document.getElementById('companionDetailBody').hidden = true;
     document.getElementById('companionDetailLoading').hidden = false;
     document.getElementById('refreshCompanionDetail').disabled = true;
     if (!detailModal.open) detailModal.showModal();
     try {
-      var data = await apiJSON('/admin/api/companions/' + encodeURIComponent(sessionID));
-      if (request !== detailRequest) return;
+      var data = await apiJSON('/admin/api/companions/' + encodeURIComponent(sessionID), { signal: controller.signal });
+      if (request !== detailRequest || controller.signal.aborted) return;
       renderCompanionDetail(data);
       document.getElementById('companionDetailBody').hidden = false;
     } catch (error) {
       if (request !== detailRequest) return;
       var errorNode = document.getElementById('companionDetailError');
-      errorNode.textContent = '详情加载失败：' + error.message + '。请点击“刷新详情”重试。';
+      errorNode.textContent = '详情加载失败：' + (controller.signal.aborted ? '读取超时' : error.message) + '。请点击“刷新详情”重试。';
       errorNode.hidden = false;
       document.getElementById('companionDetailTitle').textContent = '同行房间详情';
     } finally {
+      clearTimeout(timeout);
+      if (detailController === controller) detailController = null;
       if (request === detailRequest) {
         document.getElementById('companionDetailLoading').hidden = true;
         document.getElementById('refreshCompanionDetail').disabled = false;
@@ -422,8 +474,9 @@
     if (currentSessionID) loadDetail(currentSessionID, true);
   });
   document.getElementById('closeCompanionDetail').addEventListener('click', function () { detailModal.close(); });
-  detailModal.addEventListener('close', function () { detailRequest += 1; currentSessionID = ''; });
+  detailModal.addEventListener('close', function () { if (!detailSuspended) { detailRequest += 1; currentSessionID = ''; if (detailController) detailController.abort(); } });
   detailModal.addEventListener('click', function (event) { if (event.target === detailModal) detailModal.close(); });
+  window.addEventListener('pagehide', function () { detailRequest += 1; currentSessionID = ''; if (detailController) detailController.abort(); });
 
   loadCompanionStatistics();
   loadPage();

@@ -69,7 +69,7 @@
 | POST | `/admin/api/place-candidates/:track_id/confirm` | 轨迹操作 | 确认指定候选为轨迹主景点并同步内部景点关联 |
 | POST | `/admin/api/place-candidates/:track_id/dismiss` | 轨迹操作 | 忽略当前轨迹的景点候选 |
 | GET | `/admin/api/companions` | 鉴权 | 同行会话列表，支持 `title` 模糊搜索、`owner_name` 发起人昵称模糊搜索、`track_type` 精确筛选、`province_code` / `city_code` 按发起人资料所在地筛选及 cursor 翻页；返回发起人昵称/头像与成员记录数 |
-| GET | `/admin/api/companions/:session_id` | companions 读取权限 | 房间、成员、位置与弹幕；成员user_id为十进制字符串，额外具备tracks读取权限时返回各成员track摘要及member_tracks_warning；见[成员轨迹](admin-workflows.md#同行成员轨迹) |
+| GET | `/admin/api/companions/:session_id` | companions 读取权限 | 房间、成员、位置与弹幕；用户ID和弹幕ID为十进制字符串，额外具备tracks读取权限时返回各成员track摘要及member_tracks_warning；见[成员轨迹](admin-workflows.md#同行成员轨迹) |
 | GET | `/admin/api/tracks` | 鉴权 | 轨迹列表，支持 `title` / `user_name` 模糊搜索、`province_code`（展开为省内城市集合，`city_code` 优先）/ `city_code` / `status`（1 公开、2 私密、0 已删除，默认排除已删除）/ `missing` 筛选及 cursor 翻页 |
 | POST | `/admin/api/tracks/import` | 轨迹操作 | 批量导入轨迹文件归属内部人员，multipart `files`（≤50）+ `owner_user_id` + `track_type` + `coordinate_system`，逐文件返回结果 |
 | GET | `/admin/api/tracks/statistics` | 轨迹查看 | period=day/week/month，默认 month；已完成云端轨迹类型分布和贡献用户前十，按北京时间入库时间统计 |

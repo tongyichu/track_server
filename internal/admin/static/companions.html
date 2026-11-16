@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="/admin/static/vendor/tabler.min.css" />
   <link rel="stylesheet" href="/admin/static/style.css" />
   <link rel="stylesheet" href="/admin/static/admin_stats.css" />
+  <link rel="stylesheet" href="/admin/static/track_editor.css" />
 </head>
 <body>
   <header class="topbar"></header>
@@ -85,7 +86,8 @@
         </nav>
         <section id="companionPanelMembers" class="companion-detail-section" role="tabpanel" aria-labelledby="companionTabMembers" data-companion-panel="members">
           <p id="companionPresenceHint" class="hint"></p>
-          <div class="companion-detail-table-wrap"><table class="data"><thead><tr><th>用户</th><th>角色</th><th>成员状态</th><th>连接状态</th><th>加入时间</th><th>最后活跃</th></tr></thead><tbody id="companionMemberList"></tbody></table></div>
+          <p id="companionMemberTrackWarning" class="text-warning" role="status" data-admin-read="tracks" hidden></p>
+          <div class="companion-detail-table-wrap"><table class="data"><thead><tr><th>用户</th><th data-admin-read="tracks">轨迹</th><th>角色</th><th>成员状态</th><th>连接状态</th><th>加入时间</th><th>最后活跃</th></tr></thead><tbody id="companionMemberList"></tbody></table></div>
         </section>
         <section id="companionPanelPositions" class="companion-detail-section" role="tabpanel" aria-labelledby="companionTabPositions" data-companion-panel="positions" hidden>
           <p class="hint">仅展示已保存的最近位置，点击“刷新详情”更新。</p>
@@ -104,6 +106,10 @@
   <script src="/admin/static/shell.js"></script>
   <script src="/admin/static/admin_stats.js"></script>
   <script src="/admin/static/ui.js"></script>
+  <script src="/admin/static/place_candidates.js"></script>
+  <script src="/admin/static/track_map_preview.js"></script>
+  <script src="/admin/static/track_editor.js"></script>
+  <script src="/admin/static/companion_member_track.js"></script>
 
   <script src="/admin/static/admin_usage_charts.js"></script>
 <script src="/admin/static/region_picker.js"></script>

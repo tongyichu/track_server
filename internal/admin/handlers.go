@@ -2432,11 +2432,23 @@ func (h *Handler) GetCompanionDetail(ctx context.Context, c *app.RequestContext)
 		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
 		return
 	}
+	positionDetails := make([]companionDetailPosition, 0, len(positions))
+	for _, position := range positions {
+		if position != nil {
+			positionDetails = append(positionDetails, companionDetailPosition{CompanionLivePosition: position, UserID: companionDetailID(position.UserID)})
+		}
+	}
+	danmakuDetails := make([]companionDetailDanmaku, 0, len(danmakus))
+	for _, danmaku := range danmakus {
+		if danmaku != nil {
+			danmakuDetails = append(danmakuDetails, companionDetailDanmaku{CompanionDanmaku: danmaku, ID: companionDetailID(danmaku.ID), UserID: companionDetailID(danmaku.UserID)})
+		}
+	}
 	c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{
-		"session":               session,
+		"session":               companionDetailSession{CompanionSession: session, OwnerUserID: companionDetailID(session.OwnerUserID), EndOperatorUserID: companionDetailID(session.EndOperatorUserID)},
 		"members":               members,
-		"live_positions":        positions,
-		"danmakus":              danmakus,
+		"live_positions":        positionDetails,
+		"danmakus":              danmakuDetails,
 		"member_tracks_warning": tracksWarning,
 	}})
 }
