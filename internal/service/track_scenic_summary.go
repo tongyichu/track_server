@@ -103,7 +103,11 @@ func (s *TrackService) primaryScenicSpots(ctx context.Context, ids []string) map
 	return places
 }
 
-func (s *TrackService) fillTrackPrimaryScenicSpot(ctx context.Context, track *models.Track) {
+func (s *TrackService) fillTrackPrimaryScenicSpot(ctx context.Context, track *models.Track) error {
+	if err := s.fillTrackCompanionOrigin(ctx, track); err != nil {
+		return err
+	}
 	track.PrimaryScenicSpot = s.primaryScenicSpots(ctx, []string{track.ID})[track.ID]
-	track.Labels = buildTrackLabels(track.ShapeLabel, track.TrackType, track.PrimaryScenicSpot, track.Submission != nil && track.Submission.Status == models.TrackSubmissionStatusApproved)
+	track.Labels = TrackDisplayLabels(track)
+	return nil
 }

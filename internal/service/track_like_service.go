@@ -185,7 +185,7 @@ func (s *TrackService) ListLikedTracks(ctx context.Context, userID int64, input 
 		}
 		for _, summary := range summaries {
 			summary.IsFeatured = approved[summary.ID]
-			summary.Labels = buildTrackLabels(summary.ShapeLabel, summary.TrackType, summary.PrimaryScenicSpot, summary.IsFeatured)
+			summary.Labels = buildTrackDisplayLabels(summary.ShapeLabel, summary.TrackType, summary.PrimaryScenicSpot, summary.IsFeatured, summary.IsCompanion)
 		}
 	}
 	for _, s := range summaries {
@@ -199,6 +199,7 @@ func (s *TrackService) ListLikedTracks(ctx context.Context, userID int64, input 
 			ID:                        s.ID,
 			UserID:                    s.UserID,
 			SessionID:                 s.SessionID,
+			IsCompanion:               s.IsCompanion,
 			CityCode:                  s.CityCode,
 			LocateAddr:                s.LocateAddr,
 			TrackType:                 s.TrackType,

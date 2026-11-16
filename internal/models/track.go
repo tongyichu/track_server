@@ -30,6 +30,7 @@ type Track struct {
 	RecordingTimeline         *RecordingTimeline       `json:"recording_timeline,omitempty" bson:"recording_timeline,omitempty"`
 	StepCount                 *int64                   `json:"step_count,omitempty" bson:"step_count,omitempty"`
 	Labels                    []TrackLabel             `json:"labels" bson:"-"`
+	IsCompanion               bool                     `json:"is_companion" bson:"-"`
 	ShapeLabel                string                   `json:"shape_label,omitempty" bson:"shape_label,omitempty"`
 	PrimaryScenicSpot         *TrackPrimaryScenicSpot  `json:"primary_scenic_spot,omitempty" bson:"-"`
 	PreviewImages             TrackPreviewImages       `json:"preview_images" bson:"preview_images"`
@@ -42,7 +43,7 @@ type Track struct {
 	LikeCount                 int64                    `json:"like_count" bson:"-"`
 	ID                        string                   `json:"id" bson:"_id,omitempty"`                            // ID 是轨迹记录唯一标识，由 generateTrackID 生成。
 	UserID                    int64                    `json:"user_id" bson:"user_id"`                             // UserID 是轨迹所属用户 ID。
-	SessionID                 string                   `json:"session_id" bson:"session_id"`                       // SessionID 是关联的同行会话 ID，可为空。
+	SessionID                 string                   `json:"session_id" bson:"session_id"`                       // SessionID 是录制标识（单人 UUID 或同行会话 ID），不代表同行来源。
 	CityCode                  string                   `json:"city_code" bson:"city_code"`                         // CityCode 是轨迹所属的城市 Code（城市/省份映射由配置文件维护）。
 	LocateAddr                string                   `json:"locate_addr" bson:"locate_addr"`                     // LocateAddr 是轨迹的具体位置信息。
 	TrackType                 string                   `json:"track_type" bson:"track_type"`                       // TrackType 是轨迹类型，例如徒步、跑步、骑车、自驾。
@@ -82,6 +83,7 @@ type Track struct {
 // - collect_count 为该轨迹被收藏的总数；collected 为“当前鉴权用户”是否收藏。
 type TrackSummary struct {
 	Labels                    []TrackLabel                  `json:"labels" bson:"-"`
+	IsCompanion               bool                          `json:"is_companion" bson:"-"`
 	ShapeLabel                string                        `json:"shape_label,omitempty" bson:"shape_label,omitempty"`
 	PrimaryScenicSpot         *TrackPrimaryScenicSpot       `json:"primary_scenic_spot,omitempty"`
 	PreviewImages             TrackPreviewImages            `json:"preview_images"`
@@ -91,7 +93,7 @@ type TrackSummary struct {
 	LikeCount                 int64                         `json:"like_count" bson:"-"`
 	ID                        string                        `json:"id"`                             // ID 是轨迹记录唯一标识。
 	UserID                    int64                         `json:"user_id"`                        // UserID 是轨迹所属用户 ID。
-	SessionID                 string                        `json:"session_id"`                     // SessionID 是关联的同行会话 ID，可为空。
+	SessionID                 string                        `json:"session_id"`                     // SessionID 是录制标识（单人 UUID 或同行会话 ID），不代表同行来源。
 	CityCode                  string                        `json:"city_code"`                      // CityCode 是轨迹所属的城市 Code。
 	LocateAddr                string                        `json:"locate_addr"`                    // LocateAddr 是轨迹的具体位置信息。
 	TrackType                 string                        `json:"track_type"`                     // TrackType 是轨迹类型，例如徒步、跑步、骑车、自驾。
@@ -124,6 +126,7 @@ type TrackSummary struct {
 // It includes the current viewer's collected state, like TrackSummary.
 type CollectedTrackSummary struct {
 	Labels                    []TrackLabel            `json:"labels" bson:"-"`
+	IsCompanion               bool                    `json:"is_companion" bson:"-"`
 	ShapeLabel                string                  `json:"shape_label,omitempty" bson:"shape_label,omitempty"`
 	PrimaryScenicSpot         *TrackPrimaryScenicSpot `json:"primary_scenic_spot,omitempty"`
 	IsFeatured                bool                    `json:"is_featured"`
@@ -195,6 +198,7 @@ type CollectedTrackSummaryPage struct {
 // - 返回当前浏览者的 collected 和 collect_count/navigate_count 等统计字段。
 type MyTrackSummary struct {
 	Labels                    []TrackLabel            `json:"labels" bson:"-"`
+	IsCompanion               bool                    `json:"is_companion" bson:"-"`
 	ShapeLabel                string                  `json:"shape_label,omitempty" bson:"shape_label,omitempty"`
 	PrimaryScenicSpot         *TrackPrimaryScenicSpot `json:"primary_scenic_spot,omitempty"`
 	IsFeatured                bool                    `json:"is_featured"`
@@ -205,7 +209,7 @@ type MyTrackSummary struct {
 	LikeCount                 int64                   `json:"like_count" bson:"-"`
 	ID                        string                  `json:"id"`                             // ID 是轨迹记录唯一标识。
 	UserID                    int64                   `json:"user_id"`                        // UserID 是轨迹所属用户 ID。
-	SessionID                 string                  `json:"session_id"`                     // SessionID 是关联的同行会话 ID，可为空。
+	SessionID                 string                  `json:"session_id"`                     // SessionID 是录制标识（单人 UUID 或同行会话 ID），不代表同行来源。
 	CityCode                  string                  `json:"city_code"`                      // CityCode 是轨迹所属的城市 Code。
 	LocateAddr                string                  `json:"locate_addr"`                    // LocateAddr 是轨迹的具体位置信息。
 	TrackType                 string                  `json:"track_type"`                     // TrackType 是轨迹类型，例如徒步、跑步、骑车、自驾。

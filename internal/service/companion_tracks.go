@@ -271,14 +271,14 @@ func (s *CompanionService) CompleteMemberTrack(ctx context.Context, user int64, 
 		if existing.UserID != user {
 			return nil, repository.ErrForbidden
 		}
-		return existing, nil
+		return s.trackService.GetTrackDetail(ctx, manifest.TrackID)
 	}
 	if !errors.Is(err, repository.ErrNotFound) {
 		return nil, err
 	}
 	created, err := s.trackService.createTrackAtID(ctx, user, manifest.Input.Track, manifest.TrackID, models.TrackStatusPrivate)
 	if errors.Is(err, repository.ErrAlreadyExists) {
-		return s.tracks.FindByID(ctx, manifest.TrackID)
+		return s.trackService.GetTrackDetail(ctx, manifest.TrackID)
 	}
 	return created, err
 }

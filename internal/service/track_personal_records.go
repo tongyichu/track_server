@@ -78,6 +78,9 @@ func (s *TrackService) PersonalRecords(ctx context.Context, userID int64, trackT
 			result.Groups = append(result.Groups, group)
 		}
 	}
+	if err := s.fillSummaryCompanionOrigins(ctx, recordSummaries); err != nil {
+		return nil, err
+	}
 	if err := s.fillSummaryNavigationCounts(ctx, recordSummaries); err != nil {
 		return nil, err
 	}

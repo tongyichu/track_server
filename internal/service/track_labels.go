@@ -40,5 +40,20 @@ func buildTrackLabels(shape, sport string, spot *models.TrackPrimaryScenicSpot, 
 }
 
 func TrackDisplayLabels(track *models.Track) []models.TrackLabel {
-	return buildTrackLabels(track.ShapeLabel, track.TrackType, track.PrimaryScenicSpot, track.Submission != nil && track.Submission.Status == models.TrackSubmissionStatusApproved)
+	return buildTrackDisplayLabels(track.ShapeLabel, track.TrackType, track.PrimaryScenicSpot, track.Submission != nil && track.Submission.Status == models.TrackSubmissionStatusApproved, track.IsCompanion)
+}
+
+func buildTrackDisplayLabels(shape, sport string, spot *models.TrackPrimaryScenicSpot, featured, companion bool) []models.TrackLabel {
+	base := buildTrackLabels(shape, sport, spot, featured)
+	if !companion {
+		return base
+	}
+	index := 0
+	for index < len(base) && (base[index].Type == "featured" || base[index].Type == "sport") {
+		index++
+	}
+	labels := make([]models.TrackLabel, 0, len(base)+1)
+	labels = append(labels, base[:index]...)
+	labels = append(labels, models.TrackLabel{Type: "companion", Value: true, Code: "companion", Name: "与友同行", NameEN: "With Friends", ThemeColor: config.TrackCompanionLabelColor, ThemeColorDark: config.TrackCompanionLabelColorDark})
+	return append(labels, base[index:]...)
 }

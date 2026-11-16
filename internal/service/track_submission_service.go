@@ -440,7 +440,7 @@ func (s *TrackSubmissionService) DecorateSummaries(ctx context.Context, summarie
 			continue
 		}
 		item.IsFeatured, item.Title, item.FeaturedDescription = true, sub.Title, sub.Description
-		item.Labels = buildTrackLabels(item.ShapeLabel, item.TrackType, item.PrimaryScenicSpot, true)
+		item.Labels = buildTrackDisplayLabels(item.ShapeLabel, item.TrackType, item.PrimaryScenicSpot, true, item.IsCompanion)
 		defaultCoverURL := item.PreviewImages.LandscapeDayURL
 		item.FeaturedCoverURL = defaultCoverURL
 		if len(sub.Images) > 0 && sub.Images[0] != nil && s.imageCache != nil {
@@ -472,7 +472,7 @@ func (s *TrackSubmissionService) DecorateMySummaries(ctx context.Context, summar
 		}
 		if sub := byTrack[item.ID]; sub != nil {
 			item.IsFeatured = sub.Status == models.TrackSubmissionStatusApproved
-			item.Labels = buildTrackLabels(item.ShapeLabel, item.TrackType, item.PrimaryScenicSpot, item.IsFeatured)
+			item.Labels = buildTrackDisplayLabels(item.ShapeLabel, item.TrackType, item.PrimaryScenicSpot, item.IsFeatured, item.IsCompanion)
 			item.Submission = &models.TrackSubmissionSummary{Status: sub.Status, Revision: sub.Revision, ReviewReason: sub.ReviewReason}
 		}
 	}

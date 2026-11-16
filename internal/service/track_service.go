@@ -555,7 +555,9 @@ func (s *TrackService) createTrackAtID(ctx context.Context, userID int64, input 
 		if idempotencyRepo, ok := s.tracks.(repository.CompletedTrackSessionRepository); ok {
 			existing, findErr := idempotencyRepo.FindCompletedBySessionID(ctx, userID, *input.SessionID)
 			if findErr == nil {
-				s.fillTrackPrimaryScenicSpot(ctx, existing)
+				if err := s.fillTrackPrimaryScenicSpot(ctx, existing); err != nil {
+					return nil, err
+				}
 				return existing, nil
 			}
 			if !errors.Is(findErr, repository.ErrNotFound) {
@@ -704,7 +706,9 @@ func (s *TrackService) createTrackAtID(ctx context.Context, userID int64, input 
 	if err := s.fillTrackNavigationSummary(ctx, track); err != nil {
 		return nil, err
 	}
-	s.fillTrackPrimaryScenicSpot(ctx, track)
+	if err := s.fillTrackPrimaryScenicSpot(ctx, track); err != nil {
+		return nil, err
+	}
 	track.PreviewImages = trackPreviewURLs(track.ID, track.PreviewImages)
 	return track, nil
 }
@@ -766,8 +770,10 @@ func (s *TrackService) GetTrackDetail(ctx context.Context, trackID string) (*mod
 			}
 		}
 	}
-	s.fillTrackPrimaryScenicSpot(ctx, track)
-	track.Labels = buildTrackLabels(track.ShapeLabel, track.TrackType, track.PrimaryScenicSpot, track.Submission != nil && track.Submission.Status == models.TrackSubmissionStatusApproved)
+	if err := s.fillTrackPrimaryScenicSpot(ctx, track); err != nil {
+		return nil, err
+	}
+	track.Labels = TrackDisplayLabels(track)
 	track.PreviewImages = trackPreviewURLs(track.ID, track.PreviewImages)
 	return track, nil
 }
@@ -824,7 +830,9 @@ func (s *TrackService) GetRunningTrack(ctx context.Context, userID int64) (*mode
 		return nil, err
 	}
 	s.decorateTrackAssets(ctx, track)
-	s.fillTrackPrimaryScenicSpot(ctx, track)
+	if err := s.fillTrackPrimaryScenicSpot(ctx, track); err != nil {
+		return nil, err
+	}
 	track.PreviewImages = trackPreviewURLs(track.ID, track.PreviewImages)
 	return track, nil
 }
@@ -1354,7 +1362,7 @@ func (s *TrackService) ListCollectedTracks(ctx context.Context, userID int64, in
 		}
 		for _, summary := range summaries {
 			summary.IsFeatured = approved[summary.ID]
-			summary.Labels = buildTrackLabels(summary.ShapeLabel, summary.TrackType, summary.PrimaryScenicSpot, summary.IsFeatured)
+			summary.Labels = buildTrackDisplayLabels(summary.ShapeLabel, summary.TrackType, summary.PrimaryScenicSpot, summary.IsFeatured, summary.IsCompanion)
 		}
 	}
 	for _, s := range summaries {
@@ -1368,6 +1376,7 @@ func (s *TrackService) ListCollectedTracks(ctx context.Context, userID int64, in
 			ID:                        s.ID,
 			UserID:                    s.UserID,
 			SessionID:                 s.SessionID,
+			IsCompanion:               s.IsCompanion,
 			CityCode:                  s.CityCode,
 			LocateAddr:                s.LocateAddr,
 			TrackType:                 s.TrackType,
@@ -1644,7 +1653,9 @@ func (s *TrackService) UpdateTrackInfo(ctx context.Context, userID int64, trackI
 	if err := s.fillTrackNavigationSummary(ctx, track); err != nil {
 		return nil, err
 	}
-	s.fillTrackPrimaryScenicSpot(ctx, track)
+	if err := s.fillTrackPrimaryScenicSpot(ctx, track); err != nil {
+		return nil, err
+	}
 	track.PreviewImages = trackPreviewURLs(track.ID, track.PreviewImages)
 	return track, nil
 }
@@ -1779,13 +1790,14 @@ func toSummaries(tracks []*models.Track) []*models.TrackSummary {
 		// - 若 city_code 为空/未配置，则 city_name 返回空字符串；
 		// - 映射解析失败会被内部吞掉并兜底为空（不影响列表其它字段返回）。
 		res = append(res, &models.TrackSummary{
-			Labels:         buildTrackLabels(t.ShapeLabel, t.TrackType, nil),
+			Labels:         buildTrackDisplayLabels(t.ShapeLabel, t.TrackType, nil, false, t.IsCompanion),
 			ShapeLabel:     t.ShapeLabel,
 			CanComment:     likeEligible(t),
 			PreviewImages:  trackPreviewURLs(t.ID, t.PreviewImages),
 			ID:             t.ID,
 			UserID:         t.UserID,
 			SessionID:      t.SessionID,
+			IsCompanion:    t.IsCompanion,
 			CityCode:       config.CanonicalCityCode(t.CityCode),
 			LocateAddr:     t.LocateAddr,
 			TrackType:      t.TrackType,
@@ -1807,13 +1819,14 @@ func toMySummaries(tracks []*models.Track) []*models.MyTrackSummary {
 	res := make([]*models.MyTrackSummary, 0, len(tracks))
 	for _, t := range tracks {
 		res = append(res, &models.MyTrackSummary{
-			Labels:         buildTrackLabels(t.ShapeLabel, t.TrackType, nil),
+			Labels:         buildTrackDisplayLabels(t.ShapeLabel, t.TrackType, nil, false, t.IsCompanion),
 			ShapeLabel:     t.ShapeLabel,
 			CanComment:     likeEligible(t),
 			PreviewImages:  trackPreviewURLs(t.ID, t.PreviewImages),
 			ID:             t.ID,
 			UserID:         t.UserID,
 			SessionID:      t.SessionID,
+			IsCompanion:    t.IsCompanion,
 			CityCode:       config.CanonicalCityCode(t.CityCode),
 			LocateAddr:     t.LocateAddr,
 			TrackType:      t.TrackType,
@@ -1836,6 +1849,10 @@ func (s *TrackService) fillMyTrackSummaryExtras(ctx context.Context, userID int6
 	if len(summaries) == 0 {
 		return nil
 	}
+	if err := s.fillMySummaryCompanionOrigins(ctx, summaries); err != nil {
+		return err
+	}
+
 	trackIDs := make([]string, 0, len(summaries))
 	for _, summary := range summaries {
 		trackIDs = append(trackIDs, summary.ID)
@@ -1876,7 +1893,7 @@ func (s *TrackService) fillMyTrackSummaryExtras(ctx context.Context, userID int6
 	for _, summary := range summaries {
 		summary.Collected = collectedByTrack[summary.ID]
 		summary.PrimaryScenicSpot = primaryScenicSpots[summary.ID]
-		summary.Labels = buildTrackLabels(summary.ShapeLabel, summary.TrackType, summary.PrimaryScenicSpot, summary.IsFeatured)
+		summary.Labels = buildTrackDisplayLabels(summary.ShapeLabel, summary.TrackType, summary.PrimaryScenicSpot, summary.IsFeatured, summary.IsCompanion)
 		summary.Liked = likeStats[summary.ID].Liked
 		summary.LikeCount = likeStats[summary.ID].LikeCount
 		if summary.CanComment {
@@ -1914,6 +1931,10 @@ func (s *TrackService) fillTrackSummaryExtras(ctx context.Context, userID int64,
 func (s *TrackService) fillTrackSummaryExtrasWithAvatarCache(ctx context.Context, userID int64, summaries []*models.TrackSummary, allowAvatarCache bool) error {
 	if len(summaries) == 0 {
 		return nil
+	}
+
+	if err := s.fillSummaryCompanionOrigins(ctx, summaries); err != nil {
+		return err
 	}
 
 	// 1) 一次遍历收集所需的 trackIDs 和去重后的 userIDs。
@@ -1999,7 +2020,7 @@ func (s *TrackService) fillTrackSummaryExtrasWithAvatarCache(ctx context.Context
 	// 3) 最后一轮遍历：把准备好的扩展字段写回到每个 summary。
 	for _, summary := range summaries {
 		summary.PrimaryScenicSpot = primaryScenicSpots[summary.ID]
-		summary.Labels = buildTrackLabels(summary.ShapeLabel, summary.TrackType, summary.PrimaryScenicSpot, summary.IsFeatured)
+		summary.Labels = buildTrackDisplayLabels(summary.ShapeLabel, summary.TrackType, summary.PrimaryScenicSpot, summary.IsFeatured, summary.IsCompanion)
 		summary.Liked = likeStats[summary.ID].Liked
 		summary.LikeCount = likeStats[summary.ID].LikeCount
 		if summary.CanComment {

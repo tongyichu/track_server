@@ -16,7 +16,7 @@
 | `collected` | bool | 当前 JWT 浏览者是否已收藏；详情与所有轨迹列表摘要均明确返回 true/false，包括本人的已上传与收藏列表，false 不省略；轨迹归属自己不代表已收藏 |
 | `comment_count` | int64 | 未删除主评论与回复总数；详情与摘要均返回 |
 | `can_comment` | bool | 是否开放评论；不可评论时数量返回 0 |
-| `session_id` | string | 关联的同行会话 ID；非同行轨迹为空字符串 |
+| `session_id` | string | 录制标识：单人可为稳定 UUID，同行为会话 ID，旧记录可空；不能据非空判断同行 |
 | `city_code` | string | 城市 Code（用于标识轨迹所属城市；城市/省份映射关系维护在配置文件中） |
 | `locate_addr` | string | 轨迹的具体位置信息 |
 | `track_type` | string | 轨迹类型 code，例如 `hiking` / `running` / `climbing` / `riding` / `driving` |
@@ -26,7 +26,8 @@
 | `description` | string | 服务端默认路线说明；当前 Android 普通上传省略，AI 后台生成后由详情/创建/更新响应返回，缺失时不本地生成；投稿说明独立保存 |
 | `description_source` | string | `auto`（兼容旧客户端）/ `manual` / `ai`；人工说明不被自动生成覆盖 |
 | `description_rule_version` | int | 兼容旧客户端自动说明规则的版本，默认0；不代表服务端 AI 规则版本 |
-| `labels` | array | 统一展示标签，固定顺序 featured/sport/scenic_spot/shape；缺项省略，无标签返回 []；元素 `{type,value:boolean,code?,name,name_en?,theme_color?,theme_color_dark?}`，详见 [轨迹标签](track.md#统一轨迹标签-labels) |
+| `is_companion` | bool | 由正式同行成果清单与当前轨迹、会话、作者匹配得到的只读来源标识；与 companion 标签一致 |
+| `labels` | array | 统一展示标签，固定顺序 featured/sport/companion/scenic_spot/shape；缺项省略，无标签返回 []；元素 `{type,value:boolean,code?,name,name_en?,theme_color?,theme_color_dark?}`，详见 [轨迹标签](track.md#统一轨迹标签-labels) |
 | `shape_label` | string | 可选具象形象标签，例如“玫瑰花”“兔子”；详情及推荐、搜索、我的轨迹、收藏、喜欢列表摘要均返回，空值省略；最多32个 Unicode 字符，不代表运动类型或路线难度 |
 | `is_featured` | boolean | 推荐、搜索、我的轨迹及收藏列表摘要中的精品标识；仅投稿当前已审核通过时为 true，false 也明确返回 |
 | `featured_description` | string | 审核通过的投稿简介；非优质投稿省略 |

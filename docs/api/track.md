@@ -800,7 +800,7 @@ Authorization: Bearer <token>
 | `data.has_more` | bool | 是否还有下一页数据。 |
 | `data.items[].id` | string | 轨迹 ID。 |
 | `data.items[].user_id` | int64 | 当前轨迹所属用户 ID。 |
-| `data.items[].session_id` | string | 关联的同行会话 ID；非同行轨迹为空字符串。 |
+| `data.items[].session_id` | string | 录制标识：单人运动可为稳定 UUID，同行为真实会话 ID，旧记录可空；同行来源看 is_companion。 |
 | `data.items[].city_code` | string | 城市 Code。 |
 | `data.items[].locate_addr` | string | 轨迹的具体位置信息。 |
 | `data.items[].track_type` | string | 英文轨迹类型 code，例如 `hiking` / `running` / `climbing` / `riding` / `driving`。 |
@@ -1162,7 +1162,7 @@ Authorization: Bearer <token>
 
 ## 统一轨迹标签 labels
 
-详情及推荐、搜索、我的轨迹、收藏、喜欢、地图关联列表的轨迹摘要均返回只读 `labels` 数组。固定按 featured → sport → scenic_spot → shape 排列，每类最多一项；缺失数据省略，完全无数据时返回 `[]`。
+详情及推荐、搜索、我的轨迹、收藏、喜欢、地图关联列表的轨迹摘要均返回只读 `labels` 数组。固定按 featured → sport → companion → scenic_spot → shape 排列，每类最多一项；缺失数据省略，完全无数据时返回 `[]`。
 
 `value` 为布尔值：true 表示成立，false 或缺失默认不显示。当前服务端只输出成立的标签。具体运动代码、景区 ID、形象名移至 `code`，显示内容仍为 `name`/`name_en`。旧版字符串 value 的客户端缓存由 Android 兼容读取。
 
@@ -1170,6 +1170,7 @@ Authorization: Bearer <token>
 | --- | --- | --- |
 | featured | 固定 featured，投稿审核通过时出现；撤回/待审/驳回/失效不出现 | 精品 / Featured |
 | sport | 标准化 track_type | 运动配置中文/英文名称 |
+| companion | 固定 companion，正式同行完成清单中的 track_id、session_id、user_id 与轨迹完全对应 | 与友同行 / With Friends |
 | scenic_spot | primary_scenic_spot.id | 有等级为“主景区名称·5A”，无等级为原名称 |
 | shape | shape_label | 具象名称 |
 
@@ -1177,14 +1178,17 @@ Authorization: Bearer <token>
 {"labels":[
   {"type":"featured","value":true,"code":"featured","name":"精品","name_en":"Featured","theme_color":"#9C6500","theme_color_dark":"#F3C969"},
   {"type":"sport","value":true,"code":"running","name":"跑步","name_en":"Running","theme_color":"#F26A4B","theme_color_dark":"#FF947A"},
+  {"type":"companion","value":true,"code":"companion","name":"与友同行","name_en":"With Friends","theme_color":"#4B63B8","theme_color_dark":"#A8BAFF"},
   {"type":"scenic_spot","value":true,"code":"SCP-example","name":"故宫·5A","theme_color":"#087F8C","theme_color_dark":"#69D2DD"},
   {"type":"shape","value":true,"code":"玫瑰花","name":"玫瑰花","theme_color":"#B43F83","theme_color_dark":"#F39ACB"}
 ]}
 ```
 
+详情及轨迹摘要另返回只读布尔 `is_companion`，与 `labels[type=companion]` 一致。它来自同行仓储中索引0的正式完成清单，必须同时对应轨迹ID、作者和会话；按当前页批量查询，MySQL/Mongo/内存口径一致，不新增表或写回标识。单人 `session_id` 也可以是录制UUID，因此不能据非空 `session_id` 或其格式判断同行。旧轨迹仅在有正式完成清单时确认，缺清单不猜测补标；只读来源查询失败返回错误，不将读取失败冒充确认为单人。
+
 景区标签的等级文案由 API 在 `labels[type=scenic_spot].name` 中完整组装，例如 `故宫·5A`，分隔符是居中点 `·`（U+00B7），不是句号。没有等级时仅返回景点名称，客户端不得再次拼接等级；`code` 保持景点 ID，`primary_scenic_spot.name` 仍是原始景点名，`scenic_grade` 独立保留。景区详情页在标题旁展示该等级标记。
 
-示例只说明格式，不代表历史轨迹已赋形象。labels 不重复持久化，不接受独立写入；权威来源为投稿审核状态、运动类型、主景区、shape_label。不增加供应商或 AI 调用。旧字段保留兼容。Android 详情标题上方统一消费 labels，按上述顺序展示，未知类型排在后面；英文环境优先 name_en，否则 name。labels 为 [] 时不按旧字段补标签，缺失时兼容旧服务端和本地轨迹。
+示例只说明格式，不代表历史轨迹已赋形象。labels 不重复持久化，不接受独立写入；权威来源为投稿审核状态、运动类型、同行正式成果清单、主景区、shape_label。不增加供应商或 AI 调用。旧字段保留兼容。Android 详情标题上方统一消费 labels，按上述顺序展示，未知类型排在后面；英文环境优先 name_en，否则 name。labels 为 [] 时不按旧字段补标签，缺失时兼容旧服务端和本地轨迹。
 
 
 标签配色使用与运动类型接口一致的 `theme_color`（日间）及 `theme_color_dark`（夜间），格式为 `#RRGGBB`，语义为标签强调色，不指定背景填充或文字反色。
@@ -1192,6 +1196,7 @@ Authorization: Bearer <token>
 | 标签类型 | 日间 | 夜间 | 来源 |
 | --- | --- | --- | --- |
 | featured | #9C6500 | #F3C969 | `internal/config/track_label_colors.go`，金色系 |
+| companion | #4B63B8 | #A8BAFF | 同上，蓝紫色系 |
 | shape | #B43F83 | #F39ACB | `internal/config/track_label_colors.go`，玫紫色系 |
 | scenic_spot | #087F8C | #69D2DD | 同上，青色系 |
 | sport | 对应运动类型 ThemeColor | 对应运动类型 ThemeColorDark | 复用 `DefaultTrackTypeConfigs`，例如跑步为 #F26A4B / #FF947A |
