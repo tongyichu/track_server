@@ -265,6 +265,7 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 	auth.GET("/track/running", trackHandler.GetRunningTrack)
 	auth.GET("/track/:track_id/map", trackHandler.GetTrackMap)
 	auth.POST("/track/:track_id/navigation/report", trackHandler.ReportTrackNavigation)
+	auth.GET("/track/:track_id/navigation/results", trackHandler.ListNavigationResultTracks)
 	auth.DELETE("/track/navigation/results/:result_session_id", trackHandler.DeleteNavigationResult)
 	auth.GET("/track/:track_id/previews/:variant", trackHandler.TrackPreview)
 	auth.GET("/track/:track_id/detail", trackHandler.GetTrackDetail)

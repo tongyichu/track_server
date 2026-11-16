@@ -383,6 +383,10 @@ type NavigationResultRepository interface {
 	DeleteNavigationResult(ctx context.Context, navigatorUserID int64, resultSessionID string) error
 }
 
+type NavigationResultTrackRepository interface {
+	ListResultTracks(ctx context.Context, trackID string, viewerID int64, cursor *models.TrackListCursor, limit int) ([]*models.Track, error)
+}
+
 // RecommendationRepository stores immutable feed sessions and offline aggregates.
 type RecommendationRepository interface {
 	SaveFeedSession(ctx context.Context, session *models.RecommendationFeedSession) error
