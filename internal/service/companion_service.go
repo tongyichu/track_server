@@ -459,10 +459,11 @@ type companionMQTTPrincipalClaims struct {
 }
 
 const (
-	CompanionControlEventMemberLeft     = "member_left"
-	CompanionControlEventSessionEnded   = "session_ended"
-	CompanionControlEventMemberKicked   = "member_kicked"
-	CompanionControlEventDanmakuToggled = "danmaku_toggled"
+	CompanionControlEventMemberLeft       = "member_left"
+	CompanionControlEventOwnerTransferred = "owner_transferred"
+	CompanionControlEventSessionEnded     = "session_ended"
+	CompanionControlEventMemberKicked     = "member_kicked"
+	CompanionControlEventDanmakuToggled   = "danmaku_toggled"
 )
 
 // NewMQTTCompanionControlPublisher creates a best-effort MQTT publisher for companion control events.

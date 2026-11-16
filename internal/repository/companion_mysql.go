@@ -77,7 +77,7 @@ func (r *MySQLCompanionRepository) UpdateSession(ctx context.Context, session *m
 	res, err := r.db.ExecContext(ctx,
 		`UPDATE companion_sessions
 		 SET owner_user_id=?, status=?, visibility=?, join_token=?, title=?, track_type=?, locate_addr=?, max_members=?, danmaku_enabled=?, total_distance=?, total_duration=?, track_screenshot_url=?, actual_participant_count=?, started_at=?, ended_at=?, end_reason=?, end_source=?, end_operator_user_id=?, updated_at=?
-		 WHERE session_id=?`,
+		 WHERE session_id=? AND owner_user_id=?`,
 		session.OwnerUserID,
 		session.Status,
 		session.Visibility,
@@ -98,6 +98,7 @@ func (r *MySQLCompanionRepository) UpdateSession(ctx context.Context, session *m
 		session.EndOperatorUserID,
 		session.UpdatedAt,
 		session.SessionID,
+		session.OwnerUserID,
 	)
 	if err != nil {
 		var mysqlErr *mysql.MySQLError
@@ -108,7 +109,16 @@ func (r *MySQLCompanionRepository) UpdateSession(ctx context.Context, session *m
 	}
 	rows, _ := res.RowsAffected()
 	if rows == 0 {
-		return ErrNotFound
+		var owner int64
+		if e := r.db.QueryRowContext(ctx, "SELECT owner_user_id FROM companion_sessions WHERE session_id=?", session.SessionID).Scan(&owner); e != nil {
+			if errors.Is(e, sql.ErrNoRows) {
+				return ErrNotFound
+			}
+			return e
+		}
+		if owner != session.OwnerUserID {
+			return ErrForbidden
+		}
 	}
 	return nil
 }
@@ -348,7 +358,34 @@ func (r *MySQLCompanionRepository) UpsertMember(ctx context.Context, member *mod
 	if member.JoinedAt.IsZero() {
 		member.JoinedAt = time.Now()
 	}
-	_, err := r.db.ExecContext(ctx,
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var ownerID int64
+	var status models.CompanionSessionStatus
+	if err = tx.QueryRowContext(ctx, "SELECT owner_user_id, status FROM companion_sessions WHERE session_id=? FOR UPDATE", member.SessionID).Scan(&ownerID, &status); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		}
+		return err
+	}
+	if ownerID == member.UserID && status == models.CompanionSessionStatusActive &&
+		(member.MemberStatus == models.CompanionMemberStatusLeft || member.MemberStatus == models.CompanionMemberStatusKicked) {
+		var others int
+		if err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM companion_session_members WHERE session_id=? AND user_id<>? AND member_status='joined'", member.SessionID, member.UserID).Scan(&others); err != nil {
+			return err
+		}
+		if others > 0 {
+			return ErrForbidden
+		}
+	}
+	role := models.CompanionMemberRoleMember
+	if ownerID == member.UserID {
+		role = models.CompanionMemberRoleOwner
+	}
+	_, err = tx.ExecContext(ctx,
 		`INSERT INTO companion_session_members (
 			session_id, user_id, role, member_status, presence_status,
 			joined_at, left_at, last_seen_at, mqtt_client_id, mqtt_principal
@@ -364,7 +401,7 @@ func (r *MySQLCompanionRepository) UpsertMember(ctx context.Context, member *mod
 			mqtt_principal=VALUES(mqtt_principal)`,
 		member.SessionID,
 		member.UserID,
-		member.Role,
+		role,
 		member.MemberStatus,
 		member.PresenceStatus,
 		member.JoinedAt,
@@ -373,7 +410,10 @@ func (r *MySQLCompanionRepository) UpsertMember(ctx context.Context, member *mod
 		member.MQTTClientID,
 		member.MQTTPrincipal,
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (r *MySQLCompanionRepository) FindMember(ctx context.Context, sessionID string, userID int64) (*models.CompanionSessionMember, error) {

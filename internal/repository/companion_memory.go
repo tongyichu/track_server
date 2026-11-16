@@ -73,6 +73,9 @@ func (r *InMemoryCompanionRepository) UpdateSession(_ context.Context, session *
 	if _, ok := r.sessions[session.SessionID]; !ok {
 		return ErrNotFound
 	}
+	if r.sessions[session.SessionID].OwnerUserID != session.OwnerUserID {
+		return ErrForbidden
+	}
 	clone := *session
 	clone.UpdatedAt = time.Now()
 	r.sessions[clone.SessionID] = &clone
@@ -248,6 +251,20 @@ func (r *InMemoryCompanionRepository) UpsertMember(_ context.Context, member *mo
 		r.members[member.SessionID] = make(map[int64]*models.CompanionSessionMember)
 	}
 	clone := *member
+	if session := r.sessions[member.SessionID]; session != nil {
+		clone.Role = models.CompanionMemberRoleMember
+		if session.OwnerUserID == member.UserID {
+			clone.Role = models.CompanionMemberRoleOwner
+			if session.Status == models.CompanionSessionStatusActive &&
+				(member.MemberStatus == models.CompanionMemberStatusLeft || member.MemberStatus == models.CompanionMemberStatusKicked) {
+				for id, other := range r.members[member.SessionID] {
+					if id != member.UserID && other.MemberStatus == models.CompanionMemberStatusJoined {
+						return ErrForbidden
+					}
+				}
+			}
+		}
+	}
 	if clone.JoinedAt.IsZero() {
 		clone.JoinedAt = time.Now()
 	}

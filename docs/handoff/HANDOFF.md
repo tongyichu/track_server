@@ -6,7 +6,37 @@
 
 dashboard标题旁为小状态点与短文字，正常低调、异常高亮，整条链接至原analytics.html，提示时间统一AdminTime。异步独立于业务统计；刷新更新健康，周期切换不重复请求；8秒超时、取消旧请求/离页请求，401/403隐藏，旧响应不覆盖新状态，无analytics权限不请求。日志改名埋点同步日志，从主导航移入系统工具，桌面入口/移动更多页均保留，权限ID及原路由不变。
 
-验证：最终go build ./...、三份修改JS的node --check及git diff --check通过；静态核对三页ID唯一、CSS块与路由/权限映射。默认未运行业务/接口/UI自动化，实际桌面和窄屏视觉、异常/权限路径待用户人工验收。docs/admin-ui、admin-workflows、admin-routes与API路由索引同步；既有AGENTS只读、权限、异步和时间规则适用，无需变更政策。当前尚未提交、推送或部署。
+验证：最终go build ./...、三份修改JS的node --check及git diff --check通过；静态核对三页ID唯一、CSS块与路由/权限映射。默认未运行业务/接口/UI自动化，实际桌面和窄屏视觉、异常/权限路径待用户人工验收。docs/admin-ui、admin-workflows、admin-routes与API路由索引同步；既有AGENTS只读、权限、异步和时间规则适用，无需变更政策。用户随后要求部署。本轮先提交本次18项改动，再合并远端跟随成果列表与同行房主转移两笔更新；原有交接全部保留，合并后重新构建与检查，再推送生产快照并部署。实际部署状态以执行回执为准，不发布App。
+
+原交接如下：
+
+# 同行房主转移（2026-11-16，未部署）
+
+用户接受房主与管理权限整体交接，并明确不出现小黄旗/领队概念。新增业务 JWT POST /companion/session/:session_id/members/:user_id/transfer-owner，仅 active 房间当前 owner 可转给其他 joined 成员。复用 owner_user_id 与成员 role，MySQL 事务/内存锁/Mongo 事务原子更新，原 owner 变 member，原轨迹/时间线/汇总/会话 ID 不变；Mongo 同行基础方法仍沿用既有未实现边界，不宣称补全 Mongo 同行。成功发布 owner_transferred 控制事件（member_user_id=新 owner、operator_user_id=旧 owner、at=提交时间），返回房间状态。API、路由、限制和流程文档同步。
+
+MySQL UpdateSession 带 owner 条件避免旧写恢复房主，失败区分不存在/权限；UpsertMember 在 session 行锁内按权威 owner 定 role，保护交接后的新 owner 不被旧离开/踢人请求移出仍有其他成员的 active 房间；内存相同行为。转移沿用同行类账号限制，新房主继承结束/移除/弹幕/事件/结算权限，无字段或表结构迁移，仅 mysql.sql owner 列说明改为当前房主。客户端同时完成入口、MQTT/前台/重连校准和指向房主的虚线。
+
+go build ./... 与 git diff --check 通过。未运行自动化或接口/数据库业务测试；未提交、推送或部署，生产仍为此前 3f9fd7057d21。需部署本轮 Server 后验证房主转移；已有同行流程与 Android 前三项修复可独立验证。根 AGENTS 现有仓储/鉴权/文档边界仍适用，无需新增规则。
+
+原交接如下：
+
+# 部署作者跟随成果列表接口（2026-11-16）
+
+用户明确要求“部署”，发布范围为上一轮已完成的原轨迹作者跟随成果列表GET接口及三仓储分页实现和协议文档。main已fetch，与origin/main同为731e396，无远端合并，未混入客户端或敏感配置；go build ./...与git diff --check通过，无自动化业务测试。保留既有navigate_count口径、鉴权及他人私密成果边界，不新增表/迁移。
+
+按android-track-release流程提交推送此发布快照后构建linux/amd64镜像，推送成功后才执行生产更新脚本；必须核对新容器、新镜像摘要、实际MySQL仓储与内外网ping。发布结果以本轮交付为准，不在镜像开始构建后修改此源码快照；不将Git推送等同部署成功，不创建虚假业务记录。
+
+原交接如下：
+
+# 原轨迹作者的跟随成果列表接口（2026-11-16）
+
+用户明确要求实施详情按钮分流：本人的大于0“跟随次数(99)”进入具体成果轨迹列表，0“暂无跟随”禁用；他人的大于0“我要跟随(99)”、0“我要跟随”走原导航。保留旧计数口径，不按时间猜测旧成果。
+
+新增JWT只读GET /track/:track_id/navigation/results，仅原轨迹作者，limit默认20最大50，复用start_time/id倒序不透明游标和TrackSummaryPage。NavigationResultTrackRepository在MySQL/Mongo/memory三实现：有效带关联的导航记录按作者+result_session_id匹配成果轨迹session_id；排除撤销、删除、未上传、进行中、无文件，公开或当前用户本人的私密成果可见。按成果ID去重、筛选和排序在分页前完成，复用BuildTrackSummaries批量装饰，无逐条详情请求、无新表/迁移。源码归属验证防止原路线作者读取他人私密成果。
+
+历史未关联、未上传或私密成果可以计入有效跟随数但不出现在可见列表，不伪造记录。空列表正常返回[]，不提供可见总数或关系UUID。API分册、route-index、契约同步；go build ./...与git diff --check通过，未新增/运行自动化业务测试或造线上数据。现有AGENTS约束适用，无需修改。
+
+当前仅工作树改动，尚未提交、推送或部署；线上仍为731e396。客户端对应按钮/列表已编译，成果列表功能需先部署本接口再安装验证。
 
 原交接如下：
 

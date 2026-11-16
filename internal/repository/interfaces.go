@@ -383,6 +383,10 @@ type NavigationResultRepository interface {
 	DeleteNavigationResult(ctx context.Context, navigatorUserID int64, resultSessionID string) error
 }
 
+type NavigationResultTrackRepository interface {
+	ListResultTracks(ctx context.Context, trackID string, viewerID int64, cursor *models.TrackListCursor, limit int) ([]*models.Track, error)
+}
+
 // RecommendationRepository stores immutable feed sessions and offline aggregates.
 type RecommendationRepository interface {
 	SaveFeedSession(ctx context.Context, session *models.RecommendationFeedSession) error
@@ -468,6 +472,7 @@ type AnalyticsRepository interface {
 
 // CompanionRepository defines persistence operations for companion session control plane.
 type CompanionRepository interface {
+	TransferOwner(ctx context.Context, sessionID string, ownerID, targetID int64) (*models.CompanionSession, error)
 	CreateSession(ctx context.Context, session *models.CompanionSession) error
 	UpdateSession(ctx context.Context, session *models.CompanionSession) error
 	FindSessionByID(ctx context.Context, sessionID string) (*models.CompanionSession, error)

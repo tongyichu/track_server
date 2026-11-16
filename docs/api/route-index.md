@@ -4,6 +4,7 @@
 
 | 接口 | 方法 | 路径 | 需要认证 | 文档 |
 | --- | --- | --- | --- | --- |
+| 作者查看跟随成果轨迹 | GET | `/track/:track_id/navigation/results` | JWT，仅原轨迹作者；不开放他人私密成果 | [跟随成果列表](collect-navigation.md#作者查看跟随成果轨迹) |
 | 后台实时通信统计、连接与近期异常 | GET | `/admin/api/realtime/summary`, `/admin/api/realtime/clients`, `/admin/api/realtime/events` | 后台session，realtime查看权限 | [admin-realtime](admin-realtime.md) |
 | 在线私信关系图 / 同行房间圈选、群聊与成员事件 | GET | `/admin/api/realtime/network`, `/admin/api/realtime/network/room` | 后台session，realtime查看权限；同行网络与房间详情另需companions查看权限 | [admin-realtime](admin-realtime.md#在线关系图) |
 | 后台连接详情与账号私信流 | GET | `/admin/api/realtime/clients/detail`, `/admin/api/realtime/clients/conversations`, `/admin/api/realtime/clients/messages` | 后台session，realtime查看权限；房间弹幕另需companions查看权限 | [admin-realtime](admin-realtime.md#连接详情与消息内容) |
@@ -118,6 +119,7 @@
 | 同行结算状态 | GET | `/companion/session/:session_id/result` | 是，参与过的成员 | [companion.md](companion.md#同行个人轨迹结算与回放) |
 | 同行成员轨迹点/详情 | GET | `/companion/session/:session_id/result/:user_id/points`, `/companion/session/:session_id/result/:user_id/track` | 是，参与过的成员 | [companion.md](companion.md#同行个人轨迹结算与回放) |
 | 踢出同行成员 | POST | `/companion/session/:session_id/members/:user_id/kick` | 是 | [companion.md](companion.md#221-踢出同行成员) |
+| 转移同行房主 | POST | `/companion/session/:session_id/members/:user_id/transfer-owner` | 是 | [companion.md](companion.md#转移房主) |
 | 更新已结束同行摘要 | PUT | `/companion/session/:session_id/update` | 是 | [companion.md](companion.md#222-更新已结束同行摘要owner) |
 | 上报同行关键事件 | POST | `/companion/session/:session_id/events` | 是 | [companion.md](companion.md#223-上报同行关键事件owner) |
 | 查询同行关键事件时间线 | GET | `/companion/session/:session_id/events` | 是 | [companion.md](companion.md#224-查询同行关键事件时间线owner) |

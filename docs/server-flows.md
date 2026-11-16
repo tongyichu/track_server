@@ -222,3 +222,7 @@ GET /user/:user_id/likes → 业务JWT → TrackHandler.ListProfileLikes → Tra
 结果接口先验证本人参与资格，批量读取成员作者和正式轨迹摘要；成员轨迹点按完成清单分页，详情通过同行上下文授权，不扩大普通私密轨迹可见性。客户端使用真实时间戳统一回放，头像壳/轨迹同色，不把未知历史点生成时间信息。协议、幂等和表结构见[同行个人轨迹结算与回放](api/companion.md#同行个人轨迹结算与回放)。本功能不更改现有AGENTS的鉴权、仓储及发布边界。
 
 同行原始轨迹文件由CompanionHandler.AuthorizeTrackAssets校验轨迹归属、公开完成状态或房间成员资格及完成清单，不仅校验登录；响应private/no-store。公开安装包StaticFS的Root仅指向static/release，避免进入其他资源目录。
+
+### 同行房主转移
+
+当前房主通过成员 transfer-owner 接口交接房间管理权限。CompanionService 校验参数后由 CompanionRepository.TransferOwner 事务/锁内核对当前 active owner 和双方 joined 身份，更新当前 owner 与成员角色，再发布 owner_transferred 控制事件并返回房间状态。MySQL 普通 UpdateSession 增加 owner 条件，UpsertMember 在会话行锁内按当前 owner 写角色，防止旧请求覆盖房主或将新房主踢出/离开。原成员轨迹、时间线和会话编号不变；无领队或旗帜字段。API 见 companion.md 转移房主章节，身份与权限规则仍沿用根 AGENTS。

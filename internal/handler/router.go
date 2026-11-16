@@ -216,6 +216,7 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 	auth.POST("/companion/session/:session_id/events", companionHandler.CreateEvent)
 	auth.GET("/companion/session/:session_id/events", companionHandler.ListEvents)
 	auth.POST("/companion/session/:session_id/members/:user_id/kick", companionHandler.KickSessionMember)
+	auth.POST("/companion/session/:session_id/members/:user_id/transfer-owner", companionHandler.TransferSessionOwner)
 	auth.POST("/companion/session/:session_id/danmaku/toggle", companionHandler.ToggleSessionDanmaku)
 	auth.POST("/companion/session/:session_id/mqtt/credentials", companionHandler.IssueMQTTCredentials)
 
@@ -265,6 +266,7 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 	auth.GET("/track/running", trackHandler.GetRunningTrack)
 	auth.GET("/track/:track_id/map", trackHandler.GetTrackMap)
 	auth.POST("/track/:track_id/navigation/report", trackHandler.ReportTrackNavigation)
+	auth.GET("/track/:track_id/navigation/results", trackHandler.ListNavigationResultTracks)
 	auth.DELETE("/track/navigation/results/:result_session_id", trackHandler.DeleteNavigationResult)
 	auth.GET("/track/:track_id/previews/:variant", trackHandler.TrackPreview)
 	auth.GET("/track/:track_id/detail", trackHandler.GetTrackDetail)

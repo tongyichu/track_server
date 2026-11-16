@@ -240,3 +240,7 @@ Content-Type: application/json
 - 超时未收到 → 标记发送失败，UI 提示用户重试（失败原因可能是开关已关闭 / 命中敏感词 / 限速 / 网络抖动，UI 文案保持通用）；
 - 广播 topic 不使用 retained，断线重连后只展示新到的弹幕，历史不补发。
 
+
+## 房主转移控制消息
+
+业务 transfer-owner 接口成功后在 control topic 发布 `owner_transferred`：`member_user_id` 是新房主，`operator_user_id` 是原房主，`at` 对应会话更新时刻。事件通过现有服务端控制发布器发送，客户端不能自行发布来变更权限。客户端角色与邀请信息应补查 current，以服务端权威 owner 为准；详情见 [转移房主](companion.md#转移房主)。

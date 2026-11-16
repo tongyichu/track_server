@@ -898,3 +898,7 @@ App Server 作为一个普通 MQTT client 连接 EMQX，使用单独客户端身
 2. 联调 `control` topic 的客户端消费逻辑（`member_left` / `session_ended`）
 3. 联调 LWT / disconnect 事件到 `presence-ingest`
 4. 按需要扩展踢人、owner 转移、多端登录控制等能力
+
+## 当前房主与交接
+
+owner_user_id 表示当前房主。房主可以通过成员 transfer-owner 接口将房主交给其他 joined 成员，结束/移除成员/弹幕开关/事件与汇总管理权限一起交接，原房主变为普通成员；不新增旗帜、领队或独立角色。双方角色与会话 owner 原子更新，控制消息 owner_transferred 通知在房成员，重连/回前台通过 current 校准。离线不自动转移；原房主交接后可按普通成员规则离开。具体参数、失败和兼容边界见 docs/api/companion.md。

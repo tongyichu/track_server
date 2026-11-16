@@ -288,6 +288,25 @@ func (h *CompanionHandler) KickSessionMember(ctx context.Context, c *app.Request
 	c.JSON(http.StatusOK, successResponse(state))
 }
 
+// TransferSessionOwner handles the owner-only membership handover.
+func (h *CompanionHandler) TransferSessionOwner(ctx context.Context, c *app.RequestContext) {
+	userID, ok := h.authUserID(c)
+	if !ok {
+		return
+	}
+	target, err := strconv.ParseInt(strings.TrimSpace(c.Param("user_id")), 10, 64)
+	if err != nil || target <= 0 {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid target user_id"})
+		return
+	}
+	state, err := h.svc.TransferSessionOwner(ctx, userID, c.Param("session_id"), target)
+	if err != nil {
+		h.writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, successResponse(state))
+}
+
 type toggleDanmakuRequest struct {
 	Enabled *bool `json:"enabled"`
 }
