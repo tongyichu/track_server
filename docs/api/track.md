@@ -149,7 +149,7 @@ Android数据页将结果与当前账号isUploaded=0且已完成的本地记录�
 2. `GET /api/v1/track/description-backfill/:track_id/data?source_version=<version>`：读取完整原始 GPS 点。轨迹已被补齐时返回 `state=already_complete`；记录不可用返回 404，版本变化返回 409。
 3. `POST /api/v1/track/description-backfill/:track_id/complete`，请求 `{"source_version":"<version>","description":"<客户端生成的说明>","description_rule_version":1}`。服务端限制 1 至 1000 个字符，仅自动来源且说明为空或规则版本落后时更新，并以说明、来源、规则版本及轨迹源数据做条件比较；人工说明不会被覆盖。已有最新说明返回 `state=already_complete`，版本变化返回 409 `description_source_changed`。
 
-`track_records.description_source` 标记 `auto`/`manual`/`ai`（AI 来源不进入客户端补齐），`description_rule_version` 标记自动生成规则版本。MySQL 存量通过默认值视为 `auto/v0`，Mongo 缺失元数据也按 `auto/v0` 解释；旧客户端规则版本为 1，仅用于兼容 auto 补齐，不代表服务端 AI 规则版本；人工说明始终排除。投稿编辑内容仍独立存于投稿记录。
+`track_records.description_source` 标记 `auto`/`manual`/`ai`/`companion`（AI及同行共享来源不进入客户端补齐），`description_rule_version` 标记自动生成规则版本。MySQL 存量通过默认值视为 `auto/v0`，Mongo 缺失元数据也按 `auto/v0` 解释；旧客户端规则版本为 1，仅用于兼容 auto 补齐，不代表服务端 AI 规则版本；人工说明始终排除。投稿编辑内容仍独立存于投稿记录。
 
 ## 1. 创建轨迹
 
@@ -1133,7 +1133,7 @@ Authorization: Bearer <token>
 
 轨迹详情及列表摘要下发 `liked` 与 `like_count`，点赞和收藏互相独立。点赞、取消点赞和获赞统计见 [track-likes.md](track-likes.md)。
 
-轨迹详情、创建/更新响应及列表摘要直接下发 `comment_count` 与 `can_comment`；前者为未删除主评论与回复总数，后者沿用点赞的轨迹可见范围。不可评论时返回 false/0。客户端首屏复用轨迹信息，点击入口后才加载评论列表，不额外调用评论状态接口。发布/删除响应带回更新后的总数。协议见 [track-comments.md](track-comments.md)。
+轨迹详情、创建/更新响应及列表摘要直接下发 `comment_count` 与 `can_comment`；前者为未删除主评论与回复总数，后者表示轨迹已完成且具备原始文件。公开轨迹正常开放，私密轨迹由评论接口校验作者或同行参与者权限，与点赞范围独立；删除/进行中/未上传时返回 false/0。客户端保留已上传轨迹的评论入口，首屏复用轨迹信息，点击后加载列表，不额外调用评论状态接口。发布/删除响应带回更新后的总数。协议见 [track-comments.md](track-comments.md)。
 
 
 ## 轨迹形象标签

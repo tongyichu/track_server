@@ -32,6 +32,7 @@ type TrackPlaceConfig struct {
 	CacheTTL, GoogleCacheTTL       time.Duration
 }
 type TrackPlaceService struct {
+	companions    repository.CompanionRepository
 	cfg           TrackPlaceConfig
 	store         repository.TrackPlaceRepository
 	maps          repository.TrackMapRepository
@@ -79,6 +80,10 @@ func NewTrackPlaceService(cfg TrackPlaceConfig, store repository.TrackPlaceRepos
 	reader, _ := maps.(repository.TrackPlaceIndexReader)
 	return &TrackPlaceService{cfg: cfg, store: store, maps: maps, tracks: tracks, reader: reader, indexer: indexer, client: &http.Client{Timeout: 6 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
 }
+func (s *TrackPlaceService) SetCompanionRepository(rooms repository.CompanionRepository) {
+	s.companions = rooms
+}
+
 func (s *TrackPlaceService) Enabled() bool {
 	return s != nil && s.cfg.Enabled && s.reader != nil && s.store != nil
 }
@@ -160,6 +165,9 @@ func (s *TrackPlaceService) RunOnce(ctx context.Context) (*TrackPlaceRunResult, 
 	}()
 	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
+	if err := s.reconcileCompanionContentPage(ctx); err != nil {
+		log.Printf("companion shared content reconciliation pending")
+	}
 	var cursor string
 	scanCursorKey := fmt.Sprintf("scan_cursor:v%d", trackPlaceRuleVersion)
 	record, err := s.store.GetPlaceRecord(ctx, scanCursorKey)
@@ -251,6 +259,22 @@ func (s *TrackPlaceService) processWithOptions(ctx context.Context, index *model
 		out.Ineligible++
 		return nil
 	}
+	track, err = repairCompanionTrackLocation(ctx, s.companions, s.tracks, track)
+	if err != nil {
+		return err
+	}
+	if s.indexer != nil && track.CityCode != index.CityCode {
+		if err = s.indexer.EnqueueTrackIndexIfEligible(ctx, track); err != nil {
+			return err
+		}
+	}
+	shared, ownerTrack, err := companionContentSource(ctx, s.companions, s.tracks, track)
+	if err != nil {
+		return err
+	}
+	if shared {
+		return s.reuseCompanionPlace(ctx, index, track, ownerTrack, out)
+	}
 	key := "match:" + index.TrackID
 	var previous models.TrackPlaceMatch
 	previousRecord, err := s.store.GetPlaceRecord(ctx, key)
@@ -331,6 +355,9 @@ func (s *TrackPlaceService) processWithOptions(ctx context.Context, index *model
 			out.Reused++
 		} else {
 			out.Deferred++
+		}
+		if err := s.syncCompanionPlacesFromOwner(ctx, track, out); err != nil {
+			return err
 		}
 		return s.refreshGroup(ctx, index, &previous)
 	}
@@ -481,6 +508,9 @@ func (s *TrackPlaceService) processWithOptions(ctx context.Context, index *model
 			log.Printf("scenic spot catalog link failed track_id=%s", index.TrackID)
 		}
 	}
+	if err := s.syncCompanionPlacesFromOwner(ctx, track, out); err != nil {
+		return err
+	}
 	return s.refreshGroup(ctx, index, &match)
 }
 func nextPlaceQuotaDay(now time.Time) time.Time {
@@ -531,6 +561,7 @@ func (s *TrackPlaceService) primaryPlaceCandidateOnly(ctx context.Context, place
 	}
 	return placeCandidateOnlyKind(placeKindFromCategory(place.Provider, place.Category, place.Name))
 }
+
 // Only DB reads here. Route-group rebuilds never call external providers.
 func (s *TrackPlaceService) ApplyGroupAreas(ctx context.Context, groups []*models.TrackRouteGroup, indexes []*models.TrackGeoIndex) error {
 	if !s.Enabled() {

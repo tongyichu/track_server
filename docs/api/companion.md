@@ -963,11 +963,13 @@ Authorization: Bearer <token>
 
 上传批次body：`{index:1,points:[{latitude,longitude,altitude_meters,timestamp_millis,segment_id,accuracy_meters,speed_mps,bearing}]}`。点为WGS84，时间为UTC Unix毫秒；index从1连续递增，最大4096，每批1～256点，body最大128KiB。纬度限定[-85,85]、经度[-180,180]，数字必须有限；批内时间严格递增，采样时刻须在会话起止各一分钟容差内。仅已结束房间允许补传。同批同内容重试成功，同索引不同内容409；完成后不可追加新的有效批次。
 
-完成body：`{chunk_count,point_count,track:{title,start_time,end_time,distance,duration,elevation_gain,calories_burned,avg_speed_kmh,raw_track_url}}`，body最大64KiB。数量须匹配已存批次、索引连续，有点时原始轨迹URL必填。无GPS使用两个计数0及`track:{}`，不伪造个人轨迹。服务端强制绑定JWT用户、房间运动类型、WGS84、已结束状态和房间ID作为稳定session key；首次完成清单原子保留分配的正式轨迹ID，重试和并发创建均沿用该ID，进程在创建中断后也不重复生成。复用普通创建链路及后台索引/成就处理。响应`data:{complete:true,track:Track|null}`；已完成轨迹默认私密，可由本人通过原轨迹详情修改公开状态。
+完成body：`{chunk_count,point_count,track:{title,start_time,end_time,distance,duration,elevation_gain,calories_burned,avg_speed_kmh,raw_track_url,city_code,locate_addr,coordinate_system}}`，body最大64KiB。数量须匹配已存批次、索引连续，有点时原始轨迹URL必填。无GPS使用两个计数0及`track:{}`，不伪造个人轨迹。服务端强制绑定JWT用户、房间运动类型、WGS84、已结束状态和房间ID作为稳定session key；首次完成清单原子保留分配的正式轨迹ID，重试和并发创建均沿用该ID，进程在创建中断后也不重复生成。复用普通创建链路及后台索引/成就处理。响应`data:{complete:true,track:Track|null}`；新建正式轨迹默认公开，可由本人修改公开状态，重试不改变既有轨迹的可见性。
+
+每位成员上传自己的WGS84原始点和定位元信息。客户端保存实际定位的城市及起止位置；缺失城市或位置名称时，服务端根据本人首批GPS和本地行政边界补齐可识别的地区，不调用供应商、不复制房主坐标，不用界面选城猜测。存量轨迹也仅补空字段，不覆盖已有位置或公开状态。
 
 结果响应`data:{session:CompanionSession,members:[{user_id,nickname,avatar_url,color,sync_status,track_id,distance,duration,point_count,joined_at,left_at}]}`。`sync_status`为`syncing/ready/empty/unavailable`：未确认上传完成/已可查看/确认无GPS/正式轨迹已失效。point_count为完成清单中的总点数，客户端可据此均匀缩减预览点，不改变个人详情的完整点读取；只有ready返回有效轨迹ID和指标；作者按页批量读取，轨迹按ID批量读取，不逐项查询详情。所有人完成后按正式轨迹重算房间总里程、房间起止总耗时及人数，局部更新避免覆盖并发补写的封面。
 
-点响应`data:{points:[],next_index,has_more}`，每页最多16批，后续透传next_index作为after；只读取完成清单声明的批次。无完成轨迹或已删除返回404，禁止以最后位置拼造轨迹。结果、点、同行详情响应均no-store；非成员403，目标无轨迹404。普通轨迹详情不向其他人暴露私密轨迹，同行详情通过房间成员资格授权，本人之外查看私密同行轨迹时不开放评论。原始文件静态入口也校验轨迹可见性，仅本人、公开已完成轨迹的浏览者及该私密同行轨迹的房间成员可读取，并返回private/no-store；公开安装包的文件根独立限定在release目录。
+点响应`data:{points:[],next_index,has_more}`，每页最多16批，后续透传next_index作为after；只读取完成清单声明的批次。无完成轨迹或已删除返回404，禁止以最后位置拼造轨迹。结果、点、同行详情响应均no-store；非成员403，目标无轨迹404。普通轨迹详情不向其他人暴露私密轨迹，同行详情通过房间成员资格授权。已上传轨迹始终保留评论入口，私密同行轨迹的评论、回复和图片允许作者及经正式完成清单校验的房间参与者访问，陌生用户仍无权访问。点赞资格独立。原始文件静态入口也校验轨迹可见性，仅本人、公开已完成轨迹的浏览者及该私密同行轨迹的房间成员可读取，并返回private/no-store；公开安装包的文件根独立限定在release目录。
 
 持久化使用`companion_track_chunks`（MySQL/Mongo/in-memory同语义）：`session_id/user_id/chunk_index`唯一，0为不可变完成清单，正索引为点批次，保存点数、摘要及JSON。MySQL随初始化建表，mysql.sql同步；Mongo使用确定性_id并建立会话/成员/索引查询索引。正式个人轨迹继续保存在track_records，无新轨迹ID格式或全局账号代传授权。
 
@@ -978,3 +980,11 @@ Authorization: Bearer <token>
 ### 同行成果的展示标识
 
 正式完成清单的 `track_id` 与个人轨迹的作者及 `session_id` 完全对应时，轨迹详情和摘要返回只读 `is_companion=true`，并在统一 `labels` 中加入 `type/code=companion`、`name=与友同行`（英文 With Friends）。首次完成及幂等重取均装饰标签；普通单人运动的 UUID 不触发此标记。无正式清单的旧数据不按会话格式或时间推断。详见[轨迹标签](track.md#统一轨迹标签-labels)。
+
+### 同行景点与路线说明共享
+
+自动景点识别及路线说明统一以本场结束时的房主正式轨迹为来源，房主转移后以最终房主为准。来源和成员均须匹配正式完成清单、作者及房间ID。成员先上传时等待房主，不另行调用景点供应商或AI；房主未上传、无GPS或轨迹已删除时继续等待，不改用其他成员。
+
+房主遵循原有缓存、租约及预算规则生成结果，然后同步给成员；同步不随人数增加供应商或AI调用。成员保留各自坐标、城市和运动数据。景点权威关联标记`origin=companion`，来源轨迹ID写入`updated_by`；共享匹配JSON记录`shared_source_track_id/shared_source_version`及`primary_method=companion_owner`，不复制房主逐点Relations。自动路线说明标记`description_source=companion`，不复制形象标签，不覆盖成员人工编辑的说明或景点。
+
+成员上传、房主结果生成和后台补偿均可同步已有结果。后台沿既有景点任务每轮最多扫描两个房间，补历史缺失位置并复用已有景点/说明；补偿本身不触发AI或供应商请求、不改变历史私密状态，不新增表或接口。

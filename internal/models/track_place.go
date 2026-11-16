@@ -55,18 +55,20 @@ type TrackPlaceRelation struct {
 
 // Match identities use track IDs so regrouping does not lose enrichment.
 type TrackPlaceMatch struct {
-	TrackID          string               `json:"track_id"`
-	SourceVersion    string               `json:"source_version"`
-	RuleVersion      int                  `json:"rule_version"`
-	Provider         string               `json:"provider"`
-	Status           string               `json:"status"`
-	PrimaryPlaceID   string               `json:"primary_place_id,omitempty"`
-	PrimaryMethod    string               `json:"primary_method,omitempty"`
-	EvidenceComplete bool                 `json:"evidence_complete,omitempty"`
-	Relations        []TrackPlaceRelation `json:"relations"`
-	Attempts         int                  `json:"attempts"`
-	ErrorCode        string               `json:"error_code,omitempty"`
-	UpdatedAt        time.Time            `json:"updated_at"`
+	SharedSourceTrackID string               `json:"shared_source_track_id,omitempty"`
+	SharedSourceVersion string               `json:"shared_source_version,omitempty"`
+	TrackID             string               `json:"track_id"`
+	SourceVersion       string               `json:"source_version"`
+	RuleVersion         int                  `json:"rule_version"`
+	Provider            string               `json:"provider"`
+	Status              string               `json:"status"`
+	PrimaryPlaceID      string               `json:"primary_place_id,omitempty"`
+	PrimaryMethod       string               `json:"primary_method,omitempty"`
+	EvidenceComplete    bool                 `json:"evidence_complete,omitempty"`
+	Relations           []TrackPlaceRelation `json:"relations"`
+	Attempts            int                  `json:"attempts"`
+	ErrorCode           string               `json:"error_code,omitempty"`
+	UpdatedAt           time.Time            `json:"updated_at"`
 }
 
 // TrackPlaceRecord persists task state, provider response cache or shared places.

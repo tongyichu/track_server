@@ -19,7 +19,7 @@ func (s *TrackService) trackCommentCounts(ctx context.Context, ids []string) (ma
 }
 
 func (s *TrackService) fillTrackCommentState(ctx context.Context, track *models.Track) error {
-	track.CanComment = likeEligible(track)
+	track.CanComment = commentEligible(track)
 	track.CommentCount = 0
 	if !track.CanComment || s.comments == nil {
 		return nil

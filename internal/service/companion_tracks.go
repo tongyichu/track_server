@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"sort"
 	"time"
@@ -231,6 +232,9 @@ func (s *CompanionService) CompleteMemberTrack(ctx context.Context, user int64, 
 			if input.Track.StartTime == nil || input.Track.EndTime == nil || input.Track.StartTime.Before(session.StartedAt.Add(-time.Minute)) || input.Track.EndTime.After(session.EndedAt.Add(time.Minute)) {
 				return nil, invalidArg("invalid recording interval")
 			}
+			if err := fillCompanionTrackLocation(ctx, storage, id, user, &input.Track); err != nil {
+				return nil, err
+			}
 			running := false
 			coordinate := "WGS84"
 			source := ""
@@ -271,14 +275,27 @@ func (s *CompanionService) CompleteMemberTrack(ctx context.Context, user int64, 
 		if existing.UserID != user {
 			return nil, repository.ErrForbidden
 		}
+		if existing, err = repairCompanionTrackLocation(ctx, s.repo, s.tracks, existing); err != nil {
+			return nil, err
+		}
+		s.trackService.enqueueTrackMapIndex(ctx, existing)
+		if copyErr := s.trackService.reconcileCompanionContent(ctx, existing.ID); copyErr != nil {
+			log.Printf("companion shared content pending track_id=%s", existing.ID)
+		}
 		return s.trackService.GetTrackDetail(ctx, manifest.TrackID)
 	}
 	if !errors.Is(err, repository.ErrNotFound) {
 		return nil, err
 	}
-	created, err := s.trackService.createTrackAtID(ctx, user, manifest.Input.Track, manifest.TrackID, models.TrackStatusPrivate)
+	created, err := s.trackService.createTrackAtID(ctx, user, manifest.Input.Track, manifest.TrackID, models.TrackStatusNormal)
 	if errors.Is(err, repository.ErrAlreadyExists) {
 		return s.trackService.GetTrackDetail(ctx, manifest.TrackID)
+	}
+	if err == nil && created != nil {
+		if copyErr := s.trackService.reconcileCompanionContent(ctx, created.ID); copyErr != nil {
+			log.Printf("companion shared content pending track_id=%s", created.ID)
+		}
+		return s.trackService.GetTrackDetail(ctx, created.ID)
 	}
 	return created, err
 }
@@ -401,9 +418,6 @@ func (s *CompanionService) MemberResultTrack(ctx context.Context, viewer int64, 
 						result.UserAvatarURL = s.avatarCache.LocalURL(key, ext)
 					}
 				}
-			}
-			if track.Status == models.TrackStatusPrivate && viewer != member {
-				track.CanComment = false
 			}
 			return result, nil
 		}

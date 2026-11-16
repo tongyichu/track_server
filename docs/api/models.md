@@ -24,7 +24,7 @@
 | `coordinate_system` | string | 坐标系，例如 `WGS84` / `GCJ02` / `BD09` |
 | `title` | string | 轨迹标题 |
 | `description` | string | 服务端默认路线说明；当前 Android 普通上传省略，AI 后台生成后由详情/创建/更新响应返回，缺失时不本地生成；投稿说明独立保存 |
-| `description_source` | string | `auto`（兼容旧客户端）/ `manual` / `ai`；人工说明不被自动生成覆盖 |
+| `description_source` | string | `auto`（兼容旧客户端）/ `manual` / `ai` / `companion`（复用本场结束时房主的自动说明）；人工说明不被自动生成覆盖 |
 | `description_rule_version` | int | 兼容旧客户端自动说明规则的版本，默认0；不代表服务端 AI 规则版本 |
 | `is_companion` | bool | 由正式同行成果清单与当前轨迹、会话、作者匹配得到的只读来源标识；与 companion 标签一致 |
 | `labels` | array | 统一展示标签，固定顺序 featured/sport/companion/scenic_spot/shape；缺项省略，无标签返回 []；元素 `{type,value:boolean,code?,name,name_en?,theme_color?,theme_color_dark?}`，详见 [轨迹标签](track.md#统一轨迹标签-labels) |

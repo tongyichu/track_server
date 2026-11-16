@@ -176,6 +176,33 @@ func (s *TrackNarrativeService) RunOnce(parent context.Context) (*TrackNarrative
 }
 
 func (s *TrackNarrativeService) process(ctx context.Context, id string, activated time.Time, out *TrackNarrativeRunResult) (called bool, err error) {
+	track, lookupErr := s.tracks.FindByID(ctx, id)
+	if errors.Is(lookupErr, repository.ErrNotFound) {
+		out.Skipped++
+		return false, nil
+	}
+	if lookupErr != nil {
+		return false, lookupErr
+	}
+	track, lookupErr = repairCompanionTrackLocation(ctx, s.trackSvc.companions, s.tracks, track)
+	if lookupErr != nil {
+		return false, lookupErr
+	}
+	shared, copied, copyErr := s.trackSvc.syncCompanionDescription(ctx, track)
+	if copyErr != nil {
+		return false, copyErr
+	}
+	if shared {
+		if copied {
+			out.Skipped++
+		} else {
+			out.Deferred++
+		}
+		return false, nil
+	}
+	if err := s.trackSvc.syncCompanionDescriptionsFromOwner(ctx, track); err != nil {
+		return false, err
+	}
 	snap, err := s.snapshot(ctx, id)
 	if errors.Is(err, repository.ErrNotFound) {
 		out.Skipped++
@@ -338,6 +365,11 @@ func (s *TrackNarrativeService) process(ctx context.Context, id string, activate
 		}
 	}
 	_ = run.Adoption("applied")
+	if latest, e := s.tracks.FindByID(ctx, id); e == nil {
+		if e = s.trackSvc.syncCompanionDescriptionsFromOwner(ctx, latest); e != nil {
+			log.Printf("companion description sync pending track_id=%s", id)
+		}
+	}
 	return called, nil
 }
 

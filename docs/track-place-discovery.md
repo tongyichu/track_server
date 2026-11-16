@@ -1,5 +1,9 @@
 # 自动景区识别（普通服务版）
 
+## 同行共享
+
+经正式完成清单校验的同行轨迹，以结束时房主为自动识别来源；成员在调用供应商之前进入共享分支，来源未就绪时等待。房主按原有租约、缓存和配额识别后，成员复用权威景点关联，标记`origin=companion`并保存来源轨迹ID。匹配JSON保存共享来源及版本，使用成员自己的SourceVersion，不复制房主逐点Relations或坐标。人工景点决定保留。历史私密成员可复用景点目录关联，不因此转公开；各自位置缺失仅根据本人持久化GPS及本地边界补空。现有后台任务每轮最多补偿两个房间，只同步已有结果，不新增供应商或AI调用。详见[同行共享](api/companion.md#同行景点与路线说明共享)。
+
 ## 入口与范围
 
 `internal/service/track_place_service.go` 负责识别；`track_place_provider.go` 封装高德和 Google；`internal/repository/track_place*.go` 提供 MySQL、Mongo、内存实现。`track_place` 定时任务默认每分钟运行，受 `SCHEDULER_ENABLED` 控制。它独立于上传、地图查询和每日路线相似度聚合，不在这些请求中调用外部地图服务。

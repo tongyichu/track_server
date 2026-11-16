@@ -217,7 +217,9 @@ GET /user/:user_id/likes → 业务JWT → TrackHandler.ListProfileLikes → Tra
 
 ### 同行个人轨迹结算与多人回放
 
-房主结束会话只结束控制面并广播，客户端先展示本地结算，各成员自动补传自己的持久化采样。CompanionTrackJournal在手机按账号/房间保存原始点，结束后复用FinalizedTrackBuilder及KMZ导出，再分批写入companion_track_chunks；完成清单原子固定个人轨迹ID，TrackService按该ID创建本人私密轨迹，后续四图通过本人预览接口补齐。断网/进程终止后由原账号恢复，用户无需在房主手机代传成员数据。所有成员完成时仅更新汇总列，旧封面补写不阻塞结算或覆盖最终汇总。
+房主结束会话只结束控制面并广播，客户端先展示本地结算，各成员自动补传自己的持久化采样。CompanionTrackJournal在手机按账号/房间保存原始点，结束后复用FinalizedTrackBuilder及KMZ导出，再分批写入companion_track_chunks；完成清单原子固定个人轨迹ID，TrackService按该ID创建本人公开轨迹，重试不改变既有可见性，后续四图通过本人预览接口补齐。断网/进程终止后由原账号恢复，用户无需在房主手机代传成员数据。所有成员完成时仅更新汇总列，旧封面补写不阻塞结算或覆盖最终汇总。
+
+同行完成请求携带本人城市、位置名称和WGS84声明，缺失地区由companion_track_location根据本人首批GPS及本地行政边界补空。companion_content_source校验清单并选择结束时房主，景点与自动说明统一复用其结果；成员任务不调用供应商/AI，先上传时等待。房主结果更新后扇出，上传及每轮两个房间的后台补偿只同步已有结果，人工编辑不覆盖。CompanionTrackMetadataWriter在MySQL/Mongo/内存均以版本条件写入。已上传轨迹评论入口常驻，CommentService独立校验公开/作者/私密同行参与者权限，图片同样鉴权，点赞范围不变。
 
 结果接口先验证本人参与资格，批量读取成员作者和正式轨迹摘要；成员轨迹点按完成清单分页，详情通过同行上下文授权，不扩大普通私密轨迹可见性。客户端使用真实时间戳统一回放，头像壳/轨迹同色，不把未知历史点生成时间信息。协议、幂等和表结构见[同行个人轨迹结算与回放](api/companion.md#同行个人轨迹结算与回放)。本功能不更改现有AGENTS的鉴权、仓储及发布边界。
 

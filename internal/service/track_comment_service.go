@@ -29,18 +29,28 @@ type CommentUpload struct {
 	Credential *OSSTemporaryCredential `json:"credential"`
 }
 type CommentService struct {
-	messages     *MessageService
-	repo         repository.CommentRepository
-	tracks       repository.TrackRepository
-	users        *UserService
-	objects      CommentObjectStore
-	cache        *AssetCacheService
-	restrictions *AccountRestrictionService
+	privateTrackAccess func(context.Context, int64, string) (bool, error)
+	messages           *MessageService
+	repo               repository.CommentRepository
+	tracks             repository.TrackRepository
+	users              *UserService
+	objects            CommentObjectStore
+	cache              *AssetCacheService
+	restrictions       *AccountRestrictionService
 }
 
 func NewCommentService(repo repository.CommentRepository, tracks repository.TrackRepository, users *UserService) *CommentService {
 	return &CommentService{repo: repo, tracks: tracks, users: users}
 }
+func (s *CommentService) SetPrivateTrackAccess(access func(context.Context, int64, string) (bool, error)) {
+	s.privateTrackAccess = access
+}
+
+func commentEligible(track *models.Track) bool {
+	return track != nil && !track.IsRunning && track.DeletedAt.IsZero() && strings.TrimSpace(track.RawTrackURL) != "" &&
+		(track.Status == models.TrackStatusNormal || track.Status == models.TrackStatusPrivate)
+}
+
 func (s *CommentService) SetRestrictions(restrictions *AccountRestrictionService) {
 	s.restrictions = restrictions
 }
@@ -124,8 +134,20 @@ func (s *CommentService) eligible(ctx context.Context, user int64, trackID strin
 	if err != nil {
 		return nil, err
 	}
-	if !likeEligible(track) {
+	if !commentEligible(track) {
 		return nil, repository.ErrNotFound
+	}
+	if track.Status == models.TrackStatusPrivate && track.UserID != user {
+		if s.privateTrackAccess == nil {
+			return nil, repository.ErrNotFound
+		}
+		allowed, err := s.privateTrackAccess(ctx, user, trackID)
+		if err != nil {
+			return nil, err
+		}
+		if !allowed {
+			return nil, repository.ErrNotFound
+		}
 	}
 	return track, nil
 }

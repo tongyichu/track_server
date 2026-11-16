@@ -386,6 +386,8 @@ func main() {
 	if clientWebsocketURL == "" {
 		clientWebsocketURL = cfg.EMQXWebsocketURL
 	}
+	commentSvc.SetPrivateTrackAccess(companionSvc.CanReadTrackFile)
+
 	companionSvc.SetMQTTOptions(service.CompanionMQTTOptions{
 		BrokerURL:        clientBrokerURL,
 		WebsocketURL:     clientWebsocketURL,
@@ -632,6 +634,7 @@ func main() {
 		}, trackPlaceRepo, trackMapRepo, trackRepo, trackMapIndexSvc)
 		scenicSpotCatalogSvc.SetProviderService(trackPlaceSvc)
 		trackPlaceSvc.SetScenicSpotCatalogService(scenicSpotCatalogSvc)
+		trackPlaceSvc.SetCompanionRepository(companionRepo)
 		trackRouteGroupSvc.SetPlaceService(trackPlaceSvc)
 		trackMapSvc.SetPlaceService(trackPlaceSvc)
 		trackSvc.SetPlaceService(trackPlaceSvc)

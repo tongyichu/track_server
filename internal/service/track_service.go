@@ -1792,7 +1792,7 @@ func toSummaries(tracks []*models.Track) []*models.TrackSummary {
 		res = append(res, &models.TrackSummary{
 			Labels:         buildTrackDisplayLabels(t.ShapeLabel, t.TrackType, nil, false, t.IsCompanion),
 			ShapeLabel:     t.ShapeLabel,
-			CanComment:     likeEligible(t),
+			CanComment:     commentEligible(t),
 			PreviewImages:  trackPreviewURLs(t.ID, t.PreviewImages),
 			ID:             t.ID,
 			UserID:         t.UserID,
@@ -1821,7 +1821,7 @@ func toMySummaries(tracks []*models.Track) []*models.MyTrackSummary {
 		res = append(res, &models.MyTrackSummary{
 			Labels:         buildTrackDisplayLabels(t.ShapeLabel, t.TrackType, nil, false, t.IsCompanion),
 			ShapeLabel:     t.ShapeLabel,
-			CanComment:     likeEligible(t),
+			CanComment:     commentEligible(t),
 			PreviewImages:  trackPreviewURLs(t.ID, t.PreviewImages),
 			ID:             t.ID,
 			UserID:         t.UserID,
