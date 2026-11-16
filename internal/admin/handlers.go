@@ -2323,7 +2323,7 @@ func (h *Handler) ListCompanions(ctx context.Context, c *app.RequestContext) {
 
 // companionMemberDetail 是同行详情中的成员展示信息（包含头像、昵称等）。
 type companionMemberDetail struct {
-	UserID         int64                          `json:"user_id"`
+	UserID         string                         `json:"user_id"`
 	Nickname       string                         `json:"nickname"`
 	AvatarURL      string                         `json:"avatar_url"`
 	Role           models.CompanionMemberRole     `json:"role"`
@@ -2332,6 +2332,7 @@ type companionMemberDetail struct {
 	JoinedAt       time.Time                      `json:"joined_at"`
 	LeftAt         time.Time                      `json:"left_at,omitempty"`
 	LastSeenAt     time.Time                      `json:"last_seen_at,omitempty"`
+	Track          *companionMemberTrack          `json:"track,omitempty"`
 }
 
 // GetCompanionDetail 处理 GET /admin/api/companions/:session_id
@@ -2369,27 +2370,55 @@ func (h *Handler) GetCompanionDetail(ctx context.Context, c *app.RequestContext)
 		return
 	}
 	members := make([]companionMemberDetail, 0, len(rawMembers))
+	userIDs := make([]int64, 0, len(rawMembers))
+	for _, member := range rawMembers {
+		if member != nil {
+			userIDs = append(userIDs, member.UserID)
+		}
+	}
+	users := map[int64]*models.User{}
+	if h.userRepo != nil && len(userIDs) > 0 {
+		if found, userErr := h.userRepo.FindByIDs(ctx, userIDs); userErr == nil {
+			users = found
+		}
+	}
+	authors := make([]*models.User, 0, len(users))
+	for _, user := range users {
+		authors = append(authors, user)
+	}
+	avatarCtx, cancelAvatars := context.WithTimeout(ctx, 3*time.Second)
+	h.decorateAdminUserAvatars(avatarCtx, authors)
+	cancelAvatars()
+	var memberTracks map[int64]*companionMemberTrack
+	tracksWarning := ""
+	if h.auth != nil {
+		if sess := h.auth.SessionFromRequest(c); sess != nil && sess.Account != nil && sess.Account.allows("tracks", false) {
+			trackCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+			memberTracks, err = h.loadCompanionMemberTracks(trackCtx, sessionID, rawMembers)
+			cancel()
+			if err != nil {
+				log.Printf("[admin] companion member tracks unavailable session=%s: %v", sessionID, err)
+				tracksWarning = "部分成员轨迹暂时无法读取，请刷新重试"
+			}
+		}
+	}
 	for _, m := range rawMembers {
 		if m == nil {
 			continue
 		}
 		detail := companionMemberDetail{
-			UserID:         m.UserID,
+			UserID:         strconv.FormatInt(m.UserID, 10),
 			Role:           m.Role,
 			MemberStatus:   m.MemberStatus,
 			PresenceStatus: m.PresenceStatus,
 			JoinedAt:       m.JoinedAt,
 			LeftAt:         m.LeftAt,
 			LastSeenAt:     m.LastSeenAt,
+			Track:          memberTracks[m.UserID],
 		}
-		if h.userRepo != nil {
-			if u, uerr := h.userRepo.FindByID(ctx, m.UserID); uerr == nil && u != nil {
-				if h.userSvc != nil {
-					h.userSvc.DecorateAvatar(ctx, u)
-				}
-				detail.Nickname = u.Nickname
-				detail.AvatarURL = rewriteAdminStaticURL(u.AvatarURL)
-			}
+		if u := users[m.UserID]; u != nil {
+			detail.Nickname = u.Nickname
+			detail.AvatarURL = rewriteAdminStaticURL(u.AvatarURL)
 		}
 		members = append(members, detail)
 	}
@@ -2404,10 +2433,11 @@ func (h *Handler) GetCompanionDetail(ctx context.Context, c *app.RequestContext)
 		return
 	}
 	c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{
-		"session":        session,
-		"members":        members,
-		"live_positions": positions,
-		"danmakus":       danmakus,
+		"session":               session,
+		"members":               members,
+		"live_positions":        positions,
+		"danmakus":              danmakus,
+		"member_tracks_warning": tracksWarning,
 	}})
 }
 

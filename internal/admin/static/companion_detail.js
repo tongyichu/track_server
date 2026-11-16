@@ -24,6 +24,42 @@
   var positionHint = document.getElementById('positionHint');
   var danmakuList = document.getElementById('danmakuList');
   var danmakuHint = document.getElementById('danmakuHint');
+  var memberTrackWarning = document.getElementById('memberTrackWarning');
+  var loadController = null;
+  var loadVersion = 0;
+  var hasLoaded = false;
+
+  function trackCell(track) {
+    var cell = document.createElement('td');
+    cell.setAttribute('data-admin-read', 'tracks');
+    if (track && track.track_id && ['ready', 'deleted'].includes(track.state)) {
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'btn btn-link p-0 text-start text-wrap';
+      button.textContent = track.title || track.track_id;
+      button.addEventListener('click', function () {
+        window.AdminTrackEditor.open(track.track_id, { onSaved: load }).catch(function (error) {
+          window.AdminUI.alert('打开轨迹失败：' + (error.message || error), 'danger');
+        });
+      });
+      cell.appendChild(button);
+      if (track.title) {
+        var id = document.createElement('small');
+        id.className = 'd-block text-secondary'; id.textContent = track.track_id;
+        cell.appendChild(id);
+      }
+      if (track.state === 'deleted') {
+        var badge = document.createElement('span');
+        badge.className = 'badge bg-secondary-lt'; badge.textContent = '已下架';
+        cell.appendChild(badge);
+      }
+    } else {
+      var labels = { pending: '尚未上传', empty: '无有效轨迹', unavailable: '轨迹暂不可用', unknown: '读取失败' };
+      cell.className = 'text-secondary';
+      cell.textContent = track ? labels[track.state] || '状态未知' : '无查看权限';
+    }
+    return cell;
+  }
 
   if (!sessionID) {
     sessionInfo.innerHTML = '<span class="error">缺少 session_id 参数</span>';
@@ -59,22 +95,31 @@
   }
 
   function renderMembers(members) {
-    memberList.innerHTML = '';
-    (members || []).forEach(function (m) {
-      var avatar = m.avatar_url
-        ? '<img src="' + esc(m.avatar_url) + '" alt="" style="width:32px;height:32px;border-radius:50%;object-fit:cover;" />'
-        : '';
-      var tr = document.createElement('tr');
-      tr.innerHTML = '<td>' + (m.user_id || 0) + '</td>' +
-        '<td>' + avatar + '</td>' +
-        '<td>' + esc(m.nickname || '') + '</td>' +
-        '<td>' + esc(m.role || '') + '</td>' +
-        '<td>' + esc(m.member_status || '') + '</td>' +
-        '<td>' + esc(m.presence_status || '') + '</td>' +
-        '<td>' + fmtTime(m.joined_at) + '</td>' +
-        '<td>' + fmtTime(m.last_seen_at) + '</td>';
-      memberList.appendChild(tr);
+    var existing = new Map(Array.from(memberList.children).map(function (row) { return [row.dataset.userId, row]; }));
+    (members || []).forEach(function (m, index) {
+      var key = String(m.user_id);
+      var signature = JSON.stringify(m);
+      var tr = existing.get(key) || document.createElement('tr');
+      existing.delete(key);
+      if (tr.dataset.signature !== signature) {
+        var avatar = m.avatar_url
+          ? '<img src="' + esc(m.avatar_url) + '" alt="" style="width:32px;height:32px;border-radius:50%;object-fit:cover;" />'
+          : '';
+        tr.innerHTML = '<td>' + esc(m.user_id || '') + '</td>' +
+          '<td>' + avatar + '</td>' +
+          '<td>' + esc(m.nickname || '') + '</td>' +
+          '<td>' + esc(m.role || '') + '</td>' +
+          '<td>' + esc(m.member_status || '') + '</td>' +
+          '<td>' + esc(m.presence_status || '') + '</td>' +
+          '<td>' + fmtTime(m.joined_at) + '</td>' +
+          '<td>' + fmtTime(m.last_seen_at) + '</td>';
+        tr.insertBefore(trackCell(m.track), tr.children[3]);
+        tr.dataset.userId = key;
+        tr.dataset.signature = signature;
+      }
+      if (memberList.children[index] !== tr) memberList.insertBefore(tr, memberList.children[index] || null);
     });
+    existing.forEach(function (row) { row.remove(); });
     memberHint.textContent = '共 ' + (members || []).length + ' 人';
   }
 
@@ -112,17 +157,34 @@
   }
 
   async function load() {
-    var resp = await fetch('/admin/api/companions/' + encodeURIComponent(sessionID));
-    if (!resp.ok) {
-      sessionInfo.innerHTML = '<span class="error">加载失败：' + resp.status + '</span>';
-      return;
+    if (loadController) loadController.abort();
+    var controller = loadController = new AbortController();
+    var version = ++loadVersion;
+    var timer = setTimeout(function () { controller.abort(); }, 12000);
+    try {
+      var resp = await fetch('/admin/api/companions/' + encodeURIComponent(sessionID), { signal: controller.signal });
+      if (!resp.ok) throw new Error('加载失败：' + resp.status);
+      var data = ((await resp.json()).data) || {};
+      if (version !== loadVersion || controller.signal.aborted) return;
+      renderSession(data.session);
+      renderMembers(data.members);
+      renderPositions(data.live_positions);
+      renderDanmakus(data.danmakus);
+      memberTrackWarning.textContent = data.member_tracks_warning || '';
+      memberTrackWarning.hidden = !data.member_tracks_warning;
+      hasLoaded = true;
+    } catch (error) {
+      if (version !== loadVersion) return;
+      memberHint.textContent = controller.signal.aborted ? '加载超时，请刷新重试' : error.message;
+      if (!hasLoaded) sessionInfo.textContent = memberHint.textContent;
+    } finally {
+      clearTimeout(timer);
+      if (loadController === controller) loadController = null;
     }
-    var data = ((await resp.json()).data) || {};
-    renderSession(data.session);
-    renderMembers(data.members);
-    renderPositions(data.live_positions);
-    renderDanmakus(data.danmakus);
   }
 
+  document.getElementById('refreshMembers').addEventListener('click', load);
+  window.addEventListener('pagehide', function () { ++loadVersion; if (loadController) loadController.abort(); });
+  window.addEventListener('pageshow', function (event) { if (event.persisted) load(); });
   load();
 })();

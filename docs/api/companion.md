@@ -1002,3 +1002,7 @@ Authorization: Bearer <token>
 房主遵循原有缓存、租约及预算规则生成结果，然后同步给成员；同步不随人数增加供应商或AI调用。成员保留各自坐标、城市和运动数据。景点权威关联标记`origin=companion`，来源轨迹ID写入`updated_by`；共享匹配JSON记录`shared_source_track_id/shared_source_version`及`primary_method=companion_owner`，不复制房主逐点Relations。自动路线说明标记`description_source=companion`，不复制形象标签，不覆盖成员人工编辑的说明或景点。
 
 成员上传、房主结果生成和后台补偿均可同步已有结果。后台沿既有景点任务每轮最多扫描两个房间，补历史缺失位置并复用已有景点/说明；补偿本身不触发AI或供应商请求、不改变历史私密状态，不新增表或接口。
+
+### 后台房间详情中的成员轨迹
+
+后台独立会话接口`GET /admin/api/companions/:session_id`的成员user_id以十进制字符串返回。仅同时具有companions和tracks读取权限时，成员附带`track:{state,track_id?,title?}`，state为ready/deleted/pending/empty/unavailable/unknown；无tracks权限时不查询或返回轨迹字段。轨迹关联从该房间成员的正式完成清单读取，并批量核对作者及session_id；不以时间、最后位置或普通单人轨迹推断。已下架但仍保留的正式轨迹可在后台现有轨迹弹窗查看；彻底删除/未生成显示暂不可用。读取失败保留成员信息，并通过member_tracks_warning及unknown状态提示。该扩展不改变业务JWT结算/成员访问协议，也不触发补传或轨迹生成。详见[后台成员轨迹流程](../admin-workflows.md#同行成员轨迹)。
