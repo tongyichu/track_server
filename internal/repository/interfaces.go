@@ -472,6 +472,7 @@ type AnalyticsRepository interface {
 
 // CompanionRepository defines persistence operations for companion session control plane.
 type CompanionRepository interface {
+	TransferOwner(ctx context.Context, sessionID string, ownerID, targetID int64) (*models.CompanionSession, error)
 	CreateSession(ctx context.Context, session *models.CompanionSession) error
 	UpdateSession(ctx context.Context, session *models.CompanionSession) error
 	FindSessionByID(ctx context.Context, sessionID string) (*models.CompanionSession, error)

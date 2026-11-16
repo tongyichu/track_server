@@ -119,6 +119,7 @@
 | 同行结算状态 | GET | `/companion/session/:session_id/result` | 是，参与过的成员 | [companion.md](companion.md#同行个人轨迹结算与回放) |
 | 同行成员轨迹点/详情 | GET | `/companion/session/:session_id/result/:user_id/points`, `/companion/session/:session_id/result/:user_id/track` | 是，参与过的成员 | [companion.md](companion.md#同行个人轨迹结算与回放) |
 | 踢出同行成员 | POST | `/companion/session/:session_id/members/:user_id/kick` | 是 | [companion.md](companion.md#221-踢出同行成员) |
+| 转移同行房主 | POST | `/companion/session/:session_id/members/:user_id/transfer-owner` | 是 | [companion.md](companion.md#转移房主) |
 | 更新已结束同行摘要 | PUT | `/companion/session/:session_id/update` | 是 | [companion.md](companion.md#222-更新已结束同行摘要owner) |
 | 上报同行关键事件 | POST | `/companion/session/:session_id/events` | 是 | [companion.md](companion.md#223-上报同行关键事件owner) |
 | 查询同行关键事件时间线 | GET | `/companion/session/:session_id/events` | 是 | [companion.md](companion.md#224-查询同行关键事件时间线owner) |

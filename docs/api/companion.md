@@ -237,7 +237,7 @@ Authorization: Bearer <token>
 
 ## 21. 离开同行会话
 
-当前成员主动离开 session。owner 在仍有其他 joined 成员时不能直接离开，需调用结束接口。
+当前成员主动离开 session。owner 在仍有其他 joined 成员时不能直接离开，可以先转移房主后作为普通成员离开，或调用结束接口。
 
 **需要认证**
 
@@ -364,6 +364,24 @@ Authorization: Bearer <token>
   - session 不存在或被踢成员不存在
 
 ---
+
+## 转移房主
+
+`POST /companion/session/:session_id/members/:user_id/transfer-owner`，业务 JWT，仅当前 active 房间的房主可调用。目标必须为本房间仍 joined 的其他成员；不允许转给自己、已离开或被移除的成员，结束后的房间不可转移。受同行类账号限制拦截，不自动转移或在离线时自动收回。
+
+成功返回与 current/create 相同的 `CompanionSessionState`。`session.owner_user_id` 为当前房主，目标成员 `role=owner`，原房主 `role=member`；原房主保留参与资格和自己的轨迹，管理权限（结束、移除成员、弹幕开关、事件与结算摘要补写）归新房主。不改变会话 ID、加入凭证、开始时间、成员轨迹或汇总数据。
+
+MySQL 使用事务锁定会话及两名 joined 成员并更新房主/角色，内存使用同一锁，Mongo 使用事务（仍依赖其已有同行基础功能支持）。普通会话写入比较当前 owner，成员写入按会话权威 owner 定角色，避免旧请求还原角色或在交接后将新房主移出仍有其他人的房间。无新字段或表结构迁移。
+
+提交成功后 best-effort 向 `companion/{session_id}/control` 发布：
+
+```json
+{"event":"owner_transferred","session_id":"CMP-...","member_user_id":1002,"operator_user_id":1001,"at":"2026-11-16T09:00:00Z"}
+```
+
+`member_user_id` 为新房主，`operator_user_id` 为原房主，`at` 为本次会话更新时间。客户端按时序更新房主、角色及权限，再获取 current 校准；前台恢复和 MQTT 重连补查 current，旧事件不能覆盖更新的房间状态。超时或回执丢失保留服务端已提交的结果，客户端查询恢复，不盲目重放转移。
+
+失败沿用统一错误格式：未登录 401；非当前房主、无效成员状态或已结束房间 403；房间/成员不存在 404；参数错误及转给自己 400。查询和离开/结束的原规则保持。
 
 ## 22.2 更新已结束同行摘要（owner）
 

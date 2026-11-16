@@ -1,3 +1,13 @@
+# 同行房主转移（2026-11-16，未部署）
+
+用户接受房主与管理权限整体交接，并明确不出现小黄旗/领队概念。新增业务 JWT POST /companion/session/:session_id/members/:user_id/transfer-owner，仅 active 房间当前 owner 可转给其他 joined 成员。复用 owner_user_id 与成员 role，MySQL 事务/内存锁/Mongo 事务原子更新，原 owner 变 member，原轨迹/时间线/汇总/会话 ID 不变；Mongo 同行基础方法仍沿用既有未实现边界，不宣称补全 Mongo 同行。成功发布 owner_transferred 控制事件（member_user_id=新 owner、operator_user_id=旧 owner、at=提交时间），返回房间状态。API、路由、限制和流程文档同步。
+
+MySQL UpdateSession 带 owner 条件避免旧写恢复房主，失败区分不存在/权限；UpsertMember 在 session 行锁内按权威 owner 定 role，保护交接后的新 owner 不被旧离开/踢人请求移出仍有其他成员的 active 房间；内存相同行为。转移沿用同行类账号限制，新房主继承结束/移除/弹幕/事件/结算权限，无字段或表结构迁移，仅 mysql.sql owner 列说明改为当前房主。客户端同时完成入口、MQTT/前台/重连校准和指向房主的虚线。
+
+go build ./... 与 git diff --check 通过。未运行自动化或接口/数据库业务测试；未提交、推送或部署，生产仍为此前 3f9fd7057d21。需部署本轮 Server 后验证房主转移；已有同行流程与 Android 前三项修复可独立验证。根 AGENTS 现有仓储/鉴权/文档边界仍适用，无需新增规则。
+
+原交接如下：
+
 # 部署作者跟随成果列表接口（2026-11-16）
 
 用户明确要求“部署”，发布范围为上一轮已完成的原轨迹作者跟随成果列表GET接口及三仓储分页实现和协议文档。main已fetch，与origin/main同为731e396，无远端合并，未混入客户端或敏感配置；go build ./...与git diff --check通过，无自动化业务测试。保留既有navigate_count口径、鉴权及他人私密成果边界，不新增表/迁移。

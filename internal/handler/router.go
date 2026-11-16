@@ -216,6 +216,7 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 	auth.POST("/companion/session/:session_id/events", companionHandler.CreateEvent)
 	auth.GET("/companion/session/:session_id/events", companionHandler.ListEvents)
 	auth.POST("/companion/session/:session_id/members/:user_id/kick", companionHandler.KickSessionMember)
+	auth.POST("/companion/session/:session_id/members/:user_id/transfer-owner", companionHandler.TransferSessionOwner)
 	auth.POST("/companion/session/:session_id/danmaku/toggle", companionHandler.ToggleSessionDanmaku)
 	auth.POST("/companion/session/:session_id/mqtt/credentials", companionHandler.IssueMQTTCredentials)
 
