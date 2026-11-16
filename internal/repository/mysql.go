@@ -423,6 +423,13 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 			KEY idx_companion_member_status (session_id, member_status),
 			KEY idx_companion_presence (session_id, presence_status)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='同行会话成员表';`,
+		`CREATE TABLE IF NOT EXISTS companion_history_removals (
+			session_id VARCHAR(64) NOT NULL,
+			user_id BIGINT NOT NULL COMMENT '0为全员移除，其他值为仅本人移除',
+			actor_user_id BIGINT NOT NULL,
+			removed_at DATETIME(6) NOT NULL,
+			PRIMARY KEY (session_id, user_id)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='同行记录展示移除状态';`,
 		`CREATE TABLE IF NOT EXISTS companion_live_positions (
 			session_id VARCHAR(64) NOT NULL,
 			user_id BIGINT NOT NULL,

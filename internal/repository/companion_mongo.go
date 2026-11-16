@@ -33,6 +33,12 @@ func NewMongoCompanionRepository(sessionCollection, memberCollection, positionCo
 		if err != nil {
 			log.Printf("companion track indexes unavailable: %v", err)
 		}
+		_, err = sessionCollection.Database().Collection("companion_history_removals").Indexes().CreateOne(ctx, mongo.IndexModel{
+			Keys: bson.D{{Key: "session_id", Value: 1}, {Key: "user_id", Value: 1}}, Options: options.Index().SetUnique(true),
+		})
+		if err != nil {
+			log.Printf("companion history index unavailable: %v", err)
+		}
 	}
 	return &MongoCompanionRepository{
 		sessionCollection:  sessionCollection,
@@ -61,12 +67,41 @@ func (r *MongoCompanionRepository) FindActiveSessionByUserID(context.Context, in
 	return nil, errors.New("MongoCompanionRepository.FindActiveSessionByUserID not implemented")
 }
 
-func (r *MongoCompanionRepository) ListSessionsByUserID(context.Context, int64, *models.CompanionSessionListCursor, int) ([]*models.CompanionSession, error) {
-	return nil, errors.New("MongoCompanionRepository.ListSessionsByUserID not implemented")
+func (r *MongoCompanionRepository) ListSessionsByUserID(ctx context.Context, user int64, cursor *models.CompanionSessionListCursor, limit int) ([]*models.CompanionSession, error) {
+	pipeline := r.historyPipeline(user, cursor)
+	pipeline = append(pipeline, bson.D{{Key: "$sort", Value: bson.D{{Key: "started_at", Value: -1}, {Key: "session_id", Value: -1}}}})
+	if limit > 0 {
+		pipeline = append(pipeline, bson.D{{Key: "$limit", Value: limit}})
+	}
+	rows, err := r.sessionCollection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close(ctx)
+	items := []*models.CompanionSession{}
+	if err = rows.All(ctx, &items); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
-func (r *MongoCompanionRepository) CountSessionsByUserID(context.Context, int64) (int64, error) {
-	return 0, errors.New("MongoCompanionRepository.CountSessionsByUserID not implemented")
+func (r *MongoCompanionRepository) CountSessionsByUserID(ctx context.Context, user int64) (int64, error) {
+	pipeline := append(r.historyPipeline(user, nil), bson.D{{Key: "$count", Value: "count"}})
+	rows, err := r.sessionCollection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close(ctx)
+	var result []struct {
+		Count int64 `bson:"count"`
+	}
+	if err = rows.All(ctx, &result); err != nil {
+		return 0, err
+	}
+	if len(result) == 0 {
+		return 0, nil
+	}
+	return result[0].Count, nil
 }
 
 func (r *MongoCompanionRepository) ListActiveSessions(context.Context, int) ([]*models.CompanionSession, error) {

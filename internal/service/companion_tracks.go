@@ -52,8 +52,9 @@ type CompanionMemberResult struct {
 	LeftAt     time.Time `json:"left_at"`
 }
 type CompanionResult struct {
-	Session *models.CompanionSession `json:"session"`
-	Members []CompanionMemberResult  `json:"members"`
+	Session           *models.CompanionSession `json:"session"`
+	Members           []CompanionMemberResult  `json:"members"`
+	RecordDeleteScope string                   `json:"record_delete_scope,omitempty"`
 }
 type CompanionResultTrack struct {
 	*models.Track
@@ -345,6 +346,12 @@ func (s *CompanionService) Result(ctx context.Context, viewer int64, id string) 
 	}
 	colors := []string{"#E6194B", "#3CB44B", "#4363D8", "#F58231", "#911EB4", "#46F0F0", "#F032E6", "#BCF60C", "#008080", "#FFE119", "#9A6324", "#469990"}
 	result := &CompanionResult{Session: companionSessionForResponse(session), Members: make([]CompanionMemberResult, 0, len(members))}
+	if _, supported := s.repo.(repository.CompanionHistoryRepository); supported && session.Status == models.CompanionSessionStatusEnded {
+		result.RecordDeleteScope = "self"
+		if session.OwnerUserID == viewer {
+			result.RecordDeleteScope = "all"
+		}
+	}
 	for index, m := range members {
 		row := CompanionMemberResult{UserID: m.UserID, Color: colors[index%len(colors)], Status: "syncing", JoinedAt: m.JoinedAt, LeftAt: m.LeftAt}
 		if u := users[m.UserID]; u != nil {

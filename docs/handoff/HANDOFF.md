@@ -1,3 +1,17 @@
+# 同行记录展示删除与确认范围（2026-11-17）
+
+用户明确结束时房主可让同行记录从所有成员历史中消失、成员仅隐藏本人，并要求房主二次确认影响面。新增JWT DELETE /companion/session/:session_id/history?scope=all|self，service仅接受明确scope，仓储校验原参与者及ended状态，最终房主仅all、成员仅self；不会自动扩大确认范围。非成员/成员all为403、房主self/未结束为409并带companion_history_scope_changed，幂等成功保留首次时间。删除属于取消展示，AccountRestrictionMiddleware按已有语义放行，身份和范围仍强校验。
+
+独立companion_history_removals(session_id,user_id,actor_user_id,removed_at)，PK房间/用户，user_id=0为全员，其余为本人。mysql.go幂等建表及mysql.sql同步；MySQL事务锁会话后写入，Mongo确定性_id与唯一索引，内存锁与独立map。历史查询/总数先过滤移除状态再分页，补写/上传不覆盖；新增Mongo历史list/count实现，其他原有Mongo同行基础stub未扩展。结算下发record_delete_scope，历史item补最终owner_user_id。
+
+房间/成员/GPS/个人轨迹、评论、与友同行标签、景点和共享说明都保留，后台补传/补偿继续，已打开结算仍可读；只移除同行记录展示。客户端房主二次确认明确所有成员影响、个人成果保留及不可撤销，主按钮“为所有成员删除”；成员仅本人。旧Server未下发范围时客户端隐藏删除。API/路由索引、流程、契约及同行方案同步。
+
+验证：go build ./...、配套客户端:app:assembleDebug及两端git diff --check通过，按AGENTS未运行单元/集成/接口/UI测试；权限、幂等和分页行为仅静态核对，待人工验收。本次未提交、推送或部署；当前生产仍为上一轮f7162b8。新接口需部署Server并安装客户端。既有AGENTS鉴权、仓储三实现、表结构和发布边界适用，无需改规则。
+
+用户随后要求推送，先提交本次同行记录移除源码与文档，再合并远端6aa4dd9后台成员正式轨迹关联更新，重新构建并推送main。此次只同步代码，不部署或安装；最终推送结果以执行回执为准。
+
+原交接如下：
+
 # 同行元信息、房主内容共享与私密评论（2026-11-16）
 
 用户要求同行成员轨迹保留本人城市/坐标、新上传默认公开，景点和自动路线说明统一复用房主，评论入口常驻。CompleteMemberTrack补位置并以Normal创建新记录，重试不改既有私密状态；客户端携带本人城市/地址/WGS84，缺失地区从本人首批持久化GPS经既有坐标转换及本地行政边界补齐，不调用外部服务，不使用房主坐标/界面选城，不猜测无法识别地区。
