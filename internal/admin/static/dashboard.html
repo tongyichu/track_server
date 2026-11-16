@@ -12,7 +12,16 @@
   <header class="topbar"></header>
   <main class="container wide dashboard-page">
     <div class="page-heading dashboard-heading">
-      <div><h1>运营工作台</h1><p class="admin-stats-meta" id="rangeHint"></p></div>
+      <div>
+        <div class="dashboard-title-row"><h1>运营工作台</h1>
+          <span id="analyticsHealth" class="dashboard-health" data-admin-read="analytics" aria-live="polite">
+            <a href="/admin/analytics.html" id="analyticsHealthLink" data-state="pending" title="仅检查埋点归档链路">
+              <span class="health-dot" aria-hidden="true"></span><span id="analyticsHealthLabel">埋点 · 检查中</span>
+            </a>
+          </span>
+        </div>
+        <p class="admin-stats-meta" id="rangeHint"></p>
+      </div>
       <div class="dashboard-heading-actions">
         <div class="period-tabs admin-period-tabs" role="group" aria-label="统计周期">
           <button data-period="day" class="active">日</button>

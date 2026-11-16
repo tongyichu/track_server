@@ -10,7 +10,7 @@
     '/admin/companions.html': ['与友同行', '查看同行房间、成员与活动记录'],
     '/admin/companion_detail.html': ['同行详情', '查看成员、实时位置和弹幕历史'],
     '/admin/feedbacks.html': ['反馈与纠错', '核查轨迹问题，回复处理结果'],
-    '/admin/analytics.html': ['埋点同步', '查看埋点文件同步状态和明细']
+    '/admin/analytics.html': ['埋点同步日志', '查看归档任务状态、文件明细与失败原因']
   };
 
   function toast(message, tone) {

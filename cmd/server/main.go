@@ -720,6 +720,11 @@ func main() {
 	// 后台账号独立持久化；环境变量仅用于首次初始化，数据库降级不放开后台鉴权。
 	adminModule := admin.NewModule(cfg.AdminAccounts, appReleaseSvc, ossTokenSvc, staticRoot, userRepo, trackRepo, collectRepo, trackMapRepo, companionRepo, analyticsRepo, userSvc, feedbackSvc, accountRestrictionSvc, trackRouteGroupSvc, adminAccountStorage)
 	adminModule.Handler.SetMessageService(messageSvc)
+	adminModule.Handler.SetAnalyticsHealth(admin.AnalyticsHealthConfig{
+		ServiceReady: analyticsSvc != nil, Enabled: cfg.AnalyticsEnabled,
+		UploaderReady: analyticsUploader != nil, SchedulerEnabled: cfg.SchedulerEnabled,
+		SyncCron: jobs.NewAnalyticsSync(analyticsSvc, cfg.AnalyticsSyncCron).Spec(),
+	})
 	adminModule.Handler.SetRealtime(realtimeMonitor, service.NewRealtimeBroker(cfg.EMQXManagementURL, cfg.EMQXManagementAPIKey, cfg.EMQXManagementAPISecret))
 	if err := adminModule.ConfigureEmailRecovery(admin.SMTPConfig{Host: cfg.AdminSMTPHost, Port: cfg.AdminSMTPPort, Username: cfg.AdminSMTPUsername, Password: cfg.AdminSMTPPassword, From: cfg.AdminSMTPFrom, TLSMode: cfg.AdminSMTPTLSMode}); err != nil {
 		log.Print("admin email recovery unavailable: check account storage and SMTP configuration")

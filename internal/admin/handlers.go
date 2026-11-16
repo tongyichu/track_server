@@ -55,6 +55,7 @@ type Handler struct {
 	trackMapIndexSvc      *service.TrackMapIndexService
 	companionRepo         repository.CompanionRepository
 	analyticsRepo         repository.AnalyticsRepository
+	analyticsHealth       *analyticsHealthMonitor
 	feedbackSvc           *service.FeedbackService
 	restrictionSvc        *service.AccountRestrictionService
 	routeGroupSvc         *service.TrackRouteGroupService

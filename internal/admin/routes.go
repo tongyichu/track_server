@@ -307,6 +307,7 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	api.PUT("/ai/policies/:feature/quota", m.Handler.SaveAIDailyQuota)
 	api.PUT("/ai/prices", m.Handler.SaveAIPrices)
 	api.GET("/analytics/sync-summaries", m.Handler.ListAnalyticsSyncSummaries)
+	api.GET("/analytics/health", m.Handler.GetAnalyticsHealth)
 }
 
 func redirectToLogin(_ context.Context, c *app.RequestContext) {

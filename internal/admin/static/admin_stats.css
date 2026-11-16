@@ -155,3 +155,11 @@ button.admin-metric:hover, a.admin-metric:hover { color: inherit; background: va
   .dashboard-page .split-charts { grid-template-columns: 1fr; }
   .dashboard-table { min-width: 0; }
 }
+.dashboard-title-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
+.dashboard-health a { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; font-size: 12px; color: var(--tblr-secondary-color); text-decoration: none; }
+.dashboard-health a:hover { text-decoration: underline; }
+.dashboard-health a:focus-visible { outline: 2px solid var(--tblr-primary); outline-offset: 3px; border-radius: 3px; }
+.dashboard-health .health-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
+.dashboard-health [data-state="normal"] .health-dot { color: var(--tblr-success); }
+.dashboard-health [data-state="warning"], .dashboard-health [data-state="unknown"] { color: var(--tblr-warning); }
+.dashboard-health [data-state="error"] { color: var(--tblr-danger); }

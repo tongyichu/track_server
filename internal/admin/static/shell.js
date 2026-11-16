@@ -89,13 +89,14 @@
     { href: '/admin/realtime.html', label: '实时通信', icon: 'cloud-upload' },
     { href: '/admin/index.html', label: '发布管理', icon: 'package' },
     { href: '/admin/ai_usage.html', label: 'AI 使用', icon: 'robot' },
-    { href: '/admin/analytics.html', label: '埋点同步', icon: 'cloud-upload' },
+    { href: '/admin/more.html#system-tools', label: '系统工具', icon: 'dots', desktopOnly: true, permission: 'analytics' },
     { href: '/admin/accounts.html', label: '账号管理', icon: 'shield-lock' },
     { href: '/admin/more.html', label: '更多', icon: 'dots', mobileOnly: true, primary: true },
   ];
 
   function isActive(item) {
-    if (path === item.href) return true;
+    if (path === item.href.split('#')[0]) return true;
+    if (path === '/admin/analytics.html' && item.href.split('#')[0] === '/admin/more.html') return true;
     return path === '/admin/companion_detail.html' && item.href === '/admin/companions.html';
   }
 
@@ -110,8 +111,8 @@
     '<a class="brand" href="/admin/dashboard.html"><img class="brand-mark" src="' + AdminAssets.url('/admin/static/favicon.png') + '" width="32" height="32" alt="" data-no-preview /><span><b>时光轨迹</b><small>控制台</small></span></a>',
     '<nav class="nav" aria-label="管理后台导航">',
     items.map(function (item) {
-      const classes = [item.primary ? 'nav-primary' : 'nav-secondary', item.mobileOnly ? 'mobile-only' : '', isActive(item) ? 'active' : ''].filter(Boolean).join(' ');
-      return '<a class="' + classes + '" href="' + item.href + '"><img class="nav-icon" src="' + AdminAssets.url('/admin/static/vendor/tabler-icons/' + item.icon + '.svg') + '" alt="" /><span>' + item.label + '</span></a>';
+      const classes = [item.primary ? 'nav-primary' : 'nav-secondary', item.mobileOnly ? 'mobile-only' : '', item.desktopOnly ? 'desktop-only' : '', isActive(item) ? 'active' : ''].filter(Boolean).join(' ');
+      return '<a class="' + classes + '"' + (item.permission ? ' data-admin-read="' + item.permission + '"' : '') + ' href="' + item.href + '"><img class="nav-icon" src="' + AdminAssets.url('/admin/static/vendor/tabler-icons/' + item.icon + '.svg') + '" alt="" /><span>' + item.label + '</span></a>';
     }).join(''),
     '</nav>',
     '<div class="spacer"></div>',

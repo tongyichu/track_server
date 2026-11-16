@@ -97,6 +97,7 @@
 | PUT | `/admin/api/feedbacks/:feedback_id/status` | 鉴权 | 更新反馈处理状态与用户可见 `reply`；`resolved` 时 `reply` 必填 |
 | GET | `/admin/api/feedbacks/:feedback_id/images/:image_id` | 鉴权 | 读取反馈图片 |
 | GET | `/admin/api/analytics/sync-summaries` | 鉴权 | 埋点 OSS 同步摘要列表，支持 `status` / `limit` / `offset` |
+| GET | `/admin/api/analytics/health` | analytics 读取权限 | 工作台只读归档健康状态，独立异步加载；不触发同步或 OSS 请求 |
 | GET | `/admin/api/route-groups` | 鉴权 | 路线组列表，支持 `track_type` / `province_code`（服务端展开为省内城市集合）/ `city_code` 筛选与 `limit` / `offset` 分页；返回 `total`、`next_offset`、`has_more`、`area_id` 及目录区域摘要 |
 | GET | `/admin/api/route-groups/:group_id` | 鉴权 | 路线组详情、`area_id` 对应区域信息与成员轨迹 |
 | PUT | `/admin/api/route-groups/:group_id/name` | 鉴权 | 人工改名 |
@@ -149,3 +150,7 @@ AI 使用完整协议见 [admin-ai](api/admin-ai.md)，运行与计费边界见 
 `GET /admin/api/scenic-spots?view=summary`沿用景点查看权限，返回目录所需的编号、名称、等级、省市展示名、图片数、人工/自动类型及关联轨迹数，不返回分类、简介、照片URL或来源明细。完整列表与摘要均先按景区等级5A→1A→未知、同级关联轨迹数降序、同数ID升序全局排序后分页，计数与按钮口径一致，末页不误报更多。不传view仍返回原完整条目；查看详情继续用既有单条接口。分页和筛选规则及字段见[省市筛选协议](api/admin-regions.md#景点目录轻量摘要)。
 
 共享轨迹编辑弹窗统一分区与只读文件指标见[轨迹详情协议](api/admin-tracks.md#编辑字段与坐标预览)。PUT拒绝start_time/end_time/distance/duration/calories_burned/elevation_gain/avg_speed_kmh及旧版track_screenshot_url，地图浮窗附近结果归入景点识别区。
+
+## 埋点归档健康
+
+`GET /admin/api/analytics/health`使用后台独立session及analytics读取权限，返回`{code:0,data:{state,label,message,checked_at,last_finished_at?,next_due_at?}}`。时间为带时区的时刻，由AdminTime按北京时间展示。`state`为normal/warning/error/pending/disabled/unknown；首次等待或主动停用不冒充成功，日志读取失败返回unknown而非绿色。接口只查询最新一条摘要并检查非敏感运行配置，无文件路径、事件内容或凭证；3秒读取超时，不发起OSS探测、同步、补传或写操作。具体逾期和首次等待规则见[同步日志流程](admin-workflows.md#查看埋点同步摘要)。

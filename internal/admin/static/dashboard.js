@@ -4,6 +4,46 @@
   const charts = {};
   const colors = AdminChartStyle.colors;
   let latestData = null;
+  let healthRequest = null;
+
+  async function loadAnalyticsHealth() {
+    const node = document.getElementById('analyticsHealth');
+    if (!AdminAccess.can('analytics', false)) { node.hidden = true; return; }
+    node.hidden = false;
+    if (healthRequest) healthRequest.abort();
+    const controller = new AbortController();
+    healthRequest = controller;
+    const timeout = setTimeout(function () { controller.abort(); }, 8000);
+    const link = document.getElementById('analyticsHealthLink');
+    const label = document.getElementById('analyticsHealthLabel');
+    try {
+      const response = await fetch('/admin/api/analytics/health', { signal: controller.signal });
+      if (healthRequest !== controller) return;
+      if (response.status === 401 || response.status === 403) { node.hidden = true; return; }
+      if (!response.ok) throw new Error('health unavailable');
+      const payload = await response.json();
+      if (healthRequest !== controller) return;
+      const data = payload.data;
+      if (!data || !data.label || !['normal', 'warning', 'error', 'pending', 'disabled', 'unknown'].includes(data.state)) throw new Error('invalid health');
+      link.dataset.state = data.state;
+      label.textContent = '埋点 · ' + data.label;
+      const details = [data.message || ''];
+      if (data.last_finished_at) details.push('最近完成：' + AdminTime.dateTime(data.last_finished_at));
+      if (data.next_due_at) details.push('计划同步：' + AdminTime.dateTime(data.next_due_at));
+      details.push('查看同步日志');
+      link.title = details.join('\n');
+      link.setAttribute('aria-label', label.textContent + '。' + details.join('。'));
+    } catch (cause) {
+      if (healthRequest !== controller) return;
+      link.dataset.state = 'unknown';
+      label.textContent = '埋点 · 状态读取失败';
+      link.title = '暂时无法获取归档状态，请刷新重试或查看同步日志';
+      link.setAttribute('aria-label', label.textContent + '，查看同步日志');
+    } finally {
+      clearTimeout(timeout);
+      if (healthRequest === controller) healthRequest = null;
+    }
+  }
 
   function number(value) {
     return Number(value || 0);
@@ -321,7 +361,15 @@
       }
     });
   });
-  document.getElementById('refreshDashboard').addEventListener('click', loadDashboard);
+  document.getElementById('refreshDashboard').addEventListener('click', function () {
+    loadDashboard();
+    loadAnalyticsHealth();
+  });
+  window.addEventListener('pagehide', function () {
+    if (healthRequest) { const request = healthRequest; healthRequest = null; request.abort(); }
+  });
+  window.addEventListener('pageshow', function (event) { if (event.persisted) loadAnalyticsHealth(); });
   window.addEventListener('resize', function () { Object.keys(charts).forEach(function (key) { charts[key].resize(); }); });
   loadDashboard();
+  loadAnalyticsHealth();
 })();

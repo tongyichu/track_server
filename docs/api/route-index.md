@@ -207,3 +207,7 @@
 活动通知已有GET/POST/PUT路由不变，本轮扩展覆盖方式、定时状态与发布轮次；App通知ID按不透明发布轮次原样回传，协议见[messages](messages.md#活动通知管理)。
 
 后台景点名称选择器：GET `/admin/api/scenic-spots?view=picker&q=名称`（景点查看），单页最多20个active名称、按ID游标，不参与目录全局排名，不读取轨迹统计；见[手动录入景点](admin-tracks.md#手动录入景点)。
+
+## 后台埋点归档健康
+
+后台独立会话另提供`GET /admin/api/analytics/health`（analytics读取权限），供工作台显示归档健康；与业务埋点采集接口分开，不触发同步或读取原始事件，见[后台路由](../admin-routes.md)及[同步日志流程](../admin-workflows.md#查看埋点同步摘要)。
