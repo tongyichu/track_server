@@ -750,3 +750,11 @@ CREATE TABLE IF NOT EXISTS companion_track_chunks (
  digest CHAR(64) NOT NULL, data MEDIUMTEXT NOT NULL,
  PRIMARY KEY(session_id,user_id,chunk_index)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS companion_history_removals (
+ session_id VARCHAR(64) NOT NULL,
+ user_id BIGINT NOT NULL COMMENT '0为全员移除，其他值为仅本人移除',
+ actor_user_id BIGINT NOT NULL,
+ removed_at DATETIME(6) NOT NULL,
+ PRIMARY KEY(session_id,user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='同行记录展示移除状态';

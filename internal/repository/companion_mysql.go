@@ -147,8 +147,9 @@ func (r *MySQLCompanionRepository) ListSessionsByUserID(ctx context.Context, use
 	query := companionSessionSelectSQL() + ` WHERE EXISTS (
 			SELECT 1 FROM companion_session_members m
 			 WHERE m.session_id = companion_sessions.session_id AND m.user_id=?
-		)`
-	args := []any{userID}
+		) AND NOT EXISTS (SELECT 1 FROM companion_history_removals h
+		 WHERE h.session_id=companion_sessions.session_id AND h.user_id IN (0,?))`
+	args := []any{userID, userID}
 	if cursor != nil {
 		query += ` AND (companion_sessions.started_at < ? OR (companion_sessions.started_at = ? AND companion_sessions.session_id < ?))`
 		args = append(args, cursor.StartedAt, cursor.StartedAt, cursor.SessionID)
@@ -205,8 +206,11 @@ func (r *MySQLCompanionRepository) ListActiveSessions(ctx context.Context, limit
 
 func (r *MySQLCompanionRepository) CountSessionsByUserID(ctx context.Context, userID int64) (int64, error) {
 	row := r.db.QueryRowContext(ctx,
-		`SELECT COUNT(DISTINCT session_id) FROM companion_session_members WHERE user_id=?`,
-		userID,
+		`SELECT COUNT(*) FROM companion_sessions WHERE EXISTS (
+		 SELECT 1 FROM companion_session_members m WHERE m.session_id=companion_sessions.session_id AND m.user_id=?
+		) AND NOT EXISTS (SELECT 1 FROM companion_history_removals h
+		 WHERE h.session_id=companion_sessions.session_id AND h.user_id IN (0,?))`,
+		userID, userID,
 	)
 	var count int64
 	if err := row.Scan(&count); err != nil {

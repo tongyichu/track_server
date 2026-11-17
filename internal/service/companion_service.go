@@ -1960,6 +1960,7 @@ func (s *CompanionService) buildHistoryItem(ctx context.Context, session *models
 	}
 	item := &models.CompanionHistoryItem{
 		SessionID:              clone.SessionID,
+		OwnerUserID:            clone.OwnerUserID,
 		Title:                  clone.Title,
 		TrackType:              clone.TrackType,
 		LocateAddr:             clone.LocateAddr,

@@ -21,6 +21,7 @@ type InMemoryCompanionRepository struct {
 	events         []*models.CompanionEvent
 	eventNextID    int64
 	trackChunks    map[string]models.CompanionTrackChunk
+	historyRemoved map[string]map[int64]time.Time
 }
 
 // NewInMemoryCompanionRepository creates an in-memory companion repository.
@@ -137,6 +138,9 @@ func (r *InMemoryCompanionRepository) ListSessionsByUserID(_ context.Context, us
 		if _, ok := members[userID]; !ok {
 			continue
 		}
+		if !r.historyVisible(sessionID, userID) {
+			continue
+		}
 		session, ok := r.sessions[sessionID]
 		if !ok {
 			continue
@@ -191,8 +195,8 @@ func (r *InMemoryCompanionRepository) CountSessionsByUserID(_ context.Context, u
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	var count int64
-	for _, members := range r.members {
-		if _, ok := members[userID]; ok {
+	for id, members := range r.members {
+		if _, ok := members[userID]; ok && r.sessions[id] != nil && r.historyVisible(id, userID) {
 			count++
 		}
 	}

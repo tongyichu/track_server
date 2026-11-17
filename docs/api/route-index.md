@@ -124,6 +124,7 @@
 | 上报同行关键事件 | POST | `/companion/session/:session_id/events` | 是 | [companion.md](companion.md#223-上报同行关键事件owner) |
 | 查询同行关键事件时间线 | GET | `/companion/session/:session_id/events` | 是 | [companion.md](companion.md#224-查询同行关键事件时间线owner) |
 | 当前用户参与过的同行记录列表 | GET | `/companion/session/history` | 是 | [companion.md](companion.md#23-当前用户参与过的同行记录列表) |
+| 删除同行记录展示（房主全员/成员本人） | DELETE | `/companion/session/:session_id/history?scope=all\|self` | JWT，允许受限账号取消展示 | [companion.md](companion.md#删除同行记录展示) |
 | 获取同行 MQTT 凭证 | POST | `/companion/session/:session_id/mqtt/credentials` | 是 | [companion.md](companion.md#24-获取同行-mqtt-凭证) |
 | EMQX HTTP AuthN 回调 | POST | `/internal/mqtt/auth` | 内部 | [companion-internal.md](companion-internal.md#25-emqx-http-authn-回调) |
 | EMQX HTTP AuthZ 回调 | POST | `/internal/mqtt/acl` | 内部 | [companion-internal.md](companion-internal.md#26-emqx-http-authz-回调) |

@@ -219,6 +219,7 @@ type CompanionHistoryParticipant struct {
 // CompanionHistoryItem is one history record of a companion session.
 type CompanionHistoryItem struct {
 	SessionID              string                        `json:"session_id"`
+	OwnerUserID            int64                         `json:"owner_user_id"`
 	Title                  string                        `json:"title"`
 	TrackType              string                        `json:"track_type"`
 	LocateAddr             string                        `json:"locate_addr"`
