@@ -26,6 +26,7 @@
 | 账号限制拦截与运维管理 | [account-restriction.md](account-restriction.md) |
 | 管理后台账号、身份、权限与邮箱找回（独立 `/admin` 路由） | [admin-accounts.md](admin-accounts.md)，[SMTP 配置说明](../admin-email-recovery.md) |
 | 后台轨迹缺项筛选与景点候选确认（独立 `/admin` 路由） | [admin-tracks.md](admin-tracks.md) |
+| 3D 背景音乐、乐库资源与后台管理 | [music.md](music.md) |
 | App 升级检查 | [upgrade.md](upgrade.md) |
 | 意见反馈提交、历史列表、图片读取、运维处理 | [feedback.md](feedback.md) |
 | 成就摘要、奖励、等级规则 H5、运维刷新 | [achievement.md](achievement.md) |

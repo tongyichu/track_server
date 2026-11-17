@@ -12,7 +12,7 @@
   const modulesByPage = {
     'dashboard.html': 'dashboard', 'track_submissions.html': 'track_submissions', 'tracks.html': 'tracks',
     'scenic_spots.html': 'scenic_spots', 'regions.html': 'regions', 'users.html': 'users', 'route_groups.html': 'route_groups',
-    'companions.html': 'companions', 'companion_detail.html': 'companions', 'feedbacks.html': 'feedbacks',
+    'music.html': 'music', 'companions.html': 'companions', 'companion_detail.html': 'companions', 'feedbacks.html': 'feedbacks',
     'announcements.html': 'announcements', 'realtime.html': 'realtime', 'ai_usage.html': 'ai_usage', 'index.html': 'releases', 'analytics.html': 'analytics', 'accounts.html': 'accounts'
   };
   function linkModule(link) {
@@ -84,6 +84,7 @@
     { href: '/admin/users.html', label: '用户管理', icon: 'users' },
     { href: '/admin/route_groups.html', label: '地图模式', icon: 'map-2' },
     { href: '/admin/companions.html', label: '与友同行', icon: 'friends' },
+    { href: '/admin/music.html', label: '背景音乐', icon: 'music' },
     { href: '/admin/feedbacks.html', label: '反馈与纠错', icon: 'message-report' },
     { href: '/admin/announcements.html', label: '活动&通知', icon: 'message-report' },
     { href: '/admin/realtime.html', label: '实时通信', icon: 'cloud-upload' },

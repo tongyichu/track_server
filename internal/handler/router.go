@@ -7,6 +7,7 @@ import (
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/tongyichu/track_server/internal/maparea"
 	"github.com/tongyichu/track_server/internal/middleware"
+	"github.com/tongyichu/track_server/internal/musicapi"
 	"github.com/tongyichu/track_server/internal/regions"
 	"github.com/tongyichu/track_server/internal/service"
 
@@ -15,6 +16,7 @@ import (
 
 // Deps groups all handler dependencies.
 type Deps struct {
+	MusicService               *service.MusicService
 	MessageService             *service.MessageService
 	RegionService              *regions.Service
 	PermissionSnapshotService  *service.PermissionSnapshotService
@@ -132,6 +134,9 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 
 	// authenticated routes
 	auth := api.Group("", middleware.JWTAuthMiddleware(deps.LoginService, deps.TokenBlacklist), middleware.UserActivityMiddleware(deps.UserService), middleware.AccountRestrictionMiddleware(deps.AccountRestrictionService))
+	music := musicapi.Handler{Service: deps.MusicService}
+	auth.GET("/music", music.List)
+	auth.GET("/music/:music_id/:kind", music.Asset)
 	messages := &MessageHandler{svc: deps.MessageService}
 	auth.GET("/messages/summary", messages.Summary)
 	auth.GET("/messages/notices", messages.Notices)

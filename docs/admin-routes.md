@@ -155,3 +155,7 @@ AI 使用完整协议见 [admin-ai](api/admin-ai.md)，运行与计费边界见 
 ## 埋点归档健康
 
 `GET /admin/api/analytics/health`使用后台独立session及analytics读取权限，返回`{code:0,data:{state,label,message,checked_at,last_finished_at?,next_due_at?}}`。时间为带时区的时刻，由AdminTime按北京时间展示。`state`为normal/warning/error/pending/disabled/unknown；首次等待或主动停用不冒充成功，日志读取失败返回unknown而非绿色。接口只查询最新一条摘要并检查非敏感运行配置，无文件路径、事件内容或凭证；3秒读取超时，不发起OSS探测、同步、补传或写操作。具体逾期和首次等待规则见[同步日志流程](admin-workflows.md#查看埋点同步摘要)。
+
+## 背景音乐
+
+`/admin/music.html`新增独立music模块。GET/POST `/admin/api/music`、PUT `/admin/api/music/:music_id`以及GET版本化audio/cover资源，权限与上传协议见[乐库](api/music.md)。共享导航、模块清单和中文审计同时接入，操作员需明确授予新模块权限。

@@ -21,6 +21,8 @@
     ['POST', 'security/email/send-code', '申请新邮箱验证码', '后台账号 {actor}', '仅发送验证邮件，验证通过后才会保存邮箱。'],
     ['POST', 'security/email/verify', '验证并保存本人找回邮箱', '后台账号 {actor}', '验证成功会退出全部旧登录，管理员不能代改他人邮箱。'],
     ['POST', 'password-recovery/complete', '通过邮箱重新设置密码', '后台账号 {actor}', '这是邮箱找回流程的请求，成功表示验证通过并设置新密码；失败不代表由该账号本人发起。'],
+    ['POST', 'music', '添加背景音乐', '乐库'],
+    ['PUT', 'music/:music', '修改背景音乐或上下架', '音乐 {music}'],
     ['POST', 'releases', '发布或更新 App 版本', 'App 版本记录', '历史记录未保存本次版本号。'],
     ['DELETE', 'releases/:release', '删除 App 版本记录', '版本记录 {release}'],
     ['GET', 'releases/upload-token', '申请安装包上传凭证', '安装包上传', '申请凭证不代表安装包已经上传或发布。'],

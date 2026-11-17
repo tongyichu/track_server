@@ -66,6 +66,7 @@ func main() {
 	var scenicSpotRepo repository.ScenicSpotRepository
 	var trackSubmissionRepo repository.TrackSubmissionRepository
 	var recommendationRepo repository.RecommendationRepository
+	var musicRepo repository.MusicRepository = repository.NewMemoryMusicRepository()
 	var messageRepo repository.MessageRepository
 	var aiUsageRepo repository.AIUsageRepository
 	var aiDurable bool
@@ -138,6 +139,10 @@ func main() {
 				if err != nil {
 					log.Printf("admin account storage unavailable; admin authentication will be disabled")
 				}
+				musicRepo, err = repository.NewMySQLMusicRepository(ctx, db)
+				if err != nil {
+					log.Print("background music storage unavailable; music disabled")
+				}
 				messages, messageErr := repository.NewMySQLMessageRepository(ctx, db)
 				if messageErr != nil {
 					log.Printf("message storage unavailable; messaging disabled: %v", messageErr)
@@ -199,6 +204,7 @@ func main() {
 			appClientStatsRepo = repository.NewInMemoryAppClientStatsRepository()
 		} else {
 			db := client.Database(cfg.MongoDBName)
+			musicRepo = repository.NewMongoMusicRepository(db)
 			regionStore = regions.NewMongoStore(db)
 			adminCtx, adminCancel := context.WithTimeout(ctx, 5*time.Second)
 			adminAccountStorage, err = admin.NewMongoAccountStorage(adminCtx, db)
@@ -695,7 +701,9 @@ func main() {
 	tokenBlacklist := middleware.NewTokenBlacklist()
 	defer tokenBlacklist.Close()
 
+	musicSvc := service.NewMusicService(musicRepo, filepath.Join(cfg.LogDir, "music"))
 	handler.RegisterRoutes(h, handler.Deps{
+		MusicService:               musicSvc,
 		MessageService:             messageSvc,
 		RegionService:              regionSvc,
 		PermissionSnapshotService:  permissionSnapshotSvc,
@@ -723,6 +731,7 @@ func main() {
 
 	// 后台账号独立持久化；环境变量仅用于首次初始化，数据库降级不放开后台鉴权。
 	adminModule := admin.NewModule(cfg.AdminAccounts, appReleaseSvc, ossTokenSvc, staticRoot, userRepo, trackRepo, collectRepo, trackMapRepo, companionRepo, analyticsRepo, userSvc, feedbackSvc, accountRestrictionSvc, trackRouteGroupSvc, adminAccountStorage)
+	adminModule.Handler.SetMusicService(musicSvc)
 	adminModule.Handler.SetMessageService(messageSvc)
 	adminModule.Handler.SetAnalyticsHealth(admin.AnalyticsHealthConfig{
 		ServiceReady: analyticsSvc != nil, Enabled: cfg.AnalyticsEnabled,

@@ -193,3 +193,7 @@
 ## 普通轨迹旧版截图停用
 
 普通轨迹以preview_images为唯一地图预览来源；业务不消费TrackScreenshotURL，模型历史成员仅供数据库/源码兼容且json隐藏，创建/更新不接收旧字段、不预热或缓存、不回退。地图代表轨迹改传preview_images与cover_url，私信/投稿/质量评分使用新版图。SVG轨迹线及Companion房间合成图为独立资源，保持各自用途。本轮不删除历史数据库列或OSS对象。后台文件指标只读及共享详情布局见docs/api/admin-tracks.md。
+
+## 3D 背景音乐
+
+乐库目录与资源通过MusicService统一读取，MySQL/Mongo/memory目录保持revision CAS语义；媒体写LogDir/music并由独立JWT/admin资源接口鉴权，不进入通用static。后台上传、上下架、排序和授权资料，App按需下载并本地配乐。完整入口与边界见[背景音乐协议](api/music.md)。

@@ -232,3 +232,7 @@ GET /user/:user_id/likes → 业务JWT → TrackHandler.ListProfileLikes → Tra
 ### 同行房主转移
 
 当前房主通过成员 transfer-owner 接口交接房间管理权限。CompanionService 校验参数后由 CompanionRepository.TransferOwner 事务/锁内核对当前 active owner 和双方 joined 身份，更新当前 owner 与成员角色，再发布 owner_transferred 控制事件并返回房间状态。MySQL 普通 UpdateSession 增加 owner 条件，UpsertMember 在会话行锁内按当前 owner 写角色，防止旧请求覆盖房主或将新房主踢出/离开。原成员轨迹、时间线和会话编号不变；无领队或旗帜字段。API 见 companion.md 转移房主章节，身份与权限规则仍沿用根 AGENTS。
+
+## 3D 背景音乐
+
+乐库目录与资源通过MusicService统一读取，MySQL/Mongo/memory目录保持revision CAS语义；媒体写LogDir/music并由独立JWT/admin资源接口鉴权，不进入通用static。后台上传、上下架、排序和授权资料，App按需下载并本地配乐。完整入口与边界见[背景音乐协议](api/music.md)。

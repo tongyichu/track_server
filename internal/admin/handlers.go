@@ -29,6 +29,7 @@ import (
 	"github.com/tongyichu/track_server/internal/ai"
 	"github.com/tongyichu/track_server/internal/config"
 	"github.com/tongyichu/track_server/internal/models"
+	"github.com/tongyichu/track_server/internal/musicapi"
 	"github.com/tongyichu/track_server/internal/regions"
 	"github.com/tongyichu/track_server/internal/repository"
 	"github.com/tongyichu/track_server/internal/service"
@@ -36,6 +37,7 @@ import (
 
 // Handler 聚合管理后台需要的业务依赖。
 type Handler struct {
+	music                 musicapi.Handler
 	realtime              *service.RealtimeMonitor
 	realtimeBroker        *service.RealtimeBroker
 	messages              *service.MessageService

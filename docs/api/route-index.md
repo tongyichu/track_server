@@ -219,3 +219,12 @@
 ## 后台同行成员轨迹
 
 `GET /admin/api/companions/:session_id`保留companions读取权限，额外具备tracks读取权限时在members中返回正式个人轨迹摘要，供房间成员列表打开现有轨迹弹窗；成员user_id为十进制字符串，见[后台路由](../admin-routes.md)及[成员轨迹协议](companion.md#后台房间详情中的成员轨迹)。
+
+## 背景音乐
+
+| 方法 | 路径 | 协议 |
+| --- | --- | --- |
+| GET | `/api/v1/music`、`/api/v1/music/:music_id/:kind` | [乐库](music.md)；JWT，仅已上架及当前版本 |
+| GET / POST | `/admin/api/music` | [乐库后台](music.md#后台管理)；music读/写 |
+| PUT | `/admin/api/music/:music_id` | music写，multipart及revision CAS |
+| GET | `/admin/api/music/:music_id/:kind` | music读，含未上架试听 |

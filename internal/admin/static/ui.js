@@ -7,6 +7,7 @@
     '/admin/scenic_spots.html': ['景点管理', '维护自有景点资料、地图来源与轨迹归属'],
     '/admin/track_submissions.html': ['投稿审核', '审核用户提交的结构化路线资料'],
     '/admin/route_groups.html': ['地图模式', '维护地图模式中的路线组、代表轨迹和路线介绍'],
+    '/admin/music.html': ['背景音乐', '管理 3D 轨迹视频的配乐'],
     '/admin/companions.html': ['与友同行', '查看同行房间、成员与活动记录'],
     '/admin/companion_detail.html': ['同行详情', '查看成员、实时位置和弹幕历史'],
     '/admin/feedbacks.html': ['反馈与纠错', '核查轨迹问题，回复处理结果'],

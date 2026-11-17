@@ -759,3 +759,6 @@ CREATE TABLE IF NOT EXISTS companion_history_removals (
  removed_at DATETIME(6) NOT NULL,
  PRIMARY KEY(session_id,user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='同行记录展示移除状态';
+
+-- Background music catalog; content-addressed media live under LogDir/music.
+CREATE TABLE IF NOT EXISTS background_music (id VARCHAR(32) NOT NULL PRIMARY KEY, revision BIGINT NOT NULL, payload LONGTEXT NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

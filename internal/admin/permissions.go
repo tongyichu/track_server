@@ -44,6 +44,8 @@ func requestPermission(c *app.RequestContext) (string, bool) {
 	}
 	parts := strings.Split(route, "/")
 	switch parts[0] {
+	case "music":
+		return "music", write
 	case "realtime":
 		return "realtime", write
 	case "announcements":

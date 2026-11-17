@@ -153,6 +153,7 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	g.GET("/regions.html", serveAdminPage(m.Auth, "static/regions.html"))
 	g.GET("/route_groups.html", serveAdminPage(m.Auth, "static/route_groups.html"))
 	g.GET("/track_submissions.html", serveAdminPage(m.Auth, "static/track_submissions.html"))
+	g.GET("/music.html", serveAdminPage(m.Auth, "static/music.html"))
 	g.GET("/companions.html", serveAdminPage(m.Auth, "static/companions.html"))
 	g.GET("/companion_detail.html", serveAdminPage(m.Auth, "static/companion_detail.html"))
 	g.GET("/feedbacks.html", serveAdminPage(m.Auth, "static/feedbacks.html"))
@@ -175,6 +176,10 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 
 	// 鉴权 API
 	api := g.Group("/api", m.Auth.AuthMiddleware())
+	api.GET("/music", m.Handler.music.List)
+	api.POST("/music", m.Handler.music.Save)
+	api.PUT("/music/:music_id", m.Handler.music.Save)
+	api.GET("/music/:music_id/:kind", m.Handler.music.Asset)
 	api.GET("/realtime/summary", m.Handler.RealtimeSummary)
 	api.GET("/realtime/network", m.Handler.RealtimeNetwork)
 	api.GET("/realtime/network/room", m.Handler.RealtimeRoom)

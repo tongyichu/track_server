@@ -1,3 +1,15 @@
+# 3D 背景音乐目录与后台管理（2026-11-18）
+
+用户确认乐库方案并要求实施，之后明确客户端先不安装、服务端可以部署。本轮服务端基于main@0d4756d，工作树全部变更均为该乐库及配套文档，无混杂用户修改。已fetch确认无远端新提交；按android-track-release服务端流程提交推送后构建镜像，生产结果以执行回执为准，不发布/安装/提交客户端。
+
+新增MusicTrack、MusicRepository三实现和MusicService，background_music表/集合含字符串id、revision CAS及JSON资料，MySQL表自动初始化失败禁用乐库，不回退内存目录；媒体以SHA落LogDir/music持久卷，不进入通用static。MP3校验帧并解析时长，音频30MiB、1秒至20分钟；JPEG/PNG封面5MiB/2048px，转JPEG。运营精选最多500项，按排序及id稳定输出。写入来源/许可/必要署名后才能上架，源文件哈希/时长不信任表单；媒体保存失败不返回新链接，CAS冲突409，旧文件暂保留无GC。
+
+JWT GET /api/v1/music及/:music_id/:kind只读已上架当前SHA资源，独立admin_session GET/POST /admin/api/music、PUT /:music_id及GET资源供后台含草稿查看。music独立权限、同源审计、导航、页面、中文动作映射接齐；已有操作员不自动授予。后台紧凑列表与编辑dialog、单曲试听、下架/上架/排序和授权资料，取消/超时/旧响应隔离。初始空库，无外部歌曲采购、下载或版权假设。
+
+协议docs/api/music.md和README/route-index/admin-routes、契约/流程/后台说明同步；现有AGENTS权限、资源、仓储三实现及发布边界适用，无需改政策。go build ./...及四个JS静态语法检查通过，未运行测试或做真实音频上传/UI验收。客户端已实现乐库/下载/试听/静音及本地视频混音，Debug构建通过，用户要求不安装；对应交接在Android仓库。请勿把空目录当作已预置歌曲，也勿把构建通过描述为试听/导出已实测。
+
+原交接如下：
+
 # 同行多轨迹静态封面四图与版本更新（2026-11-17）
 
 配合客户端同行记录通栏4:3布局及多轨迹预览生成，用户额外明确1:1也需生成/上传。Session/History新增cover_preview，复用TrackPreviewImages四字段并增加source_version；四个URL完整合法、版本为64位小写hash且提供expected_cover_source_version时才能由已结束房间最终房主单独PUT原update接口，禁止与统计字段混用。source_version为客户端渲染输入指纹，不声称服务端核验几何。注入已有AccountRestrictionService限制封面写入，读取及此前历史移除语义不改。
