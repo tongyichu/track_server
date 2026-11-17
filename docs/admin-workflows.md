@@ -405,3 +405,5 @@ announcements.html 为独立模块，复用 shell/ui/Tabler 和服务端权限�
 乐库目录与资源通过MusicService统一读取，MySQL/Mongo/memory目录保持revision CAS语义；媒体写LogDir/music并由独立JWT/admin资源接口鉴权，不进入通用static。后台精简录入、卡片拖动排序与分区上下架，App按需下载并本地配乐。完整入口与边界见[背景音乐协议](api/music.md)。
 
 音乐来源同时支持上传MP3和保存公网MP3链接，后台填写链接后用原生播放器直接试听、自动读时长；服务端保存时仅HEAD/有界Range轻量探测，不下载整首或落盘。完整外链、版本及客户端无凭据读取边界见[外链音乐](api/music.md#外链轻量校验与网页试听)。
+
+音乐编辑支持“起播时间（秒）”及“从这里试听”，总时长外链需先试听读取，字段start_offset_ms默认0；细节见[起播时间](api/music.md#起播时间)。

@@ -168,6 +168,15 @@ func (s *MusicService) Save(ctx context.Context, v models.MusicTrack, audio, cov
 	if v.AudioSHA == "" && v.AudioLink == "" {
 		return v, fmt.Errorf("%w: 请上传MP3音频", ErrMusicInput)
 	}
+	if v.StartOffsetMS < 0 || v.StartOffsetMS >= 1200000 {
+		return v, fmt.Errorf("%w: 起播时间应在0秒至20分钟之间", ErrMusicInput)
+	}
+	if v.StartOffsetMS > 0 && v.DurationMS == 0 {
+		return v, fmt.Errorf("%w: 请先试听读取音乐时长，再设置起播时间", ErrMusicInput)
+	}
+	if v.DurationMS > 0 && v.StartOffsetMS >= v.DurationMS {
+		return v, fmt.Errorf("%w: 起播时间必须小于音乐时长", ErrMusicInput)
+	}
 	if len(cover) > 0 {
 		cfg, _, e := image.DecodeConfig(bytes.NewReader(cover))
 		if e != nil || cfg.Width < 1 || cfg.Height < 1 || cfg.Width > 2048 || cfg.Height > 2048 {

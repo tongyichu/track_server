@@ -19,7 +19,22 @@
   async function request(url, options) { const response=await fetch(url,options); const data=await response.json().catch(()=>({})); if(!response.ok) throw new Error(data.error || '读取失败（'+response.status+'）'); return data.data; }
   const previewBox=document.getElementById('musicPreviewBox'), previewRoot=document.getElementById('musicPreviewPlayer');
   const previewState=document.getElementById('musicPreviewState');
-  let preview=null, previewObjectURL=null, previewVersion=0;
+  let preview=null, previewObjectURL=null, previewVersion=0, previewNeedsStart=true;
+  const startInput=form.elements.start_seconds;
+  function startSeconds() { return Number(startInput.value || 0); }
+  function seekPreview(player) {
+    const start=startSeconds();
+    if(!Number.isFinite(start)||start<0||start>=1200){previewState.textContent='请填写有效的起播时间。';return false;}
+    if(Number.isFinite(player.duration)&&start>=player.duration){previewState.textContent='起播时间必须小于音乐时长。';return false;}
+    if(player.readyState>0){try{player.currentTime=start;previewNeedsStart=false;}catch(_){previewState.textContent='此音频暂不支持定位，请检查直链。';return false;}}
+    return true;
+  }
+  startInput.addEventListener('input',()=>{startInput.setCustomValidity('');previewNeedsStart=true;});
+  document.getElementById('musicPreviewStart').onclick=()=>{
+    if(!preview)showPreview();if(!preview)return;
+    previewNeedsStart=true;if(!seekPreview(preview))return;
+    const player=preview, run=previewVersion;player.play().catch(()=>{if(run===previewVersion&&preview===player)previewState.textContent='暂时无法试听，请检查音频是否可播放。';});
+  };
   function stopPreview() {
     previewVersion++;
     if(preview){preview.pause();preview.removeAttribute('src');preview.load();preview.remove();preview=null;}
@@ -27,7 +42,7 @@
     previewBox.hidden=true;
   }
   function showPreview() {
-    stopPreview(); const run=previewVersion;
+    stopPreview();startInput.setCustomValidity('');previewNeedsStart=true;const run=previewVersion;
     let url='';
     if(form.elements.audio_mode.value==='link') {
       const raw=form.elements.audio_link.value.trim(); if(!raw)return;
@@ -45,8 +60,11 @@
       if(run!==previewVersion)return;
       const duration=player.duration;
       if(Number.isFinite(duration)&&duration>=1&&duration<=1200&&form.elements.audio_mode.value==='link')form.elements.duration_seconds.value=String(Math.round(duration*1000)/1000);
+      if(previewNeedsStart&&!seekPreview(player)){player.pause();return;}
       if(Number.isFinite(duration)&&duration>0)previewState.textContent='时长 '+Math.floor(duration/60)+':'+String(Math.floor(duration)%60).padStart(2,'0')+'，点击播放确认声音。';
     });
+    player.addEventListener('play',()=>{if(run===previewVersion&&previewNeedsStart&&!seekPreview(player))player.pause();});
+    player.addEventListener('ended',()=>{if(run===previewVersion){previewNeedsStart=true;}});
     player.addEventListener('playing',()=>{if(run===previewVersion){previewState.textContent='正在播放，可以确认声音后保存。';body.querySelectorAll('audio').forEach(other=>other.pause());}});
     player.addEventListener('error',()=>{if(run===previewVersion)previewState.textContent='暂时无法播放，请检查直链是否有效或被原站限制。';});
   }
@@ -60,8 +78,8 @@
     showPreview();
   }
   form.elements.audio_mode.addEventListener('change',audioMode);
-  form.elements.audio_link.addEventListener('input',()=>{form.elements.duration_seconds.value='';showPreview();});
-  form.elements.audio.addEventListener('change',showPreview);
+  form.elements.audio_link.addEventListener('input',()=>{startInput.value='0';form.elements.duration_seconds.value='';showPreview();});
+  form.elements.audio.addEventListener('change',()=>{startInput.value='0';form.elements.duration_seconds.value='';showPreview();});
   modal.addEventListener('close',stopPreview);
   function edit(item) {
     if(!writable())return;current=item; body.querySelectorAll('audio').forEach(player=>player.pause());form.reset();saveError.hidden=true;
@@ -70,6 +88,7 @@
     form.elements.audio_mode.value=item&&item.audio_link?'link':'upload';
     form.elements.audio_link.value=item&&item.audio_link||'';
     form.elements.duration_seconds.value=item&&item.audio_link&&item.duration_ms>0?String(item.duration_ms/1000):'';
+    startInput.value=String((item&&item.start_offset_ms||0)/1000);startInput.setCustomValidity('');
     audioMode();
     modal.showModal();
   }
@@ -96,10 +115,14 @@
         else {cover.classList.add('music-cover-placeholder');cover.append(icon('music'));}
         const info=text('div','','music-info');info.append(text('strong',item.name),text('small',item.artist));
         const duration=item.duration_ms>0?Math.floor(item.duration_ms/60000)+':'+String(Math.floor(item.duration_ms/1000)%60).padStart(2,'0'):'时长未知';
-        info.append(text('small',duration+(item.audio_bytes>0?' · '+(item.audio_bytes/1048576).toFixed(1)+' MB':''),'music-meta'));
+        info.append(text('small',duration+((item.start_offset_ms||0)>0?' · 从 '+(item.start_offset_ms/1000)+' 秒起播':'')+(item.audio_bytes>0?' · '+(item.audio_bytes/1048576).toFixed(1)+' MB':''),'music-meta'));
         head.append(cover,info);inner.append(head);
         const audio=document.createElement('audio');audio.controls=true;audio.preload='none';audio.src=item.audio_url;audio.className='music-preview';audio.setAttribute('aria-label','试听 '+item.name);
-        audio.addEventListener('play',()=>body.querySelectorAll('audio').forEach(other=>{if(other!==audio)other.pause();}));inner.append(audio);
+        let firstPlay=true;
+        function seekCard(){if(firstPlay&&audio.readyState>0){const start=(item.start_offset_ms||0)/1000;if(Number.isFinite(audio.duration)&&start>=audio.duration){audio.pause();return;}try{audio.currentTime=start;firstPlay=false;}catch(_){audio.pause();}}}
+        audio.addEventListener('loadedmetadata',seekCard);
+        audio.addEventListener('ended',()=>{firstPlay=true;});
+        audio.addEventListener('play',()=>{seekCard();body.querySelectorAll('audio').forEach(other=>{if(other!==audio)other.pause();});});inner.append(audio);
         if(AdminAccess.can('music',true)) {
           const actions=text('div','','music-tile-actions');
           const handle=text('button','拖动','btn btn-sm btn-ghost-secondary music-drag');handle.type='button';handle.dataset.drag=item.id;handle.title='拖动调整顺序或切换上架分区';
@@ -158,9 +181,10 @@
     finally{clearTimeout(timeout);layoutController=null;arranging=false;controls();}
   }
   form.addEventListener('submit',async e=>{
-    e.preventDefault();if(!writable())return;saving=true;save.disabled=true;saveError.hidden=true;controls();
+    e.preventDefault();if(!writable())return;const start=startSeconds(),duration=preview&&preview.duration;if(!Number.isFinite(start)||start<0||start>=1200||(Number.isFinite(duration)&&start>=duration)){startInput.setCustomValidity('起播时间必须小于音乐时长。');startInput.reportValidity();return;}saving=true;save.disabled=true;saveError.hidden=true;controls();
     const item={...(current||{}),id:current?current.id:'',revision:current?current.revision:0,published:current?current.published:false,sort_order:current?current.sort_order:Math.min(9999,Math.max(-1,...items.map(v=>v.sort_order))+1)};['name','artist'].forEach(key=>{item[key]=form.elements[key].value.trim();});
     const linked=form.elements.audio_mode.value==='link';item.audio_link=linked?form.elements.audio_link.value.trim():'';
+    item.start_offset_ms=Math.round(start*1000);
     item.duration_ms=linked?Math.round(Number(form.elements.duration_seconds.value||0)*1000):0;
     const data=new FormData();data.set('metadata',JSON.stringify(item));['audio','cover'].forEach(key=>{const f=form.elements[key].files[0];if(f&&(key!=='audio'||!linked))data.set(key,f);});
     saveController=new AbortController();const timeout=setTimeout(()=>saveController.abort(),60000);

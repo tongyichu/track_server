@@ -8,6 +8,7 @@
 <label id="musicFileField">音频文件<input name="audio" type="file" accept=".mp3,audio/mpeg" class="form-control"><small class="hint">MP3，最大30MB；编辑时留空保留原文件。</small></label>
 <label id="musicLinkField" hidden>音频链接<input name="audio_link" type="url" maxlength="4096" placeholder="https://…/music.mp3" class="form-control"><small class="hint">填写公开可播放的MP3直链，保留原链接，不下载到服务端。</small></label>
 <input name="duration_seconds" type="hidden">
+<div class="music-wide music-start"><label>起播时间（秒）<input name="start_seconds" type="number" min="0" max="1199.999" step="0.001" value="0" required class="form-control"></label><button id="musicPreviewStart" type="button" class="btn btn-outline-secondary">从这里试听</button><small class="hint">默认0秒，循环时也从这里开始。</small></div>
 <div id="musicPreviewBox" class="music-wide" hidden><div id="musicPreviewPlayer"></div><small id="musicPreviewState" class="hint" role="status">点击播放确认声音。</small></div>
 </div><label class="music-wide">封面（选填）<input name="cover" type="file" accept="image/jpeg,image/png" class="form-control"><small class="hint">PNG/JPEG，最大5MB、2048像素。</small></label>
 </div><p id="musicSaveError" class="error" role="alert" hidden></p><div class="text-end"><button id="musicSave" class="btn btn-primary" data-admin-write="music">保存</button></div></form></dialog>
