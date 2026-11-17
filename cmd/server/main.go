@@ -376,6 +376,7 @@ func main() {
 	appReleaseSvc.SetChangelogRepository(appReleaseChangelogRepo)
 	feedbackSvc := service.NewFeedbackService(feedbackRepo, filepath.Join(cfg.LogDir, "feedback", "images"), trackRepo)
 	companionSvc := service.NewCompanionService(companionRepo, userRepo)
+	companionSvc.SetRestrictions(accountRestrictionSvc)
 	companionSvc.SetTrackRepository(trackRepo)
 	companionSvc.SetTrackService(trackSvc)
 	clientBrokerURL := cfg.EMQXClientBrokerURL

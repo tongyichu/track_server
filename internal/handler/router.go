@@ -211,6 +211,7 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 	auth.POST("/companion/session/:session_id/track/complete", companionHandler.CompleteMemberTrack)
 	auth.POST("/companion/session/:session_id/track/previews", companionHandler.UpdateTrackPreviews)
 	auth.GET("/companion/session/:session_id/result", companionHandler.Result)
+	auth.GET("/companion/session/:session_id/cover/:variant", companionHandler.CoverPreview)
 	auth.GET("/companion/session/:session_id/result/:user_id/points", companionHandler.ResultPoints)
 	auth.GET("/companion/session/:session_id/result/:user_id/track", companionHandler.ResultTrack)
 	auth.PUT("/companion/session/:session_id/update", companionHandler.UpdateSessionStats)

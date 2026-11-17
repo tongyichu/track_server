@@ -395,6 +395,7 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 				total_distance DOUBLE NOT NULL DEFAULT 0 COMMENT '同行总里程，单位米',
 				total_duration BIGINT NOT NULL DEFAULT 0 COMMENT '同行总耗时，单位秒',
 				track_screenshot_url VARCHAR(255) NOT NULL DEFAULT '' COMMENT '同行轨迹截图文件在对象存储中的地址',
+				cover_preview JSON NULL COMMENT '同行静态预览四图及源版本',
 				actual_participant_count BIGINT NOT NULL DEFAULT 0 COMMENT '实际参与同行人数',
 				started_at DATETIME(6) NOT NULL,
 				ended_at DATETIME(6) NULL,
@@ -643,6 +644,9 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 	if err := ensureMySQLCompanionSessionStatsColumns(ctx, db); err != nil {
+		return err
+	}
+	if err := ensureMySQLCompanionCoverColumn(ctx, db); err != nil {
 		return err
 	}
 	if err := ensureMySQLCompanionSessionEndAuditColumns(ctx, db); err != nil {

@@ -59,13 +59,18 @@ const (
 	CompanionPresenceStatusOffline CompanionPresenceStatus = "offline"
 )
 
+type CompanionCoverPreview struct {
+	TrackPreviewImages `bson:",inline"`
+	SourceVersion      string `json:"source_version,omitempty" bson:"source_version,omitempty"`
+}
+
 // CompanionSession 是一场“同行”控制面的核心会话对象。
 //
 // 设计说明：
 // - session_id 是对外暴露的唯一业务 ID；
 // - join_token 用于其他用户加入同行；
 // - status 只区分 active / ended；
-// - owner_user_id 是会话发起人，也是默认的结束权限拥有者。
+// - owner_user_id 是当前房主，结束后固定为最终房主。
 type CompanionSession struct {
 	SessionID              string                     `json:"session_id" bson:"session_id"`
 	OwnerUserID            int64                      `json:"owner_user_id" bson:"owner_user_id"`
@@ -80,6 +85,7 @@ type CompanionSession struct {
 	TotalDistance          float64                    `json:"total_distance" bson:"total_distance"`
 	TotalDuration          int64                      `json:"total_duration" bson:"total_duration"`
 	TrackScreenshotURL     string                     `json:"track_screenshot_url" bson:"track_screenshot_url"`
+	CoverPreview           CompanionCoverPreview      `json:"cover_preview" bson:"cover_preview"`
 	ActualParticipantCount int64                      `json:"actual_participant_count" bson:"actual_participant_count"`
 	StartedAt              time.Time                  `json:"started_at" bson:"started_at"`
 	ExpiresAt              time.Time                  `json:"expires_at" bson:"-"`
@@ -229,6 +235,7 @@ type CompanionHistoryItem struct {
 	TotalDistance          float64                       `json:"total_distance"`
 	TotalDuration          int64                         `json:"total_duration"`
 	TrackScreenshotURL     string                        `json:"track_screenshot_url"`
+	CoverPreview           CompanionCoverPreview         `json:"cover_preview"`
 	ActualParticipantCount int64                         `json:"actual_participant_count"`
 	Status                 CompanionSessionStatus        `json:"status"`
 	JoinToken              string                        `json:"join_token,omitempty"`

@@ -117,10 +117,11 @@
 | 结束同行会话 | POST | `/companion/session/:session_id/end` | 是 | [companion.md](companion.md#22-结束同行会话) |
 | 同行本人轨迹批次/完成/补图 | POST | `/companion/session/:session_id/track/batch`, `/companion/session/:session_id/track/complete`, `/companion/session/:session_id/track/previews` | 是，参与成员且仅本人写入；账号限制 | [companion.md](companion.md#同行个人轨迹结算与回放) |
 | 同行结算状态 | GET | `/companion/session/:session_id/result` | 是，参与过的成员 | [companion.md](companion.md#同行个人轨迹结算与回放) |
+| 同行1:1/4:3各日夜四种静态封面 | GET | `/companion/session/:session_id/cover/:variant?v=<source_version>` | JWT，本场参与者 | [companion.md](companion.md#同行静态封面) |
 | 同行成员轨迹点/详情 | GET | `/companion/session/:session_id/result/:user_id/points`, `/companion/session/:session_id/result/:user_id/track` | 是，参与过的成员 | [companion.md](companion.md#同行个人轨迹结算与回放) |
 | 踢出同行成员 | POST | `/companion/session/:session_id/members/:user_id/kick` | 是 | [companion.md](companion.md#221-踢出同行成员) |
 | 转移同行房主 | POST | `/companion/session/:session_id/members/:user_id/transfer-owner` | 是 | [companion.md](companion.md#转移房主) |
-| 更新已结束同行摘要 | PUT | `/companion/session/:session_id/update` | 是 | [companion.md](companion.md#222-更新已结束同行摘要owner) |
+| 更新已结束同行摘要 / 单独条件补写日夜封面 | PUT | `/companion/session/:session_id/update` | 是，最终房主；封面执行账号限制 | [companion.md](companion.md#222-更新已结束同行摘要owner) |
 | 上报同行关键事件 | POST | `/companion/session/:session_id/events` | 是 | [companion.md](companion.md#223-上报同行关键事件owner) |
 | 查询同行关键事件时间线 | GET | `/companion/session/:session_id/events` | 是 | [companion.md](companion.md#224-查询同行关键事件时间线owner) |
 | 当前用户参与过的同行记录列表 | GET | `/companion/session/history` | 是 | [companion.md](companion.md#23-当前用户参与过的同行记录列表) |

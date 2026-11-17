@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"strings"
 	"time"
@@ -35,8 +36,8 @@ func (r *MySQLCompanionRepository) CreateSession(ctx context.Context, session *m
 				session_id, owner_user_id, status, visibility, join_token,
 				title, track_type, locate_addr, max_members, danmaku_enabled,
 				total_distance, total_duration, track_screenshot_url, actual_participant_count, started_at, ended_at,
-				end_reason, end_source, end_operator_user_id, created_at, updated_at
-			) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+				end_reason, end_source, end_operator_user_id, created_at, updated_at, cover_preview
+			) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		session.SessionID,
 		session.OwnerUserID,
 		session.Status,
@@ -58,6 +59,7 @@ func (r *MySQLCompanionRepository) CreateSession(ctx context.Context, session *m
 		session.EndOperatorUserID,
 		session.CreatedAt,
 		session.UpdatedAt,
+		encodeCompanionCover(session.CoverPreview),
 	)
 	if err != nil {
 		var mysqlErr *mysql.MySQLError
@@ -750,7 +752,7 @@ func (r *MySQLCompanionRepository) ListEventsBySessionID(ctx context.Context, se
 }
 
 func companionSessionSelectSQL() string {
-	return `SELECT companion_sessions.session_id, companion_sessions.owner_user_id, companion_sessions.status, companion_sessions.visibility, companion_sessions.join_token, companion_sessions.title, companion_sessions.track_type, companion_sessions.locate_addr, companion_sessions.max_members, companion_sessions.danmaku_enabled, companion_sessions.total_distance, companion_sessions.total_duration, companion_sessions.track_screenshot_url, companion_sessions.actual_participant_count, companion_sessions.started_at, companion_sessions.ended_at, companion_sessions.end_reason, companion_sessions.end_source, companion_sessions.end_operator_user_id, companion_sessions.created_at, companion_sessions.updated_at FROM companion_sessions`
+	return `SELECT companion_sessions.session_id, companion_sessions.owner_user_id, companion_sessions.status, companion_sessions.visibility, companion_sessions.join_token, companion_sessions.title, companion_sessions.track_type, companion_sessions.locate_addr, companion_sessions.max_members, companion_sessions.danmaku_enabled, companion_sessions.total_distance, companion_sessions.total_duration, companion_sessions.track_screenshot_url, companion_sessions.actual_participant_count, companion_sessions.started_at, companion_sessions.ended_at, companion_sessions.end_reason, companion_sessions.end_source, companion_sessions.end_operator_user_id, companion_sessions.created_at, companion_sessions.updated_at, companion_sessions.cover_preview FROM companion_sessions`
 }
 
 func companionEventSelectSQL() string {
@@ -763,9 +765,15 @@ func scanCompanionSession(row companionSessionRowScanner) (*models.CompanionSess
 	var (
 		item    models.CompanionSession
 		endedAt sql.NullTime
+		cover   sql.NullString
 	)
-	if err := row.Scan(&item.SessionID, &item.OwnerUserID, &item.Status, &item.Visibility, &item.JoinToken, &item.Title, &item.TrackType, &item.LocateAddr, &item.MaxMembers, &item.DanmakuEnabled, &item.TotalDistance, &item.TotalDuration, &item.TrackScreenshotURL, &item.ActualParticipantCount, &item.StartedAt, &endedAt, &item.EndReason, &item.EndSource, &item.EndOperatorUserID, &item.CreatedAt, &item.UpdatedAt); err != nil {
+	if err := row.Scan(&item.SessionID, &item.OwnerUserID, &item.Status, &item.Visibility, &item.JoinToken, &item.Title, &item.TrackType, &item.LocateAddr, &item.MaxMembers, &item.DanmakuEnabled, &item.TotalDistance, &item.TotalDuration, &item.TrackScreenshotURL, &item.ActualParticipantCount, &item.StartedAt, &endedAt, &item.EndReason, &item.EndSource, &item.EndOperatorUserID, &item.CreatedAt, &item.UpdatedAt, &cover); err != nil {
 		return nil, err
+	}
+	if cover.Valid && cover.String != "" {
+		if err := json.Unmarshal([]byte(cover.String), &item.CoverPreview); err != nil {
+			return nil, err
+		}
 	}
 	if endedAt.Valid {
 		item.EndedAt = endedAt.Time

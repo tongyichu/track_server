@@ -151,6 +151,8 @@ Scheduler(companion_session_autoclose，每 10 分钟)
 ### 同行结束摘要更新
 owner 可在同行结束后调用 `PUT /api/v1/companion/session/:session_id/update` 补写 `locate_addr`、`total_distance`、`total_duration`、`track_screenshot_url`、`actual_participant_count`；该接口只允许 owner 操作 `status=ended` 的 session。`companion/session/history` 与 `companion/session/nearby` 都返回这些字段，其中截图响应应通过截图资源缓存改写为 `/api/v1/static/screenshots/...`。
 
+新房间封面由客户端基于多条正式轨迹按单人静态预览流程生成1:1/4:3各日夜四图，全部上传后独立PUT cover_preview/expected_cover_source_version，列表优先4:3；最终房主及账号限制校验后，CompanionCoverRepository在三种仓储以源版本条件写入，旧统计补写不覆盖封面。MySQL新增nullable JSON列并启动迁移。业务Session/历史响应只投影带版本的成员鉴权取图地址，GET cover接口按原参与资格及版本从OSS读取，不在列表或详情调用地图/AI；兼容track_screenshot_url继续读取旧图。封面不再取结算页实时地图截图，成员迟到同步可更新版本，已移除历史入口的参与者仍保留原读取权限。
+
 ### 同行关键事件时间线
 owner 可通过 `POST /api/v1/companion/session/:session_id/events` 上报成员离开、断线/重连、同行周知、关键点、风险提醒或自定义事件，并通过 `GET /api/v1/companion/session/:session_id/events` 按 `event_time,id` 游标查询。事件持久化在 `companion_events`，`client_event_id` 是同一 session 内的幂等键；单个 `session_id` 最多 100 条事件，达到上限后新事件返回 `companion event limit exceeded`，但重复 `client_event_id` 仍返回已有事件。调整事件类型、字段、上限、幂等或时间校验规则时，同步更新 `docs/api/companion.md` 与 `track_companion.md`。
 

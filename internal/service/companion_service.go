@@ -110,6 +110,7 @@ var companionEventTypes = map[string]struct{}{
 
 // CompanionService 实现“同行”控制面的业务逻辑。
 type CompanionService struct {
+	restrictions     *AccountRestrictionService
 	realtime         *RealtimeMonitor
 	messages         *MessageService
 	repo             repository.CompanionRepository
@@ -182,6 +183,10 @@ func NewCompanionService(repo repository.CompanionRepository, users repository.U
 			CredentialTTL: defaultCompanionMQTTTTL,
 		},
 	}
+}
+
+func (s *CompanionService) SetRestrictions(restrictions *AccountRestrictionService) {
+	s.restrictions = restrictions
 }
 
 // SetTrackRepository injects track repository for enforcing running-track/companion exclusivity.
@@ -268,11 +273,13 @@ type JoinCompanionSessionInput struct {
 
 // UpdateCompanionSessionStatsInput describes owner-updatable summary data after a session ends.
 type UpdateCompanionSessionStatsInput struct {
-	LocateAddr             *string  `json:"locate_addr"`
-	TotalDistance          *float64 `json:"total_distance"`
-	TotalDuration          *int64   `json:"total_duration"`
-	TrackScreenshotURL     *string  `json:"track_screenshot_url"`
-	ActualParticipantCount *int64   `json:"actual_participant_count"`
+	CoverPreview               *models.CompanionCoverPreview `json:"cover_preview"`
+	ExpectedCoverSourceVersion *string                       `json:"expected_cover_source_version"`
+	LocateAddr                 *string                       `json:"locate_addr"`
+	TotalDistance              *float64                      `json:"total_distance"`
+	TotalDuration              *int64                        `json:"total_duration"`
+	TrackScreenshotURL         *string                       `json:"track_screenshot_url"`
+	ActualParticipantCount     *int64                        `json:"actual_participant_count"`
 }
 
 // CreateCompanionEventInput describes one owner-reported key event in a companion session.
@@ -1464,7 +1471,7 @@ func (s *CompanionService) UpdateSessionStats(ctx context.Context, ownerUserID i
 	if sessionID == "" {
 		return nil, invalidArg("session_id is required")
 	}
-	if in.LocateAddr == nil && in.TotalDistance == nil && in.TotalDuration == nil && in.TrackScreenshotURL == nil && in.ActualParticipantCount == nil {
+	if in.LocateAddr == nil && in.TotalDistance == nil && in.TotalDuration == nil && in.TrackScreenshotURL == nil && in.ActualParticipantCount == nil && in.CoverPreview == nil {
 		return nil, invalidArg("nothing to update")
 	}
 	session, err := s.repo.FindSessionByID(ctx, sessionID)
@@ -1476,6 +1483,12 @@ func (s *CompanionService) UpdateSessionStats(ctx context.Context, ownerUserID i
 	}
 	if session.Status != models.CompanionSessionStatusEnded {
 		return nil, invalidArg("companion session is not ended")
+	}
+	if in.CoverPreview != nil {
+		if in.LocateAddr != nil || in.TotalDistance != nil || in.TotalDuration != nil || in.TrackScreenshotURL != nil || in.ActualParticipantCount != nil {
+			return nil, invalidArg("cover_preview must be updated separately from summary fields")
+		}
+		return s.saveCompanionCover(ctx, session, in.ExpectedCoverSourceVersion, *in.CoverPreview)
 	}
 	if in.LocateAddr != nil {
 		session.LocateAddr = strings.TrimSpace(*in.LocateAddr)
@@ -1875,6 +1888,7 @@ func companionSessionForResponse(session *models.CompanionSession) *models.Compa
 	}
 	item := *session
 	item.ExpiresAt = companionSessionExpiresAt(session)
+	item.CoverPreview = companionCoverURLs(session)
 	return &item
 }
 
@@ -1891,10 +1905,16 @@ func companionScreenshotCacheKey(sessionID string) string {
 }
 
 func (s *CompanionService) rewriteCompanionScreenshotURL(ctx context.Context, userID int64, session *models.CompanionSession) string {
-	if session == nil || strings.TrimSpace(session.TrackScreenshotURL) == "" {
+	if session == nil {
 		return ""
 	}
+	if session.CoverPreview.LandscapeDayURL != "" {
+		return companionCoverURLs(session).LandscapeDayURL
+	}
 	src := strings.TrimSpace(session.TrackScreenshotURL)
+	if src == "" {
+		return ""
+	}
 	if strings.HasPrefix(src, "/api/v1/static/") || s.screenshotCache == nil {
 		return src
 	}
@@ -1970,6 +1990,7 @@ func (s *CompanionService) buildHistoryItem(ctx context.Context, session *models
 		TotalDistance:          clone.TotalDistance,
 		TotalDuration:          clone.TotalDuration,
 		TrackScreenshotURL:     s.rewriteCompanionScreenshotURL(ctx, clone.OwnerUserID, &clone),
+		CoverPreview:           companionCoverURLs(&clone),
 		ActualParticipantCount: clone.ActualParticipantCount,
 		Status:                 clone.Status,
 		Participants:           participants,

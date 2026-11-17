@@ -1,3 +1,17 @@
+# 同行多轨迹静态封面四图与版本更新（2026-11-17）
+
+配合客户端同行记录通栏4:3布局及多轨迹预览生成，用户额外明确1:1也需生成/上传。Session/History新增cover_preview，复用TrackPreviewImages四字段并增加source_version；四个URL完整合法、版本为64位小写hash且提供expected_cover_source_version时才能由已结束房间最终房主单独PUT原update接口，禁止与统计字段混用。source_version为客户端渲染输入指纹，不声称服务端核验几何。注入已有AccountRestrictionService限制封面写入，读取及此前历史移除语义不改。
+
+新增CompanionCoverRepository的MySQL/Mongo/内存实现，CAS按房间、owner、ended及expected/incoming版本写入，支持同版本幂等，409返回companion_cover_source_changed。MySQL companion_sessions新增nullable cover_preview JSON并在启动迁移及mysql.sql同步，创建/读取支持，普通UpdateSession不写此列；内存普通更新保留当前cover，避免旧统计补写覆盖新图。Mongo新写方法直接操作collection，其余同行基础stub边界保留。
+
+新增JWT GET /companion/session/:session_id/cover/:variant?v=source_version，四个variant为square_day/square_night/landscape_day/landscape_night。按原参与资格、已结束房间和当前版本取图，缓存只从OSS按需下载，private/max-age=86400及nosniff，业务Session全投影与历史只返回鉴权URL、不暴露原始URL、不在列表取地图供应商/AI/GPS。历史track_screenshot_url兼容字段优先landscape_day；旧截图保留，移除列表展示不撤销参与者读取资格。API、路由、流程及方案已同步。
+
+客户端使用轨迹详情共享生成器绘制多成员独立颜色与分段，最终房主最后绘制且仅其有首尾marker，类型徽标优先避让房主。1:1/4:3各日夜四图全部上传才条件补写；成员晚同步更新源版本，缓存及回执支持重试，退出/暂停取消，旧Server/历史截图兼容。默认不主动全站重绘。
+
+验证：go build ./...、客户端:app:assembleDebug及两端git diff --check通过；按AGENTS未运行单元/接口/数据库/UI测试，四图渲染与并发/权限/迁移实际效果待人工验收。本轮未提交推送、部署或安装；上线需部署Server并安装客户端。既有鉴权、三仓储、坐标、资产及验证规则足够，无需改AGENTS。
+
+原交接如下：
+
 # 同行记录展示删除与确认范围（2026-11-17）
 
 用户明确结束时房主可让同行记录从所有成员历史中消失、成员仅隐藏本人，并要求房主二次确认影响面。新增JWT DELETE /companion/session/:session_id/history?scope=all|self，service仅接受明确scope，仓储校验原参与者及ended状态，最终房主仅all、成员仅self；不会自动扩大确认范围。非成员/成员all为403、房主self/未结束为409并带companion_history_scope_changed，幂等成功保留首次时间。删除属于取消展示，AccountRestrictionMiddleware按已有语义放行，身份和范围仍强校验。

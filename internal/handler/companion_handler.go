@@ -212,6 +212,10 @@ func (h *CompanionHandler) UpdateSessionStats(ctx context.Context, c *app.Reques
 		return
 	}
 	session, err := h.svc.UpdateSessionStats(ctx, userID, c.Param("session_id"), req)
+	if req.CoverPreview != nil && errors.Is(err, repository.ErrConflict) {
+		c.JSON(http.StatusConflict, utils.H{"error": "companion cover source changed", "error_code": "companion_cover_source_changed"})
+		return
+	}
 	if err != nil {
 		h.writeError(c, err)
 		return
@@ -512,7 +516,10 @@ func (h *CompanionHandler) IngestMQTTDanmaku(ctx context.Context, c *app.Request
 
 func (h *CompanionHandler) writeError(c *app.RequestContext, err error) {
 	var iae *service.InvalidArgumentError
+	var blocked *service.AccountRestrictionBlockedError
 	switch {
+	case errors.As(err, &blocked):
+		c.JSON(http.StatusForbidden, utils.H{"error": "account restricted", "message": blocked.Message, "data": blocked.Restriction})
 	case errors.As(err, &iae):
 		c.JSON(http.StatusBadRequest, utils.H{"error": iae.Error()})
 	case errors.Is(err, repository.ErrNotFound):

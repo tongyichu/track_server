@@ -385,6 +385,22 @@ MySQL 使用事务锁定会话及两名 joined 成员并更新房主/角色，�
 
 ## 22.2 更新已结束同行摘要（owner）
 
+### 同行静态封面
+
+新增独立封面补写，请与普通统计字段分开发送：
+
+```json
+{"cover_preview":{"square_day_url":"https://<oss-host>/previews/square_day.webp","square_night_url":"https://<oss-host>/previews/square_night.webp","landscape_day_url":"https://<oss-host>/previews/landscape_day.webp","landscape_night_url":"https://<oss-host>/previews/landscape_night.webp","source_version":"<64位小写SHA256>"},"expected_cover_source_version":""}
+```
+
+路径仍为`PUT /companion/session/:session_id/update`，仅允许已结束房间的最终房主；封面上传复用账号限制。生成并上传1:1的1024×1024、4:3的1024×768，各日间/夜间共四张，四个URL均必填且合法；按轨迹详情预览风格绘制逐成员颜色、分段不合并连线，仅标记房主首尾，徽标优先避让房主。四图全部上传后才更新此对象，列表优先4:3日夜图。source_version是客户端对渲染输入及样式/环境生成的指纹，不视为服务端几何校验。
+
+首次expected_cover_source_version传空字符串，后续透传上次云端版本，字段必须存在。MySQL/Mongo/内存均条件写入独立cover_preview，旧统计UpdateSession不得覆盖该字段。当前源版本变化返回409和`error_code=companion_cover_source_changed`，客户端重新读取最新成员及封面数据后处理；同源重复提交幂等。无效版本/URL或与统计字段混用返回400，非房主403，房间未结束400。MySQL通过启动迁移新增companion_sessions.cover_preview JSON列，旧数据为空，不改个人轨迹或成员资格。
+
+Session及同行历史item响应包含cover_preview的上述四图字段及source_version；尚无图为{}。所有Session业务投影均把原始URL改写为`GET /companion/session/:session_id/cover/:variant?v=<source_version>`，variant为square_day/square_night/landscape_day/landscape_night，需要JWT且验证本场参与资格、房间已结束和源版本，旧版本/缺图404、非成员403。图片请求才从OSS按需落本地缓存，返回private/max-age=86400、nosniff；列表/详情投影不调用地图供应商或生成图片。移除同行记录展示不撤销原参与者的结算/封面读取资格。
+
+历史列表的track_screenshot_url兼容字段优先返回新封面的day地址；没有新封面时保持旧截图逻辑。客户端旧Server未下发cover_preview时不启动新生成，旧图仍可按4:3容器完整展示。房主打开历史结算且取得正式轨迹后可生成新封面，其他成员复用云端日夜图；不在列表逐项拉取GPS或自动批量重绘历史图片。
+
 owner 在同行结束后补写本次同行的汇总数据。该接口只允许 session owner 调用，且仅允许更新 `status=ended` 的会话。
 
 **需要认证**
@@ -691,7 +707,8 @@ Authorization: Bearer <token>
 | `data.items[].duration_seconds` | int64 | 同行总耗时（秒）：`status=ended` 取 `ended_at - started_at`；`status=active` 取 `now - started_at`。 |
 | `data.items[].total_distance` | number | owner 通过更新接口补写的本次同行总里程，单位米；未补写时为 `0`。 |
 | `data.items[].total_duration` | int64 | owner 通过更新接口补写的本次同行总耗时，单位秒；未补写时为 `0`。 |
-| `data.items[].track_screenshot_url` | string | owner 通过更新接口补写的轨迹截图，返回服务端本地静态下载链接 `/api/v1/static/screenshots/...`；未补写时为空字符串。 |
+| `data.items[].track_screenshot_url` | string | 兼容字段：有新封面时返回其day鉴权地址，否则沿用owner补写的旧截图静态地址；无图为空字符串。 |
+| `data.items[].cover_preview` | object | 1:1/4:3各日夜四图的成员鉴权地址及source_version；缺图为{}，客户端列表优先landscape日夜图。 |
 | `data.items[].actual_participant_count` | int64 | owner 通过更新接口补写的实际参与同行人数；未补写时为 `0`。 |
 | `data.items[].status` | string | 同行状态：`active` / `ended`。 |
 | `data.items[].join_token` | string | 加入口令；仅 `status=active` 时返回，可用于邀请他人加入；`ended` 时不返回此字段。 |

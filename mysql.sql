@@ -515,6 +515,7 @@ CREATE TABLE `companion_sessions` (
 	                                     `total_distance` DOUBLE NOT NULL DEFAULT 0 COMMENT '同行总里程，单位米',
 	                                     `total_duration` BIGINT NOT NULL DEFAULT 0 COMMENT '同行总耗时，单位秒',
 	                                     `track_screenshot_url` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '同行轨迹截图文件在对象存储中的地址',
+	                                     `cover_preview` JSON DEFAULT NULL COMMENT '同行静态预览四图及源版本',
 	                                     `actual_participant_count` BIGINT NOT NULL DEFAULT 0 COMMENT '实际参与同行人数',
 	                                     `started_at` DATETIME(6) NOT NULL COMMENT '开始时间',
 	                                     `ended_at` DATETIME(6) DEFAULT NULL COMMENT '结束时间',

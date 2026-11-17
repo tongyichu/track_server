@@ -79,6 +79,7 @@ func (r *InMemoryCompanionRepository) UpdateSession(_ context.Context, session *
 	}
 	clone := *session
 	clone.UpdatedAt = time.Now()
+	clone.CoverPreview = r.sessions[session.SessionID].CoverPreview
 	r.sessions[clone.SessionID] = &clone
 	if clone.JoinToken != "" {
 		r.sessionByToken[clone.JoinToken] = clone.SessionID
