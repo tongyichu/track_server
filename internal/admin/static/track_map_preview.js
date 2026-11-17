@@ -16,17 +16,29 @@
   }
 
   function loadAMapSDK(config) {
-    if (window.AMap) return Promise.resolve(window.AMap);
+    if (window.AMap && typeof window.AMap.Map === 'function') return Promise.resolve(window.AMap);
     if (sdkPromise) return sdkPromise;
-    sdkPromise = new Promise((resolve, reject) => {
+    const attempt = new Promise((resolve, reject) => {
       window._AMapSecurityConfig = { serviceHost: window.location.origin + config.service_host };
       const script = document.createElement('script');
+      let settled = false;
+      const timeout = setTimeout(() => finish(new Error('高德地图加载超时，请恢复网络后重试')), 15000);
+      function finish(error) {
+        if (settled) return;
+        settled = true; clearTimeout(timeout);
+        script.onload = null; script.onerror = null;
+        if (error) { script.remove(); reject(error); } else resolve(window.AMap);
+      }
+      script.async = true;
       script.src = 'https://webapi.amap.com/maps?v=2.0&key=' + encodeURIComponent(config.key) + '&plugin=AMap.Scale';
-      script.onload = () => (window.AMap ? resolve(window.AMap) : reject(new Error('高德地图 SDK 未就绪')));
-      script.onerror = () => reject(new Error('高德地图 SDK 加载失败'));
+      script.onload = () => finish(window.AMap && typeof window.AMap.Map === 'function' ? null : new Error('高德地图 SDK 未就绪，请重试'));
+      script.onerror = () => finish(new Error('高德地图脚本未加载，请恢复网络后重试'));
       document.head.appendChild(script);
     });
-    return sdkPromise;
+    sdkPromise = attempt;
+    // A transient network failure must not poison every later map opened on this page.
+    attempt.catch(() => { if (sdkPromise === attempt) sdkPromise = null; });
+    return attempt;
   }
 
   function create(geo, options) {
@@ -36,7 +48,8 @@
     const heading = document.createElement('div'); heading.className = 'admin-track-candidates-heading';
     const title = document.createElement('h3'); title.textContent = '轨迹地图';
     const retry = document.createElement('button'); retry.type = 'button'; retry.className = 'btn btn-sm btn-outline-secondary'; retry.textContent = '重试预览'; retry.hidden = true;
-    heading.append(title, retry);
+    const retryMap = document.createElement('button'); retryMap.type = 'button'; retryMap.className = 'btn btn-sm btn-outline-secondary'; retryMap.textContent = '重试地图'; retryMap.hidden = true;
+    heading.append(title, retryMap, retry);
     const body = document.createElement('div'); body.className = 'admin-track-map-body';
     const note = document.createElement('p'); note.className = 'text-secondary mb-2';
     const canvas = document.createElement('div'); canvas.className = 'admin-track-map-canvas';
@@ -48,6 +61,7 @@
 
     const controller = new AbortController();
     let disposed = false, map = null, amap = null, overlays = [], variants = null;
+    let mapLoading = false;
     let selected = options.coordinateSystem || '', changed = false, fitted = false, fitTimer = null, observer = null;
     let currentSpot = options.primaryScenicSpot || null, expectedSpotID = options.scenicSpotID;
     let placeSearch = null, selectionSequence = 0, lookupTimer = null, clickTimer = null, assigning = false;
@@ -303,7 +317,10 @@
     };
     retry.addEventListener('click', loadVariants);
     loadVariants();
-    (async () => {
+    async function initializeMap() {
+      if (disposed || mapLoading || map) return;
+      mapLoading = true; retryMap.hidden = true; retryMap.disabled = true;
+      canvas.textContent = '正在加载地图…';
       try {
         const response = await fetch('/admin/api/tracks/map-config', { signal: controller.signal });
         if (!response.ok) throw new Error('地图配置读取失败');
@@ -311,6 +328,7 @@
         if (!config.configured) throw new Error('地图服务未配置');
         amap = await loadAMapSDK(config);
         if (disposed || !canvas.isConnected) return;
+        canvas.replaceChildren();
         map = new amap.Map(canvas, { resizeEnable: true, scrollWheel: true, isHotspot: true, zoom: 13, center: [116.397, 39.909] });
         map.addControl(new amap.Scale());
         if (options.canAssignScenicSpot) {
@@ -326,9 +344,19 @@
           observer.observe(canvas);
         }
       } catch (error) {
-        if (!disposed) { canvas.textContent = '地图暂时无法加载：' + error.message; }
+        clearTimeout(fitTimer);
+        if (observer) { observer.disconnect(); observer = null; }
+        if (map) { map.destroy(); map = null; overlays = []; fitted = false; }
+        if (!disposed) {
+          canvas.textContent = '地图暂时无法加载：' + error.message;
+          retryMap.hidden = false;
+        }
+      } finally {
+        mapLoading = false; retryMap.disabled = false;
       }
-    })();
+    }
+    retryMap.addEventListener('click', initializeMap);
+    initializeMap();
     return section;
   }
 

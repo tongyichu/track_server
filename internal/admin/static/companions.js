@@ -302,7 +302,7 @@
     var container = document.getElementById(id);
     container.replaceChildren();
     items.forEach(function (item) {
-      var cell = document.createElement('div'), name = document.createElement('strong'), value = document.createElement('span');
+      var cell = document.createElement('div'), name = document.createElement('dt'), value = document.createElement('dd');
       name.textContent = item[0];
       value.textContent = item[1] == null || item[1] === '' ? '—' : String(item[1]);
       cell.append(name, value);
@@ -331,10 +331,11 @@
       if (target) { event.preventDefault(); selectTab(target); target.focus(); }
     });
   });
-  function userHTML(user, id) {
+  function userHTML(user, id, role) {
     user = user || {};
     return '<div class="companion-user">' + (user.avatar_url ? '<img src="' + esc(user.avatar_url) + '" alt="" class="companion-avatar" />' : '') +
-      '<span><strong>' + esc(user.nickname || ('用户 ' + id)) + '</strong><small>ID ' + esc(id) + '</small></span></div>';
+      '<span><span class="companion-user-name"><strong>' + esc(user.nickname || ('用户 ' + id)) + '</strong>' +
+      (role ? '<span class="companion-role">' + esc(label(role)) + '</span>' : '') + '</span><small>ID ' + esc(id) + '</small></span></div>';
   }
   function openMemberTrack(trackID, sourceButton) {
     return AdminUI.runOnce('companion-track-editor', async function () {
@@ -375,12 +376,15 @@
     var owner = users.get(String(s.owner_user_id));
     document.getElementById('companionDetailTitle').textContent = s.title || '未命名房间';
     document.getElementById('companionDetailSubtitle').textContent = '房间 ID：' + (s.session_id || '—');
+    document.getElementById('companionSessionSummary').innerHTML = badge(s.status) + typeBadge(s.track_type) +
+      '<span>' + esc(label(s.visibility)) + '房间</span><span>用时 ' + esc(fmtDuration(s.started_at, s.status === 'active' ? null : s.ended_at)) + '</span>';
     setDetailRows('companionSessionInfo', [
-      ['房主', owner && owner.nickname ? owner.nickname + '（ID ' + s.owner_user_id + '）' : '用户 ' + s.owner_user_id],
-      ['房间状态', label(s.status)], ['运动类型', label(s.track_type)],
-      ['房间可见性', label(s.visibility)], ['开始时间', fmtTime(s.started_at)], ['结束时间', fmtTime(s.ended_at)]
+      ['房主', owner && owner.nickname ? owner.nickname : '用户 ' + s.owner_user_id],
+      ['开始', fmtTime(s.started_at)], ['结束', s.status === 'active' ? '尚未结束' : fmtTime(s.ended_at)]
     ]);
-    document.getElementById('companionLocation').textContent = s.locate_addr ? '活动地点：' + s.locate_addr : '活动地点未填写';
+    var location = document.getElementById('companionLocation');
+    location.textContent = s.locate_addr ? '地点　' + s.locate_addr : '';
+    location.hidden = !s.locate_addr;
     var endSources = { owner: '房主结束', member_flow: '成员离开', auto_close: '自动结束' };
     setDetailRows('companionSettingsInfo', [
       ['人数上限', s.max_members], ['弹幕', s.danmaku_enabled ? '已开启' : '已关闭'],
@@ -388,7 +392,7 @@
       ['结束方式', endSources[s.end_source] || s.end_source || '—'], ['结束原因', label(s.end_reason)],
       ['结束操作人 ID', s.end_operator_user_id || '—']
     ]);
-    document.getElementById('companionPresenceHint').textContent = s.status === 'ended' ? '房间已结束，连接状态为最后保存的记录。' : '连接状态为最近保存的记录，点击“刷新详情”更新。';
+    document.getElementById('companionPresenceHint').textContent = s.status === 'ended' ? '已结束，连接状态仅为历史快照。' : '连接状态为最近快照，非实时。';
     var memberBody = document.getElementById('companionMemberList');
     var existing = new Map(Array.from(memberBody.querySelectorAll('tr[data-user-id]')).map(function (row) { return [row.dataset.userId, row]; }));
     memberBody.querySelectorAll('tr:not([data-user-id])').forEach(function (row) { row.remove(); });
@@ -397,7 +401,9 @@
       var tr = existing.get(key) || document.createElement('tr');
       existing.delete(key);
       if (tr.dataset.signature !== signature) {
-        tr.innerHTML = '<td>' + userHTML(m, m.user_id) + '</td><td>' + esc(label(m.role)) + '</td><td>' + esc(label(m.member_status)) + '</td><td>' + badge(m.presence_status) + '</td><td>' + esc(fmtTime(m.joined_at)) + '</td><td>' + esc(fmtTime(m.last_seen_at)) + '</td>';
+        tr.innerHTML = '<td>' + userHTML(m, m.user_id, m.role) + '</td>' +
+          '<td><div class="companion-cell-stack">' + badge(m.presence_status) + '<small>' + esc(label(m.member_status)) + '</small></div></td>' +
+          '<td><div class="companion-cell-stack companion-member-times"><span><small>加入</small> ' + esc(fmtTime(m.joined_at)) + '</span><span><small>活跃</small> ' + esc(fmtTime(m.last_seen_at)) + '</span></div></td>';
         tr.insertBefore(AdminCompanionMemberTrack.cell(m.track, openMemberTrack), tr.children[1]);
         tr.dataset.userId = key; tr.dataset.signature = signature;
       }
@@ -428,7 +434,7 @@
       danmakuBody.appendChild(tr);
     });
     document.getElementById('companionDanmakuHint').textContent = danmakus.length;
-    if (!members.length) showEmpty(memberBody, AdminAccess.can('tracks', false) ? 7 : 6, '暂无同行成员');
+    if (!members.length) showEmpty(memberBody, AdminAccess.can('tracks', false) ? 4 : 3, '暂无同行成员');
     if (!positions.length) showEmpty(positionBody, 6, '暂无位置记录');
     if (!danmakus.length) showEmpty(danmakuBody, 3, '暂无弹幕记录');
   }
@@ -458,7 +464,7 @@
     } catch (error) {
       if (request !== detailRequest) return;
       var errorNode = document.getElementById('companionDetailError');
-      errorNode.textContent = '详情加载失败：' + (controller.signal.aborted ? '读取超时' : error.message) + '。请点击“刷新详情”重试。';
+      errorNode.textContent = '详情加载失败：' + (controller.signal.aborted ? '读取超时' : error.message) + '。请点击“刷新”重试。';
       errorNode.hidden = false;
       document.getElementById('companionDetailTitle').textContent = '同行房间详情';
     } finally {

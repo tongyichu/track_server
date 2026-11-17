@@ -73,12 +73,13 @@
 
   <dialog id="companionDetailModal" class="companion-dialog" aria-labelledby="companionDetailTitle">
     <div class="companion-dialog-content">
-      <div class="companion-dialog-heading"><div><h2 id="companionDetailTitle">同行房间详情</h2><div id="companionDetailSubtitle" class="hint"></div></div><div class="companion-dialog-actions"><button id="refreshCompanionDetail" type="button" class="btn btn-outline-secondary">刷新详情</button><button id="closeCompanionDetail" type="button" class="btn btn-outline-secondary">关闭</button></div></div>
+      <div class="companion-dialog-heading"><div><h2 id="companionDetailTitle">同行房间详情</h2><div id="companionDetailSubtitle" class="hint"></div></div><div class="companion-dialog-actions"><button id="refreshCompanionDetail" type="button" class="btn btn-sm btn-outline-secondary">刷新</button><button id="closeCompanionDetail" type="button" class="btn btn-sm btn-outline-secondary">关闭</button></div></div>
       <div id="companionDetailError" class="error" role="alert" hidden></div>
       <p id="companionDetailLoading" class="hint" role="status" hidden>正在加载房间详情…</p>
       <div id="companionDetailBody" hidden>
-        <section class="companion-detail-section"><div id="companionSessionInfo" class="companion-session-grid"></div></section>
-        <p id="companionLocation" class="companion-location"></p>
+        <div id="companionSessionSummary" class="companion-session-summary" aria-label="房间概况"></div>
+        <dl id="companionSessionInfo" class="companion-session-grid"></dl>
+        <p id="companionLocation" class="companion-location" hidden></p>
         <nav class="companion-tabs" role="tablist" aria-label="房间详情">
           <button id="companionTabMembers" type="button" role="tab" aria-controls="companionPanelMembers" aria-selected="true" data-companion-tab="members">同行成员 <span id="companionMemberHint"></span></button>
           <button id="companionTabPositions" type="button" role="tab" aria-controls="companionPanelPositions" aria-selected="false" tabindex="-1" data-companion-tab="positions">位置快照 <span id="companionPositionHint"></span></button>
@@ -87,17 +88,17 @@
         <section id="companionPanelMembers" class="companion-detail-section" role="tabpanel" aria-labelledby="companionTabMembers" data-companion-panel="members">
           <p id="companionPresenceHint" class="hint"></p>
           <p id="companionMemberTrackWarning" class="text-warning" role="status" data-admin-read="tracks" hidden></p>
-          <div class="companion-detail-table-wrap"><table class="data"><thead><tr><th>用户</th><th data-admin-read="tracks">轨迹</th><th>角色</th><th>成员状态</th><th>连接状态</th><th>加入时间</th><th>最后活跃</th></tr></thead><tbody id="companionMemberList"></tbody></table></div>
+          <div class="companion-detail-table-wrap"><table class="data companion-members-table"><thead><tr><th>成员</th><th data-admin-read="tracks">轨迹</th><th>状态</th><th>时间</th></tr></thead><tbody id="companionMemberList"></tbody></table></div>
         </section>
         <section id="companionPanelPositions" class="companion-detail-section" role="tabpanel" aria-labelledby="companionTabPositions" data-companion-panel="positions" hidden>
-          <p class="hint">仅展示已保存的最近位置，点击“刷新详情”更新。</p>
+          <p class="hint">最近保存的位置快照，非实时。</p>
           <div class="companion-detail-table-wrap"><table class="data"><thead><tr><th>用户</th><th>经纬度 / 坐标系</th><th>速度 / 方向</th><th>精度 / 海拔</th><th>采样时间</th><th>来源 / 序号</th></tr></thead><tbody id="companionPositionList"></tbody></table></div>
         </section>
         <section id="companionPanelDanmakus" class="companion-detail-section" role="tabpanel" aria-labelledby="companionTabDanmakus" data-companion-panel="danmakus" hidden>
           <p class="hint">展示最近 200 条弹幕。</p>
           <div class="companion-detail-table-wrap"><table class="data"><thead><tr><th>发送人</th><th>内容</th><th>发送时间</th></tr></thead><tbody id="companionDanmakuList"></tbody></table></div>
         </section>
-        <details class="companion-settings"><summary>房间设置与结束记录</summary><div id="companionSettingsInfo" class="companion-session-grid"></div></details>
+        <details class="companion-settings"><summary>更多信息 · 设置与结束记录</summary><dl id="companionSettingsInfo" class="companion-session-grid"></dl></details>
       </div>
     </div>
   </dialog>

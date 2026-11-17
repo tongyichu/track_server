@@ -142,6 +142,8 @@
 
 `GET /admin/api/tracks/map-config`（轨迹查看）：返回高德 Web(JS API) `key` 与 `service_host=/admin/api/tracks/amap-service`，供轨迹详情地图使用；`GET /admin/api/tracks/amap-service/*filepath` 为同源高德服务代理，捕获 SDK 追加的 POI 详情、周边搜索等子路径，传入既有代理处理（安全密钥不下发浏览器）。与景点页 `/scenic-spots/map-config` 同一配置，仅权限归属不同。
 
+共享轨迹地图的SDK首次加载最多等待15秒，失败移除脚本并释放失败Promise，不将临时网络错误永久缓存；打开其他轨迹或点击“重试地图”可重新请求。SDK重试与原始轨迹“重试预览”分开，前者不重复读取轨迹文件。加载互斥，弹窗关闭后忽略异步结果并清理地图；不通过改Key、下发安全码或更换代理绕过网络故障。
+
 ### 地图点选景点标签
 
 `POST /admin/api/tracks/:track_id/scenic-spot`：同时要求轨迹与景点操作权限，沿用后台 session、同源检查和写审计。
