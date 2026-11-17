@@ -226,6 +226,7 @@
 | --- | --- | --- |
 | GET | `/api/v1/music`、`/api/v1/music/:music_id/:kind` | [乐库](music.md)；JWT，仅已上架及当前版本 |
 | GET / POST | `/admin/api/music` | [乐库后台](music.md#后台管理)；music读/写 |
+| PUT | `/admin/api/music/layout` | music写，完整目录布局及逐条CAS；失败重读 |
 | PUT | `/admin/api/music/:music_id` | music写，multipart及revision CAS |
 | GET | `/admin/api/music/:music_id/:kind` | music读，含未上架试听 |
 

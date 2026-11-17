@@ -159,3 +159,5 @@ AI 使用完整协议见 [admin-ai](api/admin-ai.md)，运行与计费边界见 
 ## 背景音乐
 
 `/admin/music.html`新增独立music模块。GET/POST `/admin/api/music`、PUT `/admin/api/music/:music_id`以及GET版本化audio/cover资源，权限与上传协议见[乐库](api/music.md)。共享导航、模块清单和中文审计同时接入，操作员需明确授予新模块权限。
+
+`PUT /admin/api/music/layout`用于卡片排序和分区上下架，归属既有music写权限、同源与审计；不接收文件或覆盖隐藏资料，批量CAS与失败重读见[布局协议](api/music.md#卡片排序与上架分区)。

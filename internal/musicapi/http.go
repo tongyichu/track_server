@@ -151,3 +151,41 @@ func (h Handler) Save(ctx context.Context, c *app.RequestContext) {
 	}
 	c.JSON(200, utils.H{"code": 0, "data": h.view(saved)})
 }
+
+func (h Handler) Arrange(ctx context.Context, c *app.RequestContext) {
+	if !h.Admin {
+		c.Status(403)
+		return
+	}
+	c.Header("Cache-Control", "no-store")
+	if len(c.Request.Body()) > 96*1024 {
+		c.Status(413)
+		return
+	}
+	var input struct {
+		Items []service.MusicPlacement `json:"items"`
+	}
+	if err := json.Unmarshal(c.Request.Body(), &input); err != nil || input.Items == nil {
+		c.JSON(400, utils.H{"error": "音乐布局无效"})
+		return
+	}
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	items, saved, err := h.Service.Arrange(ctx, input.Items)
+	if err != nil {
+		status, message := 503, "布局保存失败，请刷新确认当前顺序后重试"
+		if errors.Is(err, repository.ErrMusicConflict) {
+			status, message = 409, "乐库已被修改，请刷新后重新调整"
+		}
+		if errors.Is(err, service.ErrMusicInput) {
+			status, message = 400, err.Error()
+		}
+		c.JSON(status, utils.H{"error": message, "saved_count": saved})
+		return
+	}
+	out := make([]item, 0, len(items))
+	for _, v := range items {
+		out = append(out, h.view(v))
+	}
+	c.JSON(200, utils.H{"code": 0, "data": utils.H{"items": out}})
+}

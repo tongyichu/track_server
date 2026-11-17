@@ -1,17 +1,40 @@
-.music-editor { width: min(720px, calc(100vw - 28px)); max-height: calc(100vh - 28px); overflow: auto; padding: 18px; border: 1px solid var(--tblr-border-color); border-radius: 12px; background: var(--tblr-bg-surface); color: var(--tblr-body-color); }
-.music-editor::backdrop { background: rgba(24,36,51,.56); }
-.music-editor h2 { font-size: 18px; margin: 0; }
-.music-fields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; margin: 16px 0; }
-.music-fields label { min-width: 0; font-size: 12px; }
-.music-fields .form-control { margin-top: 5px; }
-.music-wide { grid-column: 1/-1; }
-.music-cell { display: flex; align-items: center; gap: 10px; min-width: 200px; }
-.music-cell img { width: 44px; height: 44px; border-radius: 6px; object-fit: cover; }
-.music-cell small { display: block; color: var(--tblr-secondary-color); }
-.music-preview { width: 220px; height: 30px; margin-top: 6px; display: block; }
-@media(max-width:767px) { .music-editor { padding: 14px; } .music-fields { grid-template-columns: minmax(0,1fr); } .music-preview { max-width:100%; } }
-
+.music-editor { width:min(580px,calc(100vw - 28px));max-height:calc(100dvh - 28px);overflow:auto;padding:18px;border:1px solid var(--tblr-border-color);border-radius:12px;background:var(--tblr-bg-surface);color:var(--tblr-body-color); }
+.music-editor::backdrop { background:rgba(24,36,51,.56); }
+.music-editor h2 { font-size:18px;margin:0; }
+.music-fields { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:16px 0; }
+.music-fields label { min-width:0;font-size:12px; }
+.music-fields .form-control,.music-fields .form-select { margin-top:5px; }
+.music-wide { grid-column:1/-1; }
 .music-audio-input { display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:12px; }
 .music-audio-input [hidden] { display:none; }
 #musicPreviewPlayer audio { width:100%;height:36px;display:block;margin-bottom:4px; }
-@media(max-width:767px) { .music-audio-input { grid-template-columns:minmax(0,1fr); } }
+.music-toolbar,.music-section-heading { display:flex;align-items:center;gap:10px;flex-wrap:wrap; }
+.music-toolbar { justify-content:space-between;margin-bottom:16px; }
+.music-board { display:grid;gap:24px; }
+.music-section-heading { margin-bottom:10px; }
+.music-section-heading h2 { margin:0;font-size:15px; }
+.music-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr));gap:12px;padding:10px;min-height:130px;border:1px dashed var(--tblr-border-color);border-radius:10px;align-items:start; }
+.music-grid.over { border-color:var(--tblr-primary);background:var(--tblr-primary-lt); }
+.music-tile { min-width:0;margin:0; }
+.music-tile .card-body { padding:18px; }
+.music-tile.dragging { opacity:.45; }
+.music-tile-head { display:flex;align-items:center;gap:12px;min-width:0; }
+.music-cover { width:56px;height:56px;border-radius:8px;overflow:hidden;background:var(--tblr-bg-surface-secondary);display:grid;place-items:center;flex-shrink:0; }
+.music-cover img { width:100%;height:100%;object-fit:cover; }
+.music-cover-placeholder img { width:28px;height:28px;opacity:.55; }
+.music-info { min-width:0; }
+.music-info strong { display:block;overflow-wrap:anywhere;font-size:14px; }
+.music-info small { display:block;color:var(--tblr-secondary-color);overflow-wrap:anywhere; }
+.music-meta { margin-top:4px;font-size:11px; }
+.music-preview { display:block;width:100%;height:32px;margin-top:14px; }
+.music-tile-actions { display:flex;align-items:center;justify-content:space-between;margin-top:12px;gap:8px; }
+.music-drag[draggable="true"] { cursor:grab; }
+.music-drag:active { cursor:grabbing; }
+.music-empty { grid-column:1/-1;align-self:center;text-align:center;color:var(--tblr-secondary-color);padding:24px 12px;pointer-events:none; }
+.music-grid:has(.music-tile)>.music-empty { display:none; }
+.music-menu { position:relative; }
+.music-menu summary { list-style:none; }
+.music-menu summary::-webkit-details-marker { display:none; }
+.music-menu summary img { width:18px;height:18px; }
+.music-menu-options { position:absolute;right:0;top:calc(100% + 4px);z-index:5;display:grid;min-width:100px;padding:4px;border:1px solid var(--tblr-border-color);border-radius:6px;background:var(--tblr-bg-surface);box-shadow:var(--tblr-box-shadow); }
+@media(max-width:767px) { .music-editor { padding:14px; }.music-fields,.music-audio-input { grid-template-columns:minmax(0,1fr); }.music-tile .card-body { padding:14px; }.music-grid { padding:8px; } }

@@ -178,6 +178,7 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	api := g.Group("/api", m.Auth.AuthMiddleware())
 	api.GET("/music", m.Handler.music.List)
 	api.POST("/music", m.Handler.music.Save)
+	api.PUT("/music/layout", m.Handler.music.Arrange)
 	api.PUT("/music/:music_id", m.Handler.music.Save)
 	api.GET("/music/:music_id/:kind", m.Handler.music.Asset)
 	api.GET("/realtime/summary", m.Handler.RealtimeSummary)

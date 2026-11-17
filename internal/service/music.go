@@ -97,9 +97,6 @@ func (s *MusicService) Save(ctx context.Context, v models.MusicTrack, audio, cov
 	if v.Name == "" || len(v.Name) > 240 || v.Artist == "" || len(v.Artist) > 240 || len(v.Source) > 500 || len(v.Attribution) > 1200 || len(v.License) > 100 {
 		return v, fmt.Errorf("%w: 请填写名称与歌手，且资料长度不能超限", ErrMusicInput)
 	}
-	if v.Published && (v.License == "" || v.Source == "" || (strings.HasPrefix(strings.ToUpper(v.License), "CC BY") && v.Attribution == "")) {
-		return v, fmt.Errorf("%w: 上架前请填写授权类型、来源及必要署名", ErrMusicInput)
-	}
 	if v.ID == "" {
 		v.AudioSHA, v.CoverSHA = "", ""
 		v.AudioVersion = ""

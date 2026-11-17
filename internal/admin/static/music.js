@@ -3,6 +3,18 @@
   const modal = document.getElementById('musicEditor'), form = document.getElementById('musicForm');
   const save = document.getElementById('musicSave'), saveError = document.getElementById('musicSaveError');
   let current = null, controller = null, version = 0, saving = false, saveController = null;
+  let disposed = false;
+  let items = [], loading = false, arranging = false, needsRefresh = false, dragged = null, layoutController = null;
+  const status = document.getElementById('musicStatus');
+  function writable() { return AdminAccess.can('music',true) && !loading && !arranging && !saving && !needsRefresh; }
+  function controls() {
+    if(disposed)return;
+    document.getElementById('musicRefresh').disabled=loading||arranging||saving;
+    document.getElementById('musicAdd').disabled=!writable();
+    body.setAttribute('aria-busy', String(loading||arranging));
+    body.querySelectorAll('button').forEach(button=>button.disabled=!writable());
+    body.querySelectorAll('[data-drag]').forEach(handle=>handle.draggable=writable());
+  }
   function text(tag, value, className) { const el = document.createElement(tag); el.textContent = value; if(className) el.className=className; return el; }
   async function request(url, options) { const response=await fetch(url,options); const data=await response.json().catch(()=>({})); if(!response.ok) throw new Error(data.error || '读取失败（'+response.status+'）'); return data.data; }
   const previewBox=document.getElementById('musicPreviewBox'), previewRoot=document.getElementById('musicPreviewPlayer');
@@ -33,6 +45,7 @@
       if(run!==previewVersion)return;
       const duration=player.duration;
       if(Number.isFinite(duration)&&duration>=1&&duration<=1200&&form.elements.audio_mode.value==='link')form.elements.duration_seconds.value=String(Math.round(duration*1000)/1000);
+      if(Number.isFinite(duration)&&duration>0)previewState.textContent='时长 '+Math.floor(duration/60)+':'+String(Math.floor(duration)%60).padStart(2,'0')+'，点击播放确认声音。';
     });
     player.addEventListener('playing',()=>{if(run===previewVersion){previewState.textContent='正在播放，可以确认声音后保存。';body.querySelectorAll('audio').forEach(other=>other.pause());}});
     player.addEventListener('error',()=>{if(run===previewVersion)previewState.textContent='暂时无法播放，请检查直链是否有效或被原站限制。';});
@@ -41,7 +54,6 @@
     const link=form.elements.audio_mode.value==='link', writable=AdminAccess.can('music',true);
     document.getElementById('musicFileField').hidden=link;
     document.getElementById('musicLinkField').hidden=!link;
-    document.getElementById('musicDurationField').hidden=!link;
     form.elements.audio.disabled=link||!writable;form.elements.audio.required=!link&&(!current||Boolean(current.audio_link));
     form.elements.audio_link.disabled=!link||!writable;form.elements.audio_link.required=link;
     form.elements.duration_seconds.disabled=!link||!writable;
@@ -52,47 +64,112 @@
   form.elements.audio.addEventListener('change',showPreview);
   modal.addEventListener('close',stopPreview);
   function edit(item) {
-    current=item; body.querySelectorAll('audio').forEach(player=>player.pause());form.reset();saveError.hidden=true;
+    if(!writable())return;current=item; body.querySelectorAll('audio').forEach(player=>player.pause());form.reset();saveError.hidden=true;
     document.getElementById('musicEditTitle').textContent=item?'编辑音乐':'添加音乐';
-    ['name','artist','license','source','attribution','sort_order'].forEach(key=>{form.elements[key].value=item?item[key]:key==='sort_order'?'0':'';});
-    form.elements.published.checked=Boolean(item&&item.published);
+    ['name','artist'].forEach(key=>{form.elements[key].value=item?item[key]:'';});
     form.elements.audio_mode.value=item&&item.audio_link?'link':'upload';
     form.elements.audio_link.value=item&&item.audio_link||'';
     form.elements.duration_seconds.value=item&&item.audio_link&&item.duration_ms>0?String(item.duration_ms/1000):'';
     audioMode();
     modal.showModal();
   }
-  async function load() {
-    if(controller) controller.abort();controller=new AbortController();const active=controller;const run=++version;
-    error.hidden=true;document.getElementById('musicRefresh').disabled=true;const timeout=setTimeout(()=>active.abort(),12000);
-    try {
-      const data=await request('/admin/api/music',{signal:active.signal});if(run!==version)return;
-      body.querySelectorAll('audio').forEach(el=>el.pause());body.replaceChildren();
-      data.items.forEach(item=>{
-        const row=document.createElement('tr'), info=document.createElement('td'), box=text('div','','music-cell');
-        if(item.cover_url){const img=document.createElement('img');img.src=item.cover_url;img.alt='';box.append(img);}
-        const name=document.createElement('div');name.append(text('strong',item.name),text('small',item.artist));box.append(name);info.append(box);
-        const audio=document.createElement('audio');audio.controls=true;audio.preload='none';audio.src=item.audio_url;audio.className='music-preview';audio.addEventListener('play',()=>body.querySelectorAll('audio').forEach(other=>{if(other!==audio)other.pause();}));info.append(audio);
-        row.append(info,text('td',(item.duration_ms>0?Math.floor(item.duration_ms/60000)+':'+String(Math.floor(item.duration_ms/1000)%60).padStart(2,'0'):'时长未知')+' / '+(item.audio_bytes>0?(item.audio_bytes/1048576).toFixed(1)+'MB':'大小未知')),text('td',item.license||'未填写'),text('td',item.sort_order),text('td',item.published?'已上架':'已下架'));
-        const actions=document.createElement('td'),button=text('button','编辑','btn btn-sm btn-outline-primary');button.type='button';button.dataset.adminWrite='music';button.addEventListener('click',()=>edit(item));actions.append(button);row.append(actions);body.append(row);
+  function releaseCards() {
+    body.querySelectorAll('audio').forEach(player=>{player.pause();player.removeAttribute('src');player.load();});
+  }
+  function icon(name) {
+    const img=document.createElement('img');img.src=AdminAssets.url('/admin/static/vendor/tabler-icons/'+name+'.svg');img.alt='';img.draggable=false;img.dataset.noPreview='';return img;
+  }
+  function render() {
+    if(disposed)return;
+    releaseCards();body.replaceChildren();
+    [true,false].forEach(published=>{
+      const section=text('section','','music-section'), heading=text('div','','music-section-heading');
+      const group=items.filter(item=>item.published===published);
+      heading.append(text('h2',published?'已上架':'未上架'),text('span',String(group.length),'badge bg-secondary-lt'));
+      const grid=text('div','','music-grid');grid.dataset.published=String(published);
+      grid.setAttribute('aria-label',published?'已上架音乐':'未上架音乐');
+      group.forEach(item=>{
+        const tile=text('article','','card music-tile');tile.dataset.id=item.id;
+        const inner=text('div','','card-body'), head=text('div','','music-tile-head');
+        const cover=text('div','','music-cover');
+        if(item.cover_url){const img=document.createElement('img');img.src=item.cover_url;img.alt='';img.loading='lazy';img.draggable=false;cover.append(img);}
+        else {cover.classList.add('music-cover-placeholder');cover.append(icon('music'));}
+        const info=text('div','','music-info');info.append(text('strong',item.name),text('small',item.artist));
+        const duration=item.duration_ms>0?Math.floor(item.duration_ms/60000)+':'+String(Math.floor(item.duration_ms/1000)%60).padStart(2,'0'):'时长未知';
+        info.append(text('small',duration+(item.audio_bytes>0?' · '+(item.audio_bytes/1048576).toFixed(1)+' MB':''),'music-meta'));
+        head.append(cover,info);inner.append(head);
+        const audio=document.createElement('audio');audio.controls=true;audio.preload='none';audio.src=item.audio_url;audio.className='music-preview';audio.setAttribute('aria-label','试听 '+item.name);
+        audio.addEventListener('play',()=>body.querySelectorAll('audio').forEach(other=>{if(other!==audio)other.pause();}));inner.append(audio);
+        if(AdminAccess.can('music',true)) {
+          const actions=text('div','','music-tile-actions');
+          const handle=text('button','拖动','btn btn-sm btn-ghost-secondary music-drag');handle.type='button';handle.dataset.drag=item.id;handle.title='拖动调整顺序或切换上架分区';
+          handle.addEventListener('dragstart',event=>{
+            if(!writable()){event.preventDefault();return;}
+            dragged=item.id;audio.pause();event.dataTransfer.setData('text/plain',item.id);event.dataTransfer.effectAllowed='move';event.dataTransfer.setDragImage(tile,20,20);tile.classList.add('dragging');
+          });
+          handle.addEventListener('dragend',()=>{if(dragged){dragged=null;render();}});
+          const editButton=text('button','编辑','btn btn-sm btn-outline-secondary');editButton.type='button';editButton.onclick=()=>edit(item);
+          const menu=text('details','','music-menu'), summary=text('summary','','btn btn-sm btn-ghost-secondary');summary.setAttribute('aria-label','更多操作');summary.append(icon('dots'));
+          const options=text('div','','music-menu-options');
+          [['前移',-1],['后移',1],[published?'下架':'上架',0]].forEach(([label,direction])=>{
+            const button=text('button',label,'btn btn-sm btn-ghost-secondary');button.type='button';
+            button.onclick=()=>{if(!writable())return;menu.open=false;const next=items.map(v=>({...v})), from=next.findIndex(v=>v.id===item.id);const [moved]=next.splice(from,1);const group=next.filter(v=>v.published===published);
+              if(direction===0){moved.published=!published;next.push(moved);}
+              else {const oldIndex=items.filter(v=>v.published===published).findIndex(v=>v.id===item.id), to=Math.max(0,Math.min(group.length,oldIndex+direction));const anchor=group[to];if(anchor)next.splice(next.indexOf(anchor),0,moved);else next.push(moved);}
+              arrange(next);
+            };options.append(button);
+          });
+          menu.append(summary,options);const right=text('div','','d-flex gap-1');right.append(editButton,menu);actions.append(handle,right);inner.append(actions);
+        }
+        tile.append(inner);grid.append(tile);
       });
-      if(!data.items.length){const row=document.createElement('tr'),cell=text('td','暂无音乐，点击“添加音乐”上传。');cell.colSpan=6;row.append(cell);body.append(row);}
-    } catch(e) { if(run===version){error.textContent=e.name==='AbortError'?'读取超时，请刷新重试。':e.message;error.hidden=false;} }
-    finally {clearTimeout(timeout);if(run===version)document.getElementById('musicRefresh').disabled=false;}
+      const empty=text('div',published?'拖到这里上架，展示到客户端':'暂无未上架音乐','music-empty');grid.append(empty);
+      grid.addEventListener('dragover',event=>{
+        if(!dragged||!writable())return;event.preventDefault();event.dataTransfer.dropEffect='move';
+        body.querySelectorAll('.music-grid').forEach(el=>el.classList.toggle('over',el===grid));
+        const tile=body.querySelector('[data-id="'+dragged+'"]'), target=event.target.closest('.music-tile');if(!tile||target===tile)return;
+        if(target&&target.parentElement===grid){const rect=target.getBoundingClientRect();grid.insertBefore(tile,event.clientX<rect.left+rect.width/2?target:target.nextElementSibling);}
+        else grid.insertBefore(tile,empty);
+      });
+      grid.addEventListener('drop',event=>{
+        if(!dragged||!writable())return;event.preventDefault();dragged=null;
+        const next=[];body.querySelectorAll('.music-grid').forEach(zone=>zone.querySelectorAll('.music-tile').forEach(tile=>{const item=items.find(v=>v.id===tile.dataset.id);next.push({...item,published:zone.dataset.published==='true'});}));
+        arrange(next);
+      });
+      section.append(heading,grid);body.append(section);
+    });controls();
+  }
+  async function load(keepError=false) {
+    if(disposed)return false;
+    if(controller)controller.abort();controller=new AbortController();const active=controller, run=++version;loading=true;
+    if(!keepError)error.hidden=true;controls();const timeout=setTimeout(()=>active.abort(),12000);
+    try {const data=await request('/admin/api/music',{signal:active.signal});if(run!==version)return false;items=data.items;needsRefresh=false;render();return true;}
+    catch(e){if(run===version){error.textContent=(keepError?error.textContent+'；':'')+(e.name==='AbortError'?'读取超时，请刷新重试。':e.message);error.hidden=false;}return false;}
+    finally{clearTimeout(timeout);if(run===version){loading=false;controls();}}
+  }
+  async function arrange(next) {
+    if(!writable())return;
+    next=[...next.filter(v=>v.published),...next.filter(v=>!v.published)];
+    if(next.every((v,i)=>v.id===items[i].id&&v.published===items[i].published)){render();return;}
+    arranging=true;status.textContent='正在保存…';error.hidden=true;controls();
+    layoutController=new AbortController();const timeout=setTimeout(()=>layoutController.abort(),25000);
+    try {const data=await request('/admin/api/music/layout',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({items:next.map(v=>({id:v.id,revision:v.revision,published:v.published}))}),signal:layoutController.signal});items=data.items;render();status.textContent='已保存';}
+    catch(e){needsRefresh=true;error.textContent=e.name==='AbortError'?'保存超时，正在重新读取实际结果。':e.message+'，正在重新读取实际结果。';error.hidden=false;status.textContent='';await load(true);}
+    finally{clearTimeout(timeout);layoutController=null;arranging=false;controls();}
   }
   form.addEventListener('submit',async e=>{
-    e.preventDefault();if(saving||!AdminAccess.can('music',true))return;saving=true;save.disabled=true;saveError.hidden=true;
-    const item={id:current?current.id:'',revision:current?current.revision:0};['name','artist','license','source','attribution'].forEach(key=>{item[key]=form.elements[key].value.trim();});item.sort_order=Number(form.elements.sort_order.value);item.published=form.elements.published.checked;
+    e.preventDefault();if(!writable())return;saving=true;save.disabled=true;saveError.hidden=true;controls();
+    const item={...(current||{}),id:current?current.id:'',revision:current?current.revision:0,published:current?current.published:false,sort_order:current?current.sort_order:Math.min(9999,Math.max(-1,...items.map(v=>v.sort_order))+1)};['name','artist'].forEach(key=>{item[key]=form.elements[key].value.trim();});
     const linked=form.elements.audio_mode.value==='link';item.audio_link=linked?form.elements.audio_link.value.trim():'';
     item.duration_ms=linked?Math.round(Number(form.elements.duration_seconds.value||0)*1000):0;
     const data=new FormData();data.set('metadata',JSON.stringify(item));['audio','cover'].forEach(key=>{const f=form.elements[key].files[0];if(f&&(key!=='audio'||!linked))data.set(key,f);});
     saveController=new AbortController();const timeout=setTimeout(()=>saveController.abort(),60000);
-    try {await request('/admin/api/music'+(current?'/'+encodeURIComponent(current.id):''),{method:current?'PUT':'POST',body:data,signal:saveController.signal});modal.close();await load();}
+    try {await request('/admin/api/music'+(current?'/'+encodeURIComponent(current.id):''),{method:current?'PUT':'POST',body:data,signal:saveController.signal});needsRefresh=true;modal.close();await load();}
     catch(e){saveError.textContent=e.name==='AbortError'?'保存超时，请刷新确认结果后再操作。':e.message;saveError.hidden=false;}
-    finally{clearTimeout(timeout);saveController=null;saving=false;save.disabled=false;}
+    finally{clearTimeout(timeout);saveController=null;saving=false;save.disabled=false;controls();}
   });
   document.getElementById('musicClose').onclick=()=>{if(!saving)modal.close();};modal.addEventListener('cancel',e=>{if(saving)e.preventDefault();});
-  document.getElementById('musicAdd').onclick=()=>edit(null);document.getElementById('musicRefresh').onclick=load;
-  window.addEventListener('pagehide',()=>{stopPreview();version++;if(controller)controller.abort();if(saveController)saveController.abort();body.querySelectorAll('audio').forEach(el=>el.pause());});
+  document.getElementById('musicAdd').onclick=()=>edit(null);document.getElementById('musicRefresh').onclick=()=>{if(!saving&&!arranging)load();};
+  window.addEventListener('pagehide',()=>{disposed=true;stopPreview();version++;if(controller)controller.abort();if(saveController)saveController.abort();if(layoutController)layoutController.abort();releaseCards();body.querySelectorAll('audio').forEach(el=>el.pause());});
   document.addEventListener('visibilitychange',()=>{if(document.hidden){if(preview)preview.pause();body.querySelectorAll('audio').forEach(el=>el.pause());}});load();
 })();
