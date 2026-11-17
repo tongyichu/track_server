@@ -29,6 +29,12 @@ func (h Handler) view(v models.MusicTrack) item {
 		prefix = "/admin/api/music/"
 	}
 	out := item{MusicTrack: v, AudioURL: prefix + v.ID + "/audio?v=" + v.AudioSHA}
+	if v.AudioLink != "" {
+		out.AudioURL = v.AudioLink
+	}
+	if out.AudioVersion == "" {
+		out.AudioVersion = v.AudioSHA
+	}
 	if v.CoverSHA != "" {
 		out.CoverURL = prefix + v.ID + "/cover?v=" + v.CoverSHA
 	}

@@ -10,3 +10,8 @@
 .music-cell small { display: block; color: var(--tblr-secondary-color); }
 .music-preview { width: 220px; height: 30px; margin-top: 6px; display: block; }
 @media(max-width:767px) { .music-editor { padding: 14px; } .music-fields { grid-template-columns: minmax(0,1fr); } .music-preview { max-width:100%; } }
+
+.music-audio-input { display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:12px; }
+.music-audio-input [hidden] { display:none; }
+#musicPreviewPlayer audio { width:100%;height:36px;display:block;margin-bottom:4px; }
+@media(max-width:767px) { .music-audio-input { grid-template-columns:minmax(0,1fr); } }

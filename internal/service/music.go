@@ -64,6 +64,9 @@ func (s *MusicService) Asset(ctx context.Context, id, kind, hash string, all boo
 	if err != nil {
 		return "", "", err
 	}
+	if kind == "audio" && v.AudioLink != "" {
+		return "", "", repository.ErrNotFound
+	}
 	want, ext, mime := v.AudioSHA, ".mp3", "audio/mpeg"
 	if kind == "cover" {
 		want, ext, mime = v.CoverSHA, ".jpg", "image/jpeg"
@@ -81,6 +84,11 @@ func (s *MusicService) Save(ctx context.Context, v models.MusicTrack, audio, cov
 		return v, err
 	}
 	previous := v.Revision
+	requestedDuration := v.DurationMS
+	requestedLink := strings.TrimSpace(v.AudioLink)
+	if len(audio) > 0 && requestedLink != "" {
+		return v, fmt.Errorf("%w: 文件与链接请选择一种音频来源", ErrMusicInput)
+	}
 	if previous < 0 || v.SortOrder < -9999 || v.SortOrder > 9999 {
 		return v, ErrMusicInput
 	}
@@ -94,6 +102,8 @@ func (s *MusicService) Save(ctx context.Context, v models.MusicTrack, audio, cov
 	}
 	if v.ID == "" {
 		v.AudioSHA, v.CoverSHA = "", ""
+		v.AudioVersion = ""
+		v.AudioLink = ""
 		v.AudioBytes, v.DurationMS = 0, 0
 		if len(items) >= 500 {
 			return v, fmt.Errorf("%w: 乐库最多500首，请先整理现有条目", ErrMusicInput)
@@ -115,6 +125,36 @@ func (s *MusicService) Save(ctx context.Context, v models.MusicTrack, audio, cov
 			return v, repository.ErrMusicConflict
 		}
 		v.AudioSHA, v.AudioBytes, v.DurationMS, v.CoverSHA = old.AudioSHA, old.AudioBytes, old.DurationMS, old.CoverSHA
+		v.AudioVersion = old.AudioVersion
+		if requestedLink != old.AudioLink {
+			v.DurationMS = 0
+		}
+		if requestedLink != "" && requestedLink == old.AudioLink && !v.Published {
+			v.AudioLink = old.AudioLink
+		} else {
+			v.AudioLink = ""
+		}
+	}
+	if requestedLink != "" {
+		if requestedDuration != 0 && (requestedDuration < 1000 || requestedDuration > 1200000) {
+			return v, fmt.Errorf("%w: 时长应在20分钟以内", ErrMusicInput)
+		}
+		if v.AudioLink == "" || v.Published {
+			info, e := probeMusicLink(ctx, requestedLink)
+			if e != nil {
+				return v, e
+			}
+			v.AudioLink, v.AudioBytes, v.AudioVersion = info.URL, info.Bytes, info.Version
+		}
+		v.AudioSHA = ""
+		if requestedDuration > 0 || v.DurationMS == 0 {
+			v.DurationMS = requestedDuration
+		}
+	} else if len(audio) == 0 && v.AudioSHA == "" {
+		return v, fmt.Errorf("%w: 请上传MP3音频或填写音频链接", ErrMusicInput)
+	} else {
+		v.AudioLink = ""
+		v.AudioVersion = ""
 	}
 	if len(audio) > 0 {
 		duration, e := musicMP3Duration(audio)
@@ -128,7 +168,7 @@ func (s *MusicService) Save(ctx context.Context, v models.MusicTrack, audio, cov
 			return v, err
 		}
 	}
-	if v.AudioSHA == "" {
+	if v.AudioSHA == "" && v.AudioLink == "" {
 		return v, fmt.Errorf("%w: 请上传MP3音频", ErrMusicInput)
 	}
 	if len(cover) > 0 {
