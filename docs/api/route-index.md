@@ -228,6 +228,7 @@
 | GET / POST | `/admin/api/music` | [乐库后台](music.md#后台管理)；music读/写 |
 | PUT | `/admin/api/music/layout` | music写，完整目录布局及逐条CAS；失败重读 |
 | PUT | `/admin/api/music/:music_id` | music写，multipart及revision CAS |
+| DELETE | `/admin/api/music/:music_id` | music写，JSON revision条件删除目录，媒体保留 |
 | GET | `/admin/api/music/:music_id/:kind` | music读，含未上架试听 |
 
 乐库既有保存接口新增可选audio_link/duration_ms，GET条目新增audio_version；不增加导入或探测接口。见[音乐外链](music.md#外链轻量校验与网页试听)。

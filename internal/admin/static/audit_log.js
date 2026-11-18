@@ -23,6 +23,7 @@
     ['POST', 'password-recovery/complete', '通过邮箱重新设置密码', '后台账号 {actor}', '这是邮箱找回流程的请求，成功表示验证通过并设置新密码；失败不代表由该账号本人发起。'],
     ['POST', 'music', '添加背景音乐', '乐库'],
     ['PUT', 'music/layout', '调整背景音乐顺序与上架分区', '乐库'],
+    ['DELETE', 'music/:music', '删除背景音乐', '音乐 {music}'],
     ['PUT', 'music/:music', '修改背景音乐或上下架', '音乐 {music}'],
     ['POST', 'releases', '发布或更新 App 版本', 'App 版本记录', '历史记录未保存本次版本号。'],
     ['DELETE', 'releases/:release', '删除 App 版本记录', '版本记录 {release}'],

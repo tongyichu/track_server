@@ -285,3 +285,13 @@ func musicMP3Duration(data []byte) (int64, error) {
 	}
 	return duration, nil
 }
+
+func (s *MusicService) Delete(ctx context.Context, id string, previous int64) error {
+	if previous < 1 {
+		return ErrMusicInput
+	}
+	if s == nil || s.repo == nil {
+		return errors.New("music unavailable")
+	}
+	return s.repo.DeleteMusic(ctx, id, previous)
+}

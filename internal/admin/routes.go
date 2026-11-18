@@ -180,6 +180,7 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	api.POST("/music", m.Handler.music.Save)
 	api.PUT("/music/layout", m.Handler.music.Arrange)
 	api.PUT("/music/:music_id", m.Handler.music.Save)
+	api.DELETE("/music/:music_id", m.Handler.music.Delete)
 	api.GET("/music/:music_id/:kind", m.Handler.music.Asset)
 	api.GET("/realtime/summary", m.Handler.RealtimeSummary)
 	api.GET("/realtime/network", m.Handler.RealtimeNetwork)
