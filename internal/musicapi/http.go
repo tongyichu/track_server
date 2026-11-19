@@ -189,3 +189,33 @@ func (h Handler) Arrange(ctx context.Context, c *app.RequestContext) {
 	}
 	c.JSON(200, utils.H{"code": 0, "data": utils.H{"items": out}})
 }
+
+func (h Handler) Delete(ctx context.Context, c *app.RequestContext) {
+	if !h.Admin {
+		c.Status(403)
+		return
+	}
+	c.Header("Cache-Control", "no-store")
+	if len(c.Request.Body()) > 1024 {
+		c.Status(413)
+		return
+	}
+	var input struct {
+		Revision int64 `json:"revision"`
+	}
+	if err := json.Unmarshal(c.Request.Body(), &input); err != nil || input.Revision < 1 {
+		c.JSON(400, utils.H{"error": "音乐版本无效"})
+		return
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if err := h.Service.Delete(ctx, c.Param("music_id"), input.Revision); err != nil {
+		if errors.Is(err, repository.ErrMusicConflict) {
+			c.JSON(409, utils.H{"error": "音乐已被修改或删除，请刷新后重试"})
+		} else {
+			c.JSON(503, utils.H{"error": "音乐删除失败，请刷新确认结果后重试"})
+		}
+		return
+	}
+	c.JSON(200, utils.H{"code": 0, "data": utils.H{"deleted": true}})
+}

@@ -20,6 +20,7 @@ var ErrMusicConflict = errors.New("music revision conflict")
 type MusicRepository interface {
 	ListMusic(context.Context) ([]models.MusicTrack, error)
 	SaveMusic(context.Context, models.MusicTrack, int64) error
+	DeleteMusic(context.Context, string, int64) error
 }
 type MemoryMusicRepository struct {
 	mu    sync.Mutex
@@ -139,6 +140,43 @@ func (r *MongoMusicRepository) SaveMusic(ctx context.Context, v models.MusicTrac
 	}
 	res, err := r.collection.ReplaceOne(ctx, bson.M{"_id": v.ID, "revision": previous}, v)
 	if err == nil && res.MatchedCount != 1 {
+		return ErrMusicConflict
+	}
+	return err
+}
+
+func (r *MemoryMusicRepository) DeleteMusic(ctx context.Context, id string, previous int64) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	old, ok := r.items[id]
+	if !ok {
+		return ErrMusicConflict
+	}
+	if old.Revision != previous {
+		return ErrMusicConflict
+	}
+	delete(r.items, id)
+	return nil
+}
+
+func (r *MySQLMusicRepository) DeleteMusic(ctx context.Context, id string, previous int64) error {
+	res, err := r.db.ExecContext(ctx, "DELETE FROM background_music WHERE id=? AND revision=?", id, previous)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err == nil && n != 1 {
+		return ErrMusicConflict
+	}
+	return err
+}
+
+func (r *MongoMusicRepository) DeleteMusic(ctx context.Context, id string, previous int64) error {
+	res, err := r.collection.DeleteOne(ctx, bson.M{"_id": id, "revision": previous})
+	if err == nil && res.DeletedCount != 1 {
 		return ErrMusicConflict
 	}
 	return err

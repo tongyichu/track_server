@@ -3,9 +3,42 @@
   const modal = document.getElementById('musicEditor'), form = document.getElementById('musicForm');
   const save = document.getElementById('musicSave'), saveError = document.getElementById('musicSaveError');
   let current = null, controller = null, version = 0, saving = false, saveController = null;
-  let disposed = false;
+  let disposed = false, suppressClickUntil = 0;
+  const deleteConfirm = document.getElementById('musicDeleteConfirm'), actionStatus = document.getElementById('musicActionStatus');
   let items = [], loading = false, arranging = false, needsRefresh = false, dragged = null, layoutController = null;
   const status = document.getElementById('musicStatus');
+  let activeMarquee = null;
+
+  function updateMarquee() {
+    if (!activeMarquee) return;
+    const {title, titleText} = activeMarquee;
+    const width = titleText.getBoundingClientRect().width;
+    title.style.setProperty('--music-title-duration', `${Math.max(3, width / 40)}s`);
+    title.classList.toggle('music-title-scrolling', width > title.clientWidth + 1);
+  }
+
+  const marqueeObserver = new ResizeObserver(updateMarquee);
+
+  function stopMarquee(audio) {
+    if (!activeMarquee || (audio && activeMarquee.audio !== audio)) return;
+    marqueeObserver.disconnect();
+    activeMarquee.title.classList.remove('music-title-scrolling');
+    activeMarquee = null;
+  }
+
+  function bindTitleMarquee(audio, title, titleText) {
+    audio.addEventListener('playing', () => {
+      if (disposed || document.hidden || audio.paused || !audio.isConnected) return;
+      stopMarquee();
+      activeMarquee = {audio, title, titleText};
+      marqueeObserver.observe(title);
+      marqueeObserver.observe(titleText);
+      updateMarquee();
+    });
+    for (const event of ['pause', 'ended', 'error', 'emptied', 'waiting']) {
+      audio.addEventListener(event, () => stopMarquee(audio));
+    }
+  }
   function writable() { return AdminAccess.can('music',true) && !loading && !arranging && !saving && !needsRefresh; }
   function controls() {
     if(disposed)return;
@@ -13,7 +46,11 @@
     document.getElementById('musicAdd').disabled=!writable();
     body.setAttribute('aria-busy', String(loading||arranging));
     body.querySelectorAll('button').forEach(button=>button.disabled=!writable());
-    body.querySelectorAll('[data-drag]').forEach(handle=>handle.draggable=writable());
+    body.querySelectorAll('.music-tile').forEach(tile=>tile.draggable=writable());
+    save.disabled=!writable();document.getElementById('musicClose').disabled=saving;
+    ['musicDelete','musicUnpublish','musicDeleteConfirmButton','musicDeleteCancel'].forEach(id=>document.getElementById(id).disabled=!writable());
+    document.getElementById('musicDelete').hidden=!current;
+    document.getElementById('musicUnpublish').hidden=!current||!current.published;
   }
   function text(tag, value, className) { const el = document.createElement(tag); el.textContent = value; if(className) el.className=className; return el; }
   async function request(url, options) { const response=await fetch(url,options); const data=await response.json().catch(()=>({})); if(!response.ok) throw new Error(data.error || '读取失败（'+response.status+'）'); return data.data; }
@@ -82,17 +119,18 @@
   form.elements.audio.addEventListener('change',()=>{startInput.value='0';form.elements.duration_seconds.value='';showPreview();});
   modal.addEventListener('close',stopPreview);
   function edit(item) {
-    if(!writable())return;current=item; body.querySelectorAll('audio').forEach(player=>player.pause());form.reset();saveError.hidden=true;
+    if(!writable())return;current=item;deleteConfirm.hidden=true;actionStatus.textContent=''; body.querySelectorAll('audio').forEach(player=>player.pause());form.reset();saveError.hidden=true;
     document.getElementById('musicEditTitle').textContent=item?'编辑音乐':'添加音乐';
     ['name','artist'].forEach(key=>{form.elements[key].value=item?item[key]:'';});
     form.elements.audio_mode.value=item&&item.audio_link?'link':'upload';
     form.elements.audio_link.value=item&&item.audio_link||'';
     form.elements.duration_seconds.value=item&&item.audio_link&&item.duration_ms>0?String(item.duration_ms/1000):'';
     startInput.value=String((item&&item.start_offset_ms||0)/1000);startInput.setCustomValidity('');
-    audioMode();
+    audioMode();controls();
     modal.showModal();
   }
   function releaseCards() {
+    stopMarquee();
     body.querySelectorAll('audio').forEach(player=>{player.pause();player.removeAttribute('src');player.load();});
   }
   function icon(name) {
@@ -111,9 +149,19 @@
         const tile=text('article','','card music-tile');tile.dataset.id=item.id;
         const inner=text('div','','card-body'), head=text('div','','music-tile-head');
         const cover=text('div','','music-cover');
-        if(item.cover_url){const img=document.createElement('img');img.src=item.cover_url;img.alt='';img.loading='lazy';img.draggable=false;cover.append(img);}
+        if(item.cover_url){const img=document.createElement('img');img.src=item.cover_url;img.alt='';img.loading='lazy';img.draggable=false;img.dataset.noPreview='';cover.append(img);}
         else {cover.classList.add('music-cover-placeholder');cover.append(icon('music'));}
-        const info=text('div','','music-info');info.append(text('strong',item.name),text('small',item.artist));
+        const info=text('div','','music-info');
+        const title = text('strong', '', 'music-title');
+        const titleTrack = text('span', '', 'music-title-track');
+        const titleText = text('span', item.name, 'music-title-text');
+        const titleRepeat = text('span', item.name, 'music-title-text music-title-repeat');
+        title.title = item.name;
+        titleText.dir = titleRepeat.dir = 'auto';
+        titleRepeat.setAttribute('aria-hidden', 'true');
+        titleTrack.append(titleText, titleRepeat);
+        title.append(titleTrack);
+        info.append(title, text('small', item.artist));
         const duration=item.duration_ms>0?Math.floor(item.duration_ms/60000)+':'+String(Math.floor(item.duration_ms/1000)%60).padStart(2,'0'):'时长未知';
         info.append(text('small',duration+((item.start_offset_ms||0)>0?' · 从 '+(item.start_offset_ms/1000)+' 秒起播':'')+(item.audio_bytes>0?' · '+(item.audio_bytes/1048576).toFixed(1)+' MB':''),'music-meta'));
         head.append(cover,info);inner.append(head);
@@ -122,27 +170,20 @@
         function seekCard(){if(firstPlay&&audio.readyState>0){const start=(item.start_offset_ms||0)/1000;if(Number.isFinite(audio.duration)&&start>=audio.duration){audio.pause();return;}try{audio.currentTime=start;firstPlay=false;}catch(_){audio.pause();}}}
         audio.addEventListener('loadedmetadata',seekCard);
         audio.addEventListener('ended',()=>{firstPlay=true;});
-        audio.addEventListener('play',()=>{seekCard();body.querySelectorAll('audio').forEach(other=>{if(other!==audio)other.pause();});});inner.append(audio);
+        audio.addEventListener('play',()=>{seekCard();body.querySelectorAll('audio').forEach(other=>{if(other!==audio)other.pause();});});
+        bindTitleMarquee(audio, title, titleText);
+        inner.append(audio);
         if(AdminAccess.can('music',true)) {
-          const actions=text('div','','music-tile-actions');
-          const handle=text('button','拖动','btn btn-sm btn-ghost-secondary music-drag');handle.type='button';handle.dataset.drag=item.id;handle.title='拖动调整顺序或切换上架分区';
-          handle.addEventListener('dragstart',event=>{
-            if(!writable()){event.preventDefault();return;}
-            dragged=item.id;audio.pause();event.dataTransfer.setData('text/plain',item.id);event.dataTransfer.effectAllowed='move';event.dataTransfer.setDragImage(tile,20,20);tile.classList.add('dragging');
+          tile.tabIndex=0;tile.setAttribute('aria-label','编辑音乐：'+item.name);tile.dataset.editable='true';
+          let allowDrag=true;
+          tile.addEventListener('pointerdown',event=>{allowDrag=!event.target.closest('audio');});
+          tile.addEventListener('click',event=>{if(!event.target.closest('audio')&&Date.now()>=suppressClickUntil)edit(item);});
+          tile.addEventListener('keydown',event=>{if(event.target===tile&&(event.key==='Enter'||event.key===' ')){event.preventDefault();edit(item);}});
+          tile.addEventListener('dragstart',event=>{
+            if(!writable()||!allowDrag||event.target.closest('audio')){event.preventDefault();return;}
+            dragged=item.id;suppressClickUntil=Infinity;audio.pause();event.dataTransfer.setData('text/plain',item.id);event.dataTransfer.effectAllowed='move';event.dataTransfer.setDragImage(tile,20,20);tile.classList.add('dragging');
           });
-          handle.addEventListener('dragend',()=>{if(dragged){dragged=null;render();}});
-          const editButton=text('button','编辑','btn btn-sm btn-outline-secondary');editButton.type='button';editButton.onclick=()=>edit(item);
-          const menu=text('details','','music-menu'), summary=text('summary','','btn btn-sm btn-ghost-secondary');summary.setAttribute('aria-label','更多操作');summary.append(icon('dots'));
-          const options=text('div','','music-menu-options');
-          [['前移',-1],['后移',1],[published?'下架':'上架',0]].forEach(([label,direction])=>{
-            const button=text('button',label,'btn btn-sm btn-ghost-secondary');button.type='button';
-            button.onclick=()=>{if(!writable())return;menu.open=false;const next=items.map(v=>({...v})), from=next.findIndex(v=>v.id===item.id);const [moved]=next.splice(from,1);const group=next.filter(v=>v.published===published);
-              if(direction===0){moved.published=!published;next.push(moved);}
-              else {const oldIndex=items.filter(v=>v.published===published).findIndex(v=>v.id===item.id), to=Math.max(0,Math.min(group.length,oldIndex+direction));const anchor=group[to];if(anchor)next.splice(next.indexOf(anchor),0,moved);else next.push(moved);}
-              arrange(next);
-            };options.append(button);
-          });
-          menu.append(summary,options);const right=text('div','','d-flex gap-1');right.append(editButton,menu);actions.append(handle,right);inner.append(actions);
+          tile.addEventListener('dragend',()=>{suppressClickUntil=Date.now()+300;if(dragged){dragged=null;render();}});
         }
         tile.append(inner);grid.append(tile);
       });
@@ -155,7 +196,7 @@
         else grid.insertBefore(tile,empty);
       });
       grid.addEventListener('drop',event=>{
-        if(!dragged||!writable())return;event.preventDefault();dragged=null;
+        if(!dragged||!writable())return;event.preventDefault();dragged=null;suppressClickUntil=Date.now()+300;
         const next=[];body.querySelectorAll('.music-grid').forEach(zone=>zone.querySelectorAll('.music-tile').forEach(tile=>{const item=items.find(v=>v.id===tile.dataset.id);next.push({...item,published:zone.dataset.published==='true'});}));
         arrange(next);
       });
@@ -179,6 +220,28 @@
     try {const data=await request('/admin/api/music/layout',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({items:next.map(v=>({id:v.id,revision:v.revision,published:v.published}))}),signal:layoutController.signal});items=data.items;render();status.textContent='已保存';}
     catch(e){needsRefresh=true;error.textContent=e.name==='AbortError'?'保存超时，正在重新读取实际结果。':e.message+'，正在重新读取实际结果。';error.hidden=false;status.textContent='';await load(true);}
     finally{clearTimeout(timeout);layoutController=null;arranging=false;controls();}
+  }
+  document.getElementById('musicDelete').onclick=()=>{if(writable()&&current){deleteConfirm.hidden=false;document.getElementById('musicDeleteCancel').focus();}};
+  document.getElementById('musicDeleteCancel').onclick=()=>{deleteConfirm.hidden=true;document.getElementById('musicDelete').focus();};
+  document.getElementById('musicDeleteConfirmButton').onclick=()=>editorAction('delete');
+  document.getElementById('musicUnpublish').onclick=()=>editorAction('unpublish');
+  async function editorAction(kind) {
+    if(!writable()||!current)return;
+    const selected=current;saving=true;saveError.hidden=true;actionStatus.textContent='';controls();
+    saveController=new AbortController();const timeout=setTimeout(()=>saveController.abort(),25000);
+    try {
+      if(kind==='delete'){
+        await request('/admin/api/music/'+encodeURIComponent(selected.id),{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({revision:selected.revision}),signal:saveController.signal});
+        needsRefresh=true;modal.close();await load();
+      } else {
+        const next=items.map(item=>({...item,published:item.id===selected.id?false:item.published}));
+        const layout=[...next.filter(item=>item.published),...next.filter(item=>!item.published)];
+        const data=await request('/admin/api/music/layout',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({items:layout.map(item=>({id:item.id,revision:item.revision,published:item.published}))}),signal:saveController.signal});
+        items=data.items;current=items.find(item=>item.id===selected.id);render();deleteConfirm.hidden=true;actionStatus.textContent='已下架';
+      }
+    } catch(e) {
+      needsRefresh=true;modal.close();error.textContent=(e.name==='AbortError'?'操作超时，请确认当前结果。':e.message)+' 正在重新读取乐库。';error.hidden=false;await load(true);
+    } finally {clearTimeout(timeout);saveController=null;saving=false;controls();}
   }
   form.addEventListener('submit',async e=>{
     e.preventDefault();if(!writable())return;const start=startSeconds(),duration=preview&&preview.duration;if(!Number.isFinite(start)||start<0||start>=1200||(Number.isFinite(duration)&&start>=duration)){startInput.setCustomValidity('起播时间必须小于音乐时长。');startInput.reportValidity();return;}saving=true;save.disabled=true;saveError.hidden=true;controls();

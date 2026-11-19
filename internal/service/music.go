@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"github.com/tongyichu/track_server/internal/models"
 	"github.com/tongyichu/track_server/internal/repository"
+	_ "golang.org/x/image/webp"
 	"image"
 	"image/jpeg"
 	_ "image/png"
@@ -178,9 +179,9 @@ func (s *MusicService) Save(ctx context.Context, v models.MusicTrack, audio, cov
 		return v, fmt.Errorf("%w: 起播时间必须小于音乐时长", ErrMusicInput)
 	}
 	if len(cover) > 0 {
-		cfg, _, e := image.DecodeConfig(bytes.NewReader(cover))
-		if e != nil || cfg.Width < 1 || cfg.Height < 1 || cfg.Width > 2048 || cfg.Height > 2048 {
-			return v, fmt.Errorf("%w: 封面须为2048像素以内的PNG/JPEG", ErrMusicInput)
+		cfg, format, e := image.DecodeConfig(bytes.NewReader(cover))
+		if e != nil || (format != "jpeg" && format != "png" && format != "webp") || cfg.Width < 1 || cfg.Height < 1 || cfg.Width > 2048 || cfg.Height > 2048 {
+			return v, fmt.Errorf("%w: 封面须为2048像素以内的PNG/JPEG/WebP", ErrMusicInput)
 		}
 		img, _, e := image.Decode(bytes.NewReader(cover))
 		if e != nil {
@@ -284,4 +285,14 @@ func musicMP3Duration(data []byte) (int64, error) {
 		return 0, ErrMusicInput
 	}
 	return duration, nil
+}
+
+func (s *MusicService) Delete(ctx context.Context, id string, previous int64) error {
+	if previous < 1 {
+		return ErrMusicInput
+	}
+	if s == nil || s.repo == nil {
+		return errors.New("music unavailable")
+	}
+	return s.repo.DeleteMusic(ctx, id, previous)
 }
