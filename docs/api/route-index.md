@@ -31,6 +31,7 @@
 | 本人全部历史个人纪录（含轨迹预览及被跟随计数） | GET | `/track/activity/records` | 是 | [个人纪录](track.md#个人纪录) |
 | 本人全部历史探索足迹 | GET | `/track/activity/footprint` | 是 | [探索统计](track-footprint.md#全国探索统计) |
 | 本人省份/城市足迹卡片与总数 | GET | `/track/activity/footprint/tracks` | 是 | [对应轨迹](track-footprint.md#对应轨迹列表) |
+| 后台景点目录（名称、地区、缺项及资料类型筛选） | GET | `/admin/api/scenic-spots` | 后台景点读权限 | [景点管理](admin-regions.md#景点管理) |
 | 后台景点状态调整（详情删除按 archived 归档） | POST | `/admin/api/scenic-spots/:spot_id/status` | 后台景点写权限 | [track-place-discovery.md](../track-place-discovery.md#后台景点删除归档) |
 | 后台景点等级编辑与详情 | GET / PUT | `/admin/api/scenic-spots/:spot_id` | 后台景点读/写权限 | [景区等级采集与下发](../track-place-discovery.md#景区等级采集与下发) |
 | 存量景点资料、等级补采及高德图片下载压缩 | POST | `/admin/api/scenic-spots/provider-content/backfill` | 后台景点写权限 | [景区等级采集](../track-place-discovery.md#景区等级采集与下发)、[图片本地存储](../track-place-discovery.md#高德景点图片本地存储) |

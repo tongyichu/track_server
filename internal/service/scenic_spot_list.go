@@ -17,7 +17,7 @@ type ScenicSpotCatalogPage struct {
 	TrackStatistics map[string]*repository.ScenicSpotTrackStatistics
 }
 
-func (s *ScenicSpotCatalogService) ListRanked(ctx context.Context, f repository.ScenicSpotListFilter) (*ScenicSpotCatalogPage, error) {
+func (s *ScenicSpotCatalogService) ListRanked(ctx context.Context, f repository.ScenicSpotListFilter, editMode string) (*ScenicSpotCatalogPage, error) {
 	filter, err := s.prepareListFilter(ctx, f)
 	if err != nil {
 		return nil, err
@@ -44,20 +44,27 @@ func (s *ScenicSpotCatalogService) ListRanked(ctx context.Context, f repository.
 		if len(spots) == 0 {
 			break
 		}
+		matches := make([]*models.ScenicSpot, 0, len(spots))
 		ids := make([]string, 0, len(spots))
 		for _, spot := range spots {
+			if editMode != "" && ScenicSpotEditMode(spot) != editMode {
+				continue
+			}
+			matches = append(matches, spot)
 			ids = append(ids, spot.ID)
 		}
-		statistics, err := s.RelatedTrackStatistics(ctx, ids)
-		if err != nil {
-			return nil, err
-		}
-		for _, spot := range spots {
-			stats := statistics[spot.ID]
-			if stats == nil {
-				stats = &repository.ScenicSpotTrackStatistics{}
+		if len(ids) > 0 {
+			statistics, err := s.RelatedTrackStatistics(ctx, ids)
+			if err != nil {
+				return nil, err
 			}
-			ranked = append(ranked, rankedSpot{spot: spot, grade: scenicSpotGradeRank(spot.ScenicGrade), statistics: stats})
+			for _, spot := range matches {
+				stats := statistics[spot.ID]
+				if stats == nil {
+					stats = &repository.ScenicSpotTrackStatistics{}
+				}
+				ranked = append(ranked, rankedSpot{spot: spot, grade: scenicSpotGradeRank(spot.ScenicGrade), statistics: stats})
+			}
 		}
 		if len(spots) < filter.Limit {
 			break
@@ -101,4 +108,20 @@ func (s *ScenicSpotCatalogService) ListRanked(ctx context.Context, f repository.
 		page.NextCursor = ranked[end-1].spot.ID
 	}
 	return page, nil
+}
+
+// ScenicSpotEditMode classifies legacy entries and entries explicitly edited by an operator.
+func ScenicSpotEditMode(spot *models.ScenicSpot) string {
+	if spot.ManualEdited {
+		return "manual"
+	}
+	for _, source := range spot.Sources {
+		if source.Status == "active" && source.ProviderID != "" {
+			return "automatic"
+		}
+	}
+	if spot.ProviderDataStatus != "synced" && (spot.Name != "" || spot.Category != "" || spot.Address != "" || spot.Description != "" || len(spot.Photos) > 0) {
+		return "manual"
+	}
+	return "automatic"
 }

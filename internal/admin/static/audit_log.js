@@ -29,7 +29,7 @@
     ['DELETE', 'releases/:release', '删除发布版本', '版本记录 {release}'],
     ['GET', 'releases/upload-token', '申请上传凭证', '安装包上传', '申请凭证不代表安装包已经上传或发布。'],
     ['POST', 'releases/upload-package', '上传安装包', 'App 安装包', '上传成功不代表已发布版本。'],
-    ['POST', 'scenic-spots/provider-content/backfill', '同步景点资料', '景点目录', '景点页会自动分批触发此请求，连续记录不一定是手动重复操作；每条仅代表一批请求，具体同步结果请查看景点页。'],
+    ['POST', 'scenic-spots/provider-content/backfill', '同步景点资料', '景点目录', '每条记录对应一批同步请求。当前景点页需确认后才开始同步，旧版本进入页面时可能触发同步。'],
     ['POST', 'scenic-spots/description/generate', '生成简介草稿', '景点简介', '生成草稿不代表简介已经保存。'],
     ['POST', 'scenic-spots', '创建景点', '景点 · 未记录编号'],
     ['POST', 'scenic-spots/backfill', '回填景点目录', '景点目录', '批量处理的具体结果请查看景点页。'],

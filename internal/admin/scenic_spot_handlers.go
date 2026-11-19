@@ -92,8 +92,13 @@ func (h *Handler) ListScenicSpots(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 	f.VisibleOnly = f.Status == ""
+	editMode := strings.TrimSpace(string(c.Query("edit_mode")))
+	if editMode != "" && editMode != "manual" && editMode != "automatic" {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid scenic spot edit mode"})
+		return
+	}
 	if view == "picker" {
-		if f.Query == "" || utf8.RuneCountInString(f.Query) > 160 || f.Status != "" || f.Missing != "" {
+		if f.Query == "" || utf8.RuneCountInString(f.Query) > 160 || f.Status != "" || f.Missing != "" || editMode != "" {
 			c.JSON(http.StatusBadRequest, utils.H{"error": "picker requires a name query and active scenic spots"})
 			return
 		}
@@ -127,7 +132,7 @@ func (h *Handler) ListScenicSpots(ctx context.Context, c *app.RequestContext) {
 		c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"items": picks, "has_more": hasMore, "next_cursor": next}})
 		return
 	}
-	page, err := h.scenicSpotSvc.ListRanked(ctx, f)
+	page, err := h.scenicSpotSvc.ListRanked(ctx, f, editMode)
 	if err != nil {
 		h.scenicSpotServiceError(c, err)
 		return
@@ -146,12 +151,8 @@ func (h *Handler) ListScenicSpots(ctx context.Context, c *app.RequestContext) {
 	if view == "summary" {
 		summaries := make([]scenicSpotListSummary, 0, len(items))
 		for _, spot := range items {
-			mode := "automatic"
-			if scenicSpotListManual(spot) {
-				mode = "manual"
-			}
 			meta := metadata[spot.ID]
-			summaries = append(summaries, scenicSpotListSummary{ID: spot.ID, Name: spot.Name, ScenicGrade: spot.ScenicGrade, CityLabels: meta.CityLabels, PhotoCount: len(spot.Photos), EditMode: mode, RelatedTrackCount: meta.TrackCount})
+			summaries = append(summaries, scenicSpotListSummary{ID: spot.ID, Name: spot.Name, ScenicGrade: spot.ScenicGrade, CityLabels: meta.CityLabels, PhotoCount: len(spot.Photos), EditMode: service.ScenicSpotEditMode(spot), RelatedTrackCount: meta.TrackCount})
 		}
 		responseItems = summaries
 	}
@@ -171,20 +172,6 @@ type scenicSpotListSummary struct {
 type scenicSpotListMetadata struct {
 	TrackCount int64
 	CityLabels []string
-}
-
-// Match the existing editor's manual/automatic semantics without sending its
-// photos, sources and long text with each list row.
-func scenicSpotListManual(spot *models.ScenicSpot) bool {
-	if spot.ManualEdited {
-		return true
-	}
-	for _, source := range spot.Sources {
-		if source.Status == "active" && source.ProviderID != "" {
-			return false
-		}
-	}
-	return spot.ProviderDataStatus != "synced" && (spot.Name != "" || spot.Category != "" || spot.Address != "" || spot.Description != "" || len(spot.Photos) > 0)
 }
 
 func (h *Handler) enrichScenicSpotCities(ctx context.Context, spots []*models.ScenicSpot) (map[string]scenicSpotListMetadata, error) {

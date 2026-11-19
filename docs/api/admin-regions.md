@@ -16,11 +16,11 @@
 
 MySQL、Mongo、内存实现均在总数统计及游标分页前应用地域条件，不限于浏览器已加载的前 100 条。
 
-景点列表统一先按景区等级 5A→4A→3A→2A→1A→未知排列，同级按 `related_track_count` 降序，数量相同按景点 ID 升序；完整条目与 `view=summary` 使用相同顺序。轨迹数沿用后台“相关轨迹(N)”的完整关联范围，只排除已经不存在的轨迹，不改为 App 的公开已完成口径。服务层按每批最多100个扫描全部匹配目录并批量关联计数，完成全局排序后再截取请求页；同一批统计同时用于排序和当前页数量/省市展示，不逐景点请求或重复补计数，不调用外部服务。`total` 是筛选后的完整数量，`next_cursor` 仍是不透明使用的末项景点 ID，下一页从当前排序中的该锚点之后继续；不再按 ID 大小截断候选。末页 `has_more=false` 且 `next_cursor` 为空，整页恰好达到limit也不会误报有下一页。锚点已删除或不再符合筛选时返回400，需清空游标重新查询。
+景点列表统一先按景区等级 5A→4A→3A→2A→1A→未知排列，同级按 `related_track_count` 降序，数量相同按景点 ID 升序；完整条目与 `view=summary` 使用相同顺序。轨迹数沿用后台“相关轨迹”的完整关联范围，只排除已经不存在的轨迹，不改为 App 的公开已完成口径。服务层按每批最多100个扫描全部匹配目录并批量关联计数，完成全局排序后再截取请求页；同一批统计同时用于排序和当前页数量/省市展示，不逐景点请求或重复补计数，不调用外部服务。`total` 是筛选后的完整数量，`next_cursor` 仍是不透明使用的末项景点 ID，下一页从当前排序中的该锚点之后继续；不再按 ID 大小截断候选。末页 `has_more=false` 且 `next_cursor` 为空，整页恰好达到limit也不会误报有下一页。锚点已删除或不再符合筛选时返回400，需清空游标重新查询。
 
 ### 景点目录轻量摘要
 
-目录页请求 `GET /admin/api/scenic-spots?view=summary`，不传view保留完整条目，总数、地域/缺项筛选及全局排序/游标不变。另提供手动关联用view=picker：q必填且≤160字符，仅active、禁止status/missing，最多20项，按ID游标读取单页，返回items（id/name/related_city_labels）、has_more、next_cursor，不返回total或统计、不全局排名、不读关联轨迹。均沿用景点查看权限和no-store；其他view返回400。详见[手动录入景点](admin-tracks.md#手动录入景点)。
+目录页请求 `GET /admin/api/scenic-spots?view=summary`，不传view保留完整条目，总数、地域/缺项筛选及全局排序/游标不变。可选 `edit_mode=manual|automatic` 与其他筛选取交集，按既有 `edit_mode` 分类规则在服务端统计总数和分页之前应用。未知取值返回400。另提供手动关联用view=picker：q必填且≤160字符，仅active、禁止status/missing/edit_mode，最多20项，按ID游标读取单页，返回items（id/name/related_city_labels）、has_more、next_cursor，不返回total或统计、不全局排名、不读关联轨迹。均沿用景点查看权限和no-store；其他view返回400。详见[手动录入景点](admin-tracks.md#手动录入景点)。
 
 summary条目仅包含：
 
