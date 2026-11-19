@@ -2531,7 +2531,10 @@ func (h *Handler) decorateAdminTrackAssetURLs(ctx context.Context, items []*mode
 		if h != nil && h.screenshotCache != nil {
 			item.TrackScreenshotURL = h.ensureAdminScreenshotCached(ctx, item.UserID, item.ID, item.TrackScreenshotURL)
 			item.TrackNoMapBgScreenshotURL = h.ensureAdminScreenshotCached(ctx, item.UserID, item.ID+"_no_map_bg", item.TrackNoMapBgScreenshotURL)
-			item.PreviewImages.LandscapeDayURL = h.ensureAdminScreenshotCached(ctx, item.UserID, item.ID+"_landscape_day", item.PreviewImages.LandscapeDayURL)
+			if source := strings.TrimSpace(item.PreviewImages.LandscapeDayURL); source != "" {
+				key := service.TrackPreviewCacheKey(item.ID, "landscape_day", source)
+				item.PreviewImages.LandscapeDayURL = h.ensureAdminScreenshotCached(ctx, item.UserID, key, source)
+			}
 		}
 		item.TrackScreenshotURL = rewriteAdminStaticURL(item.TrackScreenshotURL)
 		item.TrackNoMapBgScreenshotURL = rewriteAdminStaticURL(item.TrackNoMapBgScreenshotURL)

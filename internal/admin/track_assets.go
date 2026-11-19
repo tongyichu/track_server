@@ -97,7 +97,7 @@ func (h *Handler) GetTrackAsset(ctx context.Context, c *app.RequestContext) {
 		version := sha256.Sum256([]byte(source))
 		key := fmt.Sprintf("%s_admin_%s_%x", track.ID, asset, version[:8])
 		if cache == h.trackPreviewCache {
-			key = fmt.Sprintf("%s_preview_%s_%x", track.ID, asset, version[:8])
+			key = service.TrackPreviewCacheKey(track.ID, asset, source)
 		}
 		cacheCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()

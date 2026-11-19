@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"log"
 	"net/url"
 	"strings"
 
@@ -27,6 +28,34 @@ func validateTrackPreviewImages(images *models.TrackPreviewImages) error {
 func previewVersion(source string) string {
 	hash := sha256.Sum256([]byte(source))
 	return fmt.Sprintf("%x", hash[:8])
+}
+
+func TrackPreviewCacheKey(trackID, variant, source string) string {
+	return trackID + "_preview_" + variant + "_" + previewVersion(source)
+}
+
+func (s *TrackService) removeTrackPreviewCache(track *models.Track) {
+	remove := func(cache *AssetCacheService, key string) {
+		if cache == nil {
+			return
+		}
+		if err := cache.RemoveCached(key); err != nil {
+			log.Printf("[TrackPreview] remove cache failed track=%s key=%s err=%v", track.ID, key, err)
+		}
+	}
+	// Older admin lists cached the landscape preview without a source version.
+	remove(s.screenshotCache, track.ID+"_landscape_day")
+	for _, variant := range previewVariants {
+		source := track.PreviewImages.Variant(variant)
+		if source == "" {
+			continue
+		}
+		key := TrackPreviewCacheKey(track.ID, variant, source)
+		remove(s.previewCache, key)
+		if variant == "landscape_day" {
+			remove(s.screenshotCache, key)
+		}
+	}
 }
 
 // Lists only construct versioned URLs; the image request performs the cache fill.
@@ -64,6 +93,6 @@ func (s *TrackService) TrackPreviewFile(ctx context.Context, viewerID int64, tra
 	if s.previewCache == nil {
 		return "", fmt.Errorf("preview cache is not configured")
 	}
-	key := track.ID + "_preview_" + variant + "_" + previewVersion(source)
+	key := TrackPreviewCacheKey(track.ID, variant, source)
 	return s.previewCache.EnsureCachedFile(ctx, track.UserID, key, source)
 }

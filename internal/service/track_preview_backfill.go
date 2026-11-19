@@ -369,6 +369,14 @@ func (s *TrackService) ClearPreviewBackfill(ctx context.Context, input PreviewBa
 	if input.All == (id != "") || len(id) > 64 {
 		return nil, invalidArg("specify either all=true or a track_id")
 	}
+	var previous *models.Track
+	if id != "" && (s.previewCache != nil || s.screenshotCache != nil) {
+		var err error
+		previous, err = s.tracks.FindByID(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+	}
 	var generation [16]byte
 	if _, err := rand.Read(generation[:]); err != nil {
 		return nil, err
@@ -379,6 +387,9 @@ func (s *TrackService) ClearPreviewBackfill(ctx context.Context, input PreviewBa
 	}
 	if id != "" && affected == 0 {
 		return nil, repository.ErrNotFound
+	}
+	if previous != nil {
+		s.removeTrackPreviewCache(previous)
 	}
 	return &PreviewBackfillClearResult{AffectedCount: affected, All: input.All, TrackID: id}, nil
 }

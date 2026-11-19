@@ -271,7 +271,7 @@ GET /admin/api/users
        → 源文件无时间戳时按运动类型估算速度沿轨迹合成时间戳（见 docs/api/admin-tracks.md），保证耗时/热量/均速与客户端图表可用
        → 标题默认自动生成；文件名（去扩展名）含汉字时优先用文件名做标题（≤40 字符）
        → 成功结果附带 track 摘要（id/city_code/title/track_type/status），结果表复用主列表单元格并增加文件名/导入结果；用户名与头像复用本批归属人，不逐文件查详情。成功行直接打开共享编辑器，保存/删除后刷新对应导入行与主列表；失败行保留错误且无编辑入口
-       → 展示 preview_images.landscape_day_url（日间横版 4:3），并经后台静态代理访问
+       → 展示 preview_images.landscape_day_url（日间横版 4:3），经后台静态代理访问；缓存键包含图片来源版本，补图后读取新横图
        → 用户名通过当前页 user_id 批量读取用户昵称，列表不展示 user_id
   → GET /admin/api/tracks/statistics?period=day|week|month 展示轨迹类型环形图与贡献用户前十横向柱状图，两卡片独立切换周期、默认本月；与用户管理共用 admin_chart_style.js，内容区压缩到220px，不再展示城市分布
   → GET /admin/api/cities 将城市 Code 显示为名称并提供编辑选择器
