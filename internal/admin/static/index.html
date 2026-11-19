@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="/admin/static/vendor/tabler.min.css" />
   <link rel="stylesheet" href="/admin/static/style.css" />
   <link rel="stylesheet" href="/admin/static/admin_stats.css" />
+  <link rel="stylesheet" href="/admin/static/releases.css" />
 </head>
 <body>
   <header class="topbar">
@@ -28,111 +29,123 @@
     </div>
   </header>
 
-  <main class="container">
-    <section class="panel admin-client-stats admin-stats-panel" id="clientStats" aria-busy="true">
+  <main class="container release-management">
+    <header class="page-heading admin-page-heading">
+      <div>
+        <h1>发布管理</h1>
+        <p class="hint mb-0">Android <span id="currentRelease" role="status">· 正在读取当前版本…</span></p>
+      </div>
+      <button id="togglePublish" type="button" class="btn btn-primary" data-admin-write="releases" aria-expanded="false" aria-controls="publishPanel">发布新版本</button>
+    </header>
+
+    <section class="panel" id="publishPanel" data-admin-write="releases" aria-labelledby="publishHeading" hidden>
+      <h2 id="publishHeading">发布新版本</h2>
+      <form id="publishForm" class="release-form">
+        <div class="release-package">
+          <label for="apkFile">Android 安装包</label>
+          <div class="release-toolbar">
+            <input type="file" class="form-control" id="apkFile" accept=".apk" required />
+            <button type="button" class="btn btn-outline-primary" id="uploadBtn" disabled>上传并解析</button>
+          </div>
+          <div class="hint" id="uploadHint" role="status"></div>
+          <dl class="release-package-info" id="packageMetadata" hidden></dl>
+        </div>
+
+        <div>
+          <span class="form-label">更新说明</span>
+          <div id="releaseNotesList" class="release-notes-editor"></div>
+        </div>
+
+        <div class="release-policy">
+          <label>发布状态
+            <select class="form-select" name="status">
+              <option value="published">已发布</option>
+              <option value="draft">草稿</option>
+              <option value="archived">已归档</option>
+            </select>
+          </label>
+          <label>最低支持构建号
+            <input class="form-control" type="number" name="min_supported_version_code" min="0" value="0" required aria-describedby="minReleaseHelp" />
+            <small class="hint" id="minReleaseHelp">0 表示不设最低门槛。</small>
+          </label>
+          <label class="form-check form-switch release-force-switch">
+            <input class="form-check-input" type="checkbox" name="force_update" />
+            <span>强制升级</span>
+          </label>
+        </div>
+        <div class="release-toolbar">
+          <button id="publishBtn" type="submit" class="btn btn-primary" disabled>核对并发布</button>
+          <span class="error" id="publishErr" role="alert" hidden></span>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel" aria-labelledby="releaseListHeading">
+      <div class="admin-section-heading release-toolbar">
+        <h2 id="releaseListHeading" class="mb-0">版本记录</h2>
+        <div class="release-toolbar">
+          <select id="filterStatus" class="form-select form-select-sm" aria-label="发布状态">
+            <option value="">全部状态</option>
+            <option value="published">已发布</option>
+            <option value="draft">草稿</option>
+            <option value="archived">已归档</option>
+          </select>
+          <button id="refreshBtn" type="button" class="btn btn-sm btn-outline-secondary">刷新</button>
+          <button id="openChangelogs" type="button" class="btn btn-sm btn-link">更新日志</button>
+        </div>
+      </div>
+      <p id="releaseListMessage" class="hint my-2" role="status">正在读取版本记录…</p>
+      <div class="table-responsive">
+        <table class="data release-table" aria-labelledby="releaseListHeading" hidden>
+          <thead>
+            <tr><th scope="col">版本</th><th scope="col">状态</th><th scope="col">时间</th><th scope="col">更新说明</th></tr>
+          </thead>
+          <tbody id="releaseList"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <details class="panel admin-client-stats admin-stats-panel" id="clientStats">
+      <summary>客户端统计</summary>
       <div class="admin-stats-heading">
-        <h2>客户端统计</h2>
-        <div class="row">
-          <select id="clientStatsDays">
+        <p class="hint mb-0">活跃概况按周期内最近上报的设备去重，趋势按北京时间自然日统计。</p>
+        <div class="release-toolbar">
+          <select id="clientStatsDays" class="form-select form-select-sm" aria-label="客户端统计周期">
             <option value="7">近 7 天</option>
             <option value="30" selected>近 30 天</option>
           </select>
           <button id="refreshClientStats" type="button" class="btn btn-sm btn-outline-secondary">刷新数据</button>
         </div>
       </div>
-      <p class="hint">口径：周期内活跃的去重设备，来自客户端升级检查与登录上报；趋势按自然日统计当天出现过的设备。</p>
       <p id="clientStatsError" class="error" role="alert" hidden></p>
       <div class="admin-metrics">
         <div class="admin-metric" data-admin-metric="" data-label="活跃设备" data-value-id="csActiveDevices" data-note="周期内去重设备" data-note-id="csActiveNote"></div>
-        <div class="admin-metric" data-admin-metric="" data-label="最新版本活跃" data-value-id="csLatestDevices" data-note="暂无已发布版本" data-note-id="csLatestNote"></div>
-        <div class="admin-metric" data-admin-metric="" data-label="低于强升线设备" data-value-id="csBelowMin" data-note="暂无强升线" data-note-id="csBelowMinNote"></div>
+        <div class="admin-metric" data-admin-metric="" data-label="当前版本活跃" data-value-id="csLatestDevices" data-note="暂无已发布版本" data-note-id="csLatestNote"></div>
+        <div class="admin-metric" data-admin-metric="" data-label="低于最低支持版本" data-value-id="csBelowMin" data-note="未设最低版本门槛" data-note-id="csBelowMinNote"></div>
       </div>
-      <div class="feature-stats-grid admin-chart-grid">
-        <article class="admin-stat-panel"><h3>版本活跃趋势</h3><div id="csTrendChart" class="chart-medium" role="img" aria-label="版本活跃趋势堆叠面积图"></div></article>
-        <article class="admin-stat-panel"><h3>版本分布</h3><div id="csVersionChart" class="chart-small" role="img" aria-label="版本分布饼图"></div></article>
+      <div class="feature-stats-grid admin-chart-grid release-charts">
+        <article class="admin-stat-panel">
+          <h3>每日版本活跃</h3>
+          <p id="csTrendNote" class="hint" hidden></p>
+          <div id="csTrendChart" class="chart-medium" role="img" aria-label="当前与其他版本每日设备活跃趋势"></div>
+        </article>
+        <article class="admin-stat-panel">
+          <h3>版本分布</h3>
+          <div class="release-version-distribution">
+            <div id="csVersionChart" class="chart-small" role="img" aria-label="版本分布环形图"></div>
+            <div id="csVersionLegend" class="admin-user-legend"></div>
+          </div>
+        </article>
         <article class="admin-stat-panel"><h3>机型分布 Top 10</h3><div id="csModelChart" class="chart-small" role="img" aria-label="机型分布条形图"></div></article>
         <article class="admin-stat-panel"><h3>系统版本分布</h3><div id="csOsChart" class="chart-small" role="img" aria-label="系统版本分布条形图"></div></article>
       </div>
-    </section>
-
-    <section class="panel" data-admin-write="releases">
-      <h2>发布新版本</h2>
-      <form id="publishForm" data-admin-write="releases" class="grid">
-        <input type="hidden" name="platform" value="android" />
-        <input type="hidden" name="version_name" />
-        <input type="hidden" name="version_code" />
-        <input type="hidden" name="package_url" />
-        <input type="hidden" name="package_size" value="0" />
-        <input type="hidden" name="package_md5" />
-
-        <div class="full row release-form-row">
-          <label>最低支持版本号
-            <input type="number" name="min_supported_version_code" min="0" value="0" />
-          </label>
-          <label>发布状态
-            <select name="status">
-              <option value="published">published</option>
-              <option value="draft">draft</option>
-              <option value="archived">archived</option>
-            </select>
-          </label>
-          <label class="release-file-label">选择安装包
-            <input type="file" id="apkFile" accept=".apk" required />
-          </label>
-          <button type="button" id="uploadBtn">上传到服务器</button>
-          <span class="hint" id="uploadHint"></span>
-        </div>
-        <div class="full hint" id="packageMetadataHint"></div>
-
-        <div class="full">
-          <span class="form-label">版本说明 (release_notes)</span>
-          <div id="releaseNotesList" class="release-notes-editor"></div>
-        </div>
-
-        <div class="full actions">
-          <button type="submit">发布</button>
-          <label class="form-switch release-force-switch">
-            <input class="form-check-input" type="checkbox" name="force_update" />
-            <span>强制升级</span>
-          </label>
-          <span class="error" id="publishErr"></span>
-          <span class="ok" id="publishOk"></span>
-        </div>
-      </form>
-    </section>
-
-    <section class="panel">
-      <div class="admin-section-heading">
-        <h2>版本列表</h2>
-        <a href="javascript:void(0)" class="admin-link" id="openChangelogs">更新日志</a>
-      </div>
-      <div class="row">
-        <label>状态过滤
-          <select id="filterStatus">
-            <option value="">全部</option>
-            <option value="published">published</option>
-            <option value="draft">draft</option>
-            <option value="archived">archived</option>
-          </select>
-        </label>
-        <button id="refreshBtn">刷新</button>
-      </div>
-      <table class="data">
-        <thead>
-          <tr>
-            <th>ID</th><th>版本名</th>
-            <th>最低支持</th><th>强升</th><th>状态</th>
-            <th>发布人</th><th>时间</th><th>包大小</th><th>更新说明</th><th>操作</th>
-          </tr>
-        </thead>
-        <tbody id="releaseList"></tbody>
-      </table>
-    </section>
+    </details>
   </main>
 
   <script src="/admin/static/vendor/tabler.min.js"></script>
   <script src="/admin/static/shell.js"></script>
   <script src="/admin/static/admin_stats.js"></script>
+  <script src="/admin/static/admin_chart_style.js"></script>
   <script src="/admin/static/ui.js"></script>
   <script src="/admin/static/app.js"></script>
 </body>

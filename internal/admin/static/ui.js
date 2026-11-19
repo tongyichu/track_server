@@ -56,6 +56,7 @@
       const root = createModal(options);
       const body = root.querySelector('.modal-body');
       body.textContent = options.message || '';
+      if (options.preserveLines) body.style.whiteSpace = 'pre-line';
       const footer = root.querySelector('.modal-footer');
       const cancel = document.createElement('button');
       cancel.type = 'button';
@@ -67,17 +68,21 @@
       submit.textContent = options.confirmText || '确认';
       footer.append(cancel, submit);
       const modal = new tabler.Modal(root, { backdrop: 'static' });
-      let settled = false;
+      let settled = false, decision = false;
       function finish(value) {
         if (settled) return;
         settled = true;
-        resolve(value);
+        decision = value;
+        if (!options.waitForHidden) resolve(value);
         modal.hide();
       }
       cancel.addEventListener('click', function () { finish(false); });
       root.querySelector('.btn-close').addEventListener('click', function () { finish(false); });
       submit.addEventListener('click', function () { finish(true); });
-      root.addEventListener('hidden.bs.modal', function () { if (!settled) resolve(false); root.remove(); });
+      root.addEventListener('hidden.bs.modal', function () {
+        if (!settled || options.waitForHidden) resolve(decision);
+        modal.dispose(); root.remove();
+      });
       modal.show();
     });
   }

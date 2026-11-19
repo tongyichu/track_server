@@ -40,7 +40,7 @@ func memoryClientDailyKey(date, platform string, versionCode int64, appVersion s
 	return date + "\x00" + platform + "\x00" + appVersion + "\x00" + strconv.FormatInt(versionCode, 10)
 }
 
-// TouchClientDevice upserts the device and counts it once per local date.
+// TouchClientDevice upserts the device and counts it once per Beijing date.
 func (r *InMemoryAppClientStatsRepository) TouchClientDevice(_ context.Context, device *models.AppClientDevice) error {
 	if device == nil || strings.TrimSpace(device.DeviceID) == "" {
 		return errors.New("device id is required")
@@ -51,9 +51,12 @@ func (r *InMemoryAppClientStatsRepository) TouchClientDevice(_ context.Context, 
 	if now.IsZero() {
 		now = time.Now()
 	}
-	today := now.Format("2006-01-02")
+	today := now.In(appClientStatsLocation).Format(time.DateOnly)
 
 	existing := r.devices[device.DeviceID]
+	if existing != nil && existing.LastSeenAt.After(now) {
+		return nil
+	}
 	firstToday := false
 	if existing == nil {
 		clone := *device
@@ -62,7 +65,7 @@ func (r *InMemoryAppClientStatsRepository) TouchClientDevice(_ context.Context, 
 		r.devices[device.DeviceID] = &clone
 		firstToday = true
 	} else {
-		firstToday = existing.LastSeenAt.Format("2006-01-02") != today
+		firstToday = existing.LastSeenAt.In(appClientStatsLocation).Format(time.DateOnly) != today
 		if device.UserID > 0 {
 			existing.UserID = device.UserID
 		}
@@ -100,9 +103,9 @@ func (r *InMemoryAppClientStatsRepository) GetClientStatistics(_ context.Context
 	if days <= 0 {
 		days = 30
 	}
-	now := time.Now()
+	now := time.Now().In(appClientStatsLocation)
 	cutoff := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 0, -(days - 1))
-	cutoffDate := cutoff.Format("2006-01-02")
+	cutoffDate := cutoff.Format(time.DateOnly)
 	stats := &models.AppClientStatistics{Days: days}
 
 	r.mu.RLock()

@@ -34,6 +34,8 @@ const appClientActiveDailySchema = `CREATE TABLE IF NOT EXISTS app_client_active
 	PRIMARY KEY (stat_date, platform, version_code, app_version)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='客户端按日版本活跃统计表';`
 
+var appClientStatsLocation = time.FixedZone("Asia/Shanghai", 8*60*60)
+
 // MySQLAppClientStatsRepository implements AppClientStatsRepository on top of MySQL.
 type MySQLAppClientStatsRepository struct{ db *sql.DB }
 
@@ -48,7 +50,7 @@ func NewMySQLAppClientStatsRepository(ctx context.Context, db *sql.DB) (*MySQLAp
 }
 
 // TouchClientDevice upserts the device's latest info and increments the daily
-// active counter when the device appears for the first time on the local date.
+// active counter when the device appears for the first time on the Beijing date.
 func (r *MySQLAppClientStatsRepository) TouchClientDevice(ctx context.Context, device *models.AppClientDevice) error {
 	if device == nil || strings.TrimSpace(device.DeviceID) == "" {
 		return errors.New("device id is required")
@@ -57,38 +59,51 @@ func (r *MySQLAppClientStatsRepository) TouchClientDevice(ctx context.Context, d
 	if now.IsZero() {
 		now = time.Now()
 	}
-	today := now.Format("2006-01-02")
-
-	var prevLastSeen time.Time
-	err := r.db.QueryRowContext(ctx,
-		`SELECT last_seen_at FROM app_client_devices WHERE device_id=?`, device.DeviceID,
-	).Scan(&prevLastSeen)
-	notFound := errors.Is(err, sql.ErrNoRows)
-	if err != nil && !notFound {
-		return err
-	}
-
-	_, err = r.db.ExecContext(ctx, `
-		INSERT INTO app_client_devices (
-			device_id, user_id, platform, app_version, version_code, device_model, os_version, first_seen_at, last_seen_at
-		) VALUES (?,?,?,?,?,?,?,?,?)
-		ON DUPLICATE KEY UPDATE
-			user_id = IF(VALUES(user_id) > 0, VALUES(user_id), user_id),
-			platform = IF(VALUES(platform) <> '', VALUES(platform), platform),
-			app_version = IF(VALUES(app_version) <> '', VALUES(app_version), app_version),
-			version_code = IF(VALUES(version_code) > 0, VALUES(version_code), version_code),
-			device_model = IF(VALUES(device_model) <> '', VALUES(device_model), device_model),
-			os_version = IF(VALUES(os_version) <> '', VALUES(os_version), os_version),
-			last_seen_at = VALUES(last_seen_at)`,
-		device.DeviceID, device.UserID, device.Platform, device.AppVersion, device.VersionCode,
-		device.DeviceModel, device.OSVersion, now, now,
-	)
+	today := now.In(appClientStatsLocation).Format(time.DateOnly)
+	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
+	defer tx.Rollback()
+	// Acquire the same device row lock for first-seen and returning devices.
+	// The provisional last_seen_at is replaced before the transaction commits.
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO app_client_devices (device_id, first_seen_at, last_seen_at)
+		VALUES (?, ?, ?)
+		ON DUPLICATE KEY UPDATE device_id=app_client_devices.device_id`,
+		device.DeviceID, now, now.AddDate(0, 0, -1),
+	); err != nil {
+		return err
+	}
+	var prevLastSeen time.Time
+	if err := tx.QueryRowContext(ctx,
+		`SELECT last_seen_at FROM app_client_devices WHERE device_id=? FOR UPDATE`, device.DeviceID,
+	).Scan(&prevLastSeen); err != nil {
+		return err
+	}
+	if prevLastSeen.After(now) {
+		return tx.Commit()
+	}
 
-	if notFound || prevLastSeen.Format("2006-01-02") != today {
-		if _, err := r.db.ExecContext(ctx, `
+	// Preserve the last known metadata when an update check or login omits it.
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE app_client_devices SET
+			user_id = COALESCE(NULLIF(?, 0), user_id),
+			platform = COALESCE(NULLIF(?, ''), platform),
+			app_version = COALESCE(NULLIF(?, ''), app_version),
+			version_code = COALESCE(NULLIF(?, 0), version_code),
+			device_model = COALESCE(NULLIF(?, ''), device_model),
+			os_version = COALESCE(NULLIF(?, ''), os_version),
+			last_seen_at = ?
+		WHERE device_id = ?`,
+		max(0, device.UserID), device.Platform, device.AppVersion, max(0, device.VersionCode),
+		device.DeviceModel, device.OSVersion, now, device.DeviceID,
+	); err != nil {
+		return err
+	}
+
+	if prevLastSeen.In(appClientStatsLocation).Format(time.DateOnly) != today {
+		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO app_client_active_daily (stat_date, platform, version_code, app_version, active_devices)
 			VALUES (?,?,?,?,1)
 			ON DUPLICATE KEY UPDATE active_devices = active_devices + 1`,
@@ -97,7 +112,7 @@ func (r *MySQLAppClientStatsRepository) TouchClientDevice(ctx context.Context, d
 			return err
 		}
 	}
-	return nil
+	return tx.Commit()
 }
 
 // GetClientStatistics aggregates active devices and daily trend for the last days days.
@@ -105,7 +120,7 @@ func (r *MySQLAppClientStatsRepository) GetClientStatistics(ctx context.Context,
 	if days <= 0 {
 		days = 30
 	}
-	now := time.Now()
+	now := time.Now().In(appClientStatsLocation)
 	cutoff := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 0, -(days - 1))
 	stats := &models.AppClientStatistics{Days: days}
 
@@ -149,7 +164,7 @@ func (r *MySQLAppClientStatsRepository) GetClientStatistics(ctx context.Context,
 		SELECT stat_date, COALESCE(NULLIF(app_version, ''), '未知'), version_code, active_devices
 		FROM app_client_active_daily
 		WHERE stat_date >= ?
-		ORDER BY stat_date ASC, active_devices DESC`, cutoff.Format("2006-01-02"))
+		ORDER BY stat_date ASC, active_devices DESC`, cutoff.Format(time.DateOnly))
 	if err != nil {
 		return nil, err
 	}
@@ -165,7 +180,7 @@ func (r *MySQLAppClientStatsRepository) GetClientStatistics(ctx context.Context,
 		if err := rows.Scan(&date, &label, &versionCode, &devices); err != nil {
 			return nil, err
 		}
-		dateKey := date.Format("2006-01-02")
+		dateKey := date.Format(time.DateOnly)
 		idx, ok := trendIndex[dateKey]
 		if !ok {
 			stats.DailyTrend = append(stats.DailyTrend, models.AppClientDailyTrendItem{Date: dateKey})
