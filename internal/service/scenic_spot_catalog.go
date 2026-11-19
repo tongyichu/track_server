@@ -53,6 +53,20 @@ func (s *ScenicSpotCatalogService) SetDescriptionGenerator(generator ScenicSpotD
 	}
 }
 func (s *ScenicSpotCatalogService) Enabled() bool { return s != nil && s.spots != nil }
+
+func (s *ScenicSpotCatalogService) NamesByID(ctx context.Context, ids []string) (map[string]string, error) {
+	spots, err := s.spots.GetScenicSpots(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	names := make(map[string]string, len(spots))
+	for id, spot := range spots {
+		if spot != nil {
+			names[id] = spot.Name
+		}
+	}
+	return names, nil
+}
 func newScenicID(prefix string) string {
 	var b [12]byte
 	if _, err := rand.Read(b[:]); err != nil {

@@ -55,6 +55,8 @@
 | POST | `/admin/api/password-recovery/request` | 公开 | `username, email`，格式有效且队列接收时统一 202 + 通用 data.message；匹配与否/投递失败不通过响应泄露 |
 | POST | `/admin/api/password-recovery/complete` | 公开 | `username, email, code, password, confirmation`；验证后保存新密码并退出全部旧登录，返回 status=ok/login_required=true，不自动登录 |
 
+审计接口附带 `data.target_names`，按 `user`、`track`、`spot`、`account` 分组，以日志路径中的原始编号或后台登录名映射当前名称。查不到对象或名称查询失败时，该条记录仍返回原始路径供定位。用户编号以 JSON 字符串键传输。
+
 邮箱发送接口成功返回 `data.message, expires_in=600, resend_after=60`，表示 SMTP 已接受邮件，不等于收件箱最终送达。公开申请仅表示有界队列已接受，返回 resend_after=60；验证码是 8 位数字，10 分钟、一次有效、最多 5 次错误；实际发信另有每用途/每账号限制。公开完成接口无效账号、邮箱、验证码统一失败描述。限额返回 429，未配置邮件返回 503；客户端应保留登录返回入口和明确的不可用说明。
 
 绑定邮箱必须使用本人 session 和当前密码，更换还需先证明原邮箱控制权，再验证新邮箱。完整邮箱只能通过本人 security 接口读取；管理员账号编辑请求不接受邮箱或现有密码修改。新增账号仍采用临时密码首次改密，随后应立即绑定邮箱。

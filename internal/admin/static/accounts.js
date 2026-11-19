@@ -5,6 +5,7 @@
   const modal = new tabler.Modal($('accountModal'), { backdrop: 'static' });
   let modules = [], selected = null, saving = false;
   let auditRequest = 0;
+  let renderedAuditUsername = null;
 
   async function api(path, options) {
     const response = await fetch('/admin/api' + path, options);
@@ -122,8 +123,10 @@
     const request = ++auditRequest, username = $('auditAccountFilter').value;
     $('refreshAudit').disabled = true;
     showError($('auditError'), '');
-    auditState('正在加载…');
-    $('auditHint').textContent = '展示' + (username ? '所选账号' : '所有账号') + '最近的修改、处理和发布等操作，同一操作的发起与结果合并显示，不包含普通浏览记录。';
+    if (renderedAuditUsername !== username) {
+      renderedAuditUsername = null;
+      auditState('正在加载…');
+    }
     try {
       const params = new URLSearchParams();
       if (username) params.set('username', username);
@@ -131,37 +134,31 @@
       if (request !== auditRequest) return;
       const items = AdminAuditLog.visibleEntries(data.items || []), rows = document.createDocumentFragment();
       items.forEach(item => {
-        const description = AdminAuditLog.describe(item), outcome = AdminAuditLog.outcome(item);
+        const description = AdminAuditLog.describe(item, data.target_names || {}), outcome = AdminAuditLog.outcome(item);
         const row = document.createElement('tr');
+        row.className = 'admin-audit-entry';
         cell(row, time(item.created_at)); cell(row, item.actor_id === 'email-recovery' ? '邮箱找回（未登录）' : item.username);
-        const action = cell(row, description.action);
-        if (item.method === 'POST' && item.path === '/admin/api/scenic-spots/provider-content/backfill') {
-          const automatic = document.createElement('div'); automatic.className = 'small text-secondary';
-          automatic.textContent = '景点页可自动触发 · 分批同步'; action.appendChild(automatic);
-        }
         const details = document.createElement('details'); details.className = 'admin-audit-details';
-        const summary = document.createElement('summary'); summary.textContent = '说明与请求详情'; details.appendChild(summary);
+        const summary = document.createElement('summary'); summary.textContent = description.action; details.appendChild(summary);
         [description.note, outcome.note, '请求：' + item.method + ' ' + item.path,
           'HTTP 状态：' + (item.status || '尚未记录最终响应'), '记录编号：' + item.id].filter(Boolean).forEach(text => {
           const line = document.createElement('p'); line.textContent = text; details.appendChild(line);
         });
-        action.appendChild(details);
+        cell(row, '').appendChild(details);
         cell(row, description.target);
         const result = cell(row, ''), badge = document.createElement('span');
         badge.className = 'badge ' + outcome.color; badge.textContent = outcome.label; badge.title = outcome.note;
         result.appendChild(badge);
-        if (!item.status || item.status >= 300) {
-          const reason = document.createElement('div'); reason.className = 'admin-audit-result-note'; reason.textContent = outcome.note;
-          result.appendChild(reason);
-        }
         rows.appendChild(row);
       });
       $('auditList').replaceChildren(rows);
+      renderedAuditUsername = username;
       if (!items.length) auditState(username ? '该账号暂无操作记录' : '暂无操作记录');
       showError($('auditError'), '');
     } catch (error) {
       if (request !== auditRequest) return;
-      showError($('auditError'), error.message); auditState('加载失败，请刷新重试');
+      showError($('auditError'), error.message);
+      if (renderedAuditUsername !== username) auditState('加载失败，请刷新重试');
     } finally { if (request === auditRequest) $('refreshAudit').disabled = false; }
   }
   function auditState(message) {

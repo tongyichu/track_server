@@ -202,7 +202,7 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	api.POST("/security/email/current-code", m.Auth.HandleSendEmailCode)
 	api.POST("/security/email/send-code", m.Auth.HandleSendEmailCode)
 	api.POST("/security/email/verify", m.Auth.HandleVerifyEmail)
-	api.GET("/audit-logs", m.Auth.HandleAuditLogs)
+	api.GET("/audit-logs", m.Handler.HandleAuditLogs)
 	api.GET("/releases", m.Handler.ListReleases)
 	api.POST("/releases", m.Handler.PublishRelease)
 	api.DELETE("/releases/:id", m.Handler.DeleteRelease)

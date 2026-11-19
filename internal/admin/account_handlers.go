@@ -104,14 +104,14 @@ func (a *Authenticator) HandleChangePassword(ctx context.Context, c *app.Request
 	c.JSON(200, utils.H{"code": 0, "data": utils.H{"status": "ok"}})
 }
 
-func (a *Authenticator) HandleAuditLogs(ctx context.Context, c *app.RequestContext) {
+func (h *Handler) HandleAuditLogs(ctx context.Context, c *app.RequestContext) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	username := strings.TrimSpace(string(c.Query("username")))
-	items, err := a.manager.storage.ListAudit(ctx, username, 100)
+	items, err := h.auth.manager.storage.ListAudit(ctx, username, 100)
 	if err != nil {
 		writeAccountError(c, err)
 		return
 	}
-	c.JSON(200, utils.H{"code": 0, "data": utils.H{"items": items}})
+	c.JSON(200, utils.H{"code": 0, "data": utils.H{"items": items, "target_names": h.auditTargetNames(ctx, items)}})
 }
