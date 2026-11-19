@@ -1,15 +1,95 @@
 <!doctype html>
-<html lang="zh-CN"><head><meta charset="UTF-8"><meta name="referrer" content="no-referrer"><meta name="viewport" content="width=device-width,initial-scale=1"><title>时光轨迹 - 控制台</title><link rel="stylesheet" href="/admin/static/vendor/tabler.min.css"><link rel="stylesheet" href="/admin/static/style.css"><link rel="stylesheet" href="/admin/static/music.css"></head>
-<body><header class="topbar"></header><main class="container wide"><div class="page-heading"><div><h1>背景音乐</h1><p>管理 3D 轨迹视频的配乐</p></div><div class="d-flex gap-2"><button id="musicRefresh" class="btn btn-outline-secondary">刷新</button><button id="musicAdd" class="btn btn-primary" data-admin-write="music">添加音乐</button></div></div><div class="music-toolbar"><span class="hint">拖动卡片调整顺序，跨区拖动即可上架或下架。</span><span id="musicStatus" class="hint" role="status" aria-live="polite"></span></div><p id="musicError" role="alert" class="error" hidden></p><div id="musicList" class="music-board"></div></main>
-<dialog id="musicEditor" class="music-editor"><form id="musicForm" data-admin-fields="music"><div class="d-flex justify-content-between align-items-center"><h2 id="musicEditTitle">添加音乐</h2><button type="button" id="musicClose" class="btn-close" aria-label="关闭"></button></div><div class="music-fields">
-<label>音乐名称<input name="name" required maxlength="80" class="form-control"></label><label>歌手 / 作者<input name="artist" required maxlength="80" class="form-control"></label>
-<div class="music-wide music-audio-input">
-<label>音频来源<select name="audio_mode" class="form-select"><option value="upload">上传文件</option><option value="link">使用链接</option></select></label>
-<label id="musicFileField">音频文件<input name="audio" type="file" accept=".mp3,audio/mpeg" class="form-control"><small class="hint">MP3，最大30MB；编辑时留空保留原文件。</small></label>
-<label id="musicLinkField" hidden>音频链接<input name="audio_link" type="url" maxlength="4096" placeholder="https://…/music.mp3" class="form-control"><small class="hint">填写公开可播放的MP3直链，保留原链接，不下载到服务端。</small></label>
-<input name="duration_seconds" type="hidden">
-<div class="music-wide music-start"><label>起播时间（秒）<input name="start_seconds" type="number" min="0" max="1199.999" step="0.001" value="0" required class="form-control"></label><button id="musicPreviewStart" type="button" class="btn btn-outline-secondary">从这里试听</button><small class="hint">默认0秒，循环时也从这里开始。</small></div>
-<div id="musicPreviewBox" class="music-wide" hidden><div id="musicPreviewPlayer"></div><small id="musicPreviewState" class="hint" role="status">点击播放确认声音。</small></div>
-</div><label class="music-wide">封面（选填）<input name="cover" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="form-control"><small class="hint">PNG/JPEG/WebP，最大5MB、2048像素。</small></label>
-</div><p id="musicSaveError" class="error" role="alert" hidden></p><p id="musicActionStatus" class="hint" role="status"></p><div id="musicDeleteConfirm" class="music-delete-confirm" hidden role="alert"><span>确认删除这首音乐？删除后将从乐库移除。</span><div class="d-flex gap-2"><button type="button" id="musicDeleteCancel" class="btn btn-sm btn-outline-secondary">取消</button><button type="button" id="musicDeleteConfirmButton" class="btn btn-sm btn-danger" data-admin-write="music">确认删除</button></div></div><div class="music-editor-footer"><div class="d-flex gap-2"><button type="button" id="musicDelete" class="btn btn-danger" data-admin-write="music" hidden>删除</button><button type="button" id="musicUnpublish" class="btn btn-outline-secondary" data-admin-write="music" hidden>下架</button></div><button id="musicSave" class="btn btn-primary" data-admin-write="music">保存</button></div></form></dialog>
-<script src="/admin/static/vendor/tabler.min.js"></script><script src="/admin/static/shell.js"></script><script src="/admin/static/ui.js"></script><script src="/admin/static/music.js"></script></body></html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="referrer" content="no-referrer">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>时光轨迹 - 控制台</title>
+  <link rel="stylesheet" href="/admin/static/vendor/tabler.min.css">
+  <link rel="stylesheet" href="/admin/static/style.css">
+  <link rel="stylesheet" href="/admin/static/music.css">
+</head>
+<body>
+  <header class="topbar"></header>
+  <main class="container wide">
+    <div class="page-heading">
+      <div><h1>背景音乐</h1><p>管理 3D 轨迹视频的配乐</p></div>
+      <div class="d-flex gap-2">
+        <button id="musicRefresh" class="btn btn-outline-secondary">刷新</button>
+        <button id="musicAdd" class="btn btn-primary" data-admin-write="music">添加音乐</button>
+      </div>
+    </div>
+    <div class="music-toolbar">
+      <span class="hint" data-admin-write="music">拖动把手排序，跨区拖动可上架或下架</span>
+      <span id="musicStatus" class="hint" role="status" aria-live="polite"></span>
+    </div>
+    <p id="musicError" role="alert" class="error" hidden></p>
+    <div id="musicList" class="music-board"></div>
+  </main>
+  <dialog id="musicEditor" class="music-editor" aria-labelledby="musicEditTitle">
+    <form id="musicForm" class="music-editor-form" data-admin-fields="music">
+      <header class="music-editor-header">
+        <h2 id="musicEditTitle">添加音乐</h2>
+        <button type="button" id="musicClose" class="btn-close" aria-label="关闭"></button>
+      </header>
+      <div id="musicEditorBody" class="music-editor-body">
+        <div class="music-fields">
+          <label>音乐名称<input name="name" required maxlength="80" class="form-control"></label>
+          <label>歌手 / 作者<input name="artist" required maxlength="80" class="form-control"></label>
+          <div class="music-wide music-audio-input">
+            <label>音频来源<select name="audio_mode" class="form-select"><option value="upload">上传文件</option><option value="link">使用链接</option></select></label>
+            <div class="music-audio-source">
+              <div id="musicCurrentAudio" class="music-current-asset" hidden>
+                <span id="musicCurrentAudioInfo"></span>
+                <button id="musicReplaceAudio" type="button" class="btn btn-sm btn-outline-secondary">替换音频</button>
+              </div>
+              <label id="musicFileField">音频文件<input name="audio" type="file" accept=".mp3,audio/mpeg" class="form-control"><small class="hint">MP3，最大 30 MB</small></label>
+              <label id="musicLinkField" hidden>音频链接<input name="audio_link" type="url" maxlength="4096" placeholder="https://…/music.mp3" class="form-control"><small class="hint">填写可公开播放的 MP3 直链</small></label>
+            </div>
+          </div>
+          <input name="duration_seconds" type="hidden">
+          <fieldset class="music-wide music-start">
+            <legend>起播与试听</legend>
+            <div class="music-start-controls">
+              <label>起播时间（秒）<input name="start_seconds" type="number" min="0" max="1199.999" step="0.001" value="0" required class="form-control"></label>
+              <button id="musicPreviewStart" type="button" class="btn btn-outline-secondary">从这里试听</button>
+            </div>
+            <small class="hint">循环播放时也从这里开始</small>
+            <div id="musicPreviewBox" hidden>
+              <div id="musicPreviewPlayer"></div>
+              <small id="musicPreviewState" class="hint" role="status"></small>
+            </div>
+          </fieldset>
+          <div class="music-wide">
+            <div id="musicCurrentCover" class="music-current-asset" hidden>
+              <span class="music-current-cover-label"><img id="musicCoverImage" alt="" data-no-preview>当前封面</span>
+              <button id="musicReplaceCover" type="button" class="btn btn-sm btn-outline-secondary">替换封面</button>
+            </div>
+            <label id="musicCoverField">封面（选填）<input name="cover" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="form-control"><small class="hint">PNG / JPEG / WebP，最大 5 MB、2048 像素</small></label>
+          </div>
+        </div>
+        <p id="musicSaveError" class="error" role="alert" hidden></p>
+        <p id="musicActionStatus" class="hint" role="status"></p>
+        <div id="musicDeleteConfirm" class="music-delete-confirm" hidden role="alert">
+          <span>确认删除这首音乐？删除后将从乐库移除。</span>
+          <div class="d-flex gap-2">
+            <button type="button" id="musicDeleteCancel" class="btn btn-sm btn-outline-secondary">取消</button>
+            <button type="button" id="musicDeleteConfirmButton" class="btn btn-sm btn-danger" data-admin-write="music">确认删除</button>
+          </div>
+        </div>
+      </div>
+      <footer class="music-editor-footer">
+        <div class="d-flex gap-2">
+          <button type="button" id="musicDelete" class="btn btn-outline-danger" data-admin-write="music" hidden>删除</button>
+          <button type="button" id="musicUnpublish" class="btn btn-outline-secondary" data-admin-write="music" hidden>下架</button>
+        </div>
+        <button id="musicSave" class="btn btn-primary" data-admin-write="music">保存</button>
+      </footer>
+    </form>
+  </dialog>
+  <script src="/admin/static/vendor/tabler.min.js"></script>
+  <script src="/admin/static/shell.js"></script>
+  <script src="/admin/static/ui.js"></script>
+  <script src="/admin/static/music.js"></script>
+</body>
+</html>
