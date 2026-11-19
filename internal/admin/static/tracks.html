@@ -29,8 +29,15 @@
     </div>
   </header>
 
-  <main class="container wide">
-    <div class="track-stat-grid">
+  <main class="container wide track-management">
+    <div class="page-heading admin-page-heading">
+      <div><h1>轨迹管理</h1></div>
+      <div class="track-page-actions">
+        <button id="trackStatsToggle" type="button" class="btn btn-outline-secondary" aria-expanded="false" aria-controls="trackStatsPanel">轨迹统计</button>
+        <button id="trackImportToggle" type="button" class="btn btn-outline-secondary" data-admin-write="tracks" aria-expanded="false" aria-controls="trackImportPanel">批量导入</button>
+      </div>
+    </div>
+    <div id="trackStatsPanel" class="track-stat-grid track-tool-panel" hidden>
       <section class="panel track-stat-card admin-stat-panel admin-stats-panel" data-track-stat="types" aria-labelledby="trackTypeStatsTitle">
         <div class="track-stat-heading admin-stats-heading">
           <h3 id="trackTypeStatsTitle">轨迹类型</h3>
@@ -63,7 +70,7 @@
         <div id="trackContributorChart" class="track-stat-chart" role="img" aria-label="前十用户贡献轨迹量横向柱状图"></div>
       </section>
     </div>
-    <section id="trackImportPanel" class="track-import-panel" data-admin-write="tracks" aria-labelledby="trackImportTitle">
+    <section id="trackImportPanel" class="track-import-panel" data-admin-write="tracks" aria-labelledby="trackImportTitle" hidden>
       <div class="track-import-heading">
         <div><h2 id="trackImportTitle">批量导入轨迹</h2><div class="hint">支持 JSON / GeoJSON / KML / KMZ，每批最多 50 个文件，预览图可在导入后补齐。</div></div>
       </div>
@@ -91,41 +98,65 @@
         <div class="track-import-field track-import-files">
           <span class="track-import-label">轨迹文件</span>
           <input id="trackImportFiles" class="form-control" type="file" multiple accept=".json,.geojson,.kml,.kmz" />
-          <span class="hint" id="trackImportFileHint">未选择文件</span>
+          <span class="hint" id="trackImportFileHint" hidden></span>
         </div>
         <div><button id="trackImportSubmit" type="button" class="btn btn-primary" disabled>开始导入</button></div>
       </div>
       <div id="trackImportResults" class="track-import-results" hidden></div>
     </section>
-    <section class="panel">
-      <h2>轨迹列表 <span class="hint" id="totalHint"></span></h2>
-      <div class="admin-toolbar track-toolbar">
-        <label>标题搜索 <input id="titleFilter" class="form-control" type="search" placeholder="输入轨迹标题关键词" /></label>
-        <label>用户名搜索 <input id="userNameFilter" class="form-control" type="search" placeholder="输入用户名关键词" /></label>
-        <label>运动类型 <select id="trackTypeFilter" class="form-select" disabled><option value="">全部运动类型</option></select></label>
-        <label>省份 <select id="provinceFilter" class="form-select"><option value="">全部省份</option></select></label>
-        <label>城市 <select id="cityFilter" class="form-select"><option value="">全部城市</option></select></label>
-        <label>状态 <select id="statusFilter" class="form-select"><option value="">全部状态</option><option value="1">公开</option><option value="2">私密</option><option value="0">已下架</option></select></label>
-        <label>资料缺项 <select id="missingFilter" class="form-select"><option value="">全部</option><option value="place_candidate">待确认景点</option><option value="scenic_spot">未关联景点</option><option value="description">缺简介</option><option value="city">缺城市</option><option value="previews">缺预览图</option></select></label>
-        <button id="searchBtn" class="btn btn-primary">搜索</button>
-        <button id="refreshBtn" class="btn btn-outline-secondary">刷新</button>
-        <button id="prevBtn" class="btn btn-outline-secondary" disabled>上一页</button>
-        <button id="nextBtn" class="btn btn-outline-secondary" disabled>下一页</button>
-        <span class="hint" id="pageHint"></span>
+    <section class="panel track-results" aria-labelledby="trackListTitle">
+      <div class="track-results-heading">
+        <h2 id="trackListTitle">轨迹列表</h2>
+        <span class="hint" id="totalHint" role="status"></span>
       </div>
+      <form id="trackSearchForm" class="track-search">
+        <div class="track-search-fields">
+          <label>轨迹标题或编号 <input id="titleFilter" class="form-control" type="search" placeholder="标题或 NO. 编号" /></label>
+          <label>用户名 <input id="userNameFilter" class="form-control" type="search" placeholder="用户名关键词" /></label>
+          <div class="track-search-actions">
+            <button id="searchBtn" type="submit" class="btn btn-primary">搜索</button>
+            <button id="trackFiltersToggle" type="button" class="btn btn-outline-secondary" aria-expanded="false" aria-controls="trackFilterFields">筛选</button>
+            <button id="refreshBtn" type="button" class="btn btn-outline-secondary">刷新</button>
+          </div>
+        </div>
+        <div id="trackFilterFields" class="track-filter-fields" hidden>
+          <label>运动类型 <select id="trackTypeFilter" class="form-select" disabled><option value="">全部运动类型</option></select></label>
+          <label>省份 <select id="provinceFilter" class="form-select"><option value="">全部省份</option></select></label>
+          <label>城市 <select id="cityFilter" class="form-select"><option value="">全部城市</option></select></label>
+          <label>状态 <select id="statusFilter" class="form-select"><option value="">未下架</option><option value="1">公开</option><option value="2">私密</option><option value="0">已下架</option></select></label>
+          <label>资料缺项 <select id="missingFilter" class="form-select"><option value="">全部</option><option value="place_candidate">待确认景点</option><option value="scenic_spot">未关联景点</option><option value="description">缺简介</option><option value="city">缺城市</option><option value="previews">缺预览图</option></select></label>
+        </div>
+      </form>
+      <div id="trackAppliedFilters" class="track-applied-filters" hidden>
+        <span id="trackFilterSummary" class="hint" role="status"></span>
+        <button id="trackClearFilters" type="button" class="btn btn-sm btn-link">清除筛选</button>
+      </div>
+      <p id="trackLookupStatus" class="hint" role="status" hidden></p>
       <p id="missingHint" class="hint" hidden></p>
       <p id="missingCountsError" class="text-secondary" role="status" hidden>部分缺项数量暂不可用，请刷新重试。</p>
       <p id="trackListError" class="text-danger" role="status" hidden></p>
       <div class="table-responsive">
-      <table class="data table">
-        <thead>
-          <tr>
-            <th>ID</th><th>城市</th><th>标题</th><th>类型</th><th>用户名</th><th>轨迹图</th><th>状态</th><th>操作</th>
-          </tr>
-        </thead>
-        <tbody id="trackList"></tbody>
-      </table>
+        <table id="trackResultsTable" class="data table track-results-table">
+          <thead>
+            <tr>
+              <th scope="col">轨迹</th>
+              <th scope="col" class="track-desktop-meta">地区 / 类型</th>
+              <th scope="col" class="track-desktop-meta">归属人</th>
+              <th scope="col" class="track-preview-cell">轨迹图</th>
+              <th scope="col" class="track-status-cell">状态</th>
+              <th scope="col" class="track-action-cell">操作</th>
+            </tr>
+          </thead>
+          <tbody id="trackList"></tbody>
+        </table>
       </div>
+      <nav class="track-pagination" aria-label="轨迹列表分页">
+        <span class="hint" id="pageHint" role="status"></span>
+        <div class="d-flex gap-2">
+          <button id="prevBtn" type="button" class="btn btn-outline-secondary" disabled>上一页</button>
+          <button id="nextBtn" type="button" class="btn btn-outline-secondary" disabled>下一页</button>
+        </div>
+      </nav>
     </section>
   </main>
 
@@ -136,7 +167,7 @@
   <script src="/admin/static/place_candidates.js"></script>
   <script src="/admin/static/track_map_preview.js"></script>
   <script src="/admin/static/track_editor.js"></script>
-<script src="/admin/static/region_picker.js"></script>
+  <script src="/admin/static/region_picker.js"></script>
   <script src="/admin/static/tracks.js"></script>
   <script src="/admin/static/admin_chart_style.js"></script>
   <script src="/admin/static/track_statistics.js"></script>

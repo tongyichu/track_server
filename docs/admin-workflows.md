@@ -262,8 +262,9 @@ GET /admin/api/users
 
 ```text
 [admin UI] /admin/tracks.html
-  → GET /admin/api/tracks 拉取轨迹列表
-  → 列表上方常驻的边框「批量导入」区域（紧凑栅格，窄屏单列，无弹窗）：选择归属人（内部人员下拉，头像+昵称，GET /admin/api/users?is_internal=true）、运动类型、坐标系与多个轨迹文件
+  → 首屏展示筛选和轨迹列表，GET /admin/api/tracks 拉取结果
+  → 输入完整 NO. 编号直达共享编辑弹窗，复用轨迹详情 GET 接口，保留当前列表筛选和页码
+  → 点标题区「批量导入」展开表单，选择归属人（内部人员下拉，头像+昵称，GET /admin/api/users?is_internal=true）、运动类型、坐标系与多个轨迹文件
   → POST /admin/api/tracks/import（multipart）
        → AdminTrackImportService 逐文件解析（复用地图索引解析器）→ 服务端直传 OSS 归属人目录
        → TrackService.CreateTrack 建档（source_tag=manual_seed，已完成），自动排队地图索引与成就结算
@@ -273,7 +274,7 @@ GET /admin/api/users
        → 成功结果附带 track 摘要（id/city_code/title/track_type/status），结果表复用主列表单元格并增加文件名/导入结果；用户名与头像复用本批归属人，不逐文件查详情。成功行直接打开共享编辑器，保存/删除后刷新对应导入行与主列表；失败行保留错误且无编辑入口
        → 展示 preview_images.landscape_day_url（日间横版 4:3），经后台静态代理访问；缓存键包含图片来源版本，补图后读取新横图
        → 用户名通过当前页 user_id 批量读取用户昵称，列表不展示 user_id
-  → GET /admin/api/tracks/statistics?period=day|week|month 展示轨迹类型环形图与贡献用户前十横向柱状图，两卡片独立切换周期、默认本月；与用户管理共用 admin_chart_style.js，内容区压缩到220px，不再展示城市分布
+  → 展开「轨迹统计」后 GET /admin/api/tracks/statistics?period=day|week|month，显示轨迹类型环形图和贡献用户前十柱状图。两张卡片独立切换周期并默认显示本月，与用户管理共用 admin_chart_style.js
   → GET /admin/api/cities 将城市 Code 显示为名称并提供编辑选择器
   → 管理员点击编辑；删除操作位于共享编辑表单底部，并经确认后执行
   → GET /admin/api/tracks/:track_id 获取完整可编辑业务详情

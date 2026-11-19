@@ -38,14 +38,18 @@
     var avatarURL = safeImageURL(it.avatar_url);
     var avatar = avatarURL ? '<img class="track-avatar" src="' + esc(avatarURL) + '" alt="" loading="lazy">' : '<span class="track-avatar-fallback">' + esc((it.user_name || '用').slice(0, 1)) + '</span>';
     var statusClass = it.status === 1 ? 'bg-green-lt' : it.status === 0 ? 'bg-red-lt' : 'bg-secondary-lt';
-    return '<td class="track-id">' + esc(it.id) + '</td>' +
-        '<td title="' + esc(it.city_code || '') + '">' + esc(trackCityName(it)) + '</td>' +
-        '<td class="track-title-cell">' + esc(it.title || '') + '</td>' +
-        '<td><span class="track-type-badge" style="--track-type-color:' + type.color + '">' + type.icon + '<span>' + esc(typeNameByCode[it.track_type] || it.track_type || '未知') + '</span></span></td>' +
-        '<td><span class="track-user">' + avatar + '<span>' + esc(it.user_name || '未知用户') + '</span></span></td>' +
-        '<td>' + screenshotCell + '</td>' +
-        '<td><span class="badge ' + statusClass + '">' + esc(statusText(it.status)) + '</span></td>' +
-        '<td><button class="btn btn-sm btn-outline-primary js-edit-track" data-track-id="' + esc(it.id) + '">' + (AdminAccess.can('tracks', true) ? '编辑' : '查看') + '</button></td>';
+    var title = esc(it.title || '未命名轨迹'), city = esc(trackCityName(it));
+    var typeName = esc(typeNameByCode[it.track_type] || it.track_type || '未知');
+    var user = esc(it.user_name || '未知用户');
+    return '<td class="track-title-cell"><span class="track-row-title" title="' + title + '">' + title + '</span>' +
+        '<span class="track-id">' + esc(it.id) + '</span>' +
+        '<span class="track-compact-meta">' + city + ' · ' + typeName + ' · ' + user + '</span></td>' +
+        '<td class="track-desktop-meta"><span class="track-row-city" title="' + esc(it.city_code || '') + '">' + city + '</span>' +
+        '<span class="track-type-badge" style="--track-type-color:' + type.color + '">' + type.icon + '<span>' + typeName + '</span></span></td>' +
+        '<td class="track-desktop-meta"><span class="track-user">' + avatar + '<span>' + user + '</span></span></td>' +
+        '<td class="track-preview-cell">' + screenshotCell + '</td>' +
+        '<td class="track-status-cell"><span class="badge ' + statusClass + '">' + esc(statusText(it.status)) + '</span></td>' +
+        '<td class="track-action-cell"><button class="btn btn-sm btn-outline-primary js-edit-track" data-track-id="' + esc(it.id) + '">' + (AdminAccess.can('tracks', true) ? '编辑' : '查看') + '</button></td>';
   }
 
   function trackCityName(track) {
@@ -60,6 +64,7 @@
   var pageIndex = 0;
   var lastNextCursor = null;
   var totalCount = 0;
+  var searchTitle = '', searchUserName = '', openingByID = false, regionPicker;
 
   var tbody = document.getElementById('trackList');
   var prevBtn = document.getElementById('prevBtn');
@@ -90,16 +95,61 @@
   var trackListError = document.getElementById('trackListError');
   var pageHint = document.getElementById('pageHint');
   var totalHint = document.getElementById('totalHint');
+  var appliedFilters = document.getElementById('trackAppliedFilters');
+  var filterSummary = document.getElementById('trackFilterSummary');
+  var lookupStatus = document.getElementById('trackLookupStatus');
+  var resultsTable = document.getElementById('trackResultsTable');
+
+  function setupDisclosure(buttonID, panelID) {
+    var button = document.getElementById(buttonID), panel = document.getElementById(panelID);
+    button.addEventListener('click', function () {
+      panel.hidden = !panel.hidden;
+      button.setAttribute('aria-expanded', String(!panel.hidden));
+    });
+  }
+  setupDisclosure('trackImportToggle', 'trackImportPanel');
+  setupDisclosure('trackStatsToggle', 'trackStatsPanel');
+  setupDisclosure('trackFiltersToggle', 'trackFilterFields');
 
   refreshBtn.addEventListener('click', function () {
-    cursorStack = [null];
-    pageIndex = 0;
-    loadPage();
+    resetSearch();
   });
   function resetSearch() { cursorStack = [null]; pageIndex = 0; loadPage(); }
-  searchBtn.addEventListener('click', resetSearch);
-  titleFilter.addEventListener('keydown', function (event) { if (event.key === 'Enter') resetSearch(); });
-  userNameFilter.addEventListener('keydown', function (event) { if (event.key === 'Enter') resetSearch(); });
+  var trackIDPattern = /^NO\.[0-9A-Z]{8}$/;
+  document.getElementById('trackSearchForm').addEventListener('submit', async function (event) {
+    event.preventDefault();
+    if (openingByID) return;
+    var keyword = titleFilter.value.trim();
+    lookupStatus.hidden = true;
+    if (/^NO\.[0-9A-Z]*$/i.test(keyword)) {
+      var trackID = keyword.toUpperCase();
+      lookupStatus.hidden = false;
+      if (!trackIDPattern.test(trackID)) {
+        lookupStatus.textContent = '请输入完整的轨迹编号，例如 NO.000000AB';
+        return;
+      }
+      lookupStatus.textContent = '正在打开 ' + trackID + '…';
+      openingByID = true; searchBtn.disabled = true;
+      try { await citiesLoaded; await editTrack(trackID); }
+      catch (err) { AdminUI.alert('读取轨迹失败: ' + (err.message || err), 'danger'); }
+      finally {
+        openingByID = false; searchBtn.disabled = false; lookupStatus.hidden = true;
+        if (titleFilter.value.trim() === keyword) titleFilter.value = searchTitle;
+      }
+      return;
+    }
+    searchTitle = keyword; searchUserName = userNameFilter.value.trim();
+    resetSearch();
+  });
+  titleFilter.addEventListener('input', function () { if (!openingByID) lookupStatus.hidden = true; });
+  document.getElementById('trackClearFilters').addEventListener('click', function () {
+    searchTitle = ''; searchUserName = '';
+    titleFilter.value = ''; userNameFilter.value = '';
+    trackTypeFilter.value = ''; statusFilter.value = ''; missingFilter.value = '';
+    provinceFilter.value = ''; populateCityOptions(cityOptions, '');
+    if (regionPicker) { regionPicker.close(); regionPicker.sync(); }
+    lookupStatus.hidden = true; resetSearch(); titleFilter.focus();
+  });
   trackTypeFilter.addEventListener('change', resetSearch);
   cityFilter.addEventListener('change', resetSearch);
   provinceFilter.addEventListener('change', function () {
@@ -112,13 +162,13 @@
     if (pageIndex <= 0) return;
     pageIndex -= 1;
     cursorStack = cursorStack.slice(0, pageIndex + 1);
-    loadPage();
+    loadPage(true);
   });
   nextBtn.addEventListener('click', function () {
     if (!lastNextCursor) return;
     pageIndex += 1;
     cursorStack[pageIndex] = lastNextCursor;
-    loadPage();
+    loadPage(true);
   });
 
   function populateTrackTypeOptions(types) {
@@ -149,27 +199,28 @@
     renderedTrackRows.forEach(function (_, id) { if (!ids.has(id)) renderedTrackRows.delete(id); });
     if (!rows.length) {
       var empty = document.createElement('tr'), cell = document.createElement('td');
-      cell.colSpan = 8; cell.textContent = '当前筛选条件下暂无轨迹'; empty.appendChild(cell); rows.push(empty);
+      cell.colSpan = 6; cell.className = 'track-empty'; cell.textContent = '当前筛选条件下暂无轨迹'; empty.appendChild(cell); rows.push(empty);
     }
     var wanted = new Set(rows);
     Array.from(tbody.children).forEach(function (row) { if (!wanted.has(row)) row.remove(); });
     rows.forEach(function (row, index) { if (tbody.children[index] !== row) tbody.insertBefore(row, tbody.children[index] || null); });
   }
 
-  async function loadPage() {
+  async function loadPage(scrollToResults) {
     var request = ++pageRequest;
     if (pageController) pageController.abort();
     var controller = new AbortController(); pageController = controller;
+    resultsTable.setAttribute('aria-busy', 'true');
     prevBtn.disabled = true; nextBtn.disabled = true;
     trackListError.hidden = true; trackListError.textContent = '';
     var hints = { scenic_spot: '未关联景点包含正常的非景区轨迹，可结合其他条件筛选。', previews: '四种日夜预览图中任意一张缺失，即视为预览图不完整。' };
-    var hint = document.getElementById('missingHint');
-    hint.textContent = hints[missingFilter.value] || '';
-    hint.hidden = !hint.textContent;
+    var selected = function (select) { return select.value ? select.selectedOptions[0]?.textContent : ''; };
+    var labels = [searchTitle && '标题 ' + searchTitle, searchUserName && '用户名 ' + searchUserName,
+      selected(trackTypeFilter), selected(cityFilter) || selected(provinceFilter), selected(statusFilter), missingFilter.value && missingLabels[missingFilter.value]];
     var params = new URLSearchParams();
     params.set('limit', String(pageSize));
-    if (titleFilter.value.trim()) params.set('title', titleFilter.value.trim());
-    if (userNameFilter.value.trim()) params.set('user_name', userNameFilter.value.trim());
+    if (searchTitle) params.set('title', searchTitle);
+    if (searchUserName) params.set('user_name', searchUserName);
     if (trackTypeFilter.value) params.set('track_type', trackTypeFilter.value);
     if (provinceFilter.value) params.set('province_code', provinceFilter.value);
     if (cityFilter.value) params.set('city_code', cityFilter.value);
@@ -195,17 +246,27 @@
       totalCount = data.total || 0;
       lastNextCursor = data.next_cursor || null;
       renderTrackRows(items);
+      var hint = document.getElementById('missingHint');
+      hint.textContent = hints[missingFilter.value] || '';
+      hint.hidden = !hint.textContent;
+      var summary = labels.filter(Boolean).join(' · ');
+      filterSummary.textContent = summary ? '生效筛选 · ' + summary : '';
+      appliedFilters.hidden = !summary;
       prevBtn.disabled = pageIndex <= 0;
       nextBtn.disabled = !lastNextCursor;
       pageHint.textContent = '第 ' + (pageIndex + 1) + ' 页（' + items.length + ' 条）';
-      totalHint.textContent = statusFilter.value === '0'
-        ? '共 ' + totalCount + ' 条已下架轨迹'
-        : '共 ' + totalCount + ' 条轨迹（不含已下架）';
+      totalHint.textContent = '共 ' + totalCount + ' 条' + (statusFilter.value ? '' : '未下架') + '轨迹';
+      if (scrollToResults === true) resultsTable.scrollIntoView({ block: 'start' });
     } catch (error) {
       if (request !== pageRequest || controller.signal.aborted) return;
       trackListError.textContent = '加载失败，已保留上次列表；请搜索或刷新重试：' + (error.message || error);
       trackListError.hidden = false;
-    } finally { if (request === pageRequest) pageController = null; }
+    } finally {
+      if (request === pageRequest) {
+        pageController = null;
+        resultsTable.setAttribute('aria-busy', 'false');
+      }
+    }
   }
 
   window.addEventListener('pagehide', function () { if (pageController) pageController.abort(); });
@@ -229,11 +290,11 @@
     var okCount = importResults.filter(function (r) { return !r.error; }).length;
     node.innerHTML = '<p class="hint">共 ' + importResults.length + ' 个文件，成功 ' + okCount + ' 个，失败 ' + (importResults.length - okCount) + ' 个。</p>' +
       '<div class="table-responsive"><table class="data table track-import-result-table"><thead><tr>' +
-      '<th>文件名</th><th>ID</th><th>城市</th><th>标题</th><th>类型</th><th>用户名</th><th>轨迹图</th><th>状态</th><th>操作</th><th>导入结果</th>' +
+      '<th>文件名</th><th>轨迹</th><th>地区 / 类型</th><th>归属人</th><th>轨迹图</th><th>状态</th><th>操作</th><th>导入结果</th>' +
       '</tr></thead><tbody>' + importResults.map(function (r) {
         var cells = r.error
-          ? '<td colspan="8" data-label="错误原因" class="track-import-result-fail">' + esc(r.error) + '</td>'
-          : r.removed ? '<td colspan="8" data-label="轨迹" class="hint">轨迹已彻底删除</td>' : trackCells(r.track);
+          ? '<td colspan="6" data-label="错误原因" class="track-import-result-fail">' + esc(r.error) + '</td>'
+          : r.removed ? '<td colspan="6" data-label="轨迹" class="hint">轨迹已彻底删除</td>' : trackCells(r.track);
         return '<tr><td class="track-import-file-name">' + esc(r.file_name) + '</td>' + cells +
           '<td data-label="导入结果"><span class="badge ' + (r.error ? 'bg-red-lt' : 'bg-green-lt') + '">' + (r.error ? '失败' : '成功') + '</span></td></tr>';
       }).join('') + '</tbody></table></div>';
@@ -289,7 +350,7 @@
       data.filter(function (item) { return item.level === 'province'; })
         .forEach(function (item) { provinceFilter.add(new Option(item.name, item.code)); });
       populateCityOptions(data, '');
-      AdminRegionPicker.enhance(provinceFilter, cityFilter, data);
+      regionPicker = AdminRegionPicker.enhance(provinceFilter, cityFilter, data);
       return data;
     } catch (err) {
       AdminUI.alert('城市列表加载失败: ' + (err.message || err), 'danger');
@@ -301,7 +362,7 @@
   citiesLoaded.then(loadPage);
   var linkedTrackID = new URLSearchParams(window.location.search).get('track_id');
   if (linkedTrackID) {
-    if (/^NO\.[0-9A-Z]{8}$/.test(linkedTrackID)) {
+    if (trackIDPattern.test(linkedTrackID)) {
       citiesLoaded.then(function () { return editTrack(linkedTrackID); }).catch(function (err) {
         AdminUI.alert('读取轨迹失败: ' + (err.message || err), 'danger');
       });
@@ -383,7 +444,8 @@
 
     fileInput.addEventListener('change', function () {
       var count = fileInput.files.length;
-      fileHint.textContent = count ? '已选择 ' + count + ' 个文件' : '未选择文件';
+      fileHint.textContent = count ? '已选择 ' + count + ' 个文件' : '';
+      fileHint.hidden = !count;
       updateSubmitState();
     });
     submitBtn.addEventListener('click', function () {

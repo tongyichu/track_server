@@ -88,13 +88,16 @@
     }
     if (canClearPreviews && ['square_day_url', 'square_night_url', 'landscape_day_url', 'landscape_night_url'].some(hasPreview)) {
       const button = document.createElement('button');
-      button.type = 'button'; button.className = 'btn btn-sm btn-outline-danger'; button.textContent = '删除预览图';
-      button.title = '删除该轨迹的日间和夜间方图、横图';
+      const clearLabel = '清除全部 4 张预览图';
+      button.type = 'button'; button.className = 'btn btn-sm btn-outline-danger'; button.textContent = clearLabel;
       header.appendChild(button);
+      const note = document.createElement('p');
+      note.className = 'hint mb-2'; note.textContent = '立即清除日夜方图及横图';
+      section.appendChild(note);
       button.addEventListener('click', async function () {
         if (button.disabled || signal.aborted) return;
         button.disabled = true;
-        button.textContent = '删除中…';
+        button.textContent = '清除中…';
         try {
           const response = await fetch('/admin/api/tracks/' + encodeURIComponent(trackID) + '/previews', { method: 'DELETE', signal });
           const result = await response.json();
@@ -105,13 +108,13 @@
           if (!signal.aborted) {
             window.AdminUI.alert(error instanceof TypeError ? '删除结果未确认，请重新打开详情核实' : error.message, 'danger');
             button.disabled = false;
-            button.textContent = '删除预览图';
+            button.textContent = clearLabel;
           }
           return;
         }
         track.preview_images = {};
-        stage.textContent = '无';
-        button.remove();
+        stage.textContent = '暂无预览图';
+        button.remove(); note.remove();
         window.AdminUI.alert('预览图已清空', 'success');
         if (typeof onSaved === 'function') {
           try { await onSaved(); }

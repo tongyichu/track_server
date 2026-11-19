@@ -280,11 +280,39 @@ table.data.table .btn { white-space: nowrap; }
 .feedback-page-hint:empty { display: none; }
 .feedback-content { min-width: 260px; max-width: 480px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .feedback-correction-context { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
-.track-toolbar { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; }
-.track-toolbar label { display: flex; flex-direction: column; align-items: stretch; gap: 5px; color: var(--tblr-secondary-color); font-size: 12px; }
-.track-toolbar label:nth-child(1), .track-toolbar label:nth-child(2) { flex: 1 1 190px; }
-.track-toolbar label:nth-child(n+3) { flex: 0 1 150px; }
-.track-toolbar .form-control, .track-toolbar .form-select { width: 100%; min-width: 0; }
+.track-management [hidden] { display: none !important; }
+.track-page-actions, .track-search-actions, .track-results-heading, .track-pagination {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+}
+.track-page-actions .btn[aria-expanded="true"], .track-search-actions .btn[aria-expanded="true"] {
+  background: var(--tblr-primary-lt); border-color: var(--tblr-primary); color: var(--tblr-primary);
+}
+.track-tool-panel { margin-bottom: 16px; }
+.track-results-heading { margin-bottom: 12px; }
+.track-results-heading h2 { margin: 0; }
+.track-search { margin-bottom: 10px; }
+.track-search-fields, .track-filter-fields { display: grid; align-items: end; gap: 8px 12px; }
+.track-search-fields { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr) auto; }
+.track-filter-fields { grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr)); margin-top: 12px; }
+.track-search label { display: flex; flex-direction: column; gap: 4px; min-width: 0; margin: 0; color: var(--tblr-secondary-color); font-size: 12px; }
+.track-search .form-control, .track-search .form-select { width: 100%; min-width: 0; margin: 0; }
+.track-search .admin-region-field { min-width: 0; }
+.track-applied-filters { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; margin-bottom: 8px; overflow-wrap: anywhere; }
+.track-applied-filters .btn { padding: 0; }
+.track-pagination { justify-content: space-between; margin-top: 12px; }
+.track-results .track-results-table { min-width: 0; margin-bottom: 0; scroll-margin-top: 68px; }
+.track-management table.data th, .track-management table.data td { vertical-align: middle; }
+.track-management .track-title-cell { min-width: 0; max-width: 320px; }
+.track-row-title { display: block; font-size: 14px; font-weight: 600; }
+.track-title-cell .track-id, .track-compact-meta { display: block; color: var(--tblr-secondary-color); font-size: 11px; }
+.track-compact-meta { display: none; }
+.track-row-city { display: block; margin-bottom: 2px; }
+.track-management .track-type-badge { padding: 2px 6px; gap: 4px; }
+.track-management .track-type-badge svg { width: 14px; height: 14px; }
+.track-management .track-user { min-width: 0; gap: 6px; white-space: normal; overflow-wrap: anywhere; }
+.track-management .track-avatar, .track-management .track-avatar-fallback { width: 24px; height: 24px; flex-basis: 24px; }
+.track-management .track-shot { display: block; width: 64px; height: 48px; box-shadow: none; }
+.track-management .track-empty { padding: 18px 8px; text-align: center; color: var(--tblr-secondary-color); }
 .user-toolbar { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; }
 .user-toolbar label { display: flex; flex: 0 1 132px; flex-direction: column; align-items: stretch; gap: 5px; color: var(--tblr-secondary-color); font-size: 12px; }
 .user-toolbar label:first-child { flex: 1 1 190px; }
@@ -522,8 +550,19 @@ table.data td.companion-table-state { padding: 32px 14px; color: var(--tblr-seco
   .admin-toolbar { align-items: stretch; padding: 10px; }
   .admin-toolbar label { width: 100%; align-items: flex-start; flex-direction: column; gap: 4px; }
   .admin-toolbar .form-control, .admin-toolbar .form-select { width: 100%; min-width: 0; }
-  .track-toolbar { align-items: stretch; }
-  .track-toolbar label:nth-child(n) { flex: 1 1 100%; }
+  .track-search-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .track-search-actions { grid-column: 1 / -1; }
+  .track-compact-meta { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .track-management table.track-results-table.admin-card-table tbody tr {
+    display: grid; grid-template-columns: minmax(0, 1fr) 48px 40px 44px; align-items: center; gap: 6px;
+    margin: 0; padding: 8px 0; border: 0; border-bottom: 1px solid var(--tblr-border-color); border-radius: 0; box-shadow: none;
+  }
+  .track-management table.track-results-table.admin-card-table td { display: block; min-width: 0; padding: 0; }
+  .track-management table.track-results-table.admin-card-table td::before,
+  .track-management table.track-results-table.admin-card-table .track-desktop-meta { display: none; }
+  .track-management table.track-results-table.admin-card-table .admin-empty-row { display: block; padding: 16px 0; }
+  .track-management .track-results-table .track-shot { width: 48px; height: 36px; }
+  .track-management .track-results-table .track-action-cell .btn { padding-inline: 5px; }
   .admin-toolbar > .btn { flex: 1 1 auto; }
   .feedback-toolbar { grid-template-columns: minmax(0, 1fr); }
   .feedback-toolbar label { align-items: stretch; gap: 6px; }

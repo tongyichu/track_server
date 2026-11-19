@@ -2,6 +2,7 @@
   'use strict';
   const periodNames = { day: '今天', week: '本周', month: '本月' };
   const pending = new Map(), cards = [];
+  const panel = document.getElementById('trackStatsPanel');
   function number(value) { return Number(value || 0).toLocaleString('zh-CN'); }
   function date(value) {
     return AdminTime.short(value, true);
@@ -52,9 +53,9 @@
       status.textContent = periodNames[period] + '统计加载中…';
       try {
         const data = await read(requestedPeriod);
-        if (current !== request) return;
+        if (current !== request || panel.hidden) return;
         await AdminAssets.loadCharts();
-        if (current !== request) return;
+        if (current !== request || panel.hidden) return;
         const items = data[kind] || [];
         if (!chart) chart = echarts.init(chartNode);
         chart.setOption(option(kind, items), true);
@@ -81,10 +82,11 @@
     const observer = new ResizeObserver(() => { if (chart) chart.resize(); });
     observer.observe(chartNode);
     cards.push({ load: load, dispose: () => { ++request; observer.disconnect(); if (chart) chart.dispose(); } });
-    load();
   });
+  function refreshVisibleStats() { if (!panel.hidden) cards.forEach(card => card.load()); }
+  document.getElementById('trackStatsToggle').addEventListener('click', refreshVisibleStats);
   const refreshPage = document.getElementById('refreshBtn');
-  if (refreshPage) refreshPage.addEventListener('click', () => cards.forEach(card => card.load()));
+  if (refreshPage) refreshPage.addEventListener('click', refreshVisibleStats);
   window.addEventListener('pagehide', event => {
     if (event.persisted) return;
     pending.forEach(item => item.controller.abort());
