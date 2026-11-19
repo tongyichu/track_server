@@ -30,16 +30,21 @@
   white-space:nowrap;
   font-size:14px;
 }
+.music-title-repeat { display:none; }
 @media (prefers-reduced-motion:no-preference) {
   .music-title-scrolling { text-overflow:clip; }
-  .music-title-scrolling .music-title-text {
-    display:inline-block;
-    animation:music-title-scroll var(--music-title-duration) linear infinite alternate;
+  .music-title-scrolling .music-title-track {
+    display:inline-flex;
+    width:max-content;
+    direction:ltr;
+    gap:16px;
+    padding-inline-end:16px;
+    animation:music-title-scroll var(--music-title-duration) linear infinite;
   }
+  .music-title-scrolling .music-title-repeat { display:block; }
 }
 @keyframes music-title-scroll {
-  0%, 15% { transform:translateX(0); }
-  85%, 100% { transform:translateX(var(--music-title-offset)); }
+  to { transform:translateX(-50%); }
 }
 .music-info small { display:block;color:var(--tblr-secondary-color);overflow-wrap:anywhere; }
 .music-meta { margin-top:4px;font-size:11px; }

@@ -12,10 +12,9 @@
   function updateMarquee() {
     if (!activeMarquee) return;
     const {title, titleText} = activeMarquee;
-    const distance = titleText.getBoundingClientRect().width - title.clientWidth;
-    title.style.setProperty('--music-title-offset', `${-distance}px`);
-    title.style.setProperty('--music-title-duration', `${Math.max(3, distance / 24 + 1.5)}s`);
-    title.classList.toggle('music-title-scrolling', distance > 1);
+    const width = titleText.getBoundingClientRect().width;
+    title.style.setProperty('--music-title-duration', `${Math.max(3, width / 40)}s`);
+    title.classList.toggle('music-title-scrolling', width > title.clientWidth + 1);
   }
 
   const marqueeObserver = new ResizeObserver(updateMarquee);
@@ -154,9 +153,14 @@
         else {cover.classList.add('music-cover-placeholder');cover.append(icon('music'));}
         const info=text('div','','music-info');
         const title = text('strong', '', 'music-title');
+        const titleTrack = text('span', '', 'music-title-track');
         const titleText = text('span', item.name, 'music-title-text');
+        const titleRepeat = text('span', item.name, 'music-title-text music-title-repeat');
         title.title = item.name;
-        title.append(titleText);
+        titleText.dir = titleRepeat.dir = 'auto';
+        titleRepeat.setAttribute('aria-hidden', 'true');
+        titleTrack.append(titleText, titleRepeat);
+        title.append(titleTrack);
         info.append(title, text('small', item.artist));
         const duration=item.duration_ms>0?Math.floor(item.duration_ms/60000)+':'+String(Math.floor(item.duration_ms/1000)%60).padStart(2,'0'):'时长未知';
         info.append(text('small',duration+((item.start_offset_ms||0)>0?' · 从 '+(item.start_offset_ms/1000)+' 秒起播':'')+(item.audio_bytes>0?' · '+(item.audio_bytes/1048576).toFixed(1)+' MB':''),'music-meta'));
