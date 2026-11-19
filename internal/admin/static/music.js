@@ -7,6 +7,39 @@
   const deleteConfirm = document.getElementById('musicDeleteConfirm'), actionStatus = document.getElementById('musicActionStatus');
   let items = [], loading = false, arranging = false, needsRefresh = false, dragged = null, layoutController = null;
   const status = document.getElementById('musicStatus');
+  let activeMarquee = null;
+
+  function updateMarquee() {
+    if (!activeMarquee) return;
+    const {title, titleText} = activeMarquee;
+    const distance = titleText.getBoundingClientRect().width - title.clientWidth;
+    title.style.setProperty('--music-title-offset', `${-distance}px`);
+    title.style.setProperty('--music-title-duration', `${Math.max(3, distance / 24 + 1.5)}s`);
+    title.classList.toggle('music-title-scrolling', distance > 1);
+  }
+
+  const marqueeObserver = new ResizeObserver(updateMarquee);
+
+  function stopMarquee(audio) {
+    if (!activeMarquee || (audio && activeMarquee.audio !== audio)) return;
+    marqueeObserver.disconnect();
+    activeMarquee.title.classList.remove('music-title-scrolling');
+    activeMarquee = null;
+  }
+
+  function bindTitleMarquee(audio, title, titleText) {
+    audio.addEventListener('playing', () => {
+      if (disposed || document.hidden || audio.paused || !audio.isConnected) return;
+      stopMarquee();
+      activeMarquee = {audio, title, titleText};
+      marqueeObserver.observe(title);
+      marqueeObserver.observe(titleText);
+      updateMarquee();
+    });
+    for (const event of ['pause', 'ended', 'error', 'emptied', 'waiting']) {
+      audio.addEventListener(event, () => stopMarquee(audio));
+    }
+  }
   function writable() { return AdminAccess.can('music',true) && !loading && !arranging && !saving && !needsRefresh; }
   function controls() {
     if(disposed)return;
@@ -98,6 +131,7 @@
     modal.showModal();
   }
   function releaseCards() {
+    stopMarquee();
     body.querySelectorAll('audio').forEach(player=>{player.pause();player.removeAttribute('src');player.load();});
   }
   function icon(name) {
@@ -118,7 +152,12 @@
         const cover=text('div','','music-cover');
         if(item.cover_url){const img=document.createElement('img');img.src=item.cover_url;img.alt='';img.loading='lazy';img.draggable=false;img.dataset.noPreview='';cover.append(img);}
         else {cover.classList.add('music-cover-placeholder');cover.append(icon('music'));}
-        const info=text('div','','music-info');info.append(text('strong',item.name),text('small',item.artist));
+        const info=text('div','','music-info');
+        const title = text('strong', '', 'music-title');
+        const titleText = text('span', item.name, 'music-title-text');
+        title.title = item.name;
+        title.append(titleText);
+        info.append(title, text('small', item.artist));
         const duration=item.duration_ms>0?Math.floor(item.duration_ms/60000)+':'+String(Math.floor(item.duration_ms/1000)%60).padStart(2,'0'):'时长未知';
         info.append(text('small',duration+((item.start_offset_ms||0)>0?' · 从 '+(item.start_offset_ms/1000)+' 秒起播':'')+(item.audio_bytes>0?' · '+(item.audio_bytes/1048576).toFixed(1)+' MB':''),'music-meta'));
         head.append(cover,info);inner.append(head);
@@ -127,7 +166,9 @@
         function seekCard(){if(firstPlay&&audio.readyState>0){const start=(item.start_offset_ms||0)/1000;if(Number.isFinite(audio.duration)&&start>=audio.duration){audio.pause();return;}try{audio.currentTime=start;firstPlay=false;}catch(_){audio.pause();}}}
         audio.addEventListener('loadedmetadata',seekCard);
         audio.addEventListener('ended',()=>{firstPlay=true;});
-        audio.addEventListener('play',()=>{seekCard();body.querySelectorAll('audio').forEach(other=>{if(other!==audio)other.pause();});});inner.append(audio);
+        audio.addEventListener('play',()=>{seekCard();body.querySelectorAll('audio').forEach(other=>{if(other!==audio)other.pause();});});
+        bindTitleMarquee(audio, title, titleText);
+        inner.append(audio);
         if(AdminAccess.can('music',true)) {
           tile.tabIndex=0;tile.setAttribute('aria-label','编辑音乐：'+item.name);tile.dataset.editable='true';
           let allowDrag=true;
