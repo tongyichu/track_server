@@ -12,7 +12,7 @@
 
 粉丝数通过 `FollowRepository.CountFollowersByUserIDs` 按当前页批量聚合，MySQL 使用 GROUP BY，Mongo 使用 match/group，内存实现遍历关注关系并统计目标用户；不按行请求详情。用户列表“刷新”位于“用户列表 共 xx 个用户”标题行右侧；分页在表格下方，与同行房间复用布局：左侧“第 N 页 · 本页 X 个用户”，右侧上一页/下一页，窄屏纵向排列。加载时提示“正在加载…”并禁用翻页，失败明确提示，快速筛选忽略旧响应。
 
-列表加载和失败保留已展示行，成功后按字符串用户 ID 复用未变化的行；仅数据变化时更新该行，避免版本/活跃时间刷新导致整表清空闪动。
+点击昵称打开详情。翻页使用已提交的筛选条件，服务端多取一条判断是否还有下一页。加载和失败保留上一页的行和分页状态，刷新可重试失败的请求。成功后按字符串用户 ID 复用未变化的行。顶部的「用户统计」默认折叠，展开后请求画像数据和图表资源。
 
 ## 最近活跃时间
 
@@ -41,10 +41,11 @@ MySQL 启动幂等创建 `user_activity_days(user_id BIGINT,active_date DATE,PRI
 `GET /admin/api/users/:user_id` 返回 `id/nickname/avatar_url/signature/background_url/gender/birthday/zodiac_sign/phone/province_code/province_name/city_code/city_name/is_internal/created_at/updated_at/last_active_at/last_active_app_version/active_days_7d`。
 
 - `background_url` 非空时固定为该用户的 `/admin/api/users/:user_id/background`，不暴露原始 OSS 地址。
+- `avatar_url` 指向该用户的 `/admin/api/users/:user_id/avatar`。该接口独立鉴权和解析缓存，重定向到后台头像静态资源，资料读取及保存无需等待头像缓存。
 - `zodiac_sign` 由服务端根据生日派生；未填写/无效日期为空串。后台选择生日时即时预览标签，保存只提交生日。边界规则见 [用户星座](user.md#星座派生规则)，图标和明暗配色复用 Android 客户端 MingCute 资源，许可随静态资源分发。
 - 手机号、所在地、头像、背景图、互动数据、级别、最近活跃及当时 App 版本、近7天活跃天数只读。详情分别显示“注册”“最近活跃”“活跃时版本”“近7天活跃”“资料更新”；`updated_at` 是用户资料/账号记录更新时间，修改资料、所在地或令牌版本均可能改变，不能当作最近活跃。
 
-`PUT /admin/api/users/:user_id` 只保存 `nickname/signature/gender/birthday/is_internal`。昵称 1–20 字、签名最多100字；生日格式、范围与原实现相同。任何显式 `phone` 字段（含空串或 null）均返回400，数据库中的手机号保留原值。其余只读展示信息不随表单提交。
+`PUT /admin/api/users/:user_id` 接收至少一个 `nickname/signature/gender/birthday/is_internal` 字段。UI 发送本次改过的字段，MySQL、Mongo、内存仓储只更新这些字段和 `updated_at`。昵称 1–20 字、签名最多100字，生日格式和范围与原实现相同。显式传入空的签名、性别或生日可清空该字段，未传字段保留原值。任何显式 `phone` 字段（含空串或 null）均返回400。
 
 ## 互动数据与级别
 
@@ -62,6 +63,6 @@ MySQL 启动幂等创建 `user_activity_days(user_id BIGINT,active_date DATE,PRI
 
 ## 账号限制与弹窗加载
 
-账号限制集中在详情右侧账号管理区：读取既有 `GET /users/:user_id/restrictions/current`（404表示无生效限制），创建和解除沿用原 POST/DELETE 接口。在当前详情内展开限制原因/天数或解除确认，显式确认后立即生效，独立于“保存资料”；失败保留资料草稿，关闭不自动重试写请求。
+账号限制集中在详情的账号管理区。读取 `GET /users/:user_id/restrictions/current`，404 表示无生效限制，返回的限制 ID 与用户 ID 是十进制字符串。创建使用 `POST /users/:user_id/restrictions`，限制原因 1–255 字，UI 明确选择按天或永久。解除使用 `DELETE /users/:user_id/restrictions/current?restriction_id=...`，只更新操作者确认且仍生效的限制，已失效或被替换时返回 409，弹窗重读状态后重新确认。限制操作独立于资料编辑，成功后刷新当前限制状态及已启用的限制筛选结果。运维内部接口仍按其既有协议。
 
-弹窗顶部显示背景图、头像、昵称、完整级别和三项互动数据；正文为基本资料与账号管理/设备权限两列，窄屏上下排列。基本资料、互动数据、限制状态独立加载，背景在图片请求中解析；设备权限首次展开时才查询。沿用详情入口去重、关闭取消和旧响应忽略，辅助数据失败不覆盖正在编辑的字段。
+弹窗顶部显示头像、昵称、完整级别及互动数据，有背景时展示封面。手机号、城市和时间等信息集中只读展示。「内部人员」随基本资料保存。未保存修改在关闭时可选择继续编辑或放弃，写入期间暂缓关闭，保存反馈保留在底部。基本资料读取失败可在弹窗重试，互动数据、限制状态、头像和背景分别加载，设备权限首次展开时才查询。

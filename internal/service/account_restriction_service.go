@@ -130,6 +130,16 @@ func (s *AccountRestrictionService) RevokeActive(ctx context.Context, userID int
 	return s.repo.RevokeActiveAccountRestrictions(ctx, userID, operator, time.Now())
 }
 
+func (s *AccountRestrictionService) RevokeByID(ctx context.Context, userID, restrictionID int64) (int64, error) {
+	if s == nil || s.repo == nil {
+		return 0, errors.New("account restriction service not configured")
+	}
+	if userID <= 0 || restrictionID <= 0 {
+		return 0, invalidArg("user_id and restriction_id are required")
+	}
+	return s.repo.RevokeAccountRestriction(ctx, userID, restrictionID, time.Now())
+}
+
 func (s *AccountRestrictionService) EnsureAllowed(ctx context.Context, userID int64, message string) error {
 	item, err := s.FindActive(ctx, userID)
 	if err != nil {

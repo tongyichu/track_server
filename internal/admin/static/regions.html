@@ -13,41 +13,98 @@
   <header class="topbar"></header>
   <main class="container">
     <section class="region-heading">
-      <div><h1>城市管理</h1><p class="text-secondary">这里是客户端城市目录的唯一数据源。国内编码保持稳定，国外可按国家、州和城市等层级组织。</p></div>
+      <h1>城市管理</h1>
+      <p class="text-secondary">维护客户端的地区目录和宣传资料</p>
     </section>
-    <p id="regionStatus" class="text-secondary" role="status"></p>
-    <div class="region-country-bar"><div id="regionCountryTabs" class="region-country-tabs" role="tablist" aria-label="国家"></div><button id="regionAddCountry" type="button" data-admin-write="regions" class="region-country-add" aria-label="新增国家" title="新增国家">+</button></div>
+    <div class="region-catalog-feedback">
+      <p id="regionStatus" class="text-secondary" role="status"></p>
+      <button id="regionRetryCatalog" type="button" class="btn btn-sm btn-outline-secondary" hidden>重试</button>
+    </div>
+    <div class="region-country-bar">
+      <div id="regionCountryTabs" class="region-country-tabs" role="tablist" aria-label="国家"></div>
+      <button id="regionAddCountry" type="button" data-admin-write="regions" class="region-country-add" aria-label="新增国家" title="新增国家">+</button>
+    </div>
     <div class="region-layout">
-      <section class="card region-tree-panel">
+      <section class="card region-tree-panel" aria-label="地区目录">
         <div class="card-body">
-          <div class="region-tree-actions"><input id="regionSearch" class="form-control" placeholder="搜索当前国家内的地区" aria-label="搜索当前国家内的地区" /><button id="regionAddChild" data-admin-write="regions" class="btn btn-outline-primary" disabled>新增下级</button></div>
-          <div id="regionTree" class="region-tree" role="tree"></div>
+          <div class="region-tree-actions">
+            <input id="regionSearch" type="search" class="form-control" placeholder="搜索当前国家的地区" aria-label="搜索当前国家的地区" />
+          </div>
+          <div class="region-tree-notes">
+            <span id="regionDraftCount" aria-live="polite"></span>
+            <span id="regionNavigationStatus" role="status"></span>
+          </div>
+          <div id="regionTree" class="region-tree" role="tree" aria-label="地区"></div>
         </div>
       </section>
-      <section class="card region-editor-panel">
+      <section id="regionEditor" class="card region-editor-panel" aria-label="地区资料">
         <div class="card-body">
-          <p id="regionEmpty" class="text-secondary">选择左侧地区后编辑。新增节点先保留在本页，点击该节点的“保存”后生效。</p>
-          <form id="regionForm" data-admin-fields="regions" hidden>
-            <div class="region-editor-title"><div class="region-editor-identity"><h2 id="regionEditorTitle">地区资料</h2><span id="regionId" class="region-editor-id"></span></div><div class="region-editor-actions"><button id="regionDeleteDraft" type="button" data-admin-write="regions" class="btn btn-outline-danger" hidden>删除未保存节点</button><button id="regionSaveNode" type="button" data-admin-write="regions" class="btn btn-primary">保存当前节点</button><button id="regionDeleteCountry" type="button" data-admin-write="regions" class="btn btn-danger" hidden>删除国家</button></div></div>
-            <div class="region-form-grid">
-              <label>名称<input id="regionName" class="form-control" maxlength="64" required /></label>
-              <label>英文名称<input id="regionNameEn" class="form-control" maxlength="200" /></label>
-              <label>高德 adcode<input id="regionAmapAdcode" class="form-control" inputmode="numeric" maxlength="6" placeholder="六位行政区编码" /></label>
-              <label>Google 地区 Place ID<input id="regionGooglePlaceId" class="form-control" maxlength="2048" placeholder="地区的 Place ID，非景点 ID" /></label>
-              <label id="regionCountryCodeField" class="d-none" hidden><span id="regionCountryCodeLabel">所属国家代码</span><input id="regionCountryCode" class="form-control" maxlength="2" placeholder="如 CN、US" /></label>
-              <label id="regionContinentField">所属洲<select id="regionContinent" class="form-select"><option value="">未设置</option><option value="AS">亚洲</option><option value="EU">欧洲</option><option value="AF">非洲</option><option value="NA">北美洲</option><option value="SA">南美洲</option><option value="OC">大洋洲</option><option value="AN">南极洲</option></select></label>
-              <label>纬度<input id="regionLatitude" class="form-control" type="number" step="any" min="-90" max="90" /></label>
-              <label>经度<input id="regionLongitude" class="form-control" type="number" step="any" min="-180" max="180" /></label>
-              <label class="region-full">城市宣传口号<input id="regionSlogan" class="form-control" maxlength="500" /><span class="form-hint">优先填写流行、经典且有当地辨识度的旅游或城市形象宣传语；请核对来源。</span></label>
-              <label class="region-full">简介<textarea id="regionDescription" class="form-control" rows="5" maxlength="8000"></textarea></label>
-              <label class="form-check region-selectable d-none" hidden><input id="regionSelectable" class="form-check-input" type="checkbox" /><span class="form-check-label">可在客户端选为城市</span></label>
+          <p id="regionEmpty" class="text-secondary mb-0">从目录选择地区</p>
+          <form id="regionForm" data-admin-fields="regions" novalidate hidden>
+            <div id="regionEditorFields">
+              <div class="region-editor-title">
+                <div class="region-editor-identity">
+                  <div class="region-editor-name"><h2 id="regionEditorTitle" tabindex="-1">地区资料</h2><span id="regionId" class="region-editor-id"></span></div>
+                  <p id="regionPath" class="region-editor-path"></p>
+                </div>
+                <button id="regionAddChild" type="button" data-admin-write="regions" class="btn btn-sm btn-outline-secondary" disabled>新增下级</button>
+              </div>
+              <p id="regionMissing" class="region-missing-summary" hidden></p>
+              <div class="region-form-grid">
+                <label>名称<input id="regionName" class="form-control" maxlength="64" required /></label>
+                <label>英文名称<input id="regionNameEn" class="form-control" maxlength="200" /></label>
+                <label id="regionCountryCodeField" hidden>国家缩写（两位）<input id="regionCountryCode" class="form-control" maxlength="2" placeholder="如 CN、US" /></label>
+                <label id="regionContinentField">所属洲<select id="regionContinent" class="form-select"><option value="">未设置</option><option value="AS">亚洲</option><option value="EU">欧洲</option><option value="AF">非洲</option><option value="NA">北美洲</option><option value="SA">南美洲</option><option value="OC">大洋洲</option><option value="AN">南极洲</option></select></label>
+                <label class="region-full">宣传口号<input id="regionSlogan" class="form-control" maxlength="500" /><span class="form-hint">填写有可核对来源的地区宣传语</span></label>
+                <label class="region-full">简介<textarea id="regionDescription" class="form-control" rows="5" maxlength="8000"></textarea></label>
+              </div>
+              <section id="regionPhotos" class="region-photos" hidden></section>
+              <details id="regionLocation" class="region-location">
+                <summary>位置与外部编号</summary>
+                <div class="region-form-grid">
+                  <label>高德 adcode<input id="regionAmapAdcode" class="form-control" inputmode="numeric" maxlength="6" placeholder="六位行政区编码" /></label>
+                  <label>Google 地区 Place ID<input id="regionGooglePlaceId" class="form-control" maxlength="2048" placeholder="地区的 Place ID，非景点 ID" /></label>
+                  <label>纬度<input id="regionLatitude" class="form-control" type="number" step="any" min="-90" max="90" /></label>
+                  <label>经度<input id="regionLongitude" class="form-control" type="number" step="any" min="-180" max="180" /></label>
+                </div>
+              </details>
+              <div id="regionDangerZone" class="region-danger" hidden>
+                <button id="regionDeleteDraft" type="button" data-admin-write="regions" class="btn btn-sm btn-outline-danger" hidden>删除未保存节点</button>
+                <button id="regionDeleteCountry" type="button" data-admin-write="regions" class="btn btn-sm btn-outline-danger" hidden>删除国家</button>
+              </div>
             </div>
-            <section id="regionPhotos" class="region-photos" hidden></section>
+            <footer class="region-editor-footer">
+              <div class="region-save-feedback">
+                <span id="regionSaveStatus" role="status"></span>
+                <button id="regionViewLatest" type="button" data-admin-write="regions" class="btn btn-sm btn-link" hidden>查看最新版本</button>
+              </div>
+              <button id="regionSaveNode" type="submit" data-admin-write="regions" class="btn btn-primary">保存</button>
+            </footer>
           </form>
         </div>
       </section>
     </div>
   </main>
+  <dialog id="regionConflictDialog" class="region-conflict-dialog" aria-labelledby="regionConflictTitle">
+    <form method="dialog">
+      <div class="region-conflict-header">
+        <h2 id="regionConflictTitle">核对地区资料</h2>
+        <button type="submit" value="cancel" class="btn-close" aria-label="关闭"></button>
+      </div>
+      <p id="regionConflictSummary"></p>
+      <div id="regionConflictDiff" class="region-conflict-diff" hidden>
+        <table class="table table-sm">
+          <thead><tr><th scope="col">字段</th><th scope="col">我的草稿</th><th scope="col">最新版本</th></tr></thead>
+          <tbody id="regionConflictRows"></tbody>
+        </table>
+      </div>
+      <div class="region-conflict-actions">
+        <button type="submit" value="cancel" class="btn btn-outline-secondary" autofocus>返回</button>
+        <button id="regionConflictUseLatest" type="submit" value="latest" class="btn btn-outline-secondary">采用最新版本</button>
+        <button id="regionConflictKeepDraft" type="submit" value="mine" class="btn btn-primary">保留我的修改</button>
+      </div>
+    </form>
+  </dialog>
   <script src="/admin/static/vendor/tabler.min.js"></script>
   <script src="/admin/static/shell.js"></script>
   <script src="/admin/static/ui.js"></script>

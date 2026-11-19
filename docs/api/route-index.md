@@ -44,7 +44,9 @@
 | 后台用户列表（最近活跃及当时 App 版本、近7天活跃天数、等级筛选、批量级别与粉丝数） | GET | `/admin/api/users` | 后台 users 读取权限 | [admin-users.md](admin-users.md#列表) |
 | 后台用户资料读取 / 编辑（手机号只读） | GET / PUT | `/admin/api/users/:user_id` | 后台 users 读 / 写权限 | [admin-users.md](admin-users.md#资料读取与保存) |
 | 后台用户互动数据与级别 | GET | `/admin/api/users/:user_id/overview` | 后台 users 读取权限 | [admin-users.md](admin-users.md#互动数据与级别) |
+| 后台用户头像 | GET | `/admin/api/users/:user_id/avatar` | 后台 users 读取权限 | [admin-users.md](admin-users.md#资料读取与保存) |
 | 后台用户背景图 | GET | `/admin/api/users/:user_id/background` | 后台 users 读取权限 | [admin-users.md](admin-users.md#背景图) |
+| 后台解除已确认的账号限制 | DELETE | `/admin/api/users/:user_id/restrictions/current?restriction_id=...` | 后台 users 写权限 | [admin-users.md](admin-users.md#账号限制与弹窗加载) |
 | 创建轨迹（含跨天时间线、可选默认路线说明） | POST | `/track/create` | 是 | [track.md](track.md#1-创建轨迹) |
 | 推荐轨迹列表（个性化 Feed Session，支持 `city_code` 筛选） | GET | `/track/recommend/list` | 是 | [track.md](track.md#2-推荐轨迹列表) |
 | 轨迹详情（含默认路线说明、收藏状态、被跟随计数及可选主景区） | GET | `/track/:track_id/detail` | 是 | [track.md](track.md#3-轨迹详情)、[主景区标签](track.md#主景区标签) |

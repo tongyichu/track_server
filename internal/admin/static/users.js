@@ -92,8 +92,10 @@
   }
   function renderProvinceMap() {
     var root = document.getElementById('userProvinceMap');
+    if (statsPanel.hidden) return;
     if (!window.echarts) { root.textContent = '图表组件暂不可用'; return; }
     loadProvinceGeo().then(function (geo) {
+      if (statsPanel.hidden) return;
       var features = (geo.features || []).filter(function (feature) {
         return String(feature.properties.adcode) !== '100000_JD';
       });
@@ -191,9 +193,35 @@
       AdminUI.alert('城市列表加载失败: ' + (error.message || error), 'danger');
     }
   }
-  var statisticsLoading = false, statisticsLoaded = false;
+  var statisticsLoading = false, statisticsLoaded = false, statisticsData;
+  var statsPanel = document.getElementById('userStatistics');
+  var statsToggle = document.getElementById('userStatsToggle');
   var statisticsRefreshBtn = document.getElementById('refreshUserStatistics');
   statisticsRefreshBtn.addEventListener('click', loadUserStatistics);
+  statsToggle.addEventListener('click', function () {
+    statsPanel.hidden = !statsPanel.hidden;
+    statsToggle.setAttribute('aria-expanded', String(!statsPanel.hidden));
+    if (statsPanel.hidden) return;
+    requestAnimationFrame(function () {
+      if (statsPanel.hidden) return;
+      if (statisticsLoaded) drawStatisticsCharts(statisticsData);
+      else loadUserStatistics();
+    });
+  });
+  function drawStatisticsCharts(data) {
+    if (statsPanel.hidden) return;
+    renderPie('userGenderChart', 'userGenderStats', data.gender, data.total_users);
+    renderPie('userZodiacChart', 'userZodiacStats', data.zodiac, data.total_users);
+    renderProvinceMap();
+    renderPie('userAgeChart', 'userAgeStats', data.age, data.total_users, ageLabels);
+    renderUserBars('userTrackOutputChart', data.track_output, trackOutputLabels, data.total_users);
+    resizeUserCharts();
+  }
+  function resizeUserCharts() {
+    if (statsPanel.hidden) return;
+    Object.keys(userCharts).forEach(function (id) { userCharts[id].resize(); });
+    if (userMap) userMap.resize();
+  }
   async function loadUserStatistics() {
     if (statisticsLoading) return;
     statisticsLoading = true;
@@ -206,16 +234,10 @@
       var response = await fetch('/admin/api/users/statistics', { cache: 'no-store' });
       if (!response.ok) throw new Error('统计加载失败');
       var data = (await response.json()).data || {};
-      renderPie('userGenderChart', 'userGenderStats', data.gender, data.total_users);
-      renderPie('userZodiacChart', 'userZodiacStats', data.zodiac, data.total_users);
-      renderPie('userAgeChart', 'userAgeStats', data.age, data.total_users, ageLabels);
-      renderProvinceStats(data.user_cities || [], false);
       await AdminAssets.loadCharts();
-      renderPie('userGenderChart', 'userGenderStats', data.gender, data.total_users);
-      renderPie('userZodiacChart', 'userZodiacStats', data.zodiac, data.total_users);
-      renderProvinceMap();
-      renderPie('userAgeChart', 'userAgeStats', data.age, data.total_users, ageLabels);
-      renderUserBars('userTrackOutputChart', data.track_output, trackOutputLabels, data.total_users);
+      renderProvinceStats(data.user_cities || [], false);
+      drawStatisticsCharts(data);
+      statisticsData = data;
       statisticsLoaded = true;
     } catch (_) {
       errorNode.textContent = statisticsLoaded ? '刷新失败，当前仍显示上次数据，请重试。' : '统计加载失败，请点击“刷新数据”重试。';
@@ -228,14 +250,10 @@
     }
   }
 
-  // 翻页：采用 cursor 栈记录每一页的入口 cursor。
-  // cursorStack[i] = 第 i 页（从 0 开始）的入口 cursor；首页入口 cursor 为 null。
+  // Only successful requests replace the displayed page and its committed filters.
   var pageSize = 20;
-  var cursorStack = [null];
-  var pageIndex = 0;
-  var lastNextCursor = null;
-  var totalCount = 0;
-  var listRequest = 0;
+  var listView = { filters: new URLSearchParams(), cursors: [null], index: 0, next: null };
+  var listController, pendingListView, failedListView;
 
   var tbody = document.getElementById('userList');
   var prevBtn = document.getElementById('prevBtn');
@@ -258,9 +276,17 @@
   var profileFields = document.getElementById('userProfileFields');
   var activeDetailUserID = '', userDetailRequest = 0, userDetailController = null;
   var profileReady = false, profileSaving = false, overviewLoading = false, permissionLoadedFor = '';
+  var profileBaseline = null, discardPrompt = false, allowDiscard = false;
   var restriction = null, restrictionReady = false, restrictionBusy = false, restrictionMode = '';
+  var restrictionTargetID = '';
+  var restrictionDuration = document.getElementById('userRestrictionDuration');
+  var restrictionDays = document.getElementById('userRestrictionDays');
+  var profileLoadError = document.getElementById('userProfileLoadError');
+  var detailStatus = document.getElementById('userDetailStatus');
+  var detailCover = document.getElementById('userDetailCover');
   var backgroundURL = '', backgroundTimer = null;
   var background = document.getElementById('userDetailBackground');
+  var avatar = document.getElementById('userDetailAvatar');
   var backgroundHint = document.getElementById('userBackgroundPlaceholder');
   var backgroundRetry = document.getElementById('userBackgroundRetry');
   var restrictionAction = document.getElementById('userRestrictionAction');
@@ -268,13 +294,64 @@
   var restrictionEditor = document.getElementById('userRestrictionEditor');
   var restrictionError = document.getElementById('userRestrictionError');
   function currentDetail(userID, request) { return userID === activeDetailUserID && request === userDetailRequest; }
-  detailRoot.addEventListener('hide.bs.modal', function () {
+  function detailMessage(message, error) {
+    detailStatus.textContent = message;
+    detailStatus.classList.toggle('text-danger', !!error);
+  }
+  function profileValues() {
+    var fields = detailForm.elements;
+    return { nickname: fields.nickname.value.trim(), gender: fields.gender.value,
+      birthday: fields.birthday.value, signature: fields.signature.value, is_internal: fields.is_internal.checked };
+  }
+  function profileChanges() {
+    if (!profileBaseline) return {};
+    return Object.fromEntries(Object.entries(profileValues()).filter(function (field) {
+      return field[1] !== profileBaseline[field[0]];
+    }));
+  }
+  function hasProfileChanges() { return Object.keys(profileChanges()).length > 0; }
+  function updateDetailActions() {
+    var busy = profileSaving || restrictionBusy;
+    detailSave.disabled = busy || !profileReady || discardPrompt || !hasProfileChanges() || !AdminAccess.can('users', true);
+    detailSave.textContent = profileSaving ? '保存中…' : '保存资料';
+    document.getElementById('userDetailClose').hidden = discardPrompt;
+    document.getElementById('userDetailClose').disabled = busy;
+    document.getElementById('userDetailCloseIcon').disabled = busy;
+    document.getElementById('userDetailKeepEditing').hidden = !discardPrompt;
+    document.getElementById('userDetailDiscard').hidden = !discardPrompt;
+  }
+  detailRoot.addEventListener('hide.bs.modal', function (event) {
+    if (profileSaving || restrictionBusy) {
+      event.preventDefault();
+      return;
+    }
+    if (!allowDiscard && hasProfileChanges()) {
+      event.preventDefault();
+      discardPrompt = true;
+      detailMessage('资料有未保存的修改。');
+      updateDetailActions();
+      document.getElementById('userDetailKeepEditing').focus();
+      return;
+    }
     userDetailRequest++;
     if (userDetailController) userDetailController.abort();
     AdminUserPermissions.cancel();
     cancelBackground(); backgroundURL = '';
+    cancelAvatar();
   });
-  detailRoot.addEventListener('hidden.bs.modal', function () { activeDetailUserID = ''; profileReady = false; });
+  detailRoot.addEventListener('hidden.bs.modal', function () {
+    activeDetailUserID = ''; profileReady = false; allowDiscard = false; profileBaseline = null;
+  });
+  document.getElementById('userDetailKeepEditing').addEventListener('click', function () {
+    discardPrompt = false; detailMessage(''); updateDetailActions(); detailForm.elements.nickname.focus();
+  });
+  document.getElementById('userDetailDiscard').addEventListener('click', function () {
+    if (profileSaving || restrictionBusy) return;
+    allowDiscard = true; detailModal.hide();
+  });
+  detailForm.addEventListener('input', function () {
+    discardPrompt = false; detailMessage(''); updateDetailActions();
+  });
   function locationText(user) {
     var province = String(user.province_name || '').trim(), city = String(user.city_name || '').trim();
     return province && city && province !== city ? province + ' · ' + city : city || province || '-';
@@ -282,7 +359,11 @@
   async function userJSON(path, options) {
     var response = await fetch('/admin/api/users/' + path, options);
     var payload = await response.json().catch(function () { return {}; });
-    if (!response.ok) throw new Error(payload.error || '请求失败：' + response.status);
+    if (!response.ok || payload.code !== 0) {
+      var error = new Error(payload.error || '请求失败：' + response.status);
+      error.status = response.status;
+      throw error;
+    }
     return payload.data;
   }
   function renderBirthday(serverCode) {
@@ -297,6 +378,7 @@
   }
   function loadBackground() {
     cancelBackground();
+    detailCover.hidden = !backgroundURL;
     background.hidden = true; backgroundHint.hidden = false; backgroundRetry.hidden = true;
     backgroundHint.textContent = backgroundURL ? '正在加载背景图…' : '未设置背景图';
     if (!backgroundURL) return;
@@ -322,13 +404,27 @@
     image.src = backgroundURL;
   }
   backgroundRetry.addEventListener('click', loadBackground);
-  document.getElementById('userDetailAvatar').addEventListener('load', function () {
-    if (!activeDetailUserID || userDetailController.signal.aborted || !this.getAttribute('src')) return;
-    this.hidden = false; document.getElementById('userDetailAvatarPlaceholder').hidden = true;
-  });
-  document.getElementById('userDetailAvatar').addEventListener('error', function () {
-    this.hidden = true; this.removeAttribute('src'); document.getElementById('userDetailAvatarPlaceholder').hidden = false;
-  });
+  function cancelAvatar() {
+    avatar.onload = null; avatar.onerror = null;
+    avatar.removeAttribute('src');
+  }
+  function loadAvatar(url) {
+    cancelAvatar();
+    var placeholder = document.getElementById('userDetailAvatarPlaceholder');
+    avatar.hidden = true; placeholder.hidden = false;
+    if (!url) return;
+    var image = avatar.cloneNode();
+    avatar.replaceWith(image); avatar = image;
+    var userID = activeDetailUserID, request = userDetailRequest;
+    image.onload = function () {
+      if (avatar !== image || !currentDetail(userID, request) || !image.naturalWidth) return;
+      image.hidden = false; placeholder.hidden = true;
+    };
+    image.onerror = function () {
+      if (avatar === image && currentDetail(userID, request)) cancelAvatar();
+    };
+    image.src = url;
+  }
   async function loadOverview(userID, request, signal) {
     if (overviewLoading) return;
     overviewLoading = true; document.getElementById('userOverviewError').hidden = true;
@@ -356,18 +452,27 @@
     restrictionAction.classList.toggle('btn-outline-secondary', !!restriction);
     restrictionAction.classList.toggle('btn-outline-danger', !restriction);
     restrictionAction.disabled = !profileReady || !restrictionReady || restrictionBusy || profileSaving || !AdminAccess.can('users', true);
-    detailForm.elements.is_internal.disabled = !profileReady || profileSaving || !AdminAccess.can('users', true);
     restrictionConfirm.disabled = restrictionBusy || profileSaving;
     document.getElementById('userRestrictionCancel').disabled = restrictionBusy;
     document.getElementById('userRestrictionReason').disabled = restrictionBusy || !AdminAccess.can('users', true);
-    document.getElementById('userRestrictionDays').disabled = restrictionBusy || !AdminAccess.can('users', true);
+    restrictionDuration.disabled = restrictionBusy || !AdminAccess.can('users', true);
+    renderRestrictionDuration();
+    updateDetailActions();
   }
+  function renderRestrictionDuration() {
+    var byDays = restrictionDuration.value === 'days';
+    document.getElementById('userRestrictionDaysField').hidden = !byDays;
+    restrictionDays.disabled = restrictionDuration.disabled || !byDays;
+  }
+  restrictionDuration.addEventListener('change', renderRestrictionDuration);
   async function loadRestriction(userID, request, signal) {
     document.getElementById('userRestrictionRetry').hidden = true;
     try {
       var response = await fetch('/admin/api/users/' + encodeURIComponent(userID) + '/restrictions/current', { signal: signal });
       var payload = await response.json().catch(function () { return {}; });
-      if (response.status !== 404 && !response.ok) throw new Error(payload.error || '读取失败');
+      if (response.status !== 404 && (!response.ok || payload.code !== 0 || typeof payload.data?.id !== 'string')) {
+        throw new Error(payload.error || '读取失败');
+      }
       if (!currentDetail(userID, request)) return;
       restriction = response.status === 404 ? null : payload.data; restrictionReady = true;
     } catch (error) {
@@ -382,9 +487,11 @@
   restrictionAction.addEventListener('click', function () {
     if (!restrictionReady || !profileReady || restrictionBusy || profileSaving || !AdminAccess.can('users', true)) return;
     restrictionMode = restriction ? 'revoke' : 'create'; restrictionEditor.hidden = false; restrictionAction.hidden = true; restrictionError.textContent = '';
+    restrictionTargetID = restriction?.id || '';
     document.getElementById('userRestrictionCreateFields').hidden = restrictionMode !== 'create';
     document.getElementById('userRestrictionConfirmText').hidden = restrictionMode !== 'revoke';
-    document.getElementById('userRestrictionReason').value = '违规上传内容'; document.getElementById('userRestrictionDays').value = '7';
+    document.getElementById('userRestrictionReason').value = '';
+    restrictionDuration.value = 'days'; restrictionDays.value = '7'; renderRestrictionDuration();
     restrictionConfirm.textContent = restrictionMode === 'create' ? '确认限制' : '确认解除';
     restrictionConfirm.classList.toggle('btn-danger', restrictionMode === 'create');
     restrictionConfirm.classList.toggle('btn-primary', restrictionMode !== 'create');
@@ -399,26 +506,41 @@
     var signal = userDetailController.signal, create = restrictionMode === 'create';
     if (create) {
       var reason = document.getElementById('userRestrictionReason').value.trim();
-      var daysRaw = document.getElementById('userRestrictionDays').value.trim(), days = Number(daysRaw);
-      if (!reason || Array.from(reason).length > 500) { restrictionError.textContent = '请填写 1–500 字的限制原因'; return; }
-      if (daysRaw && (!Number.isSafeInteger(days) || days <= 0 || !Number.isFinite(Date.now() + days * 86400000) || Date.now() + days * 86400000 > 8640000000000000)) { restrictionError.textContent = '限制天数须为大于 0 的有效整数'; return; }
+      if (!reason || Array.from(reason).length > 255) { restrictionError.textContent = '请填写 1–255 字的限制原因'; return; }
       payload = { reason: reason };
-      if (daysRaw) payload.expires_at = new Date(Date.now() + days * 86400000).toISOString();
+      if (restrictionDuration.value === 'days') {
+        var days = restrictionDays.valueAsNumber;
+        var end = new Date(Date.now() + days * 86400000);
+        if (!restrictionDays.validity.valid || !Number.isSafeInteger(days) || !Number.isFinite(end.getTime()) || end.getUTCFullYear() > 9999) {
+          restrictionError.textContent = '限制天数须为大于 0 的有效整数'; restrictionDays.focus(); return;
+        }
+        payload.expires_at = end.toISOString();
+      }
     }
-    restrictionBusy = true; restrictionError.textContent = ''; detailSave.disabled = true; renderRestriction();
+    restrictionBusy = true; restrictionError.textContent = '正在提交…'; renderRestriction();
     try {
-      await userJSON(encodeURIComponent(userID) + (create ? '/restrictions' : '/restrictions/current'), {
+      var path = create ? '/restrictions' : '/restrictions/current?restriction_id=' + encodeURIComponent(restrictionTargetID);
+      await userJSON(encodeURIComponent(userID) + path, {
         method: create ? 'POST' : 'DELETE', signal: signal,
         headers: create ? { 'Content-Type': 'application/json' } : {}, body: create ? JSON.stringify(payload) : undefined
       });
       if (!currentDetail(userID, request)) return;
       restrictionEditor.hidden = true; restrictionAction.hidden = false; restrictionMode = '';
+      restrictionError.textContent = '';
       AdminUI.alert(create ? '账号限制已生效' : '账号限制已解除', 'success');
-      await loadRestriction(userID, request, signal);
+      if ((pendingListView || listView).filters.has('restricted')) refreshVisibleList();
+      restrictionReady = false;
+      loadRestriction(userID, request, signal);
     } catch (error) {
-      if (currentDetail(userID, request) && !signal.aborted) restrictionError.textContent = error.message;
+      if (!currentDetail(userID, request) || signal.aborted) return;
+      restrictionError.textContent = error.message;
+      if (error.status === 409) {
+        restrictionEditor.hidden = true; restrictionAction.hidden = false; restrictionMode = '';
+        restrictionReady = false;
+        loadRestriction(userID, request, signal);
+      }
     } finally {
-      if (currentDetail(userID, request)) { restrictionBusy = false; detailSave.disabled = !profileReady; renderRestriction(); }
+      if (currentDetail(userID, request)) { restrictionBusy = false; renderRestriction(); }
     }
   });
   document.getElementById('userPermissionSection').addEventListener('toggle', function () {
@@ -429,18 +551,48 @@
   function openUserDetail(userID) {
     return AdminUI.runOnce('user-detail', function () { return loadUserDetail(userID); });
   }
-  async function loadUserDetail(userID) {
-    if (activeDetailUserID === userID && detailRoot.classList.contains('show')) return;
+  document.getElementById('userProfileRetry').addEventListener('click', function () {
+    if (activeDetailUserID) loadUserDetail(activeDetailUserID, true);
+  });
+  function renderProfile(user) {
+    detailForm.elements.nickname.value = user.nickname || '';
+    detailForm.elements.gender.value = user.gender || '';
+    detailForm.elements.birthday.value = user.birthday || '';
+    detailForm.elements.birthday.max = AdminUserZodiac.today();
+    detailForm.elements.signature.value = user.signature || '';
+    detailForm.elements.is_internal.checked = !!user.is_internal;
+    profileBaseline = profileValues();
+    document.getElementById('userDetailName').textContent = user.nickname || '未设置昵称';
+    var meta = [
+      ['手机号', user.phone || '—'],
+      ['所在城市', user.city_name || user.province_name ? locationText(user) : '—'],
+      ['注册', AdminTime.dateTime(user.created_at)],
+      ['最近活跃', AdminTime.dateTime(user.last_active_at)],
+      ['活跃时版本', activeAppVersionText(user.last_active_app_version)],
+      ['近7天活跃', activeDaysText(user.active_days_7d)],
+      ['资料更新', AdminTime.dateTime(user.updated_at)]
+    ];
+    document.getElementById('userDetailMeta').replaceChildren(...meta.filter(function (pair) { return pair[1]; }).map(function (pair) {
+      var item = document.createElement('div'), term = document.createElement('dt'), value = document.createElement('dd');
+      term.textContent = pair[0]; value.textContent = pair[1];
+      item.append(term, value);
+      return item;
+    }));
+    renderBirthday(user.zodiac_sign);
+  }
+  async function loadUserDetail(userID, retry) {
+    if (!retry && activeDetailUserID === userID && detailRoot.classList.contains('show')) return;
     var request = ++userDetailRequest;
     if (userDetailController) userDetailController.abort();
     var controller = userDetailController = new AbortController();
     activeDetailUserID = userID; profileReady = false; profileSaving = false; overviewLoading = false; permissionLoadedFor = '';
+    profileBaseline = null; discardPrompt = allowDiscard = false;
+    detailMessage(''); profileLoadError.hidden = true;
     restriction = null; restrictionReady = false; restrictionBusy = false; restrictionMode = '';
-    detailForm.reset(); profileFields.disabled = true; detailSave.disabled = true; detailSave.textContent = '保存资料';
+    detailForm.reset(); profileFields.disabled = true;
     document.getElementById('userDetailName').textContent = '加载中…';
     document.getElementById('userDetailMeta').textContent = ''; document.getElementById('userDetailID').textContent = 'ID ' + userID;
-    document.getElementById('userDetailAvatar').removeAttribute('src'); document.getElementById('userDetailLevel').hidden = true;
-    document.getElementById('userDetailAvatar').hidden = true; document.getElementById('userDetailAvatarPlaceholder').hidden = false;
+    loadAvatar(''); document.getElementById('userDetailLevel').hidden = true;
     ['userFollowingCount','userFollowerCount','userReceivedLikeCount'].forEach(function (id) { document.getElementById(id).textContent = '—'; });
     document.getElementById('userPermissionSection').open = false; document.getElementById('userPermissionSnapshots').replaceChildren();
     restrictionEditor.hidden = true; restrictionAction.hidden = false; restrictionError.textContent = '';
@@ -450,48 +602,47 @@
     try {
       var user = await userJSON(encodeURIComponent(userID), { signal: controller.signal });
       if (!currentDetail(userID, request)) return;
-      detailForm.elements.nickname.value = user.nickname || ''; detailForm.elements.phone.value = user.phone || '';
-      detailForm.elements.gender.value = user.gender || ''; detailForm.elements.birthday.value = user.birthday || '';
-      detailForm.elements.birthday.max = AdminUserZodiac.today(); detailForm.elements.signature.value = user.signature || '';
-      detailForm.elements.is_internal.checked = !!user.is_internal;
-      document.getElementById('userDetailLocation').value = locationText(user);
-      document.getElementById('userDetailName').textContent = user.nickname || '未设置昵称';
-      var activeVersion = activeAppVersionText(user.last_active_app_version);
-      document.getElementById('userDetailMeta').textContent = '注册  ' + fmtTime(user.created_at) + '\n最近活跃  ' + (user.last_active_at ? fmtTime(user.last_active_at) : '—') + (activeVersion ? '\n活跃时版本  ' + activeVersion : '') + '\n近7天活跃  ' + activeDaysText(user.active_days_7d) + '\n资料更新  ' + fmtTime(user.updated_at);
-      if (user.avatar_url) document.getElementById('userDetailAvatar').src = user.avatar_url;
-      backgroundURL = user.background_url || ''; loadBackground(); renderBirthday(user.zodiac_sign);
-      profileReady = true; profileFields.disabled = false; detailSave.disabled = false; renderRestriction();
+      renderProfile(user);
+      loadAvatar(user.avatar_url);
+      backgroundURL = user.background_url || ''; loadBackground();
+      profileReady = true; profileFields.disabled = false; renderRestriction();
     } catch (error) {
       if (!currentDetail(userID, request) || controller.signal.aborted) return;
-      detailModal.hide(); AdminUI.alert('读取用户资料失败: ' + error.message, 'danger');
+      document.getElementById('userDetailName').textContent = '用户资料';
+      profileLoadError.hidden = false;
     }
   }
   detailForm.addEventListener('submit', async function (event) {
     event.preventDefault();
-    if (!profileReady || profileSaving || restrictionBusy || !AdminAccess.can('users', true) || !detailForm.reportValidity()) return;
+    if (!profileReady || profileSaving || restrictionBusy || discardPrompt || !AdminAccess.can('users', true) || !detailForm.reportValidity()) return;
+    var payload = profileChanges();
+    if (!Object.keys(payload).length) return;
+    if (payload.nickname === '') {
+      detailMessage('请输入昵称', true); detailForm.elements.nickname.focus(); return;
+    }
     var userID = activeDetailUserID, request = userDetailRequest;
-    profileSaving = true; profileFields.disabled = true; detailSave.disabled = true; detailSave.textContent = '保存中…'; renderRestriction();
-    var payload = { nickname: detailForm.elements.nickname.value.trim(), gender: detailForm.elements.gender.value,
-      birthday: detailForm.elements.birthday.value, signature: detailForm.elements.signature.value, is_internal: detailForm.elements.is_internal.checked };
+    profileSaving = true; profileFields.disabled = true; detailMessage(''); renderRestriction();
     try {
-      await userJSON(encodeURIComponent(userID), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-      if (currentDetail(userID, request)) detailModal.hide();
-      AdminUI.alert('用户资料已保存', 'success');
-      loadPage().catch(function () { AdminUI.alert('资料已保存，列表刷新失败，请手动刷新', 'warning'); });
-    } catch (error) { AdminUI.alert('保存失败: ' + error.message, 'danger'); }
-    finally { if (currentDetail(userID, request)) { profileSaving = false; profileFields.disabled = !profileReady; detailSave.disabled = !profileReady; detailSave.textContent = '保存资料'; renderRestriction(); } }
+      var user = await userJSON(encodeURIComponent(userID), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      if (currentDetail(userID, request)) { renderProfile(user); detailMessage('资料已保存'); }
+      refreshVisibleList().then(function (updated) {
+        if (updated === false && currentDetail(userID, request) && !hasProfileChanges()) {
+          detailMessage('资料已保存，用户列表刷新失败。', true);
+        }
+      });
+    } catch (error) {
+      if (currentDetail(userID, request)) detailMessage('保存失败：' + error.message, true);
+    } finally {
+      if (currentDetail(userID, request)) { profileSaving = false; profileFields.disabled = !profileReady; renderRestriction(); }
+    }
   });
   tbody.addEventListener('click', function (event) {
     var button = event.target.closest('[data-action="detail"]');
     if (button) openUserDetail(button.dataset.userId);
   });
 
-  refreshBtn.addEventListener('click', function () {
-    cursorStack = [null];
-    pageIndex = 0;
-    loadPage();
-  });
-  function resetSearch() { cursorStack = [null]; pageIndex = 0; loadPage(); }
+  refreshBtn.addEventListener('click', function () { loadPage(failedListView || listView); });
+  function resetSearch() { loadPage({ filters: readFilters(), cursors: [null], index: 0, next: null }); }
   searchBtn.addEventListener('click', resetSearch);
   titleFilter.addEventListener('keydown', function (event) { if (event.key === 'Enter') resetSearch(); });
   provinceFilter.addEventListener('change', function () { populateFilterCities(); resetSearch(); });
@@ -499,22 +650,17 @@
     filter.addEventListener('change', resetSearch);
   });
   prevBtn.addEventListener('click', function () {
-    if (pageIndex <= 0) return;
-    pageIndex -= 1;
-    cursorStack = cursorStack.slice(0, pageIndex + 1);
-    loadPage();
+    if (listView.index <= 0 || pendingListView) return;
+    var index = listView.index - 1;
+    loadPage({ filters: listView.filters, cursors: listView.cursors.slice(0, index + 1), index: index });
   });
   nextBtn.addEventListener('click', function () {
-    if (!lastNextCursor) return;
-    pageIndex += 1;
-    cursorStack[pageIndex] = lastNextCursor;
-    loadPage();
+    if (!listView.next || pendingListView) return;
+    loadPage({ filters: listView.filters, cursors: listView.cursors.concat(listView.next), index: listView.index + 1 });
   });
 
-  async function loadPage() {
-    var request = ++listRequest;
+  function readFilters() {
     var params = new URLSearchParams();
-    params.set('limit', String(pageSize));
     if (titleFilter.value.trim()) params.set('title', titleFilter.value.trim());
     if (internalFilter.value) params.set('is_internal', internalFilter.value);
     if (provinceFilter.value) params.set('province_code', provinceFilter.value);
@@ -522,25 +668,38 @@
     if (genderFilter.value) params.set('gender', genderFilter.value);
     if (levelFilter.value) params.set('level', levelFilter.value);
     if (restrictedFilter.value) params.set('restricted', restrictedFilter.value);
-    var cur = cursorStack[pageIndex];
+    return params;
+  }
+
+  function refreshVisibleList() {
+    var view = pendingListView || listView;
+    return loadPage(view);
+  }
+
+  async function loadPage(view) {
+    listController?.abort();
+    var controller = listController = new AbortController();
+    pendingListView = view;
+    failedListView = null;
+    var params = new URLSearchParams(view.filters);
+    params.set('limit', String(pageSize));
+    var cur = view.cursors[view.index];
     if (cur) {
       params.set('cursor_created_at', cur.created_at);
       params.set('cursor_id', String(cur.id));
     }
-    prevBtn.disabled = nextBtn.disabled = true;
-    lastNextCursor = null;
+    prevBtn.disabled = nextBtn.disabled = refreshBtn.disabled = true;
     pageHint.textContent = '正在加载…';
     tbody.setAttribute('aria-busy', 'true');
-    if (!tbody.querySelector('tr[data-user-id]')) tbody.innerHTML = '<tr><td colspan="8">正在加载用户…</td></tr>';
+    if (!tbody.querySelector('tr[data-user-id]')) tbody.innerHTML = '<tr><td colspan="7">正在加载用户…</td></tr>';
     try {
-      var resp = await fetch('/admin/api/users?' + params.toString());
+      var resp = await fetch('/admin/api/users?' + params.toString(), { signal: controller.signal });
       var body = await resp.json();
-      if (request !== listRequest) return;
+      if (listController !== controller) return;
       if (!resp.ok || body.code !== 0) throw new Error(body.error || String(resp.status));
       var data = body.data || {};
       var items = data.items || [];
-      totalCount = data.total || 0;
-      lastNextCursor = data.next_cursor || null;
+      var totalCount = data.total || 0;
       if (Array.isArray(data.level_options)) {
         var selectedLevel = levelFilter.value;
         levelFilter.replaceChildren(new Option('全部等级', ''));
@@ -557,44 +716,46 @@
         avatar = '<span class="admin-user-avatar-wrap">' + avatar + (it.is_internal ? '<span class="admin-user-inner-badge">inner</span>' : '') + '</span>';
         var id = String(it.id), tr = existing.get(id) || document.createElement('tr');
         var activeVersion = activeAppVersionText(it.last_active_app_version);
-        var markup = '<td><div class="admin-user-identity">' + avatar + '<span class="admin-user-name"><span>' + esc(it.nickname) + '</span>' + (Number.isInteger(it.level) && it.level > 0 ? '<span class="admin-user-level">Lv.' + it.level + '</span>' : '') + '</span></div></td>' +
+        var markup = '<td><div class="admin-user-identity">' + avatar + '<div class="admin-user-name"><button class="btn btn-link admin-user-name-link" type="button" data-action="detail" data-user-id="' + esc(it.id) + '" title="查看用户详情">' + esc(it.nickname || '未设置昵称') + '</button>' + (Number.isInteger(it.level) && it.level > 0 ? '<span class="admin-user-level">Lv.' + it.level + '</span>' : '') + '</div></div></td>' +
           '<td>' + esc(it.phone || '') + '</td>' +
           '<td>' + esc(genderText(it.gender)) + '</td>' +
           '<td><span class="admin-user-city-cell">' + esc(locationText(it)) + '</span></td>' +
           '<td>' + (it.follower_count == null ? '—' : esc(number(it.follower_count).toLocaleString())) + '</td>' +
           '<td><span class="admin-user-active-time">' + (it.last_active_at ? fmtTime(it.last_active_at) : '—') + '</span>' + (activeVersion ? '<small class="admin-user-active-version" title="最近活跃时版本：' + esc(activeVersion) + '">' + esc(activeVersion) + '</small>' : '') + '</td>' +
-          '<td>' + activeDaysText(it.active_days_7d) + '</td>' +
-          '<td><div class="admin-user-actions"><button data-action="detail" data-user-id="' + esc(it.id) + '">查看详情</button>' + '</div></td>';
+          '<td>' + activeDaysText(it.active_days_7d) + '</td>';
         tr.dataset.userId = id;
         if (tr.dataset.markup !== markup) { tr.innerHTML = markup; tr.dataset.markup = markup; }
         rows.push(tr);
       });
       if (!rows.length) {
-        var empty = document.createElement('tr'); empty.innerHTML = '<td colspan="8">暂无符合条件的用户</td>'; rows.push(empty);
+        var empty = document.createElement('tr'); empty.innerHTML = '<td colspan="7">暂无符合条件的用户</td>'; rows.push(empty);
       }
       var wanted = new Set(rows);
       Array.from(tbody.children).forEach(function (row) { if (!wanted.has(row)) row.remove(); });
       rows.forEach(function (row, index) { if (tbody.children[index] !== row) tbody.insertBefore(row, tbody.children[index] || null); });
-      nextBtn.disabled = !lastNextCursor;
-      pageHint.textContent = '第 ' + (pageIndex + 1) + ' 页 · 本页 ' + items.length + ' 个用户';
+      listView = { filters: view.filters, cursors: view.cursors, index: view.index, next: data.next_cursor || null };
+      pageHint.textContent = '第 ' + (view.index + 1) + ' 页 · 本页 ' + items.length + ' 个用户';
       totalHint.textContent = '共 ' + totalCount.toLocaleString() + ' 个用户';
+      return true;
     } catch (error) {
-      if (request !== listRequest) return;
-      if (!tbody.querySelector('tr[data-user-id]')) tbody.innerHTML = '<tr><td colspan="8">加载失败：' + esc(error.message) + '。请点击“刷新”重试。</td></tr>';
-      pageHint.textContent = '加载失败：' + error.message + '。请点击“刷新”重试。';
+      if (listController !== controller || controller.signal.aborted) return;
+      failedListView = view;
+      var hasRows = !!tbody.querySelector('tr[data-user-id]');
+      if (!hasRows) tbody.innerHTML = '<tr><td colspan="7">加载失败：' + esc(error.message) + '。请点击“刷新”重试。</td></tr>';
+      pageHint.textContent = hasRows ? '当前显示上次加载的结果。请点击“刷新”重试。' : '加载失败，请点击“刷新”重试。';
+      return false;
     } finally {
-      if (request === listRequest) {
+      if (listController === controller) {
+        pendingListView = null;
         tbody.removeAttribute('aria-busy');
-        prevBtn.disabled = pageIndex <= 0;
+        prevBtn.disabled = listView.index <= 0;
+        nextBtn.disabled = !listView.next;
+        refreshBtn.disabled = false;
       }
     }
   }
 
-  loadUserStatistics();
   loadCities();
-  loadPage();
-  window.addEventListener('resize', function () {
-    Object.keys(userCharts).forEach(function (id) { userCharts[id].resize(); });
-    if (userMap) userMap.resize();
-  });
+  resetSearch();
+  window.addEventListener('resize', resizeUserCharts);
 })();

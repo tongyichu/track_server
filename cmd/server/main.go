@@ -249,7 +249,13 @@ func main() {
 			navigationRepo = repository.NewMongoNavigationRepository(db.Collection("track_navigations"))
 			appReleaseRepo = repository.NewMongoAppReleaseRepository(db.Collection("app_releases"))
 			achievementRepo = repository.NewMongoAchievementRepository(db.Collection("user_achievement_rewards"))
-			accountRestrictionRepo = repository.NewMongoAccountRestrictionRepository(db.Collection("user_account_restrictions"))
+			mongoRestrictions := repository.NewMongoAccountRestrictionRepository(db.Collection("user_account_restrictions"))
+			restrictionIndexCtx, restrictionIndexCancel := context.WithTimeout(ctx, 5*time.Second)
+			if err := mongoRestrictions.EnsureIndexes(restrictionIndexCtx); err != nil {
+				log.Printf("account restriction mongo indexes unavailable: %v", err)
+			}
+			restrictionIndexCancel()
+			accountRestrictionRepo = mongoRestrictions
 			feedbackRepo = repository.NewMongoFeedbackRepository(db.Collection("user_feedbacks"))
 			analyticsRepo = repository.NewMongoAnalyticsRepository(db.Collection("analytics_sync_summaries"))
 			appClientStatsRepo = repository.NewMongoAppClientStatsRepository()

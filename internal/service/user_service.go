@@ -765,6 +765,11 @@ func backgroundCacheKey(userID int64, source string) string {
 	return fmt.Sprintf("%d_%x", userID, hash[:8])
 }
 
+// DecorateBackground resolves only the user's background, without fetching their avatar.
+func (s *UserService) DecorateBackground(ctx context.Context, user *models.User) {
+	s.decorateUserBackground(ctx, user)
+}
+
 func (s *UserService) decorateUserBackground(ctx context.Context, user *models.User) {
 	if user == nil || user.BackgroundURL == "" || s.backgroundCache == nil {
 		return

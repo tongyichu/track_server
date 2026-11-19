@@ -57,13 +57,14 @@
 | GET | `/admin/api/static/*filepath` | 鉴权 | 后台静态资源代理，从 `<LogDir>/static/` 读取头像等资源；后台页面不要直接访问需业务 JWT 的 `/api/v1/static/*` |
 | GET | `/admin/api/users` | 用户查看 | 用户列表，支持 `title` 昵称模糊搜索、`is_internal` / `province_code` / `city_code` / `gender` / `level` / `restricted` 组合筛选及 cursor 翻页；旧 `zodiac_sign` 参数兼容。等级按现有 XP 规则计算后在 total/分页前筛选，返回权威 `level_options`；当前页批量补 `last_active_at`、`active_days_7d`、`level`、`follower_count`，行不返回星座/限制详情。见 [列表协议](api/admin-users.md#列表) |
 | GET | `/admin/api/users/:user_id` | 用户查看 | 用户资料、最近活跃/近7天活跃天数、生日派生星座、只读手机号/所在地及受保护背景图入口；见 [资料协议](api/admin-users.md) |
-| PUT | `/admin/api/users/:user_id` | 用户操作 | 编辑昵称、签名、性别、生日与 `is_internal`；显式提交手机号返回400 |
+| PUT | `/admin/api/users/:user_id` | 用户操作 | 仅更新已提交的昵称、签名、性别、生日与 `is_internal`；显式提交手机号返回400 |
 | GET | `/admin/api/users/:user_id/overview` | 用户查看 | 独立读取关注数、粉丝数、获赞数与完整级别，使用原有规则，不结算奖励 |
+| GET | `/admin/api/users/:user_id/avatar` | 用户查看 | 独立解析该用户的头像缓存，重定向到受保护的头像资源 |
 | GET | `/admin/api/users/:user_id/background` | 用户查看 | 代理读取该用户已设置的背景图，不下发原始 OSS URL，不允许指定任意图片源 |
 | PUT | `/admin/api/users/:user_id/internal` | 鉴权 | 仅更新 `is_internal` 内部人员标识；普通资料更新保留该字段 |
 | GET | `/admin/api/users/:user_id/restrictions/current` | 鉴权 | 查询当前账号限制；无生效限制返回 404 |
 | POST | `/admin/api/users/:user_id/restrictions` | 鉴权 | 创建账号限制；`expires_at` 为空表示永久，操作人取 admin session 用户名 |
-| DELETE | `/admin/api/users/:user_id/restrictions/current` | 鉴权 | 解除当前账号限制 |
+| DELETE | `/admin/api/users/:user_id/restrictions/current` | 用户操作 | 必传 `restriction_id`，只解除对应仍生效的记录；状态变更时返回409 |
 | GET | `/admin/api/place-candidates` | 轨迹查看 | 保留兼容的候选队列 API，页面改为详情单条处理 |
 | GET | `/admin/api/tracks/:track_id/place-candidates` | 轨迹查看 | 单条轨迹当前有效候选，404 无候选，409 源变化 |
 | POST | `/admin/api/place-candidates/:track_id/confirm` | 轨迹操作 | 确认指定候选为轨迹主景点并同步内部景点关联 |

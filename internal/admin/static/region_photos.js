@@ -33,6 +33,11 @@
       if (this.root.hidden) return;
       const title = document.createElement('h3'); title.textContent = '宣传图片';
       const heading = document.createElement('div'); heading.className = 'region-photos-heading'; heading.appendChild(title);
+      if (this.options.editable()) {
+        const autoSave = document.createElement('small');
+        autoSave.textContent = '图片自动保存';
+        heading.appendChild(autoSave);
+      }
       const hint = document.createElement('p'); hint.className = 'form-hint';
       hint.textContent = '可拖动调整顺序。';
       let session = this.sessions.get(node.id);

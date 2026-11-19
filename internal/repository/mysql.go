@@ -3045,22 +3045,34 @@ func (r *MySQLAccountRestrictionRepository) ListAccountRestrictionsByUserID(ctx 
 }
 
 func (r *MySQLAccountRestrictionRepository) RevokeActiveAccountRestrictions(ctx context.Context, userID int64, operator string, now time.Time) (int64, error) {
-	res, err := r.db.ExecContext(ctx,
-		`UPDATE user_account_restrictions
+	return r.revokeAccountRestrictions(ctx, userID, 0, now)
+}
+
+func (r *MySQLAccountRestrictionRepository) RevokeAccountRestriction(ctx context.Context, userID, restrictionID int64, now time.Time) (int64, error) {
+	return r.revokeAccountRestrictions(ctx, userID, restrictionID, now)
+}
+
+func (r *MySQLAccountRestrictionRepository) revokeAccountRestrictions(ctx context.Context, userID, restrictionID int64, now time.Time) (int64, error) {
+	query := `UPDATE user_account_restrictions
 		    SET status=?, updated_at=?, revoked_at=?
-		  WHERE user_id=? AND status=? AND (expires_at IS NULL OR expires_at > ?)`,
+		  WHERE user_id=? AND status=? AND (expires_at IS NULL OR expires_at > ?)`
+	args := []any{
 		models.AccountRestrictionStatusRevoked,
 		now,
 		now,
 		userID,
 		models.AccountRestrictionStatusActive,
 		now,
-	)
+	}
+	if restrictionID != 0 {
+		query += " AND id=?"
+		args = append(args, restrictionID)
+	}
+	res, err := r.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return 0, err
 	}
-	rows, _ := res.RowsAffected()
-	return rows, nil
+	return res.RowsAffected()
 }
 
 type accountRestrictionScanner interface {

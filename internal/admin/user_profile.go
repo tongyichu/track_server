@@ -61,12 +61,8 @@ func (h *Handler) UpdateUserProfile(ctx context.Context, c *app.RequestContext) 
 		return
 	}
 	var body struct {
-		Nickname   string          `json:"nickname"`
-		Signature  string          `json:"signature"`
-		Phone      json.RawMessage `json:"phone"`
-		Gender     string          `json:"gender"`
-		Birthday   string          `json:"birthday"`
-		IsInternal bool            `json:"is_internal"`
+		repository.AdminUserProfilePatch
+		Phone json.RawMessage `json:"phone"`
 	}
 	data, err := c.Body()
 	if err != nil || json.Unmarshal(data, &body) != nil {
@@ -77,43 +73,56 @@ func (h *Handler) UpdateUserProfile(ctx context.Context, c *app.RequestContext) 
 		c.JSON(http.StatusBadRequest, utils.H{"error": "手机号为只读，不能在后台修改"})
 		return
 	}
-	body.Nickname = strings.TrimSpace(body.Nickname)
-	body.Gender = strings.TrimSpace(body.Gender)
-	body.Birthday = strings.TrimSpace(body.Birthday)
-	if body.Nickname == "" || utf8.RuneCountInString(body.Nickname) > 20 {
-		c.JSON(http.StatusBadRequest, utils.H{"error": "nickname must contain 1-20 characters"})
-		return
-	}
-	if utf8.RuneCountInString(body.Signature) > 100 {
-		c.JSON(http.StatusBadRequest, utils.H{"error": "signature is too long"})
-		return
-	}
-	if body.Gender != "" && body.Gender != "male" && body.Gender != "female" {
-		c.JSON(http.StatusBadRequest, utils.H{"error": "gender must be empty, male or female"})
-		return
-	}
-	if body.Birthday != "" {
-		birthday, err := time.Parse(time.DateOnly, body.Birthday)
-		if err != nil || birthday.Format(time.DateOnly) != body.Birthday || body.Birthday < "1900-01-01" || body.Birthday > time.Now().In(time.FixedZone("Asia/Shanghai", 8*60*60)).Format(time.DateOnly) {
-			c.JSON(http.StatusBadRequest, utils.H{"error": "invalid birthday"})
+	if body.Nickname != nil {
+		*body.Nickname = strings.TrimSpace(*body.Nickname)
+		if size := utf8.RuneCountInString(*body.Nickname); size == 0 || size > 20 {
+			c.JSON(http.StatusBadRequest, utils.H{"error": "昵称须为 1–20 字"})
 			return
 		}
+	}
+	if body.Signature != nil && utf8.RuneCountInString(*body.Signature) > 100 {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "签名最多 100 字"})
+		return
+	}
+	if body.Gender != nil {
+		*body.Gender = strings.TrimSpace(*body.Gender)
+		if gender := *body.Gender; gender != "" && gender != "male" && gender != "female" {
+			c.JSON(http.StatusBadRequest, utils.H{"error": "性别无效"})
+			return
+		}
+	}
+	if body.Birthday != nil {
+		*body.Birthday = strings.TrimSpace(*body.Birthday)
+		value := *body.Birthday
+		birthday, err := time.Parse(time.DateOnly, value)
+		today := time.Now().In(time.FixedZone("Asia/Shanghai", 8*60*60)).Format(time.DateOnly)
+		if value != "" && (err != nil || birthday.Format(time.DateOnly) != value || value < "1900-01-01" || value > today) {
+			c.JSON(http.StatusBadRequest, utils.H{"error": "生日无效"})
+			return
+		}
+	}
+	patch := body.AdminUserProfilePatch
+	if patch.Empty() {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "没有需要保存的资料"})
+		return
+	}
+	writer, ok := h.userRepo.(repository.AdminUserProfileRepository)
+	if !ok {
+		c.JSON(http.StatusServiceUnavailable, utils.H{"error": "用户资料编辑暂不可用"})
+		return
 	}
 	user, err := h.userRepo.FindByID(ctx, userID)
 	if err != nil {
 		writeAdminUserProfileError(c, err)
 		return
 	}
-	clone := *user
-	clone.Nickname = body.Nickname
-	clone.Signature = body.Signature
-	clone.Gender = body.Gender
-	clone.Birthday = body.Birthday
-	clone.IsInternal = body.IsInternal
-	if err := h.userRepo.Update(ctx, &clone); err != nil {
+	now := time.Now()
+	if err := writer.PatchAdminUserProfile(ctx, userID, patch, now); err != nil {
 		writeAdminUserProfileError(c, err)
 		return
 	}
+	clone := *user
+	patch.Apply(&clone, now)
 	c.JSON(http.StatusOK, utils.H{"code": 0, "data": h.adminUserProfile(ctx, &clone)})
 }
 
@@ -138,14 +147,10 @@ func (h *Handler) UpdateUserInternal(ctx context.Context, c *app.RequestContext)
 }
 
 func (h *Handler) adminUserProfile(ctx context.Context, user *models.User) *adminUserProfileResponse {
-	copy := *user
-	user = &copy
-	if h.userSvc != nil {
-		h.userSvc.DecorateAvatar(ctx, user)
-	}
+	userPath := "/admin/api/users/" + strconv.FormatInt(user.ID, 10)
 	backgroundURL := ""
 	if strings.TrimSpace(user.BackgroundURL) != "" {
-		backgroundURL = "/admin/api/users/" + strconv.FormatInt(user.ID, 10) + "/background"
+		backgroundURL = userPath + "/background"
 	}
 	var lastActiveAt *time.Time
 	var lastActiveAppVersion *string
@@ -156,7 +161,7 @@ func (h *Handler) adminUserProfile(ctx context.Context, user *models.User) *admi
 		activeDays7D = &stats.ActiveDays7D
 	}
 	return &adminUserProfileResponse{
-		ID: strconv.FormatInt(user.ID, 10), Nickname: user.Nickname, AvatarURL: rewriteAdminStaticURL(user.AvatarURL),
+		ID: strconv.FormatInt(user.ID, 10), Nickname: user.Nickname, AvatarURL: userPath + "/avatar",
 		BackgroundURL: backgroundURL, ZodiacSign: service.ZodiacSignFromBirthday(user.Birthday),
 		Signature: user.Signature, Phone: user.Phone, Gender: user.Gender, Birthday: user.Birthday,
 		ProvinceCode: user.ProvinceCode, ProvinceName: user.ProvinceName,
@@ -166,6 +171,33 @@ func (h *Handler) adminUserProfile(ctx context.Context, user *models.User) *admi
 		LastActiveAppVersion: lastActiveAppVersion,
 		ActiveDays7D:         activeDays7D,
 	}
+}
+
+func (h *Handler) GetUserProfileAvatar(ctx context.Context, c *app.RequestContext) {
+	userID, ok := parseAdminUserID(c)
+	if !ok {
+		return
+	}
+	if h.userSvc == nil {
+		c.JSON(http.StatusServiceUnavailable, utils.H{"error": "头像暂不可用"})
+		return
+	}
+	user, err := h.userRepo.FindByID(ctx, userID)
+	if err != nil {
+		writeAdminUserProfileError(c, err)
+		return
+	}
+	clone := *user
+	h.userSvc.DecorateAvatar(ctx, &clone)
+	const prefix = "/api/v1/static/"
+	rel, valid := cleanAdminStaticPath(strings.TrimPrefix(clone.AvatarURL, prefix))
+	if !strings.HasPrefix(clone.AvatarURL, prefix) || !valid ||
+		(!strings.HasPrefix(rel, "avatars/") && !strings.HasPrefix(rel, "default_avatars/")) {
+		c.JSON(http.StatusNotFound, utils.H{"error": "头像暂不可用"})
+		return
+	}
+	c.Header("Cache-Control", "no-store")
+	c.Redirect(http.StatusFound, []byte("/admin/api/static/"+rel))
 }
 
 func adminUserActivityVersion(stats models.UserActivityStats) *string {
@@ -225,21 +257,23 @@ func (h *Handler) GetUserProfileBackground(ctx context.Context, c *app.RequestCo
 		c.JSON(http.StatusServiceUnavailable, utils.H{"error": "背景图服务暂不可用"})
 		return
 	}
-	user, err := h.userSvc.GetUserProfile(ctx, userID)
+	user, err := h.userRepo.FindByID(ctx, userID)
 	if err != nil {
 		writeAdminUserProfileError(c, err)
 		return
 	}
-	if user.BackgroundURL == "" {
+	clone := *user
+	h.userSvc.DecorateBackground(ctx, &clone)
+	if clone.BackgroundURL == "" {
 		c.JSON(http.StatusNotFound, utils.H{"error": "未设置或暂时无法读取背景图"})
 		return
 	}
 	const prefix = "/api/v1/static/profile_backgrounds/"
-	if !strings.HasPrefix(user.BackgroundURL, prefix) {
+	if !strings.HasPrefix(clone.BackgroundURL, prefix) {
 		c.JSON(http.StatusBadGateway, utils.H{"error": "背景图暂不可用"})
 		return
 	}
-	rel, valid := cleanAdminStaticPath(strings.TrimPrefix(user.BackgroundURL, "/api/v1/static/"))
+	rel, valid := cleanAdminStaticPath(strings.TrimPrefix(clone.BackgroundURL, "/api/v1/static/"))
 	if !valid {
 		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid background path"})
 		return

@@ -900,11 +900,19 @@ func (r *InMemoryAccountRestrictionRepository) ListAccountRestrictionsByUserID(_
 }
 
 func (r *InMemoryAccountRestrictionRepository) RevokeActiveAccountRestrictions(_ context.Context, userID int64, operator string, now time.Time) (int64, error) {
+	return r.revokeAccountRestrictions(userID, 0, now)
+}
+
+func (r *InMemoryAccountRestrictionRepository) RevokeAccountRestriction(_ context.Context, userID, restrictionID int64, now time.Time) (int64, error) {
+	return r.revokeAccountRestrictions(userID, restrictionID, now)
+}
+
+func (r *InMemoryAccountRestrictionRepository) revokeAccountRestrictions(userID, restrictionID int64, now time.Time) (int64, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	var count int64
 	for _, item := range r.restrictions[userID] {
-		if item == nil || item.Status != models.AccountRestrictionStatusActive {
+		if item == nil || item.Status != models.AccountRestrictionStatusActive || (restrictionID != 0 && item.ID != restrictionID) {
 			continue
 		}
 		if item.ExpiresAt != nil && !item.ExpiresAt.After(now) {

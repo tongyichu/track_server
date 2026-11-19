@@ -1155,10 +1155,14 @@ func (h *Handler) ListUsers(ctx context.Context, c *app.RequestContext) {
 			}
 		}
 	}
-	items, total, err := search.ListAdminUsers(ctx, filter, cursor, limit)
+	items, total, err := search.ListAdminUsers(ctx, filter, cursor, limit+1)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
 		return
+	}
+	hasMore := len(items) > limit
+	if hasMore {
+		items = items[:limit]
 	}
 	userIDs := make([]int64, 0, len(items))
 	for _, u := range items {
@@ -1227,10 +1231,10 @@ func (h *Handler) ListUsers(ctx context.Context, c *app.RequestContext) {
 	resp := utils.H{
 		"items":         rows,
 		"total":         total,
-		"has_more":      len(items) == limit,
+		"has_more":      hasMore,
 		"level_options": levelOptions,
 	}
-	if len(items) == limit {
+	if hasMore {
 		last := items[len(items)-1]
 		resp["next_cursor"] = utils.H{
 			"created_at": last.CreatedAt.Format(time.RFC3339Nano),
@@ -1243,6 +1247,14 @@ func (h *Handler) ListUsers(ctx context.Context, c *app.RequestContext) {
 type adminAccountRestrictionBody struct {
 	Reason    string `json:"reason"`
 	ExpiresAt string `json:"expires_at"`
+}
+
+func adminAccountRestriction(item *models.AccountRestriction) any {
+	return struct {
+		*models.AccountRestriction
+		ID     string `json:"id"`
+		UserID string `json:"user_id"`
+	}{item, strconv.FormatInt(item.ID, 10), strconv.FormatInt(item.UserID, 10)}
 }
 
 func (h *Handler) CreateAccountRestriction(ctx context.Context, c *app.RequestContext) {
@@ -1284,7 +1296,7 @@ func (h *Handler) CreateAccountRestriction(ctx context.Context, c *app.RequestCo
 		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, utils.H{"code": 0, "data": item})
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": adminAccountRestriction(item)})
 }
 
 func (h *Handler) GetCurrentAccountRestriction(ctx context.Context, c *app.RequestContext) {
@@ -1305,7 +1317,7 @@ func (h *Handler) GetCurrentAccountRestriction(ctx context.Context, c *app.Reque
 		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, utils.H{"code": 0, "data": item})
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": adminAccountRestriction(item)})
 }
 
 func (h *Handler) RevokeCurrentAccountRestriction(ctx context.Context, c *app.RequestContext) {
@@ -1317,9 +1329,18 @@ func (h *Handler) RevokeCurrentAccountRestriction(ctx context.Context, c *app.Re
 	if !ok {
 		return
 	}
-	count, err := h.restrictionSvc.RevokeActive(ctx, userID, h.adminOperator(c))
+	restrictionID, err := strconv.ParseInt(string(c.Query("restriction_id")), 10, 64)
+	if err != nil || restrictionID <= 0 {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "请先读取要解除的限制"})
+		return
+	}
+	count, err := h.restrictionSvc.RevokeByID(ctx, userID, restrictionID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
+		return
+	}
+	if count == 0 {
+		c.JSON(http.StatusConflict, utils.H{"error": "限制状态已变更，请核对后重新操作"})
 		return
 	}
 	c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"revoked_count": count}})

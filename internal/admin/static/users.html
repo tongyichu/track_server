@@ -30,7 +30,11 @@
   </header>
 
   <main class="container wide users-page">
-    <section class="panel admin-stats-panel" id="userStatistics" aria-busy="true">
+    <div class="page-heading admin-page-heading user-page-heading">
+      <h1>用户管理</h1>
+      <button id="userStatsToggle" type="button" class="btn btn-outline-secondary" aria-expanded="false" aria-controls="userStatistics">用户统计</button>
+    </div>
+    <section class="panel admin-stats-panel" id="userStatistics" hidden>
       <div class="admin-stats-heading"><h2>用户画像分布</h2><button id="refreshUserStatistics" type="button" class="btn btn-sm btn-outline-secondary">刷新数据</button></div>
       <p id="userStatisticsError" class="error" role="alert" hidden></p>
       <div class="admin-user-distribution-grid">
@@ -65,13 +69,13 @@
         <label>性别 <select id="genderFilter" class="form-select"><option value="">全部</option><option value="male">男</option><option value="female">女</option><option value="unknown">未设置</option></select></label>
         <label>用户等级 <select id="levelFilter" class="form-select"><option value="">全部等级</option></select></label>
         <label>账号限制 <select id="restrictedFilter" class="form-select"><option value="">全部</option><option value="true">已限制</option><option value="false">正常</option></select></label>
-        <button id="searchBtn" class="btn btn-primary">搜索</button>
+        <button id="searchBtn" type="button" class="btn btn-primary">搜索</button>
       </div>
       <div class="table-responsive">
       <table class="data admin-user-table">
         <thead>
           <tr>
-            <th>用户</th><th>手机号</th><th>性别</th><th>所在城市</th><th>粉丝数</th><th title="北京时间；最近一次 App 活动时间及当时上报的版本名称，约一分钟精度，可能包含后台活动；无版本记录时不展示版本">最近活跃</th><th title="按北京时间统计今天及前6天，每天最多计1天；启用后累计，历史不补算">近7天活跃天数</th><th>操作</th>
+            <th>用户</th><th>手机号</th><th>性别</th><th>所在城市</th><th>粉丝数</th><th title="北京时间；最近一次 App 活动时间及当时上报的版本名称，约一分钟精度，可能包含后台活动；无版本记录时不展示版本">最近活跃</th><th title="按北京时间统计今天及前6天，每天最多计1天；启用后累计，历史不补算">近7天活跃天数</th>
           </tr>
         </thead>
         <tbody id="userList"></tbody>
@@ -89,10 +93,10 @@
       <div class="modal-content">
         <div class="modal-header">
           <h2 class="modal-title" id="userDetailTitle">用户资料</h2>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+          <button id="userDetailCloseIcon" type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
         </div>
         <div class="modal-body">
-          <div class="admin-user-cover">
+          <div id="userDetailCover" class="admin-user-cover" hidden>
             <img id="userDetailBackground" alt="用户背景图" hidden />
             <span id="userBackgroundPlaceholder">未设置背景图</span>
             <button type="button" id="userBackgroundRetry" class="btn btn-sm btn-outline-secondary" hidden>重试背景图</button>
@@ -111,18 +115,21 @@
             </div>
           </div>
           <div id="userOverviewError" class="admin-user-inline-error" hidden><span>互动数据与级别加载失败</span><button type="button" id="userOverviewRetry" class="btn btn-sm btn-link">重试</button></div>
+          <dl id="userDetailMeta" class="admin-user-readonly" aria-label="用户信息"></dl>
           <div class="admin-user-detail-columns">
             <section class="admin-user-detail-section">
               <h3>基本资料</h3>
+              <div id="userProfileLoadError" class="admin-user-inline-error" role="status" hidden>
+                <span>用户资料加载失败</span><button type="button" id="userProfileRetry" class="btn btn-sm btn-link">重试</button>
+              </div>
               <form id="userDetailForm" data-admin-fields="users">
                 <fieldset id="userProfileFields" disabled>
                   <div class="admin-dialog-form admin-user-profile-fields">
-                    <label class="form-label">昵称<input class="form-control" name="nickname" maxlength="20" required /></label>
-                    <label class="form-label">手机号<input class="form-control" name="phone" readonly aria-readonly="true" /></label>
+                    <label class="form-label">昵称<input class="form-control" name="nickname" maxlength="20" /></label>
                     <label class="form-label">性别<select class="form-select" name="gender"><option value="">未设置</option><option value="male">男</option><option value="female">女</option></select></label>
                     <label class="form-label">生日<span class="admin-user-birthday-control"><input name="birthday" type="date" min="1900-01-01" /><span id="userDetailZodiac" class="admin-user-zodiac" aria-live="polite" hidden></span></span></label>
-                    <label class="form-label full">所在城市<input class="form-control" id="userDetailLocation" readonly /></label>
                     <label class="form-label full">个人签名<textarea class="form-control" name="signature" maxlength="100" rows="3"></textarea></label>
+                    <label class="form-switch admin-user-profile-internal full"><input class="form-check-input" type="checkbox" name="is_internal"><span>内部人员</span></label>
                   </div>
                 </fieldset>
               </form>
@@ -135,15 +142,14 @@
               <button type="button" id="userRestrictionRetry" class="btn btn-sm btn-link" hidden>重新读取</button>
               <div id="userRestrictionEditor" class="admin-user-restriction-editor" hidden>
                 <div id="userRestrictionCreateFields">
-                  <label class="form-label">限制原因<textarea id="userRestrictionReason" class="form-control" maxlength="500" rows="3"></textarea></label>
-                  <label class="form-label">限制天数<input id="userRestrictionDays" class="form-control" type="number" min="1" step="1" placeholder="留空表示永久" /></label>
+                  <label class="form-label">限制原因<textarea id="userRestrictionReason" class="form-control" rows="3" required></textarea><small class="form-hint">最多 255 字</small></label>
+                  <label class="form-label">限制期限<select id="userRestrictionDuration" class="form-select"><option value="days">按天</option><option value="permanent">永久</option></select></label>
+                  <label id="userRestrictionDaysField" class="form-label">限制天数<input id="userRestrictionDays" class="form-control" type="number" min="1" step="1" required /></label>
                 </div>
                 <p id="userRestrictionConfirmText" hidden>确认解除该账号当前的限制？</p>
                 <div class="d-flex gap-2"><button type="button" id="userRestrictionConfirm" class="btn btn-sm btn-danger" data-admin-write="users">确认限制</button><button type="button" id="userRestrictionCancel" class="btn btn-sm btn-outline-secondary">取消</button></div>
               </div>
               <p id="userRestrictionError" class="text-danger mt-2 mb-0" role="status"></p>
-              <label class="form-switch admin-user-profile-internal"><input class="form-check-input" type="checkbox" name="is_internal" form="userDetailForm" disabled><span>内部人员</span></label>
-              <div id="userDetailMeta" class="admin-user-profile-meta"></div>
             </section>
           <details id="userPermissionSection" class="admin-user-permission-section">
             <summary>设备权限<span>最近上报的设备快照</span></summary>
@@ -153,8 +159,11 @@
           </div>
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">关闭</button>
-          <button type="submit" form="userDetailForm" class="btn btn-primary" id="userDetailSave" data-admin-write="users">保存资料</button>
+          <span id="userDetailStatus" class="me-auto" role="status"></span>
+          <button id="userDetailKeepEditing" type="button" class="btn btn-outline-secondary" hidden>继续编辑</button>
+          <button id="userDetailDiscard" type="button" class="btn btn-outline-danger" hidden>放弃修改</button>
+          <button id="userDetailClose" type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">关闭</button>
+          <button type="submit" form="userDetailForm" class="btn btn-primary" id="userDetailSave" data-admin-write="users" disabled>保存资料</button>
         </div>
       </div>
     </div>

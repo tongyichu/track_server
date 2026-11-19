@@ -2,7 +2,8 @@ package repository
 
 import (
 	"context"
-
+	"crypto/rand"
+	"encoding/binary"
 	"errors"
 	"regexp"
 	"strings"
@@ -945,7 +946,7 @@ func (r *MongoUserRepository) ListAdminUsers(ctx context.Context, filter AdminUs
 					bson.M{"$eq": bson.A{"$user_id", "$$admin_user_id"}},
 					bson.M{"$eq": bson.A{"$status", models.AccountRestrictionStatusActive}},
 					bson.M{"$or": bson.A{
-						bson.M{"$eq": bson.A{"$expires_at", nil}},
+						bson.M{"$eq": bson.A{bson.M{"$ifNull": bson.A{"$expires_at", nil}}, nil}},
 						bson.M{"$gt": bson.A{"$expires_at", now}},
 					}},
 				}}}}}}}}},
@@ -1040,20 +1041,91 @@ func NewMongoAccountRestrictionRepository(collection *mongo.Collection) *MongoAc
 	return &MongoAccountRestrictionRepository{collection: collection}
 }
 
-func (r *MongoAccountRestrictionRepository) CreateAccountRestriction(context.Context, *models.AccountRestriction) error {
-	return errors.New("MongoAccountRestrictionRepository.CreateAccountRestriction not implemented")
+func (r *MongoAccountRestrictionRepository) EnsureIndexes(ctx context.Context) error {
+	_, err := r.collection.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{Keys: bson.D{{Key: "user_id", Value: 1}, {Key: "status", Value: 1}, {Key: "expires_at", Value: 1}}},
+		{Keys: bson.D{{Key: "user_id", Value: 1}, {Key: "created_at", Value: -1}, {Key: "_id", Value: -1}}},
+	})
+	return err
 }
 
-func (r *MongoAccountRestrictionRepository) FindActiveAccountRestriction(context.Context, int64, time.Time) (*models.AccountRestriction, error) {
-	return nil, errors.New("MongoAccountRestrictionRepository.FindActiveAccountRestriction not implemented")
+func (r *MongoAccountRestrictionRepository) CreateAccountRestriction(ctx context.Context, item *models.AccountRestriction) error {
+	if item == nil || item.UserID <= 0 {
+		return errors.New("account restriction user_id is required")
+	}
+	if item.ID <= 0 {
+		var id [8]byte
+		if _, err := rand.Read(id[:]); err != nil {
+			return err
+		}
+		item.ID = 1 + int64(binary.BigEndian.Uint64(id[:])&((1<<62)-1))
+	}
+	if item.CreatedAt.IsZero() {
+		item.CreatedAt = time.Now()
+	}
+	if item.UpdatedAt.IsZero() {
+		item.UpdatedAt = item.CreatedAt
+	}
+	if item.Status == "" {
+		item.Status = models.AccountRestrictionStatusActive
+	}
+	_, err := r.collection.InsertOne(ctx, item)
+	return err
 }
 
-func (r *MongoAccountRestrictionRepository) ListAccountRestrictionsByUserID(context.Context, int64, int) ([]*models.AccountRestriction, error) {
-	return nil, errors.New("MongoAccountRestrictionRepository.ListAccountRestrictionsByUserID not implemented")
+func mongoActiveAccountRestriction(userID int64, now time.Time) bson.M {
+	return bson.M{"user_id": userID, "status": models.AccountRestrictionStatusActive,
+		"$or": bson.A{bson.M{"expires_at": nil}, bson.M{"expires_at": bson.M{"$gt": now}}}}
 }
 
-func (r *MongoAccountRestrictionRepository) RevokeActiveAccountRestrictions(context.Context, int64, string, time.Time) (int64, error) {
-	return 0, errors.New("MongoAccountRestrictionRepository.RevokeActiveAccountRestrictions not implemented")
+func (r *MongoAccountRestrictionRepository) FindActiveAccountRestriction(ctx context.Context, userID int64, now time.Time) (*models.AccountRestriction, error) {
+	var item models.AccountRestriction
+	err := r.collection.FindOne(ctx, mongoActiveAccountRestriction(userID, now),
+		options.FindOne().SetSort(bson.D{{Key: "created_at", Value: -1}, {Key: "_id", Value: -1}})).Decode(&item)
+	if err == mongo.ErrNoDocuments {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+func (r *MongoAccountRestrictionRepository) ListAccountRestrictionsByUserID(ctx context.Context, userID int64, limit int) ([]*models.AccountRestriction, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	cursor, err := r.collection.Find(ctx, bson.M{"user_id": userID},
+		options.Find().SetSort(bson.D{{Key: "created_at", Value: -1}, {Key: "_id", Value: -1}}).SetLimit(int64(limit)))
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	items := make([]*models.AccountRestriction, 0)
+	if err := cursor.All(ctx, &items); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+func (r *MongoAccountRestrictionRepository) RevokeActiveAccountRestrictions(ctx context.Context, userID int64, _ string, now time.Time) (int64, error) {
+	return r.revokeAccountRestrictions(ctx, mongoActiveAccountRestriction(userID, now), now)
+}
+
+func (r *MongoAccountRestrictionRepository) RevokeAccountRestriction(ctx context.Context, userID, restrictionID int64, now time.Time) (int64, error) {
+	filter := mongoActiveAccountRestriction(userID, now)
+	filter["_id"] = restrictionID
+	return r.revokeAccountRestrictions(ctx, filter, now)
+}
+
+func (r *MongoAccountRestrictionRepository) revokeAccountRestrictions(ctx context.Context, filter bson.M, now time.Time) (int64, error) {
+	result, err := r.collection.UpdateMany(ctx, filter, bson.M{"$set": bson.M{
+		"status": models.AccountRestrictionStatusRevoked, "updated_at": now, "revoked_at": now,
+	}})
+	if err != nil {
+		return 0, err
+	}
+	return result.ModifiedCount, nil
 }
 
 // MongoCollectRepository implements CollectRepository backed by MongoDB.

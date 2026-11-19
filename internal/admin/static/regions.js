@@ -4,7 +4,7 @@
   let catalog = null;
   let selectedId = '';
   let activeCountryId = '';
-  let dirtyIds = new Set();
+  const dirtyIds = new Set();
   let persistedIds = new Set();
   let persistedNodes = new Map();
   let expandedIds = new Set();
@@ -12,6 +12,13 @@
   const childrenByParent = new Map();
   const treeButtons = new Map();
   const treeMissingElements = new Map();
+  const treeDraftElements = new Map();
+  const saveNotes = new Map();
+  const conflicts = new Map();
+  let operationMessage = '';
+  let conflictReview = null;
+  let latestController = null;
+  let loadingCatalog = false;
   let treeNeedsRender = true;
   let saving = false;
   const photoEditor = new RegionPhotosEditor($('regionPhotos'), {
@@ -31,16 +38,30 @@
       if (base) base.photos = structuredClone(photos);
       catalog.version = Math.max(catalog.version, result.version);
       updateTreeMissing(node);
+      if (node.id === selectedId) showMissingSummary(node);
     },
     busyChanged: updateSaveState
   });
   const fieldMap = {
     regionName: 'name', regionNameEn: 'name_en',
-    regionCountryCode: 'country_code', regionSlogan: 'slogan', regionDescription: 'description'
+    regionCountryCode: 'country_code', regionContinent: 'continent',
+    regionSlogan: 'slogan', regionDescription: 'description'
   };
+  const editableFields = [
+    ['name', '名称'], ['name_en', '英文名称'], ['country_code', '国家缩写'], ['continent', '所属洲'],
+    ['slogan', '宣传口号'], ['description', '简介'], ['latitude', '纬度'], ['longitude', '经度']
+  ].map(([key, label]) => ({ key, label, value: node => node?.[key] ?? '' }));
+  editableFields.push(
+    { label: '高德 adcode', provider: 'amap', type: 'adcode', value: node => node ? amapValue(node) : '' },
+    { label: 'Google 地区 Place ID', provider: 'google', type: 'place_id', value: node => node ? externalValue(node, 'google', 'place_id') : '' }
+  );
 
   function externalValue(node, provider, type) {
     return (node.external_ids || []).find(item => item.provider === provider && item.type === type)?.value || '';
+  }
+
+  function amapValue(node) {
+    return externalValue(node, 'amap', 'adcode') || (node.code_system === 'cn_adcode' ? node.code || '' : '');
   }
 
   function setExternalValue(node, provider, type, value) {
@@ -56,24 +77,70 @@
   }
 
   function updateSaveState() {
-    $('regionSaveNode').disabled = !editable() || saving || photoEditor.busy || !dirtyIds.has(selectedId);
-    $('regionSaveNode').textContent = '保存当前节点';
-    $('regionDeleteCountry').hidden = !canDeleteCountry(current());
-    $('regionDeleteCountry').disabled = !editable() || saving || photoEditor.busy;
+    const node = current(), busy = saving || photoEditor.busy;
+    const conflict = conflicts.get(selectedId), note = saveNotes.get(selectedId);
+    $('regionSaveNode').disabled = !editable() || !node?.active || busy || !!conflict || !dirtyIds.has(selectedId);
+    const canDelete = editable() && canDeleteCountry(node);
+    const canDiscard = editable() && node && !persistedIds.has(node.id);
+    $('regionDeleteCountry').hidden = !canDelete;
+    $('regionDeleteCountry').disabled = busy || !!conflict;
+    $('regionDeleteDraft').hidden = !canDiscard;
+    $('regionDeleteDraft').disabled = busy;
+    $('regionDangerZone').hidden = !canDelete && !canDiscard;
+    $('regionAddChild').disabled = !editable() || busy || !node?.active || !persistedIds.has(selectedId);
+    $('regionAddCountry').disabled = !editable() || !catalog || busy;
+    $('regionViewLatest').hidden = !conflict;
+    $('regionViewLatest').disabled = busy || !!latestController;
+    const feedback = $('regionSaveStatus');
+    feedback.classList.toggle('text-danger', !busy && !!(conflict || note?.error));
+    feedback.textContent = saving ? operationMessage : photoEditor.busy ? '宣传图片处理中…' :
+      conflict || note?.message || (dirtyIds.has(selectedId) ? '有未保存修改' : '');
+    if (!busy) $('regionNavigationStatus').textContent = '';
     photoEditor.sessions.get(selectedId)?.picker.refresh();
   }
 
-  function markDirty(node, message) {
-    dirtyIds.add(node.id);
+  function setSaveNote(id, message, error = false) {
+    saveNotes.set(id, { message, error });
     updateSaveState();
-    status(message || '当前节点有未保存修改');
+  }
+
+  function refreshDraftIndicators() {
+    const count = dirtyIds.size;
+    $('regionDraftCount').textContent = count ? count + ' 个地区有未保存修改' : '';
+    const dirtyCountries = new Set();
+    for (const id of dirtyIds) {
+      const country = countryOf(nodesById.get(id));
+      if (country) dirtyCountries.add(country.id);
+    }
+    $('regionCountryTabs').querySelectorAll('[data-draft-country]').forEach(marker => {
+      marker.hidden = !dirtyCountries.has(marker.dataset.draftCountry);
+    });
+  }
+
+  function fieldChanged(field, one, another) {
+    return field.value(one) !== field.value(another);
+  }
+
+  function markDirty(node) {
+    const base = persistedNodes.get(node.id);
+    if (!base || editableFields.some(field => fieldChanged(field, node, base))) dirtyIds.add(node.id);
+    else dirtyIds.delete(node.id);
+    saveNotes.delete(node.id);
+    const marker = treeDraftElements.get(node.id);
+    if (marker) marker.hidden = !dirtyIds.has(node.id);
+    refreshDraftIndicators();
+    updateSaveState();
   }
 
   async function api(path, options) {
     const response = await fetch('/admin/api/regions/' + path, options);
     let body;
     try { body = await response.json(); } catch (_) { throw new Error('服务器返回无效内容'); }
-    if (!response.ok || body.code !== 0) throw new Error(body.error || '操作失败');
+    if (!response.ok || body.code !== 0) {
+      const error = new Error(body.error || '操作失败');
+      error.status = response.status;
+      throw error;
+    }
     return body.data;
   }
 
@@ -131,7 +198,7 @@
     children('').filter(node => node.level === 'country' && node.active).forEach(node => {
       const tab = document.createElement('button');
       tab.type = 'button';
-      tab.className = 'region-country-tab' + (node.id === activeCountryId ? ' active' : '') + (!node.active ? ' archived' : '');
+      tab.className = 'region-country-tab' + (node.id === activeCountryId ? ' active' : '');
       tab.setAttribute('role', 'tab');
       tab.setAttribute('aria-selected', node.id === activeCountryId ? 'true' : 'false');
       tab.setAttribute('aria-controls', 'regionTree');
@@ -139,32 +206,41 @@
       title.textContent = node.name;
       const code = document.createElement('small');
       code.textContent = node.country_code || node.code || '';
-      tab.append(title, code);
+      const draft = document.createElement('small');
+      draft.dataset.draftCountry = node.id;
+      draft.textContent = '有草稿';
+      draft.hidden = true;
+      tab.append(title, code, draft);
       tab.addEventListener('click', () => {
-        if ($('regionSearch').value) treeNeedsRender = true;
-        $('regionSearch').value = '';
-        select(node.id);
-        root.querySelector('[aria-selected="true"]')?.focus();
+        if (select(node.id, {clearSearch: true})) root.querySelector('[aria-selected="true"]')?.focus();
       });
       root.appendChild(tab);
     });
   }
 
-  function updateTreeMissing(node) {
-    const root = treeMissingElements.get(node.id);
-    if (!root) return;
-    const saved = persistedNodes.get(node.id);
+  function missingFields(saved) {
+    if (!saved) return [];
     const missing = [];
-    if (!saved?.slogan?.trim()) missing.push('缺口号');
-    if (!saved?.description?.trim()) missing.push('缺简介');
-    if (['province', 'city'].includes(node.level) &&
-        !(saved?.photos || []).some(photo => photo.url?.trim())) missing.push('缺图片');
-    root.replaceChildren(...missing.map(text => {
-      const badge = document.createElement('span');
-      badge.className = 'badge bg-orange-lt';
-      badge.textContent = text;
-      return badge;
-    }));
+    if (!saved.slogan?.trim()) missing.push('口号');
+    if (!saved.description?.trim()) missing.push('简介');
+    if (['province', 'city'].includes(saved.level) &&
+        !(saved.photos || []).some(photo => photo.url?.trim())) missing.push('宣传图');
+    return missing;
+  }
+
+  function updateTreeMissing(node) {
+    const indicator = treeMissingElements.get(node.id);
+    if (!indicator) return;
+    const missing = missingFields(persistedNodes.get(node.id));
+    indicator.textContent = missing.length ? '缺 ' + missing.length + ' 项' : '';
+    indicator.title = missing.length ? '缺少' + missing.join('、') : '';
+  }
+
+  function showMissingSummary(node) {
+    const missing = missingFields(persistedNodes.get(node.id));
+    const summary = $('regionMissing');
+    summary.hidden = !missing.length;
+    summary.textContent = missing.length ? '已保存资料缺少' + missing.join('、') : '';
   }
 
   function renderTree() {
@@ -172,6 +248,7 @@
     const root = $('regionTree');
     root.replaceChildren();
     treeMissingElements.clear();
+    treeDraftElements.clear();
     treeButtons.clear();
     if (!catalog || !activeCountryId) return;
     const query = $('regionSearch').value.trim().toLowerCase();
@@ -222,13 +299,20 @@
         const label = document.createElement('span');
         label.className = 'region-tree-name';
         label.textContent = node.name;
+        label.title = node.name;
         button.appendChild(label);
         const missing = document.createElement('span');
         missing.className = 'region-tree-missing';
         button.appendChild(missing);
         treeMissingElements.set(node.id, missing);
         updateTreeMissing(node);
-        button.addEventListener('click', () => select(node.id));
+        const draft = document.createElement('span');
+        draft.className = 'region-tree-draft';
+        draft.textContent = '未保存';
+        draft.hidden = !dirtyIds.has(node.id);
+        treeDraftElements.set(node.id, draft);
+        button.appendChild(draft);
+        button.addEventListener('click', () => select(node.id, {revealEditor: true}));
         row.appendChild(button);
         item.appendChild(row);
         if (expanded) {
@@ -250,8 +334,31 @@
 
   function editable() { return !!(window.AdminAccess && AdminAccess.can('regions', true)); }
 
-  function select(id) {
-    if (photoEditor.busy || saving && id !== selectedId) return;
+  function updateEditorIdentity(node) {
+    $('regionEditorTitle').textContent = node.name || '新增地区';
+    const parents = Array.from(ancestors(node.id)).reverse().map(id => nodesById.get(id)?.name).filter(Boolean);
+    $('regionPath').textContent = parents.length ? parents.concat(node.name || '新增地区').join(' / ') : '';
+  }
+
+  function revealEditor() {
+    if (!window.matchMedia('(max-width: 900px)').matches) return;
+    $('regionEditor').scrollIntoView({ block: 'start' });
+    $('regionEditorTitle').focus({ preventScroll: true });
+  }
+
+  function select(id, options = {}) {
+    if (saving || photoEditor.busy) {
+      $('regionNavigationStatus').textContent = saving ? '请等当前操作完成后再切换地区' : '请等宣传图片处理完成后再切换地区';
+      return false;
+    }
+    if (id !== selectedId) {
+      latestController?.abort();
+      $('regionLocation').open = false;
+    }
+    if (options.clearSearch) {
+      treeNeedsRender = treeNeedsRender || !!$('regionSearch').value;
+      $('regionSearch').value = '';
+    }
     const previousId = selectedId;
     const previousCountryId = activeCountryId;
     let treeChanged = false;
@@ -268,29 +375,29 @@
       });
     } else activeCountryId = '';
     renderCountryTabs();
+    refreshDraftIndicators();
     $('regionEmpty').hidden = !!node;
     $('regionForm').hidden = !node;
-    $('regionAddChild').disabled = !node || !node.active || !persistedIds.has(node.id) || !editable();
     photoEditor.bind(node);
-    if (!node) { renderTree(); return; }
-    $('regionEditorTitle').textContent = node.name || '新增地区';
+    if (!node) {
+      renderTree();
+      updateSaveState();
+      return true;
+    }
+    updateEditorIdentity(node);
     $('regionId').textContent = node.region_id || '';
     Object.entries(fieldMap).forEach(([id, key]) => { $(id).value = node[key] || ''; });
-    $('regionAmapAdcode').value = externalValue(node, 'amap', 'adcode') || (node.code_system === 'cn_adcode' ? node.code || '' : '');
+    $('regionAmapAdcode').value = amapValue(node);
     $('regionGooglePlaceId').value = externalValue(node, 'google', 'place_id');
     const countryRoot = node.level === 'country' && !node.parent_id;
     const showCountryCode = countryRoot && !persistedIds.has(node.id);
     $('regionCountryCodeField').hidden = !showCountryCode;
-    $('regionCountryCodeField').classList.toggle('d-none', !showCountryCode);
-    $('regionCountryCodeLabel').textContent = countryRoot ? '国家缩写（两位）' : '所属国家代码';
-    $('regionCountryCode').required = countryRoot && node.active;
-    $('regionCountryCode').disabled = !countryRoot || persistedIds.has(node.id);
+    $('regionCountryCode').required = showCountryCode && node.active;
+    $('regionCountryCode').disabled = !showCountryCode;
     $('regionContinentField').hidden = node.level !== 'country';
-    $('regionContinent').value = node.continent || '';
     $('regionLatitude').value = node.latitude == null ? '' : String(node.latitude);
     $('regionLongitude').value = node.longitude == null ? '' : String(node.longitude);
-    $('regionSelectable').checked = !!node.selectable;
-    $('regionDeleteDraft').hidden = persistedIds.has(node.id);
+    showMissingSummary(node);
     updateSaveState();
     if (treeNeedsRender || treeChanged || previousCountryId !== activeCountryId) renderTree();
     else {
@@ -301,7 +408,8 @@
         button.setAttribute('aria-selected', nodeId === selectedId ? 'true' : 'false');
       });
     }
-    if (dirtyIds.has(id)) status('当前节点有未保存修改');
+    if (options.revealEditor) revealEditor();
+    return true;
   }
 
   function searchText(node) {
@@ -309,40 +417,48 @@
       (node.external_ids || []).map(item => item.value).join(' ')).toLowerCase();
   }
 
-  function syncForm() {
+  function syncForm(input) {
     const node = current();
-    if (!node) return;
+    if (!node || saving || !editable()) return;
     const previousName = node.name;
     const previousCountryCode = node.country_code;
-    const previousSearchText = searchText(node);
-    Object.entries(fieldMap).forEach(([id, key]) => { node[key] = $(id).value.trim(); });
-    setExternalValue(node, 'amap', 'adcode', $('regionAmapAdcode').value.trim());
-    setExternalValue(node, 'google', 'place_id', $('regionGooglePlaceId').value.trim());
-    node.country_code = node.country_code.toUpperCase();
-    if (node.level === 'country' && !persistedIds.has(node.id)) {
-      node.code = node.country_code;
+    const previousSearchText = $('regionSearch').value.trim() ? searchText(node) : '';
+    const value = input.value.trim();
+    switch (input.id) {
+      case 'regionCountryCode':
+        if (node.level !== 'country' || persistedIds.has(node.id)) return;
+        node.country_code = value.toUpperCase();
+        node.code = node.country_code;
+        node.code_system = node.code ? 'iso3166-1' : '';
+        break;
+      case 'regionAmapAdcode':
+        setExternalValue(node, 'amap', 'adcode', value);
+        break;
+      case 'regionGooglePlaceId':
+        setExternalValue(node, 'google', 'place_id', value);
+        break;
+      case 'regionLatitude':
+      case 'regionLongitude':
+        node[input.id === 'regionLatitude' ? 'latitude' : 'longitude'] = value === '' ? null : Number(value);
+        break;
+      default:
+        if (!Object.hasOwn(fieldMap, input.id)) return;
+        node[fieldMap[input.id]] = value;
     }
-    if (node.level === 'country') node.continent = $('regionContinent').value;
-    if (node.code && !node.code_system) {
-      const countryCode = node.country_code.toUpperCase();
-      node.code_system = node.level === 'country' ? 'iso3166-1' : countryCode === 'CN' && /^\d{6}$/.test(node.code) ? 'cn_adcode' : 'local:' + (countryCode || countryOf(node)?.id || 'unknown');
-    }
-    node.latitude = $('regionLatitude').value === '' ? null : Number($('regionLatitude').value);
-    node.longitude = $('regionLongitude').value === '' ? null : Number($('regionLongitude').value);
-    node.selectable = $('regionSelectable').checked;
-    $('regionEditorTitle').textContent = node.name || '新增地区';
     markDirty(node);
-    const country = countryOf(node);
-    if (country) activeCountryId = country.id;
     if (previousName !== node.name) {
+      updateEditorIdentity(node);
       sortChildren(node.parent_id);
     }
-    if (node.level === 'country' && (previousName !== node.name || previousCountryCode !== node.country_code)) renderCountryTabs();
-    if (previousName !== node.name || ($('regionSearch').value.trim() && previousSearchText !== searchText(node))) renderTree();
+    if (node.level === 'country' && (previousName !== node.name || previousCountryCode !== node.country_code)) {
+      renderCountryTabs();
+      refreshDraftIndicators();
+    }
+    if (previousName !== node.name || (previousSearchText && previousSearchText !== searchText(node))) renderTree();
   }
 
   function addNode(parent) {
-    if (!catalog || saving || photoEditor.busy || parent && !persistedIds.has(parent.id)) return;
+    if (!editable() || !catalog || saving || photoEditor.busy || parent && (!parent.active || !persistedIds.has(parent.id))) return;
     const country = !parent;
     let id;
     do {
@@ -361,40 +477,193 @@
     catalog.nodes.push(node);
     indexCatalog();
     if (parent) expandedIds.add(parent.id);
-    markDirty(node, '已新增节点，请填写资料并保存当前节点');
-    select(id);
+    markDirty(node);
+    select(id, { revealEditor: true });
     $('regionName').focus();
   }
 
+  function applyCatalog(updated, replacedIds = new Set()) {
+    const pending = catalog?.nodes.filter(node => dirtyIds.has(node.id) && !replacedIds.has(node.id)) || [];
+    const previousBases = persistedNodes;
+    catalog = updated;
+    persistedNodes = new Map(updated.nodes.map(node => [node.id, structuredClone(node)]));
+    persistedIds = new Set(persistedNodes.keys());
+    const positions = new Map(updated.nodes.map((node, index) => [node.id, index]));
+    for (const draft of pending) {
+      const index = positions.get(draft.id);
+      if (index === undefined) catalog.nodes.push(draft);
+      else catalog.nodes[index] = draft;
+      const baseline = previousBases.get(draft.id);
+      if (baseline) {
+        persistedNodes.set(draft.id, baseline);
+        persistedIds.add(draft.id);
+      } else {
+        persistedNodes.delete(draft.id);
+        persistedIds.delete(draft.id);
+      }
+    }
+    indexCatalog();
+  }
+
+  function forgetDraft(id) {
+    dirtyIds.delete(id);
+    conflicts.delete(id);
+    saveNotes.delete(id);
+  }
+
+  function setConflict(id, message) {
+    conflicts.set(id, message);
+    updateSaveState();
+  }
+
   async function load() {
+    if (catalog || loadingCatalog) return;
+    loadingCatalog = true;
+    $('regionRetryCatalog').hidden = true;
     status('正在加载地区目录…');
+    updateSaveState();
     try {
-      catalog = await api('catalog');
-      indexCatalog();
-      persistedIds = new Set(catalog.nodes.map(node => node.id));
-      persistedNodes = new Map(structuredClone(catalog.nodes).map(node => [node.id, node]));
-      expandedIds = new Set();
-      dirtyIds = new Set();
-      const selected = current();
-      select(selected && countryOf(selected)?.active ? selectedId : firstCountryId());
-      status('地区目录已加载');
-    } catch (error) { status(error.message, true); }
+      applyCatalog(await api('catalog'));
+      select(firstCountryId());
+      status('');
+    } catch (error) {
+      status(error.message, true);
+      $('regionRetryCatalog').hidden = false;
+    } finally {
+      loadingCatalog = false;
+      updateSaveState();
+    }
+  }
+
+  function renderConflictReview(review) {
+    const { remote, draft, baseline, latest } = review;
+    const canCompare = !!baseline && !!latest?.active && !!draft.active;
+    const canKeepNew = !baseline && !latest && (!draft.parent_id ||
+      remote.nodes.some(node => node.id === draft.parent_id && node.active));
+    const changed = canCompare ? editableFields.filter(field =>
+      fieldChanged(field, draft, latest) &&
+      (fieldChanged(field, draft, baseline) || fieldChanged(field, latest, baseline))) : [];
+    const rows = $('regionConflictRows');
+    rows.replaceChildren();
+    for (const field of changed) {
+      const row = document.createElement('tr');
+      const label = document.createElement('th');
+      label.scope = 'row';
+      label.textContent = field.label;
+      row.appendChild(label);
+      for (const node of [draft, latest]) {
+        const value = document.createElement('td');
+        const content = field.value(node);
+        value.textContent = content === '' ? '未填写' : String(content);
+        row.appendChild(value);
+      }
+      rows.appendChild(row);
+    }
+    const mayAdoptVersion = !!baseline;
+    const mayKeepDraft = canKeepNew || (canCompare && dirtyIds.has(draft.id));
+    let summary;
+    if (canKeepNew) summary = '目录已有更新。保留草稿后可以重新保存。';
+    else if (!baseline) summary = latest ? '该编号已被占用。可以返回查看草稿，核对后重新新建。' :
+      '上级地区已从目录移除。可以返回查看草稿。';
+    else if (!latest?.active) summary = '此地区已从目录移除。可以返回查看草稿，或采用最新版本并放弃这条草稿。';
+    else if (changed.length) summary = '请核对两版资料。保留我的修改会把你编辑过的字段应用到最新版本，确认后仍需手动保存。';
+    else summary = '目录已有更新。两版的文字与位置资料没有差异，可以更新到最新版本后继续。';
+    $('regionConflictSummary').textContent = summary;
+    $('regionConflictDiff').hidden = changed.length === 0;
+    $('regionConflictUseLatest').hidden = !mayAdoptVersion;
+    $('regionConflictKeepDraft').hidden = !mayKeepDraft;
+    conflictReview = { remote, draft, baseline, latest, mayKeepDraft, mayAdoptVersion };
+    const dialog = $('regionConflictDialog');
+    dialog.returnValue = '';
+    dialog.showModal();
+  }
+
+  async function viewLatest() {
+    const draft = current();
+    if (!draft || !editable() || !conflicts.has(draft.id) || latestController || saving || photoEditor.busy) return;
+    const controller = new AbortController();
+    latestController = controller;
+    updateSaveState();
+    try {
+      const remote = await api('catalog', { signal: controller.signal });
+      if (controller.signal.aborted || current() !== draft) return;
+      if (saving || photoEditor.busy || remote.version < catalog.version) {
+        setConflict(draft.id, '目录有新更新，请重新查看最新版本');
+        return;
+      }
+      renderConflictReview({
+        remote, draft, baseline: persistedNodes.get(draft.id),
+        latest: remote.nodes.find(node => node.id === draft.id)
+      });
+    } catch (error) {
+      if (!controller.signal.aborted && current() === draft) setConflict(draft.id, '读取最新版本失败，请重试。' + error.message);
+    } finally {
+      latestController = null;
+      updateSaveState();
+    }
+  }
+
+  function resolveConflict() {
+    const review = conflictReview;
+    conflictReview = null;
+    const action = $('regionConflictDialog').returnValue;
+    if (!review || !editable() || !['latest', 'mine'].includes(action)) return;
+    const { remote, draft, baseline, latest, mayKeepDraft, mayAdoptVersion } = review;
+    if (current() !== draft || !conflicts.has(draft.id) || saving || photoEditor.busy) return;
+    if (remote.version < catalog.version) {
+      setConflict(draft.id, '目录有新更新，请重新查看最新版本');
+      return;
+    }
+    if ((action === 'latest' && !mayAdoptVersion) || (action === 'mine' && !mayKeepDraft)) return;
+    const id = draft.id;
+    const keepNew = action === 'mine' && !baseline;
+    if (keepNew) {
+      conflicts.delete(id);
+      applyCatalog(remote);
+    } else {
+      forgetDraft(id);
+      applyCatalog(remote, new Set([id]));
+    }
+    if (action === 'mine' && latest) {
+      for (const field of editableFields) {
+        if (!fieldChanged(field, draft, baseline)) continue;
+        if (field.provider) setExternalValue(latest, field.provider, field.type, field.value(draft));
+        else latest[field.key] = draft[field.key];
+      }
+      sortChildren(latest.parent_id);
+      markDirty(latest);
+    }
+    select(keepNew || latest?.active ? id : firstCountryId());
+    const message = dirtyIds.has(id) ? '已保留你的修改，核对后可保存' : '已采用最新版本';
+    if (selectedId) setSaveNote(selectedId, message);
+    else status(message);
   }
 
   $('regionSearch').addEventListener('input', renderTree);
+  $('regionRetryCatalog').addEventListener('click', load);
+  $('regionViewLatest').addEventListener('click', viewLatest);
+  $('regionConflictDialog').addEventListener('close', resolveConflict);
+  window.addEventListener('pagehide', () => latestController?.abort());
   ['input', 'change'].forEach(type => $('regionForm').addEventListener(type, event => {
-    if (!event.target.closest('#regionPhotos')) syncForm();
+    if (event.target.matches('input, select, textarea') && !event.target.closest('#regionPhotos')) syncForm(event.target);
   }));
+  $('regionPhotos').addEventListener('keydown', event => {
+    if (event.key === 'Enter' && event.target.matches('input:not([type="file"])') && !event.defaultPrevented) {
+      event.preventDefault();
+      event.target.blur();
+    }
+  });
   $('regionAddCountry').addEventListener('click', () => addNode(null));
   $('regionAddChild').addEventListener('click', () => addNode(current()));
   $('regionDeleteCountry').addEventListener('click', async () => {
     const node = current();
-    if (!editable() || saving || photoEditor.busy || !canDeleteCountry(node)) return;
+    if (!editable() || saving || photoEditor.busy || !canDeleteCountry(node) || conflicts.has(node.id)) return;
     const removed = new Set(catalog.nodes.filter(item => countryOf(item)?.id === node.id).map(item => item.id));
     const expectedVersion = catalog.version;
     const name = persistedNodes.get(node.id).name;
     saving = true;
-    $('regionForm').inert = true;
+    operationMessage = '';
+    $('regionEditorFields').inert = true;
     updateSaveState();
     try {
       const confirmed = await AdminUI.confirm({
@@ -403,79 +672,70 @@
         confirmText: '删除国家', danger: true
       });
       if (!confirmed) return;
-      status('正在删除国家…');
+      operationMessage = '正在删除国家…';
+      updateSaveState();
       const updated = await api(encodeURIComponent(node.id), {
         method: 'DELETE', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ expected_version: expectedVersion })
       });
-      const previousBases = persistedNodes;
-      const pending = catalog.nodes.filter(item => !removed.has(item.id) && dirtyIds.has(item.id));
-      catalog = updated;
-      persistedIds = new Set(updated.nodes.map(item => item.id));
-      persistedNodes = new Map(structuredClone(updated.nodes).map(item => [item.id, item]));
-      pending.forEach(draft => {
-        const index = catalog.nodes.findIndex(item => item.id === draft.id);
-        if (index < 0) catalog.nodes.push(draft);
-        else catalog.nodes[index] = draft;
-        if (previousBases.has(draft.id)) persistedNodes.set(draft.id, previousBases.get(draft.id));
-        else persistedNodes.delete(draft.id);
-      });
-      indexCatalog();
-      removed.forEach(id => { dirtyIds.delete(id); expandedIds.delete(id); });
+      applyCatalog(updated, removed);
+      removed.forEach(id => { forgetDraft(id); expandedIds.delete(id); });
       photoEditor.remove(removed);
-      $('regionSearch').value = '';
       saving = false;
-      select(firstCountryId());
-      status('已删除“' + name + '”及其下级地区');
-    } catch (error) { status(error.message, true); }
+      select(firstCountryId(), { clearSearch: true });
+      const message = '已删除“' + name + '”及其下级地区';
+      if (selectedId) setSaveNote(selectedId, message);
+      else status(message);
+    } catch (error) {
+      if (error.status === 409) setConflict(node.id, '目录已更新，请查看最新版本后再删除');
+      else setSaveNote(node.id, error.message, true);
+    }
     finally {
       saving = false;
-      $('regionForm').inert = false;
+      $('regionEditorFields').inert = false;
       updateSaveState();
     }
   });
   $('regionDeleteDraft').addEventListener('click', () => {
     const node = current();
-    if (!node || persistedIds.has(node.id) || saving || photoEditor.busy) return;
+    if (!node || !editable() || persistedIds.has(node.id) || saving || photoEditor.busy) return;
     const removed = new Set([node.id]);
     catalog.nodes.forEach(item => { if (ancestors(item.id).has(node.id)) removed.add(item.id); });
     catalog.nodes = catalog.nodes.filter(item => !removed.has(item.id));
     indexCatalog();
-    removed.forEach(id => dirtyIds.delete(id));
+    removed.forEach(forgetDraft);
     select(catalog.nodes.some(item => item.id === activeCountryId && item.active) ? activeCountryId : firstCountryId());
-    status('未保存节点及下级已删除');
+    if (selectedId) setSaveNote(selectedId, '已删除未保存节点');
+    else status('已删除未保存节点');
   });
-  $('regionSaveNode').addEventListener('click', async () => {
+  $('regionForm').addEventListener('submit', async event => {
+    event.preventDefault();
     const node = current();
-    if (!node || !dirtyIds.has(node.id) || saving || photoEditor.busy || !editable()) return;
+    if (!node?.active || !dirtyIds.has(node.id) || saving || photoEditor.busy || !editable() || conflicts.has(node.id)) return;
+    if ($('regionLocation').querySelector(':invalid')) $('regionLocation').open = true;
     if (!$('regionForm').reportValidity()) return;
     const savedId = node.id;
-    const previousBases = persistedNodes;
-    saving = true; $('regionForm').inert = true; updateSaveState();
-    status('正在保存当前节点…');
+    saving = true;
+    operationMessage = '正在保存当前地区…';
+    $('regionEditorFields').inert = true;
+    updateSaveState();
     try {
-      const updated = await api('node', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ node, base_node: previousBases.get(savedId) || null }) });
-      const pending = new Map(catalog.nodes.filter(item => item.id !== savedId && dirtyIds.has(item.id)).map(item => [item.id, item]));
-      catalog = updated;
-      persistedIds = new Set(updated.nodes.map(item => item.id));
-      persistedNodes = new Map(structuredClone(updated.nodes).map(item => [item.id, item]));
-      pending.forEach((draft, id) => {
-        const index = catalog.nodes.findIndex(item => item.id === id);
-        if (index < 0) catalog.nodes.push(draft);
-        else catalog.nodes[index] = draft;
-        if (previousBases.has(id)) persistedNodes.set(id, previousBases.get(id));
-        else persistedNodes.delete(id);
+      const updated = await api('node', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ node, base_node: persistedNodes.get(savedId) || null })
       });
-      indexCatalog();
-      dirtyIds.delete(savedId);
+      forgetDraft(savedId);
+      applyCatalog(updated);
+      saving = false;
       select(savedId);
-      status('当前节点已保存，客户端下次刷新目录时会读取新版本');
-    } catch (error) { status(error.message, true); }
+      setSaveNote(savedId, '已保存');
+    } catch (error) {
+      if (error.status === 409) setConflict(savedId, '资料已有更新，草稿仍在');
+      else setSaveNote(savedId, error.message, true);
+    }
     finally {
       saving = false;
-      $('regionForm').inert = false;
-      $('regionForm').querySelector('.region-form-grid').inert = false;
-      $('regionForm').querySelector('.region-editor-title').inert = false;
+      $('regionEditorFields').inert = false;
       updateSaveState();
     }
   });
