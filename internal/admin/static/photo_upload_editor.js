@@ -318,7 +318,9 @@
         const text = document.createElement('span');
         const retry = this.button('重试保存', () => { this.schedulePhotos(); this.stateChanged(); });
         const discard = this.button('放弃本地图片修改', () => { if (!this.busy) { const photos = structuredClone(this.savedPhotos); this.load(photos); this.options.changed?.(); this.stateChanged(); } });
-        row.append(text, retry, discard); this.host.appendChild(row);
+        row.append(text, retry, discard);
+        if (this.options.saveStatusHost) this.options.saveStatusHost.replaceChildren(row);
+        else this.host.appendChild(row);
         this.saveStatus = { text, retry, discard }; this.renderSaveStatus();
       }
     }

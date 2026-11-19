@@ -55,9 +55,15 @@
     .scenic-catalog-link:focus-visible { outline:2px solid var(--tblr-primary); outline-offset:2px; }
     .scenic-catalog .name-cell { font-weight:600; }
     .scenic-catalog th.scenic-number,.scenic-catalog td.scenic-number { text-align:end; font-variant-numeric:tabular-nums; }
-    .scenic-location { margin-top:16px; padding-top:12px; border-top:1px solid var(--tblr-border-color); }
+    .scenic-fields label { align-content:start; min-width:0; }
+    .scenic-fields .scenic-provider-hint:empty { display:none; }
+    .scenic-fields .scenic-classification-field :is(.form-control,.form-select) { height:var(--tblr-control-height, 2.5rem); }
+    .scenic-location { margin-top:-4px; min-width:0; }
     .scenic-location-header { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; }
-    .scenic-location-header h3 { margin:0; }
+    .scenic-location-header .btn { flex:none; }
+    .scenic-location [hidden] { display:none !important; }
+    .scenic-position-pending { color:var(--tblr-primary); }
+    .scenic-photo-status .admin-photo-save-status { gap:4px 8px; }
     .scenic-provider-hint:empty { display:none; }
     #detailModal .scenic-detail-footer > :first-child { margin-inline-end:auto; }
     .scenic-discard { width:min(360px,calc(100vw - 32px)); padding:16px; border:1px solid var(--tblr-border-color); border-radius:12px; color:var(--tblr-body-color); background:var(--tblr-bg-surface); }
@@ -116,31 +122,36 @@
       <div class="p-3 text-center"><button id="loadMoreSpotsBtn" type="button" class="btn btn-outline-secondary" hidden>加载更多景点</button></div>
     </section>
   </main>
-  <dialog id="detailModal" class="scenic-modal"><div id="detailPanel" data-admin-fields="scenic_spots" class="scenic-modal-body">
+  <dialog id="detailModal" class="scenic-modal" aria-labelledby="detailTitle"><div id="detailPanel" data-admin-fields="scenic_spots" class="scenic-modal-body">
     <div class="scenic-detail-head scenic-detail-sticky"><div><div class="scenic-title-row"><h2 id="detailTitle">景点资料</h2><span id="cityInfo" class="scenic-city-tag">暂无</span></div><div class="scenic-detail-actions"><span id="detailMode" class="scenic-mode"></span><span id="detailMeta" class="scenic-hint"></span><button id="copySpotIdBtn" type="button" class="btn btn-sm scenic-copy-id" aria-label="复制景点内部 ID" title="复制内部 ID" disabled><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="7" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button></div></div><span class="spacer"></span><button id="closeDetailBtn" type="button" class="btn btn-outline-secondary scenic-close-icon" aria-label="关闭" title="关闭"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 6-12 12M6 6l12 12"/></svg></button></div>
     <div id="newCityFields" class="scenic-new-city-fields mt-3" hidden><label>省份<select id="newProvinceSelect" class="form-select"><option value="">选择省份</option></select></label><label>城市<select id="newCitySelect" class="form-select" disabled><option value="">先选择省份</option></select></label></div>
     <div class="scenic-fields mt-3">
       <label class="full">景点名称<input id="nameInput" class="form-control" maxlength="160" /><small id="providerNameHint" class="scenic-provider-hint"></small></label>
-      <label>分类<input id="categoryInput" class="form-control" maxlength="100" /><small id="providerCategoryHint" class="scenic-provider-hint"></small></label>
-      <label>景区等级<select id="scenicGradeInput" class="form-select"><option value="">暂无等级</option><option value="1A">1A</option><option value="2A">2A</option><option value="3A">3A</option><option value="4A">4A</option><option value="5A">5A</option></select><small id="scenicGradeHint" class="scenic-provider-hint"></small></label>
+      <label class="scenic-classification-field">分类<input id="categoryInput" class="form-control" maxlength="100" /><small id="providerCategoryHint" class="scenic-provider-hint"></small></label>
+      <label class="scenic-classification-field">景区等级<select id="scenicGradeInput" class="form-select"><option value="">暂无等级</option><option value="1A">1A</option><option value="2A">2A</option><option value="3A">3A</option><option value="4A">4A</option><option value="5A">5A</option></select><small id="scenicGradeHint" class="scenic-provider-hint"></small></label>
       <label class="full">地址<input id="addressInput" class="form-control" maxlength="500" /><small id="providerAddressHint" class="scenic-provider-hint"></small></label>
-      <label class="full"><span class="scenic-description-heading"><span>简介</span><a id="generateDescriptionBtn" data-admin-write="scenic_spots" href="#" class="scenic-description-link">AI联网查询</a></span><textarea id="descriptionInput" class="form-control" rows="3" maxlength="8000"></textarea><small id="providerDescriptionHint" class="scenic-provider-hint" role="status"></small><div id="aiDescriptionCandidate" class="scenic-ai-candidate" hidden><div id="aiDescriptionCandidateText" class="scenic-ai-candidate-text"></div><div class="scenic-ai-candidate-actions"><button id="applyAiDescriptionBtn" data-admin-write="scenic_spots" type="button" class="btn btn-sm btn-primary">一键代入</button></div></div></label>
-    </div>
-    <section class="scenic-location">
+    <section class="scenic-location full" aria-label="地图位置">
       <div class="scenic-location-header">
-        <div><h3>位置</h3><div id="coordinateInfo" class="scenic-hint"></div></div>
-        <div class="d-flex gap-2 flex-wrap">
-          <button id="toggleScenicMapBtn" type="button" class="btn btn-sm btn-outline-secondary" aria-expanded="false" aria-controls="scenicMapContent">查看地图</button>
-          <button id="chooseMapLocationBtn" type="button" data-admin-write="scenic_spots" class="btn btn-sm btn-outline-secondary">重新选点</button>
+        <div>
+          <div id="coordinateInfo" class="scenic-hint"></div>
+          <div id="pendingCoordinateInfo" class="scenic-hint scenic-position-pending" role="status" hidden></div>
         </div>
+        <button id="toggleScenicMapBtn" type="button" class="btn btn-sm btn-outline-secondary" aria-expanded="false" aria-controls="scenicMapContent">查看地图</button>
       </div>
       <div id="scenicMapContent" hidden aria-busy="false">
-<div id="coordinateMap" class="scenic-coordinate-map" hidden><img id="coordinateMapImage" alt="景点位置地图" loading="lazy" /><div id="coordinateMapCanvas" class="scenic-map-canvas"></div><div id="coordinateMapError" class="scenic-map-error" hidden></div></div><div id="poiCandidatePanel" data-admin-write="scenic_spots" class="scenic-poi-panel" hidden><div class="scenic-poi-head"><strong id="poiCandidateTitle">附近高德景点</strong><button id="useClickedLocationBtn" type="button" class="btn btn-sm btn-outline-secondary">按此坐标新建</button></div><div id="poiCandidateList" class="scenic-poi-list"></div><section id="poiDraftPanel" class="scenic-poi-draft" hidden><strong>景点资料备选</strong><div class="scenic-poi-draft-fields mt-2"><span class="scenic-poi-draft-label">景点名</span><span id="poiDraftName">—</span><span class="scenic-poi-draft-label">分类</span><span id="poiDraftCategory">—</span><span class="scenic-poi-draft-label">简介</span><span id="poiDraftDescription" class="scenic-poi-draft-description">供应商未提供</span><span class="scenic-poi-draft-label">地址</span><span id="poiDraftAddress">—</span><span class="scenic-poi-draft-label">坐标 / POI ID</span><span id="poiDraftLocation">—</span></div><div id="providerPhotoPanel" class="scenic-provider-photo-panel" hidden><strong>备选图片</strong><div id="providerPhotoCandidates" class="scenic-provider-photo-grid"></div></div><div class="scenic-poi-draft-actions"><button id="applyPoiDraftBtn" type="button" class="btn btn-primary">一键代入资料及图片</button></div></section></div><div id="coordinateMapActions" data-admin-write="scenic_spots" class="scenic-map-actions" hidden><button id="resetMapLocationBtn" type="button" class="btn btn-sm btn-outline-secondary" disabled>复位</button><span id="coordinateMapActionHint" class="scenic-hint">选点后可保存新位置</span></div><div id="coordinateMapHelp" class="scenic-map-help" hidden>点击地图上的景点，或选点查找附近景点</div>
+        <div id="coordinateMapActions" data-admin-write="scenic_spots" class="scenic-map-actions" hidden>
+          <button id="chooseMapLocationBtn" type="button" class="btn btn-sm btn-outline-secondary" aria-controls="coordinateMapCanvas">重新选点</button>
+          <button id="resetMapLocationBtn" type="button" class="btn btn-sm btn-outline-secondary" hidden>撤销本次选点</button>
+          <span id="coordinateMapActionHint" class="scenic-hint" role="status"></span>
+        </div>
+<div id="coordinateMap" class="scenic-coordinate-map" hidden><img id="coordinateMapImage" alt="景点位置地图" loading="lazy" /><div id="coordinateMapCanvas" class="scenic-map-canvas"></div><div id="coordinateMapError" class="scenic-map-error" hidden></div></div><div id="poiCandidatePanel" data-admin-write="scenic_spots" class="scenic-poi-panel" hidden><div class="scenic-poi-head"><strong id="poiCandidateTitle">附近高德景点</strong><button id="useClickedLocationBtn" type="button" class="btn btn-sm btn-outline-secondary">按此坐标新建</button></div><div id="poiCandidateList" class="scenic-poi-list"></div><section id="poiDraftPanel" class="scenic-poi-draft" hidden><strong>景点资料备选</strong><div class="scenic-poi-draft-fields mt-2"><span class="scenic-poi-draft-label">景点名</span><span id="poiDraftName">—</span><span class="scenic-poi-draft-label">分类</span><span id="poiDraftCategory">—</span><span class="scenic-poi-draft-label">简介</span><span id="poiDraftDescription" class="scenic-poi-draft-description">供应商未提供</span><span class="scenic-poi-draft-label">地址</span><span id="poiDraftAddress">—</span><span class="scenic-poi-draft-label">坐标 / POI ID</span><span id="poiDraftLocation">—</span></div><div id="providerPhotoPanel" class="scenic-provider-photo-panel" hidden><strong>备选图片</strong><div id="providerPhotoCandidates" class="scenic-provider-photo-grid"></div></div><div class="scenic-poi-draft-actions"><button id="applyPoiDraftBtn" type="button" class="btn btn-primary">一键代入资料及图片</button></div></section></div><div id="coordinateMapHelp" class="scenic-map-help" hidden>点击地图上的景点，或选点查找附近景点</div>
       </div>
     </section>
-    <section class="mt-3"><div class="d-flex align-items-baseline flex-wrap gap-2"><h3 class="mb-0">景点图片</h3><span class="scenic-hint" data-admin-write="scenic_spots">拖动可调整展示顺序</span></div><div id="photosBox"></div></section>
+      <label class="full"><span class="scenic-description-heading"><span>简介</span><a id="generateDescriptionBtn" data-admin-write="scenic_spots" href="#" class="scenic-description-link">AI联网查询</a></span><textarea id="descriptionInput" class="form-control" rows="3" maxlength="8000"></textarea><small id="providerDescriptionHint" class="scenic-provider-hint" role="status"></small><div id="aiDescriptionCandidate" class="scenic-ai-candidate" hidden><div id="aiDescriptionCandidateText" class="scenic-ai-candidate-text"></div><div class="scenic-ai-candidate-actions"><button id="applyAiDescriptionBtn" data-admin-write="scenic_spots" type="button" class="btn btn-sm btn-primary">一键代入</button></div></div></label>
+    </div>
+    <section class="mt-3"><div class="d-flex align-items-baseline flex-wrap gap-2"><h3 class="mb-0">景点图片</h3><div id="scenicPhotoSaveStatus" class="scenic-photo-status" data-admin-write="scenic_spots"></div></div><div id="photosBox" aria-describedby="scenicPhotoOrderHint"></div><div id="scenicPhotoOrderHint" class="scenic-hint mt-1" data-admin-write="scenic_spots">拖动可调整展示顺序</div></section>
     <div id="deleteSpotError" class="alert alert-danger mt-3" role="alert" hidden></div>
-  </div><div class="scenic-detail-footer"><div><button id="deleteSpotBtn" type="button" data-admin-write="scenic_spots" class="btn btn-outline-danger" hidden>删除景点</button></div><button id="saveBtn" data-admin-write="scenic_spots" class="btn btn-primary" disabled>保存修改</button></div>
+  </div><div class="scenic-detail-footer"><div><button id="deleteSpotBtn" type="button" data-admin-write="scenic_spots" class="btn btn-outline-danger" hidden>归档景点</button></div><button id="saveBtn" data-admin-write="scenic_spots" class="btn btn-primary" disabled>保存景点资料</button></div>
   </dialog>
   <dialog id="discardScenicDialog" class="scenic-discard" aria-labelledby="discardScenicTitle">
     <form method="dialog">

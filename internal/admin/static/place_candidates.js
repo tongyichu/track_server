@@ -22,12 +22,12 @@
     const title = document.createElement('span'); title.className = 'admin-track-label-caption'; title.textContent = '景点';
     const currentName = document.createElement('span'); currentName.className = 'admin-track-label-current';
     const values = document.createElement('span'); values.className = 'admin-track-label-values';
-    const add = document.createElement('span'); add.className = 'admin-track-label-add'; add.textContent = '+'; add.setAttribute('aria-hidden', 'true');
-    summary.setAttribute('aria-label', '查看或设置景点'); values.append(currentName, add); summary.append(title, values);
+    const recognition = document.createElement('small'); recognition.className = 'admin-track-label-status';
+    const add = document.createElement('span'); add.className = 'admin-track-label-action';
+    values.append(currentName, recognition); summary.append(title, values, add);
     const panel = document.createElement('div'); panel.className = 'admin-track-label-options';
     const canWrite = !options.readOnly && AdminAccess.can('tracks', true);
     const canManual = canWrite && AdminAccess.can('scenic_spots', true) && typeof options.scenicSpotID === 'string';
-    add.hidden = !canWrite;
     const actions = document.createElement('div'); actions.className = 'd-flex flex-wrap gap-2';
     const dismiss = document.createElement('button'); dismiss.type = 'button'; dismiss.className = 'btn btn-sm btn-outline-secondary';
     dismiss.textContent = '忽略'; dismiss.title = '忽略本次候选'; dismiss.dataset.adminWrite = 'tracks'; dismiss.hidden = true;
@@ -70,8 +70,11 @@
       if (status) recognitionStatus = status;
       const selected = !!spot && !!spot.id;
       const statuses = { waiting: 'AI等待查询', running: 'AI正在查询', not_found: 'AI没有查到' };
-      currentName.textContent = selected ? spot.name || '未命名景点' : statuses[recognitionStatus] || '未关联';
+      currentName.textContent = selected ? spot.name || '未命名景点' : '未关联景点';
       currentName.title = currentName.textContent; currentName.classList.toggle('is-empty', !selected);
+      recognition.textContent = selected ? '' : statuses[recognitionStatus] || '';
+      recognition.hidden = !recognition.textContent;
+      add.textContent = canWrite ? (selected ? '更换景点' : '关联景点') : '查看';
       detail.hidden = !selected;
       if (selected) detail.href = '/admin/scenic_spots.html?spot_id=' + encodeURIComponent(spot.id);
       else detail.removeAttribute('href');
@@ -99,6 +102,11 @@
     const matches = document.createElement('div'); matches.className = 'admin-track-place-matches'; matches.setAttribute('aria-live', 'polite');
     const createButton = document.createElement('button'); createButton.type = 'button'; createButton.className = 'btn btn-sm btn-outline-primary'; createButton.textContent = '新建并关联'; createButton.dataset.adminWrite = 'tracks'; createButton.hidden = true;
     manual.append(input, matches, createButton); panel.prepend(manual);
+    if (canWrite) {
+      const hint = document.createElement('p'); hint.className = 'text-secondary mb-2';
+      hint.textContent = '选择已有景点或识别候选后，关联立即生效。';
+      panel.prepend(hint);
+    }
     function syncManual() {
       input.disabled = busy || !canManual;
       createButton.hidden = !canManual || !searchedQuery || searchedQuery !== input.value.trim();

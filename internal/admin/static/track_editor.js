@@ -7,7 +7,7 @@
     const header = document.createElement('div');
     header.className = 'd-flex align-items-center justify-content-between flex-wrap gap-2 mb-2';
     const heading = document.createElement('h3');
-    heading.className = 'mb-0'; heading.textContent = '轨迹预览';
+    heading.className = 'mb-0'; heading.textContent = '客户端预览';
     header.appendChild(heading); section.appendChild(header);
     const fileRow = document.createElement('div');
     fileRow.className = 'admin-track-file';
@@ -55,14 +55,35 @@
     }
     const grid = document.createElement('div');
     grid.className = 'admin-track-preview-grid';
-    const previews = track.preview_images || {};
+    let previews = track.preview_images || {};
+    const slots = [
+      ['square_day_url', '日间方图'],
+      ['square_night_url', '夜间方图'],
+      ['landscape_day_url', '日间横图'],
+      ['landscape_night_url', '夜间横图']
+    ];
+    const availability = document.createElement('dl');
+    availability.className = 'admin-track-preview-status';
+    const hasPreview = key => Boolean(String(previews[key] || '').trim());
+    function renderAvailability() {
+      availability.replaceChildren();
+      slots.forEach(([key, name]) => {
+        const item = document.createElement('div');
+        const label = document.createElement('dt'); label.textContent = name;
+        const state = document.createElement('dd');
+        const exists = hasPreview(key);
+        state.textContent = exists ? '已生成' : '缺失';
+        state.classList.toggle('text-secondary', !exists);
+        item.append(label, state); availability.appendChild(item);
+      });
+    }
+    renderAvailability();
     const figure = document.createElement('figure');
     figure.className = 'admin-track-preview-square';
     const caption = document.createElement('figcaption');
     caption.textContent = '1:1 日间';
     const stage = document.createElement('div');
     stage.className = 'admin-track-preview-image';
-    const hasPreview = key => Boolean(String(previews[key] || '').trim());
     if (hasPreview('square_day_url')) {
       const image = document.createElement('img');
       image.src = assetURL('square_day');
@@ -86,7 +107,7 @@
     } else {
       stage.textContent = '无';
     }
-    if (canClearPreviews && ['square_day_url', 'square_night_url', 'landscape_day_url', 'landscape_night_url'].some(hasPreview)) {
+    if (canClearPreviews && slots.some(([key]) => hasPreview(key))) {
       const button = document.createElement('button');
       const clearLabel = '清除全部 4 张预览图';
       button.type = 'button'; button.className = 'btn btn-sm btn-outline-danger'; button.textContent = clearLabel;
@@ -112,7 +133,8 @@
           }
           return;
         }
-        track.preview_images = {};
+        previews = track.preview_images = {};
+        renderAvailability();
         stage.textContent = '暂无预览图';
         button.remove(); note.remove();
         window.AdminUI.alert('预览图已清空', 'success');
@@ -124,7 +146,7 @@
     }
     figure.append(caption, stage);
     grid.appendChild(figure);
-    section.append(grid, fileRow);
+    section.append(grid, availability, fileRow);
     return section;
   }
 
@@ -181,7 +203,7 @@
         isDeleted = track.status === 0;
         const labelAbort = new AbortController();
         let labelBadges = null, placeCandidates = null, mapPreview = null;
-        let detailLayout, workoutFields, shapeFields, patternPicker, patternValue, patternAdd, patternActions;
+        let detailLayout, detailContent, workoutFields, shapeFields, patternPicker, patternValue, patternStatus, patternAdd, patternActions;
         function renderLabelBadges() {
           if (!labelBadges) return;
           labelBadges.replaceChildren();
@@ -216,6 +238,7 @@
         }
         mapPreview = window.AdminTrackMapPreview ? window.AdminTrackMapPreview.create(trackPayload.geo, {
           trackID: trackID, coordinateSystem: track.coordinate_system,
+          strokeColor: (track.labels || []).find(label => label.type === 'sport')?.theme_color,
           scenicSpotID: trackPayload.scenic_spot_id, primaryScenicSpot: track.primary_scenic_spot,
           canAssignScenicSpot: !readOnly && !isDeleted && window.AdminAccess.can('scenic_spots', true) && typeof trackPayload.scenic_spot_id === 'string',
           onScenicSpotAssigned: async function (data) { updateScenicSpot(data); await notifyScenicSpotChanged(); },
@@ -245,7 +268,7 @@
           const sources = document.createElement('div'); sources.className = 'admin-track-description-sources';
           const actions = document.createElement('div'); actions.className = 'admin-track-description-actions';
           const apply = document.createElement('button'); apply.type = 'button'; apply.className = 'btn btn-sm btn-primary';
-          apply.textContent = '一键代入并保存'; apply.setAttribute('aria-label', '一键代入并保存');
+          apply.textContent = '保存这段说明';
           const note = document.createElement('span'); note.className = 'text-secondary'; note.textContent = '只保存路线说明，其他未保存的修改会保留。';
           actions.append(apply, note); candidateArea.append(candidateTitle, candidateInput, sources, actions); group.appendChild(candidateArea);
           let revision = 0, candidateVersion = '', candidateTaskID = '', generating = false, applying = false;
@@ -255,7 +278,7 @@
             button.disabled = generating || applying;
             button.textContent = generating ? '正在联网生成…' : 'AI 联网填写';
             apply.disabled = generating || applying || !candidateVersion || !candidateInput.value.trim();
-            apply.textContent = applying ? '正在保存…' : '一键代入并保存';
+            apply.textContent = applying ? '正在保存…' : '保存这段说明';
           }
           candidateInput.addEventListener('input', updateButtons);
           button.addEventListener('click', async function (event) {
@@ -278,7 +301,7 @@
               if (!String(data.description || '').trim() || !data.source_version) throw new Error('AI 未返回有效建议，原说明已保留');
               candidateInput.value = data.description; candidateVersion = data.source_version; candidateTaskID = data.task_id || '';
               candidateArea.hidden = false; sources.replaceChildren();
-              hint.textContent = '建议已生成，原说明未变；可编辑建议，确认后点击“一键代入并保存”。';
+              hint.textContent = '建议已生成。可以先修改，再点击“保存这段说明”。';
               const sourceList = Array.isArray(data.sources) ? data.sources : [];
               if (sourceList.length) {
                 const caption = document.createElement('span'); caption.textContent = '检索参考来源：'; sources.appendChild(caption);
@@ -339,9 +362,14 @@
           updateButtons();
         }
         return {
-          title: (readOnly ? '查看轨迹 ' : '编辑轨迹 ') + trackID,
+          title: String(track.title || '').trim() || '未命名轨迹',
           readOnly: readOnly,
           onReady: function (view) {
+            const header = view.root.querySelector('.modal-title');
+            const recordID = document.createElement('span');
+            recordID.className = 'admin-track-record-id';
+            recordID.textContent = trackID;
+            header.appendChild(recordID);
             view.form.prepend(detailLayout);
             detailLayout.classList.add('full');
             const editable = !readOnly && !isDeleted;
@@ -355,8 +383,12 @@
             Array.from(patternGroup.childNodes).forEach(node => { if (node.nodeType === Node.TEXT_NODE) node.remove(); });
             const renderPattern = () => {
               const statuses = { waiting: 'AI等待查询', running: 'AI正在查询', not_found: 'AI没有查到' };
-              patternValue.textContent = pattern.value.trim() || statuses[(trackPayload.label_generation || {}).shape_recognition_status] || '未设置'; patternValue.title = patternValue.textContent;
-              patternValue.classList.toggle('is-empty', !pattern.value.trim());
+              const value = pattern.value.trim();
+              patternValue.textContent = value || '未设置图案';
+              patternValue.title = patternValue.textContent;
+              patternValue.classList.toggle('is-empty', !value);
+              patternStatus.textContent = value ? '' : statuses[trackPayload.label_generation?.shape_recognition_status] || '';
+              patternStatus.hidden = !patternStatus.textContent;
             };
             pattern.addEventListener('input', renderPattern); pattern.addEventListener('change', renderPattern); renderPattern();
             pattern.addEventListener('keydown', event => {
@@ -391,16 +423,22 @@
             const basic = document.createElement('section'); basic.className = 'admin-track-basic full';
             const basicTitle = document.createElement('h3'); basicTitle.textContent = '基本信息';
             const basicFields = document.createElement('div'); basicFields.className = 'admin-track-basic-fields';
-            ['title', 'user_name', 'city_code', 'locate_addr', 'source_tag', 'status', 'session_id'].forEach(name => {
+            ['title', 'city_code', 'status', 'locate_addr'].forEach(name => {
               const group = view.form.elements[name].parentNode;
               if (name === 'title' || name === 'locate_addr') group.classList.add('admin-track-field-wide');
               basicFields.appendChild(group);
             });
             basic.append(basicTitle, basicFields);
-            main.appendChild(basic);
-            const metrics = trackMetrics(track); main.appendChild(metrics);
+            detailContent.prepend(basic);
             setupRouteDescription(view);
             main.appendChild(view.form.elements.description.parentNode);
+            const metrics = trackMetrics(track); main.appendChild(metrics);
+            const record = document.createElement('details');
+            record.className = 'admin-track-record';
+            const recordTitle = document.createElement('summary'); recordTitle.textContent = '更多资料';
+            const recordFields = document.createElement('div'); recordFields.className = 'admin-track-basic-fields';
+            ['user_name', 'source_tag', 'session_id'].forEach(name => recordFields.appendChild(view.form.elements[name].parentNode));
+            record.append(recordTitle, recordFields); main.appendChild(record);
             if (assets.loadMetadata) assets.loadMetadata();
             if (Array.isArray(options.cities)) return;
             const select = view.form.elements.city_code;
@@ -431,7 +469,7 @@
           onClosed: function () { labelAbort.abort(); if (mapPreview) mapPreview.dispose(); if (placeCandidates) placeCandidates.dispose(); },
           waitForHidden: true,
           confirmText: isDeleted ? '彻底删除' : '保存修改',
-          cancelText: readOnly ? '关闭' : (isDeleted ? '恢复' : '删除'),
+          cancelText: readOnly ? '关闭' : (isDeleted ? '恢复' : '下架轨迹'),
           cancelDanger: !readOnly && !isDeleted,
           onCancel: readOnly ? null : isDeleted ? async function () {
             const confirmed = await window.AdminUI.confirm({ title: '恢复轨迹', message: '确认恢复轨迹 ' + trackID + '？恢复后状态为公开，并会重新排队地图索引；删除时清理的收藏与路线组成员关系不会恢复。', confirmText: '恢复轨迹' });
@@ -446,11 +484,11 @@
             window.AdminUI.alert('轨迹已恢复为公开状态', 'success');
             return 'restored';
           } : async function () {
-            const confirmed = await window.AdminUI.confirm({ title: '删除轨迹', message: '确认删除轨迹 ' + trackID + '？删除后标记为下架（数据保留，可在已下架筛选中恢复），并清理收藏和地图索引。', confirmText: '删除轨迹', danger: true });
+            const confirmed = await window.AdminUI.confirm({ title: '下架轨迹', message: '确认下架轨迹 ' + trackID + '？数据保留，可在已下架筛选中恢复。下架会清理收藏和地图索引。', confirmText: '下架轨迹', danger: true });
             if (!confirmed) return false;
             const response = await fetch('/admin/api/tracks/' + encodeURIComponent(trackID), { method: 'DELETE' });
             if (!response.ok) {
-              let message = '删除失败: ' + response.status;
+              let message = '下架失败: ' + response.status;
               try { const result = await response.json(); if (result && result.error) message += ' ' + result.error; } catch (_) {}
               window.AdminUI.alert(message, 'danger');
               return false;
@@ -467,7 +505,7 @@
             const panel = document.createElement('section');
             panel.className = 'card';
             const content = document.createElement('div');
-            content.className = 'card-body';
+            content.className = 'card-body'; detailContent = content;
             labelBadges = document.createElement('div'); labelBadges.className = 'd-flex flex-wrap gap-2 mb-2';
             renderLabelBadges();
             content.appendChild(labelBadges);
@@ -479,8 +517,9 @@
             const shapeTitle = document.createElement('span'); shapeTitle.className = 'admin-track-label-caption'; shapeTitle.textContent = '图案';
             const shapeValues = document.createElement('span'); shapeValues.className = 'admin-track-label-values';
             patternValue = document.createElement('span'); patternValue.className = 'admin-track-label-current';
-            patternAdd = document.createElement('span'); patternAdd.className = 'admin-track-label-add'; patternAdd.textContent = '+'; patternAdd.setAttribute('aria-hidden', 'true');
-            shapeHeading.setAttribute('aria-label', '查看或设置图案'); shapeValues.append(patternValue, patternAdd); shapeHeading.append(shapeTitle, shapeValues);
+            patternStatus = document.createElement('small'); patternStatus.className = 'admin-track-label-status';
+            patternAdd = document.createElement('span'); patternAdd.className = 'admin-track-label-action'; patternAdd.textContent = '设置图案';
+            shapeValues.append(patternValue, patternStatus); shapeHeading.append(shapeTitle, shapeValues, patternAdd);
             shapeFields = document.createElement('div'); shapeFields.className = 'admin-track-label-options';
             patternActions = document.createElement('div'); patternActions.className = 'd-flex flex-wrap gap-2'; shapeFields.appendChild(patternActions);
             shapeSection.append(shapeHeading, shapeFields);
@@ -505,7 +544,7 @@
             { name: 'source_tag', label: '来源标签', type: 'select', value: track.source_tag, options: sourceFields },
             { name: 'coordinate_system', label: '坐标系', type: 'select', value: track.coordinate_system, options: coordinateFields, onChange: function (value) { if (mapPreview) mapPreview.setCoordinateSystem(value); } },
             { name: 'description', label: '路线说明', type: 'textarea', value: track.description, maxLength: 4000, full: true },
-            { name: 'status', label: '可见状态', type: 'select', value: track.status, options: [{ value: 1, label: '正常' }, { value: 2, label: '私密' }] }
+            { name: 'status', label: '可见状态', type: 'select', value: track.status, options: [{ value: 0, label: '已下架' }, { value: 1, label: '公开' }, { value: 2, label: '私密' }].filter(item => (item.value === 0) === isDeleted) }
           ]
         };
       }

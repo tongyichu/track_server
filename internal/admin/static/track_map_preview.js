@@ -46,7 +46,7 @@
     const section = document.createElement('section');
     section.className = 'admin-track-map';
     const heading = document.createElement('div'); heading.className = 'admin-track-candidates-heading';
-    const title = document.createElement('h3'); title.textContent = '轨迹地图';
+    const title = document.createElement('h3'); title.textContent = '地图校验';
     const retry = document.createElement('button'); retry.type = 'button'; retry.className = 'btn btn-sm btn-outline-secondary'; retry.textContent = '重试预览'; retry.hidden = true;
     const retryMap = document.createElement('button'); retryMap.type = 'button'; retryMap.className = 'btn btn-sm btn-outline-secondary'; retryMap.textContent = '重试地图'; retryMap.hidden = true;
     heading.append(title, retryMap, retry);
@@ -256,7 +256,7 @@
     function fit() {
       if (disposed || !map || !canvas.isConnected) return;
       map.resize();
-      if (overlays.length) map.setFitView(overlays, true, [40, 40, 40, 40], 17);
+      if (overlays.length) map.setFitView(overlays, true, [64, 36, 36, 36], 17);
     }
     function draw() {
       if (disposed) return;
@@ -269,17 +269,22 @@
       const paths = pathsOf(points);
       if (!paths.length) return;
       overlays = paths.filter(path => path.length > 1).map(path => new amap.Polyline({
-        path, strokeColor: '#2563eb', strokeWeight: 4, strokeOpacity: 0.9, lineJoin: 'round', lineCap: 'round', bubble: true
+        path, strokeColor: options.strokeColor || '#2563eb', strokeWeight: 4, strokeOpacity: 0.9, lineJoin: 'round', lineCap: 'round', bubble: true
       }));
       paths.forEach((path, index) => {
         if (path.length === 1 && index > 0 && index < paths.length - 1) {
           overlays.push(new amap.Marker({ position: path[0], title: '轨迹点', bubble: true }));
         }
       });
-      overlays.push(new amap.Marker({ position: paths[0][0], label: { content: '起', direction: 'top' } }));
-      if (paths.length > 1 || paths[0].length > 1) {
-        const last = paths[paths.length - 1];
-        overlays.push(new amap.Marker({ position: last[last.length - 1], label: { content: '终', direction: 'top' } }));
+      const start = paths[0][0];
+      const end = paths[paths.length - 1].at(-1);
+      const singlePoint = paths.length === 1 && paths[0].length === 1;
+      const longitudeScale = Math.cos(start[1] * Math.PI / 180);
+      const distanceMeters = Math.hypot((end[0] - start[0]) * longitudeScale, end[1] - start[1]) * 111_320;
+      const coincident = distanceMeters < 3;
+      overlays.push(new amap.Marker({ position: start, label: { content: !singlePoint && coincident ? '起终' : '起', direction: 'top' } }));
+      if (!coincident) {
+        overlays.push(new amap.Marker({ position: end, label: { content: '终', direction: 'top' } }));
       }
       map.add(overlays);
       // 切换坐标系保留视野，便于比较同一路段的偏移。

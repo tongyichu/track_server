@@ -276,16 +276,7 @@
     $('nameInput').value=spot.name||'';$('categoryInput').value=spot.category||'';$('addressInput').value=spot.address||'';$('descriptionInput').value=spot.description||'';$('scenicGradeInput').value=spot.scenic_grade||'';$('scenicGradeHint').textContent=spot.scenic_grade_source==='manual'?'人工维护，自动采集不会覆盖':spot.scenic_grade_status==='synced'?'来自高德':spot.scenic_grade_status==='unavailable'?'暂无可用等级信息':spot.scenic_grade_status==='failed'?'等级采集失败，后续同步时重试':'保存后自动采集';
     const cities=spotCities(spot);$('cityInfo').textContent=cities.length?cities.join('、'):'暂无';
     releaseScenicMap();
-    state.pendingCoordinates = null;
-    const lat = Number(spot.latitude), lng = Number(spot.longitude);
-    const hasCoordinates = Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0 && lng !== 0;
-    $('coordinateInfo').textContent = hasCoordinates ? coordinateLabel(lat, lng, spot.coordinate_system) : '尚未设置坐标';
-    $('coordinateMapError').hidden = true;
-    $('coordinateMapImage').hidden = !hasCoordinates || !spot.id;
-    $('coordinateMapImage').removeAttribute('src');
-    $('chooseMapLocationBtn').textContent = hasCoordinates ? '重新选点' : '选择位置';
-    $('chooseMapLocationBtn').disabled = false;
-    $('resetMapLocationBtn').disabled = true;
+    resetLocationDraft(spot);
     $('newCityFields').hidden = !state.newSpot;
     $('poiDraftPanel').hidden = true;
     $('providerPhotoPanel').hidden = true;
@@ -296,6 +287,17 @@
       openScenicMap();
     }
     $('providerNameHint').textContent='';$('providerCategoryHint').textContent='';$('providerAddressHint').textContent='';$('providerDescriptionHint').textContent='';clearPhotoPreview();renderPhotoCards(spot.photos||[]);captureFormBaseline();
+  }
+  function resetLocationDraft(spot) {
+    state.pendingCoordinates = suggestedMapAddress = null;
+    const lat = Number(spot.latitude), lng = Number(spot.longitude);
+    const hasCoordinates = Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0 && lng !== 0;
+    renderCoordinateInfo();
+    $('coordinateMapError').hidden = true;
+    $('coordinateMapImage').hidden = !hasCoordinates || !spot.id;
+    $('coordinateMapImage').removeAttribute('src');
+    $('chooseMapLocationBtn').textContent = hasCoordinates ? '重新选点' : '选择位置';
+    $('resetMapLocationBtn').hidden = true;
   }
   function toGCJ02(lat,lng,system){if(system!=='WGS84')return{lat,lng};const inside=lng>=72.004&&lng<=137.8347&&lat>=0.8293&&lat<=55.8271;if(!inside)return{lat,lng};let x=lng-105,y=lat-35,a=-100+2*x+3*y+.2*y*y+.1*x*y+.2*Math.sqrt(Math.abs(x));a+=(20*Math.sin(6*x*Math.PI)+20*Math.sin(2*x*Math.PI))*2/3;a+=(20*Math.sin(y*Math.PI)+40*Math.sin(y/3*Math.PI))*2/3;a+=(160*Math.sin(y/12*Math.PI)+320*Math.sin(y*Math.PI/30))*2/3;let b=300+x+2*y+.1*x*x+.1*x*y+.1*Math.sqrt(Math.abs(x));b+=(20*Math.sin(6*x*Math.PI)+20*Math.sin(2*x*Math.PI))*2/3;b+=(20*Math.sin(x*Math.PI)+40*Math.sin(x/3*Math.PI))*2/3;b+=(150*Math.sin(x/12*Math.PI)+300*Math.sin(x/30*Math.PI))*2/3;const rad=lat/180*Math.PI,magic=1-.00669342162296594323*Math.sin(rad)**2,root=Math.sqrt(magic);return{lat:lat+a*180/((6378245*(1-.00669342162296594323))/(magic*root)*Math.PI),lng:lng+b*180/(6378245/root*Math.cos(rad)*Math.PI)};}
   function loadAMapSDK(config){if(window.AMap)return Promise.resolve(window.AMap);if(state.mapSDKPromise)return state.mapSDKPromise;state.mapSDKPromise=new Promise((resolve,reject)=>{window._AMapSecurityConfig={serviceHost:window.location.origin+config.service_host};const script=document.createElement('script');script.src='https://webapi.amap.com/maps?v=2.0&key='+encodeURIComponent(config.key)+'&plugin=AMap.Scale,AMap.ToolBar';script.onload=()=>window.AMap?resolve(window.AMap):reject(new Error('高德地图 SDK 未就绪'));script.onerror=()=>reject(new Error('高德地图 SDK 加载失败'));document.head.appendChild(script);});return state.mapSDKPromise;}
@@ -312,6 +314,18 @@
 
   function coordinateLabel(lat, lng, system) {
     return lat.toFixed(6) + '，' + lng.toFixed(6) + ' · ' + (system || '未知坐标系');
+  }
+
+  function renderCoordinateInfo() {
+    const spot = state.current, pending = state.pendingCoordinates;
+    const lat = Number(spot.latitude), lng = Number(spot.longitude);
+    const hasCoordinates = Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0 && lng !== 0;
+    $('coordinateInfo').textContent = hasCoordinates
+      ? (pending ? '已保存坐标 · ' : '坐标 · ') + coordinateLabel(lat, lng, spot.coordinate_system)
+      : '尚未设置坐标';
+    const info = $('pendingCoordinateInfo');
+    info.textContent = pending ? '新位置待保存 · ' + coordinateLabel(pending.latitude, pending.longitude, pending.coordinate_system) : '';
+    info.hidden = !pending;
   }
 
   function updateMapMarker(lat,lng){if(!state.mapMarker){state.mapMarker=new window.AMap.Marker({position:[lng,lat],draggable:false});state.map.add(state.mapMarker);}else{state.mapMarker.setPosition([lng,lat]);}}
@@ -365,7 +379,7 @@
   function renderPOIDraft(){const draft=state.poiDraft;if(!draft){$('poiDraftPanel').hidden=true;return;}$('poiDraftPanel').hidden=false;$('poiDraftName').textContent=draft.name||'供应商未提供';$('poiDraftCategory').textContent=draft.category||'供应商未提供';$('poiDraftDescription').textContent=draft.description||'高德未提供简介';$('poiDraftAddress').textContent=draft.address||'未提供';$('poiDraftLocation').textContent=(draft.location?Number(draft.location.lat).toFixed(6)+'，'+Number(draft.location.lng).toFixed(6):'无坐标')+(draft.sourceID?' · '+draft.sourceID:' · 无 POI ID');const panel=$('providerPhotoPanel'),host=$('providerPhotoCandidates');host.replaceChildren();panel.hidden=!draft.photos.length;draft.photos.forEach(photo=>{const card=document.createElement('div');card.className='scenic-provider-photo-card';const image=document.createElement('img');image.loading='lazy';image.src=photo.url;image.alt=photo.title||draft.name||'高德景点图片';const caption=document.createElement('small');caption.textContent=photo.title||'高德景点图片';card.append(image,caption);host.appendChild(card);});$('applyPoiDraftBtn').textContent=draft.photos.length?'一键代入资料及 '+draft.photos.length+' 张图片':'一键代入资料';}
   function selectNearbyPOI(poi){if(!AdminAccess.can('scenic_spots',true))return;if(!poi||!state.poiSearchPoint)return;const id=String(poi.id||poi.uid||poi.pguid||'').trim(),existing=id&&state.list.find(spot=>(spot.sources||[]).some(source=>source.provider==='amap'&&source.provider_id===id&&source.status!=='disabled'));if(existing){toast('这个高德 POI 已在景点目录中：'+(existing.name||existing.id),'warning');return;}state.poiDraft=makePOIDraft(poi);renderPOIDraft();if(!id||!state.placeSearch)return;const selectedID=id;state.placeSearch.getDetails(id,(status,result)=>{if(!state.poiDraft||state.poiDraft.sourceID!==selectedID||status!=='complete')return;const details=result&&result.poiList&&result.poiList.pois&&result.poiList.pois[0];if(!details)return;state.poiDraft=makePOIDraft(details,state.poiDraft);renderPOIDraft();});}
   function selectBaseMapPOI(event){if(!state.newSpot||!event||!event.lnglat)return;const point={lat:Number(event.lnglat.getLat()),lng:Number(event.lnglat.getLng())};if(!Number.isFinite(point.lat)||!Number.isFinite(point.lng))return;const id=String(event.id||'').trim();state.poiSearchPoint=point;state.selectingMapLocation=false;$('coordinateMapCanvas').classList.remove('selecting-location');$('poiCandidatePanel').hidden=false;$('poiCandidateTitle').textContent=id?'正在读取所点击景点资料…':'正在查找附近景点…';$('poiCandidateList').replaceChildren();$('coordinateMapActionHint').textContent='已选中地图景点，资料加载后可在备选区一键代入。';if(!id){searchNearbyPOIs(point.lat,point.lng);return;}loadAMapPlugin('PlaceSearch').then(PlaceSearch=>{if(state.poiSearchPoint!==point)return;if(!state.placeSearch)state.placeSearch=new PlaceSearch({pageSize:10,pageIndex:1,extensions:'all'});state.placeSearch.getDetails(id,(status,result)=>{if(state.poiSearchPoint!==point)return;const poi=status==='complete'&&result&&result.poiList&&result.poiList.pois&&result.poiList.pois[0];if(poi){state.poiDraft=makePOIDraft(poi,{sourceID:id,name:event.name||'',location:point});renderPOIDraft();$('poiCandidateTitle').textContent='地图景点资料已就绪';return;}searchNearbyPOIs(point.lat,point.lng);});}).catch(()=>searchNearbyPOIs(point.lat,point.lng));}
-  function applyPOIDraft(){const draft=state.poiDraft;if(!draft)return;if(draft.sourceID){const existing=state.list.find(spot=>(spot.sources||[]).some(source=>source.provider==='amap'&&source.provider_id===draft.sourceID&&source.status!=='disabled'));if(existing){toast('这个高德 POI 已在景点目录中：'+(existing.name||existing.id),'warning');return;}}$('nameInput').value=draft.name||'';$('categoryInput').value=draft.category||'';$('descriptionInput').value=draft.description||'';$('addressInput').value=draft.address||'';if(draft.location){updateMapMarker(draft.location.lat,draft.location.lng);setPendingCoordinates(draft.location.lat,draft.location.lng);$('resetMapLocationBtn').disabled=false;}state.current.sources=draft.sourceID?[{provider:'amap',provider_id:draft.sourceID,status:'active'}]:[];chooseRegionFromAddress({province:draft.province,city:draft.city,district:draft.district}).catch(error=>toast('省市识别失败：'+error.message,'warning'));const existingURLs=new Set(Array.from($('photosBox').querySelectorAll('.scenic-photo-item')).map(card=>card.dataset.url));draft.photos.forEach((photo,index)=>{if(existingURLs.has(photo.url))return;const id='amap-photo-'+Date.now().toString(36)+'-'+index+'-'+Math.random().toString(36).slice(2,7);addPhotoCard({id,url:photo.url,caption:photo.title||'',provider:'amap',source_url:'https://www.amap.com/'});existingURLs.add(photo.url);});if(state.placeSearch)state.placeSearch.clear();state.poiSearchPoint=null;state.poiDraft=null;$('poiCandidatePanel').hidden=true;$('coordinateMapActionHint').textContent=draft.sourceID?'已代入高德景点资料并关联 POI ID。':'已代入景点资料。';updateSaveButton();}
+  function applyPOIDraft(){const draft=state.poiDraft;if(!draft)return;if(draft.sourceID){const existing=state.list.find(spot=>(spot.sources||[]).some(source=>source.provider==='amap'&&source.provider_id===draft.sourceID&&source.status!=='disabled'));if(existing){toast('这个高德 POI 已在景点目录中：'+(existing.name||existing.id),'warning');return;}}$('nameInput').value=draft.name||'';$('categoryInput').value=draft.category||'';$('descriptionInput').value=draft.description||'';$('addressInput').value=draft.address||'';if(draft.location){updateMapMarker(draft.location.lat,draft.location.lng);setPendingCoordinates(draft.location.lat,draft.location.lng);}state.current.sources=draft.sourceID?[{provider:'amap',provider_id:draft.sourceID,status:'active'}]:[];chooseRegionFromAddress({province:draft.province,city:draft.city,district:draft.district}).catch(error=>toast('省市识别失败：'+error.message,'warning'));const existingURLs=new Set(Array.from($('photosBox').querySelectorAll('.scenic-photo-item')).map(card=>card.dataset.url));draft.photos.forEach((photo,index)=>{if(existingURLs.has(photo.url))return;const id='amap-photo-'+Date.now().toString(36)+'-'+index+'-'+Math.random().toString(36).slice(2,7);addPhotoCard({id,url:photo.url,caption:photo.title||'',provider:'amap',source_url:'https://www.amap.com/'});existingURLs.add(photo.url);});if(state.placeSearch)state.placeSearch.clear();state.poiSearchPoint=null;state.poiDraft=null;$('poiCandidatePanel').hidden=true;$('coordinateMapActionHint').textContent=draft.sourceID?'已代入高德景点资料并关联 POI ID。':'已代入景点资料。';updateSaveButton();}
   function useClickedMapLocation(){const point=state.poiSearchPoint;if(!point)return;updateMapMarker(point.lat,point.lng);setPendingCoordinates(point.lat,point.lng);state.current.sources=[];state.poiDraft=null;if(state.placeSearch)state.placeSearch.clear();state.poiSearchPoint=null;$('poiCandidatePanel').hidden=true;$('coordinateMapActionHint').textContent='已使用地图坐标；可手动填写景点名称。';reverseGeocode(point.lat,point.lng);}
   function searchNearbyPOIs(lat,lng){if(!AdminAccess.can('scenic_spots',true))return;const point={lat:Number(lat),lng:Number(lng)};state.poiSearchPoint=point;$('poiCandidatePanel').hidden=false;$('poiCandidateTitle').textContent='正在查找附近高德景点…';$('poiCandidateList').replaceChildren();loadAMapPlugin('PlaceSearch').then(PlaceSearch=>{if(!state.map||state.poiSearchPoint!==point)return;if(state.placeSearch)state.placeSearch.clear();state.placeSearch=new PlaceSearch({map:state.map,pageSize:10,pageIndex:1,extensions:'all',type:'110000',autoFitView:false,showCover:false});state.placeSearch.on('markerClick',event=>selectNearbyPOI(event.data));state.placeSearch.searchNearBy('风景名胜',[lng,lat],2000,(status,result)=>{if(state.poiSearchPoint!==point)return;const pois=status==='complete'&&result&&result.poiList&&result.poiList.pois||[];const host=$('poiCandidateList');host.replaceChildren();if(!pois.length){$('poiCandidateTitle').textContent='附近没有匹配的高德景点';return;}$('poiCandidateTitle').textContent='附近高德景点 · '+pois.length+' 个';pois.forEach(poi=>{const button=document.createElement('button');button.type='button';button.className='scenic-poi-item';const info=document.createElement('span'),name=document.createElement('strong'),detail=document.createElement('small');name.textContent=poi.name||'未命名景点';detail.textContent=[poi.type,providerAddress(poi.address)].filter(Boolean).join(' · ');info.append(name,detail);const distance=document.createElement('span');distance.className='scenic-poi-distance';distance.textContent=distanceLabel(poi);button.append(info,distance);button.addEventListener('click',()=>selectNearbyPOI(poi));host.appendChild(button);});});}).catch(error=>{if(state.poiSearchPoint!==point)return;$('poiCandidateTitle').textContent='附近景点查询失败';toast('高德景点查询失败：'+error.message,'warning');});}
   function reverseGeocode(lat, lng) {
@@ -379,6 +393,10 @@
       new Geocoder({}).getAddress([lng, lat], (status, result) => {
         if (!isCurrent() || status !== 'complete' || !result.regeocode) return;
         if (address.value === previous && result.regeocode.formattedAddress) {
+          if (!state.newSpot) {
+            const original = suggestedMapAddress?.value === previous ? suggestedMapAddress.original : previous;
+            suggestedMapAddress = { original, value: result.regeocode.formattedAddress };
+          }
           address.value = result.regeocode.formattedAddress;
           updateSaveButton();
         }
@@ -391,7 +409,7 @@
     });
   }
 
-  let mapController = null, selectWhenReady = false;
+  let mapController = null, selectWhenReady = false, suggestedMapAddress = null;
   function setMapExpanded(expanded) {
     $('scenicMapContent').hidden = !expanded;
     const toggle = $('toggleScenicMapBtn');
@@ -410,6 +428,7 @@
     state.selectingMapLocation = false;
     $('coordinateMapCanvas').classList.remove('selecting-location');
     $('scenicMapContent').setAttribute('aria-busy', 'false');
+    $('coordinateMapActions').hidden = true;
     $('poiCandidatePanel').hidden = true;
     setMapExpanded(false);
   }
@@ -431,7 +450,6 @@
     $('scenicMapContent').setAttribute('aria-busy', 'true');
     $('coordinateMap').hidden = false;
     $('coordinateMapError').hidden = true;
-    $('coordinateMapActions').hidden = false;
     $('coordinateMapHelp').hidden = !state.newSpot;
     if (!$('coordinateMapImage').hidden && spot.id) {
       $('coordinateMapImage').src = '/admin/api/scenic-spots/' + encodeURIComponent(spot.id) + '/map?v=' + encodeURIComponent(spot.version || '');
@@ -446,8 +464,7 @@
       const hasCoordinates = Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0 && lng !== 0;
       const center = hasCoordinates ? toGCJ02(lat, lng, spot.coordinate_system) : {lat: 35.8617, lng: 104.1954};
       const zoom = hasCoordinates ? 15 : 4;
-      state.mapOriginalPosition = {latitude: lat, longitude: lng, coordinateSystem: spot.coordinate_system || '',
-        hasCoordinates, mapLat: center.lat, mapLng: center.lng, zoom};
+      state.mapOriginalPosition = {hasCoordinates, mapLat: center.lat, mapLng: center.lng, zoom};
       state.map = new AMap.Map('coordinateMapCanvas', {zoom, center: [center.lng, center.lat], resizeEnable: true, scrollWheel: true});
       state.map.addControl(new AMap.Scale());
       state.map.addControl(new AMap.ToolBar({position: {right: '10px', top: '10px'}}));
@@ -457,7 +474,7 @@
         if (!state.selectingMapLocation) return;
         const lat = event.lnglat.getLat(), lng = event.lnglat.getLng();
         updateMapMarker(lat, lng);
-        $('resetMapLocationBtn').disabled = false;
+        $('resetMapLocationBtn').hidden = false;
         setMapSelectionMode(false);
         if (state.newSpot) searchNearbyPOIs(lat, lng);
         else {
@@ -466,6 +483,7 @@
         }
       });
       setMapSelectionMode(selectWhenReady);
+      $('coordinateMapActions').hidden = false;
       if (state.newSpot && selectedRegion()) focusRegion(selectedRegion().code);
     } catch (error) {
       if (isCurrent()) {
@@ -495,7 +513,8 @@
 
   function setPendingCoordinates(lat, lng) {
     state.pendingCoordinates = {latitude: lat, longitude: lng, coordinate_system: 'GCJ02'};
-    $('coordinateInfo').textContent = '待保存 · ' + coordinateLabel(lat, lng, 'GCJ02');
+    $('resetMapLocationBtn').hidden = false;
+    renderCoordinateInfo();
     updateSaveButton();
   }
 
@@ -503,6 +522,9 @@
     if (!state.map || !state.mapOriginalPosition) return;
     const original = state.mapOriginalPosition;
     state.pendingCoordinates = null;
+    const address = $('addressInput');
+    if (suggestedMapAddress?.value === address.value) address.value = suggestedMapAddress.original;
+    suggestedMapAddress = null;
     state.poiDraft = state.poiSearchPoint = null;
     setMapSelectionMode(false);
     state.placeSearch?.clear();
@@ -514,9 +536,9 @@
     }
     state.map.setZoom(original.zoom);
     state.map.setCenter([original.mapLng, original.mapLat]);
-    $('coordinateInfo').textContent = original.hasCoordinates
-      ? coordinateLabel(original.latitude, original.longitude, original.coordinateSystem) : '尚未设置坐标';
-    $('resetMapLocationBtn').disabled = true;
+    renderCoordinateInfo();
+    $('resetMapLocationBtn').hidden = true;
+    $('chooseMapLocationBtn').focus();
     updateSaveButton();
   }
 
@@ -542,6 +564,7 @@
 
   const photoEditor = new AdminPhotoEditor($('photosBox'), {
     module: 'scenic_spots', label: '景点图片', max: 30, captionMax: 255,
+    saveStatusHost: $('scenicPhotoSaveStatus'),
     editable: () => AdminAccess.can('scenic_spots', true),
     ready: () => !!state.current?.id && !state.newSpot,
     uploadURL: () => state.current?.id ? '/admin/api/scenic-spots/' + encodeURIComponent(state.current.id) + '/photos?draft=1' : null,
@@ -586,7 +609,7 @@
   function updateSaveButton() {
     const button = $('saveBtn');
     button.disabled = state.saving || photoEditor.busy || !hasUnsavedForm();
-    button.textContent = state.newSpot ? '保存基本信息' : '保存修改';
+    button.textContent = state.newSpot ? '保存基本信息' : '保存景点资料';
     const remove = $('deleteSpotBtn');
     remove.hidden = state.newSpot || !state.current?.id || state.current.status !== 'active';
     remove.disabled = state.saving || photoEditor.busy;
@@ -639,7 +662,11 @@
       });
       state.current = spot; state.newSpot = false;
       const hasPendingPhotos = photoEditor.pending;
-      if (hasPendingPhotos) captureFormBaseline();
+      if (hasPendingPhotos) {
+        releaseScenicMap();
+        resetLocationDraft(spot);
+        captureFormBaseline();
+      }
       else { clearPhotoPreview(); releaseScenicMap(); $('detailModal').close(); }
       await Promise.all([loadList(), loadStats()]);
       toast(hasPendingPhotos ? '基本资料已保存，图片修改仍需处理。' : '保存成功', 'success');
@@ -658,9 +685,9 @@
       // 原生 dialog 位于浏览器顶层，先关闭再显示共享 Bootstrap 确认框。
       modal.close();
       const confirmed = await window.AdminUI.confirm({
-        title: '删除景点',
-        message: '确认删除景点“' + (spot.name || spot.id) + '”（' + spot.id + '）？删除后将从目的地目录和客户端隐藏，关联轨迹、图片及历史记录保留。当前未保存的修改不会提交。',
-        confirmText: '删除景点',
+        title: '归档景点',
+        message: '确认归档景点“' + (spot.name || spot.id) + '”（' + spot.id + '）？归档会从目的地目录和客户端隐藏该景点，并保留关联轨迹、图片及历史记录。当前未保存的修改将丢弃。',
+        confirmText: '归档景点',
         danger: true
       });
       await new Promise(resolve => window.setTimeout(resolve, 350));
@@ -689,13 +716,13 @@
         url.searchParams.delete('spot_id');
         window.history.replaceState(null, '', url);
       }
-      toast('景点已删除', 'success');
+      toast('景点已归档', 'success');
       loadList();
       loadStats();
     } catch (error) {
       const message = error.status === 409
-        ? '景点资料已变化，请关闭详情后重新打开，再确认删除。'
-        : '删除失败：' + error.message;
+        ? '景点资料已变化，请关闭详情后重新打开，再确认归档。'
+        : '归档失败：' + error.message;
       if (state.current === spot) {
         if (!modal.open) modal.showModal();
         $('deleteSpotError').textContent = message;
