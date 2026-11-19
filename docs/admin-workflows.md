@@ -277,7 +277,8 @@ GET /admin/api/users
   → GET /admin/api/cities 将城市 Code 显示为名称并提供编辑选择器
   → 管理员点击编辑；删除操作位于共享编辑表单底部，并经确认后执行
   → GET /admin/api/tracks/:track_id 获取完整可编辑业务详情
-  → PUT /admin/api/tracks/:track_id 更新所选业务字段与预览图；ID、轨迹点和创建/更新时间不由表单修改
+  → PUT /admin/api/tracks/:track_id 更新所选业务字段，表单不提交预览图
+  → DELETE /admin/api/tracks/:track_id/previews 从预览栏独立清空四图，刷新预览与来源列表，保留表单草稿
   → DELETE /admin/api/tracks/:track_id
        → track_records.status=0，is_running=0，记录/保留 deleted_at
        → 清理 track_collects

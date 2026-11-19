@@ -1524,18 +1524,28 @@ func (r *MySQLTrackRepository) Create(ctx context.Context, t *models.Track) erro
 }
 
 func (r *MySQLTrackRepository) Update(ctx context.Context, t *models.Track) error {
-	t.UpdatedAt = time.Now()
+	return r.updateTrack(ctx, t, true)
+}
 
-	res, err := r.db.ExecContext(ctx,
-		`UPDATE track_records SET
+func (r *MySQLTrackRepository) UpdateKeepingPreviewImages(ctx context.Context, t *models.Track) error {
+	return r.updateTrack(ctx, t, false)
+}
+
+func (r *MySQLTrackRepository) updateTrack(ctx context.Context, t *models.Track, writePreviews bool) error {
+	t.UpdatedAt = time.Now()
+	query := `UPDATE track_records SET
 			user_id=?, session_id=?, city_code=?, locate_addr=?, track_type=?, source_tag=?, coordinate_system=?, title=?, route_description=?, description_source=?, description_rule_version=?, shape_label=?, start_time=?, end_time=?,
-			distance=?, duration=?, calories_burned=?, elevation_gain=?, step_count=?, raw_track_url=?, track_screenshot_url=?, track_no_map_bg_screenshot_url=?, preview_images=?, is_running=?, status=?, avg_speed_kmh=?, updated_at=?, deleted_at=?, recording_timeline=?
-		WHERE id=?`,
+			distance=?, duration=?, calories_burned=?, elevation_gain=?, step_count=?, raw_track_url=?, track_screenshot_url=?, track_no_map_bg_screenshot_url=?, is_running=?, status=?, avg_speed_kmh=?, updated_at=?, deleted_at=?, recording_timeline=?`
+	args := []any{
 		t.UserID, t.SessionID, t.CityCode, t.LocateAddr, t.TrackType, t.SourceTag, t.CoordinateSystem, t.Title, nullableStringValue(t.Description), descriptionSourceValue(t.DescriptionSource), t.DescriptionRuleVersion, t.ShapeLabel, t.StartTime, nullableTimeValue(t.EndTime),
-		t.Distance, t.Duration, t.CaloriesBurned, t.ElevationGain, t.StepCount, nullableStringValue(t.RawTrackURL), nullableStringValue(t.TrackScreenshotURL), nullableStringValue(t.TrackNoMapBgScreenshotURL), encodeTrackPreviewImages(t.PreviewImages), t.IsRunning, t.Status, t.AvgSpeedKmh, t.UpdatedAt,
+		t.Distance, t.Duration, t.CaloriesBurned, t.ElevationGain, t.StepCount, nullableStringValue(t.RawTrackURL), nullableStringValue(t.TrackScreenshotURL), nullableStringValue(t.TrackNoMapBgScreenshotURL), t.IsRunning, t.Status, t.AvgSpeedKmh, t.UpdatedAt,
 		nullableTimeValue(t.DeletedAt), encodeRecordingTimeline(t.RecordingTimeline),
-		t.ID,
-	)
+	}
+	if writePreviews {
+		query += ", preview_images=?"
+		args = append(args, encodeTrackPreviewImages(t.PreviewImages))
+	}
+	res, err := r.db.ExecContext(ctx, query+" WHERE id=?", append(args, t.ID)...)
 	if err != nil {
 		return err
 	}

@@ -751,6 +751,7 @@ func main() {
 		))
 		adminModule.Handler.SetScreenshotCache(screenshotCache)
 		adminModule.Handler.SetTrackAssetCaches(rawTrackCache, previewCache)
+		adminModule.Handler.SetTrackService(trackSvc)
 		adminModule.Handler.SetTrackSubmissionService(trackSubmissionSvc)
 		adminModule.Handler.SetScenicSpotCatalogService(scenicSpotCatalogSvc)
 		adminModule.Handler.SetTrackPlaceService(trackPlaceSvc)

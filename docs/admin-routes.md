@@ -82,6 +82,7 @@
 | PUT | `/admin/api/scenic-spots/:spot_id/photos` | 景点操作 | `{expected_version,photos}` 独立保存图片数组，版本CAS，返回景点；高德外链先下载压缩为本站WebP，不重新查询POI或保存未提交文字 |
 | GET | `/admin/api/tracks/:track_id` | 鉴权 | 返回 `{track, user_name, user_id_text, geo?}`：轨迹详情、只读归属用户名、主景点与 GCJ02 简化线；`user_id_text` 保留字符串兼容，新表单不展示或提交 ID/用户名，服务端拒绝变更归属人 |
 | GET | `/admin/api/tracks/:track_id/assets/:asset` | 轨迹查看 | 只读图片与原始文件资源，raw 按附件下载；asset 白名单与错误码见 [资源协议](api/admin-tracks.md#详情资源展示与下载) |
+| DELETE | `/admin/api/tracks/:track_id/previews` | 轨迹操作 | 即时清空单条轨迹的四图引用，使符合条件的记录重新进入客户端补图队列 |
 | POST | `/admin/api/tracks/:track_id/description/generate` | 轨迹操作 | 单条 AI 联网生成候选说明、来源及 source_version，不写轨迹，见 [协议](api/admin-tracks.md#路线说明与-ai-联网填写) |
 | PUT | `/admin/api/tracks/:track_id/description` | 轨迹操作 | 一键代入并保存候选说明，版本核对与CAS，仅写说明及人工来源，不提交其他草稿；见 [协议](api/admin-tracks.md#路线说明与-ai-联网填写) |
 | POST | `/admin/api/tracks/:track_id/place-refresh` | 轨迹操作 | 同步触发单条轨迹重新景点识别；任务忙 409，无索引 404 |

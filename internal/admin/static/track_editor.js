@@ -1,10 +1,14 @@
 (function () {
   'use strict';
 
-  function trackAssets(trackID, track, signal) {
+  function trackAssets(trackID, track, signal, canClearPreviews, onSaved) {
     const section = document.createElement('section');
     section.className = 'admin-track-assets';
-    const heading = document.createElement('h3'); heading.textContent = '轨迹预览'; section.appendChild(heading);
+    const header = document.createElement('div');
+    header.className = 'd-flex align-items-center justify-content-between flex-wrap gap-2 mb-2';
+    const heading = document.createElement('h3');
+    heading.className = 'mb-0'; heading.textContent = '轨迹预览';
+    header.appendChild(heading); section.appendChild(header);
     const fileRow = document.createElement('div');
     fileRow.className = 'admin-track-file';
     const assetURL = asset => '/admin/api/tracks/' + encodeURIComponent(trackID) + '/assets/' + asset;
@@ -52,40 +56,71 @@
     const grid = document.createElement('div');
     grid.className = 'admin-track-preview-grid';
     const previews = track.preview_images || {};
-    [
-      ['square_day', '1:1 日间', previews.square_day_url]
-    ].forEach(function (asset) {
-      const figure = document.createElement('figure');
-      if (asset[0].startsWith('square')) figure.className = 'admin-track-preview-square';
-      const caption = document.createElement('figcaption');
-      caption.textContent = asset[1];
-      const stage = document.createElement('div');
-      stage.className = 'admin-track-preview-image';
-      if (String(asset[2] || '').trim()) {
-        const image = document.createElement('img');
-        image.src = assetURL(asset[0]);
-        image.alt = asset[1] + '预览图';
-        image.loading = 'lazy';
-        image.tabIndex = 0;
-        image.setAttribute('role', 'button');
-        image.addEventListener('keydown', function (event) {
-          if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); image.click(); }
-        });
-        image.addEventListener('error', function () {
-          const error = document.createElement('span');
-          error.textContent = '加载失败';
-          const retry = document.createElement('button');
-          retry.type = 'button'; retry.className = 'btn btn-sm btn-outline-secondary'; retry.textContent = '重试';
-          retry.addEventListener('click', function () { stage.replaceChildren(image); image.src = assetURL(asset[0]); });
-          stage.replaceChildren(error, retry);
-        });
-        stage.appendChild(image);
-      } else {
+    const figure = document.createElement('figure');
+    figure.className = 'admin-track-preview-square';
+    const caption = document.createElement('figcaption');
+    caption.textContent = '1:1 日间';
+    const stage = document.createElement('div');
+    stage.className = 'admin-track-preview-image';
+    const hasPreview = key => Boolean(String(previews[key] || '').trim());
+    if (hasPreview('square_day_url')) {
+      const image = document.createElement('img');
+      image.src = assetURL('square_day');
+      image.alt = '1:1 日间预览图';
+      image.loading = 'lazy';
+      image.tabIndex = 0;
+      image.setAttribute('role', 'button');
+      image.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); image.click(); }
+      });
+      image.addEventListener('error', function () {
+        if (signal.aborted || !stage.contains(image)) return;
+        const error = document.createElement('span');
+        error.textContent = '加载失败';
+        const retry = document.createElement('button');
+        retry.type = 'button'; retry.className = 'btn btn-sm btn-outline-secondary'; retry.textContent = '重试';
+        retry.addEventListener('click', function () { stage.replaceChildren(image); image.src = assetURL('square_day'); });
+        stage.replaceChildren(error, retry);
+      });
+      stage.appendChild(image);
+    } else {
+      stage.textContent = '无';
+    }
+    if (canClearPreviews && ['square_day_url', 'square_night_url', 'landscape_day_url', 'landscape_night_url'].some(hasPreview)) {
+      const button = document.createElement('button');
+      button.type = 'button'; button.className = 'btn btn-sm btn-outline-danger'; button.textContent = '删除预览图';
+      button.title = '删除该轨迹的日间和夜间方图、横图';
+      header.appendChild(button);
+      button.addEventListener('click', async function () {
+        if (button.disabled || signal.aborted) return;
+        button.disabled = true;
+        button.textContent = '删除中…';
+        try {
+          const response = await fetch('/admin/api/tracks/' + encodeURIComponent(trackID) + '/previews', { method: 'DELETE', signal });
+          const result = await response.json();
+          if (signal.aborted) return;
+          if (!response.ok) throw new Error(result.error || '预览图删除失败');
+          if (result.code !== 0 || result.data?.affected_count !== 1) throw new Error('删除结果未确认，请重新打开详情核实');
+        } catch (error) {
+          if (!signal.aborted) {
+            window.AdminUI.alert(error instanceof TypeError ? '删除结果未确认，请重新打开详情核实' : error.message, 'danger');
+            button.disabled = false;
+            button.textContent = '删除预览图';
+          }
+          return;
+        }
+        track.preview_images = {};
         stage.textContent = '无';
-      }
-      figure.append(caption, stage);
-      grid.appendChild(figure);
-    });
+        button.remove();
+        window.AdminUI.alert('预览图已清空', 'success');
+        if (typeof onSaved === 'function') {
+          try { await onSaved(); }
+          catch (_) { if (!signal.aborted) window.AdminUI.alert('预览图已删除，列表刷新失败', 'warning'); }
+        }
+      });
+    }
+    figure.append(caption, stage);
+    grid.appendChild(figure);
     section.append(grid, fileRow);
     return section;
   }
@@ -184,7 +219,7 @@
           onScenicSpotRefresh: refreshScenicSpot,
           onNearbyResults: function (state) { if (placeCandidates) placeCandidates.showNearby(state); }
         }) : null;
-        const assets = trackAssets(trackID, track, labelAbort.signal);
+        const assets = trackAssets(trackID, track, labelAbort.signal, !readOnly && !isDeleted, options.onSaved);
         function setupRouteDescription(view) {
           const input = view.form.elements.description;
           const oldGroup = input.parentNode;

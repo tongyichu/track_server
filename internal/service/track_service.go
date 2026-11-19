@@ -1426,7 +1426,7 @@ func (s *TrackService) MarkUploadedToCloud(ctx context.Context, trackID string) 
 		track.EndTime = time.Now()
 	}
 	ensureTrackCalories(track)
-	if err := s.tracks.Update(ctx, track); err != nil {
+	if err := s.tracks.UpdateKeepingPreviewImages(ctx, track); err != nil {
 		return err
 	}
 	if s.achievements != nil {
@@ -1599,7 +1599,11 @@ func (s *TrackService) UpdateTrackInfo(ctx context.Context, userID int64, trackI
 	}
 
 	if updated {
-		if err := s.tracks.Update(ctx, track); err != nil {
+		update := s.tracks.UpdateKeepingPreviewImages
+		if patch.PreviewImages != nil {
+			update = s.tracks.Update
+		}
+		if err := update(ctx, track); err != nil {
 			return nil, err
 		}
 		if s.submissions != nil && (updatedRaw || patch.TrackType != nil || patch.CoordinateSystem != nil) {
@@ -1707,7 +1711,7 @@ func (s *TrackService) DeleteTrack(ctx context.Context, userID int64, trackID st
 	}
 	// 删除后不应再被视为进行中。
 	track.IsRunning = false
-	if err := s.tracks.Update(ctx, track); err != nil {
+	if err := s.tracks.UpdateKeepingPreviewImages(ctx, track); err != nil {
 		return err
 	}
 	if s.submissions != nil {

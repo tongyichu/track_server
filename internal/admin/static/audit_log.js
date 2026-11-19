@@ -57,6 +57,7 @@
     ['POST', 'users/:user/restrictions', '设置账号限制', '用户 {user}'],
     ['DELETE', 'users/:user/restrictions/current', '解除账号限制', '用户 {user}'],
     ['PUT', 'tracks/:track', '更新轨迹', '轨迹 {track}'],
+    ['DELETE', 'tracks/:track/previews', '删除预览图', '轨迹 {track}'],
     ['DELETE', 'tracks/:track', '删除轨迹', '轨迹 {track}'],
     ['POST', 'tracks/:track/restore', '恢复轨迹', '轨迹 {track}'],
     ['POST', 'tracks/:track/purge', '彻底删除轨迹', '轨迹 {track}'],

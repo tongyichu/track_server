@@ -158,13 +158,25 @@ func (r *InMemoryTrackRepository) Create(_ context.Context, t *models.Track) err
 
 // Update updates an existing track.
 func (r *InMemoryTrackRepository) Update(_ context.Context, t *models.Track) error {
+	return r.updateTrack(t, true)
+}
+
+func (r *InMemoryTrackRepository) UpdateKeepingPreviewImages(_ context.Context, t *models.Track) error {
+	return r.updateTrack(t, false)
+}
+
+func (r *InMemoryTrackRepository) updateTrack(t *models.Track, writePreviews bool) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if _, ok := r.tracks[t.ID]; !ok {
+	current, ok := r.tracks[t.ID]
+	if !ok {
 		return ErrNotFound
 	}
 	t.UpdatedAt = time.Now()
 	clone := *t
+	if !writePreviews {
+		clone.PreviewImages = current.PreviewImages
+	}
 	clone.RecordingTimeline = t.RecordingTimeline.Clone()
 	r.tracks[t.ID] = &clone
 	return nil

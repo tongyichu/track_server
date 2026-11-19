@@ -111,44 +111,52 @@ func (r *MongoTrackRepository) Create(ctx context.Context, t *models.Track) erro
 
 // Update updates an existing track in MongoDB.
 func (r *MongoTrackRepository) Update(ctx context.Context, t *models.Track) error {
+	return r.updateTrack(ctx, t, true)
+}
+
+func (r *MongoTrackRepository) UpdateKeepingPreviewImages(ctx context.Context, t *models.Track) error {
+	return r.updateTrack(ctx, t, false)
+}
+
+func (r *MongoTrackRepository) updateTrack(ctx context.Context, t *models.Track, writePreviews bool) error {
 	t.UpdatedAt = time.Now()
 	if t.EndTime.IsZero() {
 		t.EndTime = t.StartTime
 	}
 
-	res, err := r.collection.UpdateOne(ctx,
-		bson.M{"_id": t.ID},
-		bson.M{"$set": bson.M{
-			"user_id":                        t.UserID,
-			"session_id":                     t.SessionID,
-			"city_code":                      t.CityCode,
-			"locate_addr":                    t.LocateAddr,
-			"track_type":                     t.TrackType,
-			"source_tag":                     t.SourceTag,
-			"coordinate_system":              t.CoordinateSystem,
-			"title":                          t.Title,
-			"description":                    t.Description,
-			"description_source":             t.DescriptionSource,
-			"description_rule_version":       t.DescriptionRuleVersion,
-			"shape_label":                    t.ShapeLabel,
-			"start_time":                     t.StartTime,
-			"end_time":                       t.EndTime,
-			"distance":                       t.Distance,
-			"duration":                       t.Duration,
-			"calories_burned":                t.CaloriesBurned,
-			"avg_speed_kmh":                  t.AvgSpeedKmh,
-			"elevation_gain":                 t.ElevationGain,
-			"step_count":                     t.StepCount,
-			"recording_timeline":             t.RecordingTimeline,
-			"raw_track_url":                  t.RawTrackURL,
-			"track_screenshot_url":           t.TrackScreenshotURL,
-			"track_no_map_bg_screenshot_url": t.TrackNoMapBgScreenshotURL,
-			"preview_images":                 t.PreviewImages,
-			"is_running":                     t.IsRunning,
-			"status":                         t.Status,
-			"updated_at":                     t.UpdatedAt,
-		}},
-	)
+	fields := bson.M{
+		"user_id":                        t.UserID,
+		"session_id":                     t.SessionID,
+		"city_code":                      t.CityCode,
+		"locate_addr":                    t.LocateAddr,
+		"track_type":                     t.TrackType,
+		"source_tag":                     t.SourceTag,
+		"coordinate_system":              t.CoordinateSystem,
+		"title":                          t.Title,
+		"description":                    t.Description,
+		"description_source":             t.DescriptionSource,
+		"description_rule_version":       t.DescriptionRuleVersion,
+		"shape_label":                    t.ShapeLabel,
+		"start_time":                     t.StartTime,
+		"end_time":                       t.EndTime,
+		"distance":                       t.Distance,
+		"duration":                       t.Duration,
+		"calories_burned":                t.CaloriesBurned,
+		"avg_speed_kmh":                  t.AvgSpeedKmh,
+		"elevation_gain":                 t.ElevationGain,
+		"step_count":                     t.StepCount,
+		"recording_timeline":             t.RecordingTimeline,
+		"raw_track_url":                  t.RawTrackURL,
+		"track_screenshot_url":           t.TrackScreenshotURL,
+		"track_no_map_bg_screenshot_url": t.TrackNoMapBgScreenshotURL,
+		"is_running":                     t.IsRunning,
+		"status":                         t.Status,
+		"updated_at":                     t.UpdatedAt,
+	}
+	if writePreviews {
+		fields["preview_images"] = t.PreviewImages
+	}
+	res, err := r.collection.UpdateOne(ctx, bson.M{"_id": t.ID}, bson.M{"$set": fields})
 	if err != nil {
 		return err
 	}

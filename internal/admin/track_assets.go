@@ -21,6 +21,25 @@ func (h *Handler) SetTrackAssetCaches(raw, preview *service.AssetCacheService) {
 	h.rawTrackCache, h.trackPreviewCache = raw, preview
 }
 
+func (h *Handler) SetTrackService(svc *service.TrackService) {
+	h.trackSvc = svc
+}
+
+func (h *Handler) ClearTrackPreviews(ctx context.Context, c *app.RequestContext) {
+	if h == nil || h.trackSvc == nil {
+		c.JSON(http.StatusServiceUnavailable, utils.H{"error": "轨迹服务未配置"})
+		return
+	}
+	result, err := h.trackSvc.ClearPreviewBackfill(ctx, service.PreviewBackfillClearInput{
+		TrackID: c.Param("track_id"),
+	})
+	if err != nil {
+		handleAdminRepoError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": result})
+}
+
 // GetTrackAsset resolves a persisted asset under the tracks read permission.
 // URLs are never accepted from the browser, and downloads do not rewrite track fields.
 func (h *Handler) GetTrackAsset(ctx context.Context, c *app.RequestContext) {

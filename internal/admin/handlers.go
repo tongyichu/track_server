@@ -52,6 +52,7 @@ type Handler struct {
 	userRepo              repository.UserRepository
 	userSvc               *service.UserService
 	trackRepo             repository.TrackRepository
+	trackSvc              *service.TrackService
 	collectRepo           repository.CollectRepository
 	trackMapRepo          repository.TrackMapRepository
 	trackMapIndexSvc      *service.TrackMapIndexService
@@ -1906,7 +1907,11 @@ func (h *Handler) UpdateTrack(ctx context.Context, c *app.RequestContext) {
 		c.JSON(http.StatusBadRequest, utils.H{"error": err.Error()})
 		return
 	}
-	if err := h.trackRepo.Update(ctx, track); err != nil {
+	update := h.trackRepo.UpdateKeepingPreviewImages
+	if body.PreviewImages != nil {
+		update = h.trackRepo.Update
+	}
+	if err := update(ctx, track); err != nil {
 		handleAdminRepoError(c, err)
 		return
 	}
@@ -1987,7 +1992,7 @@ func (h *Handler) RestoreTrack(ctx context.Context, c *app.RequestContext) {
 	track.IsRunning = false
 	track.DeletedAt = time.Time{}
 	track.UpdatedAt = time.Now()
-	if err := h.trackRepo.Update(ctx, track); err != nil {
+	if err := h.trackRepo.UpdateKeepingPreviewImages(ctx, track); err != nil {
 		handleAdminRepoError(c, err)
 		return
 	}
@@ -2094,7 +2099,7 @@ func (h *Handler) DeleteTrack(ctx context.Context, c *app.RequestContext) {
 	track.Status = models.TrackStatusDeleted
 	track.IsRunning = false
 	track.UpdatedAt = now
-	if err := h.trackRepo.Update(ctx, track); err != nil {
+	if err := h.trackRepo.UpdateKeepingPreviewImages(ctx, track); err != nil {
 		handleAdminRepoError(c, err)
 		return
 	}

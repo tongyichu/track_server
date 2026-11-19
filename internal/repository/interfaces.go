@@ -44,6 +44,7 @@ type TrackRepository interface {
 	NextTrackID(ctx context.Context) (string, error)
 	Create(ctx context.Context, t *models.Track) error
 	Update(ctx context.Context, t *models.Track) error
+	UpdateKeepingPreviewImages(ctx context.Context, t *models.Track) error
 	FindByID(ctx context.Context, id string) (*models.Track, error)
 	// FindByIDs returns existing tracks keyed by ID. Missing IDs are omitted.
 	FindByIDs(ctx context.Context, ids []string) (map[string]*models.Track, error)
