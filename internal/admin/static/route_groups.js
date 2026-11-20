@@ -84,8 +84,8 @@
   var loadMoreBtn = document.getElementById('loadMoreBtn');
   var introPanel = document.querySelector('[data-route-panel="introduction"]');
   var cityNames = Object.create(null);
-  var detailModal = new tabler.Modal(document.getElementById('detailModal'));
-  document.getElementById('detailModal').addEventListener('hide.bs.modal', function (event) {
+  var detailModal = new AdminComponents.Dialog(document.getElementById('detailModal'));
+  document.getElementById('detailModal').addEventListener('admin:dialog-closing', function (event) {
     if (introWriting) { event.preventDefault(); return; }
     if (!allowIntroClose && introDirty()) {
       event.preventDefault();

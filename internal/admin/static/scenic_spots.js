@@ -700,7 +700,7 @@
     updateSaveButton();
     $('deleteSpotError').hidden = true;
     try {
-      // 原生 dialog 位于浏览器顶层，先关闭再显示共享 Bootstrap 确认框。
+      // 关闭当前详情，再打开共享确认框，取消后恢复原编辑器。
       modal.close();
       const confirmed = await window.AdminUI.confirm({
         title: '归档景点',

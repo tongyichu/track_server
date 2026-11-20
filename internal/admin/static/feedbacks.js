@@ -51,7 +51,7 @@
   var listError = document.getElementById('feedbackListError');
   var emptyDetail = document.getElementById('emptyDetail');
   var detailContent = document.getElementById('detailContent');
-  var detailModal = new tabler.Modal(document.getElementById('detailModal'));
+  var detailModal = new AdminComponents.Dialog(document.getElementById('detailModal'));
   var statusForm = document.getElementById('statusForm');
   var statusSelect = document.getElementById('statusSelect');
   var replyInput = document.getElementById('replyInput');
@@ -95,7 +95,7 @@
       var source = structuredCorrection && window.AdminAccess.can('feedbacks', true) ? id : '';
       try {
         await new Promise(function (resolve) {
-          document.getElementById('detailModal').addEventListener('hidden.bs.modal', resolve, { once: true });
+          document.getElementById('detailModal').addEventListener('admin:dialog-closed', resolve, { once: true });
           detailModal.hide();
         });
         await window.AdminTrackEditor.open(trackID, { sourceFeedbackID: source, waitForHidden: true });
@@ -112,12 +112,12 @@
       finally { button.disabled = !currentIssue || !window.AdminAccess.can('tracks', false); }
     });
   });
-  document.getElementById('detailModal').addEventListener('hide.bs.modal', function () {
+  document.getElementById('detailModal').addEventListener('admin:dialog-closing', function () {
     detailRequest += 1;
     if (detailController) detailController.abort();
     loadingDetailID = '';
   });
-  document.getElementById('detailModal').addEventListener('hidden.bs.modal', function () { currentID = ''; });
+  document.getElementById('detailModal').addEventListener('admin:dialog-closed', function () { currentID = ''; });
 
   function updateReplyRequirement() {
     var terminal = statusSelect.value === 'resolved' || statusSelect.value === 'ignored';

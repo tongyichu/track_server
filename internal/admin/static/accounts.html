@@ -4,13 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>时光轨迹 - 控制台</title>
-  <link rel="stylesheet" href="/admin/static/vendor/tabler.min.css" />
+  <link rel="stylesheet" href="/admin/static/admin-components.css" />
   <link rel="stylesheet" href="/admin/static/style.css" />
 </head>
 <body>
   <header class="topbar"></header>
   <main class="container wide accounts-page">
-    <div class="page-heading"><h1>账号管理</h1><div class="d-flex gap-2"><button id="refreshAccounts" class="btn btn-outline-secondary">刷新账号</button><button id="createAccount" class="btn btn-primary">新增账号</button></div></div>
+    <div class="page-heading"><h1>账号管理</h1><div class="d-flex gap-2"><button id="refreshAccounts" class="btn btn-outline-secondary btn-touch">刷新账号</button><button id="createAccount" class="btn btn-primary">新增账号</button></div></div>
     <p id="accountsError" class="alert alert-danger" hidden role="alert"></p>
     <section class="panel p-0 accounts-list" aria-label="后台账号">
       <table class="table data"><thead><tr><th>账号</th><th>状态</th><th>找回邮箱</th><th>最近登录</th><th>操作</th></tr></thead>
@@ -45,8 +45,8 @@
       </div>
     </section>
   </main>
-  <div class="modal modal-blur fade admin-account-modal" id="accountModal" tabindex="-1" aria-labelledby="accountTitle" aria-hidden="true"><div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable"><form id="accountForm" class="modal-content" method="post">
-    <div class="modal-header"><h2 id="accountTitle" class="modal-title">新增账号</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
+  <dialog class="modal admin-account-modal" id="accountModal" aria-labelledby="accountTitle" aria-hidden="true"><div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable"><form id="accountForm" class="modal-content" method="post">
+    <div class="modal-header"><h2 id="accountTitle" class="modal-title">新增账号</h2><button type="button" class="btn-close" data-admin-dismiss="dialog" aria-label="关闭"></button></div>
     <div class="modal-body">
       <div class="account-form-fields">
         <label class="form-label"><span>登录名</span><input name="username" class="form-control" required maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9_.@\-]{0,63}" autocomplete="off" /><small class="form-hint" id="newUsernameHint">创建后不可修改</small></label>
@@ -70,20 +70,20 @@
         <span class="form-check-label" id="accountChangeMessage"></span>
       </label>
       <p id="accountFormError" class="alert alert-danger account-modal-message" hidden role="alert"></p>
-      <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+      <button type="button" class="btn btn-outline-secondary" data-admin-dismiss="dialog">取消</button>
       <button id="saveAccount" type="submit" class="btn btn-primary">保存</button>
     </div>
-  </form></div></div>
-  <div class="modal modal-blur fade admin-account-modal" id="accountResetModal" tabindex="-1" aria-labelledby="accountResetTitle" aria-hidden="true"><div class="modal-dialog modal-dialog-centered"><form id="accountResetForm" class="modal-content" method="post">
-    <div class="modal-header"><h2 id="accountResetTitle" class="modal-title">应急重置</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
+  </form></div></dialog>
+  <dialog class="modal admin-account-modal" id="accountResetModal" aria-labelledby="accountResetTitle" aria-hidden="true"><div class="modal-dialog modal-dialog-centered"><form id="accountResetForm" class="modal-content" method="post">
+    <div class="modal-header"><h2 id="accountResetTitle" class="modal-title">应急重置</h2><button type="button" class="btn-close" data-admin-dismiss="dialog" aria-label="关闭"></button></div>
     <div class="modal-body">
       <p class="small text-secondary">重置会退出该账号的所有登录。账号持有人下次登录时须修改临时密码。</p>
       <label class="form-label"><span>临时密码</span><input name="password" class="form-control" type="password" required autocomplete="new-password" /><small class="form-hint">至少 8 个字符，最多 72 字节</small></label>
       <p id="accountResetError" class="alert alert-danger mb-0" hidden role="alert"></p>
     </div>
-    <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button id="confirmAccountReset" type="submit" class="btn btn-danger">重置并退出登录</button></div>
-  </form></div></div>
-  <script src="/admin/static/vendor/tabler.min.js"></script>
+    <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-admin-dismiss="dialog">取消</button><button id="confirmAccountReset" type="submit" class="btn btn-danger">重置并退出登录</button></div>
+  </form></div></dialog>
+  <script src="/admin/static/admin-components.js"></script>
   <script src="/admin/static/shell.js"></script>
   <script src="/admin/static/ui.js"></script>
   <script src="/admin/static/audit_log.js"></script>

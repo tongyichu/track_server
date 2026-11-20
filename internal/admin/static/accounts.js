@@ -2,9 +2,9 @@
   'use strict';
   const $ = id => document.getElementById(id);
   const form = $('accountForm');
-  const modal = new tabler.Modal($('accountModal'), { backdrop: 'static' });
+  const modal = new AdminComponents.Dialog($('accountModal'), { backdrop: 'static' });
   const resetForm = $('accountResetForm');
-  const resetModal = new tabler.Modal($('accountResetModal'), { backdrop: 'static' });
+  const resetModal = new AdminComponents.Dialog($('accountResetModal'), { backdrop: 'static' });
   const username = AdminAccess.identity()?.username;
   const permissionGroups = [
     ['内容与路线', ['tracks', 'track_submissions', 'scenic_spots', 'regions', 'route_groups']],
@@ -57,15 +57,19 @@
     const statusLabel = document.createElement('span');
     statusLabel.className = status === '待改密' ? 'account-password-pending' : (account.enabled ? '' : 'text-secondary');
     statusLabel.textContent = status;
-    cell(row, '').appendChild(statusLabel);
-    cell(row, account.recovery_email_bound ? '已验证' : '未绑定');
+    const statusCell = cell(row, '');
+    statusCell.className = 'account-status';
+    statusCell.appendChild(statusLabel);
+    cell(row, account.recovery_email_bound ? '已验证' : '未绑定').className = 'account-recovery';
     cell(row, time(account.last_login_at)).className = 'account-login-time';
 
     const actions = document.createElement('div');
-    actions.className = 'd-flex align-items-center flex-wrap gap-2';
-    cell(row, '').appendChild(actions);
+    actions.className = 'account-row-actions';
+    const actionCell = cell(row, '');
+    actionCell.className = 'account-actions';
+    actionCell.appendChild(actions);
     const edit = document.createElement('button');
-    edit.type = 'button'; edit.className = 'btn btn-sm btn-outline-primary'; edit.textContent = '设置';
+    edit.type = 'button'; edit.className = 'btn btn-sm btn-outline-primary btn-touch'; edit.textContent = '设置';
     edit.setAttribute('aria-label', '设置账号 ' + account.username);
     edit.onclick = () => openEditor(account);
     actions.appendChild(edit);
@@ -73,8 +77,8 @@
       const dropdown = document.createElement('div');
       dropdown.className = 'dropdown';
       const more = document.createElement('button');
-      more.type = 'button'; more.className = 'btn btn-sm btn-outline-secondary dropdown-toggle'; more.textContent = '更多';
-      more.setAttribute('data-bs-toggle', 'dropdown');
+      more.type = 'button'; more.className = 'btn btn-sm btn-outline-secondary dropdown-toggle btn-touch'; more.textContent = '更多';
+      more.setAttribute('data-admin-menu', '');
       more.setAttribute('aria-expanded', 'false');
       more.setAttribute('aria-label', '账号 ' + account.username + ' 的更多操作');
       const menu = document.createElement('div');
@@ -239,8 +243,8 @@
     } catch (error) { showError($('accountFormError'), error.message); }
     finally { saving = false; $('saveAccount').disabled = false; }
   });
-  $('accountModal').addEventListener('hide.bs.modal', event => { if (saving) event.preventDefault(); });
-  $('accountModal').addEventListener('hidden.bs.modal', () => { form.elements.password.value = ''; });
+  $('accountModal').addEventListener('admin:dialog-closing', event => { if (saving) event.preventDefault(); });
+  $('accountModal').addEventListener('admin:dialog-closed', () => { form.elements.password.value = ''; });
 
   function openReset(account) {
     if (resetting) return;
@@ -272,9 +276,9 @@
     } catch (cause) { showError(error, cause.message); }
     finally { resetting = false; $('confirmAccountReset').disabled = false; }
   });
-  $('accountResetModal').addEventListener('shown.bs.modal', () => resetForm.elements.password.focus());
-  $('accountResetModal').addEventListener('hide.bs.modal', event => { if (resetting) event.preventDefault(); });
-  $('accountResetModal').addEventListener('hidden.bs.modal', () => {
+  $('accountResetModal').addEventListener('admin:dialog-shown', () => resetForm.elements.password.focus());
+  $('accountResetModal').addEventListener('admin:dialog-closing', event => { if (resetting) event.preventDefault(); });
+  $('accountResetModal').addEventListener('admin:dialog-closed', () => {
     resetForm.reset();
     resetTarget = null;
   });

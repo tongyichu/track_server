@@ -5,7 +5,7 @@
   var listController = null, listRequest = 0;
   var modalClosing = false, pendingDetailID = '';
   var typeOptions = Object.create(null), optionLabels = Object.create(null);
-  var modalRoot = $('submissionDetailModal'), modal = new tabler.Modal(modalRoot);
+  var modalRoot = $('submissionDetailModal'), modal = new AdminComponents.Dialog(modalRoot);
   var statusLabels = { pending: '待审核', approved: '已通过', rejected: '已驳回', withdrawn: '已撤回', invalidated: '已失效' };
   var statusColors = { pending: 'bg-yellow-lt', approved: 'bg-green-lt', rejected: 'bg-red-lt', withdrawn: 'bg-secondary-lt', invalidated: 'bg-secondary-lt' };
   var eventLabels = { submitted: '提交投稿', resubmitted: '更新并重新投稿', approved: '审核通过', rejected: '审核驳回', withdrawn: '撤回投稿', invalidated: '投稿失效' };
@@ -194,7 +194,7 @@
     ['approveBtn', 'rejectBtn'].forEach(function (id) { $(id).hidden = !allowed; $(id).disabled = !allowed || reviewing; });
     $('approveBtn').textContent = reviewing ? '正在提交…' : '通过投稿';
     $('reviewReason').disabled = !allowed || reviewing;
-    modalRoot.querySelectorAll('[data-bs-dismiss="modal"]').forEach(function (button) { button.disabled = reviewing; });
+    modalRoot.querySelectorAll('[data-admin-dismiss="dialog"]').forEach(function (button) { button.disabled = reviewing; });
   }
   async function show(id, retry) {
     if (modalClosing) { pendingDetailID = id; return; }
@@ -233,13 +233,13 @@
     } catch (error) { $('reviewError').textContent = errorText(error); $('reviewError').hidden = false; }
     finally { reviewing = false; updateReviewState(); }
   }
-  modalRoot.addEventListener('hide.bs.modal', function (event) {
+  modalRoot.addEventListener('admin:dialog-closing', function (event) {
     if (reviewing) { event.preventDefault(); return; }
     modalClosing = true;
     detailRequest++; if (detailController) detailController.abort();
     selected = null; detailID = loadingID = '';
   });
-  modalRoot.addEventListener('hidden.bs.modal', function () {
+  modalRoot.addEventListener('admin:dialog-closed', function () {
     modalClosing = false;
     var id = pendingDetailID; pendingDetailID = '';
     if (id) show(id);

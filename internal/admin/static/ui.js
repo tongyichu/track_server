@@ -15,34 +15,30 @@
   };
 
   function toast(message, tone) {
-    let host = document.getElementById('adminToastHost');
+    const parent = document.activeElement?.closest('dialog[open]') || document.body;
+    let host = parent.querySelector(':scope > .admin-toast-host');
     if (!host) {
       host = document.createElement('div');
-      host.id = 'adminToastHost';
-      host.className = 'toast-container position-fixed top-0 end-0 p-3';
-      document.body.appendChild(host);
+      host.className = 'admin-toast-host';
+      parent.appendChild(host);
     }
     const element = document.createElement('div');
-    element.className = 'toast border-0';
-    element.setAttribute('role', 'status');
-    const body = document.createElement('div');
-    body.className = 'toast-body d-flex align-items-center gap-2';
-    const marker = document.createElement('span');
-    marker.className = 'status-dot status-dot-animated bg-' + (tone === 'danger' ? 'red' : tone === 'success' ? 'green' : 'azure');
-    const text = document.createElement('span');
-    text.textContent = String(message || '');
-    body.append(marker, text);
-    element.appendChild(body);
+    element.className = 'admin-toast';
+    element.dataset.slot = 'toast';
+    element.dataset.tone = tone || 'default';
+    element.setAttribute('role', tone === 'danger' ? 'alert' : 'status');
+    element.textContent = String(message || '');
     host.appendChild(element);
-    const instance = new tabler.Toast(element, { delay: 3600 });
-    element.addEventListener('hidden.bs.toast', function () { element.remove(); });
-    instance.show();
+    setTimeout(() => {
+      element.remove();
+      if (!host.childElementCount) host.remove();
+    }, 3600);
   }
 
   function createModal(options) {
-    const root = document.createElement('div');
-    root.className = 'modal modal-blur fade';
-    root.tabIndex = -1;
+    const root = document.createElement('dialog');
+    root.className = 'modal';
+    root.setAttribute('aria-label', options.title || '提示');
     root.innerHTML = '<div class="modal-dialog modal-dialog-centered' + (options.wide ? ' modal-dialog-scrollable modal-xl' : '') + '"><div class="modal-content"><div class="modal-header"><h5 class="modal-title"></h5><button type="button" class="btn-close" aria-label="关闭"></button></div><div class="modal-body"></div><div class="modal-footer"></div></div></div>';
     root.querySelector('.modal-title').textContent = options.title || '提示';
     document.body.appendChild(root);
@@ -67,7 +63,7 @@
       submit.className = 'btn ' + (options.danger ? 'btn-danger' : 'btn-primary');
       submit.textContent = options.confirmText || '确认';
       footer.append(cancel, submit);
-      const modal = new tabler.Modal(root, { backdrop: 'static' });
+      const modal = new AdminComponents.Dialog(root, { backdrop: 'static' });
       let settled = false, decision = false;
       function finish(value) {
         if (settled) return;
@@ -79,7 +75,7 @@
       cancel.addEventListener('click', function () { finish(false); });
       root.querySelector('.btn-close').addEventListener('click', function () { finish(false); });
       submit.addEventListener('click', function () { finish(true); });
-      root.addEventListener('hidden.bs.modal', function () {
+      root.addEventListener('admin:dialog-closed', function () {
         if (!settled || options.waitForHidden) resolve(decision);
         modal.dispose(); root.remove();
       });
@@ -105,7 +101,7 @@
       const body = root.querySelector('.modal-body');
       const footer = root.querySelector('.modal-footer');
       const close = root.querySelector('.btn-close');
-      const modal = new tabler.Modal(root, { backdrop: 'static' });
+      const modal = new AdminComponents.Dialog(root, { backdrop: 'static' });
       const controller = new AbortController();
       let config = options, settled = false, hidden = false, loading = false, pendingValue = null, form = null;
       function finish(value) {
@@ -121,12 +117,11 @@
         if (first) first.focus();
       }
       close.addEventListener('click', function () { finish(null); });
-      root.addEventListener('shown.bs.modal', function () {
-        // Bootstrap 在入场动画中忽略 hide；补齐快速关闭，避免留下无响应的加载框。
-        if (settled) modal.hide(); else focusField();
+      root.addEventListener('admin:dialog-shown', function () {
+        focusField();
       });
-      root.addEventListener('hide.bs.modal', function () { controller.abort(); });
-      root.addEventListener('hidden.bs.modal', function () {
+      root.addEventListener('admin:dialog-closing', function () { controller.abort(); });
+      root.addEventListener('admin:dialog-closed', function () {
         hidden = true; controller.abort();
         try { if (typeof config.onClosed === 'function') config.onClosed(); }
         finally {
@@ -138,6 +133,7 @@
         if (settled || hidden || controller.signal.aborted) return;
         config = Object.assign({}, options, loaded);
         root.querySelector('.modal-title').textContent = config.title || '提示';
+        root.setAttribute('aria-label', config.title || '提示');
         if (config.className) root.classList.add(config.className);
         body.removeAttribute('aria-busy'); body.replaceChildren(); footer.replaceChildren();
         form = document.createElement('form'); form.className = 'admin-dialog-form';
@@ -277,8 +273,9 @@
   }
 
   function enhanceCard(panel) {
-    if (panel.dataset.tablerCard === 'true') return;
-    panel.dataset.tablerCard = 'true';
+    if (panel.dataset.cardReady === 'true') return;
+    panel.dataset.cardReady = 'true';
+    panel.dataset.slot = 'card';
     panel.classList.add('card');
     if (panel.closest('.dashboard-page') || panel.classList.contains('admin-stats-panel')) return;
     const title = Array.from(panel.children).find(function (child) {
@@ -290,11 +287,13 @@
     }
     const header = document.createElement('div');
     header.className = 'card-header';
+    header.dataset.slot = 'card-header';
     title.parentNode.insertBefore(header, title);
     title.classList.add('card-title');
     header.appendChild(title);
     const body = document.createElement('div');
     body.className = 'card-body';
+    body.dataset.slot = 'card-content';
     while (header.nextSibling) body.appendChild(header.nextSibling);
     panel.appendChild(body);
   }
@@ -302,10 +301,11 @@
   function enhanceButton(button) {
     if (button.classList.contains('admin-metric') || button.closest('.admin-period-tabs')) return;
     if (button.matches('.scenic-photo-picker, .region-photo-picker, .admin-photo-picker, .admin-photo-remove, .admin-photo-download')) return;
-    if (button.hasAttribute('data-period') || button.hasAttribute('data-stat-period') || button.classList.contains('btn-close') || button.matches('.dropdown-item, [data-bs-toggle="dropdown"]')) return;
+    if (button.hasAttribute('data-period') || button.hasAttribute('data-stat-period') || button.classList.contains('btn-close') || button.matches('.dropdown-item, [data-admin-menu]')) return;
     if (button.closest('.region-country-bar, .region-tree, .admin-region-field, .admin-region-popup')) return;
     button.classList.add('btn');
-    if (Array.from(button.classList).some(function (name) { return /^btn-(primary|secondary|success|danger|warning|info|light|dark|outline)/.test(name); })) return;
+    button.dataset.slot = 'button';
+    if (Array.from(button.classList).some(function (name) { return /^btn-(primary|secondary|success|danger|warning|info|light|dark|outline|ghost|link)/.test(name); })) return;
     const id = button.id || '';
     const isDanger = button.classList.contains('danger') || id === 'rejectBtn';
     const isSuccess = id === 'approveBtn';
@@ -321,10 +321,13 @@
   function enhanceField(field) {
     if (field.matches('input[type="checkbox"], input[type="radio"]')) {
       field.classList.add('form-check-input');
+      field.dataset.slot = field.type === 'radio' ? 'radio' : 'checkbox';
     } else if (field.tagName === 'SELECT') {
       field.classList.add('form-select');
+      field.dataset.slot = 'native-select';
     } else {
       field.classList.add('form-control');
+      field.dataset.slot = field.tagName === 'TEXTAREA' ? 'textarea' : 'input';
     }
   }
 
@@ -344,6 +347,7 @@
   }
 
   function enhanceTable(table) {
+    table.dataset.slot = 'table';
     table.classList.add('table', 'table-vcenter', 'table-hover', 'admin-card-table');
     const headers = Array.from(table.querySelectorAll('thead th')).map(function (th) {
       return th.textContent.trim();

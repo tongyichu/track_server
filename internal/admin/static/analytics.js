@@ -17,7 +17,7 @@
   var totalHint = document.getElementById('totalHint');
   var emptyDetail = document.getElementById('emptyDetail');
   var detailContent = document.getElementById('detailContent');
-  var detailModal = new tabler.Modal(document.getElementById('fileDetailModal'));
+  var detailModal = new AdminComponents.Dialog(document.getElementById('fileDetailModal'));
 
   statusFilter.addEventListener('change', resetAndLoad);
   refreshBtn.addEventListener('click', resetAndLoad);

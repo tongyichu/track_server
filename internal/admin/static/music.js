@@ -250,7 +250,7 @@
     const wrapper=text('div','','dropdown music-actions');
     wrapper.dataset.adminWrite='music';
     const toggle=text('button','','btn btn-sm btn-outline-secondary music-action-toggle');
-    toggle.type='button';toggle.dataset.bsToggle='dropdown';toggle.dataset.musicWrite='';
+    toggle.type='button';toggle.dataset.adminMenu='';toggle.dataset.musicWrite='';
     toggle.setAttribute('aria-expanded','false');toggle.setAttribute('aria-label','排序和操作 '+item.name);
     toggle.title='曲目操作';toggle.append(icon('dots'));
     toggle.append(text('span','排序','music-touch-action'));
@@ -281,7 +281,7 @@
   function render() {
     if(disposed)return;
     closeTrackPreview();
-    body.querySelectorAll('.music-action-toggle').forEach(toggle=>tabler.Dropdown.getInstance(toggle)?.dispose());
+    body.querySelectorAll('.music-action-toggle').forEach(toggle=>AdminComponents.Dropdown.getInstance(toggle)?.dispose());
     body.replaceChildren();body.classList.remove('is-dragging');
     [true,false].forEach(published=>{
       const section=text('section','','music-section'), heading=text('div','','music-section-heading');

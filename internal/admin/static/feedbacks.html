@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>时光轨迹 - 控制台</title>
-  <link rel="stylesheet" href="/admin/static/vendor/tabler.min.css" />
+  <link rel="stylesheet" href="/admin/static/admin-components.css" />
   <link rel="stylesheet" href="/admin/static/style.css" />
   <link rel="stylesheet" href="/admin/static/track_editor.css" />
   <link rel="stylesheet" href="/admin/static/admin_stats.css" />
@@ -88,12 +88,12 @@
       </div>
     </section>
 
-    <div class="modal modal-blur fade" id="correctionConfigModal" tabindex="-1" aria-hidden="true" aria-labelledby="correctionConfigTitle">
+    <dialog class="modal" id="correctionConfigModal" aria-hidden="true" aria-labelledby="correctionConfigTitle">
       <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg" role="document">
         <form class="modal-content" id="correctionConfigForm" data-admin-fields="feedbacks">
           <div class="modal-header">
             <h2 class="modal-title" id="correctionConfigTitle">纠错选项</h2>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+            <button type="button" class="btn-close" data-admin-dismiss="dialog" aria-label="关闭"></button>
           </div>
           <div class="modal-body">
             <p class="text-secondary">解释显示在客户端选项下方，填写提示随选择更新；均支持中英文，选填且最多 160 字。排序越小越靠前，停用不影响历史记录。</p>
@@ -114,14 +114,14 @@
           </div>
         </form>
       </div>
-    </div>
+    </dialog>
 
-    <div class="modal modal-blur fade" id="detailModal" tabindex="-1" aria-hidden="true" aria-labelledby="detailTitle">
+    <dialog class="modal" id="detailModal" aria-hidden="true" aria-labelledby="detailTitle">
       <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg" role="document">
         <div class="modal-content">
           <div class="modal-header">
             <h2 class="modal-title" id="detailTitle">反馈详情</h2>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+            <button type="button" class="btn-close" data-admin-dismiss="dialog" aria-label="关闭"></button>
           </div>
           <div class="modal-body">
             <div id="emptyDetail" class="hint">请选择一条反馈查看详情</div>
@@ -193,10 +193,10 @@
           </div>
         </div>
       </div>
-    </div>
+    </dialog>
   </main>
 
-  <script src="/admin/static/vendor/tabler.min.js"></script>
+  <script src="/admin/static/admin-components.js"></script>
   <script src="/admin/static/shell.js"></script>
   <script src="/admin/static/admin_stats.js"></script>
   <script src="/admin/static/ui.js"></script>

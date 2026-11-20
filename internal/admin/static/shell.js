@@ -133,7 +133,7 @@
     '<div class="spacer"></div>',
     '<div class="user dropdown dropup admin-account-footer">',
     '<div class="admin-identity"><span id="userName"></span><span id="adminRole" class="badge"></span></div>',
-    '<button id="accountSettingsBtn" type="button" class="btn btn-icon btn-ghost-secondary admin-settings-toggle" data-bs-toggle="dropdown" data-bs-reference="parent" data-bs-offset="0,8" data-bs-auto-close="outside" aria-expanded="false" aria-controls="accountMenu" aria-label="账号设置" title="账号设置">' + settingsIcon + '</button>',
+    '<button id="accountSettingsBtn" type="button" class="btn btn-icon btn-ghost-secondary admin-settings-toggle" data-admin-menu data-admin-menu-anchor="parent" data-admin-menu-close="outside" aria-expanded="false" aria-controls="accountMenu" aria-label="账号设置" title="账号设置">' + settingsIcon + '</button>',
     '<div id="accountMenu" class="dropdown-menu admin-account-menu" aria-labelledby="accountSettingsBtn">',
     '<div class="admin-account-menu-heading">当前账号</div>',
     '<dl class="admin-account-details"><div><dt>登录账号</dt><dd id="accountMenuUsername"></dd></div><div><dt>名称</dt><dd id="accountMenuName"></dd></div><div><dt>身份</dt><dd id="accountMenuRole"></dd></div><div><dt>最近登录</dt><dd id="accountMenuLastLogin"></dd></div></dl>',
@@ -192,7 +192,7 @@
     accountMenu.querySelector('[href="/admin/password.html"]').setAttribute('aria-current', 'page');
   }
   function positionAccountMenu() {
-    const dropdown = tabler.Dropdown.getInstance(accountToggle);
+    const dropdown = AdminComponents.Dropdown.getInstance(accountToggle);
     if (dropdown) dropdown.hide();
     accountFooter.classList.toggle('dropup', !mobileLayout.matches);
     accountMenu.classList.toggle('dropdown-menu-end', mobileLayout.matches);
@@ -203,7 +203,7 @@
     syncNavigation();
   });
   window.addEventListener('resize', revealActiveNavigation);
-  accountFooter.addEventListener('show.bs.dropdown', function () {
+  accountFooter.addEventListener('admin:menu-opening', function () {
     const error = document.getElementById('accountMenuError');
     error.textContent = ''; error.hidden = true;
     refreshIdentity();

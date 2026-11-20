@@ -4,6 +4,7 @@ WORKDIR /src/internal/admin/frontend
 COPY internal/admin/frontend/package*.json ./
 RUN npm ci --no-audit --no-fund
 COPY internal/admin/frontend/ ./
+COPY internal/admin/static/*.html /src/internal/admin/static/
 RUN npm run build
 
 # Builder stage

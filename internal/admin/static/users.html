@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>时光轨迹 - 控制台</title>
-  <link rel="stylesheet" href="/admin/static/vendor/tabler.min.css" />
+  <link rel="stylesheet" href="/admin/static/admin-components.css" />
   <link rel="stylesheet" href="/admin/static/style.css" />
   <link rel="stylesheet" href="/admin/static/users.css" />
   <link rel="stylesheet" href="/admin/static/user_zodiac.css" />
@@ -93,12 +93,12 @@
     </section>
   </main>
 
-  <div class="modal modal-blur fade admin-user-detail" id="userDetailModal" tabindex="-1" aria-hidden="true" aria-labelledby="userDetailTitle">
+  <dialog class="modal admin-user-detail" id="userDetailModal" aria-hidden="true" aria-labelledby="userDetailTitle">
     <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-xl" role="document">
       <div class="modal-content">
         <div class="modal-header">
           <h2 class="modal-title" id="userDetailTitle">用户资料</h2>
-          <button id="userDetailCloseIcon" type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+          <button id="userDetailCloseIcon" type="button" class="btn-close" data-admin-dismiss="dialog" aria-label="关闭"></button>
         </div>
         <div class="modal-body">
           <div id="userDetailCover" class="admin-user-cover" hidden>
@@ -167,14 +167,14 @@
           <span id="userDetailStatus" class="me-auto" role="status"></span>
           <button id="userDetailKeepEditing" type="button" class="btn btn-outline-secondary" hidden>继续编辑</button>
           <button id="userDetailDiscard" type="button" class="btn btn-outline-danger" hidden>放弃修改</button>
-          <button id="userDetailClose" type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">关闭</button>
+          <button id="userDetailClose" type="button" class="btn btn-outline-secondary" data-admin-dismiss="dialog">关闭</button>
           <button type="submit" form="userDetailForm" class="btn btn-primary" id="userDetailSave" data-admin-write="users" disabled>保存资料</button>
         </div>
       </div>
     </div>
-  </div>
+  </dialog>
 
-  <script src="/admin/static/vendor/tabler.min.js"></script>
+  <script src="/admin/static/admin-components.js"></script>
   <script src="/admin/static/shell.js"></script>
   <script src="/admin/static/admin_stats.js"></script>
   <script src="/admin/static/ui.js"></script>

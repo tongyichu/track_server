@@ -77,7 +77,7 @@
 
 ## 卡片操作与删除
 
-编辑弹窗右上角使用Tabler btn-close叉号；底部左侧删除（仅已有条目）/下架（仅已上架条目），右侧保存。下架复用layout接口，只修改已保存条目的上架状态/顺序，不提交当前未保存的表单；成功更新current revision并保留表单内容，继续保存不会重新上架。新建不显示删除/下架。
+编辑弹窗右上角使用共用关闭按钮；底部左侧删除（仅已有条目）/下架（仅已上架条目），右侧保存。下架复用layout接口，只修改已保存条目的上架状态/顺序，不提交当前未保存的表单；成功更新current revision并保留表单内容，继续保存不会重新上架。新建不显示删除/下架。
 
 删除需弹窗内二次确认，使用`DELETE /admin/api/music/:music_id`，JSON body为`{"revision":当前版本}`，请求体最多1KiB、服务端5秒。成功`{code:0,data:{deleted:true}}`；版本无效400，条目不存在或版本已变409，仓储错误503。MusicRepository新增DeleteMusic，memory锁内比较版本删除、MySQL按id/revision条件DELETE、Mongo按_id/revision条件DeleteOne，三实现冲突语义一致，不先读后无条件删。无schema迁移。删除仅移除目录，音频及封面按SHA共用，文件保留，不物理删除共享资产；已下载副本不远程删除。
 

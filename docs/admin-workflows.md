@@ -97,7 +97,7 @@ internal/admin/
 | 列表图片等待 | `list_assets.go` 限制并发与头像去重；`handlers.go` 的 `decorateAdminTrackAssetURLs` 处理轨迹预览资源，仍等待缓存成功后才使用本地 URL |
 | 业务依赖注入 | `routes.go` 的 `NewModule(accounts, releaseSvc, stsSvc, staticRoot, userRepo, trackRepo, collectRepo, trackMapRepo, ..., restrictionSvc, routeGroupSvc, accountStorage)`；`cmd/server/main.go` 创建后通过 `Handler.SetScreenshotCache(screenshotCache)`、`Handler.SetTrackSubmissionService(trackSubmissionSvc)` 和 `Handler.SetDashboardStatisticsRepository(...)` 注入缓存、投稿与跨域只读统计能力 |
 | 前端入口 | `static/login.html`；登录后按授权页面跳转；账号管理 `static/accounts.html`、账号安全 `static/password.html`、无业务权限 `static/access.html` |
-| 响应式外壳与工作台 | `static/shell.js`、`static/ui.js`、`static/style.css`、`static/dashboard.html`、`static/dashboard.js`；组件库固定为内置 Tabler 1.7.1，图标为 Tabler Icons 3.49.0，图表为 ECharts 6.1.0，均位于 `static/vendor/`，不要改成运行时 CDN |
+| 响应式外壳与工作台 | `static/shell.js`、`static/ui.js`、`static/style.css`、`static/dashboard.html`、`static/dashboard.js`；界面组件来自本地 `frontend/` 的 shadcn/ui 与 `static/admin-components.js`；Tabler Icons 和 ECharts 从 `static/vendor/` 加载 |
 | 安装包上传 | `handlers.go` 中 `UploadPackage`、`static/app.js` 中 `/admin/api/releases/upload-package` |
 | 用户与账号限制 | `handlers.go` 中 `ListUsers` / `CreateAccountRestriction` / `GetCurrentAccountRestriction` / `RevokeCurrentAccountRestriction`，`static/users.html`、`static/users.js` |
 | 意见反馈管理 | `handlers.go` 中 `ListFeedbacks` / `GetFeedback` / `UpdateFeedbackStatus` / `GetFeedbackImage`，`static/feedbacks.html`、`static/feedbacks.js` |
@@ -392,7 +392,7 @@ Pixabay大图下载失败时最多回退同一缓存中的原始640图一次，�
 
 通知列表支持按状态筛选，时间列按草稿更新、计划上线、实际上线、停止发放或撤回标注。详情和新建共用固定标题栏与底部操作栏，仅中间内容滚动。撤回按已保存版本和 revision 变更状态，不提交当前表单。保存错误随底部操作区保持可见。
 
-announcements.html 为独立模块，复用 shell/ui/Tabler 和服务端权限、同源与审计。announcements.js保留列表失败内容，使用字符串用户ID及CAS expected_version，加载详情时取消旧请求，只复用一个编辑对话框；关闭/切换忽略旧响应。标题/正文预览用 textContent，不执行运营输入。覆盖方式分一次性通知/持续公告，发布方式分立即/定时，接收全部或指定用户，H5选填。持续公告独立设置停止发放时间或长期有效，活动结束时间单独保留；待发布可修改或取消定时回草稿。已上线内容普通编辑保留已读，不改发布安排与范围；撤回后可编辑、存草稿并重新发布为新轮次。列表增覆盖方式并复用未变行，详情显示预定/实际上线时间和最近50条操作记录，所有运营文本用textContent。只读可预览不能提交。协议与持久化边界见 [消息API](api/messages.md#活动通知管理) 和 [消息架构](messages.md)。
+announcements.html 为独立模块，复用 shell、AdminUI、原生对话框和服务端权限、同源与审计。announcements.js保留列表失败内容，使用字符串用户ID及CAS expected_version，加载详情时取消旧请求，只复用一个编辑对话框；关闭/切换忽略旧响应。标题/正文预览用 textContent，不执行运营输入。覆盖方式分一次性通知/持续公告，发布方式分立即/定时，接收全部或指定用户，H5选填。持续公告独立设置停止发放时间或长期有效，活动结束时间单独保留；待发布可修改或取消定时回草稿。已上线内容普通编辑保留已读，不改发布安排与范围；撤回后可编辑、存草稿并重新发布为新轮次。列表增覆盖方式并复用未变行，详情显示预定/实际上线时间和最近50条操作记录，所有运营文本用textContent。只读可预览不能提交。协议与持久化边界见 [消息API](api/messages.md#活动通知管理) 和 [消息架构](messages.md)。
 
 ## 实时通信
 

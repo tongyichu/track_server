@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>时光轨迹 - 控制台</title>
-  <link rel="stylesheet" href="/admin/static/vendor/tabler.min.css" />
+  <link rel="stylesheet" href="/admin/static/admin-components.css" />
   <link rel="stylesheet" href="/admin/static/style.css" />
   <link rel="stylesheet" href="/admin/static/track_submissions.css" />
   <link rel="stylesheet" href="/admin/static/admin_stats.css" />
@@ -55,10 +55,10 @@
       </div>
     </details>
   </main>
-  <div class="modal modal-blur fade submission-detail-modal" id="submissionDetailModal" tabindex="-1" aria-hidden="true" aria-labelledby="detailTitle">
+  <dialog class="modal submission-detail-modal" id="submissionDetailModal" aria-hidden="true" aria-labelledby="detailTitle">
     <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-xl">
       <div class="modal-content">
-        <div class="modal-header"><div class="submission-modal-heading"><h2 class="modal-title" id="detailTitle">投稿详情</h2><p id="detailSubtitle" class="text-secondary"></p></div><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
+        <div class="modal-header"><div class="submission-modal-heading"><h2 class="modal-title" id="detailTitle">投稿详情</h2><p id="detailSubtitle" class="text-secondary"></p></div><button type="button" class="btn-close" data-admin-dismiss="dialog" aria-label="关闭"></button></div>
         <div class="modal-body">
           <p id="detailLoading" class="submission-loading" role="status" hidden>正在加载投稿详情…</p>
           <div id="detailError" class="alert alert-danger" role="alert" hidden><span id="detailErrorText"></span><button id="retryDetail" type="button" class="btn btn-sm btn-outline-danger">重新加载</button></div>
@@ -67,11 +67,11 @@
             <h3>审核意见</h3><label for="reviewReason" class="form-label">备注或驳回原因</label><textarea id="reviewReason" data-admin-input="track_submissions" class="form-control" rows="3" placeholder="驳回时必须填写原因；通过时可填写备注。"></textarea><p id="reviewError" class="text-danger" role="alert" hidden></p>
           </section>
         </div>
-        <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">关闭</button><button id="rejectBtn" type="button" data-admin-write="track_submissions" class="btn btn-danger" hidden>驳回投稿</button><button id="approveBtn" type="button" data-admin-write="track_submissions" class="btn btn-primary" hidden>通过投稿</button></div>
+        <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-admin-dismiss="dialog">关闭</button><button id="rejectBtn" type="button" data-admin-write="track_submissions" class="btn btn-danger" hidden>驳回投稿</button><button id="approveBtn" type="button" data-admin-write="track_submissions" class="btn btn-primary" hidden>通过投稿</button></div>
       </div>
     </div>
-  </div>
-  <script src="/admin/static/vendor/tabler.min.js"></script>
+  </dialog>
+  <script src="/admin/static/admin-components.js"></script>
   <script src="/admin/static/shell.js"></script>
   <script src="/admin/static/admin_stats.js"></script>
   <script src="/admin/static/ui.js"></script>

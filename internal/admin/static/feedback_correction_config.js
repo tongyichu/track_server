@@ -1,7 +1,7 @@
 (function () {
   var endpoint = '/admin/api/feedback-correction-config';
   var root = document.getElementById('correctionConfigModal');
-  var modal = new tabler.Modal(root, { backdrop: 'static' });
+  var modal = new AdminComponents.Dialog(root, { backdrop: 'static' });
   var form = document.getElementById('correctionConfigForm');
   var rows = document.getElementById('correctionConfigRows');
   var table = document.getElementById('correctionConfigTable');
@@ -126,7 +126,7 @@
     modal.show();
     if (!dirty) load();
   });
-  root.addEventListener('hide.bs.modal', function (event) {
+  root.addEventListener('admin:dialog-closing', function (event) {
     if (busy) event.preventDefault();
   });
   rows.addEventListener('input', function () { setDirty(true); });

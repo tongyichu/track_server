@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>时光轨迹 - 控制台</title>
-  <link rel="stylesheet" href="/admin/static/vendor/tabler.min.css" />
+  <link rel="stylesheet" href="/admin/static/admin-components.css" />
   <link rel="stylesheet" href="/admin/static/style.css" />
   <link rel="stylesheet" href="/admin/static/admin_stats.css" />
 </head>
@@ -75,12 +75,12 @@
 
   </main>
 
-  <div class="modal modal-blur fade route-management-modal" id="detailModal" tabindex="-1" aria-hidden="true">
+  <dialog class="modal route-management-modal" id="detailModal" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-xl" role="document">
       <div class="modal-content">
         <div class="modal-header route-modal-header">
           <div><h2 class="modal-title" id="detailName"></h2><span class="hint" id="detailHint"></span></div>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+          <button type="button" class="btn-close" data-admin-dismiss="dialog" aria-label="关闭"></button>
         </div>
         <div class="modal-body route-modal-body">
     <section class="route-workspace" id="detailPanel" hidden>
@@ -150,9 +150,9 @@
         </div>
       </div>
     </div>
-  </div>
+  </dialog>
 
-  <script src="/admin/static/vendor/tabler.min.js"></script>
+  <script src="/admin/static/admin-components.js"></script>
   <script src="/admin/static/shell.js"></script>
   <script src="/admin/static/admin_stats.js"></script>
   <script src="/admin/static/ui.js"></script>

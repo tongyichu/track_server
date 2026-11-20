@@ -1,6 +1,6 @@
 # AI 使用记录与运行控制
 
-后台入口 `/admin/ai_usage.html`。协议及字段见 [admin-ai](api/admin-ai.md)，页面复用 Tabler、共享 shell、AdminUI 和 AdminChartStyle，图表异步加载，列表不依赖图表/配置。实时任务及配额区默认每5秒刷新，统计及当前页记录每15秒刷新，可关闭；页面隐藏停止轮询，离开释放定时器、请求和图表。配置草稿不因查询刷新丢失，CAS冲突可显式重新载入配置。
+后台入口 `/admin/ai_usage.html`。协议及字段见 [admin-ai](api/admin-ai.md)，页面复用 shadcn/ui、共享 shell、AdminUI 和 AdminChartStyle，图表异步加载，列表不依赖图表/配置。实时任务及配额区默认每5秒刷新，统计及当前页记录每15秒刷新，可关闭；页面隐藏停止轮询，离开释放定时器、请求和图表。配置草稿不因查询刷新丢失，CAS冲突可显式重新载入配置。
 
 ## 接入范围
 

@@ -3,31 +3,31 @@
 @import "tailwindcss/utilities.css" layer(utilities);
 
 @theme inline {
-  --color-background: var(--workbench-surface);
-  --color-foreground: var(--workbench-text);
-  --color-card: var(--workbench-surface);
-  --color-card-foreground: var(--workbench-text);
-  --color-primary: var(--workbench-text);
-  --color-primary-foreground: var(--workbench-surface);
-  --color-secondary: var(--workbench-subtle);
-  --color-secondary-foreground: var(--workbench-text);
-  --color-muted: var(--workbench-subtle);
-  --color-muted-foreground: var(--workbench-muted);
-  --color-accent: var(--workbench-subtle);
-  --color-accent-foreground: var(--workbench-text);
-  --color-border: var(--workbench-border);
-  --color-input: var(--workbench-border);
-  --color-ring: var(--workbench-blue);
-  --color-destructive: #b42318;
+  --color-background: var(--admin-bg-surface);
+  --color-foreground: var(--admin-body-color);
+  --color-card: var(--admin-bg-surface);
+  --color-card-foreground: var(--admin-body-color);
+  --color-primary: var(--admin-primary);
+  --color-primary-foreground: var(--admin-primary-fg);
+  --color-secondary: var(--admin-bg-surface-secondary);
+  --color-secondary-foreground: var(--admin-body-color);
+  --color-muted: var(--admin-bg-surface-secondary);
+  --color-muted-foreground: var(--admin-secondary-color);
+  --color-accent: var(--admin-bg-surface-secondary);
+  --color-accent-foreground: var(--admin-body-color);
+  --color-border: var(--admin-border-color);
+  --color-input: var(--admin-border-color);
+  --color-ring: var(--admin-primary);
+  --color-destructive: var(--admin-danger);
 }
 
 #dashboard-workbench {
-  --workbench-surface: #fff;
-  --workbench-text: #181e29;
-  --workbench-muted: #596579;
-  --workbench-subtle: #f1f4f8;
-  --workbench-border: #dce2eb;
-  --workbench-blue: #214e9d;
+  --workbench-surface: var(--admin-bg-surface);
+  --workbench-text: var(--admin-body-color);
+  --workbench-muted: var(--admin-secondary-color);
+  --workbench-subtle: var(--admin-bg-surface-secondary);
+  --workbench-border: var(--admin-border-color);
+  --workbench-blue: var(--admin-primary);
   color: var(--workbench-text);
 }
 

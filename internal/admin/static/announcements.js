@@ -2,7 +2,7 @@
   'use strict';
   const $ = id => document.getElementById(id);
   let items = [], cursor = '', appliedStatus = '', listGeneration = 0, listController = null;
-  const editor = new tabler.Modal($('noticeEditor'), { backdrop: 'static', keyboard: false });
+  const editor = new AdminComponents.Dialog($('noticeEditor'), { backdrop: 'static', keyboard: false });
   let editorVisible = false, editorClosing = false, leavePromise = null, saveGate = false;
   let current = null, detailGeneration = 0, detailController = null, saving = false, baseline = '';
   const date = value => AdminTime.dateTime(value, value ? '—' : '立即');
@@ -204,7 +204,7 @@
   $('closeNotice').addEventListener('click', close);
   $('showNoticeFields').addEventListener('click', () => showPreviewView(false));
   $('showNoticePreview').addEventListener('click', () => showPreviewView(true));
-  $('noticeEditor').addEventListener('hidden.bs.modal', () => { editorVisible = false; editorClosing = false; showPreviewView(false); });
+  $('noticeEditor').addEventListener('admin:dialog-closed', () => { editorVisible = false; editorClosing = false; showPreviewView(false); });
   $('noticeEditor').addEventListener('keydown', event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(); } });
   $('noticeForm').addEventListener('change', preview);
   $('noticeForm').addEventListener('input', preview); $('noticeForm').addEventListener('submit', event => { event.preventDefault(); save('published'); });

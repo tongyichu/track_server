@@ -40,6 +40,12 @@ func embeddedPage(name string) ([]byte, error) {
 	if name == "static/dashboard.html" && workbenchAvailable() {
 		name = "static/dashboard_workbench.html"
 	}
+	if strings.HasSuffix(name, ".html") {
+		compiled := "static/workbench/pages/" + strings.TrimPrefix(name, "static/")
+		if _, err := fs.Stat(staticFS, compiled); err == nil {
+			name = compiled
+		}
+	}
 	if cached, ok := adminPageTemplates.Load(name); ok {
 		return cached.([]byte), nil
 	}

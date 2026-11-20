@@ -9,8 +9,8 @@
 .release-package-info, .release-detail-fields {
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px;
 }
-.release-package-info { margin: 8px 0 0; padding: 12px; background: var(--tblr-bg-surface-secondary); border-radius: 6px; }
-.release-package-info dt, .release-detail-fields dt { color: var(--tblr-secondary-color); font-size: 12px; font-weight: 500; }
+.release-package-info { margin: 8px 0 0; padding: 12px; background: var(--admin-bg-surface-secondary); border-radius: 6px; }
+.release-package-info dt, .release-detail-fields dt { color: var(--admin-secondary-color); font-size: 12px; font-weight: 500; }
 .release-package-info dd, .release-detail-fields dd { margin: 3px 0 0; overflow-wrap: anywhere; }
 .release-policy { display: flex; flex-wrap: wrap; align-items: start; gap: 12px 16px; }
 .release-policy > label:not(.form-switch) { flex: 0 1 184px; margin: 0; }
@@ -21,8 +21,8 @@
 .release-table th:nth-child(2) { width: 15%; }
 .release-table th:nth-child(3) { width: 22%; }
 .release-table .release-version-link { min-height: 28px; padding: 0; font-weight: 600; }
-.release-table .release-version-meta { display: block; color: var(--tblr-secondary-color); font-size: 12px; }
-.release-table .release-current-label { color: var(--tblr-primary); font-weight: 600; }
+.release-table .release-version-meta { display: block; color: var(--admin-secondary-color); font-size: 12px; }
+.release-table .release-current-label { color: var(--admin-primary); font-weight: 600; }
 .release-notes-preview {
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
   overflow: hidden; overflow-wrap: anywhere; line-height: 1.5;
@@ -32,7 +32,7 @@
 .release-detail .modal-footer .btn-outline-danger { margin-inline-end: auto; }
 .release-detail-fields { margin: 0 0 16px; }
 .release-detail-fields .release-detail-wide { grid-column: 1 / -1; }
-.release-detail-notes { padding-top: 12px; border-top: 1px solid var(--tblr-border-color); }
+.release-detail-notes { padding-top: 12px; border-top: 1px solid var(--admin-border-color); }
 .release-management #clientStats > summary { cursor: pointer; font-weight: 600; }
 .release-management #clientStats[open] > summary { margin-bottom: 12px; }
 .release-version-distribution { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, .85fr); gap: 12px; }
@@ -46,12 +46,12 @@
 @media (max-width:767px) {
   table.release-table.admin-card-table tbody tr {
     display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:4px 8px;
-    margin:0; padding:9px 0; border:0; border-bottom:1px solid var(--tblr-border-color); border-radius:0; box-shadow:none;
+    margin:0; padding:9px 0; border:0; border-bottom:1px solid var(--admin-border-color); border-radius:0; box-shadow:none;
   }
   table.release-table.admin-card-table tbody td { display:block; padding:0; }
   table.release-table.admin-card-table tbody td::before { display:none; }
   .release-table.admin-card-table tbody td:nth-child(2) { justify-self:end; }
-  .release-table.admin-card-table tbody td:nth-child(3) { grid-column:1 / -1; color:var(--tblr-secondary); font-size:12px; }
+  .release-table.admin-card-table tbody td:nth-child(3) { grid-column:1 / -1; color:var(--admin-secondary); font-size:12px; }
   table.release-table.admin-card-table tbody td:nth-child(4) { display:none; }
   .release-table .release-version-link { min-height:36px; }
 }

@@ -18,7 +18,7 @@
   let appliedFilters = new URLSearchParams(), renderedTasks = '', activeOpen = true, activeLoading = false;
   let policyDirty = false, pricesDirty = false, busySettings = false;
   const controllers = {}, charts = new Map(), operations = new Set();
-  const modal = new tabler.Modal($('detailModal'));
+  const modal = new AdminComponents.Dialog($('detailModal'));
   function localDate(d) { return AdminTime.date(d); }
   let quotaLoading = false, quotaSnapshot = null, tasksLoading = false, statisticsLoading = false;
   const quotaNodes = new Map(), quotaDrafts = new Map(), controlPolicies = new Map();
@@ -455,7 +455,7 @@
       root.append(grid, technical);
     } catch (error) { if (!signal.aborted) $('detail').replaceChildren(node('p', error.message, 'text-danger'), button('重试读取', () => loadDetail(id, signal))); }
   }
-  $('detailModal').addEventListener('hidden.bs.modal', () => { modalTaskID = ''; if (detailController) detailController.abort(); $('detail').replaceChildren(); });
+  $('detailModal').addEventListener('admin:dialog-closed', () => { modalTaskID = ''; if (detailController) detailController.abort(); $('detail').replaceChildren(); });
   function refresh(reset) {
     if (reset) { cursor = ''; nextCursor = ''; history = []; page = 1; }
     $('pageError').textContent = '';

@@ -42,13 +42,13 @@
 - **内容留白默认存在**：卡片里的标题、说明、错误提示、筛选和按钮不得贴边。共享内容内边距默认桌面 18px、窄屏 14px，复用 style.css 的统一规则；不要只给当前截图某一行补 margin，留下其他状态或同类页面继续贴边。
 - **检查增强后的结构**：`static/ui.js` 的 `enhanceCard` 有两种结构：独立 `.panel.card > .card-body`，以及没有直接 H2 时的同节点 `.panel.card.card-body`（包括标题放在复合工具栏内的情况）。两种都必须有内边距，不能让 `.panel.card { padding: 0 }` 覆盖同节点内容。改共享 Card/CSS 时同时检查这两条路径，不能仅凭 HTML 里有 card-body 就认为留白生效。
 - **贴边必须显式且局部**：只有纯表格或其他明确设计为满宽的区域可用 `p-0` 等标记；账号列表纯表格和景点纯表格是现有例子。不得把包含标题、说明和筛选的整个业务卡片设为零内边距。表格贴边时仍保留单元格留白，文字/表单恢复正常内容边距。
-- **工具栏和宽表格不突破留白**：普通筛选工具栏使用专用 flex/grid 类，不直接借用 Bootstrap `.row`；`.row` 的负边距必须和成对的列 gutter 一起使用，不能让标题、筛选和表格边界错位。反馈页复用 `admin-toolbar feedback-toolbar`：标签/控件分成固定行，三个控件高度 40px，按钮独立分组且与控件底部对齐，分页说明放在工具栏外；中等宽度按钮整组换行，窄屏字段独占一行。不能仅加 align-items 而忽略标签高度、控件高度与换行结构。宽表格包在独立 `.table-responsive` 内，包含弹窗内的配置表，不能让整个卡片或弹窗横向溢出。
+- **工具栏和宽表格不突破留白**：普通筛选工具栏使用专用 flex/grid 类，保持标题、筛选和表格边界对齐。反馈页复用 `admin-toolbar feedback-toolbar`：标签/控件分成固定行，三个控件高度 40px，按钮独立分组且与控件底部对齐，分页说明放在工具栏外；中等宽度按钮整组换行，窄屏字段独占一行。不能仅加 align-items 而忽略标签高度、控件高度与换行结构。宽表格包在独立 `.table-responsive` 内，包含弹窗内的配置表，不能让整个卡片或弹窗横向溢出。
 - **提交前布局自查**：修改后台页面或共享增强逻辑时，对照桌面和窄屏规则，检查卡片四边、标题/说明/表格对齐、工具栏换行，以及加载/空态/报错/展开详情后的留白；长文本或宽表格只能在各自内容区换行或滚动。沿用根文件的人工验收约定，未实看页面不得声称视觉验收通过。
 - **最近操作记录**：操作列显示可展开的简短动词，结果列显示成功、失败或待确认。对象优先展示名称和原始编号，名称缺失时保留编号。固定表格列宽为 21%/14%/20%/34%/11%，桌面最小表宽 680px，由外围独立滚动。767px 以下，卡片首行显示动作和结果，第二行显示对象，第三行显示时间和操作人。展开请求详情仅增加行高，原始路径或长对象名在单元格内换行。
 
 ## 共享统计组件与选用
 
-运营工作台试用 React 和 shadcn/ui。源码与依赖锁定在 `internal/admin/frontend/`，从仓库根目录执行 `npm --prefix internal/admin/frontend ci` 和 `npm --prefix internal/admin/frontend run build` 后再构建 Go。Docker 构建会自动生成工作台资源并嵌入原有 `static`，本地 Go 构建缺少前端产物时使用原工作台。`/admin/dashboard.html` 沿用原页面鉴权、共享导航和统计脚本，前端构建不需要额外的运行时服务。
+后台统一使用 shadcn/ui。依赖与组件源码位于 `internal/admin/frontend/`，从仓库根目录执行 `npm --prefix internal/admin/frontend ci` 和 `npm --prefix internal/admin/frontend run build` 后再构建 Go。Docker 会把前端资源与按 shadcn 组件生成的页面一并嵌入原有 `static`。工作台主体使用 React；其他页面构建时应用 shadcn 组件标记，运行时复用现有页面脚本与浏览器原生表单、对话框和菜单。未先构建前端的本地 Go 环境会使用同一主题的原始模板。
 
 新增或调整统计区域先盘点现有组件，有合适的就复用；共性变化修改共享组件并检查调用方，不按页面再复制一套卡片、周期按钮或图表样式。纯业务数据、权限、请求取消和筛选语义由页面负责，展示组件不发请求、不缓存用户数据，也不把不同统计口径合并。
 
@@ -60,10 +60,10 @@
 | 统计容器、图表容器与网格 | `.admin-stats-panel`、`.admin-chart-panel`、`.admin-chart-grid` | 12px/14px内边距、10px间距、8px圆角；ui.js识别统计面板后不再另包一层card-header/card-body |
 | 次要统计展开 | `.admin-stat-disclosure`、`AdminStats.onExpand` | 原生details/summary；展开后再测量和绘图，隐藏尺寸为0时不初始化ECharts；数据请求仍由页面掌握 |
 | 环形、图例、细柱与配色 | `AdminChartStyle.ring/bars/legend/colors` | 复用用户管理基准；legend可传同一色板，保证色块与图形对应，默认调用兼容 |
-| 通用表格、按钮、弹窗、图片预览 | 既有`ui.js` / Tabler | 继续复用AdminUI与既有增强；指标按钮和周期按钮显式跳过通用按钮染色 |
+| 通用表格、按钮、弹窗、图片预览 | shadcn/ui、`admin-components.js` 和 `ui.js` | 继续复用AdminUI与既有增强；指标按钮和周期按钮显式跳过通用按钮染色 |
 | 地区选择、共享轨迹编辑 | 既有`region_picker.js`、`track_editor.js` | 沿用现有组件；本轮不将地图供应商、权限或业务表单强抽成通用统计逻辑 |
 
-统计页面加载顺序：Tabler CSS → style.css及页面CSS → admin_stats.css；Tabler JS → shell.js → admin_stats.js → ui.js → 页面脚本。使用图表工厂时在页面脚本前加载admin_chart_style.js，ECharts仍由AdminAssets.loadCharts异步加载。静态统计节点在页面脚本执行前同步生成，保留原数值ID、说明ID、按钮ID及data-admin-read；后续业务代码照常按ID局部更新。
+统计页面先加载 admin-components.css、style.css 和 admin_stats.css；脚本依次加载 admin-components.js、shell.js、admin_stats.js、ui.js 与页面逻辑。使用图表工厂时在页面脚本前加载admin_chart_style.js，ECharts仍由AdminAssets.loadCharts异步加载。静态统计节点在页面脚本执行前同步生成，保留原数值ID、说明ID、按钮ID及data-admin-read；后续业务代码照常按ID局部更新。
 
 声明式示例：
 
@@ -116,7 +116,7 @@
 - **展示业务静态资源**：后台页面不要直接使用 `/api/v1/static/*`，应由 handler 改写为 `/admin/api/static/*`，通过 admin session 鉴权后读取 `staticRoot`。
 - **加一个公开页面/资源**：把文件放进 `static/`，在 `routes.go` 用 `serveEmbedded(...)` 或走 `/admin/static/*filepath`。**不要新增第二个 `go:embed`**。
 - **加一个侧边/顶部入口**：统一修改 `static/shell.js` 的导航配置；页面只需在自身脚本前加载 `shell.js`，不要再复制一份导航。
-- **后台组件样式**：页面先加载内置 `vendor/tabler.min.css`，再加载 `style.css`；通用 Card / Button / Form / Table / Badge、移动端表格卡片化及图片点击全屏预览由 `static/ui.js` 统一增强，新增页面应加载 `vendor/tabler.min.js`、`shell.js`、`ui.js` 后再加载页面脚本，不要另写一套原生组件外观。地图图片或其他不应预览的图片可标记 `data-no-preview`。
+- **后台组件样式**：页面加载 `admin-components.css` 和 `style.css`。动态卡片、按钮、表单、窄屏表格和图片预览由 `ui.js` 统一处理。新增页面依次加载 `admin-components.js`、`shell.js`、`ui.js` 和页面脚本。地图图片或其他不应预览的图片可标记 `data-no-preview`。
 - **改 cookie 策略**：只在 `auth.go` 改；保持 `HttpOnly=true`，跨站调用前提下才考虑 `SameSite=None + Secure`。
 - **调整 session TTL**：改 `routes.go` 中 `NewSessionStore(12 * time.Hour)`，不要在 cookie 与 store 两边写不一致的过期时间。
 
@@ -174,7 +174,7 @@
 
 输入框尾部图标互斥：可清除时用“×”替换下拉箭头，两者占用同一位置；清空后隐藏“×”并恢复下拉箭头。点击文字区域仍展开选择器，点击“×”仅清除筛选。未提供清除能力的表单继续显示下拉箭头。
 
-弹层挂到body避让卡片/抽屉裁剪，限制于视窗、列表内滚动，复用Tabler语义色；窄屏字段换行。输入框使用表单底色和正文色，菜单普通项无填充、悬停浅灰、选中浅蓝底蓝字；`ui.js` 的通用按钮增强须跳过 `.admin-region-field` 与 `.admin-region-popup` 内的按钮，避免注入 `btn btn-primary` 导致蓝底深色字、居中文字与多余边框阴影。支持Enter/空格展开、上下/Home/End在当前列移动、左右键在省市列之间移动、Esc关闭，关闭后按操作来源恢复焦点；外部点击、页面滚动/缩放及离页关闭。
+弹层挂到body避让卡片/抽屉裁剪，限制于视窗、列表内滚动，复用共享语义色；窄屏字段换行。输入框使用表单底色和正文色，菜单普通项无填充、悬停浅灰、选中浅蓝底蓝字；`ui.js` 的通用按钮增强须跳过 `.admin-region-field` 与 `.admin-region-popup` 内的按钮，避免注入 `btn btn-primary` 导致蓝底深色字、居中文字与多余边框阴影。支持Enter/空格展开、上下/Home/End在当前列移动、左右键在省市列之间移动、Esc关闭，关闭后按操作来源恢复焦点；外部点击、页面滚动/缩放及离页关闭。
 
 ## 景点目录
 
@@ -184,7 +184,7 @@
 
 曲目标题固定为一行，超长显示省略号。试听时，放不下的标题向左循环滚动，下一轮开头紧接上一轮末尾。暂停、缓冲或结束时恢复省略显示。启用减少动态效果的系统设置时保留省略显示，悬停可查看全名。
 
-music.html 复用 Tabler、shell 和 ui，保留已上架、未上架两个紧凑卡片区。用拖拽把手排序或跨区，上架、下架、上移和下移也可通过曲目菜单操作。卡片展示封面、名称、作者、时长和非零起播时间，当前试听曲目独自展开播放进度和起播点。编辑弹窗固定顶部标题和底部操作，主体滚动。已有音频、封面先显示当前资料，再按需替换。只读账号可试听。布局自动保存、失败重读和并发冲突边界见[布局协议](api/music.md#卡片排序与上架分区)。
+music.html 复用后台组件、shell 和 ui，保留已上架、未上架两个紧凑卡片区。用拖拽把手排序或跨区，上架、下架、上移和下移也可通过曲目菜单操作。卡片展示封面、名称、作者、时长和非零起播时间，当前试听曲目独自展开播放进度和起播点。编辑弹窗固定顶部标题和底部操作，主体滚动。已有音频、封面先显示当前资料，再按需替换。只读账号可试听。布局自动保存、失败重读和并发冲突边界见[布局协议](api/music.md#卡片排序与上架分区)。
 
 音乐来源同时支持上传MP3和保存公网MP3链接，后台填写链接后用原生播放器直接试听、自动读时长；服务端保存时仅HEAD/有界Range轻量探测，不下载整首或落盘。完整外链、版本及客户端无凭据读取边界见[外链音乐](api/music.md#外链轻量校验与网页试听)。
 

@@ -271,7 +271,7 @@
   var totalHint = document.getElementById('totalHint');
 
   var detailRoot = document.getElementById('userDetailModal');
-  var detailModal = new tabler.Modal(detailRoot, { backdrop: 'static' });
+  var detailModal = new AdminComponents.Dialog(detailRoot, { backdrop: 'static' });
   var detailForm = document.getElementById('userDetailForm'), detailSave = document.getElementById('userDetailSave');
   var profileFields = document.getElementById('userProfileFields');
   var activeDetailUserID = '', userDetailRequest = 0, userDetailController = null;
@@ -320,7 +320,7 @@
     document.getElementById('userDetailKeepEditing').hidden = !discardPrompt;
     document.getElementById('userDetailDiscard').hidden = !discardPrompt;
   }
-  detailRoot.addEventListener('hide.bs.modal', function (event) {
+  detailRoot.addEventListener('admin:dialog-closing', function (event) {
     if (profileSaving || restrictionBusy) {
       event.preventDefault();
       return;
@@ -339,7 +339,7 @@
     cancelBackground(); backgroundURL = '';
     cancelAvatar();
   });
-  detailRoot.addEventListener('hidden.bs.modal', function () {
+  detailRoot.addEventListener('admin:dialog-closed', function () {
     activeDetailUserID = ''; profileReady = false; allowDiscard = false; profileBaseline = null;
   });
   document.getElementById('userDetailKeepEditing').addEventListener('click', function () {

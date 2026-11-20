@@ -267,9 +267,8 @@
 
   function showReleaseDetail(item, trigger) {
     if (releaseDetailRoot) return;
-    const root = releaseDetailRoot = document.createElement('div');
-    root.className = 'modal modal-blur fade release-detail';
-    root.tabIndex = -1;
+    const root = releaseDetailRoot = document.createElement('dialog');
+    root.className = 'modal release-detail';
     root.setAttribute('aria-labelledby', 'releaseDetailTitle');
     root.innerHTML = '<div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg"><div class="modal-content">' +
       '<div class="modal-header"><div><h2 id="releaseDetailTitle" class="modal-title"></h2><p class="hint mb-0"></p></div>' +
@@ -315,7 +314,7 @@
       }
     }
     document.body.appendChild(root);
-    const modal = new tabler.Modal(root);
+    const modal = new AdminComponents.Dialog(root);
     let removing = false;
     root.querySelector('.btn-close').addEventListener('click', () => modal.hide());
     root.querySelector('.release-detail-close').addEventListener('click', () => modal.hide());
@@ -326,7 +325,7 @@
       remove.addEventListener('click', () => { removing = true; modal.hide(); });
       footer.prepend(remove);
     }
-    root.addEventListener('hidden.bs.modal', () => {
+    root.addEventListener('admin:dialog-closed', () => {
       releaseDetailRoot = null;
       modal.dispose(); root.remove();
       if (removing) AdminUI.runOnce('remove-release', () => deleteRelease(item, trigger));
@@ -361,21 +360,21 @@
   // ---------------- 更新日志弹窗（独立留存） ----------------
   async function showChangelogModal() {
     if (changelogRoot) return;
-    const root = changelogRoot = document.createElement('div');
+    const root = changelogRoot = document.createElement('dialog');
     const controller = new AbortController();
-    root.className = 'modal modal-blur fade';
-    root.tabIndex = -1;
+    root.className = 'modal';
+    root.setAttribute('aria-label', '更新日志');
     root.innerHTML = '<div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg"><div class="modal-content">' +
       '<div class="modal-header"><h5 class="modal-title">更新日志</h5><button type="button" class="btn-close" aria-label="关闭"></button></div>' +
       '<div class="modal-body"><div class="changelog-loading">加载中…</div></div>' +
       '<div class="modal-footer"><button type="button" class="btn btn-outline-secondary">关闭</button></div>' +
       '</div></div>';
     document.body.appendChild(root);
-    const modal = new tabler.Modal(root);
+    const modal = new AdminComponents.Dialog(root);
     root.querySelector('.btn-close').addEventListener('click', function () { modal.hide(); });
     root.querySelector('.modal-footer button').addEventListener('click', function () { modal.hide(); });
-    root.addEventListener('hide.bs.modal', function () { controller.abort(); });
-    root.addEventListener('hidden.bs.modal', function () { changelogRoot = null; modal.dispose(); root.remove(); });
+    root.addEventListener('admin:dialog-closing', function () { controller.abort(); });
+    root.addEventListener('admin:dialog-closed', function () { changelogRoot = null; modal.dispose(); root.remove(); });
     modal.show();
 
     const body = root.querySelector('.modal-body');

@@ -103,6 +103,6 @@ EMQX_MANAGEMENT_API_SECRET=
 
 ## 入口与验证
 
-观测在 `internal/service/realtime_monitor.go`，Broker 只读适配在 `realtime_broker.go`，消息待处理统计在 `realtime_backlog.go`、只读联系人/账号私信流/头像投影在 `realtime_chat.go`；注入于 `cmd/server/main.go`，API 为 `internal/admin/realtime.go`、`realtime_detail.go`、`realtime_chat.go`，页面复用现有 Tabler、shell/ui、AdminTime 及嵌入资源版本缓存。
+观测在 `internal/service/realtime_monitor.go`，Broker 只读适配在 `realtime_broker.go`，消息待处理统计在 `realtime_backlog.go`、只读联系人/账号私信流/头像投影在 `realtime_chat.go`；注入于 `cmd/server/main.go`，API 为 `internal/admin/realtime.go`、`realtime_detail.go`、`realtime_chat.go`，页面复用现有 后台组件、shell/ui、AdminTime 及嵌入资源版本缓存。
 
 页面每15秒独立刷新统计、两个列表和已打开的详情内容，可关闭自动刷新；详情另提供“刷新消息”。隐藏/离开/关闭详情取消对应请求，10秒请求期限，快筛忽略旧响应，失败保留列表和可恢复分页，相同内容不替换现有行。默认仅 Go 构建、JS语法和差量检查；实际 Broker、权限（包括同行内容的额外权限）、筛选分页、断线/恢复、全部联系人混合收发、联系人分页与筛选切换、双方头像/昵称、历史锚点、增量追赶、收发方向/空态/失败重试、采样上限和窄屏视觉由用户人工验收。
