@@ -144,7 +144,7 @@
 | GET | `/admin/api/password-recovery/status` | 公开 | 是否已配置邮件能力，不含账号信息 |
 | POST | `/admin/api/password-recovery/request` | 公开 | username/email，通用 202，异步有界发送 |
 | POST | `/admin/api/password-recovery/complete` | 公开 | username/email/code/password/confirmation；验证后设置密码，不自动登录 |
-| GET | `/admin/api/audit-logs` | 管理员 | 可选 username 精确筛选，返回筛选后最近 100 条发起/结果日志 |
+| GET | `/admin/api/audit-logs` | 管理员 | 可选 username 精确筛选操作人、operation 筛选操作类型，返回筛选后最近 100 条发起/结果日志 |
 
 AI 使用完整协议见 [admin-ai](api/admin-ai.md)，运行与计费边界见 [AI 使用运行说明](ai-usage.md)。
 

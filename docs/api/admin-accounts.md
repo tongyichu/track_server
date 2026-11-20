@@ -35,7 +35,7 @@
 
 ## 页面与接口
 
-页面 `/admin/accounts.html` 维护账号并展示最近操作记录，记录区提供“全部账号”和各后台账号的下拉筛选（含停用账号，显示名称与登录名）；`/admin/password.html` 为本人的“账号安全”，包含改密与找回邮箱验证；登录页的“忘记密码”进入公开 `/admin/forgot-password.html`。无业务页面授权时 `/admin/access.html` 提示联系管理员。登录响应和 `GET /admin/api/me` 的 `data` 包含 `username`、`display_name`、`role`、`permissions`、`must_change_password`、`expires_at`、`home` 和不含密码哈希的 `account`。登录后按 `home` 跳转。
+页面 `/admin/accounts.html` 维护账号并展示最近操作记录，记录可按操作人和操作类型筛选，操作人选项包含停用账号。账号设置按业务分组展示权限，授予管理员权限、停用本人或移除本人管理员权限时在保存前确认影响。`/admin/password.html` 为本人的“账号安全”，包含改密与找回邮箱验证。登录页的“忘记密码”进入公开 `/admin/forgot-password.html`。无业务页面授权时 `/admin/access.html` 提示联系管理员。登录响应和 `GET /admin/api/me` 的 `data` 包含 `username`、`display_name`、`role`、`permissions`、`must_change_password`、`expires_at`、`home` 和不含密码哈希的 `account`。登录后按 `home` 跳转。
 
 共享账号区只显示名称、身份标签与齿轮。桌面端位于侧栏左下方，齿轮菜单向上展开；移动端保留顶栏紧凑布局，菜单向下展开。菜单展示当前账号的登录名、名称、身份和最近登录时间（`account.last_login_at`），打开时通过现有 `/admin/api/me` 刷新信息；“账号安全”入口保留原改密页 URL，退出调用现有 `/admin/api/logout`，失败时保留当前页并提示重试。菜单中不展示密码、密码哈希或内部版本字段。
 
@@ -46,7 +46,7 @@
 | PUT | `/admin/api/accounts/:username` | 管理员 | `display_name, role, enabled, permissions, revision`；整体替换页面权限，未包含项默认无权限 |
 | POST | `/admin/api/accounts/:username/reset-password` | 迁移期管理员 | `password, revision`；仅目标未验证邮箱且旧入口未永久关闭时可应急重置，否则 403；重置使旧登录/验证码失效并要求改密 |
 | POST | `/admin/api/password` | 已登录，包括待改密账号 | `old_password, password`；成功后重新登录 |
-| GET | `/admin/api/audit-logs` | 管理员 | 可选 `username` 查询参数，精确筛选该登录名的最近 100 条操作发起/HTTP 结果记录；不传或空串为全部账号 |
+| GET | `/admin/api/audit-logs` | 管理员 | 可选 `username` 精确筛选操作人登录名。可选 `operation` 筛选 `account_create` 新增账号、`account_update` 更新账号或 `account_reset` 应急重置，未知值返回 400。返回筛选后最近 100 条操作发起/HTTP 结果记录 |
 | GET | `/admin/api/security` | 本人 session | `data.email, email_verified, email_recovery_enabled`；存在有效新邮箱挑战时另含 pending_email/verification_expires_at，不含验证码 |
 | POST | `/admin/api/security/email/current-code` | 本人 session，已完成首次改密 | `password`，向当前已验证邮箱发送换绑证明码 |
 | POST | `/admin/api/security/email/send-code` | 本人 session，已完成首次改密 | `password, email, current_code`；首次绑定不需 current_code，换绑需原邮箱验证码 |
@@ -71,7 +71,7 @@
 
 写操作在执行前持久化发起记录，结束后保存 HTTP 结果，记录稳定账号 ID、登录名、方法、对象路径和 UTC 时间，不保存请求正文、密码或哈希。日志存储不可用时拒绝发起写操作。后置结果写入失败会保留发起记录并记录 server log；不能据此承诺业务写入与日志之间的跨存储事务。记录状态 0 表示已发起但结果待确认，其他值为实际 HTTP 状态。
 
-账号筛选在数据库查询中先应用，再按时间和 ID 倒序取最近 100 条，不能只过滤全局最近 100 条的浏览器缓存。切换账号立即加载，刷新保持当前筛选；快速切换时忽略旧请求响应，无记录时显示空状态。
+操作人和操作类型筛选均在数据库查询中应用，再按时间和 ID 倒序取最近 100 条。操作类型按已存的请求方法和路径匹配，更新账号涵盖名称、身份、启停或权限变更。切换筛选立即加载，刷新保持条件，快速切换时忽略旧请求响应，无记录时显示空状态。
 
 账号页按“时间、操作人、操作内容、操作对象、结果”展示，例如“修改轨迹资料 / 轨迹 NO.…”、“重置后台账号密码 / 后台账号 operator”。`static/audit_log.js` 根据已有方法/路径生成中文说明，适用于旧记录，不增加查询或变更日志存储。原始请求方法、路径、HTTP 状态、记录编号及行为说明收在“说明与请求详情”中。最近 100 条原始日志中，同一操作的发起与结果合并显示，因此页面操作行数可能少于 100。
 

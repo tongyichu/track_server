@@ -786,6 +786,40 @@ table.admin-audit-table { width: 100%; min-width: 680px; table-layout: fixed; }
 .admin-audit-col-action { width: 20%; }
 .admin-audit-col-target { width: 34%; }
 .admin-audit-col-result { width: 11%; }
+.accounts-list.panel { overflow: visible; }
+.accounts-list table.data { min-width: 0; margin: 0; }
+.accounts-list td { overflow-wrap: anywhere; }
+.account-identity small { display: block; }
+.account-self { color: var(--tblr-secondary-color); font-size: 11px; margin-inline-start: 8px; }
+.account-password-pending { color: var(--tblr-warning-text-emphasis, #8a5a00); }
+.account-login-time { font-variant-numeric: tabular-nums; }
+.accounts-migration { margin: 8px 0 0; }
+.accounts-audit-filters > select { max-width: 100%; }
+.admin-account-modal .modal-title { overflow-wrap: anywhere; }
+.account-form-fields { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 3fr) minmax(100px, 2fr) minmax(84px, 2fr); gap: 12px; }
+.admin-account-modal .form-label { display: grid; gap: 4px; min-width: 0; align-content: start; margin-bottom: 0; }
+.admin-account-modal .form-label > :is(input, select) { width: 100%; min-width: 0; height: 36px; margin: 0; }
+.admin-account-modal .form-hint { margin: 0; }
+.account-initial-password { grid-column: 1 / -1; }
+.account-permission-groups { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.account-permission-groups fieldset { min-width: 0; }
+.account-permission-groups legend { margin: 0; padding-bottom: 4px; font-size: 12px; font-weight: 600; color: var(--tblr-secondary-color); }
+.account-permission-row { display: grid; grid-template-columns: minmax(0, 1fr) 84px; align-items: center; gap: 8px; padding: 4px 0; border-top: 1px solid var(--tblr-border-color); }
+.account-permission-row .form-select { width: 100%; min-width: 0; margin: 0; }
+.admin-account-modal .account-modal-message { flex: 0 0 100%; margin: 0 0 8px; padding: 8px 12px; }
+.admin-account-modal label.account-modal-message { display: flex; align-items: flex-start; gap: 8px; }
+.admin-account-modal .account-modal-message .form-check-input { float: none; flex: none; margin: 2px 0 0; }
+.admin-account-modal [hidden] { display: none !important; }
+@media (max-width: 767px) {
+  .accounts-list table.data.admin-card-table { border-spacing: 0; }
+  .accounts-list table.data.admin-card-table tbody tr { margin: 0; border: 0; border-bottom: 1px solid var(--tblr-border-color); border-radius: 0; box-shadow: none; }
+  .accounts-list table.data.admin-card-table tbody tr:last-child { border-bottom: 0; }
+  .accounts-list table.data.admin-card-table td { padding: 4px 0; }
+  .accounts-list table.data.admin-card-table .account-identity { display: block; }
+  .accounts-list table.data.admin-card-table .account-identity::before { display: none; }
+  .account-form-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .account-permission-groups { grid-template-columns: 1fr; }
+}
 .admin-audit-table td { vertical-align: top; white-space: normal; overflow-wrap: anywhere; padding-block: 7px; }
 .admin-audit-table .badge { max-width: 100%; white-space: normal; line-height: 1.5; text-align: left; }
 .admin-audit-details summary { cursor: pointer; color: var(--tblr-primary); }

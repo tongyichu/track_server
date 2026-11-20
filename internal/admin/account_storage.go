@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"regexp"
+	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -19,7 +21,19 @@ type AccountStorage interface {
 	Load(context.Context) (version int64, data []byte, err error)
 	Save(ctx context.Context, version int64, data []byte) (bool, error)
 	AppendAudit(context.Context, AuditEntry) error
-	ListAudit(context.Context, string, int) ([]AuditEntry, error)
+	ListAudit(context.Context, AuditLogFilter, int) ([]AuditEntry, error)
+}
+
+type AuditLogFilter struct {
+	Username string
+	Method   string
+	Path     *regexp.Regexp
+}
+
+var auditAccountOperations = map[string]AuditLogFilter{
+	"account_create": {Method: "POST", Path: regexp.MustCompile(`^/admin/api/accounts(/[^/]+)?$`)},
+	"account_update": {Method: "PUT", Path: regexp.MustCompile(`^/admin/api/accounts/[^/]+$`)},
+	"account_reset":  {Method: "POST", Path: regexp.MustCompile(`^/admin/api/accounts/[^/]+/reset-password$`)},
 }
 
 type AuditEntry struct {
@@ -90,12 +104,20 @@ func (s *mysqlAccountStorage) AppendAudit(ctx context.Context, entry AuditEntry)
 	return err
 }
 
-func (s *mysqlAccountStorage) ListAudit(ctx context.Context, username string, limit int) ([]AuditEntry, error) {
+func (s *mysqlAccountStorage) ListAudit(ctx context.Context, filter AuditLogFilter, limit int) ([]AuditEntry, error) {
 	query := "SELECT id,actor_id,username,method,path,status,created_at FROM admin_audit_logs"
-	args := make([]interface{}, 0, 2)
-	if username != "" {
-		query += " WHERE username=?"
-		args = append(args, username)
+	var clauses []string
+	args := make([]interface{}, 0, 4)
+	if filter.Username != "" {
+		clauses = append(clauses, "username=?")
+		args = append(args, filter.Username)
+	}
+	if filter.Path != nil {
+		clauses = append(clauses, "method=? AND path REGEXP ?")
+		args = append(args, filter.Method, filter.Path.String())
+	}
+	if len(clauses) > 0 {
+		query += " WHERE " + strings.Join(clauses, " AND ")
 	}
 	query += " ORDER BY created_at DESC,id DESC LIMIT ?"
 	args = append(args, limit)
@@ -159,12 +181,16 @@ func (s *mongoAccountStorage) AppendAudit(ctx context.Context, entry AuditEntry)
 	return err
 }
 
-func (s *mongoAccountStorage) ListAudit(ctx context.Context, username string, limit int) ([]AuditEntry, error) {
-	filter := bson.M{}
-	if username != "" {
-		filter["username"] = username
+func (s *mongoAccountStorage) ListAudit(ctx context.Context, filter AuditLogFilter, limit int) ([]AuditEntry, error) {
+	query := bson.M{}
+	if filter.Username != "" {
+		query["username"] = filter.Username
 	}
-	cur, err := s.audit.Find(ctx, filter, options.Find().SetSort(bson.D{{Key: "created_at", Value: -1}, {Key: "_id", Value: -1}}).SetLimit(int64(limit)))
+	if filter.Path != nil {
+		query["method"] = filter.Method
+		query["path"] = bson.M{"$regex": filter.Path.String()}
+	}
+	cur, err := s.audit.Find(ctx, query, options.Find().SetSort(bson.D{{Key: "created_at", Value: -1}, {Key: "_id", Value: -1}}).SetLimit(int64(limit)))
 	if err != nil {
 		return nil, err
 	}

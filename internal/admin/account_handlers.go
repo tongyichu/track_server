@@ -107,8 +107,14 @@ func (a *Authenticator) HandleChangePassword(ctx context.Context, c *app.Request
 func (h *Handler) HandleAuditLogs(ctx context.Context, c *app.RequestContext) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	username := strings.TrimSpace(string(c.Query("username")))
-	items, err := h.auth.manager.storage.ListAudit(ctx, username, 100)
+	operation := strings.TrimSpace(string(c.Query("operation")))
+	filter, valid := auditAccountOperations[operation]
+	if !valid && operation != "" {
+		c.JSON(400, utils.H{"error": "操作类型无效"})
+		return
+	}
+	filter.Username = strings.TrimSpace(string(c.Query("username")))
+	items, err := h.auth.manager.storage.ListAudit(ctx, filter, 100)
 	if err != nil {
 		writeAccountError(c, err)
 		return

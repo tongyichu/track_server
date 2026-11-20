@@ -568,14 +568,19 @@ func (s *adminAccountTestStorage) AppendAudit(_ context.Context, entry AuditEntr
 	s.audit = append(s.audit, entry)
 	return nil
 }
-func (s *adminAccountTestStorage) ListAudit(_ context.Context, username string, limit int) ([]AuditEntry, error) {
+func (s *adminAccountTestStorage) ListAudit(_ context.Context, filter AuditLogFilter, limit int) ([]AuditEntry, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	entries := make([]AuditEntry, 0)
 	for i := len(s.audit) - 1; i >= 0 && len(entries) < limit; i-- {
-		if username == "" || s.audit[i].Username == username {
-			entries = append(entries, s.audit[i])
+		entry := s.audit[i]
+		if filter.Username != "" && entry.Username != filter.Username {
+			continue
 		}
+		if filter.Path != nil && (entry.Method != filter.Method || !filter.Path.MatchString(entry.Path)) {
+			continue
+		}
+		entries = append(entries, entry)
 	}
 	return entries, nil
 }
