@@ -21,8 +21,7 @@
 .ai-toolbar input,.ai-toolbar select,.ai-toolbar button{min-height:38px}
 .ai-custom-dates{margin-top:12px}
 .ai-page [hidden]{display:none!important}
-.ai-check{display:flex;align-items:center;gap:7px;font-size:12px;color:#667085;margin:0}
-.ai-check input{width:auto;margin:0}
+.ai-check{font-size:12px;color:var(--admin-secondary-color);margin:0}
 .ai-section-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px}
 .ai-section-heading h2,.ai-section-heading h3{margin:0}
 .ai-disclosure{margin-top:16px}
@@ -56,7 +55,6 @@
 .ai-quota-meta{display:block;color:#667085;font-size:11px;margin-top:5px}
 .ai-policy-table{min-width:980px}
 .ai-policy-table input[type=number]{width:115px}
-.ai-policy-table input[type=checkbox]{width:auto}
 .ai-price-table{min-width:800px}
 .ai-price-table input{width:130px}
 .ai-breakdown-table{min-width:850px}

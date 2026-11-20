@@ -333,11 +333,6 @@ table.data.table .btn { white-space: nowrap; }
 .track-management .track-avatar, .track-management .track-avatar-fallback { width: 24px; height: 24px; flex-basis: 24px; }
 .track-management .track-shot { display: block; width: 64px; height: 48px; box-shadow: none; }
 .track-management .track-empty { padding: 18px 8px; text-align: center; color: var(--admin-secondary-color); }
-.user-toolbar { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; }
-.user-toolbar label { display: flex; flex: 0 1 132px; flex-direction: column; align-items: stretch; gap: 5px; color: var(--admin-secondary-color); font-size: 12px; }
-.user-toolbar label:first-child { flex: 1 1 190px; }
-.user-toolbar label:nth-child(3) { flex-basis: 170px; }
-.user-toolbar .form-control, .user-toolbar .form-select { width: 100%; min-width: 0; }
 .track-type-badge { display: inline-flex; align-items: center; gap: 7px; padding: 4px 9px; border-radius: 999px; color: var(--track-type-color); background: color-mix(in srgb, var(--track-type-color) 10%, white); font-size: 12px; font-weight: 600; white-space: nowrap; }
 .track-type-badge svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .track-user { display: inline-flex; align-items: center; gap: 9px; min-width: 132px; white-space: nowrap; }

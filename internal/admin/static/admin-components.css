@@ -115,18 +115,40 @@ hr { border: 0; border-top: 1px solid var(--admin-border-color); margin: 1rem 0;
 .form-select { padding-inline-end: 24px; }
 .form-control[type="file"]::file-selector-button { margin: -6px 10px -6px -10px; padding: 6px 10px; border: 0; border-inline-end: 1px solid var(--admin-border-color); background: var(--admin-bg-surface-secondary); font: inherit; cursor: pointer; }
 textarea.form-control { resize: vertical; }
-.form-check, .form-check-label { display: inline-flex; align-items: center; gap: 6px; }
-.form-check-input { accent-color: var(--admin-primary); margin: 0; width: 16px; height: 16px; flex: none; }
-.form-switch .form-check-input {
-  appearance: none; width: 32px; height: 18px; padding: 2px;
-  border: 1px solid #8996a8; border-radius: 999px; background: #e1e7ef;
+.form-check, .form-switch { display: inline-flex; align-items: center; gap: 8px; }
+.form-check-input, input[type="checkbox"] { margin: 0; width: 16px; height: 16px; flex: none; vertical-align: middle; accent-color: var(--admin-primary); }
+input[type="checkbox"] {
+  appearance: none; padding: 0; border: 1px solid #8794a7; border-radius: 4px;
+  background: var(--admin-bg-forms) center / 12px 12px no-repeat; cursor: pointer;
 }
-.form-switch .form-check-input::before {
-  content: ""; display: block; width: 12px; height: 12px; border-radius: 50%;
-  background: #fff; box-shadow: 0 1px 2px #17203333;
+input[type="checkbox"]:not(:disabled):hover { border-color: var(--admin-primary); }
+input[type="checkbox"]:focus-visible { outline: 2px solid var(--admin-primary); outline-offset: 2px; }
+input[type="checkbox"]:is(:checked, :indeterminate) { border-color: var(--admin-primary); background-color: var(--admin-primary); }
+input[type="checkbox"]:checked {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='m2.5 6 2.25 2.25 4.75-4.75' stroke='white' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
-.form-switch .form-check-input:checked { background: var(--admin-primary); border-color: var(--admin-primary); }
-.form-switch .form-check-input:checked::before { transform: translateX(13px); }
+input[type="checkbox"]:indeterminate {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 6h6' stroke='white' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+input[type="checkbox"]:disabled { cursor: not-allowed; }
+.form-switch input[type="checkbox"] {
+  display: inline-grid; align-items: center; justify-items: start;
+  width: 32px; height: 20px; padding: 2px; border-radius: 999px;
+  background: var(--admin-bg-surface-secondary);
+}
+.form-switch input[type="checkbox"]::before {
+  content: ""; width: 14px; height: 14px; border-radius: 50%;
+  background: var(--admin-bg-surface); box-shadow: var(--admin-box-shadow);
+}
+.form-switch input[type="checkbox"]:checked { justify-items: end; background: var(--admin-primary); }
+
+@media (forced-colors: active) {
+  input[type="checkbox"], .form-switch input[type="checkbox"] {
+    appearance: auto; display: inline-block; width: 16px; height: 16px; padding: 0; background: none;
+  }
+  input[type="checkbox"]:is(:checked, :indeterminate), .form-switch input[type="checkbox"]:checked { background: none; }
+  .form-switch input[type="checkbox"]::before { content: none; }
+}
 
 .card {
   position: relative; display: block; min-width: 0; border: 1px solid var(--admin-border-color);

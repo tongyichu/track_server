@@ -188,7 +188,7 @@
       filterRegions = cities;
       cities.filter(function (item) { return item.level === 'province'; }).forEach(function (item) { provinceFilter.add(new Option(item.name, item.code)); });
       populateFilterCities();
-      AdminRegionPicker.enhance(provinceFilter, cityFilter, cities);
+      userRegionPicker.setRegions(cities);
     } catch (error) {
       AdminUI.alert('城市列表加载失败: ' + (error.message || error), 'danger');
     }
@@ -260,10 +260,14 @@
   var nextBtn = document.getElementById('nextBtn');
   var refreshBtn = document.getElementById('refreshBtn');
   var searchBtn = document.getElementById('searchBtn');
+  var extraFilters = document.getElementById('userExtraFilters');
+  var extraFilterToggle = document.getElementById('userExtraFilterToggle');
+  var extraFilterCount = document.getElementById('userExtraFilterCount');
   var titleFilter = document.getElementById('titleFilter');
   var internalFilter = document.getElementById('internalFilter');
   var provinceFilter = document.getElementById('provinceFilter');
   var cityFilter = document.getElementById('cityFilter');
+  var userRegionPicker = AdminRegionPicker.enhance(provinceFilter, cityFilter, [], { label: '所在地区' });
   var genderFilter = document.getElementById('genderFilter');
   var levelFilter = document.getElementById('levelFilter');
   var restrictedFilter = document.getElementById('restrictedFilter');
@@ -643,11 +647,11 @@
 
   refreshBtn.addEventListener('click', function () { loadPage(failedListView || listView); });
   function resetSearch() { loadPage({ filters: readFilters(), cursors: [null], index: 0, next: null }); }
-  var narrowFilters = window.matchMedia('(max-width: 767px)');
-  var extraFilters = document.getElementById('userExtraFilters');
-  function syncFilterLayout() { extraFilters.open = !narrowFilters.matches; }
-  narrowFilters.addEventListener('change', syncFilterLayout);
-  syncFilterLayout();
+  extraFilterToggle.addEventListener('click', function () {
+    extraFilters.hidden = !extraFilters.hidden;
+    extraFilterToggle.setAttribute('aria-expanded', String(!extraFilters.hidden));
+    if (extraFilters.hidden) userRegionPicker.close();
+  });
   searchBtn.addEventListener('click', resetSearch);
   titleFilter.addEventListener('keydown', function (event) { if (event.key === 'Enter') resetSearch(); });
   provinceFilter.addEventListener('change', function () { populateFilterCities(); resetSearch(); });
@@ -673,8 +677,10 @@
     if (genderFilter.value) params.set('gender', genderFilter.value);
     if (levelFilter.value) params.set('level', levelFilter.value);
     if (restrictedFilter.value) params.set('restricted', restrictedFilter.value);
-    var extraCount = Array.from(params.keys()).filter(function (key) { return key !== 'title'; }).length;
-    document.getElementById('userExtraFilterCount').textContent = extraCount ? '· ' + extraCount + ' 项' : '';
+    var extraCount = [internalFilter.value, cityFilter.value || provinceFilter.value, genderFilter.value, levelFilter.value, restrictedFilter.value].filter(Boolean).length;
+    extraFilterCount.textContent = extraCount;
+    extraFilterCount.hidden = extraCount === 0;
+    extraFilterToggle.setAttribute('aria-label', extraCount ? '筛选，已选 ' + extraCount + ' 项' : '筛选');
     return params;
   }
 

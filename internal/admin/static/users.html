@@ -61,20 +61,22 @@
     </section>
     <section class="panel">
       <div class="admin-section-heading"><h2>用户列表 <span class="hint" id="totalHint"></span></h2><button id="refreshBtn" type="button" class="btn btn-outline-secondary">刷新</button></div>
-      <div class="admin-toolbar user-toolbar">
-        <label>昵称搜索 <input id="titleFilter" class="form-control" type="search" placeholder="输入用户名称关键词" /></label>
-        <details id="userExtraFilters" class="user-extra-filters" open>
-          <summary>更多筛选 <span id="userExtraFilterCount"></span></summary>
-          <div class="user-extra-fields">
-        <label>内部人员 <select id="internalFilter" class="form-select"><option value="">全部</option><option value="true">是</option><option value="false">否</option></select></label>
-        <label>省份 <select id="provinceFilter" class="form-select"><option value="">全部省份</option></select></label>
-        <label>所在城市 <select id="cityFilter" class="form-select"><option value="">全部城市</option></select></label>
-        <label>性别 <select id="genderFilter" class="form-select"><option value="">全部</option><option value="male">男</option><option value="female">女</option><option value="unknown">未设置</option></select></label>
-        <label>用户等级 <select id="levelFilter" class="form-select"><option value="">全部等级</option></select></label>
-        <label>账号限制 <select id="restrictedFilter" class="form-select"><option value="">全部</option><option value="true">已限制</option><option value="false">正常</option></select></label>
-          </div>
-        </details>
-        <button id="searchBtn" type="button" class="btn btn-primary">搜索</button>
+      <div class="user-toolbar" role="search" aria-label="搜索用户">
+        <div class="user-search-row">
+          <input id="titleFilter" class="form-control" type="search" aria-label="用户昵称" placeholder="搜索昵称" />
+          <button id="searchBtn" type="button" class="btn btn-primary">搜索</button>
+          <button id="userExtraFilterToggle" type="button" class="btn btn-outline-secondary" aria-expanded="false" aria-controls="userExtraFilters">
+            筛选<span id="userExtraFilterCount" class="user-filter-count" aria-hidden="true" hidden></span>
+          </button>
+        </div>
+        <div id="userExtraFilters" class="user-extra-fields" hidden>
+          <label>省份<select id="provinceFilter" class="form-select"><option value="">全部省份</option></select></label>
+          <label>所在城市<select id="cityFilter" class="form-select"><option value="">全部城市</option></select></label>
+          <label>性别<select id="genderFilter" class="form-select"><option value="">全部</option><option value="male">男</option><option value="female">女</option><option value="unknown">未设置</option></select></label>
+          <label>用户等级<select id="levelFilter" class="form-select"><option value="">全部等级</option></select></label>
+          <label>内部人员<select id="internalFilter" class="form-select"><option value="">全部</option><option value="true">是</option><option value="false">否</option></select></label>
+          <label>账号限制<select id="restrictedFilter" class="form-select"><option value="">全部</option><option value="true">已限制</option><option value="false">正常</option></select></label>
+        </div>
       </div>
       <div class="table-responsive">
       <table class="data admin-user-table">
