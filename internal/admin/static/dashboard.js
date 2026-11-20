@@ -1,6 +1,8 @@
 (function () {
-  let period = 'day';
-  let requestVersion = 0;
+  const periodLabels = { day: '今日', week: '本周', month: '本月' };
+  const periodButtons = document.querySelectorAll('[data-period]');
+  let requestedPeriod = 'day';
+  let dashboardRequest = null;
   const charts = {};
   const colors = AdminChartStyle.colors;
   let latestData = null;
@@ -63,12 +65,11 @@
   }
 
   function setMetric(id, metric) {
-    metric = metric || {};
-    document.getElementById(id).textContent = formatNumber(metric.current);
+    setText(id, metric ? formatNumber(metric.current) : '—');
     const delta = document.getElementById(id + 'Delta');
     if (!delta) return;
-    delta.textContent = comparisonText(metric);
-    delta.className = number(metric.current) >= number(metric.previous) ? 'positive' : 'negative';
+    delta.textContent = metric ? comparisonText(metric) : '';
+    delta.className = metric && number(metric.current) < number(metric.previous) ? 'negative' : 'positive';
   }
 
   function setText(id, value) {
@@ -143,14 +144,32 @@
     return (items || []).map(function (item) { return { name: item.label || item.key || '未知', value: number(item.count) }; });
   }
 
-  function renderReviewMetrics(review) {
-    review = review || {};
-    setText('reviewPending', formatNumber(review.pending));
-    setText('reviewOver24', formatNumber(review.pending_over_24h));
-    setText('reviewOver72', formatNumber(review.pending_over_72h));
-    setText('approvalRate', (number(review.approval_rate) * 100).toFixed(1) + '%');
-    setText('avgReviewHours', formatDurationHours(review.avg_review_hours));
-    setText('oldestPending', AdminTime.dateTime(review.oldest_pending, '暂无积压'));
+  function renderBacklog(id, label, stats, oldest) {
+    const element = document.getElementById(id);
+    const over72 = number(stats?.pending_over_72h);
+    const between24And72 = Math.max(0, number(stats?.pending_over_24h) - over72);
+    element.hidden = !between24And72 && !over72 && !oldest;
+    element.replaceChildren(label);
+    function addAge(text, className) {
+      const age = document.createElement('span');
+      age.textContent = text;
+      age.className = className;
+      element.append(' · ', age);
+    }
+    if (between24And72) addAge('24–72 小时 ' + formatNumber(between24And72) + ' 条', 'backlog-warning');
+    if (over72) addAge('超 72 小时 ' + formatNumber(over72) + ' 条', 'backlog-danger');
+    if (oldest) element.append(' · 最早 ' + oldest);
+  }
+
+  function renderReviewMetrics(review, pendingSubmissions) {
+    const pending = review?.pending ?? pendingSubmissions;
+    const reviewed = review && number(review.approved) + number(review.rejected) > 0;
+    const empty = review ? '暂无样本' : '—';
+    setText('reviewPending', pending == null ? '—' : formatNumber(pending));
+    setText('approvalRate', reviewed ? (number(review.approval_rate) * 100).toFixed(1) + '%' : empty);
+    setText('avgReviewHours', reviewed ? formatDurationHours(review.avg_review_hours) : empty);
+    renderBacklog('reviewBacklog', '投稿积压', review, AdminTime.dateTime(review?.oldest_pending, ''));
+    document.getElementById('reviewBreakdown').hidden = !review;
   }
 
   function renderReviewChart(review) {
@@ -162,13 +181,14 @@
   }
 
   function renderFeedbackMetrics(feedback) {
-    feedback = feedback || {};
-    setText('feedbackPending', formatNumber(feedback.pending));
-    setText('feedbackProcessing', formatNumber(feedback.processing));
-    setText('feedbackOver24', formatNumber(feedback.pending_over_24h));
-    setText('feedbackOver72', formatNumber(feedback.pending_over_72h));
-    setText('feedbackResolvedPeriod', formatNumber(feedback.resolved_in_period));
-    setText('avgResolutionHours', formatDurationHours(feedback.avg_resolution_hours));
+    setText('feedbackPending', feedback ? formatNumber(feedback.pending) : '—');
+    setText('feedbackProcessing', feedback ? formatNumber(feedback.processing) : '—');
+    setText('feedbackResolvedPeriod', feedback ? formatNumber(feedback.resolved_in_period) : '—');
+    const resolved = feedback && number(feedback.resolved_in_period) > 0;
+    const empty = feedback ? '暂无样本' : '—';
+    setText('avgResolutionHours', resolved ? formatDurationHours(feedback.avg_resolution_hours) : empty);
+    renderBacklog('feedbackBacklog', '反馈积压', feedback);
+    document.getElementById('feedbackBreakdown').hidden = !feedback;
   }
 
   function renderFeedbackCharts(feedback) {
@@ -253,21 +273,30 @@
 
   function renderTopTracks(items) {
     const body = document.getElementById('topTracks');
-    body.innerHTML = '';
+    body.replaceChildren();
     if (!items.length) {
-      body.innerHTML = '<tr><td colspan="7" class="text-secondary text-center">暂无互动数据</td></tr>';
+      const cell = body.insertRow().insertCell();
+      cell.colSpan = 6;
+      cell.className = 'text-secondary text-center';
+      cell.textContent = '暂无互动数据';
       return;
     }
     items.forEach(function (item) {
-      const row = document.createElement('tr');
-      row.innerHTML = '<td class="mono">' + esc(item.track_id) + '</td>' +
-        '<td>' + esc(item.title || '未命名轨迹') + '</td>' +
-        '<td>' + formatNumber(item.collections) + '</td>' +
-        '<td>' + formatNumber(item.navigations) + '</td>' +
-        '<td>' + formatNumber(item.likes) + '</td>' +
-        '<td>' + formatNumber(item.comments) + '</td>' +
-        '<td><strong>' + formatNumber(item.score) + '</strong></td>';
-      body.appendChild(row);
+      const row = body.insertRow();
+      const track = row.insertCell();
+      const link = document.createElement('a');
+      link.href = '/admin/tracks.html?track_id=' + encodeURIComponent(item.track_id);
+      link.textContent = item.title || '未命名轨迹';
+      const id = document.createElement('small');
+      id.className = 'dashboard-track-id mono text-secondary';
+      id.textContent = item.track_id;
+      track.append(link, id);
+      ['collections', 'navigations', 'likes', 'comments'].forEach(function (key) {
+        row.insertCell().textContent = formatNumber(item[key]);
+      });
+      const score = document.createElement('strong');
+      score.textContent = formatNumber(item.score);
+      row.insertCell().appendChild(score);
     });
   }
 
@@ -290,59 +319,99 @@
     return Math.round(meters) + ' m';
   }
 
-  function esc(value) {
-    return String(value == null ? '' : value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  function dateRange(start, end) {
+    const from = AdminTime.date(start);
+    const to = AdminTime.date(end);
+    return from === to ? from : from + ' 至 ' + to;
   }
 
-  async function loadDashboard() {
-    const current = ++requestVersion;
+  function renderDashboard(data) {
+    const metrics = data.metrics || {};
+    setMetric('activeUsers', metrics.active_users);
+    setMetric('newUsers', metrics.new_users);
+    setMetric('uploadedTracks', metrics.uploaded_tracks);
+    setMetric('uploadUsers', metrics.upload_users);
+    setMetric('submissions', metrics.submissions);
+    setText('rangeHint', periodLabels[data.period] + ' · ' + dateRange(data.range.start, data.range.end));
+    setText('updatedAt', '最近更新 ' + AdminTime.dateTime(data.updated_at) + '（北京时间）');
+    const trend = data.trend || [];
+    const trendRange = trend.length ? dateRange(trend[0].date, trend[trend.length - 1].date) : '';
+    setText('trendRangeHint', trendRange);
+    setText('engagementRangeHint', trendRange ? '每日趋势 · ' + trendRange : '');
+    renderReviewMetrics(data.review, metrics.pending_submissions);
+    renderFeedbackMetrics(data.feedback);
+    renderContentMetrics(data.content);
+    renderEngagementMetrics(data.engagement);
+    renderCompanion(data.companion);
+    periodButtons.forEach(function (button) {
+      const active = button.dataset.period === data.period;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', String(active));
+    });
+  }
+
+  function showChartError() {
+    const error = document.getElementById('dashboardChartError');
+    error.textContent = '图表加载失败，请刷新重试';
+    error.classList.remove('hidden');
+  }
+
+  async function renderDashboardCharts(data) {
+    document.getElementById('dashboardChartError').classList.add('hidden');
+    try {
+      await AdminAssets.loadCharts();
+      if (data !== latestData) return;
+      renderTrend(data.trend);
+      if (data.funnel) renderFunnel(data.funnel);
+      if (data.review && document.getElementById('reviewBreakdown').open) renderReviewChart(data.review);
+      if (data.feedback && document.getElementById('feedbackBreakdown').open) renderFeedbackCharts(data.feedback);
+      if (data.content) renderContentCharts(data.content);
+      if (data.engagement) renderEngagementChart(data.engagement, data.trend);
+    } catch (_) {
+      if (data === latestData) showChartError();
+    }
+  }
+
+  async function loadDashboard(period = requestedPeriod) {
+    requestedPeriod = period;
+    if (dashboardRequest) dashboardRequest.abort();
+    const controller = new AbortController();
+    dashboardRequest = controller;
+    const status = document.getElementById('dashboardStatus');
     const error = document.getElementById('dashboardError');
+    status.textContent = '正在读取' + periodLabels[period] + '数据';
+    status.hidden = false;
     error.classList.add('hidden');
     try {
-      const response = await fetch('/admin/api/dashboard?period=' + encodeURIComponent(period));
+      const response = await fetch('/admin/api/dashboard?period=' + encodeURIComponent(period), { signal: controller.signal });
+      if (controller.signal.aborted) return;
       if (response.status === 401) {
         window.location.href = '/admin/login.html';
         return;
       }
       const payload = await response.json();
-      if (current !== requestVersion) return;
-      if (!response.ok) throw new Error(payload.error || ('加载失败: ' + response.status));
-      const data = payload.data || {};
+      if (controller.signal.aborted) return;
+      const data = payload.data;
+      if (!response.ok || !data?.range || !Object.hasOwn(periodLabels, data.period)) throw new Error('统计数据暂不可用');
+      renderDashboard(data);
       latestData = data;
-      const metrics = data.metrics || {};
-      setMetric('activeUsers', metrics.active_users);
-      setMetric('newUsers', metrics.new_users);
-      setMetric('uploadedTracks', metrics.uploaded_tracks);
-      setMetric('uploadUsers', metrics.upload_users);
-      setMetric('submissions', metrics.submissions);
-      setText('rangeHint', AdminTime.date(data.range.start) + ' 至今');
-      setText('updatedAt', '数据更新时间：' + AdminTime.dateTime(data.updated_at));
-      renderReviewMetrics(data.review);
-      renderFeedbackMetrics(data.feedback);
-      renderContentMetrics(data.content);
-      renderEngagementMetrics(data.engagement);
-      renderCompanion(data.companion);
-      await new Promise(function (resolve) { requestAnimationFrame(resolve); });
-      await AdminAssets.loadCharts();
-      if (current !== requestVersion) return;
-      renderTrend(data.trend);
-      renderFunnel(data.funnel);
-      if (document.getElementById('reviewBreakdown').open) renderReviewChart(data.review);
-      if (document.getElementById('feedbackBreakdown').open) renderFeedbackCharts(data.feedback);
-      renderContentCharts(data.content);
-      renderEngagementChart(data.engagement, data.trend);
-    } catch (cause) {
-      if (current !== requestVersion) return;
-      error.textContent = cause.message || String(cause);
+      renderDashboardCharts(data);
+    } catch (_) {
+      if (controller.signal.aborted) return;
+      const displayed = latestData ? '，当前显示' + periodLabels[latestData.period] + '数据' : '，请刷新重试';
+      error.textContent = periodLabels[period] + '数据读取失败' + displayed;
       error.classList.remove('hidden');
+    } finally {
+      if (dashboardRequest === controller) {
+        dashboardRequest = null;
+        status.hidden = true;
+      }
     }
   }
 
-  document.querySelectorAll('[data-period]').forEach(function (button) {
+  periodButtons.forEach(function (button) {
     button.addEventListener('click', function () {
-      period = button.dataset.period;
-      document.querySelectorAll('[data-period]').forEach(function (item) { item.classList.toggle('active', item === button); item.setAttribute('aria-pressed', String(item === button)); });
-      loadDashboard();
+      loadDashboard(button.dataset.period);
     });
   });
   ['reviewBreakdown', 'feedbackBreakdown'].forEach(function (id) {
@@ -355,9 +424,8 @@
         if (!details.open || data !== latestData) return;
         if (id === 'reviewBreakdown') renderReviewChart(data.review); else renderFeedbackCharts(data.feedback);
         Object.keys(charts).forEach(function (key) { charts[key].resize(); });
-      } catch (cause) {
-        const error = document.getElementById('dashboardError');
-        error.textContent = '图表加载失败，请刷新重试'; error.classList.remove('hidden');
+      } catch (_) {
+        if (details.open && data === latestData) showChartError();
       }
     });
   });
@@ -366,10 +434,21 @@
     loadAnalyticsHealth();
   });
   window.addEventListener('pagehide', function () {
+    if (dashboardRequest) dashboardRequest.abort();
     if (healthRequest) { const request = healthRequest; healthRequest = null; request.abort(); }
   });
-  window.addEventListener('pageshow', function (event) { if (event.persisted) loadAnalyticsHealth(); });
+  window.addEventListener('pageshow', function (event) {
+    if (event.persisted) {
+      loadDashboard();
+      loadAnalyticsHealth();
+    }
+  });
   window.addEventListener('resize', function () { Object.keys(charts).forEach(function (key) { charts[key].resize(); }); });
+  const canReview = AdminAccess.can('track_submissions', false);
+  const canReadFeedback = AdminAccess.can('feedbacks', false);
+  document.getElementById('dashboardTodos').hidden = !canReview && !canReadFeedback;
+  document.getElementById('dashboardEfficiency').hidden = !canReview && !canReadFeedback;
+  document.getElementById('dashboardGrowth').hidden = !canReview && !AdminAccess.can('users', false) && !AdminAccess.can('tracks', false);
   loadDashboard();
   loadAnalyticsHealth();
 })();

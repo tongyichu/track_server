@@ -40,7 +40,9 @@
 
   var tbody = document.getElementById('feedbackList');
   var statusFilter = document.getElementById('statusFilter');
-  statusFilter.value = 'pending';
+  var linkedStatus = new URLSearchParams(window.location.search).get('status');
+  var validLinkedStatus = Array.from(statusFilter.options).some(function (option) { return option.value === linkedStatus; });
+  statusFilter.value = validLinkedStatus ? linkedStatus : 'pending';
   var versionFilter = document.getElementById('versionFilter');
   var phoneFilter = document.getElementById('phoneFilter');
   var refreshBtn = document.getElementById('refreshBtn');

@@ -20,33 +20,54 @@
             </a>
           </span>
         </div>
-        <p class="admin-stats-meta" id="rangeHint"></p>
+        <div class="dashboard-heading-meta admin-stats-meta">
+          <span id="rangeHint"></span>
+          <span id="updatedAt"></span>
+        </div>
       </div>
       <div class="dashboard-heading-actions">
         <div class="period-tabs admin-period-tabs" role="group" aria-label="统计周期">
-          <button data-period="day" class="active">日</button>
-          <button data-period="week">周</button>
-          <button data-period="month">月</button>
+          <button type="button" data-period="day" aria-pressed="false">日</button>
+          <button type="button" data-period="week" aria-pressed="false">周</button>
+          <button type="button" data-period="month" aria-pressed="false">月</button>
         </div>
         <button id="refreshDashboard" class="quiet-button">刷新数据</button>
       </div>
     </div>
 
-    <div id="dashboardError" class="notice error hidden"></div>
+    <p id="dashboardStatus" class="admin-stats-meta dashboard-status" role="status" hidden></p>
+    <div id="dashboardError" class="notice error hidden" role="alert"></div>
 
-    <section class="admin-metrics" aria-live="polite">
-      <article data-admin-read="users" class="admin-metric" data-admin-metric="" data-label="活跃用户" data-value-id="activeUsers" data-note="正在加载" data-note-id="activeUsersDelta"></article>
-      <article data-admin-read="users" class="admin-metric" data-admin-metric="" data-label="新增用户" data-value-id="newUsers" data-note="正在加载" data-note-id="newUsersDelta"></article>
-      <article data-admin-read="tracks" class="admin-metric" data-admin-metric="" data-label="新增轨迹" data-value-id="uploadedTracks" data-note="正在加载" data-note-id="uploadedTracksDelta"></article>
-      <article data-admin-read="tracks" class="admin-metric" data-admin-metric="" data-label="上传用户" data-value-id="uploadUsers" data-note="正在加载" data-note-id="uploadUsersDelta"></article>
-      <article data-admin-read="track_submissions" class="admin-metric" data-admin-metric="" data-label="新增投稿" data-value-id="submissions" data-note="正在加载" data-note-id="submissionsDelta"></article>
+    <section id="dashboardTodos" class="dashboard-section" aria-labelledby="dashboardTodosHeading" hidden>
+      <div class="section-heading"><h2 id="dashboardTodosHeading">当前待办</h2></div>
+      <div class="admin-metrics dashboard-todos">
+        <a href="/admin/track_submissions.html?status=pending" data-admin-read="track_submissions" class="admin-metric" data-admin-metric="" data-label="投稿待审核" data-value-id="reviewPending"></a>
+        <a href="/admin/feedbacks.html?status=pending" data-admin-read="feedbacks" class="admin-metric" data-admin-metric="" data-label="反馈待处理" data-value-id="feedbackPending"></a>
+        <a href="/admin/feedbacks.html?status=processing" data-admin-read="feedbacks" class="admin-metric" data-admin-metric="" data-label="反馈处理中" data-value-id="feedbackProcessing"></a>
+      </div>
+      <div class="dashboard-backlog admin-stats-meta" aria-live="polite">
+        <span data-admin-read="track_submissions" id="reviewBacklog" hidden></span>
+        <span data-admin-read="feedbacks" id="feedbackBacklog" hidden></span>
+      </div>
     </section>
 
+    <section id="dashboardGrowth" class="dashboard-section" aria-labelledby="dashboardGrowthHeading" hidden>
+      <div class="section-heading"><h2 id="dashboardGrowthHeading">本期增长</h2></div>
+      <div class="admin-metrics" aria-live="polite">
+        <article data-admin-read="users" class="admin-metric" data-admin-metric="" data-label="活跃用户" data-value-id="activeUsers" data-note-id="activeUsersDelta"></article>
+        <article data-admin-read="users" class="admin-metric" data-admin-metric="" data-label="新增用户" data-value-id="newUsers" data-note-id="newUsersDelta"></article>
+        <article data-admin-read="tracks" class="admin-metric" data-admin-metric="" data-label="新增轨迹" data-value-id="uploadedTracks" data-note-id="uploadedTracksDelta"></article>
+        <article data-admin-read="tracks" class="admin-metric" data-admin-metric="" data-label="上传用户" data-value-id="uploadUsers" data-note-id="uploadUsersDelta"></article>
+        <article data-admin-read="track_submissions" class="admin-metric" data-admin-metric="" data-label="新增投稿" data-value-id="submissions" data-note-id="submissionsDelta"></article>
+      </div>
+    </section>
+
+    <p id="dashboardChartError" class="notice error hidden" role="alert"></p>
     <section class="dashboard-section">
       <div class="section-heading"><div><h2>增长与转化</h2></div></div>
       <div class="dashboard-layout dashboard-layout-main">
         <article class="panel dashboard-card dashboard-card-wide" data-admin-read="users tracks">
-          <div class="dashboard-card-header"><div><h3>用户与轨迹趋势</h3></div></div>
+          <div class="dashboard-card-header"><div><h3>用户与轨迹趋势</h3></div><span id="trendRangeHint" class="admin-stats-meta"></span></div>
           <div class="dashboard-card-body"><div id="trendChart" class="dashboard-chart chart-large" role="img" aria-label="用户和轨迹趋势图"></div></div>
         </article>
         <article class="panel dashboard-card" data-admin-read="users tracks track_submissions">
@@ -56,36 +77,24 @@
       </div>
     </section>
 
-    <section class="dashboard-section">
-      <div class="section-heading"><div><h2>运营效率</h2></div></div>
+    <section id="dashboardEfficiency" class="dashboard-section" hidden>
+      <div class="section-heading"><div><h2>本期运营效率</h2></div></div>
       <div class="dashboard-layout dashboard-layout-equal">
         <article class="panel dashboard-card" data-admin-read="track_submissions">
-          <div class="dashboard-card-header"><div><h3>投稿审核</h3></div><a href="/admin/track_submissions.html?status=pending">进入审核</a></div>
+          <div class="dashboard-card-header"><div><h3>投稿审核</h3></div></div>
           <div class="dashboard-card-body">
-            <div class="stat-list stat-list-four">
-              <div class="admin-metric admin-metric-inline" data-admin-metric="" data-label="待审核" data-value-id="reviewPending"></div>
-              <div class="admin-metric admin-metric-inline" data-admin-metric="" data-label="超 24 小时" data-value-id="reviewOver24" data-tone="warning"></div>
-              <div class="admin-metric admin-metric-inline" data-admin-metric="" data-label="超 72 小时" data-value-id="reviewOver72" data-tone="danger"></div>
-              <div class="admin-metric admin-metric-inline" data-admin-metric="" data-label="通过率" data-value-id="approvalRate"></div>
-            </div>
-            <div class="dashboard-detail-row"><span>平均审核耗时</span><strong id="avgReviewHours">--</strong></div>
-            <div class="dashboard-detail-row"><span>最早待审核</span><strong id="oldestPending">--</strong></div>
+            <div class="dashboard-detail-row"><span>审核通过率</span><strong id="approvalRate">—</strong></div>
+            <div class="dashboard-detail-row"><span>平均审核耗时</span><strong id="avgReviewHours">—</strong></div>
             <details id="reviewBreakdown" class="admin-stat-disclosure"><summary>审核结果分布</summary><div class="dashboard-ring"><div id="reviewChart" class="dashboard-chart chart-small" role="img" aria-label="审核结果分布"></div><div id="reviewChartLegend" class="admin-user-legend"></div></div></details>
           </div>
         </article>
 
         <article class="panel dashboard-card" data-admin-read="feedbacks">
-          <div class="dashboard-card-header"><div><h3>意见反馈</h3></div><a href="/admin/feedbacks.html">处理反馈</a></div>
+          <div class="dashboard-card-header"><div><h3>意见反馈</h3></div></div>
           <div class="dashboard-card-body">
-            <div class="stat-list stat-list-four">
-              <div class="admin-metric admin-metric-inline" data-admin-metric="" data-label="待处理" data-value-id="feedbackPending"></div>
-              <div class="admin-metric admin-metric-inline" data-admin-metric="" data-label="处理中" data-value-id="feedbackProcessing"></div>
-              <div class="admin-metric admin-metric-inline" data-admin-metric="" data-label="超 24 小时" data-value-id="feedbackOver24" data-tone="warning"></div>
-              <div class="admin-metric admin-metric-inline" data-admin-metric="" data-label="超 72 小时" data-value-id="feedbackOver72" data-tone="danger"></div>
-            </div>
-            <div class="dashboard-detail-row"><span>本周期已解决</span><strong id="feedbackResolvedPeriod">--</strong></div>
-            <div class="dashboard-detail-row"><span>平均解决耗时</span><strong id="avgResolutionHours">--</strong></div>
-            <details id="feedbackBreakdown" class="admin-stat-disclosure"><summary>状态与来源分布</summary><div class="split-charts"><div class="dashboard-ring"><div id="feedbackStatusChart" class="dashboard-chart chart-small" role="img" aria-label="反馈状态分布"></div><div id="feedbackStatusChartLegend" class="admin-user-legend"></div></div><div id="feedbackVersionChart" class="dashboard-chart chart-small" role="img" aria-label="反馈来源分布"></div></div></details>
+            <div class="dashboard-detail-row"><span>已解决反馈</span><strong id="feedbackResolvedPeriod">—</strong></div>
+            <div class="dashboard-detail-row"><span>平均解决耗时</span><strong id="avgResolutionHours">—</strong></div>
+            <details id="feedbackBreakdown" class="admin-stat-disclosure"><summary>当前状态与本期来源</summary><div class="split-charts"><div class="dashboard-ring"><div id="feedbackStatusChart" class="dashboard-chart chart-small" role="img" aria-label="当前反馈状态分布"></div><div id="feedbackStatusChartLegend" class="admin-user-legend"></div></div><div id="feedbackVersionChart" class="dashboard-chart chart-small" role="img" aria-label="本期反馈来源分布"></div></div></details>
           </div>
         </article>
       </div>
@@ -113,7 +122,7 @@
       <div class="section-heading"><div><h2>互动与同行</h2></div></div>
       <div class="dashboard-layout dashboard-layout-main">
         <article class="panel dashboard-card dashboard-card-wide" data-admin-read="tracks">
-          <div class="dashboard-card-header"><div><h3>内容互动趋势</h3></div></div>
+          <div class="dashboard-card-header"><div><h3>本期内容互动</h3></div></div>
           <div class="dashboard-card-body">
             <div class="stat-list stat-list-four engagement-summary">
               <div class="admin-metric admin-metric-inline" data-admin-metric="" data-label="收藏" data-value-id="engagementCollections" data-note="" data-note-id="engagementCollectionsDelta"></div>
@@ -121,7 +130,8 @@
               <div class="admin-metric admin-metric-inline" data-admin-metric="" data-label="点赞" data-value-id="engagementLikes" data-note="" data-note-id="engagementLikesDelta"></div>
               <div class="admin-metric admin-metric-inline" data-admin-metric="" data-label="评论" data-value-id="engagementComments" data-note="" data-note-id="engagementCommentsDelta"></div>
             </div>
-            <div id="engagementChart" class="dashboard-chart chart-large"></div>
+            <span id="engagementRangeHint" class="admin-stats-meta"></span>
+            <div id="engagementChart" class="dashboard-chart chart-large" role="img" aria-label="每日内容互动趋势"></div>
           </div>
         </article>
         <article class="panel dashboard-card" data-admin-read="companions">
@@ -137,17 +147,16 @@
       </div>
 
       <article class="panel dashboard-card top-tracks-card" data-admin-read="tracks">
-        <div class="dashboard-card-header"><div><h3>热门轨迹</h3></div></div>
+        <div class="dashboard-card-header"><div><h3>本期热门轨迹</h3></div></div>
         <div class="dashboard-card-body dashboard-table-wrap">
           <table class="data dashboard-table">
-            <thead><tr><th>轨迹</th><th>标题</th><th>收藏</th><th>导航</th><th>点赞</th><th>评论</th><th>总互动</th></tr></thead>
+            <thead><tr><th>轨迹</th><th>收藏</th><th>导航</th><th>点赞</th><th>评论</th><th>总互动</th></tr></thead>
             <tbody id="topTracks"></tbody>
           </table>
         </div>
       </article>
     </section>
 
-    <p class="dashboard-updated" id="updatedAt"></p>
   </main>
   <script src="/admin/static/vendor/tabler.min.js"></script>
   <script src="/admin/static/shell.js"></script>
