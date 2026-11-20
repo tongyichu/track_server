@@ -14,4 +14,13 @@
 .notice-footer .notice-footer-actions{margin-left:auto}
 .notice-save-error{flex-basis:100%;overflow-wrap:anywhere}
 .notice-save-error:empty{display:none}
-@media(max-width:700px){.notice-dialog>.modal-header,.notice-dialog>.notice-scroll-body,.notice-dialog>.modal-footer{padding:18px}.notice-footer .notice-footer-actions{margin-left:0}}
+.notice-view-switch.btn-group { display:none; }
+@media(max-width:700px) {
+  .notice-dialog>.modal-header,.notice-dialog>.notice-scroll-body,.notice-dialog>.modal-footer { padding:12px 14px; }
+  .notice-dialog .notice-heading { flex-wrap:nowrap; }
+  .notice-view-switch.btn-group { display:inline-flex; margin-inline-start:auto; }
+  .notice-dialog .btn-close { margin:0; flex:none; }
+  .notice-footer .notice-footer-actions { margin-left:0; }
+  .notice-dialog:not(.notice-previewing) .notice-preview,
+  .notice-previewing :is(.notice-fields,#noticeHistory) { display:none; }
+}

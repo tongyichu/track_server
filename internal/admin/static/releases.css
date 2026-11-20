@@ -43,3 +43,15 @@
   .release-policy .form-switch { margin-top: 0; }
   .release-package-info, .release-detail-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+@media (max-width:767px) {
+  table.release-table.admin-card-table tbody tr {
+    display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:4px 8px;
+    margin:0; padding:9px 0; border:0; border-bottom:1px solid var(--tblr-border-color); border-radius:0; box-shadow:none;
+  }
+  table.release-table.admin-card-table tbody td { display:block; padding:0; }
+  table.release-table.admin-card-table tbody td::before { display:none; }
+  .release-table.admin-card-table tbody td:nth-child(2) { justify-self:end; }
+  .release-table.admin-card-table tbody td:nth-child(3) { grid-column:1 / -1; color:var(--tblr-secondary); font-size:12px; }
+  table.release-table.admin-card-table tbody td:nth-child(4) { display:none; }
+  .release-table .release-version-link { min-height:36px; }
+}

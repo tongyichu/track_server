@@ -85,4 +85,16 @@
 .ai-table colgroup,.ai-quota-table colgroup{display:none}
 .ai-ring{grid-template-columns:minmax(140px,1fr) minmax(120px,1fr)}
 .ai-settings>summary .hint{display:block;margin:5px 0 0}
+table.ai-table.admin-card-table tbody tr:not(.admin-empty-row) {
+  display:grid; grid-template-columns:minmax(0,1fr) minmax(0,42%); align-items:start; gap:4px 8px;
+  margin:0; padding:10px 0; border:0; border-bottom:1px solid var(--tblr-border-color); border-radius:0; box-shadow:none;
 }
+table.ai-table.admin-card-table tbody tr:not(.admin-empty-row) > td { display:block; padding:0; }
+.ai-table.admin-card-table td::before { display:none; }
+.ai-table td:nth-child(1) { grid-area:2 / 1; color:var(--tblr-secondary); font-size:12px; }
+.ai-table td:nth-child(2) { grid-area:1 / 1; }
+.ai-table td:nth-child(4) { grid-area:1 / 2; text-align:end; }
+.ai-table td:nth-child(6) { grid-area:2 / 2; justify-self:end; }
+table.ai-table.admin-card-table tbody tr:not(.admin-empty-row) > :is(td:nth-child(3),td:nth-child(5)) { display:none; }
+}
+@media(max-width:420px){.ai-ring{grid-template-columns:minmax(0,1fr)}}

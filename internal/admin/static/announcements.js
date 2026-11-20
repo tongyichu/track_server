@@ -102,6 +102,15 @@
     catch (_) { $('previewTime').textContent = '请输入有效的北京时间'; }
     $('previewLink').textContent = $('noticeURL').value.trim() ? '点击卡片打开 H5' : '';
   }
+  function showPreviewView(previewing) {
+    if ($('noticeForm').classList.contains('notice-previewing') === previewing) return;
+    $('noticeForm').classList.toggle('notice-previewing', previewing);
+    for (const [id, active] of [['showNoticeFields', !previewing], ['showNoticePreview', previewing]]) {
+      $(id).classList.toggle('active', active);
+      $(id).setAttribute('aria-pressed', String(active));
+    }
+    $('noticeForm').querySelector('.notice-scroll-body').scrollTop = 0;
+  }
   function bind(notice) {
     current = notice; $('noticeSaveError').textContent = ''; $('noticeEditorTitle').textContent = notice.id ? '通知详情' : '新建通知';
     $('noticeKind').value = notice.kind || 'system'; $('noticeTitle').value = notice.title || ''; $('noticeBody').value = notice.body || ''; $('noticeURL').value = notice.h5_url || '';
@@ -153,10 +162,11 @@
     const statusOnly = cancelling || withdrawing;
     $('noticePublishAt').required = nextStatus === 'published' && phase(current || {}) !== 'published' && $('noticePublishMode').value === 'scheduled';
     $('noticeDeliveryEndsAt').required = nextStatus === 'published' && !$('noticeDeliveryEndLabel').hidden;
+    if (!statusOnly && $('noticeForm').querySelector(':invalid')) showPreviewView(false);
     if (!statusOnly && !$('noticeForm').reportValidity()) return;
     const targets = $('noticeAudience').value === 'users' ? [...new Set($('noticeUsers').value.split(/[\s,，]+/).filter(Boolean))] : [];
-    if (!statusOnly && $('noticeAudience').value === 'users' && (!targets.length || targets.some(id => !/^[1-9]\d*$/.test(id)))) { $('noticeSaveError').textContent = '请填写有效的用户ID'; return; }
-    if (!statusOnly && $('noticeURL').value && !/^https:\/\//i.test($('noticeURL').value.trim())) { $('noticeSaveError').textContent = 'H5链接须使用HTTPS'; return; }
+    if (!statusOnly && $('noticeAudience').value === 'users' && (!targets.length || targets.some(id => !/^[1-9]\d*$/.test(id)))) { showPreviewView(false); $('noticeSaveError').textContent = '请填写有效的用户ID'; return; }
+    if (!statusOnly && $('noticeURL').value && !/^https:\/\//i.test($('noticeURL').value.trim())) { showPreviewView(false); $('noticeSaveError').textContent = 'H5链接须使用HTTPS'; return; }
     if (withdrawing && !await AdminUI.confirm({ title: '撤回通知？', message: '撤回后客户端将隐藏此通知。' + (snapshot() !== baseline ? '提交后将舍弃当前未保存的修改。' : ''), confirmText: '撤回', danger: true })) return;
     const live = phase(current || {}) === 'published', scheduled = $('noticePublishMode').value === 'scheduled';
     if (cancelling && !await AdminUI.confirm({ title: '取消定时发布？', message: '取消后保留为草稿，当前未保存的修改不生效。', confirmText: '取消定时' })) return;
@@ -164,7 +174,7 @@
       let when = '立即发布';
       if (scheduled) {
         const planned = inputTime($('noticePublishAt').value, current?.publish_at);
-        if (!planned || new Date(planned) <= new Date()) { $('noticeSaveError').textContent = '定时发布时间已过去，请重新选择'; return; }
+        if (!planned || new Date(planned) <= new Date()) { showPreviewView(false); $('noticeSaveError').textContent = '定时发布时间已过去，请重新选择'; return; }
         when = date(planned) + '（北京时间）上线';
       }
       if (!await AdminUI.confirm({ title: scheduled ? '确认定时发布？' : '发布通知？', message: when + '，接收范围：' + (targets.length ? '指定' + targets.length + '位用户' : '全部用户') + '。', confirmText: scheduled ? '确认定时' : '发布' })) return;
@@ -192,7 +202,9 @@
   $('newNotice').addEventListener('click', () => open('')); $('refreshNotices').addEventListener('click', () => load()); $('moreNotices').addEventListener('click', () => load(true));
   $('noticeStatusFilter').addEventListener('change', () => load());
   $('closeNotice').addEventListener('click', close);
-  $('noticeEditor').addEventListener('hidden.bs.modal', () => { editorVisible = false; editorClosing = false; });
+  $('showNoticeFields').addEventListener('click', () => showPreviewView(false));
+  $('showNoticePreview').addEventListener('click', () => showPreviewView(true));
+  $('noticeEditor').addEventListener('hidden.bs.modal', () => { editorVisible = false; editorClosing = false; showPreviewView(false); });
   $('noticeEditor').addEventListener('keydown', event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(); } });
   $('noticeForm').addEventListener('change', preview);
   $('noticeForm').addEventListener('input', preview); $('noticeForm').addEventListener('submit', event => { event.preventDefault(); save('published'); });

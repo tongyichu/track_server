@@ -162,10 +162,13 @@
     });
     sections.forEach((items, title) => {
       if (!items.length) return;
-      const group = document.createElement('fieldset');
-      const legend = document.createElement('legend');
-      legend.textContent = title;
-      group.appendChild(legend);
+      const group = document.createElement('details');
+      group.open = !window.matchMedia('(max-width: 767px)').matches;
+      const heading = document.createElement('summary');
+      const count = document.createElement('span');
+      count.className = 'account-permission-count';
+      heading.append(title, count);
+      group.appendChild(heading);
       items.forEach(module => {
         const label = document.createElement('label');
         label.className = 'account-permission-row';
@@ -181,6 +184,12 @@
         label.append(name, select);
         group.appendChild(label);
       });
+      function updateCount() {
+        const granted = Array.from(group.querySelectorAll('select')).filter(input => input.value !== 'none').length;
+        count.textContent = '已授权 ' + granted + ' / ' + items.length;
+      }
+      group.addEventListener('change', updateCount);
+      updateCount();
       container.appendChild(group);
     });
   }

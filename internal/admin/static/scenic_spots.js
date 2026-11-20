@@ -116,15 +116,33 @@
       const city = row.insertCell();
       city.className = 'city-cell';
       city.textContent = (spot.related_city_labels || spotCities(spot)).join('、') || '—';
-      row.insertCell().textContent = spot.scenic_grade || '—';
+      const grade = row.insertCell();
+      grade.className = 'scenic-grade';
+      grade.textContent = spot.scenic_grade || '—';
       const mode = row.insertCell();
       mode.className = 'scenic-mode';
       mode.textContent = modeLabel(spot);
       const photos = row.insertCell();
-      photos.className = 'scenic-number';
-      photos.textContent = Number(spot.photo_count || 0).toLocaleString();
+      const photoCount = Number(spot.photo_count || 0);
+      photos.className = 'scenic-number scenic-photos';
+      const photoValue = document.createElement('span');
+      photoValue.className = 'scenic-photo-count';
+      photoValue.textContent = photoCount.toLocaleString();
+      photos.append(photoValue);
+      if (!photoCount) {
+        photos.classList.add('scenic-missing-photos');
+        const missing = document.createElement('span');
+        missing.className = 'scenic-mobile-no-photos';
+        missing.textContent = '无图片';
+        photos.append(missing);
+      }
       const tracks = row.insertCell();
-      tracks.className = 'scenic-number';
+      tracks.className = 'scenic-number scenic-tracks';
+      const trackLabel = document.createElement('span');
+      trackLabel.className = 'scenic-mobile-label';
+      trackLabel.textContent = '轨迹 ';
+      trackLabel.setAttribute('aria-hidden', 'true');
+      tracks.append(trackLabel);
       const trackCount = Number(spot.related_track_count || 0);
       if (AdminAccess.can('tracks', false) && trackCount) {
         const related = document.createElement('button');
@@ -136,7 +154,7 @@
         related.addEventListener('click', () => openRelatedTracks(spot));
         tracks.append(related);
       } else {
-        tracks.textContent = trackCount.toLocaleString();
+        tracks.append(trackCount.toLocaleString());
       }
       rows.append(row);
     }

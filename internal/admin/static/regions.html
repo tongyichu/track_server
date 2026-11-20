@@ -25,7 +25,7 @@
       <button id="regionAddCountry" type="button" data-admin-write="regions" class="region-country-add" aria-label="新增国家" title="新增国家">+</button>
     </div>
     <div class="region-layout">
-      <section class="card region-tree-panel" aria-label="地区目录">
+      <section id="regionDirectory" class="card region-tree-panel" aria-label="地区目录">
         <div class="card-body">
           <div class="region-tree-actions">
             <input id="regionSearch" type="search" class="form-control" placeholder="搜索当前国家的地区" aria-label="搜索当前国家的地区" />
@@ -41,6 +41,7 @@
         <div class="card-body">
           <p id="regionEmpty" class="text-secondary mb-0">从目录选择地区</p>
           <form id="regionForm" data-admin-fields="regions" novalidate hidden>
+            <button id="regionBackToDirectory" type="button" class="btn btn-sm btn-outline-secondary region-directory-back">返回目录</button>
             <div id="regionEditorFields">
               <div class="region-editor-title">
                 <div class="region-editor-identity">
@@ -73,7 +74,7 @@
                 <button id="regionDeleteCountry" type="button" data-admin-write="regions" class="btn btn-sm btn-outline-danger" hidden>删除国家</button>
               </div>
             </div>
-            <footer class="region-editor-footer">
+            <footer id="regionEditorFooter" class="region-editor-footer">
               <div class="region-save-feedback">
                 <span id="regionSaveStatus" role="status"></span>
                 <button id="regionViewLatest" type="button" data-admin-write="regions" class="btn btn-sm btn-link" hidden>查看最新版本</button>

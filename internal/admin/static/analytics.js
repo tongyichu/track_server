@@ -115,12 +115,43 @@
       tr.innerHTML = '<td>' + statusBadge(f.status) + '</td>' +
         '<td>' + fmtBytes(f.size_bytes) + '</td>' +
         '<td>' + esc(inputFileCount(f)) + '</td>' +
-        '<td class="mono clip" title="' + esc(inputFiles) + '">' + esc(inputFiles || f.local_path || '') + '</td>' +
-        '<td class="mono clip" title="' + esc(f.oss_key || '') + '">' + esc(f.oss_key || '') + '</td>' +
+        '<td class="analytics-path-cell"></td><td class="analytics-path-cell"></td>' +
         '<td class="clip" title="' + esc(f.error || '') + '">' + esc(f.error || '') + '</td>';
+      tr.children[3].append(artifactPath(inputFiles || f.local_path));
+      tr.children[4].append(artifactPath(f.oss_key));
       fileList.appendChild(tr);
     });
     detailModal.show();
+  }
+
+  function artifactPath(value) {
+    if (!value) return document.createTextNode('—');
+    const details = document.createElement('details');
+    const summary = document.createElement('summary');
+    summary.textContent = value;
+    const path = document.createElement('code');
+    path.textContent = value;
+    const copy = document.createElement('button');
+    copy.type = 'button';
+    copy.className = 'btn btn-sm btn-outline-secondary';
+    copy.textContent = '复制';
+    copy.addEventListener('click', async function () {
+      try {
+        await navigator.clipboard.writeText(value);
+        copy.textContent = '已复制';
+      } catch (_) {
+        const selection = window.getSelection();
+        if (!selection) return;
+        const range = document.createRange();
+        range.selectNodeContents(path);
+        selection.removeAllRanges();
+        selection.addRange(range);
+        copy.textContent = '已选中，请复制';
+        if (document.execCommand?.('copy')) copy.textContent = '已复制';
+      }
+    });
+    details.append(summary, path, copy);
+    return details;
   }
 
   function setText(id, value) {

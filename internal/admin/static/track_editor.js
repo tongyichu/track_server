@@ -2,13 +2,15 @@
   'use strict';
 
   function trackAssets(trackID, track, signal, canClearPreviews, onSaved) {
-    const section = document.createElement('section');
+    const section = document.createElement('details');
     section.className = 'admin-track-assets';
+    section.open = !window.matchMedia('(max-width: 767px)').matches;
+    const heading = document.createElement('summary');
+    heading.textContent = '客户端预览与文件';
+    section.append(heading);
     const header = document.createElement('div');
-    header.className = 'd-flex align-items-center justify-content-between flex-wrap gap-2 mb-2';
-    const heading = document.createElement('h3');
-    heading.className = 'mb-0'; heading.textContent = '客户端预览';
-    header.appendChild(heading); section.appendChild(header);
+    header.className = 'admin-track-assets-actions';
+    section.append(header);
     const fileRow = document.createElement('div');
     fileRow.className = 'admin-track-file';
     const assetURL = asset => '/admin/api/tracks/' + encodeURIComponent(trackID) + '/assets/' + asset;
@@ -439,7 +441,16 @@
             const recordFields = document.createElement('div'); recordFields.className = 'admin-track-basic-fields';
             ['user_name', 'source_tag', 'session_id'].forEach(name => recordFields.appendChild(view.form.elements[name].parentNode));
             record.append(recordTitle, recordFields); main.appendChild(record);
-            if (assets.loadMetadata) assets.loadMetadata();
+            if (assets.loadMetadata) {
+              if (assets.open) assets.loadMetadata();
+              else {
+                assets.addEventListener('toggle', function loadOnOpen() {
+                  if (!assets.open) return;
+                  assets.removeEventListener('toggle', loadOnOpen);
+                  assets.loadMetadata();
+                }, { signal: view.signal });
+              }
+            }
             if (Array.isArray(options.cities)) return;
             const select = view.form.elements.city_code;
             const hint = document.createElement('span'); hint.className = 'text-secondary d-block mt-1';

@@ -55,6 +55,30 @@
     .scenic-catalog-link:focus-visible { outline:2px solid var(--tblr-primary); outline-offset:2px; }
     .scenic-catalog .name-cell { font-weight:600; }
     .scenic-catalog th.scenic-number,.scenic-catalog td.scenic-number { text-align:end; font-variant-numeric:tabular-nums; }
+    .scenic-mobile-label,.scenic-mobile-no-photos { display:none; }
+    @media (max-width:900px) {
+      .scenic-stats-panel .admin-metric { min-height:56px; padding:6px 10px; }
+      .scenic-stats-panel .admin-metric-value { font-size:20px; }
+      .scenic-stats-panel .admin-metric-note { display:none; }
+      .scenic-catalog-main,.scenic-catalog-main tbody { display:block; min-width:0; }
+      .scenic-catalog-main thead { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
+      .scenic-catalog-main tr[data-spot-id] {
+        display:grid; grid-template-columns:minmax(0,1fr) auto auto; align-items:center;
+        gap:2px 8px; padding:9px 14px; border-top:1px solid var(--tblr-border-color);
+      }
+      .scenic-catalog-main tr[data-spot-id] > td { min-width:0; padding:0; border:0; overflow-wrap:anywhere; }
+      .scenic-catalog-main .name-cell { grid-area:1 / 1 / 2 / 3; }
+      .scenic-catalog-main .scenic-grade { grid-area:1 / 3; text-align:end; }
+      .scenic-catalog-main .city-cell { grid-area:2 / 1; }
+      .scenic-catalog-main .scenic-mode { grid-area:2 / 2; }
+      .scenic-catalog-main .scenic-tracks { grid-area:2 / 3; }
+      .scenic-catalog-main .scenic-photos { display:none; }
+      .scenic-catalog-main .scenic-photos.scenic-missing-photos { display:block; grid-area:3 / 1 / 4 / -1; text-align:start; color:var(--tblr-warning); }
+      .scenic-missing-photos .scenic-photo-count { display:none; }
+      .scenic-mobile-label,.scenic-mobile-no-photos { display:inline; }
+      .scenic-catalog-main .scenic-catalog-link { min-height:36px; }
+      .scenic-catalog-main .city-cell,.scenic-catalog-main .scenic-mode,.scenic-catalog-main .scenic-tracks { font-size:12px; }
+    }
     .scenic-fields label { align-content:start; min-width:0; }
     .scenic-fields .scenic-provider-hint:empty { display:none; }
     .scenic-fields .scenic-classification-field :is(.form-control,.form-select) { height:var(--tblr-control-height, 2.5rem); }

@@ -251,8 +251,9 @@
     wrapper.dataset.adminWrite='music';
     const toggle=text('button','','btn btn-sm btn-outline-secondary music-action-toggle');
     toggle.type='button';toggle.dataset.bsToggle='dropdown';toggle.dataset.musicWrite='';
-    toggle.setAttribute('aria-expanded','false');toggle.setAttribute('aria-label','操作 '+item.name);
+    toggle.setAttribute('aria-expanded','false');toggle.setAttribute('aria-label','排序和操作 '+item.name);
     toggle.title='曲目操作';toggle.append(icon('dots'));
+    toggle.append(text('span','排序','music-touch-action'));
     const menu=text('div','','dropdown-menu dropdown-menu-end');
     const addOption=(label,callback,unavailable=false)=>{
       const option=text('button',label,'dropdown-item');option.type='button';option.dataset.musicWrite='';

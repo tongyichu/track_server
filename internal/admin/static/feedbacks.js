@@ -272,6 +272,7 @@
     emptyDetail.textContent = '正在加载反馈详情…';
     emptyDetail.classList.remove('hidden');
     detailContent.classList.add('hidden');
+    document.getElementById('feedbackDetailActions').hidden = true;
     if (scrollToDetail) detailModal.show();
     try {
       var resp = await fetch('/admin/api/feedbacks/' + encodeURIComponent(id), { signal: controller.signal });
@@ -304,6 +305,8 @@
       document.getElementById('detailTrackEdit').disabled = !window.AdminAccess.can('tracks', false);
       emptyDetail.classList.add('hidden');
       detailContent.classList.remove('hidden');
+      document.getElementById('feedbackDeviceDetails').open = !window.matchMedia('(max-width: 767px)').matches;
+      document.getElementById('feedbackDetailActions').hidden = !window.AdminAccess.can('feedbacks', true);
       setText('detailUserName', it.user_name || '未知用户');
       document.getElementById('detailStatus').innerHTML = statusBadge(it.status);
       setText('detailClient', [it.platform, it.app_version].filter(Boolean).join(' / '));

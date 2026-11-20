@@ -643,6 +643,11 @@
 
   refreshBtn.addEventListener('click', function () { loadPage(failedListView || listView); });
   function resetSearch() { loadPage({ filters: readFilters(), cursors: [null], index: 0, next: null }); }
+  var narrowFilters = window.matchMedia('(max-width: 767px)');
+  var extraFilters = document.getElementById('userExtraFilters');
+  function syncFilterLayout() { extraFilters.open = !narrowFilters.matches; }
+  narrowFilters.addEventListener('change', syncFilterLayout);
+  syncFilterLayout();
   searchBtn.addEventListener('click', resetSearch);
   titleFilter.addEventListener('keydown', function (event) { if (event.key === 'Enter') resetSearch(); });
   provinceFilter.addEventListener('change', function () { populateFilterCities(); resetSearch(); });
@@ -668,6 +673,8 @@
     if (genderFilter.value) params.set('gender', genderFilter.value);
     if (levelFilter.value) params.set('level', levelFilter.value);
     if (restrictedFilter.value) params.set('restricted', restrictedFilter.value);
+    var extraCount = Array.from(params.keys()).filter(function (key) { return key !== 'title'; }).length;
+    document.getElementById('userExtraFilterCount').textContent = extraCount ? '· ' + extraCount + ' 项' : '';
     return params;
   }
 

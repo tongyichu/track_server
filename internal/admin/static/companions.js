@@ -490,4 +490,6 @@
 
   loadCompanionStatistics();
   loadPage();
+  var linkedSessionID = new URLSearchParams(window.location.search).get('session_id');
+  if (linkedSessionID) loadDetail(linkedSessionID);
 })();

@@ -60,6 +60,14 @@
   background:var(--tblr-bg-surface-secondary);color:var(--tblr-body-color);
 }
 .music-action-toggle img { width:18px;height:18px; }
+.music-touch-action { display:none; }
+@media (pointer:coarse) {
+  .music-tile .music-drag-handle,.music-action-toggle img { display:none; }
+  .music-tile .music-play { width:44px;height:44px; }
+  .music-tile .music-action-toggle { width:auto;min-width:44px;height:44px; }
+  .music-touch-action { display:inline; }
+  .music-actions .dropdown-item { min-height:44px; }
+}
 .music-play::before {
   content:"";width:0;height:0;
   border-block:5px solid transparent;border-inline-start:8px solid currentColor;

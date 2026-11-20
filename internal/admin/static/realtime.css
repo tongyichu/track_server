@@ -21,7 +21,27 @@
 .realtime-message:last-child{border-bottom:0}
 .realtime-message p{white-space:pre-wrap;margin:6px 0 0}
 @media(max-width:767px){.realtime-query{flex-basis:100%}.realtime-detail-meta{grid-template-columns:90px minmax(0,1fr)}.realtime-toolbar label:not(.realtime-query){flex:1;min-width:110px}}
-@media(max-width:400px){}
+.realtime-mobile-fields { display:none; }
+@media(max-width:767px) {
+  .realtime-table,.realtime-table tbody { display:block; }
+  .realtime-table thead { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
+  .realtime-table :is(.realtime-client-row,.realtime-event-row) {
+    display:grid; grid-template-columns:minmax(0,1fr) auto; gap:4px 10px;
+    padding:10px 0; border-bottom:1px solid var(--tblr-border-color);
+  }
+  .realtime-table :is(.realtime-client-row,.realtime-event-row) > td { min-width:0; max-width:none; border:0; padding:0; }
+  .realtime-table .realtime-desktop-field { display:none; }
+  .realtime-client-row .realtime-row-user,.realtime-event-row .realtime-row-state { grid-area:1 / 1; font-weight:600; }
+  .realtime-client-row .realtime-row-state,.realtime-event-row .realtime-row-module { grid-area:1 / 2; justify-self:end; }
+  .realtime-client-row .realtime-row-module,.realtime-event-row .realtime-row-time { grid-area:2 / 1; }
+  .realtime-client-row .realtime-row-time { grid-area:3 / 1; }
+  .realtime-client-row .realtime-row-action { grid-area:2 / 2 / 4 / 3; align-self:end; }
+  .realtime-row-action .btn { min-height:36px; }
+  .realtime-row-time { font-size:12px; color:var(--tblr-secondary); }
+  .realtime-event-row .realtime-row-reason { grid-area:3 / 1 / 4 / -1; }
+  .realtime-mobile-fields { display:block; margin-top:4px; }
+  .realtime-mobile-fields summary { cursor:pointer; color:var(--tblr-primary); width:fit-content; padding-block:4px; }
+}
 
 .realtime-chat-dialog .modal-dialog{max-width:1180px}
 .rt-chat-layout{display:grid;grid-template-columns:280px minmax(0,1fr);gap:22px;min-width:0}

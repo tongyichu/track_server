@@ -79,7 +79,10 @@
   function updateSaveState() {
     const node = current(), busy = saving || photoEditor.busy;
     const conflict = conflicts.get(selectedId), note = saveNotes.get(selectedId);
-    $('regionSaveNode').disabled = !editable() || !node?.active || busy || !!conflict || !dirtyIds.has(selectedId);
+    const dirty = dirtyIds.has(selectedId);
+    $('regionSaveNode').disabled = !editable() || !node?.active || busy || !!conflict || !dirty;
+    $('regionEditorFooter').classList.toggle('region-save-pending', !!(dirty || busy || conflict));
+    $('regionEditorFooter').classList.toggle('region-save-idle', !(dirty || busy || conflict || note?.message));
     const canDelete = editable() && canDeleteCountry(node);
     const canDiscard = editable() && node && !persistedIds.has(node.id);
     $('regionDeleteCountry').hidden = !canDelete;
@@ -94,7 +97,7 @@
     const feedback = $('regionSaveStatus');
     feedback.classList.toggle('text-danger', !busy && !!(conflict || note?.error));
     feedback.textContent = saving ? operationMessage : photoEditor.busy ? '宣传图片处理中…' :
-      conflict || note?.message || (dirtyIds.has(selectedId) ? '有未保存修改' : '');
+      conflict || note?.message || (dirty ? '有未保存修改' : '');
     if (!busy) $('regionNavigationStatus').textContent = '';
     photoEditor.sessions.get(selectedId)?.picker.refresh();
   }
@@ -639,6 +642,10 @@
     else status(message);
   }
 
+  $('regionBackToDirectory').addEventListener('click', () => {
+    $('regionDirectory').scrollIntoView({ block: 'start' });
+    (treeButtons.get(selectedId) || $('regionSearch')).focus({ preventScroll: true });
+  });
   $('regionSearch').addEventListener('input', renderTree);
   $('regionRetryCatalog').addEventListener('click', load);
   $('regionViewLatest').addEventListener('click', viewLatest);

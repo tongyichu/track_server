@@ -51,7 +51,8 @@
 .region-tree-missing:empty,.region-tree-draft[hidden] { display:none; }
 .region-country-tab:focus-visible,.region-tree-item:focus-visible,.region-tree-toggle:focus-visible,.region-location summary:focus-visible { outline:2px solid var(--tblr-primary); outline-offset:-2px; }
 
-.region-editor-panel { scroll-margin-top:var(--admin-header-height, 64px); }
+.region-editor-panel,.region-tree-panel { scroll-margin-top:var(--admin-header-height, 64px); }
+.region-directory-back { display:none; }
 .region-editor-title { display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px; margin-bottom:16px; }
 .region-editor-identity { min-width:0; }
 .region-editor-name { display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; }
@@ -93,7 +94,11 @@
 @media (max-width:900px) {
   .region-layout { grid-template-columns:1fr; }
   .region-tree { max-height:38vh; }
-  .region-editor-footer { bottom:var(--admin-bottom-tab-height); padding-bottom:12px; }
+  .region-directory-back { display:inline-flex; margin-bottom:12px; }
+  .region-editor-footer { position:static; padding-bottom:12px; }
+  .region-editor-footer.region-save-pending { position:sticky; bottom:var(--admin-bottom-tab-height); }
+  .region-editor-footer.region-save-idle,
+  .region-editor-footer:not(.region-save-pending) #regionSaveNode { display:none; }
 }
 @media (max-width:767px) {
   .region-tree-panel .card-body,.region-editor-panel .card-body { padding:14px; }

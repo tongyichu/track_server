@@ -237,8 +237,30 @@ table.data .danger { color: #d93026; background: #fff; border: 1px solid #d93026
   .more-grid { grid-template-columns: 1fr; }
   .grid { grid-template-columns: 1fr; }
   .grid .full { grid-column: auto; }
-  .login-box { margin: 48px 14px; }
+  .login-box { margin: 24px 14px; padding: 20px; }
 }
+
+@media (max-width: 767px) {
+  .login-box input, .admin-password-panel input,
+  .modal :is(input.form-control,select.form-select,textarea.form-control) { font-size:16px; }
+  .login-box .btn { min-height:44px; }
+  .modal-dialog-scrollable { max-height:calc(100dvh - 2 * var(--tblr-modal-margin, .5rem)); }
+  #feedbackDetailActions :is(.error,.ok):not(:empty) { flex-basis:100%; overflow-wrap:anywhere; }
+  #feedbackDetailActions :is(.error,.ok):empty { display:none; }
+  .more-page .more-grid { grid-template-columns:minmax(0,1fr); gap:0; }
+  .more-page .more-grid a {
+    min-height:48px; display:flex; align-items:center; padding:8px 12px;
+    border:0; border-radius:0; box-shadow:none; background:none;
+  }
+  .more-page .more-grid a span { display:none; }
+  .more-page .more-grid a:not(.admin-permission-hidden) ~ a { border-top:1px solid var(--tblr-border-color); }
+}
+.more-page .more-section { margin:0 0 16px; }
+.more-page .more-section:not(:has(a:not(.admin-permission-hidden))) { display:none; }
+.more-page .more-section h2 { margin:0 0 6px; font-size:13px; color:var(--tblr-secondary-color); }
+.analytics-path-cell { min-width:0; }
+.analytics-path-cell summary { max-width:220px; cursor:pointer; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.analytics-path-cell code { display:block; white-space:pre-wrap; overflow-wrap:anywhere; margin:6px 0; user-select:text; }
 
 /* Tabler component integration */
 .admin-page-heading { padding: 4px 2px 0; }
@@ -804,7 +826,8 @@ table.admin-audit-table { width: 100%; min-width: 680px; table-layout: fixed; }
 .account-initial-password { grid-column: 1 / -1; }
 .account-permission-groups { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 .account-permission-groups fieldset { min-width: 0; }
-.account-permission-groups legend { margin: 0; padding-bottom: 4px; font-size: 12px; font-weight: 600; color: var(--tblr-secondary-color); }
+.account-permission-groups summary { padding:6px 0; color:var(--tblr-secondary-color); font-size:12px; font-weight:600; cursor:pointer; }
+.account-permission-count { margin-inline-start:6px; font-weight:400; }
 .account-permission-row { display: grid; grid-template-columns: minmax(0, 1fr) 84px; align-items: center; gap: 8px; padding: 4px 0; border-top: 1px solid var(--tblr-border-color); }
 .account-permission-row .form-select { width: 100%; min-width: 0; margin: 0; }
 .admin-account-modal .account-modal-message { flex: 0 0 100%; margin: 0 0 8px; padding: 8px 12px; }
@@ -866,6 +889,45 @@ table.admin-audit-table { width: 100%; min-width: 680px; table-layout: fixed; }
 .correction-config-table { min-width: 720px; }
 .correction-config-table td:nth-child(-n+2) { min-width: 250px; }
 .feedback-track-context { margin-top: 14px; padding: 14px; border: 1px solid var(--tblr-border-color); border-radius: 10px; overflow-wrap: anywhere; }
+@media (max-width:767px) {
+  :is(.companion-list-table,.feedback-list-table,.route-member-table).admin-card-table tbody tr:not(.admin-empty-row) {
+    display:grid; grid-template-columns:minmax(0,1fr) auto auto; align-items:center; gap:4px 8px;
+    border:0; border-bottom:1px solid var(--tblr-border-color); box-shadow:none; border-radius:0;
+    margin:0; padding:10px 0;
+  }
+  :is(.companion-list-table,.feedback-list-table,.route-member-table).admin-card-table tbody tr:not(.admin-empty-row) > td {
+    display:block; min-width:0; padding:0;
+  }
+  :is(.companion-list-table,.feedback-list-table,.route-member-table).admin-card-table td::before { display:none; }
+  .companion-list-table td:nth-child(1) { grid-area:1 / 1 / 2 / 3; }
+  .companion-list-table td:nth-child(2) { grid-area:2 / 2; }
+  .companion-list-table td:nth-child(3) { grid-area:2 / 1; }
+  .companion-list-table td:nth-child(4) { grid-area:1 / 3; text-align:end; }
+  .companion-list-table td:nth-child(4) .companion-cell-stack { align-items:flex-end; gap:2px; }
+  .companion-list-table td:nth-child(5) { grid-area:3 / 1 / 4 / 3; }
+  .companion-list-table td:nth-child(6) { grid-area:3 / 3; text-align:end; }
+  .companion-list-table td:nth-child(7) { grid-area:2 / 3; text-align:end; }
+  .companion-list-table td:nth-child(7)::before { display:inline; content:'人数 '; font-weight:400; }
+  .companion-list-table :is(td:nth-child(5),td:nth-child(6)) { color:var(--tblr-secondary); font-size:12px; }
+  .companion-list-table .companion-room-link { min-height:36px; }
+  .feedback-list-table td:nth-child(1) { grid-area:2 / 1; }
+  .feedback-list-table td:nth-child(2) { grid-area:1 / 1 / 2 / 3; }
+  .feedback-list-table td:nth-child(3) { grid-area:1 / 3; justify-self:end; }
+  .feedback-list-table td:nth-child(4) { grid-area:3 / 1 / 4 / -1; }
+  .feedback-list-table td:nth-child(5) { grid-area:4 / 2; }
+  .feedback-list-table.admin-card-table tbody tr:not(.admin-empty-row) > :is(td:nth-child(6),td:nth-child(7)) { display:none; }
+  .feedback-list-table td:nth-child(8) { grid-area:4 / 1; font-size:12px; color:var(--tblr-secondary); }
+  .feedback-list-table td:nth-child(9) { grid-area:4 / 3; justify-self:end; }
+  table.correction-config-table.admin-card-table td:nth-child(-n+2) { min-width:0; grid-template-columns:minmax(0,1fr); }
+  .route-member-table.admin-card-table tbody tr:not(.admin-empty-row) { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .route-member-table td:nth-child(1) { grid-column:1 / 3; font-weight:600; }
+  .route-member-table td:nth-child(2) { text-align:end; }
+  .route-member-table td:nth-child(n+3):nth-child(-n+8)::before { display:inline; margin-inline-end:4px; }
+  .route-member-table.admin-card-table tbody tr:not(.admin-empty-row) > td.row-actions { grid-column:1 / -1; display:flex; }
+  .account-permission-groups { gap:5px; }
+  .account-permission-groups summary { min-height:38px; padding-block:9px; }
+  #permissionRows .form-select { min-width:0; }
+}
 
 /* 地图模式：运动类型下拉（icon + 文字）与省市级联 */
 .route-groups-toolbar .route-type-field { display: grid; gap: 5px; min-width: 210px; width: min(240px, 100%); color: var(--tblr-secondary-color); font-size: 12px; font-weight: 550; }

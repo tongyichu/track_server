@@ -17,6 +17,10 @@
   }
 
   var sessionID = getQuery('session_id');
+  if (sessionID && window.matchMedia('(max-width: 767px)').matches) {
+    window.location.replace('/admin/companions.html?' + new URLSearchParams({ session_id: sessionID }));
+    return;
+  }
   var sessionInfo = document.getElementById('sessionInfo');
   var memberList = document.getElementById('memberList');
   var memberHint = document.getElementById('memberHint');

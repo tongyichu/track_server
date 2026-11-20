@@ -65,9 +65,14 @@
     if (rowsKey === lists.clients.rendered) return;
     const fragment = document.createDocumentFragment();
     for (const item of data.items || []) {
-      const row = node('tr'); cell(row, item.nickname, item.user_id); cell(row, moduleName(item.module)); cell(row, item.client_id, item.session_id);
-      cell(row, item.connected ? '已连接' : '已断开'); cell(row, date(item.connected_at));
+      const row = node('tr', null, 'realtime-client-row');
+      cell(row, item.nickname, item.user_id).className = 'realtime-row-user';
+      cell(row, moduleName(item.module)).className = 'realtime-row-module';
+      cell(row, item.client_id, item.session_id).className = 'realtime-desktop-field';
+      cell(row, item.connected ? '已连接' : '已断开').className = 'realtime-row-state';
+      cell(row, date(item.connected_at)).className = 'realtime-row-time';
       const action = cell(row, ''), button = node('button', '详情', 'btn btn-sm btn-outline-secondary');
+      action.className = 'realtime-row-action';
       action.replaceChildren(button); button.type = 'button'; button.addEventListener('click', () => showDetail(item)); fragment.append(row);
     }
     if (!data.items?.length) emptyRow($('clientRows'), 6, known ? '当前筛选没有连接记录' : '实际连接数据尚不可用');
@@ -79,7 +84,22 @@
     if (key === lists.events.rendered) return;
     const fragment = document.createDocumentFragment();
     for (const item of data.items || []) {
-      const row = node('tr'); cell(row, date(item.at)); cell(row, moduleName(item.module)); cell(row, kindName(item.kind)); cell(row, item.user_id, item.client_id || item.session_id); cell(row, item.reason); fragment.append(row);
+      const row = node('tr', null, 'realtime-event-row');
+      cell(row, date(item.at)).className = 'realtime-row-time';
+      cell(row, moduleName(item.module)).className = 'realtime-row-module';
+      cell(row, kindName(item.kind)).className = 'realtime-row-state';
+      cell(row, item.user_id, item.client_id || item.session_id).className = 'realtime-desktop-field';
+      const reason = cell(row, item.reason);
+      reason.className = 'realtime-row-reason';
+      if (item.user_id || item.client_id || item.session_id) {
+        const details = node('details', null, 'realtime-mobile-fields');
+        details.append(node('summary', '连接标识'));
+        if (item.user_id) details.append(node('small', '用户：' + item.user_id, 'text-secondary'));
+        if (item.client_id) details.append(node('small', '客户端：' + item.client_id, 'text-secondary'));
+        if (item.session_id) details.append(node('small', '房间：' + item.session_id, 'text-secondary'));
+        reason.append(details);
+      }
+      fragment.append(row);
     }
     if (!data.items?.length) emptyRow($('eventRows'), 5, '当前筛选没有已记录的异常'); else $('eventRows').replaceChildren(fragment);
     lists.events.rendered = key;

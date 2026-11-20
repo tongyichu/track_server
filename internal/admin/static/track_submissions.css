@@ -56,7 +56,18 @@
   .submission-track-metrics strong { font-size: 16px; }
   .submission-list-table.admin-card-table { min-width: 0; }
   .submission-list-table .submission-track-cell { min-width: 0; max-width: none; }
-  .submission-list-table td:nth-last-child(2) { white-space: normal; }
+  table.submission-list-table.admin-card-table tbody tr:not(.admin-empty-row) {
+    display:grid; grid-template-columns:repeat(3,minmax(0,max-content)) minmax(0,1fr) auto;
+    align-items:center; gap:6px; margin:0; padding:10px 0;
+    border:0; border-bottom:1px solid var(--tblr-border-color); border-radius:0; box-shadow:none;
+  }
+  table.submission-list-table.admin-card-table tbody tr:not(.admin-empty-row) > td { display:block; min-width:0; padding:0; }
+  .submission-list-table.admin-card-table td::before { display:none; }
+  .submission-list-table td:first-child { grid-area:1 / 1 / 2 / 5; }
+  .submission-list-table td:nth-child(5) { grid-area:1 / 5; justify-self:end; }
+  .submission-list-table td:nth-child(6) { grid-area:3 / 1 / 4 / 5; color:var(--tblr-secondary); font-size:12px; white-space:normal; }
+  .submission-list-table td:last-child { grid-area:2 / 5 / 4 / 6; align-self:end; justify-self:end; }
+  .submission-list-table td:last-child .btn { min-height:36px; }
 }
 @media (max-width: 430px) {
   .submission-photo-grid { grid-template-columns: 1fr; }
