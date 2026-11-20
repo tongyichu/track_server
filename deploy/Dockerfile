@@ -1,4 +1,11 @@
 # Multi-stage Dockerfile for Hertz-based Go server
+FROM node:22-bookworm-slim AS admin-frontend
+WORKDIR /src/internal/admin/frontend
+COPY internal/admin/frontend/package*.json ./
+RUN npm ci --no-audit --no-fund
+COPY internal/admin/frontend/ ./
+RUN npm run build
+
 # Builder stage
 FROM golang:1.22-bullseye AS builder
 
@@ -14,6 +21,7 @@ RUN go mod download
 
 # Copy the rest of the source code
 COPY . .
+COPY --from=admin-frontend /src/internal/admin/static/workbench ./internal/admin/static/workbench
 
 # Build the server binary
 RUN go build -o /out/hertz-track ./cmd/server

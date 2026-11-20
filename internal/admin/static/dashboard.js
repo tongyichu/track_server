@@ -1,4 +1,8 @@
-(function () {
+(function (mountDashboard) {
+  const workbench = document.getElementById('dashboard-workbench');
+  if (workbench) workbench.addEventListener('admin:dashboard-ready', mountDashboard, { once: true });
+  else mountDashboard();
+})(function () {
   const periodLabels = { day: '今日', week: '本周', month: '本月' };
   const periodButtons = document.querySelectorAll('[data-period]');
   let requestedPeriod = 'day';
@@ -297,6 +301,9 @@
       const score = document.createElement('strong');
       score.textContent = formatNumber(item.score);
       row.insertCell().appendChild(score);
+      Array.from(row.cells).forEach(function (cell, index) {
+        cell.dataset.label = body.parentElement.tHead.rows[0].cells[index].textContent;
+      });
     });
   }
 
@@ -451,4 +458,4 @@
   document.getElementById('dashboardGrowth').hidden = !canReview && !AdminAccess.can('users', false) && !AdminAccess.can('tracks', false);
   loadDashboard();
   loadAnalyticsHealth();
-})();
+});

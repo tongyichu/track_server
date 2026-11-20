@@ -37,6 +37,9 @@ var adminPageTemplates sync.Map
 var adminStaticAttribute = regexp.MustCompile(`(?:src|href)="/admin/static/[^"?]+"`)
 
 func embeddedPage(name string) ([]byte, error) {
+	if name == "static/dashboard.html" && workbenchAvailable() {
+		name = "static/dashboard_workbench.html"
+	}
 	if cached, ok := adminPageTemplates.Load(name); ok {
 		return cached.([]byte), nil
 	}
@@ -56,6 +59,12 @@ func embeddedPage(name string) ([]byte, error) {
 	cached, _ := adminPageTemplates.LoadOrStore(name, data)
 	return cached.([]byte), nil
 }
+
+var workbenchAvailable = sync.OnceValue(func() bool {
+	_, scriptErr := fs.Stat(staticFS, "static/workbench/index.js")
+	_, styleErr := fs.Stat(staticFS, "static/workbench/index.css")
+	return scriptErr == nil && styleErr == nil
+})
 
 func servePrivateHTML(c *app.RequestContext, data []byte) {
 	c.Response.Header.Set("Vary", "Accept-Encoding")

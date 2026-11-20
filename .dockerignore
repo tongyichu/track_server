@@ -6,3 +6,5 @@ build
 **/.env.*
 !**/.env.example
 **/*.log
+internal/admin/frontend/node_modules
+internal/admin/static/workbench

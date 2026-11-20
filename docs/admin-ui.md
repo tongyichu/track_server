@@ -48,6 +48,8 @@
 
 ## 共享统计组件与选用
 
+运营工作台试用 React 和 shadcn/ui。源码与依赖锁定在 `internal/admin/frontend/`，从仓库根目录执行 `npm --prefix internal/admin/frontend ci` 和 `npm --prefix internal/admin/frontend run build` 后再构建 Go。Docker 构建会自动生成工作台资源并嵌入原有 `static`，本地 Go 构建缺少前端产物时使用原工作台。`/admin/dashboard.html` 沿用原页面鉴权、共享导航和统计脚本，前端构建不需要额外的运行时服务。
+
 新增或调整统计区域先盘点现有组件，有合适的就复用；共性变化修改共享组件并检查调用方，不按页面再复制一套卡片、周期按钮或图表样式。纯业务数据、权限、请求取消和筛选语义由页面负责，展示组件不发请求、不缓存用户数据，也不把不同统计口径合并。
 
 | 重复展示 | 统一入口 | 使用方式与边界 |

@@ -7,3 +7,5 @@ deploy/.env
 
 # Build outputs
 build/
+internal/admin/frontend/node_modules/
+internal/admin/static/workbench/
