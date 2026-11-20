@@ -10,24 +10,19 @@
 #userExtraFilterToggle[aria-expanded="true"] { color: var(--admin-primary); background: var(--admin-primary-lt); }
 #userExtraFilterToggle[aria-expanded="true"]::after { transform: rotate(225deg); margin-top: 3px; }
 .user-filter-count { display: inline-grid; place-items: center; min-width: 16px; padding: 0 4px; border-radius: 4px; background: var(--admin-primary-lt); color: var(--admin-primary); font-size: 11px; font-variant-numeric: tabular-nums; }
-.user-extra-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 120px), 1fr)); align-items: end; gap: 8px 12px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--admin-border-color); }
+.user-extra-fields { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--admin-border-color); }
 .user-extra-fields > :is(label, .admin-region-field) { display: grid; gap: 4px; min-width: 0; margin: 0; color: var(--admin-secondary-color); font-size: 12px; font-weight: 500; }
-.user-extra-fields .form-select { appearance: none; color: var(--admin-body-color); }
-.user-extra-fields .form-select:not(.is-clearable) {
-  padding-right: 30px;
-  background: var(--admin-bg-forms) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='m4 6 4 4 4-4' stroke='%23526074' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") right 10px center / 14px no-repeat;
-}
+.user-extra-fields > label > select { width: auto; min-width: 88px; max-width: 100%; }
+.user-extra-fields > .admin-region-field { flex: 0 1 200px; }
 @media (max-width:767px) {
   .user-search-row { grid-template-columns: minmax(0, 1fr) auto auto; justify-content: stretch; }
-  .user-extra-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .user-extra-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .user-extra-fields > label > select { width: 100%; min-width: 0; }
   .user-extra-fields > .admin-region-field { grid-column: 1 / -1; }
   .users-page table.admin-user-table.admin-card-table { min-width:0; }
 }
 @media (max-width: 767px), (pointer: coarse) {
   .user-toolbar { --user-filter-height: var(--admin-touch-target); }
-}
-@media (forced-colors: active) {
-  .user-extra-fields select.form-select:not(.is-clearable) { appearance: auto; background-image: none; }
 }
 .admin-user-level { display: inline-flex; align-items: center; flex-shrink: 0; padding: 3px 7px; border-radius: 5px; background: rgba(var(--admin-primary-rgb), .1); color: var(--admin-link-color); font-size: 11px; font-weight: 600; line-height: 1.3; white-space: nowrap; }
 .admin-user-detail .modal-dialog { max-width: 1000px; }

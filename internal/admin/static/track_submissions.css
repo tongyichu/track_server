@@ -1,5 +1,5 @@
 .submission-list-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
-.submission-list-toolbar .form-select { width: 160px; }
+.submission-list-toolbar .form-select { width: auto; max-width: 100%; }
 .submission-list-table { min-width: 680px; }
 .submission-list-table td { vertical-align: middle; }
 .submission-list-table .submission-track-cell { min-width: 160px; max-width: 320px; overflow-wrap: anywhere; }

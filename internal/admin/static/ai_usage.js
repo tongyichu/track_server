@@ -163,7 +163,7 @@
     const module = t.feature === 'scenic_description' ? 'scenic_spots' : 'tracks';
     const title = (t.object_name || '') + (t.object_id ? ' · ' + t.object_id : '');
     if (!t.object_id || !can(module)) return node('span', title || '未保存的景点草稿');
-    const a = node('a', title); a.href = '/admin/' + module + '.html?' + (module === 'tracks' ? 'track_id' : 'spot_id') + '=' + encodeURIComponent(t.object_id); a.target = '_blank'; a.rel = 'noopener'; return a;
+    const a = node('a', title); a.href = '/admin/' + module + '.html?' + (module === 'tracks' ? 'track_id' : 'spot_id') + '=' + encodeURIComponent(t.object_id); return a;
   }
   function taskActions(t, target, inDetail) {
     if (!inDetail) target.append(button('详情', () => openDetail(t.id)));

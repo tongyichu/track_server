@@ -110,9 +110,28 @@ hr { border: 0; border-top: 1px solid var(--admin-border-color); margin: 1rem 0;
 }
 .form-control::placeholder { color: var(--admin-secondary-color); opacity: .8; }
 .form-control:focus, .form-select:focus { outline: 2px solid #214e9d36; outline-offset: 0; border-color: #527bbf; }
-.form-control[readonly], .form-control:disabled, .form-select:disabled { background: var(--admin-bg-surface-secondary); }
+.form-control[readonly], .form-control:disabled, .form-select:disabled { background-color: var(--admin-bg-surface-secondary); }
 .form-control-sm, .form-select-sm { min-height: 30px; padding-block: 4px; font-size: 12px; }
-.form-select { padding-inline-end: 24px; }
+.form-select { color: var(--admin-body-color); }
+.form-select:where(:not(select[multiple], select[size]:not([size="1"]), .is-clearable)) {
+  appearance: none; padding-inline-end: 32px; text-overflow: ellipsis;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='m4 6 4 4 4-4' stroke='%23526074' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 8px center; background-size: 16px;
+}
+.form-select:dir(rtl) { background-position: left 8px center; }
+.form-select:not(:disabled) { cursor: pointer; }
+.form-select:not(:disabled):hover { border-color: #8794a7; }
+.form-select:focus-visible { outline: 2px solid var(--admin-primary); outline-offset: 2px; }
+
+@media (forced-colors: active) {
+  .form-select { background-image: none; }
+  select.form-select { appearance: auto; padding-inline-end: 10px; }
+  button.form-select:not(.is-clearable) { position: relative; }
+  button.form-select:not(.is-clearable)::after {
+    content: ""; position: absolute; inset-inline-end: 13px; top: 50%; width: 6px; height: 6px;
+    border: solid currentColor; border-width: 0 1.5px 1.5px 0; transform: translateY(-75%) rotate(45deg);
+  }
+}
 .form-control[type="file"]::file-selector-button { margin: -6px 10px -6px -10px; padding: 6px 10px; border: 0; border-inline-end: 1px solid var(--admin-border-color); background: var(--admin-bg-surface-secondary); font: inherit; cursor: pointer; }
 textarea.form-control { resize: vertical; }
 .form-check, .form-switch { display: inline-flex; align-items: center; gap: 8px; }

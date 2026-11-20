@@ -17,7 +17,8 @@
 }
 .admin-stats-panel > h2 { margin: 0 0 10px; font-size: 14px; font-weight: 600; }
 .admin-stats-heading .row { margin: 0; gap: 8px; }
-.admin-stats-heading .btn, .admin-stats-heading select { min-height: 28px; padding: 4px 9px; font-size: 12px; }
+.admin-stats-heading .btn, .admin-stats-heading select { min-height: 28px; padding-block: 4px; font-size: 12px; }
+.admin-stats-heading .btn { padding-inline: 9px; }
 .admin-stats-meta, .admin-stats-heading > span:not(.btn-group) { color: var(--admin-secondary-color); font-size: 11px; font-weight: 400; }
 .admin-metrics {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));

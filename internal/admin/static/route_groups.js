@@ -120,8 +120,7 @@
   function renderTypeToggle() {
     var meta = trackTypeMeta(selectedTrackType);
     typeToggle.innerHTML = (meta ? typeIconHTML(meta, 'route-type-option-icon') : '<span class="route-type-option-icon route-type-option-icon-all" aria-hidden="true"></span>') +
-      '<span class="route-type-toggle-label">' + esc(meta ? meta.name : '全部类型') + '</span>' +
-      '<span class="route-type-toggle-caret" aria-hidden="true"></span>';
+      '<span class="route-type-toggle-label">' + esc(meta ? meta.name : '全部类型') + '</span>';
   }
   function renderTypeMenu() {
     var html = typeOptionHTML('', null, '全部类型');

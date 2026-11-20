@@ -1,4 +1,4 @@
-.ai-toolbar{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+.ai-toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end}
 .ai-page-heading{flex-wrap:wrap;gap:8px}
 .ai-filter-panel :is(.ai-filters,#searchDraftHint){margin-top:8px}
 .ai-status-actions,.ai-price-actions,.ai-task-outcome{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
@@ -16,9 +16,11 @@
 .ai-distribution-row{display:flex;justify-content:space-between;align-items:baseline;gap:8px 12px;padding:8px 0;border-bottom:1px solid var(--admin-border-color);font-size:13px}
 .ai-distribution-row span{overflow-wrap:anywhere}
 .ai-distribution-row strong{flex:none;font-weight:600;font-variant-numeric:tabular-nums}
-.ai-toolbar label{display:flex;flex-direction:column;gap:5px;font-size:12px;min-width:135px}
-.ai-toolbar .ai-search{flex:1;min-width:200px}
-.ai-toolbar input,.ai-toolbar select,.ai-toolbar button{min-height:38px}
+.ai-toolbar label{display:flex;flex-direction:column;gap:4px;font-size:12px;min-width:0;max-width:100%}
+.ai-toolbar select{width:auto;min-width:88px;max-width:100%}
+.ai-toolbar .ai-model{flex:0 1 192px}
+.ai-toolbar .ai-model select{width:100%;min-width:0}
+.ai-toolbar .ai-search{flex:1 1 224px}
 .ai-custom-dates{margin-top:12px}
 .ai-page [hidden]{display:none!important}
 .ai-check{font-size:12px;color:var(--admin-secondary-color);margin:0}
@@ -74,9 +76,8 @@
 .ai-page .hint{overflow-wrap:anywhere}
 .ai-page p:empty{display:none}
 @media(max-width:767px){
-.ai-toolbar label{flex:1 1 125px;min-width:0}
-.ai-toolbar .ai-search{flex:1 1 100%;min-width:0}
-.ai-toolbar button{flex:1}
+.ai-toolbar label{flex:0 1 auto}
+.ai-toolbar .ai-search{flex-basis:192px}
 .ai-charts,.ai-active,.ai-detail-grid{grid-template-columns:1fr}
 .ai-charts>div:first-child{grid-column:auto}
 .ai-table,.ai-quota-table{min-width:0;table-layout:auto}

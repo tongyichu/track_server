@@ -206,6 +206,7 @@
         const labelAbort = new AbortController();
         let labelBadges = null, placeCandidates = null, mapPreview = null;
         let detailLayout, detailContent, workoutFields, shapeFields, patternPicker, patternValue, patternStatus, patternAdd, patternActions;
+        let editorForm, savedFields;
         function renderLabelBadges() {
           if (!labelBadges) return;
           labelBadges.replaceChildren();
@@ -338,6 +339,7 @@
               if (!response.ok) throw new Error(result.error || '路线说明保存失败');
               if (!result.data || result.data.saved !== true) throw new Error('保存结果未确认，请重新打开轨迹核实');
               track.description = result.data.description; track.description_source = 'manual'; track.description_rule_version = 0;
+              savedFields.set('description', track.description);
               candidateVersion = '';
               if (view.signal.aborted || !group.isConnected) return;
               candidateArea.hidden = true;
@@ -441,6 +443,8 @@
             const recordFields = document.createElement('div'); recordFields.className = 'admin-track-basic-fields';
             ['user_name', 'source_tag', 'session_id'].forEach(name => recordFields.appendChild(view.form.elements[name].parentNode));
             record.append(recordTitle, recordFields); main.appendChild(record);
+            editorForm = view.form;
+            savedFields = new Map(new FormData(editorForm));
             if (assets.loadMetadata) {
               if (assets.open) assets.loadMetadata();
               else {
@@ -537,6 +541,7 @@
             content.append(workoutSection, shapeSection);
             panel.appendChild(content); wrapper.appendChild(panel);
             placeCandidates = window.AdminTrackPlaceCandidates.create(trackID, { readOnly: readOnly || isDeleted,
+              hasUnsavedChanges: () => editorForm && Array.from(new FormData(editorForm)).some(([name, value]) => value !== savedFields.get(name)),
               onChanged: async function () { await refreshScenicSpot(); await notifyScenicSpotChanged(); },
               onAssigned: async function (data) { updateScenicSpot(data); await notifyScenicSpotChanged(); },
               scenicSpotID: trackPayload.scenic_spot_id, track: track, recognitionStatus: trackPayload.place_recognition_status });

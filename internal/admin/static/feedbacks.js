@@ -302,7 +302,9 @@
       var change = it.track_change;
       var fieldNames = {Title:'标题',CityCode:'城市',LocateAddr:'位置',TrackType:'运动类型',Description:'路线说明',Distance:'里程',Duration:'时长',ElevationGain:'爬升',AvgSpeedKmh:'速度',CaloriesBurned:'热量',UserID:'所属用户',SessionID:'会话',SourceTag:'来源',CoordinateSystem:'坐标系',DescriptionSource:'说明来源',DescriptionRuleVersion:'说明版本',StartTime:'开始时间',EndTime:'结束时间',IsRunning:'录制状态',Status:'可见范围',RawTrackURL:'原始文件',TrackScreenshotURL:'截图',TrackNoMapBgScreenshotURL:'无底图截图',PreviewImages:'预览图'};
       setText('detailTrackChange', change ? '最近关联修改：' + (change.fields || []).map(function (field) { return fieldNames[field] || field; }).join('、') + ' · ' + change.operator + ' · ' + fmtTime(change.saved_at) : (issue ? '尚无从此纠错入口保存的资料修改记录。' : ''));
-      document.getElementById('detailTrackEdit').disabled = !window.AdminAccess.can('tracks', false);
+      var trackButton = document.getElementById('detailTrackEdit');
+      trackButton.disabled = !window.AdminAccess.can('tracks', false);
+      trackButton.textContent = window.AdminAccess.can('tracks', true) ? '核实 / 编辑轨迹资料' : '查看轨迹资料';
       emptyDetail.classList.add('hidden');
       detailContent.classList.remove('hidden');
       document.getElementById('feedbackDeviceDetails').open = !window.matchMedia('(max-width: 767px)').matches;
@@ -317,13 +319,10 @@
       setText('detailTitle', issue ? '轨迹纠错' : '反馈详情');
       document.getElementById('detailCorrection').classList.toggle('hidden', !issue);
       document.getElementById('correctionReplies').classList.toggle('hidden', !issue);
-      var trackLink = document.getElementById('detailTrackLink');
-      trackLink.removeAttribute('href');
       if (issue) {
         setText('detailCorrectionReason', issue.reason);
         setText('detailTrackTitle', issue.title);
         setText('detailTrackID', issue.trackID);
-        trackLink.href = correction.trackURL(issue.trackID);
       }
       setText('detailTextLabel', issue ? '补充说明' : '反馈内容');
       setText('detailText', issue ? issue.notes : it.content || '');
@@ -381,7 +380,7 @@
   function feedbackContent(content, issue) {
     if (!issue) return esc(content);
     return '<div class="feedback-correction-context"><span class="badge bg-blue-lt text-blue">' + esc(issue.reason) + '</span>' +
-      '<a href="' + esc(correction.trackURL(issue.trackID)) + '" target="_blank" rel="noopener">' + esc(issue.title) + '</a>' +
+      '<a href="' + esc(correction.trackURL(issue.trackID)) + '">' + esc(issue.title) + '</a>' +
       '<span class="hint mono">' + esc(issue.trackID) + '</span></div>' +
       (issue.notes ? '<p class="feedback-correction-notes">' + esc(issue.notes) + '</p>' : '');
   }

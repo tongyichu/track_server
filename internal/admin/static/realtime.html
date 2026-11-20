@@ -66,8 +66,8 @@
     <div class="rt-diagnostic-body">
       <p id="brokerStatus" class="text-secondary small" role="status">正在读取连接信息</p>
       <form id="clientsFilters" class="realtime-toolbar">
-        <label>业务<select id="clientsModule" class="form-select"><option value="">全部</option><option value="messages">消息提醒</option><option value="companions">与友同行</option></select></label>
         <label class="realtime-query">用户或连接<input id="clientsQuery" class="form-control" placeholder="用户ID / 客户端ID / 房间ID" maxlength="200"></label>
+        <label>业务<select id="clientsModule" class="form-select"><option value="">全部</option><option value="messages">消息提醒</option><option value="companions">与友同行</option></select></label>
         <label>状态<select id="clientsState" class="form-select"><option value="">全部</option><option value="connected">已连接</option><option value="disconnected">已断开</option></select></label>
         <button class="btn btn-primary" type="submit">查询</button>
       </form>
@@ -81,8 +81,8 @@
     <div class="rt-diagnostic-body">
       <p class="text-secondary small">本进程最近 200 条 · 重启后重置</p>
       <form id="eventsFilters" class="realtime-toolbar">
-        <label>业务<select id="eventsModule" class="form-select"><option value="">全部</option><option value="messages">消息提醒</option><option value="companions">与友同行</option><option value="server">服务端</option><option value="unknown">未知</option></select></label>
         <label class="realtime-query">用户或连接<input id="eventsQuery" class="form-control" placeholder="申报用户ID / 客户端ID / 房间ID" maxlength="200"></label>
+        <label>业务<select id="eventsModule" class="form-select"><option value="">全部</option><option value="messages">消息提醒</option><option value="companions">与友同行</option><option value="server">服务端</option><option value="unknown">未知</option></select></label>
         <button class="btn btn-primary" type="submit">查询</button>
       </form>
       <p id="eventsError" class="text-danger" role="status"></p>

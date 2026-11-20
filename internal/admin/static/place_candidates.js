@@ -31,7 +31,14 @@
     const actions = document.createElement('div'); actions.className = 'd-flex flex-wrap gap-2';
     const dismiss = document.createElement('button'); dismiss.type = 'button'; dismiss.className = 'btn btn-sm btn-outline-secondary';
     dismiss.textContent = '忽略'; dismiss.title = '忽略本次候选'; dismiss.dataset.adminWrite = 'tracks'; dismiss.hidden = true;
-    const detail = document.createElement('a'); detail.className = 'btn btn-sm btn-link'; detail.textContent = '查看景点'; detail.target = '_blank'; detail.rel = 'noopener'; detail.hidden = true;
+    const detail = document.createElement('a'); detail.className = 'btn btn-sm btn-link'; detail.textContent = '查看景点'; detail.hidden = true;
+    detail.addEventListener('click', async function (event) {
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || !options.hasUnsavedChanges?.()) return;
+      event.preventDefault();
+      const href = detail.href;
+      const confirmed = await AdminUI.confirm({ title: '查看景点', message: '打开景点页面会丢弃未保存的轨迹修改。', confirmText: '继续查看' });
+      if (confirmed && !disposed) window.location.assign(href);
+    });
     actions.append(dismiss, detail);
     const body = document.createElement('div'); body.className = 'admin-track-candidates-body'; body.setAttribute('aria-live', 'polite');
     panel.append(actions, body); picker.append(summary, panel); root.appendChild(picker);
@@ -75,7 +82,7 @@
       recognition.textContent = selected ? '' : statuses[recognitionStatus] || '';
       recognition.hidden = !recognition.textContent;
       add.textContent = canWrite ? (selected ? '更换景点' : '关联景点') : '查看';
-      detail.hidden = !selected;
+      detail.hidden = !selected || !AdminAccess.can('scenic_spots', false);
       if (selected) detail.href = '/admin/scenic_spots.html?spot_id=' + encodeURIComponent(spot.id);
       else detail.removeAttribute('href');
     }
