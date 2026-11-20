@@ -15,7 +15,7 @@
     scene.append(groupLayer, edgeLayer, nodeLayer); root.append(defs, scene); host.append(root);
     const positions = new Map(), nodes = new Map(), edges = new Map(), groups = new Map();
     let data = { nodes: [], edges: [], module: 'messages' }, selected = null, view = { x: 0, y: 0, scale: 1 }, width = 800, height = 520;
-    let drag = null, frame = null, disposed = false, lastTopology = '', first = true, nodeNumber = 0;
+    let drag = null, frame = null, disposed = false, lastTopology = '', first = true, nodeNumber = 0, touchDrag = false;
     const point = event => { const rect = root.getBoundingClientRect(); return { x: (event.clientX - rect.left) / view.scale - view.x, y: (event.clientY - rect.top) / view.scale - view.y }; };
     function transform() {
       scene.setAttribute('transform', 'scale(' + view.scale + ') translate(' + view.x + ' ' + view.y + ')');
@@ -62,7 +62,7 @@
     function select(kind, id) {
       selected = { kind, id }; highlight();
       const entry = entryFor(kind, id);
-      if (entry) onSelect({ kind, value: entry.data, data });
+      if (entry) onSelect({ kind, value: entry.data, data, trigger: entry.hit || entry.root });
     }
     function activate(element, handler) {
       element.addEventListener('click', event => { event.stopPropagation(); if (drag?.moved) return; handler(); });
@@ -186,7 +186,8 @@
     }
     function setData(next) {
       cancelAnimationFrame(frame); const changedMode = next.module !== data.module;
-      data = next; if (changedMode) { first = true; selected = null; onLost(); }
+      const previous = !changedMode && selected ? { ...selected, value: entryFor(selected.kind, selected.id)?.data } : null;
+      data = next; if (changedMode) { first = true; selected = null; }
       const topology = JSON.stringify([data.module, data.nodes.map(n => n.id).sort(), data.edges.map(e => e.id).sort()]);
       if (topology !== lastTopology) drag = null;
       const wantedNodes = new Set(data.nodes.filter(n => n.kind === 'user').map(n => n.id)), wantedRooms = new Set(data.nodes.filter(n => n.kind === 'room').map(n => n.id));
@@ -212,7 +213,7 @@
         entry.title.textContent = a + ' ↔ ' + b + (edge.last_at ? '\n最近往来：' + AdminTime.dateTime(edge.last_at) : '');
         entry.hit.setAttribute('aria-label', entry.title.textContent);
       }
-      if (selected && !entryFor(selected.kind, selected.id)) { selected = null; onLost(); }
+      if (previous && !entryFor(previous.kind, previous.id)) { selected = null; onLost(previous, next); }
       highlight(); place();
       if (!data.nodes.length) { first = true; lastTopology = topology; return; }
       if (data.module === 'companions') { if (topology !== lastTopology || first) roomLayout(); first = false; }
@@ -221,7 +222,7 @@
       lastTopology = topology;
     }
     root.addEventListener('pointerdown', event => {
-      if (event.button !== 0 || event.target.closest('.rt-graph-node,.rt-graph-hit,.rt-graph-room')) return;
+      if (event.button !== 0 || event.pointerType === 'touch' && !touchDrag || event.target.closest('.rt-graph-node,.rt-graph-hit,.rt-graph-room')) return;
       first = false; drag = { pan: true, x: event.clientX, y: event.clientY, vx: view.x, vy: view.y, moved: false }; root.setPointerCapture(event.pointerId);
     });
     root.addEventListener('pointermove', event => {
@@ -230,6 +231,7 @@
       else {
         const p = point(event), dx = p.x - drag.x, dy = p.y - drag.y;
         drag.moved ||= Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 4;
+        if (event.pointerType === 'touch' && !touchDrag) return;
         if (drag.members) {
           for (const member of drag.members) if (nodes.has(member.id)) positions.set(member.id, { x: member.x + dx, y: member.y + dy });
           const room = groups.get(drag.id); if (room) moveRoom(room, drag.px + dx, drag.py + dy);
@@ -250,6 +252,7 @@
     root.addEventListener('pointerup', event => { const old = drag; drag = null; if (root.hasPointerCapture(event.pointerId)) root.releasePointerCapture(event.pointerId); if (old?.id && !old.moved) select(old.kind || 'node', old.id); });
     root.addEventListener('pointercancel', () => { drag = null; });
     root.addEventListener('wheel', event => {
+      if (!event.altKey) return;
       event.preventDefault(); first = false; const rect = root.getBoundingClientRect(), x = event.clientX - rect.left, y = event.clientY - rect.top;
       const next = Math.max(0.025, Math.min(3, view.scale * (event.deltaY > 0 ? 0.9 : 1.1)));
       view.x += x / next - x / view.scale; view.y += y / next - y / view.scale; view.scale = next; transform();
@@ -260,6 +263,8 @@
       zoom(factor) { first = false; const scale = Math.max(0.025, Math.min(3, view.scale * factor)); view.x += width / 2 / scale - width / 2 / view.scale; view.y += height / 2 / scale - height / 2 / view.scale; view.scale = scale; transform(); },
       pause() { cancelAnimationFrame(frame); frame = null; },
       clearSelection() { selected = null; highlight(); },
+      selectEdge(id) { if (edges.has(id)) select('edge', id); },
+      setTouchDrag(enabled) { touchDrag = enabled; host.classList.toggle('is-touch-draggable', enabled); },
       find(query) {
         const q = query.trim().toLowerCase(); if (!q) return false;
         const n = data.nodes.find(n => n.user_id === q) || data.nodes.find(n => n.kind === 'room' && n.session_id === q) || data.nodes.find(n => n.label.toLowerCase().includes(q)); if (!n) return false;

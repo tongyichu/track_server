@@ -7,20 +7,23 @@
 </head>
 <body>
 <header class="topbar"></header>
-<main class="container wide">
-  <section class="panel card card-body admin-stats-panel">
-    <div class="realtime-heading">
+<main class="container wide realtime-page">
+  <header class="page-heading admin-page-heading">
+    <div>
       <h1>实时通信</h1>
-      <div class="d-flex align-items-center gap-3 flex-wrap">
-        <label class="form-check mb-0"><input id="realtimeAuto" type="checkbox" class="form-check-input" checked><span class="form-check-label">每15秒刷新</span></label>
-        <button id="realtimeRefresh" class="btn btn-outline-secondary" type="button">刷新</button>
-      </div>
     </div>
+    <div class="rt-page-controls">
+      <span id="networkSample" class="text-secondary small">等待采样</span>
+      <label class="form-check mb-0"><input id="realtimeAuto" type="checkbox" class="form-check-input" checked><span class="form-check-label">每 15 秒刷新</span></label>
+      <button id="realtimeRefresh" class="btn btn-sm btn-outline-secondary" type="button">刷新</button>
+    </div>
+  </header>
+  <section class="panel card card-body admin-stats-panel rt-overview" aria-label="运行概况">
     <div class="admin-metrics">
-      <div class="admin-metric" data-admin-metric="" data-label="发布连接" data-value-id="publisherState"></div>
-      <div class="admin-metric" data-admin-metric="" data-label="在线连接" data-value-id="onlineCount" data-note="等待采样" data-note-id="onlineDetail"></div>
+      <div class="admin-metric" data-admin-metric="" data-label="服务端发布连接" data-value-id="publisherState"></div>
+      <div class="admin-metric" data-admin-metric="" data-label="在线客户端连接" data-value-id="onlineCount" data-note="等待采样" data-note-id="onlineDetail"></div>
       <div class="admin-metric" data-admin-metric="" data-label="待补发提醒" data-value-id="pendingCount"></div>
-      <div class="admin-metric" data-admin-metric="" data-label="发布失败" data-value-id="publishFailures"></div>
+      <div class="admin-metric" data-admin-metric="" data-label="本进程发布失败" data-value-id="publishFailures"></div>
     </div>
     <p id="summaryError" class="text-danger" role="status"></p>
     <details class="realtime-diagnostics">
@@ -34,45 +37,59 @@
     </details>
   </section>
   <section class="panel card card-body">
-    <div class="realtime-heading"><h2>连接网络</h2><span id="networkCount" class="text-secondary small">正在读取在线用户</span></div>
+    <div class="realtime-heading"><h2>连接网络</h2><span id="networkCount" class="text-secondary small"></span></div>
     <div class="rt-network-toolbar">
       <div class="btn-group" aria-label="网络类型"><button id="messagesNetwork" type="button" class="btn btn-outline-primary active" aria-pressed="true">消息提醒</button><button id="companionsNetwork" type="button" class="btn btn-outline-primary" aria-pressed="false" data-admin-read="companions">与友同行</button></div>
-      <form id="networkSearch" class="rt-network-search"><input id="networkQuery" class="form-control" aria-label="搜索图中的用户或房间" placeholder="搜索昵称 / 用户ID / 房间ID" maxlength="200"><button class="btn btn-outline-secondary" type="submit">定位</button></form>
-      <div class="btn-group" aria-label="关系图缩放"><button id="networkZoomOut" class="btn btn-outline-secondary" type="button" aria-label="缩小关系图">−</button><button id="networkZoomIn" class="btn btn-outline-secondary" type="button" aria-label="放大关系图">＋</button><button id="networkFit" class="btn btn-outline-secondary" type="button">适应画布</button></div>
+      <form id="networkSearch" class="rt-network-search" hidden><input id="networkQuery" class="form-control" aria-label="定位图中账号或房间" placeholder="昵称 / 用户 ID" maxlength="200"><button class="btn btn-outline-secondary" type="submit">定位</button></form>
+      <div id="networkZoom" class="btn-group" aria-label="关系图缩放" hidden><button id="networkZoomOut" class="btn btn-outline-secondary" type="button" aria-label="缩小关系图">−</button><button id="networkZoomIn" class="btn btn-outline-secondary" type="button" aria-label="放大关系图">＋</button><button id="networkFit" class="btn btn-outline-secondary" type="button">适应画布</button></div>
+      <button id="networkDrag" class="btn btn-outline-secondary rt-network-drag" type="button" aria-pressed="false" hidden>拖动图谱</button>
     </div>
     <p id="networkError" class="text-danger small" role="status"></p>
+    <p id="networkSearchStatus" class="text-secondary small" role="status"></p>
     <div id="networkShell" class="rt-network-shell">
-      <div class="rt-network-stage"><div id="networkCanvas" class="rt-network-canvas"></div><div id="networkEmpty" class="rt-network-empty text-secondary">正在加载关系图…</div><span class="rt-network-gesture text-secondary">拖动节点或画布 · 滚轮缩放</span></div>
-      <aside id="networkDetail" class="rt-network-detail" hidden><div class="rt-network-detail-heading"><strong id="networkDetailTitle"></strong><button id="networkClose" class="btn-close" type="button" aria-label="关闭关系详情"></button></div><div id="networkDetailBody" class="rt-network-detail-body"></div></aside>
+      <div id="networkStage" class="rt-network-stage is-empty">
+        <div id="networkCanvas" class="rt-network-canvas" aria-hidden="true"></div>
+        <div id="networkEmpty" class="rt-network-empty text-secondary" role="status">正在加载关系图…</div>
+        <span class="rt-network-gesture text-secondary">拖动节点或画布 · Alt + 滚轮缩放</span>
+      </div>
+      <aside id="networkDetail" class="rt-network-detail" aria-labelledby="networkDetailTitle" hidden>
+        <div class="rt-network-detail-heading"><h3 id="networkDetailTitle"></h3><button id="networkClose" class="btn-close" type="button" aria-label="关闭关系详情"></button></div>
+        <div id="networkDetailBody" class="rt-network-detail-body"></div>
+      </aside>
     </div>
-    <p id="networkNote" class="text-secondary small mt-2 mb-1">节点为在线账号，线为双方已有的私信关系。点击连线查看往来记录。</p>
+    <dialog id="networkSheet" class="rt-network-sheet" aria-labelledby="networkDetailTitle"></dialog>
+    <p id="networkNote" class="text-secondary small mt-2 mb-1" hidden></p>
     <p id="networkStatus" class="text-secondary small mb-0" role="status"></p>
   </section>
-  <details class="rt-network-diagnostics"><summary>连接诊断与近期异常</summary>
-  <section class="panel card card-body">
-    <div class="realtime-heading"><h2>连接列表</h2><span id="brokerStatus" class="text-secondary small" role="status">正在读取连接信息</span></div>
-    <form id="clientsFilters" class="realtime-toolbar">
-      <label>业务<select id="clientsModule" class="form-select"><option value="">全部</option><option value="messages">消息提醒</option><option value="companions">与友同行</option></select></label>
-      <label class="realtime-query">用户或连接<input id="clientsQuery" class="form-control" placeholder="用户ID / 客户端ID / 房间ID" maxlength="200"></label>
-      <label>状态<select id="clientsState" class="form-select"><option value="">全部</option><option value="connected">已连接</option><option value="disconnected">已断开</option></select></label>
-      <button class="btn btn-primary" type="submit">查询</button>
-    </form>
-    <p id="clientsError" class="text-danger" role="status"></p>
-    <div class="table-responsive"><table class="table table-vcenter realtime-table"><thead><tr><th>用户</th><th>业务</th><th>客户端 / 房间</th><th>状态</th><th>连接时间</th><th>操作</th></tr></thead><tbody id="clientRows"><tr><td colspan="6" class="text-secondary">正在加载</td></tr></tbody></table></div>
-    <div class="realtime-pagination"><button id="clientsPrev" class="btn btn-outline-secondary" type="button" disabled>上一页</button><span id="clientsPage" class="text-secondary"></span><button id="clientsNext" class="btn btn-outline-secondary" type="button" disabled>下一页</button></div>
-  </section>
-  <section class="panel card card-body">
-    <div class="realtime-heading"><h2>近期异常</h2><span class="text-secondary small">本进程最近200条 · 重启后重置</span></div>
-    <form id="eventsFilters" class="realtime-toolbar">
-      <label>业务<select id="eventsModule" class="form-select"><option value="">全部</option><option value="messages">消息提醒</option><option value="companions">与友同行</option><option value="server">服务端</option><option value="unknown">未知</option></select></label>
-      <label class="realtime-query">用户或连接<input id="eventsQuery" class="form-control" placeholder="申报用户ID / 客户端ID / 房间ID" maxlength="200"></label>
-      <button class="btn btn-primary" type="submit">查询</button>
-    </form>
-    <p id="eventsError" class="text-danger" role="status"></p>
-    <div class="table-responsive"><table class="table table-vcenter realtime-table"><thead><tr><th>时间（北京时间）</th><th>业务</th><th>异常</th><th>申报用户 / 客户端</th><th>说明</th></tr></thead><tbody id="eventRows"><tr><td colspan="5" class="text-secondary">正在加载</td></tr></tbody></table></div>
-    <div class="realtime-pagination"><button id="eventsPrev" class="btn btn-outline-secondary" type="button" disabled>上一页</button><span id="eventsPage" class="text-secondary"></span><button id="eventsNext" class="btn btn-outline-secondary" type="button" disabled>下一页</button></div>
-    <p class="text-secondary small mb-0 mt-2">鉴权 / 权限拒绝中的用户为请求申报身份，未经确认。客户端断连原因历史尚未采集。</p>
-  </section>
+  <details class="panel card card-body rt-diagnostic-panel">
+    <summary><span class="rt-diagnostic-title">连接列表</span><span id="clientsOverview" class="text-secondary small">等待采样</span></summary>
+    <div class="rt-diagnostic-body">
+      <p id="brokerStatus" class="text-secondary small" role="status">正在读取连接信息</p>
+      <form id="clientsFilters" class="realtime-toolbar">
+        <label>业务<select id="clientsModule" class="form-select"><option value="">全部</option><option value="messages">消息提醒</option><option value="companions">与友同行</option></select></label>
+        <label class="realtime-query">用户或连接<input id="clientsQuery" class="form-control" placeholder="用户ID / 客户端ID / 房间ID" maxlength="200"></label>
+        <label>状态<select id="clientsState" class="form-select"><option value="">全部</option><option value="connected">已连接</option><option value="disconnected">已断开</option></select></label>
+        <button class="btn btn-primary" type="submit">查询</button>
+      </form>
+      <p id="clientsError" class="text-danger" role="status"></p>
+      <div class="table-responsive"><table class="table table-vcenter realtime-table"><thead><tr><th>用户</th><th>业务</th><th>客户端 / 房间</th><th>状态</th><th>连接时间</th><th>操作</th></tr></thead><tbody id="clientRows"><tr><td colspan="6" class="text-secondary">正在加载</td></tr></tbody></table></div>
+      <div class="realtime-pagination"><button id="clientsPrev" class="btn btn-outline-secondary" type="button" disabled>上一页</button><span id="clientsPage" class="text-secondary"></span><button id="clientsNext" class="btn btn-outline-secondary" type="button" disabled>下一页</button></div>
+    </div>
+  </details>
+  <details class="panel card card-body rt-diagnostic-panel">
+    <summary><span class="rt-diagnostic-title">近期异常</span><span id="eventsOverview" class="text-secondary small">正在读取</span></summary>
+    <div class="rt-diagnostic-body">
+      <p class="text-secondary small">本进程最近 200 条 · 重启后重置</p>
+      <form id="eventsFilters" class="realtime-toolbar">
+        <label>业务<select id="eventsModule" class="form-select"><option value="">全部</option><option value="messages">消息提醒</option><option value="companions">与友同行</option><option value="server">服务端</option><option value="unknown">未知</option></select></label>
+        <label class="realtime-query">用户或连接<input id="eventsQuery" class="form-control" placeholder="申报用户ID / 客户端ID / 房间ID" maxlength="200"></label>
+        <button class="btn btn-primary" type="submit">查询</button>
+      </form>
+      <p id="eventsError" class="text-danger" role="status"></p>
+      <div class="table-responsive"><table class="table table-vcenter realtime-table"><thead><tr><th>时间（北京时间）</th><th>业务</th><th>异常</th><th>申报用户 / 客户端</th><th>说明</th></tr></thead><tbody id="eventRows"><tr><td colspan="5" class="text-secondary">正在加载</td></tr></tbody></table></div>
+      <div class="realtime-pagination"><button id="eventsPrev" class="btn btn-outline-secondary" type="button" disabled>上一页</button><span id="eventsPage" class="text-secondary"></span><button id="eventsNext" class="btn btn-outline-secondary" type="button" disabled>下一页</button></div>
+      <p class="text-secondary small mb-0 mt-2">鉴权 / 权限拒绝中的用户为请求申报身份，未经确认。客户端断连原因历史尚未采集。</p>
+    </div>
   </details>
 </main>
 <script src="/admin/static/vendor/tabler.min.js"></script><script src="/admin/static/shell.js"></script><script src="/admin/static/admin_stats.js"></script>

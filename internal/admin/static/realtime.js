@@ -58,7 +58,7 @@
     $('onlineCount').textContent = known ? (data.complete ? '' : '至少 ') + data.online : '—';
     $('onlineCount').className = stale ? 'text-warning' : '';
     $('onlineDetail').textContent = known ? (stale ? '上次采样 · ' : '') + '消息 ' + data.messages_online + ' / 同行 ' + data.companions_online : '实际连接数未知';
-    $('brokerStatus').textContent = (data.message || 'EMQX 正常') + (known ? ' · ' + date(data.sampled_at) : '');
+    $('brokerStatus').textContent = (data.message || (known ? 'EMQX 正常' : '等待连接采样')) + (known ? ' · ' + date(data.sampled_at) : '');
     // Sampling timestamps update the detail source without replacing unchanged list rows.
     lists.clients.sample = { at: data.sampled_at, status: data.status };
     const rowsKey = JSON.stringify([known, data.items]);
@@ -89,6 +89,18 @@
     $(name + 'Prev').disabled = state.loading || state.page <= 1;
     $(name + 'Next').disabled = state.loading || !state.hasMore;
   }
+  function renderOverview(name, data, filters) {
+    const status = [];
+    if (name === 'clients') {
+      if (data.status === 'stale') status.push('上次采样');
+      else if (data.sampled_at && !data.complete) status.push('局部采样');
+    }
+    if (Object.values(filters).some(Boolean)) status.push('筛选结果');
+    status.push(data.total == null ? '连接数未知' : data.total + ' 条');
+    const state = lists[name];
+    state.overview = status.join(' · ');
+    $(name + 'Overview').textContent = state.overview;
+  }
   async function load(name, request) {
     const state = lists[name];
     if (state.loading && !request) return;
@@ -101,10 +113,12 @@
       const data = await api(name + '?' + query, controller.signal); if (version !== state.generation || controller.signal.aborted) return;
       if (name === 'clients') renderClients(data); else renderEvents(data);
       state.page = data.page; state.hasMore = data.has_more; state.filters = target.filters;
+      renderOverview(name, data, target.filters);
       $(name + 'Page').textContent = data.total == null ? '连接数量未知' : '第 ' + data.page + ' 页 · ' + (name === 'clients' && !data.complete ? '已采样 ' : '') + data.total + ' 条';
     } catch (error) {
       if ((timedOut || !controller.signal.aborted) && version === state.generation) {
         $(name + 'Error').textContent = (timedOut ? '列表查询超时' : error.message) + (state.rendered === null ? '' : '，保留上次列表与分页。');
+        $(name + 'Overview').textContent = '查询失败' + (state.overview ? ' · 保留上次结果' : '');
         if (state.rendered === null) emptyRow($(name === 'clients' ? 'clientRows' : 'eventRows'), name === 'clients' ? 6 : 5, '查询失败，请重试');
       }
     } finally {

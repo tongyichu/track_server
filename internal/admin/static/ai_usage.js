@@ -14,6 +14,8 @@
   const node = (tag, text, className) => { const el = document.createElement(tag); if (text != null) el.textContent = String(text); if (className) el.className = className; return el; };
   const can = (module, write) => window.AdminAccess && AdminAccess.can(module, !!write);
   let settings = null, statistics = null, cursor = '', nextCursor = '', history = [], page = 1, activeCursor = '', activeRows = [], modalTaskID = '', detailController = null;
+  const filterIDs = ['feature', 'provider', 'model', 'mode', 'status', 'adoption'];
+  let appliedFilters = new URLSearchParams(), renderedTasks = '', activeOpen = true, activeLoading = false;
   let policyDirty = false, pricesDirty = false, busySettings = false;
   const controllers = {}, charts = new Map(), operations = new Set();
   const modal = new tabler.Modal($('detailModal'));
@@ -56,7 +58,8 @@
     const limited = items.filter(item => !item.unlimited).length;
     $('settingsHint').textContent = !items.length ? '暂无额度信息' : exhausted ? exhausted + ' 个功能额度已用尽' : limited ? limited + ' 个功能已设每日上限' : '当前额度不限';
     $('settingsHint').classList.toggle('text-danger', exhausted > 0);
-    $('quotaHint').textContent = data.day + ' · 北京时间';
+    const resetsAt = AdminTime.short(data.resets_at, true, '');
+    $('quotaHint').textContent = [data.day + ' · 北京时间', resetsAt && '下次重置 ' + resetsAt].filter(Boolean).join(' · ');
     items.forEach(item => {
       const view = quotaRow(item.feature), policy = item.policy;
       view.title.textContent = feature(item.feature); view.used.textContent = n(item.used) + ' 次';
@@ -110,12 +113,42 @@
   function updateFilterSummary() {
     const selected = ['provider', 'mode', 'status', 'adoption'].map(id => $(id).selectedOptions[0]).filter(option => option.value).map(option => option.textContent);
     $('filterSummary').textContent = selected.length ? '更多筛选 · ' + selected.join(' / ') : '更多筛选';
+    document.querySelectorAll('[data-task-status]').forEach(button => {
+      const pressed = button.dataset.taskStatus === appliedFilters.get('status');
+      button.setAttribute('aria-pressed', String(pressed));
+      button.classList.toggle('active', pressed);
+    });
   }
-  setPeriod();
+  function updateSearchHint() {
+    const changed = $('q').value.trim() !== (appliedFilters.get('q') || '');
+    $('searchDraftHint').textContent = changed ? '按回车或点击查询应用搜索词。' : '';
+  }
+  function applyFilters(includeSearch = false) {
+    setPeriod();
+    const from = $('from').value, to = $('to').value;
+    if (!from || !to || from > to || to > AdminTime.shiftDate(from, 365)) {
+      $('pageError').textContent = '请选择 1～366 天的有效日期范围。';
+      return;
+    }
+    const q = includeSearch ? $('q').value.trim() : appliedFilters.get('q');
+    if (q && new TextEncoder().encode(q).length > 200) {
+      $('pageError').textContent = '搜索词过长，请缩短后重试。';
+      return;
+    }
+    const params = new URLSearchParams({ from, to });
+    filterIDs.forEach(id => { if ($(id).value) params.set(id, $(id).value); });
+    if (q) params.set('q', q);
+    appliedFilters = params;
+    updateFilterSummary();
+    updateSearchHint();
+    refresh(true);
+  }
   function query(active) {
-    const params = new URLSearchParams();
-    ['from', 'to', 'feature', 'provider', 'model', 'mode', 'status', 'adoption', 'q'].forEach(id => { const value = $(id).value.trim(); if (value) params.set(id, value); });
-    if (active) { params.set('active', 'true'); params.delete('status'); params.delete('adoption'); }
+    const params = new URLSearchParams(appliedFilters);
+    if (active) {
+      ['from', 'to', 'status', 'adoption'].forEach(id => params.delete(id));
+      params.set('active', 'true');
+    }
     params.set('limit', '30'); return params;
   }
   async function request(path, options) {
@@ -148,13 +181,32 @@
     catch (error) { showError('pageError', error); }
     finally { operations.delete(t.id); }
   }
-  async function loadTasks() {
-    const ctrl = replaceController('tasks'), params = query(false); tasksLoading=true; if (cursor) params.set('cursor', cursor);
-    try { const data = await request('tasks?' + params, { signal: ctrl.signal }); if (ctrl.signal.aborted) return; renderTasks(data.items || []); nextCursor = data.next_cursor || ''; $('total').textContent = '共 ' + n(data.total) + ' 项'; $('prev').disabled = history.length === 0; $('next').disabled = !nextCursor; $('pageHint').textContent = '第 ' + page + ' 页'; }
-    catch (error) { showError('pageError', error); }
-    finally {if(controllers.tasks===ctrl)tasksLoading=false;}
+  async function loadTasks(target = { cursor, history, page }) {
+    const ctrl = replaceController('tasks'), params = query(false);
+    tasksLoading = true;
+    $('prev').disabled = $('next').disabled = true;
+    if (target.cursor) params.set('cursor', target.cursor);
+    try {
+      const data = await request('tasks?' + params, { signal: ctrl.signal });
+      if (ctrl.signal.aborted) return;
+      ({ cursor, history, page } = target);
+      nextCursor = data.next_cursor || '';
+      renderTasks(data.items || []);
+      $('total').textContent = '共 ' + n(data.total) + ' 项';
+      $('pageHint').textContent = '第 ' + page + ' 页';
+    } catch (error) { showError('pageError', error); }
+    finally {
+      if (controllers.tasks === ctrl) {
+        tasksLoading = false;
+        $('prev').disabled = !history.length;
+        $('next').disabled = !nextCursor;
+      }
+    }
   }
   function renderTasks(items) {
+    const key = JSON.stringify(items);
+    if (key === renderedTasks) return;
+    renderedTasks = key;
     const body = $('tasks'); body.replaceChildren(); if (!items.length) { const td = node('td', '当前条件下暂无任务记录', 'hint'); td.colSpan = 6; const row = node('tr'); row.append(td); body.append(row); return; }
     items.forEach(t => {
       const row = node('tr');
@@ -170,42 +222,156 @@
       row.append(time, business, source, status, usage, actions); body.append(row);
     });
   }
+  function showActiveBody() {
+    const hasActive = activeRows.length > 0;
+    $('activeBody').hidden = !hasActive || !activeOpen;
+    $('toggleActive').hidden = !hasActive;
+    $('toggleActive').setAttribute('aria-expanded', String(hasActive && activeOpen));
+    $('toggleActive').textContent = activeOpen ? '收起' : '展开';
+  }
   async function loadActive(append) {
-    const ctrl = replaceController('active'), params = query(true); if (append && activeCursor) params.set('cursor', activeCursor);
-    try { const data = await request('tasks?' + params, { signal: ctrl.signal }); if (ctrl.signal.aborted) return; activeCursor = data.next_cursor || ''; activeRows = append ? activeRows.concat(data.items || []) : data.items || []; $('activeHint').textContent = n(data.total) + ' 项'; $('moreActive').hidden = !activeCursor; const root = $('active'); root.replaceChildren();
-      if (!activeRows.length) root.append(node('p', '当前没有正在执行或排队的任务', 'hint'));
+    if (append && (!activeCursor || activeLoading)) return;
+    const ctrl = replaceController('active'), params = query(true);
+    activeLoading = true; $('moreActive').disabled = true;
+    if (append) params.set('cursor', activeCursor);
+    try {
+      const data = await request('tasks?' + params, { signal: ctrl.signal });
+      if (ctrl.signal.aborted) return;
+      activeCursor = data.next_cursor || '';
+      activeRows = append ? activeRows.concat(data.items || []) : data.items || [];
+      const hasActiveFilters = ['feature', 'provider', 'model', 'mode', 'q'].some(id => params.has(id));
+      $('activeHint').textContent = n(data.total) + ' 项' + (hasActiveFilters ? ' · 实时筛选' : '');
+      $('activeHint').title = hasActiveFilters ? '按功能、供应商、模型、触发方式和已查询的搜索词筛选实时任务' : '';
+      $('moreActive').hidden = !activeCursor;
+      const root = $('active'); root.replaceChildren();
       activeRows.forEach(t => {
         const card = node('article', null, 'ai-active-card'); card.append(node('strong', feature(t.feature)), node('p')); card.lastChild.append(objectLink(t));
         card.append(node('p', (t.mode === 'manual' ? '手动' : '自动') + ' · ' + t.model, 'hint'), node('p', (t.cancel_requested ? '正在中断' : stages[t.stage] || states[t.status] || t.status) + ' · ' + seconds(Date.now() - new Date(t.created_at).getTime())));
         const actions = node('div', null, 'ai-detail-actions'); taskActions(t, actions); card.append(actions); root.append(card);
-      }); }
-
-    catch (error) { $('activeHint').textContent = error.name === 'AbortError' ? $('activeHint').textContent : '读取失败，保留上次数据'; }
+      });
+      showActiveBody();
+    } catch (error) {
+      if (error.name !== 'AbortError') $('activeHint').textContent = activeRows.length ? '读取失败 · 显示上次数据' : '读取失败';
+    } finally {
+      if (controllers.active === ctrl) { activeLoading = false; $('moreActive').disabled = false; }
+    }
   }
   function metric(title, value, hint) { return AdminStats.metric({ label: title, value: value, note: hint }); }
+  function coverage(known, requests) { return n(known) + ' / ' + n(requests) + ' 次'; }
   async function loadStatistics() {
-    const ctrl = replaceController('statistics'); statisticsLoading=true;
-    try { const data = await request('statistics?' + query(false), { signal: ctrl.signal }); if (ctrl.signal.aborted) return; statistics = data; const root = $('stats'); root.replaceChildren();
-      root.append(metric('任务数', n(data.tasks), n(data.success) + ' 成功 · ' + n(data.failed) + ' 失败'), metric('请求次数', n(data.requests), '包含联网搜索与生成'), metric('消耗 Token', data.usage_known ? n(data.input_tokens + data.output_tokens) : '暂无记录', data.usage_known ? '已返回的用量' : '等待模型返回用量'), metric('预估费用', data.cost_known ? '¥' + amount(data.estimated_cny) : '暂无估算', data.cost_known ? '仅含已知费用' : '可在设置中配置单价'));
-      $('statHint').textContent = $('period').selectedOptions[0].textContent;
+    const ctrl = replaceController('statistics'), params = query(false);
+    statisticsLoading = true;
+    try {
+      const data = await request('statistics?' + params, { signal: ctrl.signal });
+      if (ctrl.signal.aborted) return;
+      const from = params.get('from'), to = params.get('to');
+      statistics = { data, from, to };
+      let costNote = data.requests ? '可估算 ' + coverage(data.cost_known, data.requests) : '当前筛选无请求';
+      if (data.requests && !data.cost_known && !data.usage_known) costNote += ' · 尚无 Token 用量记录';
+      $('stats').replaceChildren(
+        metric('任务数', n(data.tasks), n(data.success) + ' 成功 · ' + n(data.failed) + ' 失败或进程中断'),
+        metric('请求次数', n(data.requests), '按任务创建日期归属'),
+        metric('已知 Token', data.usage_known ? n(data.input_tokens + data.output_tokens) : '—', data.requests ? '有用量 ' + coverage(data.usage_known, data.requests) : ''),
+        metric('费用估算', data.cost_known ? '¥' + amount(data.estimated_cny) : '—', costNote)
+      );
+      $('statHint').textContent = from === to ? from : from + ' 至 ' + to;
       renderBreakdown(data);
-      (data.models || []).forEach(row => addModel(row.key.split(' / ').slice(1).join(' / '))); drawCharts(data); }
-
-    catch (error) { if (error.name !== 'AbortError') $('statHint').textContent = '统计读取失败，请点击查询重试'; }
+      (data.models || []).forEach(row => addModel(row.key.split(' / ').slice(1).join(' / ')));
+      drawCharts(statistics);
+    }
+    catch (error) { if (error.name !== 'AbortError') $('statHint').textContent = statistics ? '统计读取失败 · 显示上次结果' : '统计读取失败，请点击查询重试'; }
     finally {if(controllers.statistics===ctrl)statisticsLoading=false;}
   }
   function renderBreakdown(data) {
     const root=$('breakdown');root.replaceChildren();
-    [['features','功能'],['models','模型']].forEach(([key,caption]) => (data[key]||[]).forEach(group => {const row=node('tr');[caption+' · '+(key==='features'?feature(group.key):group.key),n(group.tasks)+' / '+n(group.requests),n(group.success)+' / '+n(group.failed),n(group.input_tokens)+' / '+n(group.output_tokens)+(group.usage_known?'':'（未返回用量）'),group.cost_known?'≈ ¥'+amount(group.estimated_cny)+'（'+n(group.cost_known)+'次可估算）':'未知',n(group.adopted)].forEach(value=>row.append(node('td',value)));root.append(row);}));
+    for (const [key, caption] of [['features', '功能'], ['models', '模型']]) {
+      for (const group of data[key] || []) {
+        const row = node('tr');
+        const tokens = group.usage_known ? n(group.input_tokens) + ' / ' + n(group.output_tokens) : '未知';
+        const cost = group.cost_known ? '≈ ¥' + amount(group.estimated_cny) : '未知';
+        const counts = group.requests ? cost + ' · ' + coverage(group.cost_known, group.requests) + '可估算' : '—';
+        const values = [caption + ' · ' + (key === 'features' ? feature(group.key) : group.key),
+          n(group.tasks) + ' / ' + n(group.requests), n(group.success) + ' / ' + n(group.failed), tokens, counts, n(group.adopted)];
+        values.forEach(value => row.append(node('td', value)));
+        root.append(row);
+      }
+    }
     if(!root.children.length){const row=node('tr'),cell=node('td','当前周期暂无数据','hint');cell.colSpan=6;row.append(cell);root.append(row);}
   }
   function addModel(value) { if (value && !Array.from($('model').options).some(option => option.value === value)) { const option = node('option', value); option.value = value; $('model').append(option); } }
-  async function drawCharts(data) {
-    try { await AdminAssets.loadCharts(); if (statistics !== data) return; const ec = window.echarts; ['trend', 'featuresChart', 'modelsChart'].forEach(id => { if (!charts.has(id)) charts.set(id, ec.init($(id))); });
-      const days = data.days || []; const trend = AdminChartStyle.bars(days.map(row => ({ name: row.key, value: row.tasks })), data.tasks, { unit: '项' }); if (days.length > 10) trend.dataZoom = [{ type: 'inside', yAxisIndex: 0, start: Math.max(0, 100 - 1000 / days.length), end: 100 }]; charts.get('trend').setOption(trend, true);
-      const features = (data.features || []).map(row => ({ name: feature(row.key), value: row.tasks })); charts.get('featuresChart').setOption(AdminChartStyle.ring(features, data.tasks, '任务总数', '项'), true); AdminChartStyle.legend($('featuresLegend'), features);
-      const models = (data.models || []).map(row => ({ name: row.key, value: row.input_tokens + row.output_tokens })); charts.get('modelsChart').setOption(AdminChartStyle.bars(models, data.input_tokens + data.output_tokens, { unit: 'Token', labelWidth: 150 }), true);
-    } catch (error) { if (statistics === data) { console.warn('[AIUsage] chart rendering failed', error); $('statHint').textContent = $('period').selectedOptions[0].textContent + ' · 图表加载失败，查询可重试'; } }
+  function daySeries(data, from, to) {
+    const counts = new Map((data.days || []).map(day => [day.key, day.tasks]));
+    const first = AdminTime.date(data.first_recorded_at, '');
+    const rows = [];
+    for (let day = from; day && day <= to; day = AdminTime.shiftDate(day, 1)) {
+      rows.push({ day, tasks: counts.get(day) ?? (first && day >= first ? 0 : null) });
+    }
+    return { rows, first };
+  }
+  function setChart(id, option) {
+    if (!charts.has(id)) charts.set(id, window.echarts.init($(id)));
+    charts.get(id).resize();
+    charts.get(id).setOption(option, true);
+  }
+  function compactDistribution(id, rows, valueText, empty) {
+    const root = $(id); root.replaceChildren();
+    if (!rows.length && empty) root.append(node('p', empty, 'hint'));
+    for (const row of rows) {
+      const item = node('div', null, 'ai-distribution-row');
+      item.append(node('span', row.name), node('strong', valueText(row)));
+      root.append(item);
+    }
+  }
+  async function drawCharts(snapshot) {
+    if (!snapshot || !$('usageDetails').open) return;
+    const { data, from, to } = snapshot;
+    const { rows: days, first } = daySeries(data, from, to);
+    const hasTrend = days.some(row => row.tasks !== null);
+    const features = (data.features || []).map(row => ({ name: feature(row.key), value: row.tasks }));
+    const models = (data.models || []).map(row => ({ name: row.key, value: row.usage_known ? row.input_tokens + row.output_tokens : null }));
+    const knownModels = models.filter(row => row.value != null);
+    const showModelsChart = knownModels.length > 1;
+    $('trend').hidden = !hasTrend;
+    $('trendCoverage').textContent = !first ? '暂无采集起点记录'
+      : to < first ? '所选日期未采集 · 记录始于 ' + first
+      : from < first ? '记录始于 ' + first + '，之前日期未采集' : '';
+    $('featurePlot').hidden = features.length < 2;
+    $('modelsChart').hidden = !showModelsChart;
+    $('chartError').textContent = '';
+    compactDistribution('featureSummary', features.length < 2 ? features : [], row => n(row.value) + ' 项', features.length ? '' : '当前筛选无任务');
+    compactDistribution('modelSummary', showModelsChart ? models.filter(row => row.value == null) : models,
+      row => row.value == null ? '用量未知' : n(row.value) + ' Token', showModelsChart ? '' : '当前筛选无模型记录');
+    if (!hasTrend && features.length < 2 && !showModelsChart) return;
+    try {
+      await AdminAssets.loadCharts();
+      if (statistics !== snapshot || !$('usageDetails').open) return;
+      if (hasTrend) {
+        const trend = {
+          color: [AdminChartStyle.colors[0]], aria: { enabled: true },
+          grid: { left: 8, right: 12, top: 12, bottom: days.length > 31 ? 44 : 20, containLabel: true },
+          xAxis: { type: 'category', data: days.map(row => row.day), axisLabel: { formatter: day => AdminTime.short(day), hideOverlap: true } },
+          yAxis: { type: 'value', minInterval: 1, axisLabel: { color: '#667085' } },
+          tooltip: { trigger: 'axis', confine: true, renderMode: 'richText', formatter: points => {
+            const row = days[points[0]?.dataIndex];
+            return row ? row.day + '\n' + (row.tasks == null ? '未采集' : n(row.tasks) + ' 项') : '';
+          } },
+          series: [{ type: 'bar', name: '任务', data: days.map(row => row.tasks), barMaxWidth: 12, itemStyle: { borderRadius: [4, 4, 0, 0] } }]
+        };
+        if (days.length > 31) trend.dataZoom = [{ type: 'slider', start: 100 - 3100 / days.length, end: 100, height: 16, bottom: 4 }];
+        setChart('trend', trend);
+      }
+      if (features.length > 1) {
+        setChart('featuresChart', AdminChartStyle.ring(features, data.tasks, '任务总数', '项'));
+        AdminChartStyle.legend($('featuresLegend'), features);
+      }
+      if (showModelsChart) {
+        const bars = AdminChartStyle.bars(knownModels, 0, { unit: 'Token', labelWidth: 132 });
+        bars.series[0].label.formatter = item => n(item.value);
+        setChart('modelsChart', bars);
+      }
+    } catch (error) {
+      if (statistics === snapshot) $('chartError').textContent = '图表加载失败，可重新展开或查询重试。';
+    }
   }
   function alerts(data) {
     const root = $('alerts'); root.replaceChildren(); const rows = (data.today_usage || {}).features || [];
@@ -241,14 +407,33 @@
     try { await request('prices', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ revision: Number($('prices').dataset.revision), items }) }); pricesDirty = false; $('priceMessage').textContent = '价格配置已保存，仅用于后续请求。'; }
     catch (error) { showError('priceMessage', error); } finally { busySettings = false; loadSettings(); }
   });
-  async function openDetail(id) { modalTaskID = id; if (detailController) detailController.abort(); detailController = new AbortController(); $('detail').replaceChildren(node('p', '正在读取…', 'hint')); modal.show(); await loadDetail(id, detailController.signal); }
+  async function openDetail(id) {
+    modalTaskID = id;
+    detailController?.abort();
+    detailController = new AbortController();
+    $('detailTitle').textContent = 'AI 任务详情';
+    $('detail').replaceChildren(node('p', '正在读取…', 'hint'));
+    modal.show();
+    await loadDetail(id, detailController.signal);
+  }
   async function loadDetail(id, signal) {
     try { const t = await request('tasks/' + encodeURIComponent(id), { signal }); if (signal.aborted || modalTaskID !== id) return; const root = $('detail'); root.replaceChildren(); const grid = node('div', null, 'ai-detail-grid');
-      const fields = [['功能', feature(t.feature)], ['模型', t.model], ['触发', (t.mode === 'manual' ? '手动' : '自动') + ' · ' + t.actor], ['状态', states[t.status] || t.status], ['时间', dateTime(t.created_at)], ['耗时', seconds(t.finished_at ? t.duration_ms : Date.now() - new Date(t.created_at).getTime())]];
-      fields.forEach(([label, value]) => { const field = node('div', null, 'ai-detail-field'); field.append(node('strong', label), node('span', value)); grid.append(field); }); root.append(grid, objectLink(t));
-      if (t.error) root.append(node('p', t.error, 'ai-alert'));
-      if (t.adoption && t.adoption !== 'not_generated') root.append(node('p', '结果：' + (adoptions[t.adoption] || t.adoption), 'hint'));
-      const actions = node('div', null, 'ai-detail-actions'); taskActions(t, actions, true); if (t.retry_of) actions.append(button('查看原任务', () => openDetail(t.retry_of))); if (t.retry_task_id) actions.append(button('查看重试任务', () => openDetail(t.retry_task_id))); root.append(actions);
+      $('detailTitle').textContent = feature(t.feature);
+      const fields = [['模型', t.model || '—'], ['触发', [t.mode === 'manual' ? '手动' : '自动', t.actor].filter(Boolean).join(' · ')], ['创建时间', dateTime(t.created_at)], ['耗时', seconds(t.finished_at ? t.duration_ms : Date.now() - new Date(t.created_at).getTime())]];
+      fields.forEach(([label, value]) => { const field = node('div', null, 'ai-detail-field'); field.append(node('strong', label), node('span', value)); grid.append(field); });
+      const outcome = node('div', null, 'ai-task-outcome');
+      outcome.append(node('strong', states[t.status] || t.status, 'ai-state ai-state-' + t.status));
+      if (t.adoption && t.adoption !== 'not_generated') outcome.append(node('span', adoptions[t.adoption] || t.adoption, 'text-secondary'));
+      root.append(outcome, objectLink(t));
+      const failed = t.status === 'failed' || t.status === 'interrupted';
+      const failedCall = failed && (t.calls || []).findLast(call => errorNames[call.error_code]);
+      const reason = t.error || (failedCall && errorNames[failedCall.error_code]);
+      if (reason || failed) root.append(node('p', reason || '暂无已记录的失败原因', 'ai-alert'));
+      const actions = node('div', null, 'ai-detail-actions');
+      taskActions(t, actions, true);
+      if (t.retry_of) actions.append(button('查看原任务', () => openDetail(t.retry_of)));
+      if (t.retry_task_id) actions.append(button('查看重试任务', () => openDetail(t.retry_task_id)));
+      if (actions.childElementCount) root.append(actions);
       const technical = node('details', null, 'ai-disclosure'); technical.append(node('summary', '请求与技术明细'));
       [['任务编号', t.id], ['触发原因', t.reason], ['执行阶段', stages[t.stage] || t.stage], ['规则版本', t.rule_version], ['输入版本', t.input_version], ['输入摘要', t.input_summary]].forEach(([label, value]) => { if (value) technical.append(node('p', label + '：' + value, 'hint')); });
       const scroll = node('div', null, 'table-responsive'), table = node('table', null, 'data ai-request-table'); const head = node('thead'), hr = node('tr'); ['阶段', '开始时间', '状态 / 错误', '耗时', '输入 / 输出 / 缓存 Token', '预估费用 / 价格版本'].forEach(text => hr.append(node('th', text))); head.append(hr); table.append(head); const body = node('tbody'); (t.calls || []).forEach(call => { const row = node('tr'); [stages[call.kind] || call.kind, dateTime(call.started_at), (states[call.status] || call.status) + (call.http_status ? ' · HTTP ' + call.http_status : '') + (call.error_code ? ' · ' + (errorNames[call.error_code] || call.error_code) : ''), seconds(call.duration_ms), [call.input_tokens, call.output_tokens, call.cached_tokens].map(v => v == null ? '未知' : n(v)).join(' / '), (call.estimated_cny == null ? '未知' : '≈ ¥' + amount(call.estimated_cny)) + ' · ' + (call.price_version ? 'v' + call.price_version : '未配置')].forEach(text => row.append(node('td', text))); if(call.price_snapshot){const price=call.price_snapshot,detail=node('details'),summary=node('summary','当时单价');detail.append(summary);[['输入',price.input_per_million],['缓存命中',price.cached_per_million],['输出',price.output_per_million],['搜索/次',price.search_per_call]].forEach(([label,value])=>detail.append(node('p',label+'：'+(value==null?'未知':amount(value))+' 元'+(label==='搜索/次'?' / 次':' / 百万 Token'),'hint')));row.lastChild.append(detail);} body.append(row); }); table.append(body); scroll.append(table); technical.append(scroll);
@@ -267,19 +452,70 @@
           const apply = button('一键代入并保存路线说明', async () => { if (!input.value.trim()) return; apply.disabled = true; try { const response = await fetch('/admin/api/tracks/' + encodeURIComponent(t.object_id) + '/description', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, signal, body: JSON.stringify({ description: input.value.trim(), source_version: result.source_version, task_id: t.id }) }); const data = await response.json(); if (!response.ok || !data.data || !data.data.saved) throw new Error(data.error || '保存结果未确认，请核实'); msg.textContent = '路线说明已保存。'; apply.remove(); refresh(false); } catch (error) { if (!signal.aborted) msg.textContent = error.message; } finally { apply.disabled = false; } }, 'tracks'); root.append(input, msg, apply);
         }
       }
-      root.append(technical);
+      root.append(grid, technical);
     } catch (error) { if (!signal.aborted) $('detail').replaceChildren(node('p', error.message, 'text-danger'), button('重试读取', () => loadDetail(id, signal))); }
   }
   $('detailModal').addEventListener('hidden.bs.modal', () => { modalTaskID = ''; if (detailController) detailController.abort(); $('detail').replaceChildren(); });
-  function refresh(reset) { if (reset) { cursor = ''; nextCursor = ''; history = []; page = 1; } $('pageError').textContent = ''; loadTasks(); loadStatistics(); loadActive(false); loadSettings(); loadQuotas(true); }
-  $('period').addEventListener('change', () => { setPeriod(); refresh(true); }); ['from', 'to'].forEach(id => $(id).addEventListener('change', () => { $('period').value = 'custom'; setPeriod(); refresh(true); })); ['feature', 'provider', 'model', 'mode', 'status', 'adoption'].forEach(id => $(id).addEventListener('change', () => { updateFilterSummary(); refresh(true); })); $('q').addEventListener('keydown', event => { if (event.key === 'Enter') refresh(true); }); $('refresh').addEventListener('click', () => refresh(true)); $('prev').addEventListener('click', () => { cursor = history.pop() || ''; page--; loadTasks(); }); $('next').addEventListener('click', () => { if (!nextCursor) return; history.push(cursor); cursor = nextCursor; page++; loadTasks(); }); $('moreActive').addEventListener('click', () => loadActive(true));
+  function refresh(reset) {
+    if (reset) { cursor = ''; nextCursor = ''; history = []; page = 1; }
+    $('pageError').textContent = '';
+    loadTasks(); loadStatistics(); loadActive(false); loadSettings(); loadQuotas(true);
+  }
+  $('period').addEventListener('change', () => applyFilters());
+  ['from', 'to', ...filterIDs].forEach(id => $(id).addEventListener('change', () => applyFilters()));
+  $('q').addEventListener('input', updateSearchHint);
+  $('q').addEventListener('keydown', event => {
+    if (event.key === 'Enter' && !event.isComposing) { event.preventDefault(); applyFilters(true); }
+  });
+  $('refresh').addEventListener('click', () => applyFilters(true));
+  document.querySelectorAll('[data-task-status]').forEach(button => button.addEventListener('click', () => {
+    const status = button.dataset.taskStatus;
+    $('status').value = appliedFilters.get('status') === status ? '' : status;
+    applyFilters();
+  }));
+  $('prev').addEventListener('click', () => {
+    if (history.length) loadTasks({ cursor: history[history.length - 1], history: history.slice(0, -1), page: page - 1 });
+  });
+  $('next').addEventListener('click', () => {
+    if (nextCursor) loadTasks({ cursor: nextCursor, history: [...history, cursor], page: page + 1 });
+  });
+  $('toggleActive').addEventListener('click', () => { activeOpen = !activeOpen; showActiveBody(); });
+  $('moreActive').addEventListener('click', () => loadActive(true));
+  $('usageDetails').addEventListener('toggle', () => {
+    if ($('usageDetails').open) requestAnimationFrame(() => drawCharts(statistics));
+  });
+  $('openQuota').addEventListener('click', () => {
+    $('settingsSection').open = true;
+    $('quotaSection').scrollIntoView({ block: 'start' });
+    $('refreshQuota').focus({ preventScroll: true });
+  });
+  $('openPricing').addEventListener('click', () => {
+    if (!can('ai_settings', true)) return;
+    $('settingsSection').open = true;
+    $('pricingSection').open = true;
+    $('pricingSection').scrollIntoView({ block: 'start' });
+    $('pricingSection').querySelector('summary').focus({ preventScroll: true });
+  });
   $('reloadSettings').addEventListener('click', async () => { if (busySettings) return; if ((policyDirty || pricesDirty) && !await AdminUI.confirm({title:'重新载入配置',message:'将放弃尚未保存的预算和价格修改，读取服务端最新配置。'})) return; policyDirty=false; pricesDirty=false; await loadSettings(); });
-  $('clearFilters').addEventListener('click', () => { ['provider', 'mode', 'status', 'adoption'].forEach(id => { $(id).value = ''; }); updateFilterSummary(); refresh(true); });
+  $('clearFilters').addEventListener('click', () => { ['provider', 'mode', 'status', 'adoption'].forEach(id => { $(id).value = ''; }); applyFilters(); });
   $('refreshQuota').addEventListener('click',()=>loadQuotas(true));
   let refreshTicks=0;
-  const timer = setInterval(() => { if (document.hidden || !$('autoRefresh').checked) return; loadActive(false); loadQuotas(false); if(++refreshTicks%3===0){if(!statisticsLoading)loadStatistics();if(!tasksLoading)loadTasks();} }, 5000);
-  const resize = new ResizeObserver(() => charts.forEach(chart => chart.resize())); ['trend', 'featuresChart', 'modelsChart'].forEach(id => resize.observe($(id)));
+  const timer = setInterval(() => {
+    if (document.hidden || !$('autoRefresh').checked) return;
+    loadQuotas(false);
+    if (!appliedFilters.has('from')) return;
+    if (!activeLoading) loadActive(false);
+    if (++refreshTicks % 3 === 0) {
+      if (!statisticsLoading) loadStatistics();
+      if (!tasksLoading) loadTasks();
+    }
+  }, 5000);
+  const resize = new ResizeObserver(() => charts.forEach(chart => {
+    if (chart.getDom().clientWidth && chart.getDom().clientHeight) chart.resize();
+  }));
+  ['trend', 'featuresChart', 'modelsChart'].forEach(id => resize.observe($(id)));
   window.addEventListener('pagehide', () => { clearInterval(timer); resize.disconnect(); Object.values(controllers).forEach(ctrl => ctrl.abort()); if (detailController) detailController.abort(); charts.forEach(chart => chart.dispose()); });
-  refresh(true);
+  applyFilters(true);
+  if (!appliedFilters.has('from')) { loadSettings(); loadQuotas(true); }
   const deepTask = new URLSearchParams(location.search).get('task_id'); if (deepTask) openDetail(deepTask);
 })();

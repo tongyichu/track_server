@@ -1,4 +1,21 @@
 .ai-toolbar{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+.ai-page-heading{flex-wrap:wrap;gap:8px}
+.ai-filter-panel :is(.ai-filters,#searchDraftHint){margin-top:8px}
+.ai-status-actions,.ai-price-actions,.ai-task-outcome{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.ai-price-actions{margin-top:10px}
+.ai-task-outcome{margin-bottom:6px}
+.ai-task-outcome+*{display:block;margin-bottom:10px}
+.ai-active-panel .ai-section-heading,.ai-task-section .ai-section-heading{margin-bottom:0}
+#activeBody{margin-top:10px}
+.ai-overview .ai-section-heading{margin-bottom:8px}
+.ai-overview .admin-metrics{margin-bottom:0}
+.ai-overview .admin-metric{min-height:68px;gap:3px}
+.ai-overview .admin-metric>strong{font-size:22px}
+.ai-usage-details>summary{cursor:pointer;font-size:15px;font-weight:600}
+.ai-usage-details:not([open])>:not(summary){display:none}
+.ai-distribution-row{display:flex;justify-content:space-between;align-items:baseline;gap:8px 12px;padding:8px 0;border-bottom:1px solid var(--tblr-border-color);font-size:13px}
+.ai-distribution-row span{overflow-wrap:anywhere}
+.ai-distribution-row strong{flex:none;font-weight:600;font-variant-numeric:tabular-nums}
 .ai-toolbar label{display:flex;flex-direction:column;gap:5px;font-size:12px;min-width:135px}
 .ai-toolbar .ai-search{flex:1;min-width:200px}
 .ai-toolbar input,.ai-toolbar select,.ai-toolbar button{min-height:38px}
@@ -12,7 +29,8 @@
 .ai-disclosure>summary,.ai-settings>summary{cursor:pointer;color:#206bc4;width:fit-content;max-width:100%;overflow-wrap:anywhere}
 .ai-disclosure[open]>summary{margin-bottom:14px}
 .ai-filters{margin-top:12px}
-.ai-charts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin:14px 0}
+.ai-charts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 18px;margin:12px 0}
+.ai-charts>div:first-child{grid-column:1/-1}
 .ai-charts h3{font-size:14px;margin:0 0 6px}
 .ai-chart{height:220px;min-width:0}
 .ai-ring{display:grid;grid-template-columns:minmax(130px,1fr) minmax(100px,1fr);gap:8px;align-items:center}
@@ -43,7 +61,7 @@
 .ai-price-table input{width:130px}
 .ai-breakdown-table{min-width:850px}
 .ai-pagination{display:flex;gap:15px;align-items:center;margin-top:14px}
-.ai-detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:18px}
+.ai-detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:12px 0 16px}
 .ai-detail-field{overflow-wrap:anywhere}
 .ai-detail-field strong{display:block;margin-bottom:4px}
 .ai-detail-result{white-space:pre-wrap;overflow-wrap:anywhere;background:#f6f8fb;padding:14px;border-radius:8px;max-height:450px;overflow:auto}
@@ -57,9 +75,9 @@
 .ai-detail-actions{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
 .ai-page .hint{overflow-wrap:anywhere}
 .ai-page p:empty{display:none}
-@media(max-width:1199px){.ai-charts{grid-template-columns:repeat(2,minmax(0,1fr))}.ai-charts>div:first-child{grid-column:1/-1}}
 @media(max-width:767px){
-.ai-toolbar label,.ai-toolbar .ai-search{width:100%;min-width:0}
+.ai-toolbar label{flex:1 1 125px;min-width:0}
+.ai-toolbar .ai-search{flex:1 1 100%;min-width:0}
 .ai-toolbar button{flex:1}
 .ai-charts,.ai-active,.ai-detail-grid{grid-template-columns:1fr}
 .ai-charts>div:first-child{grid-column:auto}
