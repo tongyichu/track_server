@@ -160,6 +160,7 @@ type AdminCompanionListFilter struct {
 	SessionIDs []string
 	Title      string
 	TrackType  string
+	Status     models.CompanionSessionStatus
 	// OwnerIDs 限制发起人范围（昵称/省市筛选解析结果）；nil 表示不限制，非 nil 空切片表示无匹配。
 	OwnerIDs []int64
 }

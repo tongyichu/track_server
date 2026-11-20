@@ -1022,4 +1022,6 @@ Authorization: Bearer <token>
 
 ### 后台房间详情中的成员轨迹
 
+后台房间列表 `GET /admin/api/companions` 可传 `status=active` 或 `status=ended`，状态同时参与总数统计和游标分页。
+
 后台独立会话接口`GET /admin/api/companions/:session_id`的成员、房主、位置快照和弹幕中的用户ID及弹幕ID以十进制字符串返回。仅同时具有companions和tracks读取权限时，成员附带`track:{state,track_id?,title?}`，state为ready/deleted/pending/empty/unavailable/unknown；无tracks权限时不查询或返回轨迹字段。轨迹关联从该房间成员的正式完成清单读取，并批量核对作者及session_id；不以时间、最后位置或普通单人轨迹推断。已下架但仍保留的正式轨迹可在后台现有轨迹弹窗查看；彻底删除/未生成显示暂不可用。读取失败保留成员信息，并通过member_tracks_warning及unknown状态提示。该扩展不改变业务JWT结算/成员访问协议，也不触发补传或轨迹生成。详见[后台成员轨迹流程](../admin-workflows.md#同行成员轨迹)。

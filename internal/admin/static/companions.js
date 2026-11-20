@@ -83,12 +83,14 @@
   }
 
   var cursorStack = [null], pageIndex = 0, lastNextCursor = null, listRequest = 0;
-  var applied = { title: '', ownerName: '', trackType: '', provinceCode: '', cityCode: '' };
+  var applied = { title: '', ownerName: '', status: '', trackType: '', provinceCode: '', cityCode: '' };
   var tbody = document.getElementById('companionList');
   var prevBtn = document.getElementById('prevBtn');
   var nextBtn = document.getElementById('nextBtn');
   var titleFilter = document.getElementById('titleFilter');
   var ownerNameFilter = document.getElementById('ownerNameFilter');
+  var statusFilter = document.getElementById('companionStatusFilter');
+  var activeRooms = document.getElementById('showActiveRooms');
   var provinceFilter = document.getElementById('provinceFilter');
   var cityFilter = document.getElementById('cityFilter');
   var pageHint = document.getElementById('pageHint');
@@ -177,16 +179,17 @@
   });
 
   function hasActiveFilter() {
-    return !!(applied.title || applied.ownerName || applied.trackType || applied.provinceCode || applied.cityCode);
+    return !!(applied.title || applied.ownerName || applied.status || applied.trackType || applied.provinceCode || applied.cityCode);
   }
   function pendingFilterChange() {
-    return titleFilter.value.trim() !== applied.title || ownerNameFilter.value.trim() !== applied.ownerName ||
+    return titleFilter.value.trim() !== applied.title || ownerNameFilter.value.trim() !== applied.ownerName || statusFilter.value !== applied.status ||
       selectedType !== applied.trackType || provinceFilter.value !== applied.provinceCode || cityFilter.value !== applied.cityCode;
   }
   function resetSearch() {
     applied = {
       title: titleFilter.value.trim(),
       ownerName: ownerNameFilter.value.trim(),
+      status: statusFilter.value,
       trackType: selectedType,
       provinceCode: provinceFilter.value,
       cityCode: cityFilter.value
@@ -200,15 +203,22 @@
     event.preventDefault();
     resetSearch();
   });
-  resetBtn.addEventListener('click', function () {
+  function clearFilters(status) {
     titleFilter.value = '';
     ownerNameFilter.value = '';
+    statusFilter.value = status;
     selectType('');
     provinceFilter.value = '';
     cityFilter.value = '';
     loadRegions().then(function (regions) { populateCityOptions(regions, ''); }).catch(function () {});
     resetSearch();
+  }
+  resetBtn.addEventListener('click', function () { clearFilters(''); });
+  activeRooms.addEventListener('click', function () {
+    clearFilters('active');
+    document.getElementById('companionSearch').scrollIntoView({ block: 'nearest' });
   });
+  statusFilter.addEventListener('change', function () { resetBtn.hidden = !hasActiveFilter() && !pendingFilterChange(); });
   [titleFilter, ownerNameFilter].forEach(function (input) {
     input.addEventListener('input', function () { resetBtn.hidden = !hasActiveFilter() && !pendingFilterChange() && !input.value; });
   });
@@ -240,6 +250,7 @@
     var params = new URLSearchParams({ limit: '20' });
     if (applied.title) params.set('title', applied.title);
     if (applied.ownerName) params.set('owner_name', applied.ownerName);
+    if (applied.status) params.set('status', applied.status);
     if (applied.trackType) params.set('track_type', applied.trackType);
     if (applied.provinceCode) params.set('province_code', applied.provinceCode);
     if (applied.cityCode) params.set('city_code', applied.cityCode);
@@ -253,42 +264,35 @@
     totalHint.textContent = '';
     pageHint.textContent = '正在加载…';
     tbody.setAttribute('aria-busy', 'true');
-    showEmpty(tbody, 8, '正在加载房间…');
+    showEmpty(tbody, 7, '正在加载房间…');
     try {
       var data = await apiJSON('/admin/api/companions?' + params.toString());
       if (request !== listRequest) return;
       var items = data.items || [];
+      activeRooms.setAttribute('aria-pressed', String(applied.status === 'active'));
       lastNextCursor = data.next_cursor || null;
       tbody.replaceChildren();
       items.forEach(function (it) {
         var ownerAvatar = safeImageURL(it.owner_avatar_url);
         var tr = document.createElement('tr');
-        tr.className = 'companion-row';
-        tr.tabIndex = 0;
-        tr.setAttribute('aria-label', '查看房间：' + (it.title || it.session_id));
-        tr.innerHTML = '<td><div class="companion-room-cell"><strong>' + esc(it.title || '未命名房间') + '</strong></div></td>' +
+        tr.innerHTML = '<td><div class="companion-room-cell"><button type="button" class="btn btn-link p-0 companion-room-link">' + esc(it.title || '未命名房间') + '</button></div></td>' +
           '<td>' + typeBadge(it.track_type) + '</td>' +
           '<td><div class="companion-user">' + (ownerAvatar ? '<img src="' + esc(ownerAvatar) + '" alt="" class="companion-avatar" />' : '') +
           '<span><strong>' + esc(it.owner_name || '未知用户') + '</strong></span></div></td>' +
           '<td><div class="companion-cell-stack">' + badge(it.status) + '<small>' + esc(label(it.visibility)) + '房间</small></div></td>' +
           '<td>' + esc(fmtTime(it.started_at)) + '</td>' +
           '<td>' + esc(fmtDuration(it.started_at, it.status === 'active' ? null : it.ended_at)) + '</td>' +
-          '<td>' + esc(Number(it.member_count || 0) + ' / ' + (it.max_members || 0)) + '</td>' +
-          '<td><button type="button" class="btn btn-sm btn-outline-primary companion-view">查看详情</button></td>';
-        tr.addEventListener('click', function () { loadDetail(it.session_id); });
-        tr.addEventListener('keydown', function (event) {
-          if (event.target === tr && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); loadDetail(it.session_id); }
-        });
-        tr.querySelector('.companion-view').addEventListener('click', function (event) { event.stopPropagation(); loadDetail(it.session_id); });
+          '<td>' + esc(Number(it.member_count || 0) + ' / ' + (it.max_members || 0)) + '</td>';
+        tr.querySelector('.companion-room-link').addEventListener('click', function () { loadDetail(it.session_id); });
         tbody.appendChild(tr);
       });
-      if (!items.length) showEmpty(tbody, 8, hasActiveFilter() ? '未找到匹配的房间，请调整筛选条件。' : '暂无同行房间。');
+      if (!items.length) showEmpty(tbody, 7, hasActiveFilter() ? '未找到匹配的房间，请调整筛选条件。' : '暂无同行房间。');
       nextBtn.disabled = !lastNextCursor;
       totalHint.textContent = '共 ' + Number(data.total || 0).toLocaleString() + ' 个房间';
       pageHint.textContent = '第 ' + (pageIndex + 1) + ' 页 · 本页 ' + items.length + ' 个房间';
     } catch (error) {
       if (request !== listRequest) return;
-      showEmpty(tbody, 8, '加载失败：' + error.message + '。请点击“刷新数据”重试。');
+      showEmpty(tbody, 7, '加载失败：' + error.message + '。请点击“刷新数据”重试。');
       pageHint.textContent = '加载失败';
     } finally {
       if (request === listRequest) {

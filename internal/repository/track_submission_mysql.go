@@ -89,19 +89,32 @@ func scanTrackSubmission(row scanner) (*models.TrackSubmission, error) {
 
 const submissionColumns = `submission_id,track_id,user_id,track_type,title,description,difficulty,risk_level,suitable_months_json,surface_types_json,transport_modes_json,transport_description,status,revision,submitted_at,approved_at,reviewed_at,reviewed_by,review_reason,created_at,updated_at`
 
-func (r *MySQLTrackSubmissionRepository) loadImages(ctx context.Context, sub *models.TrackSubmission) error {
-	rows, err := r.db.QueryContext(ctx, `SELECT image_id,submission_id,oss_url,caption,sort_order,created_at,updated_at FROM track_submission_images WHERE submission_id=? ORDER BY sort_order,image_id`, sub.SubmissionID)
+func (r *MySQLTrackSubmissionRepository) loadImages(ctx context.Context, submissions ...*models.TrackSubmission) error {
+	if len(submissions) == 0 {
+		return nil
+	}
+	byID := make(map[string]*models.TrackSubmission, len(submissions))
+	args := make([]any, 0, len(submissions))
+	for _, sub := range submissions {
+		byID[sub.SubmissionID] = sub
+		sub.Images = make([]*models.TrackSubmissionImage, 0)
+		args = append(args, sub.SubmissionID)
+	}
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(args)), ",")
+	rows, err := r.db.QueryContext(ctx, `SELECT image_id,submission_id,oss_url,caption,sort_order,created_at,updated_at FROM track_submission_images WHERE submission_id IN (`+placeholders+`) ORDER BY submission_id,sort_order,image_id`, args...)
 	if err != nil {
 		return err
 	}
 	defer rows.Close()
-	sub.Images = make([]*models.TrackSubmissionImage, 0)
 	for rows.Next() {
 		var image models.TrackSubmissionImage
 		if err := rows.Scan(&image.ImageID, &image.SubmissionID, &image.OSSURL, &image.Caption, &image.SortOrder, &image.CreatedAt, &image.UpdatedAt); err != nil {
 			return err
 		}
-		sub.Images = append(sub.Images, &image)
+		sub := byID[image.SubmissionID]
+		if sub != nil {
+			sub.Images = append(sub.Images, &image)
+		}
 	}
 	return rows.Err()
 }
@@ -208,11 +221,28 @@ func (r *MySQLTrackSubmissionRepository) List(ctx context.Context, filter models
 		query += ` AND user_id=?`
 		args = append(args, filter.UserID)
 	}
+	if !filter.SubmittedFrom.IsZero() {
+		query += ` AND submitted_at>=?`
+		args = append(args, filter.SubmittedFrom.UTC())
+	}
+	if !filter.SubmittedBefore.IsZero() {
+		query += ` AND submitted_at<?`
+		args = append(args, filter.SubmittedBefore.UTC())
+	}
+	order, compare := "DESC", "<"
+	if filter.OldestFirst {
+		order, compare = "ASC", ">"
+	}
+	if !filter.CursorSubmittedAt.IsZero() {
+		query += ` AND (submitted_at ` + compare + ` ? OR (submitted_at=? AND submission_id ` + compare + ` ?))`
+		at := filter.CursorSubmittedAt.UTC()
+		args = append(args, at, at, filter.CursorID)
+	}
 	limit := filter.Limit
-	if limit <= 0 || limit > 100 {
+	if limit <= 0 || limit > 101 {
 		limit = 20
 	}
-	query += ` ORDER BY submitted_at DESC,submission_id DESC LIMIT ?`
+	query += ` ORDER BY submitted_at ` + order + `,submission_id ` + order + ` LIMIT ?`
 	args = append(args, limit)
 	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -232,10 +262,8 @@ func (r *MySQLTrackSubmissionRepository) List(ctx context.Context, filter models
 		return nil, err
 	}
 	rows.Close()
-	for _, sub := range items {
-		if err := r.loadImages(ctx, sub); err != nil {
-			return nil, err
-		}
+	if err := r.loadImages(ctx, items...); err != nil {
+		return nil, err
 	}
 	return items, nil
 }

@@ -156,7 +156,8 @@ POST /admin/api/login {username,password}
 ```text
 [admin UI] /admin/track_submissions.html
   → GET /admin/api/dashboard?period=month
-  → 展示当前 pending 与超时数，以及当月通过/驳回/通过率/平均审核时长
+  → 待审入口分为全部待审、等待 24–72 小时、等待超 72 小时
+  → 按需展开本月通过、驳回、通过率和平均审核时长
   → 审核成功后重新读取统计和当前列表
 ```
 
@@ -208,7 +209,7 @@ GET /admin/api/users
        → resolved 状态要求 reply 必填，reply 会展示给提交用户
 ```
 
-纠错展示以 `correction` 的提交时快照为准，不根据当前选项名称重建历史记录；旧文字格式仅保留兼容，普通反馈仅提到轨迹 ID 不应被误识别。选项通过后台配置维护稳定 ID，已有项只允许停用而非删除，新增 ID 由服务端生成；并发保存冲突时保留表单，由管理员显式重新加载，不覆盖他人配置。状态统计仍包含全部反馈。轨迹实际修改继续走既有鉴权与保存确认，读取关联轨迹不能自动提交改动。
+列表把纠错问题、轨迹 ID、版本和手机号放在“更多筛选”。分页和刷新使用上次成功应用的条件，翻页失败时保留上页数据与游标。纠错展示以 `correction` 的提交时快照为准，不根据当前选项名称重建历史记录；旧文字格式仅保留兼容，普通反馈仅提到轨迹 ID 不应被误识别。选项通过后台配置维护稳定 ID，已有项只允许停用而非删除，新增 ID 由服务端生成；并发保存冲突时保留表单，由管理员显式重新加载，不覆盖他人配置。状态统计仍包含全部反馈。轨迹实际修改继续走既有鉴权与保存确认，读取关联轨迹不能自动提交改动。
 
 ### 同行成员轨迹
 
@@ -222,7 +223,7 @@ GET /admin/api/users
 
 后台地图模式只增加“路线空间覆盖”和“路线组规模分布”两张图；与友同行只增加“创建/结束趋势”和“参与人数分布”，使用近 1/7/30 天切换。`AdminDashboardStatisticsRepository` 的 `GetAdminMapModeStatistics` / `GetAdminCompanionUsageStatistics` 在 MySQL、Mongo、内存仓储中只读聚合；不新增表、客户端协议或业务埋点。实现位于 `internal/repository/admin_feature_statistics*.go`，模型为 `internal/models/admin_feature_statistics.go`，后台入口为 `feature_statistics.go`。地图按全量 active 路线组中心 GCJ02 坐标展示；规模按当前 member_count 分为 0、1、2–5、6–20、21 条及以上，城市去重。同行使用趋势按创建/结束各自发生时间独立计数，不以同周期结束数除以创建数作为完成率；人数分布以本周期创建的会话为 cohort，按服务端成员记录 user_id 去重，包含曾离开或移出的成员，不使用 max_members 或客户端 actual_participant_count。没有成员记录的历史会话单列未知，平均人数只计算有成员记录的会话。近 1 天为滚动 24 小时按小时分桶，7/30 天按北京时间自然日含当天补齐空桶。统一刷新保留周期，切换失败回退到上次成功周期；两页不再增加排行和重复数字卡片。
 
-`static/admin_usage_charts.js` 共用空间聚合、折线与分布图；`static/feature_statistics.js` 是地图模式/同行页的轻量控制器，景点页通过 `scenic_spot_charts.js` 复用同一地图与趋势组件。组件均使用已内置 ECharts 和省界数据，不访问高德图表 API；地图保留视野并支持点选详情，页面按窄屏上下排列。地图模式统计刷新同时刷新列表，与友同行沿用页面顶部统一刷新按钮。
+`static/admin_usage_charts.js` 共用空间聚合、折线与分布图；`static/feature_statistics.js` 是地图模式/同行页的轻量控制器，景点页通过 `scenic_spot_charts.js` 复用同一地图与趋势组件。地图模式和同行图表首次展开时加载，地图保留视野并支持点选详情。地图统计与路线列表各自刷新。同行的“进行中房间”直达对应状态列表，顶部自然月概览与趋势周期分别标注。
 
 ### 运营聚合路线
 
@@ -237,7 +238,8 @@ GET /admin/api/users
   → DELETE /admin/api/route-groups/:group_id/members/:track_id
   → PUT /admin/api/route-groups/:group_id/representative {track_id}
   → PUT /admin/api/route-groups/:group_id/introduction 保存中英文介绍
-  → POST /admin/api/route-groups/:group_id/introduction/publish|unpublish 发布或下线
+  → POST /admin/api/route-groups/:group_id/introduction/publish 提交当前编辑内容并发布
+  → POST /admin/api/route-groups/:group_id/introduction/unpublish 下线
        → TrackRouteGroupService 校验运动类型、成员关系与代表轨迹
        → TrackMapRepository 更新 track_route_groups / track_route_group_members
 ```
@@ -248,7 +250,7 @@ GET /admin/api/users
 
 ```text
 [admin UI] /admin/track_submissions.html
-  → GET /admin/api/track-submissions?status=pending
+  → GET /admin/api/track-submissions?status=pending&sort=oldest
   → GET /admin/api/track-submissions/:submission_id 查看投稿、轨迹与审核流水
   → POST /admin/api/track-submissions/:submission_id/review
        {decision, reason, expected_revision}
@@ -329,7 +331,7 @@ Kimi 景点简介使用 `MOONSHOT_API_KEY` 和可选的 `KIMI_SCENIC_DESCRIPTION
 
 健康判断使用当前实例的采集、服务初始化、上传器和调度配置，以及最新一条持久化同步摘要；不读取原始事件、不扫描队列、不触发OSS、补传或重试。采集停用为中性状态；服务初始化失败、缺上传器、未启用自动任务和无效计划分别明确提示。最新失败/部分失败告警；成功按与实际调度器相同的cron和进程时区计算下次计划，超出计划一小时仍无完成摘要提示逾期。没有摘要时以当前实例启动时间后的首次计划作为起点，期限前显示等待，不因没有用户事件报警。摘要时间无效、查询失败显示未知。此状态仅反映归档链路，不能证明客户端埋点完整收到；独立任务实例需在对应实例核对，不将当前实例关闭调度泛称全局故障。
 
-日志页面保留原`/admin/analytics.html`与analytics权限ID，改名“埋点同步日志”，从主导航移入“系统工具”（桌面入口及移动更多页的工具区）；日志仍只读查看，刷新不触发同步。
+有 analytics 读取权限时，从工作台页头的埋点状态进入 `/admin/analytics.html`。没有工作台权限时，桌面侧栏和手机端“更多”提供直达入口。日志只读，刷新只查询记录。
 
 ```text
 [admin UI] /admin/analytics.html
@@ -388,7 +390,7 @@ Pixabay大图下载失败时最多回退同一缓存中的原始640图一次，�
 
 ## 活动与通知
 
-通知详情/新建共用的弹窗使用固定标题栏与底部操作栏，仅表单、预览及操作记录所在的中间区域滚动；保存错误提示随底部操作区保持可见，窄屏保留换行与内容留白。
+通知列表支持按状态筛选，时间列按草稿更新、计划上线、实际上线、停止发放或撤回标注。详情和新建共用固定标题栏与底部操作栏，仅中间内容滚动。撤回按已保存版本和 revision 变更状态，不提交当前表单。保存错误随底部操作区保持可见。
 
 announcements.html 为独立模块，复用 shell/ui/Tabler 和服务端权限、同源与审计。announcements.js保留列表失败内容，使用字符串用户ID及CAS expected_version，加载详情时取消旧请求，只复用一个编辑对话框；关闭/切换忽略旧响应。标题/正文预览用 textContent，不执行运营输入。覆盖方式分一次性通知/持续公告，发布方式分立即/定时，接收全部或指定用户，H5选填。持续公告独立设置停止发放时间或长期有效，活动结束时间单独保留；待发布可修改或取消定时回草稿。已上线内容普通编辑保留已读，不改发布安排与范围；撤回后可编辑、存草稿并重新发布为新轮次。列表增覆盖方式并复用未变行，详情显示预定/实际上线时间和最近50条操作记录，所有运营文本用textContent。只读可预览不能提交。协议与持久化边界见 [消息API](api/messages.md#活动通知管理) 和 [消息架构](messages.md)。
 

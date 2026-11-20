@@ -2,6 +2,7 @@ package admin
 
 import (
 	"archive/zip"
+	"bytes"
 	"context"
 	"crypto/md5"
 	"encoding/hex"
@@ -516,15 +517,50 @@ func (h *Handler) ListTrackSubmissions(ctx context.Context, c *app.RequestContex
 		return
 	}
 	userID, _ := strconv.ParseInt(strings.TrimSpace(string(c.Query("user_id"))), 10, 64)
-	items, err := h.trackSubmissionSvc.ListAdmin(ctx, models.TrackSubmissionListFilter{Status: models.TrackSubmissionStatus(strings.TrimSpace(string(c.Query("status")))), Difficulty: strings.TrimSpace(string(c.Query("difficulty"))), RiskLevel: strings.TrimSpace(string(c.Query("risk_level"))), TrackType: strings.TrimSpace(string(c.Query("track_type"))), UserID: userID, Limit: parseAdminListLimit(string(c.Query("limit")))})
+	limit := parseAdminListLimit(string(c.Query("limit")))
+	filter := models.TrackSubmissionListFilter{
+		Status:     models.TrackSubmissionStatus(strings.TrimSpace(string(c.Query("status")))),
+		Difficulty: strings.TrimSpace(string(c.Query("difficulty"))), RiskLevel: strings.TrimSpace(string(c.Query("risk_level"))),
+		TrackType: strings.TrimSpace(string(c.Query("track_type"))), UserID: userID, Limit: limit + 1,
+	}
+	filter.OldestFirst = string(c.Query("sort")) == "oldest"
+	if age := string(c.Query("age")); age != "" {
+		now := time.Now().UTC()
+		if filter.Status != models.TrackSubmissionStatusPending || age != "24_72h" && age != "over_72h" {
+			c.JSON(http.StatusBadRequest, utils.H{"error": "待审核时长筛选无效"})
+			return
+		}
+		filter.SubmittedBefore = now.Add(-72 * time.Hour)
+		if age == "24_72h" {
+			filter.SubmittedFrom = filter.SubmittedBefore
+			filter.SubmittedBefore = now.Add(-24 * time.Hour)
+		}
+	}
+	cursorAt, cursorID := string(c.Query("cursor_submitted_at")), string(c.Query("cursor_submission_id"))
+	if cursorAt != "" || cursorID != "" {
+		at, err := time.Parse(time.RFC3339Nano, cursorAt)
+		if err != nil || at.IsZero() || cursorID == "" || len(cursorID) > 128 {
+			c.JSON(http.StatusBadRequest, utils.H{"error": "投稿分页游标无效"})
+			return
+		}
+		filter.CursorSubmittedAt, filter.CursorID = at, cursorID
+	}
+	items, err := h.trackSubmissionSvc.ListAdmin(ctx, filter)
 	if err != nil {
 		writeAdminTrackSubmissionError(c, err)
 		return
 	}
+	data := utils.H{"has_more": len(items) > limit}
+	if len(items) > limit {
+		items = items[:limit]
+		last := items[len(items)-1]
+		data["next_cursor"] = utils.H{"submitted_at": last.SubmittedAt, "submission_id": last.SubmissionID}
+	}
 	for _, sub := range items {
 		rewriteAdminSubmissionImages(sub)
 	}
-	c.JSON(http.StatusOK, utils.H{"code": 0, "data": h.adminSubmissionData(utils.H{"items": items, "total": len(items)})})
+	data["items"], data["total"] = items, len(items)
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": h.adminSubmissionData(data)})
 }
 
 // Keep admin labels/icons aligned with the submission options and built-in sports.
@@ -2167,6 +2203,7 @@ func handleAdminRepoError(c *app.RequestContext, err error) {
 //   - title:        房间标题模糊搜索；
 //   - owner_name:   发起人昵称模糊搜索；
 //   - track_type:   运动类型精确筛选；
+//   - status: active / ended 房间状态；
 //   - province_code / city_code: 按发起人资料所在省市精确筛选；
 //   - cursor_started_at: RFC3339 时间，上一页最后一条的 started_at；
 //   - cursor_session_id: 上一页最后一条会话的 session_id；
@@ -2180,6 +2217,7 @@ func (h *Handler) ListCompanions(ctx context.Context, c *app.RequestContext) {
 	title := strings.TrimSpace(string(c.Query("title")))
 	ownerName := strings.TrimSpace(string(c.Query("owner_name")))
 	trackType := strings.TrimSpace(string(c.Query("track_type")))
+	status := models.CompanionSessionStatus(strings.TrimSpace(string(c.Query("status"))))
 	provinceCode := strings.TrimSpace(string(c.Query("province_code")))
 	cityCode := strings.TrimSpace(string(c.Query("city_code")))
 	if utf8.RuneCountInString(title) > 128 {
@@ -2192,6 +2230,10 @@ func (h *Handler) ListCompanions(ctx context.Context, c *app.RequestContext) {
 	}
 	if utf8.RuneCountInString(trackType) > 32 {
 		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid track_type"})
+		return
+	}
+	if status != "" && status != models.CompanionSessionStatusActive && status != models.CompanionSessionStatusEnded {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid companion status"})
 		return
 	}
 	var cursor *models.CompanionSessionListCursor
@@ -2271,7 +2313,7 @@ func (h *Handler) ListCompanions(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 	items, total, err := listRepo.ListAdminCompanions(ctx, repository.AdminCompanionListFilter{
-		Title: title, TrackType: trackType, OwnerIDs: ownerIDs,
+		Title: title, TrackType: trackType, Status: status, OwnerIDs: ownerIDs,
 	}, cursor, limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, utils.H{"error": err.Error()})
@@ -2962,7 +3004,19 @@ func (h *Handler) setRouteGroupIntroductionPublished(ctx context.Context, c *app
 		c.JSON(http.StatusInternalServerError, utils.H{"error": "route group service not configured"})
 		return
 	}
-	introduction, err := h.routeGroupSvc.SetRouteIntroductionPublished(ctx, c.Param("group_id"), published)
+	groupID := c.Param("group_id")
+	var introduction *models.TrackRouteIntroduction
+	var err error
+	if data := bytes.TrimSpace(c.Request.Body()); published && len(data) > 0 {
+		var body models.TrackRouteIntroduction
+		if json.Unmarshal(data, &body) != nil {
+			c.JSON(http.StatusBadRequest, utils.H{"error": "invalid payload"})
+			return
+		}
+		introduction, err = h.routeGroupSvc.PublishRouteIntroduction(ctx, groupID, &body)
+	} else {
+		introduction, err = h.routeGroupSvc.SetRouteIntroductionPublished(ctx, groupID, published)
+	}
 	if err != nil {
 		writeAdminRouteGroupError(c, err)
 		return

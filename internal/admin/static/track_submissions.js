@@ -53,44 +53,90 @@
     }
     return body.data || {};
   }
-  function listState(message) { $('list').innerHTML = '<tr><td colspan="9" class="submission-table-state">' + esc(message) + '</td></tr>'; }
-  async function load() {
+  var age = '', listPage = 0, listCursors = [null], nextCursor = null, statsRequest = 0;
+  var ageButtons = Array.from(document.querySelectorAll('[data-review-age]'));
+  function listState(message) { $('list').innerHTML = '<tr><td colspan="7" class="submission-table-state">' + esc(message) + '</td></tr>'; }
+  function resetList() {
+    listPage = 0; listCursors = [null]; nextCursor = null;
+    var pending = $('status').value === 'pending';
+    ageButtons.forEach(function (button) {
+      button.setAttribute('aria-pressed', String(pending && button.dataset.reviewAge === age));
+    });
+    $('submissionAgeHint').textContent = pending ? ({ '24_72h': '等待 24–72 小时', over_72h: '等待超 72 小时' }[age] || '最早提交优先') : '';
+    load(0);
+  }
+  async function load(page) {
+    if (page == null) page = listPage;
     if (listController) listController.abort();
     var controller = listController = new AbortController(), request = ++listRequest;
-    $('refreshBtn').disabled = true; $('list').setAttribute('aria-busy', 'true'); listState('正在加载投稿…');
+    $('refreshBtn').disabled = $('submissionPrev').disabled = $('submissionNext').disabled = true;
+    $('list').setAttribute('aria-busy', 'true');
+    listState('正在加载投稿…');
+    $('submissionPageHint').textContent = '';
+    var status = $('status').value, cursor = listCursors[page];
+    var params = new URLSearchParams({ limit: '30', status: status });
+    if (status === 'pending') {
+      params.set('sort', 'oldest');
+      if (age) params.set('age', age);
+    }
+    if (cursor) {
+      params.set('cursor_submitted_at', cursor.submitted_at);
+      params.set('cursor_submission_id', cursor.submission_id);
+    }
     try {
-      var data = await api('/admin/api/track-submissions?limit=100&status=' + encodeURIComponent($('status').value), { signal: controller.signal });
+      var data = await api('/admin/api/track-submissions?' + params.toString(), { signal: controller.signal });
       if (request !== listRequest || controller.signal.aborted) return;
+      listPage = page;
+      nextCursor = data.has_more ? data.next_cursor : null;
       readMetadata(data); $('list').replaceChildren();
       (data.items || []).forEach(function (item) {
         var row = document.createElement('tr');
-        row.innerHTML = '<td>' + esc(item.track_id) + '</td><td>' + esc(item.title || '未命名路线') + '</td><td>' + typeBadge(item.track_type) + '</td><td>' +
-          badge(optionText('difficulty_options', item.difficulty)) + '</td><td>' + riskBadge(item.risk_level) + '</td><td>' + statusBadge(item.status) + '</td><td>第 ' +
-          esc(item.revision) + ' 版</td><td>' + esc(timeText(item.submitted_at)) + '</td><td><button type="button" class="btn btn-sm btn-outline-primary">查看</button></td>';
+        row.innerHTML = '<td class="submission-track-cell"><strong>' + esc(item.title || '未命名路线') + '</strong><small class="text-secondary">' +
+          esc(item.track_id) + ' · 第 ' + esc(item.revision) + ' 版</small></td><td>' + typeBadge(item.track_type) + '</td><td>' +
+          badge(optionText('difficulty_options', item.difficulty)) + '</td><td>' + riskBadge(item.risk_level) + '</td><td>' + statusBadge(item.status) +
+          '</td><td>' + esc(timeText(item.submitted_at)) + '</td><td><button type="button" class="btn btn-sm btn-outline-primary">查看</button></td>';
         row.querySelector('button').addEventListener('click', function () { show(item.submission_id); });
         $('list').appendChild(row);
       });
       if (!(data.items || []).length) listState('暂无符合条件的投稿');
+      $('submissionPageHint').textContent = '第 ' + (listPage + 1) + ' 页 · 本页 ' + (data.items || []).length + ' 条';
     } catch (error) {
       if (request === listRequest && !controller.signal.aborted) listState('加载失败：' + errorText(error));
     } finally {
-      if (request === listRequest) { $('refreshBtn').disabled = false; $('list').removeAttribute('aria-busy'); }
+      if (request === listRequest) {
+        $('refreshBtn').disabled = false;
+        $('submissionPrev').disabled = listPage === 0;
+        $('submissionNext').disabled = !nextCursor;
+        $('list').removeAttribute('aria-busy');
+      }
     }
   }
   async function loadStats() {
+    var request = ++statsRequest;
     var ids = ['submissionPending', 'submissionOver24', 'submissionOver72', 'submissionApproved', 'submissionRejected', 'submissionApprovalRate', 'submissionAvgHours'];
     try {
       var data = await api('/admin/api/dashboard?period=month&scope=track_submissions'), review = data.review || {};
+      if (request !== statsRequest) return;
+      if (!data.review) throw new Error('审核统计暂不可用');
       var reviewed = Number(review.approved || 0) + Number(review.rejected || 0);
+      var over72 = Number(review.pending_over_72h || 0);
+      var between = Math.max(0, Number(review.pending_over_24h || 0) - over72);
       function set(id, value) { $(id).textContent = value; }
       set('submissionPending', Number(review.pending || 0).toLocaleString());
-      set('submissionOver24', Number(review.pending_over_24h || 0).toLocaleString());
-      set('submissionOver72', Number(review.pending_over_72h || 0).toLocaleString());
+      set('submissionOver24', between.toLocaleString());
+      set('submissionOver72', over72.toLocaleString());
+      $('submissionOver24').parentElement.classList.toggle('is-warning', between > 0);
+      $('submissionOver72').parentElement.classList.toggle('is-danger', over72 > 0);
       set('submissionApproved', Number(review.approved || 0).toLocaleString());
       set('submissionRejected', Number(review.rejected || 0).toLocaleString());
       set('submissionApprovalRate', reviewed ? (Number(review.approval_rate || 0) * 100).toFixed(1) + '%' : '—');
       set('submissionAvgHours', reviewed ? Number(review.avg_review_hours || 0).toFixed(1) + ' 小时' : '—');
-    } catch (_) { ids.forEach(function (id) { $(id).textContent = '—'; }); }
+    } catch (_) {
+      if (request !== statsRequest) return;
+      ids.forEach(function (id) { $(id).textContent = '—'; });
+      $('submissionOver24').parentElement.classList.remove('is-warning');
+      $('submissionOver72').parentElement.classList.remove('is-danger');
+    }
   }
   function fact(label, content) { return '<div><dt>' + esc(label) + '</dt><dd>' + content + '</dd></div>'; }
   function tags(group, values) {
@@ -202,6 +248,21 @@
   $('approveBtn').addEventListener('click', function () { review('approved'); });
   $('rejectBtn').addEventListener('click', function () { review('rejected'); });
   $('refreshBtn').addEventListener('click', function () { load(); loadStats(); });
-  $('status').addEventListener('change', load);
-  load(); loadStats();
+  $('status').addEventListener('change', function () { age = ''; resetList(); });
+  ageButtons.forEach(function (button) {
+    button.addEventListener('click', function () {
+      $('status').value = 'pending';
+      age = button.dataset.reviewAge;
+      resetList();
+    });
+  });
+  $('submissionPrev').addEventListener('click', function () { if (listPage > 0) load(listPage - 1); });
+  $('submissionNext').addEventListener('click', function () {
+    if (!nextCursor) return;
+    listCursors[listPage + 1] = nextCursor;
+    load(listPage + 1);
+  });
+  var linkedStatus = new URLSearchParams(location.search).get('status');
+  if (Array.from($('status').options).some(function (option) { return option.value === linkedStatus; })) $('status').value = linkedStatus;
+  resetList(); loadStats();
 })();

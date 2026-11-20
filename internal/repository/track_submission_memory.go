@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -139,16 +140,32 @@ func (r *InMemoryTrackSubmissionRepository) List(_ context.Context, filter model
 		if filter.Status != "" && sub.Status != filter.Status || filter.Difficulty != "" && sub.Difficulty != filter.Difficulty || filter.RiskLevel != "" && sub.RiskLevel != filter.RiskLevel || filter.TrackType != "" && sub.TrackType != filter.TrackType || filter.UserID > 0 && sub.UserID != filter.UserID {
 			continue
 		}
+		if !filter.SubmittedFrom.IsZero() && sub.SubmittedAt.Before(filter.SubmittedFrom) || !filter.SubmittedBefore.IsZero() && !sub.SubmittedAt.Before(filter.SubmittedBefore) {
+			continue
+		}
+		if !filter.CursorSubmittedAt.IsZero() {
+			order := sub.SubmittedAt.Compare(filter.CursorSubmittedAt)
+			if order == 0 {
+				order = strings.Compare(sub.SubmissionID, filter.CursorID)
+			}
+			if filter.OldestFirst && order <= 0 || !filter.OldestFirst && order >= 0 {
+				continue
+			}
+		}
 		items = append(items, cloneSubmission(sub))
 	}
 	sort.Slice(items, func(i, j int) bool {
-		if items[i].SubmittedAt.Equal(items[j].SubmittedAt) {
-			return items[i].SubmissionID > items[j].SubmissionID
+		order := items[i].SubmittedAt.Compare(items[j].SubmittedAt)
+		if order == 0 {
+			order = strings.Compare(items[i].SubmissionID, items[j].SubmissionID)
 		}
-		return items[i].SubmittedAt.After(items[j].SubmittedAt)
+		if filter.OldestFirst {
+			return order < 0
+		}
+		return order > 0
 	})
 	limit := filter.Limit
-	if limit <= 0 || limit > 100 {
+	if limit <= 0 || limit > 101 {
 		limit = 20
 	}
 	if len(items) > limit {

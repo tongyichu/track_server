@@ -290,4 +290,6 @@ GET /api/v1/track-map/groups/RG.00000001/introduction.html?lang=english&is_dark=
 
 仅已发布的路线介绍可访问。页面支持 `lang=english` 切换英文、`is_dark=true` 切换夜间模式；未知路线组、未配置介绍或草稿状态均返回 `404`。接口返回的 `introduction_url` 携带内容版本 `v`，用于缓存失效。
 
+后台 `POST /admin/api/route-groups/:group_id/introduction/publish` 需要路线组操作权限。可提交与保存草稿相同的介绍结构，服务端校验并一次写入已发布版本。空请求体继续发布已保存的版本。
+
 地图代表轨迹`cover_track`使用`preview_images`新版四图及可选`cover_url`（投稿封面），不再返回旧版`track_screenshot_url`。

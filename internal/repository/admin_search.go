@@ -330,6 +330,9 @@ func (r *InMemoryCompanionRepository) ListAdminCompanions(_ context.Context, fil
 		if filter.TrackType != "" && session.TrackType != filter.TrackType {
 			continue
 		}
+		if filter.Status != "" && session.Status != filter.Status {
+			continue
+		}
 		if ownerSet != nil {
 			if _, ok := ownerSet[session.OwnerUserID]; !ok {
 				continue

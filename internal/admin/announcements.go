@@ -39,7 +39,7 @@ func (h *Handler) ListAnnouncements(ctx context.Context, c *app.RequestContext) 
 	if !h.messagesReady(c) {
 		return
 	}
-	v, err := h.messages.ListAdminAnnouncements(ctx, string(c.Query("cursor")), parseAdminListLimit(string(c.Query("limit"))))
+	v, err := h.messages.ListAdminAnnouncements(ctx, string(c.Query("cursor")), parseAdminListLimit(string(c.Query("limit"))), string(c.Query("status")))
 	if err != nil {
 		announcementError(c, err)
 		return

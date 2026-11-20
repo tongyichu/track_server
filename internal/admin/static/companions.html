@@ -18,21 +18,21 @@
       <button id="refreshBtn" class="btn btn-outline-secondary" type="button">刷新数据</button>
     </div>
     <section class="admin-metrics" aria-label="同行房间统计">
-      <article class="admin-metric" data-admin-metric="" data-label="进行中房间" data-value-id="companionActive" data-note="当前尚未结束的房间"></article>
+      <button type="button" id="showActiveRooms" class="admin-metric" data-admin-metric data-label="进行中房间" data-value-id="companionActive" aria-pressed="false"></button>
       <article class="admin-metric" data-admin-metric="" data-label="本月创建" data-value-id="companionCreated" data-note="上期 —" data-note-id="companionCreatedCompare"></article>
       <article class="admin-metric" data-admin-metric="" data-label="本月结束" data-value-id="companionEnded" data-note="其中自动结束 —" data-note-id="companionAutoEnded"></article>
-      <article class="admin-metric" data-admin-metric="" data-label="平均参与人数" data-value-id="companionParticipants" data-note="本月有成员记录的房间"></article>
+      <article class="admin-metric" data-admin-metric="" data-label="本月平均参与人数" data-value-id="companionParticipants"></article>
     </section>
     <p id="companionStatsError" class="error" role="status" hidden></p>
-    <section class="panel feature-stats admin-stats-panel">
-      <h2 class="feature-stats-title admin-stats-heading"><span>同行使用</span><span class="btn-group btn-group-sm admin-period-tabs" role="group" aria-label="同行统计周期"><button type="button" class="btn btn-outline-secondary" data-usage-days="1" aria-pressed="false">近 1 天</button><button type="button" class="btn btn-outline-secondary" data-usage-days="7" aria-pressed="false">近 7 天</button><button type="button" class="btn btn-outline-secondary active" data-usage-days="30" aria-pressed="true">近 30 天</button></span></h2>
+    <details id="companionUsage" class="panel feature-stats admin-stats-panel">
+      <summary>同行趋势与参与人数</summary>
+      <div class="admin-stats-heading mt-2"><span id="companionUsageScope" class="hint"></span><div class="btn-group btn-group-sm admin-period-tabs" role="group" aria-label="同行统计周期"><button type="button" class="btn btn-outline-secondary" data-usage-days="1" aria-pressed="false">近 1 天</button><button type="button" class="btn btn-outline-secondary" data-usage-days="7" aria-pressed="false">近 7 天</button><button type="button" class="btn btn-outline-secondary active" data-usage-days="30" aria-pressed="true">近 30 天</button></div></div>
       <p id="companionUsageError" class="error" role="alert" hidden></p>
-      <p id="companionUsageScope" class="hint">按实际发生时间统计创建和结束</p>
       <div class="feature-stats-grid admin-chart-grid">
         <section><div class="feature-chart-heading admin-stats-heading"><h3>创建 / 结束趋势</h3></div><div id="companionTrendChart" class="feature-chart" role="img" aria-label="同行房间创建与结束趋势"></div></section>
         <section><div class="feature-chart-heading admin-stats-heading"><h3>参与人数分布</h3><span class="hint">本周期创建的房间</span></div><div id="companionSizeChart" class="feature-chart" role="img" aria-label="同行房间实际参与人数分布"></div><p class="hint feature-chart-note">人数含曾参与后离开的成员，每间房间只计一次。</p></section>
       </div>
-    </section>
+    </details>
     <section class="panel">
       <h2>同行房间 <span class="hint" id="totalHint"></span></h2>
       <form id="companionSearch" class="companion-search" role="search">
@@ -40,6 +40,8 @@
         <input id="titleFilter" type="search" maxlength="128" placeholder="搜索房间标题" />
         <label for="ownerNameFilter" class="visually-hidden">搜索发起人名称</label>
         <input id="ownerNameFilter" type="search" maxlength="128" placeholder="搜索发起人名称" />
+        <label for="companionStatusFilter" class="visually-hidden">房间状态</label>
+        <select id="companionStatusFilter" class="form-select"><option value="">全部状态</option><option value="active">进行中</option><option value="ended">已结束</option></select>
         <div class="companion-type-filter" id="trackTypeFilter">
           <button type="button" class="btn btn-outline-secondary companion-type-toggle" id="trackTypeToggle" aria-haspopup="listbox" aria-expanded="false">
             <span class="companion-type-current" id="trackTypeCurrent">全部类型</span>
@@ -58,10 +60,10 @@
       <table class="data companion-list-table" aria-label="同行房间列表">
         <thead>
           <tr>
-            <th>房间</th><th>运动类型</th><th>发起人</th><th>房间状态</th><th>开始时间</th><th>用时</th><th>参与人数</th><th>操作</th>
+            <th>房间</th><th>运动类型</th><th>发起人</th><th>房间状态</th><th>开始时间</th><th>用时</th><th>参与人数</th>
           </tr>
         </thead>
-        <tbody id="companionList"><tr><td colspan="8" class="companion-table-state">正在加载房间…</td></tr></tbody>
+        <tbody id="companionList"><tr><td colspan="7" class="companion-table-state">正在加载房间…</td></tr></tbody>
       </table>
       </div>
       <div class="companion-pagination">

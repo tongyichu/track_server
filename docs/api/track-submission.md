@@ -86,6 +86,8 @@ POST /admin/api/track-submissions/:submission_id/review
 
 后台列表与详情响应的 `data` 附带 `options`（复用投稿难度、风险、地形及交通选项）和 `track_types:[{code,name,color,icon}]`（来自 `DefaultTrackTypeConfigs`），供页面展示中文名称及内置类型图标，不改变投稿中持久化的英文 code。
 
+列表默认按提交时间倒序，传 `sort=oldest` 按最早提交优先。待审核可传 `age=24_72h` 或 `age=over_72h` 按等待时间筛选。返回 `has_more` 与可选的 `next_cursor:{submitted_at,submission_id}`，翻页使用同样的筛选和排序并传 `cursor_submitted_at`、`cursor_submission_id`。原有 `total` 为本次返回条数。
+
 列表隐藏投稿编号，保留轨迹编号；类型使用中文、主题色和内置运动图标标签，难度、风险、状态均为中文。所有状态的“查看”在当前页打开同一详情弹窗，包括已通过投稿；点击立即显示加载态，关闭取消查询，失败可原地重试，切换投稿忽略旧响应。弹窗按路线概况、路线介绍/投稿图片、出行信息、投稿与审核、可折叠审核记录分区；桌面双列，窄屏单列，底部关闭与审核操作固定。地形、交通、月份和审核事件使用中文展示，图片沿用后台受鉴权缓存代理。
 
 仅待审核且有投稿操作权限时展示审核意见、通过和驳回操作；已通过等其他状态只读。驳回前校验原因，提交期间禁止重复提交，继续使用 `expected_revision` 防止旧详情覆盖新审核；成功后刷新列表及统计，失败不宣称审核成功。

@@ -1,7 +1,7 @@
 (function () {
   'use strict';
   const $ = id => document.getElementById(id);
-  let items = [], cursor = '', listGeneration = 0, listController = null;
+  let items = [], cursor = '', appliedStatus = '', listGeneration = 0, listController = null;
   const editor = new tabler.Modal($('noticeEditor'), { backdrop: 'static', keyboard: false });
   let editorVisible = false, editorClosing = false, leavePromise = null, saveGate = false;
   let current = null, detailGeneration = 0, detailController = null, saving = false, baseline = '';
@@ -12,6 +12,17 @@
   const coverage = notice => notice.delivery_mode === 'persistent' ? '持续公告' : notice.delivery_mode === 'once' ? '一次性通知' : '原有通知';
   const historyActions = { edited: '保存修改', draft: '保存草稿', scheduled: '安排定时发布', published: '上线', withdrawn: '撤回', cancelled: '取消定时', expired: '到期未发放' };
   const renderedRows = new Map();
+  function listTime(notice) {
+    const state = phase(notice);
+    if (state === 'scheduled') return '计划上线 · ' + AdminTime.dateTime(notice.publish_at);
+    if (state === 'published') {
+      if (status(notice) === '已结束发放') return '停止发放 · ' + AdminTime.dateTime(notice.delivery_ends_at);
+      return '实际上线 · ' + AdminTime.dateTime(notice.published_at || notice.publish_at);
+    }
+    if (state === 'withdrawn') return '撤回 · ' + AdminTime.dateTime(notice.updated_at);
+    if (state === 'expired') return '原计划上线 · ' + AdminTime.dateTime(notice.publish_at);
+    return notice.updated_at ? '草稿更新 · ' + AdminTime.dateTime(notice.updated_at) : '—';
+  }
   async function api(path, options = {}) {
     const response = await fetch('/admin/api/announcements' + path, { credentials: 'same-origin', ...options });
     const body = await response.json();
@@ -20,7 +31,7 @@
   }
   function render() {
     const rows = items.map(notice => {
-      const values = [kind(notice.kind), notice.title, coverage(notice), notice.target_user_ids?.length ? '指定 ' + notice.target_user_ids.length + ' 人' : '全部用户', date(notice.publish_at), status(notice)];
+      const values = [kind(notice.kind), notice.title, coverage(notice), notice.target_user_ids?.length ? '指定 ' + notice.target_user_ids.length + ' 人' : '全部用户', listTime(notice), status(notice)];
       const fingerprint = JSON.stringify([values, notice.body, AdminAccess.can('announcements', true)]);
       const cached = renderedRows.get(notice.id);
       if (cached?.fingerprint === fingerprint) return cached.row;
@@ -37,7 +48,12 @@
     });
     const ids = new Set(items.map(notice => notice.id));
     for (const id of renderedRows.keys()) if (!ids.has(id)) renderedRows.delete(id);
-    if (!rows.length) { const tr = document.createElement('tr'), td = document.createElement('td'); td.colSpan = 7; td.className = 'text-center text-secondary p-4'; td.textContent = '暂无通知'; tr.appendChild(td); rows.push(tr); }
+    if (!rows.length) {
+      const tr = document.createElement('tr'), td = document.createElement('td');
+      td.colSpan = 7; td.className = 'text-center text-secondary p-4';
+      td.textContent = cursor ? '本批暂无符合条件的通知，可以继续查找' : appliedStatus ? '暂无符合条件的通知' : '暂无通知';
+      tr.appendChild(td); rows.push(tr);
+    }
     const parent = $('noticeRows'), wanted = new Set(rows);
     for (const row of [...parent.children]) if (!wanted.has(row)) row.remove();
     rows.forEach((row, index) => { if (parent.children[index] !== row) parent.insertBefore(row, parent.children[index] || null); });
@@ -45,13 +61,25 @@
   }
   async function load(append = false) {
     listController?.abort(); const controller = new AbortController(), generation = ++listGeneration; listController = controller;
+    const filter = append ? appliedStatus : $('noticeStatusFilter').value;
+    const params = new URLSearchParams({ limit: '30' });
+    if (append && cursor) params.set('cursor', cursor);
+    if (filter) params.set('status', filter);
     $('refreshNotices').disabled = true; $('moreNotices').disabled = true; $('noticeListError').textContent = '';
     try {
-      const page = await api('?limit=30' + (append && cursor ? '&cursor=' + encodeURIComponent(cursor) : ''), { signal: controller.signal });
+      const page = await api('?' + params.toString(), { signal: controller.signal });
       if (generation !== listGeneration) return;
       const merged = append ? [...items, ...(page.items || [])] : page.items || [];
-      items = [...new Map(merged.map(item => [item.id, item])).values()]; cursor = page.has_more ? page.next_cursor || '' : ''; render();
-    } catch (error) { if (!controller.signal.aborted) $('noticeListError').textContent = error.message; }
+      items = [...new Map(merged.map(item => [item.id, item])).values()];
+      appliedStatus = filter;
+      cursor = page.has_more ? page.next_cursor || '' : '';
+      render();
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        $('noticeStatusFilter').value = appliedStatus;
+        $('noticeListError').textContent = error.message;
+      }
+    }
     finally { if (generation === listGeneration) { $('refreshNotices').disabled = false; $('moreNotices').disabled = false; } }
   }
   function localDate(value) { return AdminTime.toInput(value); }
@@ -121,13 +149,15 @@
   async function saveNotice(nextStatus) {
     if (saving || !AdminAccess.can('announcements', true)) return;
     const cancelling = nextStatus === 'cancelled';
+    const withdrawing = nextStatus === 'withdrawn';
+    const statusOnly = cancelling || withdrawing;
     $('noticePublishAt').required = nextStatus === 'published' && phase(current || {}) !== 'published' && $('noticePublishMode').value === 'scheduled';
     $('noticeDeliveryEndsAt').required = nextStatus === 'published' && !$('noticeDeliveryEndLabel').hidden;
-    if (!cancelling && !$('noticeForm').reportValidity()) return;
+    if (!statusOnly && !$('noticeForm').reportValidity()) return;
     const targets = $('noticeAudience').value === 'users' ? [...new Set($('noticeUsers').value.split(/[\s,，]+/).filter(Boolean))] : [];
-    if (!cancelling && $('noticeAudience').value === 'users' && (!targets.length || targets.some(id => !/^[1-9]\d*$/.test(id)))) { $('noticeSaveError').textContent = '请填写有效的用户ID'; return; }
-    if (!cancelling && $('noticeURL').value && !/^https:\/\//i.test($('noticeURL').value.trim())) { $('noticeSaveError').textContent = 'H5链接须使用HTTPS'; return; }
-    if (nextStatus === 'withdrawn' && !await AdminUI.confirm({ title: '撤回通知？', message: '撤回后客户端将隐藏此通知。', confirmText: '撤回' })) return;
+    if (!statusOnly && $('noticeAudience').value === 'users' && (!targets.length || targets.some(id => !/^[1-9]\d*$/.test(id)))) { $('noticeSaveError').textContent = '请填写有效的用户ID'; return; }
+    if (!statusOnly && $('noticeURL').value && !/^https:\/\//i.test($('noticeURL').value.trim())) { $('noticeSaveError').textContent = 'H5链接须使用HTTPS'; return; }
+    if (withdrawing && !await AdminUI.confirm({ title: '撤回通知？', message: '撤回后客户端将隐藏此通知。' + (snapshot() !== baseline ? '提交后将舍弃当前未保存的修改。' : ''), confirmText: '撤回', danger: true })) return;
     const live = phase(current || {}) === 'published', scheduled = $('noticePublishMode').value === 'scheduled';
     if (cancelling && !await AdminUI.confirm({ title: '取消定时发布？', message: '取消后保留为草稿，当前未保存的修改不生效。', confirmText: '取消定时' })) return;
     if (nextStatus === 'published' && !live) {
@@ -142,7 +172,7 @@
     const owner = current; saving = true; $('noticeForm').inert = true; $('noticeSaveError').textContent = '';
     const controller = new AbortController(); detailController = controller; const timeout = setTimeout(() => controller.abort(), 30000);
     try {
-      const notice = cancelling ? {
+      const notice = withdrawing ? { status: 'withdrawn' } : cancelling ? {
         kind: owner.kind, title: owner.title, body: owner.body, h5_url: owner.h5_url, status: 'draft', target_user_ids: owner.target_user_ids,
         publish_at: owner.publish_at, publish_mode: owner.publish_mode || 'scheduled', expires_at: owner.expires_at,
         delivery_mode: owner.delivery_mode || 'once', delivery_ends_at: owner.delivery_ends_at
@@ -160,6 +190,7 @@
     finally { clearTimeout(timeout); saving = false; $('noticeForm').inert = false; }
   }
   $('newNotice').addEventListener('click', () => open('')); $('refreshNotices').addEventListener('click', () => load()); $('moreNotices').addEventListener('click', () => load(true));
+  $('noticeStatusFilter').addEventListener('change', () => load());
   $('closeNotice').addEventListener('click', close);
   $('noticeEditor').addEventListener('hidden.bs.modal', () => { editorVisible = false; editorClosing = false; });
   $('noticeEditor').addEventListener('keydown', event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(); } });

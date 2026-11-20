@@ -19,7 +19,7 @@
 | 按客户端ID恢复发送结果 | GET | `/messages/conversations/:peer_id/messages/by-client/:client_id` | JWT | [messages](messages.md#私信) |
 | 会话已读 / 拉黑或解除 | POST / PUT | `/messages/conversations/:peer_id/read`, `/messages/conversations/:peer_id/block` | JWT | [messages](messages.md#私信) |
 | 消息模块MQTT凭证 | POST | `/messages/mqtt/credentials` | JWT | [messages](messages.md#实时连接) |
-| 后台通知分页 / 新建（按北京时间编辑发布时刻） | GET / POST | `/admin/api/announcements` | announcements 读/写 | [messages](messages.md#活动通知管理) |
+| 后台通知按状态分页 / 新建（按北京时间编辑发布时刻） | GET / POST | `/admin/api/announcements` | announcements 读/写 | [messages](messages.md#活动通知管理) |
 | 后台通知详情 / 修改撤回 | GET / PUT | `/admin/api/announcements/:notice_id` | announcements 读/写 | [messages](messages.md#活动通知管理) |
 | 后台 AI 实时配额 / 独立调整 | GET / PUT | `/admin/api/ai/quotas`, `/admin/api/ai/policies/:feature/quota` | AI 使用读取 / AI 配置操作及读取 | [admin-ai](admin-ai.md#实时配额与独立调整) |
 | 后台 AI 任务列表 / 统计 / 设置读取 | GET | `/admin/api/ai/tasks`, `/admin/api/ai/statistics`, `/admin/api/ai/settings` | AI 使用读取 | [admin-ai](admin-ai.md) |
@@ -163,7 +163,7 @@
 | 接口 | 方法 | 完整路径 | 需要认证 | 文档 |
 | --- | --- | --- | --- | --- |
 | 后台账号列表与页面目录 | GET | `/admin/api/accounts` | 管理员 session | [admin-accounts.md](admin-accounts.md) |
-| 投稿审核列表与中文展示元数据 | GET | `/admin/api/track-submissions` | 投稿查看 | [track-submission.md](track-submission.md#7-管理后台审核) |
+| 投稿审核列表、等待时长筛选、游标分页与展示元数据 | GET | `/admin/api/track-submissions` | 投稿查看 | [track-submission.md](track-submission.md#7-管理后台审核) |
 | 投稿、轨迹与审核记录详情（弹窗） | GET | `/admin/api/track-submissions/:submission_id` | 投稿查看 | [track-submission.md](track-submission.md#7-管理后台审核) |
 | 审核通过或驳回投稿（版本条件保存） | POST | `/admin/api/track-submissions/:submission_id/review` | 投稿操作 | [track-submission.md](track-submission.md#7-管理后台审核) |
 | 后台读取/保存地区目录（完整响应支持 gzip，no-store） | GET / PUT | `/admin/api/regions/catalog` | 地区查看 / 操作 | [regions.md](regions.md) |
@@ -222,7 +222,7 @@
 
 ## 后台同行成员轨迹
 
-`GET /admin/api/companions/:session_id`保留companions读取权限，额外具备tracks读取权限时在members中返回正式个人轨迹摘要，供房间成员列表打开现有轨迹弹窗；成员user_id为十进制字符串，见[后台路由](../admin-routes.md)及[成员轨迹协议](companion.md#后台房间详情中的成员轨迹)。
+`GET /admin/api/companions` 可按房间状态筛选。 `GET /admin/api/companions/:session_id` 需 companions 读取权限，额外具备 tracks 读取权限时在 members 中返回正式个人轨迹摘要，供房间成员列表打开现有轨迹弹窗。成员 user_id 为十进制字符串，见[后台路由](../admin-routes.md)及[成员轨迹协议](companion.md#后台房间详情中的成员轨迹)。
 
 ## 背景音乐
 

@@ -75,7 +75,7 @@ Android 仅在消息模块可见时连接，内部页面切换共享连接；离
 
 ## 活动通知管理
 
-页面 `/admin/announcements.html`，模块 `announcements`，读写权限独立。路由：GET/POST `/admin/api/announcements`、GET/PUT `/admin/api/announcements/:notice_id`。列表 cursor/limit 同上；保存请求 `{expected_version:0,notice:{…}}`，创建0、修改传最新 revision。
+页面 `/admin/announcements.html`，模块 `announcements`，读写权限独立。路由：GET/POST `/admin/api/announcements`、GET/PUT `/admin/api/announcements/:notice_id`。列表接受 cursor/limit 以及可选的 `status=draft|scheduled|published|withdrawn|expired`，已停止发放的持续公告归入 `expired`。状态筛选读取旧记录内容分批匹配，`has_more` 为真时可继续读取，即使本批没有匹配。保存请求 `{expected_version:0,notice:{…}}`，创建传 0，修改传最新 revision。
 
 notice 可编辑字段：`kind/title/body/h5_url/status/target_user_ids/publish_mode/publish_at/delivery_mode/delivery_ends_at/expires_at`。标题1～100字、正文1～8000字、H5选填且只接受无账号密码的 HTTPS；接收范围为空数组表示全部，指定 ID 最多1000且服务端批量验证存在。操作者、创建/修改时间、ID及revision由服务端写入。
 
@@ -83,7 +83,7 @@ status 为 `draft/scheduled/published/withdrawn/expired`，expired仅由调度�
 
 - 待发布：可修改内容、范围、覆盖方式和时间；提交draft取消定时并保留草稿，也可选择立即上线。同一待发布安排修改保留发布轮次。
 - 已上线：可普通编辑内容及活动结束时间，不更改发布时间、接收范围、覆盖方式或停止发放时间；普通编辑保留发布轮次和阅读标记。修改发布安排须先撤回。
-- 已撤回：可以继续编辑、存草稿，再立即或定时发布；不要求新建通知。重新发布增加发布轮次并重新允许未读提醒。
+- 撤回已上线通知时，提交 `{expected_version,notice:{status:"withdrawn"}}`。服务端按版本撤回已保存的内容。撤回后可以编辑、存草稿，再立即或定时发布，新发布轮次重新允许未读提醒。
 - 持续公告：delivery_ends_at为空表示长期有效，否则须晚于publish_at。一次性通知不使用该字段。活动expires_at单独校验晚于publish_at。
 - 只读返回字段：publish_round、published_at（实际上线时刻）、history（详情最近50条操作记录，含操作/时间/操作者/轮次/revision/预定时间/标题）；客户端提交这些字段不被信任，服务端从已有记录衍生。全部操作记录与状态在同一CAS中持久保存，列表不携带history。后台ID稳定，App轮次ID不作为后台编辑ID。
 - 定时任务每秒扫描持久化的notice_schedule，不依赖MQTT连接；到期以revision CAS转为published并进入刷新投递队列。重启补处理未到期失效的任务，超过停止发放时间或活动结束时间的任务转expired且不发提醒。受众截止仍取预定publish_at，published_at记录实际执行时刻。竞争的编辑/取消/激活只有一个revision写入成功，冲突409后重开核对。审计沿用后台统一写请求流程。

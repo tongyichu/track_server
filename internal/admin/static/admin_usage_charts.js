@@ -112,6 +112,7 @@
     };
     maps.push(api); return api;
   }
-  window.addEventListener('resize', () => { charts.forEach(value => value.resize()); maps.forEach(value => value.resize()); });
-  window.AdminUsageCharts = { createSpatialMap, bars, trend, loading, date };
+  function resize() { charts.forEach(value => value.resize()); maps.forEach(value => value.resize()); }
+  window.addEventListener('resize', resize);
+  window.AdminUsageCharts = { createSpatialMap, bars, trend, loading, date, resize };
 })();

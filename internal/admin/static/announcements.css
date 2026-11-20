@@ -4,6 +4,9 @@
 
 .notice-history{padding-left:20px;margin-top:12px;color:var(--tblr-secondary-color);overflow-wrap:anywhere}.notice-history li{margin-bottom:8px}
 #noticeEditor select:disabled{opacity:1}
+.notice-filters { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.notice-filters .form-select { width: auto; min-width: 120px; }
+#noticeListError:empty { display: none; }
 
 .notice-dialog>.modal-header,.notice-dialog>.modal-footer{flex-shrink:0;padding:18px 24px;background:var(--tblr-bg-surface)}
 .notice-dialog>.notice-scroll-body{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:24px}

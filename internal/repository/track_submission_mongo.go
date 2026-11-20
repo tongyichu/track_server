@@ -121,11 +121,29 @@ func (r *MongoTrackSubmissionRepository) List(ctx context.Context, filter models
 	if filter.UserID > 0 {
 		query["user_id"] = filter.UserID
 	}
+	submitted := bson.M{}
+	if !filter.SubmittedFrom.IsZero() {
+		submitted["$gte"] = filter.SubmittedFrom.UTC()
+	}
+	if !filter.SubmittedBefore.IsZero() {
+		submitted["$lt"] = filter.SubmittedBefore.UTC()
+	}
+	if len(submitted) > 0 {
+		query["submitted_at"] = submitted
+	}
+	direction, compare := -1, "$lt"
+	if filter.OldestFirst {
+		direction, compare = 1, "$gt"
+	}
+	if !filter.CursorSubmittedAt.IsZero() {
+		at := filter.CursorSubmittedAt.UTC()
+		query["$or"] = bson.A{bson.M{"submitted_at": bson.M{compare: at}}, bson.M{"submitted_at": at, "_id": bson.M{compare: filter.CursorID}}}
+	}
 	limit := filter.Limit
-	if limit <= 0 || limit > 100 {
+	if limit <= 0 || limit > 101 {
 		limit = 20
 	}
-	cur, err := r.collection.Find(ctx, query, options.Find().SetSort(bson.D{{Key: "submitted_at", Value: -1}, {Key: "_id", Value: -1}}).SetLimit(int64(limit)))
+	cur, err := r.collection.Find(ctx, query, options.Find().SetSort(bson.D{{Key: "submitted_at", Value: direction}, {Key: "_id", Value: direction}}).SetLimit(int64(limit)))
 	if err != nil {
 		return nil, err
 	}

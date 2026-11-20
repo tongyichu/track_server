@@ -288,6 +288,10 @@ func (r *MySQLCompanionRepository) ListAdminCompanions(ctx context.Context, filt
 		where += ` AND companion_sessions.track_type = ?`
 		args = append(args, filter.TrackType)
 	}
+	if filter.Status != "" {
+		where += ` AND companion_sessions.status = ?`
+		args = append(args, filter.Status)
+	}
 	if filter.OwnerIDs != nil {
 		if len(filter.OwnerIDs) == 0 {
 			return []*models.CompanionSession{}, 0, nil

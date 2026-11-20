@@ -14,28 +14,67 @@ import (
 	"unicode/utf8"
 )
 
-func (s *MessageService) ListAdminAnnouncements(ctx context.Context, cursor string, limit int) (*models.MessagePage[*models.Announcement], error) {
+func (s *MessageService) ListAdminAnnouncements(ctx context.Context, cursor string, limit int, status string) (*models.MessagePage[*models.Announcement], error) {
 	limit = messagePageLimit(limit)
-	f := repository.MessageFilter{Kinds: []string{"notice", "notice_schedule"}, Limit: limit + 1}
+	batchSize, batches := limit, 1
+	switch status {
+	case "":
+	case "draft", "scheduled", "published", "withdrawn", "expired":
+		// Legacy notice status lives in the JSON payload. Bound each scan and resume at the last inspected record.
+		batchSize, batches = 100, 4
+	default:
+		return nil, invalidArg("通知状态无效")
+	}
+	f := repository.MessageFilter{Kinds: []string{"notice", "notice_schedule"}, Limit: batchSize + 1}
 	if err := messageApplyCursor(&f, cursor); err != nil {
 		return nil, err
 	}
-	rows, err := s.repo.ListMessageRecords(ctx, f)
-	if err != nil {
-		return nil, err
-	}
-	rows, more, next := messagePageRows(rows, limit)
-	out := &models.MessagePage[*models.Announcement]{Items: []*models.Announcement{}, HasMore: more, NextCursor: next}
-	for _, row := range rows {
-		var v models.Announcement
-		if err = json.Unmarshal(row.Payload, &v); err != nil {
+	out := &models.MessagePage[*models.Announcement]{Items: []*models.Announcement{}}
+	now := messageNow()
+	for batch := 0; batch < batches; batch++ {
+		rows, err := s.repo.ListMessageRecords(ctx, f)
+		if err != nil {
 			return nil, err
 		}
-		v.Revision = row.Revision
-		v.History = nil
-		out.Items = append(out.Items, &v)
+		rows, more, next := messagePageRows(rows, batchSize)
+		for i, row := range rows {
+			var v models.Announcement
+			if err := json.Unmarshal(row.Payload, &v); err != nil {
+				return nil, err
+			}
+			if status != "" && adminAnnouncementStatus(v, now) != status {
+				continue
+			}
+			v.Revision = row.Revision
+			v.History = nil
+			out.Items = append(out.Items, &v)
+			if len(out.Items) == limit {
+				if i+1 < len(rows) || more {
+					out.HasMore, out.NextCursor = true, messageEncodeCursor(row)
+				}
+				return out, nil
+			}
+		}
+		out.HasMore, out.NextCursor = more, next
+		if !more {
+			return out, nil
+		}
+		last := rows[len(rows)-1]
+		f.Before, f.BeforeID = last.CreatedAt, last.ID
 	}
 	return out, nil
+}
+
+func adminAnnouncementStatus(notice models.Announcement, now time.Time) string {
+	if notice.Status == "published" {
+		if notice.PublishedAt == nil && notice.PublishAt.After(now) {
+			return "scheduled"
+		}
+		if notice.DeliveryEndsAt != nil && !notice.DeliveryEndsAt.After(now) {
+			return "expired"
+		}
+	}
+	return notice.Status
 }
 func (s *MessageService) GetAdminAnnouncement(ctx context.Context, id string) (*models.Announcement, error) {
 	row, err := s.repo.GetMessageRecord(ctx, id)
@@ -54,10 +93,13 @@ func (s *MessageService) GetAdminAnnouncement(ctx context.Context, id string) (*
 	return &v, err
 }
 func (s *MessageService) SaveAnnouncement(ctx context.Context, actor, id string, expected int64, in models.Announcement) (*models.Announcement, error) {
+	if in.Status == "withdrawn" {
+		return s.withdrawAnnouncement(ctx, actor, id, expected)
+	}
 	in.Title = strings.TrimSpace(in.Title)
 	in.Body = strings.TrimSpace(in.Body)
 	in.H5URL = strings.TrimSpace(in.H5URL)
-	if in.Kind != "system" && in.Kind != "activity" || in.Status != "draft" && in.Status != "scheduled" && in.Status != "published" && in.Status != "withdrawn" || in.Title == "" || utf8.RuneCountInString(in.Title) > 100 || in.Body == "" || utf8.RuneCountInString(in.Body) > 8000 || len(in.TargetUserIDs) > 1000 {
+	if in.Kind != "system" && in.Kind != "activity" || in.Status != "draft" && in.Status != "scheduled" && in.Status != "published" || in.Title == "" || utf8.RuneCountInString(in.Title) > 100 || in.Body == "" || utf8.RuneCountInString(in.Body) > 8000 || len(in.TargetUserIDs) > 1000 {
 		return nil, invalidArg("请填写有效的通知类型、状态、标题和正文")
 	}
 	if in.H5URL != "" {
@@ -70,7 +112,7 @@ func (s *MessageService) SaveAnnouncement(ctx context.Context, actor, id string,
 	row := &models.MessageRecord{Kind: "notice", CreatedAt: now}
 	old := models.Announcement{}
 	if id == "" {
-		if expected != 0 || in.Status == "withdrawn" {
+		if expected != 0 {
 			return nil, repository.ErrConflict
 		}
 		in.ID = newScenicID("N.")
@@ -120,7 +162,7 @@ func (s *MessageService) SaveAnnouncement(ctx context.Context, actor, id string,
 	in.TargetUserIDs = targets
 	live := old.Status == "published"
 	if live {
-		if in.Status != "published" && in.Status != "withdrawn" {
+		if in.Status != "published" {
 			return nil, invalidArg("已上线通知请先撤回，再修改发布安排")
 		}
 		if in.DeliveryMode == "legacy" {
@@ -197,9 +239,9 @@ func (s *MessageService) SaveAnnouncement(ctx context.Context, actor, id string,
 		row.Kind = "notice_schedule"
 	}
 	row.Active = in.Status == "published"
-	row.Pending = in.Status == "published" || in.Status == "scheduled" || in.Status == "withdrawn"
+	row.Pending = in.Status == "published" || in.Status == "scheduled"
 	row.Targets, row.CreatedAt = targets, in.PublishAt
-	if in.Status == "draft" || in.Status == "withdrawn" {
+	if in.Status == "draft" {
 		row.CreatedAt = now
 	}
 	row.NoticeMode, row.NoticeRound, row.NoticeUntilMicros = in.DeliveryMode, in.PublishRound, 0
@@ -214,6 +256,38 @@ func (s *MessageService) SaveAnnouncement(ctx context.Context, actor, id string,
 		in.History = in.History[len(in.History)-50:]
 	}
 	return &in, nil
+}
+
+func (s *MessageService) withdrawAnnouncement(ctx context.Context, actor, id string, expected int64) (*models.Announcement, error) {
+	if id == "" {
+		return nil, repository.ErrConflict
+	}
+	row, err := s.repo.GetMessageRecord(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if row.Kind != "notice" || row.Revision != expected {
+		return nil, repository.ErrConflict
+	}
+	var notice models.Announcement
+	if err := json.Unmarshal(row.Payload, &notice); err != nil {
+		return nil, err
+	}
+	now := messageNow()
+	if notice.Status != "published" || adminAnnouncementStatus(notice, now) == "scheduled" {
+		return nil, repository.ErrConflict
+	}
+	notice.Status, notice.Revision, notice.UpdatedAt, notice.UpdatedBy = "withdrawn", expected+1, now, actor
+	notice.History = append(notice.History, models.AnnouncementHistory{Action: notice.Status, At: now, Actor: actor, Round: notice.PublishRound, Revision: notice.Revision, PublishAt: notice.PublishAt, Title: notice.Title})
+	row.Revision, row.Active, row.Pending, row.CreatedAt = notice.Revision, false, true, now
+	row.Payload = messageJSON(notice)
+	if err := s.repo.PutMessageRecord(ctx, row, expected); err != nil {
+		return nil, err
+	}
+	if len(notice.History) > 50 {
+		notice.History = notice.History[len(notice.History)-50:]
+	}
+	return &notice, nil
 }
 
 func sameNoticeTime(a, b *time.Time) bool {

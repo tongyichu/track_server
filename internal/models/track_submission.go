@@ -70,10 +70,15 @@ type TrackSubmissionSummary struct {
 }
 
 type TrackSubmissionListFilter struct {
-	Status     TrackSubmissionStatus
-	Difficulty string
-	RiskLevel  string
-	TrackType  string
-	UserID     int64
-	Limit      int
+	Status            TrackSubmissionStatus
+	Difficulty        string
+	RiskLevel         string
+	TrackType         string
+	UserID            int64
+	Limit             int
+	OldestFirst       bool
+	SubmittedFrom     time.Time
+	SubmittedBefore   time.Time
+	CursorSubmittedAt time.Time
+	CursorID          string
 }

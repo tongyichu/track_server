@@ -29,7 +29,10 @@
   function applyPermissionsTo(root) {
     select(root, 'a[href]').forEach(link => {
       const module = linkModule(link);
-      if (module && !link.classList.contains('brand')) link.classList.toggle('admin-permission-hidden', !can(module, false));
+      if (module && !link.classList.contains('brand')) {
+        const primaryEntry = link.dataset.adminFallbackFor;
+        link.classList.toggle('admin-permission-hidden', !can(module, false) || (!!primaryEntry && can(primaryEntry, false)));
+      }
     });
     select(root, '[data-admin-read], [data-admin-write]').forEach(element => {
       const write = element.hasAttribute('data-admin-write');
@@ -75,30 +78,44 @@
   if (!topbar) return;
 
   const path = window.location.pathname;
-  const items = [
-    { href: '/admin/dashboard.html', label: '工作台', icon: 'layout-dashboard', primary: true },
-    { href: '/admin/track_submissions.html', label: '投稿审核', icon: 'clipboard-check', primary: true },
-    { href: '/admin/tracks.html', label: '轨迹管理', icon: 'route', primary: true },
-    { href: '/admin/scenic_spots.html', label: '景点管理', icon: 'mountain' },
-    { href: '/admin/regions.html', label: '城市管理', icon: 'building-community' },
-    { href: '/admin/users.html', label: '用户管理', icon: 'users' },
-    { href: '/admin/route_groups.html', label: '地图模式', icon: 'map-2' },
-    { href: '/admin/companions.html', label: '与友同行', icon: 'friends' },
-    { href: '/admin/music.html', label: '背景音乐', icon: 'music' },
-    { href: '/admin/feedbacks.html', label: '反馈与纠错', icon: 'message-report' },
-    { href: '/admin/announcements.html', label: '活动&通知', icon: 'message-report' },
-    { href: '/admin/realtime.html', label: '实时通信', icon: 'cloud-upload' },
-    { href: '/admin/index.html', label: '发布管理', icon: 'package' },
-    { href: '/admin/ai_usage.html', label: 'AI 使用', icon: 'robot' },
-    { href: '/admin/more.html#system-tools', label: '系统工具', icon: 'dots', desktopOnly: true, permission: 'analytics' },
-    { href: '/admin/accounts.html', label: '账号管理', icon: 'shield-lock' },
-    { href: '/admin/more.html', label: '更多', icon: 'dots', mobileOnly: true, primary: true },
+  const dashboardPath = '/admin/dashboard.html';
+  const morePath = '/admin/more.html';
+  const navigation = [
+    { items: [{ href: dashboardPath, label: '工作台', icon: 'layout-dashboard', primary: true }] },
+    { label: '运营', items: [
+      { href: '/admin/track_submissions.html', label: '投稿审核', icon: 'clipboard-check', primary: true },
+      { href: '/admin/feedbacks.html', label: '反馈与纠错', icon: 'message-report' },
+      { href: '/admin/announcements.html', label: '活动&amp;通知', icon: 'bell' },
+      { href: '/admin/users.html', label: '用户管理', icon: 'users' }
+    ] },
+    { label: '轨迹与地图', items: [
+      { href: '/admin/tracks.html', label: '轨迹管理', icon: 'route', primary: true },
+      { href: '/admin/route_groups.html', label: '地图模式', icon: 'map-2' },
+      { href: '/admin/scenic_spots.html', label: '景点管理', icon: 'mountain' },
+      { href: '/admin/regions.html', label: '城市管理', icon: 'building-community' }
+    ] },
+    { label: '应用功能', items: [
+      { href: '/admin/companions.html', label: '与友同行', icon: 'friends' },
+      { href: '/admin/music.html', label: '背景音乐', icon: 'music' }
+    ] },
+    { label: '维护', items: [
+      { href: '/admin/realtime.html', label: '实时通信', icon: 'cloud-upload' },
+      { href: '/admin/index.html', label: '发布管理', icon: 'package' },
+      { href: '/admin/ai_usage.html', label: 'AI 使用', icon: 'robot' },
+      { href: '/admin/analytics.html', label: '埋点同步日志', icon: 'chart-bar', desktopOnly: true, fallbackFor: 'dashboard' },
+      { href: '/admin/accounts.html', label: '账号管理', icon: 'shield-lock' }
+    ] },
+    { items: [{ href: morePath, label: '更多', icon: 'dots', mobileOnly: true, primary: true }] }
   ];
 
-  function isActive(item) {
-    if (path === item.href.split('#')[0]) return true;
-    if (path === '/admin/analytics.html' && item.href.split('#')[0] === '/admin/more.html') return true;
-    return path === '/admin/companion_detail.html' && item.href === '/admin/companions.html';
+  function navigationHTML() {
+    return navigation.map(section => {
+      const links = section.items.map(item => {
+        const classes = [item.primary ? 'nav-primary' : '', item.mobileOnly ? 'mobile-only' : '', item.desktopOnly ? 'desktop-only' : ''].filter(Boolean).join(' ');
+        return '<a class="' + classes + '"' + (item.fallbackFor ? ' data-admin-fallback-for="' + item.fallbackFor + '"' : '') + ' href="' + item.href + '"><img class="nav-icon" src="' + AdminAssets.url('/admin/static/vendor/tabler-icons/' + item.icon + '.svg') + '" alt="" /><span>' + item.label + '</span></a>';
+      }).join('');
+      return section.label ? '<div class="admin-nav-section" role="group" aria-label="' + section.label + '"><span class="admin-nav-label" aria-hidden="true">' + section.label + '</span>' + links + '</div>' : links;
+    }).join('');
   }
 
   function accountIcon(content) {
@@ -111,10 +128,7 @@
   topbar.innerHTML = [
     '<a class="brand" href="/admin/dashboard.html"><img class="brand-mark" src="' + AdminAssets.url('/admin/static/favicon.png') + '" width="32" height="32" alt="" data-no-preview /><span><b>时光轨迹</b><small>控制台</small></span></a>',
     '<nav class="nav" aria-label="管理后台导航">',
-    items.map(function (item) {
-      const classes = [item.primary ? 'nav-primary' : 'nav-secondary', item.mobileOnly ? 'mobile-only' : '', item.desktopOnly ? 'desktop-only' : '', isActive(item) ? 'active' : ''].filter(Boolean).join(' ');
-      return '<a class="' + classes + '"' + (item.permission ? ' data-admin-read="' + item.permission + '"' : '') + ' href="' + item.href + '"><img class="nav-icon" src="' + AdminAssets.url('/admin/static/vendor/tabler-icons/' + item.icon + '.svg') + '" alt="" /><span>' + item.label + '</span></a>';
-    }).join(''),
+    navigationHTML(),
     '</nav>',
     '<div class="spacer"></div>',
     '<div class="user dropdown dropup admin-account-footer">',
@@ -133,6 +147,50 @@
   const accountToggle = document.getElementById('accountSettingsBtn');
   const accountMenu = document.getElementById('accountMenu');
   const mobileLayout = window.matchMedia('(max-width: 900px)');
+  const nav = topbar.querySelector('.nav');
+  const navLinks = Array.from(nav.querySelectorAll('a'));
+
+  function revealActiveNavigation() {
+    if (mobileLayout.matches) return;
+    const active = nav.querySelector('a.active');
+    if (!active) return;
+    const viewport = nav.getBoundingClientRect(), row = active.getBoundingClientRect();
+    if (row.top < viewport.top) nav.scrollTop -= viewport.top - row.top;
+    else if (row.bottom > viewport.bottom) nav.scrollTop += row.bottom - viewport.bottom;
+  }
+
+  function syncNavigation() {
+    let visibilityChanged = false;
+    nav.querySelectorAll('.admin-nav-section').forEach(section => {
+      const hidden = !section.querySelector('a:not(.admin-permission-hidden)');
+      if (section.hidden !== hidden) {
+        section.hidden = hidden;
+        visibilityChanged = true;
+      }
+    });
+    let target = path;
+    if (path === '/admin/companion_detail.html') target = '/admin/companions.html';
+    if (path === '/admin/analytics.html' && can('dashboard', false)) target = dashboardPath;
+    let active = navLinks.find(link => link.pathname === target && !link.classList.contains('admin-permission-hidden'));
+    if (active && mobileLayout.matches && !active.classList.contains('nav-primary')) {
+      active = navLinks.find(link => link.pathname === morePath);
+    } else if (active && !mobileLayout.matches && active.classList.contains('mobile-only')) {
+      active = null;
+    }
+    const activeChanged = nav.querySelector('a.active') !== (active || null);
+    navLinks.forEach(link => {
+      const current = link === active;
+      link.classList.toggle('active', current);
+      if (current) link.setAttribute('aria-current', link.pathname === path ? 'page' : 'location');
+      else link.removeAttribute('aria-current');
+    });
+    if (activeChanged || visibilityChanged) requestAnimationFrame(revealActiveNavigation);
+  }
+
+  if (path === '/admin/password.html') {
+    accountToggle.classList.add('is-current');
+    accountMenu.querySelector('[href="/admin/password.html"]').setAttribute('aria-current', 'page');
+  }
   function positionAccountMenu() {
     const dropdown = tabler.Dropdown.getInstance(accountToggle);
     if (dropdown) dropdown.hide();
@@ -140,7 +198,11 @@
     accountMenu.classList.toggle('dropdown-menu-end', mobileLayout.matches);
   }
   positionAccountMenu();
-  mobileLayout.addEventListener('change', positionAccountMenu);
+  mobileLayout.addEventListener('change', function () {
+    positionAccountMenu();
+    syncNavigation();
+  });
+  window.addEventListener('resize', revealActiveNavigation);
   accountFooter.addEventListener('show.bs.dropdown', function () {
     const error = document.getElementById('accountMenuError');
     error.textContent = ''; error.hidden = true;
@@ -169,6 +231,7 @@
       if (main) main.prepend(note);
     }
     applyPermissions();
+    syncNavigation();
   }
   document.getElementById('logoutBtn').addEventListener('click', async function () {
     const button = document.getElementById('logoutBtn'), error = document.getElementById('accountMenuError');

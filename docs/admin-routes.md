@@ -20,8 +20,8 @@
 | GET | `/admin/`、`/admin` | 公开 | 302 跳转 `/admin/login.html` |
 | GET | `/admin/login.html` | 公开 | 登录页 |
 | GET | `/admin/announcements.html` | announcements读取 | 活动&通知页 |
-| GET / POST | `/admin/api/announcements` | announcements读/写 | 通知分页或新建 |
-| GET / PUT | `/admin/api/announcements/:notice_id` | announcements读/写 | 通知详情、修改或撤回，CAS保存 |
+| GET / POST | `/admin/api/announcements` | announcements读/写 | 通知分页可按状态筛选，或新建通知 |
+| GET / PUT | `/admin/api/announcements/:notice_id` | announcements读/写 | 通知详情、修改或按已保存版本撤回，CAS保存 |
 | GET | `/admin/index.html` | 会话 | 管理首页，服务端返回 HTML 前校验会话 |
 | GET | `/admin/dashboard.html` | 会话 | 响应式运营工作台，服务端返回 HTML 前校验会话 |
 | GET | `/admin/more.html` | 会话 | 移动端低频功能入口，服务端返回 HTML 前校验会话 |
@@ -69,7 +69,7 @@
 | GET | `/admin/api/tracks/:track_id/place-candidates` | 轨迹查看 | 单条轨迹当前有效候选，404 无候选，409 源变化 |
 | POST | `/admin/api/place-candidates/:track_id/confirm` | 轨迹操作 | 确认指定候选为轨迹主景点并同步内部景点关联 |
 | POST | `/admin/api/place-candidates/:track_id/dismiss` | 轨迹操作 | 忽略当前轨迹的景点候选 |
-| GET | `/admin/api/companions` | 鉴权 | 同行会话列表，支持 `title` 模糊搜索、`owner_name` 发起人昵称模糊搜索、`track_type` 精确筛选、`province_code` / `city_code` 按发起人资料所在地筛选及 cursor 翻页；返回发起人昵称/头像与成员记录数 |
+| GET | `/admin/api/companions` | 鉴权 | 同行会话列表，按标题、发起人、运动类型、`status=active\|ended` 或发起人省市筛选并使用游标翻页 |
 | GET | `/admin/api/companions/:session_id` | companions 读取权限 | 房间、成员、位置与弹幕；用户ID和弹幕ID为十进制字符串，额外具备tracks读取权限时返回各成员track摘要及member_tracks_warning；见[成员轨迹](admin-workflows.md#同行成员轨迹) |
 | GET | `/admin/api/tracks` | 鉴权 | 轨迹列表，支持 `title` / `user_name` 模糊搜索、`province_code`（展开为省内城市集合，`city_code` 优先）/ `city_code` / `status`（1 公开、2 私密、0 已删除，默认排除已删除）/ `missing` 筛选及 cursor 翻页 |
 | POST | `/admin/api/tracks/import` | 轨迹操作 | 批量导入轨迹文件归属内部人员，multipart `files`（≤50）+ `owner_user_id` + `track_type` + `coordinate_system`，逐文件返回结果 |
@@ -108,9 +108,9 @@
 | DELETE | `/admin/api/route-groups/:group_id/members/:track_id` | 鉴权 | 从路线组移除成员轨迹 |
 | PUT | `/admin/api/route-groups/:group_id/representative` | 鉴权 | 指定代表轨迹 |
 | GET/PUT | `/admin/api/route-groups/:group_id/introduction` | 鉴权 | 查询或保存结构化双语路线介绍 |
-| POST | `/admin/api/route-groups/:group_id/introduction/publish` | 鉴权 | 发布路线介绍 |
+| POST | `/admin/api/route-groups/:group_id/introduction/publish` | 鉴权 | 有介绍正文时一次保存并发布，空请求体发布已保存版本 |
 | POST | `/admin/api/route-groups/:group_id/introduction/unpublish` | 鉴权 | 下线路线介绍 |
-| GET | `/admin/api/track-submissions` | 鉴权 | 投稿审核列表，支持状态、难度、风险、运动类型、用户过滤；附带中文选项及内置类型图标/颜色元数据，列表隐藏投稿编号 |
+| GET | `/admin/api/track-submissions` | 鉴权 | 按状态、难度、风险、运动类型、用户和待审时长筛选，支持最早优先及时间/编号游标翻页 |
 | GET | `/admin/api/track-submissions/:submission_id` | 鉴权 | 投稿、轨迹、审核流水及展示元数据；所有状态由当前页详情弹窗展示，见 [投稿接口](api/track-submission.md#7-管理后台审核) |
 | POST | `/admin/api/track-submissions/:submission_id/review` | 鉴权 | 按 expected_revision 通过或驳回投稿 |
 

@@ -45,7 +45,7 @@
         <h2 class="mb-0">反馈列表</h2>
         <button type="button" id="correctionConfigBtn" class="btn btn-outline-primary">纠错选项</button>
       </div>
-      <div class="admin-toolbar feedback-toolbar">
+      <form id="feedbackSearch" class="admin-toolbar feedback-toolbar">
         <label><span>状态</span>
           <select id="statusFilter" class="form-select">
             <option value="">全部</option>
@@ -56,21 +56,21 @@
           </select>
         </label>
         <label><span>反馈类型</span><select id="kindFilter" class="form-select"><option value="">全部类型</option><option value="correction">轨迹纠错</option><option value="feedback">意见反馈</option></select></label>
-        <label><span>纠错问题</span><select id="optionFilter" class="form-select"><option value="">全部问题</option></select></label>
-        <label><span>轨迹 ID</span><input id="trackFilter" class="form-control" placeholder="NO.00000001" /></label>
-        <label><span>版本</span>
-          <input id="versionFilter" class="form-control" type="text" placeholder="如 1.2.0" />
-        </label>
-        <label><span>手机号</span>
-          <input id="phoneFilter" class="form-control" type="text" placeholder="用户手机号" />
-        </label>
-        <div class="feedback-toolbar-actions">
-          <button id="refreshBtn" class="btn btn-outline-secondary">刷新</button>
-          <button id="prevBtn" class="btn btn-outline-secondary" disabled>上一页</button>
-          <button id="nextBtn" class="btn btn-outline-secondary" disabled>下一页</button>
+        <div class="feedback-search-actions">
+          <button type="submit" class="btn btn-primary">查询</button>
+          <button type="button" id="refreshBtn" class="btn btn-outline-secondary">刷新</button>
         </div>
-      </div>
-      <p class="hint feedback-page-hint" id="pageHint"></p>
+        <details class="feedback-extra-filters">
+          <summary>更多筛选 <span id="feedbackAdvancedCount" class="text-secondary small"></span></summary>
+          <div class="admin-toolbar feedback-toolbar mt-2">
+            <label><span>纠错问题</span><select id="optionFilter" class="form-select"><option value="">全部问题</option></select></label>
+            <label><span>轨迹 ID</span><input id="trackFilter" class="form-control" placeholder="NO.00000001" /></label>
+            <label><span>版本</span><input id="versionFilter" class="form-control" type="text" placeholder="如 1.2.0" /></label>
+            <label><span>手机号</span><input id="phoneFilter" class="form-control" type="text" inputmode="tel" /></label>
+          </div>
+        </details>
+      </form>
+      <p id="feedbackListError" class="text-danger" role="alert" hidden></p>
       <div class="table-responsive">
       <table class="data">
         <thead>
@@ -81,6 +81,10 @@
         </thead>
         <tbody id="feedbackList"></tbody>
       </table>
+      </div>
+      <div class="companion-pagination">
+        <span class="hint" id="pageHint" role="status"></span>
+        <div><button type="button" id="prevBtn" class="btn btn-outline-secondary" disabled>上一页</button><button type="button" id="nextBtn" class="btn btn-outline-secondary" disabled>下一页</button></div>
       </div>
     </section>
 

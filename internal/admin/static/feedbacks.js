@@ -5,6 +5,7 @@
   var cursorStack = [null];
   var pageIndex = 0;
   var lastNextCursor = '';
+  var appliedFilters = '', listController = null;
   var currentID = '';
   var detailRequest = 0, detailController = null, loadingDetailID = '';
   var listRequest = 0;
@@ -19,8 +20,6 @@
   var kindFilter = document.getElementById('kindFilter');
   var optionFilter = document.getElementById('optionFilter');
   var trackFilter = document.getElementById('trackFilter');
-  [kindFilter, optionFilter].forEach(function (select) { select.addEventListener('change', resetAndLoad); });
-  trackFilter.addEventListener('keydown', function (event) { if (event.key === 'Enter') resetAndLoad(); });
   var optionRequest = 0;
   async function loadOptions() {
     var request = ++optionRequest;
@@ -49,6 +48,7 @@
   var prevBtn = document.getElementById('prevBtn');
   var nextBtn = document.getElementById('nextBtn');
   var pageHint = document.getElementById('pageHint');
+  var listError = document.getElementById('feedbackListError');
   var emptyDetail = document.getElementById('emptyDetail');
   var detailContent = document.getElementById('detailContent');
   var detailModal = new tabler.Modal(document.getElementById('detailModal'));
@@ -128,12 +128,11 @@
     if (statusSelect.value === 'ignored' && outcomeSelect.value !== 'unverified') outcomeSelect.value = '';
   }
 
-  statusFilter.addEventListener('change', resetAndLoad);
-  refreshBtn.addEventListener('click', resetAndLoad);
-  [versionFilter, phoneFilter].forEach(function (input) {
-    input.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter') resetAndLoad();
-    });
+  [statusFilter, kindFilter].forEach(function (select) { select.addEventListener('change', resetAndLoad); });
+  refreshBtn.addEventListener('click', function () { loadPage(); });
+  document.getElementById('feedbackSearch').addEventListener('submit', function (e) {
+    e.preventDefault();
+    resetAndLoad();
   });
   tbody.addEventListener('click', function (event) {
     var button = event.target && event.target.closest ? event.target.closest('button[data-id]') : null;
@@ -144,16 +143,11 @@
     loadDetail(button.dataset.id, true);
   });
   prevBtn.addEventListener('click', function () {
-    if (pageIndex <= 0) return;
-    pageIndex -= 1;
-    cursorStack = cursorStack.slice(0, pageIndex + 1);
-    loadPage();
+    if (pageIndex > 0) loadPage(pageIndex - 1);
   });
   nextBtn.addEventListener('click', function () {
     if (!lastNextCursor) return;
-    pageIndex += 1;
-    cursorStack[pageIndex] = lastNextCursor;
-    loadPage();
+    loadPage(pageIndex + 1, appliedFilters, lastNextCursor);
   });
 
   statusForm.addEventListener('submit', async function (e) {
@@ -197,39 +191,48 @@
   });
 
   function resetAndLoad() {
-    cursorStack = [null];
-    pageIndex = 0;
-    lastNextCursor = '';
-    loadPage();
+    var filters = new URLSearchParams();
+    if (statusFilter.value) filters.set('status', statusFilter.value);
+    if (kindFilter.value) filters.set('kind', kindFilter.value);
+    if (optionFilter.value) filters.set('correction_option_id', optionFilter.value);
+    if (trackFilter.value.trim()) filters.set('track_id', trackFilter.value.trim());
+    if (versionFilter.value.trim()) filters.set('app_version', versionFilter.value.trim());
+    if (phoneFilter.value.trim()) filters.set('phone', phoneFilter.value.trim());
+    loadPage(0, filters.toString(), null);
   }
 
-  async function loadPage() {
+  async function loadPage(targetPage = pageIndex, filters = appliedFilters, cursor = cursorStack[targetPage]) {
+    if (listController) listController.abort();
+    var controller = listController = new AbortController();
     var request = ++listRequest;
-    prevBtn.disabled = true;
-    nextBtn.disabled = true;
-    var params = new URLSearchParams();
+    prevBtn.disabled = nextBtn.disabled = true;
+    tbody.setAttribute('aria-busy', 'true');
+    listError.hidden = true;
+    var params = new URLSearchParams(filters);
     params.set('limit', String(pageSize));
-    if (statusFilter.value) params.set('status', statusFilter.value);
-    if (kindFilter.value) params.set('kind', kindFilter.value);
-    if (optionFilter.value) params.set('correction_option_id', optionFilter.value);
-    if (trackFilter.value.trim()) params.set('track_id', trackFilter.value.trim());
-    if (versionFilter.value.trim()) params.set('app_version', versionFilter.value.trim());
-    if (phoneFilter.value.trim()) params.set('phone', phoneFilter.value.trim());
-    if (cursorStack[pageIndex]) params.set('cursor', cursorStack[pageIndex]);
+    if (cursor) params.set('cursor', cursor);
 
     var data;
     try {
-      var resp = await fetch('/admin/api/feedbacks?' + params.toString());
+      var resp = await fetch('/admin/api/feedbacks?' + params.toString(), { signal: controller.signal });
       if (!resp.ok) throw new Error(String(resp.status));
       data = ((await resp.json()).data) || {};
     } catch (err) {
       if (request !== listRequest) return;
-      tbody.innerHTML = '<tr><td colspan="9">加载失败: ' + esc(err.message || err) + '</td></tr>';
+      listError.textContent = '反馈加载失败。' + (tbody.rows.length ? '已保留上次加载的结果。' : '请重试。');
+      listError.hidden = false;
       prevBtn.disabled = pageIndex <= 0;
+      nextBtn.disabled = !lastNextCursor;
       return;
+    } finally {
+      if (request === listRequest) tbody.removeAttribute('aria-busy');
     }
     if (request !== listRequest) return;
     var items = data.items || [];
+    appliedFilters = filters;
+    pageIndex = targetPage;
+    cursorStack = cursorStack.slice(0, targetPage + 1);
+    cursorStack[targetPage] = cursor;
     lastNextCursor = data.next_cursor || '';
     tbody.innerHTML = '';
     if (!items.length) {
@@ -253,6 +256,8 @@
     prevBtn.disabled = pageIndex <= 0;
     nextBtn.disabled = !lastNextCursor;
     pageHint.textContent = '第 ' + (pageIndex + 1) + ' 页（' + items.length + ' 条）';
+    var advancedCount = ['correction_option_id', 'track_id', 'app_version', 'phone'].filter(function (key) { return params.has(key); }).length;
+    document.getElementById('feedbackAdvancedCount').textContent = advancedCount ? '（已应用 ' + advancedCount + ' 项）' : '';
   }
 
   async function loadDetail(id, scrollToDetail) {
@@ -414,5 +419,5 @@
   }
 
   loadStats();
-  loadPage();
+  resetAndLoad();
 })();

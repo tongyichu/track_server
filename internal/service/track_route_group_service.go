@@ -215,6 +215,14 @@ func (s *TrackRouteGroupService) GetRouteIntroduction(ctx context.Context, group
 }
 
 func (s *TrackRouteGroupService) SaveRouteIntroduction(ctx context.Context, groupID string, input *models.TrackRouteIntroduction) (*models.TrackRouteIntroduction, error) {
+	return s.saveRouteIntroduction(ctx, groupID, input, false)
+}
+
+func (s *TrackRouteGroupService) PublishRouteIntroduction(ctx context.Context, groupID string, input *models.TrackRouteIntroduction) (*models.TrackRouteIntroduction, error) {
+	return s.saveRouteIntroduction(ctx, groupID, input, true)
+}
+
+func (s *TrackRouteGroupService) saveRouteIntroduction(ctx context.Context, groupID string, input *models.TrackRouteIntroduction, published bool) (*models.TrackRouteIntroduction, error) {
 	group, err := s.repo.FindRouteGroup(ctx, strings.TrimSpace(groupID))
 	if err != nil {
 		return nil, err
@@ -242,6 +250,10 @@ func (s *TrackRouteGroupService) SaveRouteIntroduction(ctx context.Context, grou
 	input.CurrentGroupID = group.GroupID
 	input.Status = models.TrackRouteIntroductionStatusDraft
 	input.PublishedAt = nil
+	if published {
+		now := time.Now()
+		input.Status, input.PublishedAt = models.TrackRouteIntroductionStatusPublished, &now
+	}
 	input.ContentVersion = 1
 	if existing != nil {
 		input.ContentVersion = existing.ContentVersion + 1

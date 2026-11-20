@@ -21,34 +21,39 @@
     <div class="spacer"></div><div class="user"><span id="userName"></span><button id="logoutBtn">退出</button></div>
   </header>
   <main class="container wide">
-    <div class="submission-stat-sections" aria-live="polite">
+    <div class="mb-3" aria-live="polite">
       <section class="submission-stat-section">
-        <div class="admin-stats-heading"><h2>待审核队列</h2><span>用于安排当前审核优先级</span></div>
+        <div class="admin-stats-heading"><h2>待审核队列</h2></div>
         <div class="admin-metrics">
-          <article class="admin-metric" data-admin-metric="" data-label="当前待审核" data-value-id="submissionPending" data-note="所有待审核投稿"></article>
-          <article class="admin-metric" data-admin-metric="" data-label="待审核超 24 小时" data-value-id="submissionOver24" data-note="需要优先处理" data-tone="warning"></article>
-          <article class="admin-metric" data-admin-metric="" data-label="待审核超 72 小时" data-value-id="submissionOver72" data-note="长期未处理" data-tone="danger"></article>
-        </div>
-      </section>
-      <section class="submission-stat-section">
-        <div class="admin-stats-heading"><h2>本月审核结果</h2><span>按审核完成时间统计</span></div>
-        <div class="admin-metrics">
-          <article class="admin-metric" data-admin-metric="" data-label="审核通过" data-value-id="submissionApproved" data-note="本月通过投稿数"></article>
-          <article class="admin-metric" data-admin-metric="" data-label="审核驳回" data-value-id="submissionRejected" data-note="本月驳回投稿数"></article>
-          <article class="admin-metric" data-admin-metric="" data-label="通过率" data-value-id="submissionApprovalRate" data-note="通过数 / 通过与驳回数"></article>
-          <article class="admin-metric" data-admin-metric="" data-label="平均审核时长" data-value-id="submissionAvgHours" data-note="从提交到审核完成"></article>
+          <button class="admin-metric" type="button" data-admin-metric data-review-age="" data-label="当前待审核" data-value-id="submissionPending" aria-pressed="true"></button>
+          <button class="admin-metric" type="button" data-admin-metric data-review-age="24_72h" data-label="等待 24–72 小时" data-value-id="submissionOver24" aria-pressed="false"></button>
+          <button class="admin-metric" type="button" data-admin-metric data-review-age="over_72h" data-label="等待超 72 小时" data-value-id="submissionOver72" aria-pressed="false"></button>
         </div>
       </section>
     </div>
     <section class="panel">
-      <h2>轨迹投稿审核</h2>
+      <h2>投稿列表</h2>
       <div class="submission-list-toolbar">
         <label for="status" class="visually-hidden">投稿状态</label>
         <select id="status" class="form-select"><option value="pending">待审核</option><option value="approved">已通过</option><option value="rejected">已驳回</option><option value="withdrawn">已撤回</option><option value="invalidated">已失效</option><option value="">全部</option></select>
         <button id="refreshBtn" type="button" class="btn btn-outline-secondary">刷新</button>
+        <span id="submissionAgeHint" class="text-secondary small"></span>
       </div>
-      <div class="table-responsive"><table class="data submission-list-table"><thead><tr><th>轨迹编号</th><th>标题</th><th>类型</th><th>难度</th><th>风险</th><th>状态</th><th>版本</th><th>提交时间</th><th>操作</th></tr></thead><tbody id="list"></tbody></table></div>
+      <div class="table-responsive"><table class="data submission-list-table"><thead><tr><th>投稿轨迹</th><th>类型</th><th>难度</th><th>风险</th><th>状态</th><th>提交时间</th><th>操作</th></tr></thead><tbody id="list"></tbody></table></div>
+      <div class="companion-pagination">
+        <span class="hint" id="submissionPageHint" role="status"></span>
+        <div><button id="submissionPrev" class="btn btn-outline-secondary" type="button" disabled>上一页</button><button id="submissionNext" class="btn btn-outline-secondary" type="button" disabled>下一页</button></div>
+      </div>
     </section>
+    <details class="panel">
+      <summary>本月审核结果</summary>
+      <div class="admin-metrics mt-3 mb-0">
+        <article class="admin-metric" data-admin-metric data-label="审核通过" data-value-id="submissionApproved"></article>
+        <article class="admin-metric" data-admin-metric data-label="审核驳回" data-value-id="submissionRejected"></article>
+        <article class="admin-metric" data-admin-metric data-label="通过率" data-value-id="submissionApprovalRate"></article>
+        <article class="admin-metric" data-admin-metric data-label="平均审核时长" data-value-id="submissionAvgHours"></article>
+      </div>
+    </details>
   </main>
   <div class="modal modal-blur fade submission-detail-modal" id="submissionDetailModal" tabindex="-1" aria-hidden="true" aria-labelledby="detailTitle">
     <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-xl">

@@ -77,7 +77,6 @@ button.admin-metric:hover, a.admin-metric:hover { color: inherit; background: va
 .admin-stat-disclosure > summary { cursor: pointer; color: var(--tblr-secondary-color); font-size: 12px; }
 .admin-stat-disclosure[open] > summary { margin-bottom: 8px; }
 .admin-stat-disclosure:focus-within { border-color: var(--tblr-primary); }
-.submission-stat-sections { grid-template-columns: minmax(0, 3fr) minmax(0, 4fr); gap: var(--admin-stat-gap); margin-bottom: 12px; }
 .submission-stat-section .admin-metrics, .feedback-stat-section .admin-metrics { margin-bottom: 0; }
 .feedback-stat-sections { margin-bottom: 12px; }
 .scenic-spots-page .scenic-stats-panel.admin-stats-panel { padding: var(--admin-stat-padding) !important; }
@@ -153,7 +152,7 @@ button.admin-metric:hover, a.admin-metric:hover { color: inherit; background: va
 .dashboard-ring .admin-user-legend { max-height: 175px; overflow-y: auto; }
 @media (min-width: 901px) { .topbar ~ .container.dashboard-page { margin-top: 18px; margin-bottom: 18px; } }
 @media (max-width: 900px) {
-  .admin-chart-grid, .dashboard-layout-main, .dashboard-layout-equal, .submission-stat-sections { grid-template-columns: 1fr; }
+  .admin-chart-grid, .dashboard-layout-main, .dashboard-layout-equal { grid-template-columns: 1fr; }
   .dashboard-layout-thirds { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dashboard-layout-thirds > :last-child { grid-column: 1 / -1; }
   .dashboard-heading-actions { width: auto; flex-direction: row; }

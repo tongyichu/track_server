@@ -137,6 +137,9 @@ func (r *MongoCompanionRepository) ListAdminCompanions(ctx context.Context, filt
 	if filter.TrackType != "" {
 		conditions = append(conditions, bson.M{"track_type": filter.TrackType})
 	}
+	if filter.Status != "" {
+		conditions = append(conditions, bson.M{"status": filter.Status})
+	}
 	if filter.OwnerIDs != nil {
 		if len(filter.OwnerIDs) == 0 {
 			return []*models.CompanionSession{}, 0, nil

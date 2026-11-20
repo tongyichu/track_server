@@ -29,21 +29,21 @@ type PermissionModule struct {
 }
 
 var permissionModules = []PermissionModule{
-	{"music", "背景音乐", "/admin/music.html"},
-	{"announcements", "活动&通知", "/admin/announcements.html"},
 	{"dashboard", "工作台", "/admin/dashboard.html"},
 	{"track_submissions", "投稿审核", "/admin/track_submissions.html"},
+	{"feedbacks", "反馈与纠错", "/admin/feedbacks.html"},
+	{"announcements", "活动&通知", "/admin/announcements.html"},
+	{"users", "用户管理", "/admin/users.html"},
 	{"tracks", "轨迹管理", "/admin/tracks.html"},
+	{"route_groups", "地图模式", "/admin/route_groups.html"},
 	{"scenic_spots", "景点管理", "/admin/scenic_spots.html"},
 	{"regions", "城市管理", "/admin/regions.html"},
-	{"users", "用户管理", "/admin/users.html"},
-	{"route_groups", "地图模式", "/admin/route_groups.html"},
 	{"companions", "与友同行", "/admin/companions.html"},
+	{"music", "背景音乐", "/admin/music.html"},
 	{"realtime", "实时通信", "/admin/realtime.html"},
-	{"feedbacks", "反馈与纠错", "/admin/feedbacks.html"},
 	{"releases", "App 发布", "/admin/index.html"},
-	{"analytics", "埋点同步日志", "/admin/analytics.html"},
 	{"ai_usage", "AI 使用", "/admin/ai_usage.html"},
+	{"analytics", "埋点同步日志", "/admin/analytics.html"},
 	{"ai_tasks", "AI 任务中断与重试", ""},
 	{"ai_settings", "AI 预算与价格配置", ""},
 }
