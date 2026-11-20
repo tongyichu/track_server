@@ -498,7 +498,7 @@ Content-Type: application/json
 
 | 字段 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
-| `event_type` | string | 是 | 事件类型：`member_left` / `member_disconnected` / `member_reconnected` / `notice_sent` / `checkpoint_reached` / `risk_reported` / `custom`。 |
+| `event_type` | string | 是 | 事件类型：`member_joined` / `member_rejoined` / `member_left` / `member_kicked` / `member_disconnected` / `member_reconnected` / `owner_transferred` / `notice_sent` / `checkpoint_reached` / `risk_reported` / `custom`。成员变化和连接变化由服务端自动记录，owner 上报主要用于通知、关键点、风险和自定义事件。 |
 | `target_user_id` | int64 | 否 | 事件关联成员 user_id；无关联成员传 `0` 或不传。传入大于 0 时，该用户必须属于该 session。 |
 | `title` | string | 否 | 事件标题，最多 64 个字符。 |
 | `content` | string | 否 | 事件内容，最多 500 个字符。 |
@@ -554,9 +554,9 @@ Content-Type: application/json
 
 ---
 
-## 22.4 查询同行关键事件时间线（owner）
+## 22.4 查询同行关键事件时间线（参与者）
 
-owner 按时间线查询自己上报过的同行关键事件，支持游标分页。
+本房间参与者按时间线查询自动记录及 owner 上报的同行关键事件，支持游标分页。
 
 **需要认证**
 
@@ -610,10 +610,8 @@ Authorization: Bearer <token>
   - `invalid limit`
   - `invalid cursor`
   - `invalid order`
-- `403 Forbidden`
-  - 当前用户不是 owner
 - `404 Not Found`
-  - session 不存在
+  - session 不存在或当前用户不是本房间参与者
 
 ---
 

@@ -18,6 +18,7 @@ func (s *CompanionService) TransferSessionOwner(ctx context.Context, owner int64
 	if err != nil {
 		return nil, err
 	}
+	s.recordAutomaticEvent(ctx, session, "owner_transferred", target, session.UpdatedAt)
 	s.publishControlEvent(ctx, id, CompanionControlEvent{
 		Event: CompanionControlEventOwnerTransferred, SessionID: id, MemberUserID: target, OperatorUserID: owner, At: session.UpdatedAt,
 	})

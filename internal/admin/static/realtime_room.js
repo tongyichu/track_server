@@ -1,6 +1,6 @@
 (function () {
   'use strict';
-  const eventNames = { member_left: '成员离开', member_disconnected: '成员断线', member_reconnected: '成员重连', notice_sent: '同行周知', checkpoint_reached: '到达关键点', risk_reported: '风险提醒', custom: '自定义事件' };
+  const eventNames = { member_joined: '成员加入', member_rejoined: '成员重新加入', member_left: '成员离开', member_kicked: '成员被移出', member_disconnected: '成员断线', member_reconnected: '成员重连', owner_transferred: '房主变更', notice_sent: '同行周知', checkpoint_reached: '到达关键点', risk_reported: '风险提醒', custom: '自定义事件' };
   function compareTime(a, b) {
     const difference = Date.parse(a) - Date.parse(b); if (difference) return difference;
     const fraction = value => ((/\.(\d+)/.exec(value)?.[1] || '').padEnd(9, '0')).slice(3, 9);
@@ -16,7 +16,7 @@
     const status = el('span', '', 'text-secondary small'); status.setAttribute('role', 'status');
     const newest = button('回到最新', bottom); newest.hidden = true;
     const footer = el('div', null, 'rt-chat-footer'); footer.append(status, newest);
-    const note = el('p', '只读查看存储记录；关键事件由房主上报，不代表 Broker 完整收发历史。', 'rt-chat-note text-secondary');
+    const note = el('p', '只读查看存储记录；关键事件由服务端自动记录或房主上报，不代表 Broker 完整收发历史。', 'rt-chat-note text-secondary');
     panel.append(heading, feed, footer, note);
     const summary = el('details', null, 'rt-room-summary'), summaryTitle = el('summary', '房间信息与位置快照'), summaryBody = el('div'); summary.append(summaryTitle, summaryBody);
     host.append(panel, summary);

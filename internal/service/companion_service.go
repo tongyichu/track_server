@@ -58,7 +58,7 @@ const (
 	// 自动收尾：单次扫描 active session 的上限。
 	companionAutoCloseScanLimit = 1000
 
-	// 关键事件：单场同行最多保留 owner 上报的事件数。
+	// 关键事件：单场同行最多保留自动记录与 owner 上报的事件总数。
 	companionEventMaxPerSession    = 100
 	companionEventMaxTitleRunes    = 64
 	companionEventMaxContentRunes  = 500
@@ -99,9 +99,13 @@ var companionAutoCloseRules = map[string]companionAutoCloseRule{
 }
 
 var companionEventTypes = map[string]struct{}{
+	"member_joined":       {},
+	"member_rejoined":     {},
 	"member_left":         {},
+	"member_kicked":       {},
 	"member_disconnected": {},
 	"member_reconnected":  {},
+	"owner_transferred":   {},
 	"notice_sent":         {},
 	"checkpoint_reached":  {},
 	"risk_reported":       {},
@@ -293,7 +297,7 @@ type CreateCompanionEventInput struct {
 	Metadata      json.RawMessage `json:"metadata"`
 }
 
-// ListCompanionEventsInput describes paging input for owner-visible companion events.
+// ListCompanionEventsInput describes paging input for participant-visible companion events.
 type ListCompanionEventsInput struct {
 	Cursor string
 	Limit  int
@@ -1010,10 +1014,12 @@ func (s *CompanionService) JoinSession(ctx context.Context, userID int64, in Joi
 	} else if !errors.Is(err, repository.ErrNotFound) {
 		return nil, err
 	}
+	rejoined := false
 	if member, err := s.repo.FindMember(ctx, session.SessionID, userID); err == nil {
 		if member.MemberStatus == models.CompanionMemberStatusJoined {
 			return s.buildSessionState(ctx, session, userID, userID == session.OwnerUserID)
 		}
+		rejoined = true
 	} else if !errors.Is(err, repository.ErrNotFound) {
 		return nil, err
 	}
@@ -1035,6 +1041,11 @@ func (s *CompanionService) JoinSession(ctx context.Context, userID int64, in Joi
 	}); err != nil {
 		return nil, err
 	}
+	eventType := "member_joined"
+	if rejoined {
+		eventType = "member_rejoined"
+	}
+	s.recordAutomaticEvent(ctx, session, eventType, userID, now)
 	return s.buildSessionState(ctx, session, userID, false)
 }
 
@@ -1351,6 +1362,7 @@ func (s *CompanionService) LeaveSession(ctx context.Context, userID int64, sessi
 	if err := s.repo.UpsertMember(ctx, member); err != nil {
 		return err
 	}
+	s.recordAutomaticEvent(ctx, session, "member_left", userID, now)
 	s.publishControlEvent(ctx, sessionID, CompanionControlEvent{
 		Event:          CompanionControlEventMemberLeft,
 		SessionID:      sessionID,
@@ -1418,6 +1430,7 @@ func (s *CompanionService) KickSessionMember(ctx context.Context, ownerUserID in
 	if err := s.repo.UpsertMember(ctx, member); err != nil {
 		return nil, err
 	}
+	s.recordAutomaticEvent(ctx, session, "member_kicked", targetUserID, now)
 	s.publishControlEvent(ctx, sessionID, CompanionControlEvent{
 		Event:          CompanionControlEventMemberKicked,
 		SessionID:      sessionID,
@@ -1630,24 +1643,20 @@ func (s *CompanionService) CreateEvent(ctx context.Context, ownerUserID int64, s
 	return companionEventForResponse(event), nil
 }
 
-// ListEvents returns owner-visible key events in a companion session.
-func (s *CompanionService) ListEvents(ctx context.Context, ownerUserID int64, sessionID string, in ListCompanionEventsInput) (*models.CompanionEventPage, error) {
+// ListEvents returns participant-visible key events in a companion session.
+func (s *CompanionService) ListEvents(ctx context.Context, userID int64, sessionID string, in ListCompanionEventsInput) (*models.CompanionEventPage, error) {
 	if s == nil || s.repo == nil {
 		return nil, errors.New("companion service not configured")
 	}
-	if ownerUserID <= 0 {
+	if userID <= 0 {
 		return nil, invalidArg("user_id is required")
 	}
 	sessionID = strings.TrimSpace(sessionID)
 	if sessionID == "" {
 		return nil, invalidArg("session_id is required")
 	}
-	session, err := s.repo.FindSessionByID(ctx, sessionID)
-	if err != nil {
+	if _, err := s.repo.FindMember(ctx, sessionID, userID); err != nil {
 		return nil, err
-	}
-	if session.OwnerUserID != ownerUserID {
-		return nil, repository.ErrForbidden
 	}
 	order := strings.ToLower(strings.TrimSpace(in.Order))
 	if order == "" {
@@ -1785,12 +1794,12 @@ func companionAutoCloseRuleForTrackType(trackType string) companionAutoCloseRule
 	return defaultCompanionAutoCloseRule
 }
 
-// UpdatePresence updates member online/offline status, reserved for future EMQX integration.
+// UpdatePresence updates member online/offline status and records connection transitions.
 func (s *CompanionService) UpdatePresence(ctx context.Context, sessionID string, userID int64, status models.CompanionPresenceStatus, lastSeenAt time.Time) error {
 	if status != models.CompanionPresenceStatusOnline && status != models.CompanionPresenceStatusOffline {
 		return invalidArg("invalid presence_status")
 	}
-	_, err := s.requireJoinedActiveSession(ctx, userID, sessionID)
+	session, err := s.requireJoinedActiveSession(ctx, userID, sessionID)
 	if err != nil {
 		return err
 	}
@@ -1798,13 +1807,23 @@ func (s *CompanionService) UpdatePresence(ctx context.Context, sessionID string,
 	if err != nil {
 		return err
 	}
+	previousStatus := member.PresenceStatus
+	hasSeen := !member.LastSeenAt.IsZero()
 	member.PresenceStatus = status
 	if !lastSeenAt.IsZero() {
 		member.LastSeenAt = lastSeenAt
 	} else {
 		member.LastSeenAt = time.Now()
 	}
-	return s.repo.UpsertMember(ctx, member)
+	if err := s.repo.UpsertMember(ctx, member); err != nil {
+		return err
+	}
+	if previousStatus == models.CompanionPresenceStatusOnline && status == models.CompanionPresenceStatusOffline {
+		s.recordAutomaticEvent(ctx, session, "member_disconnected", userID, member.LastSeenAt)
+	} else if previousStatus == models.CompanionPresenceStatusOffline && status == models.CompanionPresenceStatusOnline && hasSeen {
+		s.recordAutomaticEvent(ctx, session, "member_reconnected", userID, member.LastSeenAt)
+	}
+	return nil
 }
 
 // UpsertPositionSnapshot upserts member latest live position, reserved for future EMQX integration.

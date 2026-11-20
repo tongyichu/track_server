@@ -170,11 +170,11 @@ type CompanionDanmaku struct {
 	CreatedAt time.Time `json:"created_at" bson:"created_at"`
 }
 
-// CompanionEvent 表示 owner 上报的一条同行关键事件。
+// CompanionEvent 表示一条自动记录或 owner 上报的同行关键事件。
 //
 // 设计说明：
 // - id 由存储层自增分配，作为对外事件 ID；
-// - client_event_id 由客户端生成，用于 owner 重试时幂等；
+// - client_event_id 用于客户端重试或服务端自动事件幂等；
 // - metadata_json 保存客户端扩展 JSON 对象，服务端不解释其业务含义。
 type CompanionEvent struct {
 	ID            int64           `json:"id" bson:"id"`
@@ -199,7 +199,7 @@ type CompanionEventCursor struct {
 	ID        int64     `json:"id"`
 }
 
-// CompanionEventPage is the paging response of owner-visible companion events.
+// CompanionEventPage is the paging response of participant-visible companion events.
 type CompanionEventPage struct {
 	Items      []*CompanionEvent `json:"items"`
 	NextCursor string            `json:"next_cursor,omitempty"`

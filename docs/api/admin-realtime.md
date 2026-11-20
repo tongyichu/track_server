@@ -53,7 +53,7 @@ status 为 ok / partial / stale / unavailable / unconfigured。未配置或从�
 
 `GET /network/room` 先检验当前采样中该房间至少一条在线同行连接，再查询房间及成员；有效完整样本中房间已不在线返回409，未采样/部分采样/旧样本无法确认时返回503。成功响应 `{room,members,positions,messages,events,messages_limited,events_limited,people,sampled_at,status}`：room 仅含 session_id/title/owner_id/status/started_at，成员仅含 user_id/role/member_status/connections/last_seen_at；positions 按用户字符串ID索引，包含坐标、明确坐标系和 recorded_at，表示位置快照，不宣称实时定位。messages 为最近最多200条存储弹幕，events 为最近最多100条已存储关键事件，分别额外查询一条判断 limited；页面明确显示本次载入范围和截断，个人列表仅筛选这些已加载的房间记录，不宣称全量历史。每次刷新使用最新有界记录窗口，失败保留上次内容。
 
-events 每条为 `{id,owner_user_id,target_user_id,event_type,title,content,event_time,created_at}`，所有ID为字符串，未关联成员的 target_user_id 为空字符串。七类关键事件为 member_left / member_disconnected / member_reconnected / notice_sent / checkpoint_reached / risk_reported / custom，仅展示业务库中房主已上报的记录，不推测未持久化的 MQTT 控制消息、连接历史或所有状态变更。people 包含成员、弹幕发送者、事件上报者与关联成员的头像昵称，按唯一ID集合批量查询；不返回事件 metadata/client_event_id、MQTT principal、凭证或房间加入 token。复用既有同行仓储方法，MySQL/内存按现有查询语义读取；Mongo 既有弹幕/事件方法未实现时明确返回503，不伪造空记录。
+events 每条为 `{id,owner_user_id,target_user_id,event_type,title,content,event_time,created_at}`，所有ID为字符串，未关联成员的 target_user_id 为空字符串。关键事件为 member_joined / member_rejoined / member_left / member_kicked / member_disconnected / member_reconnected / owner_transferred / notice_sent / checkpoint_reached / risk_reported / custom，展示业务库中自动记录或房主已上报的记录，不推测未持久化的 MQTT 控制消息、连接历史或所有状态变更。people 包含成员、弹幕发送者、事件上报者与关联成员的头像昵称，按唯一ID集合批量查询；不返回事件 metadata/client_event_id、MQTT principal、凭证或房间加入 token。复用既有同行仓储方法，MySQL/内存按现有查询语义读取；Mongo 既有弹幕/事件方法未实现时明确返回503，不伪造空记录。
 
 图及其详情使用 realtime 查看权限，同行图与房间详情额外要求 companions 查看权限；服务端 permissions.go 和 handler 均校验，不能只隐藏按钮。每次业务读取预算3秒，前端请求10秒超时；关闭/切换/页面隐藏取消工作，失败保留已加载内容，不修改已读、投递、房间或用户状态。
 
