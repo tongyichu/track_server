@@ -299,7 +299,8 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 			updated_at DATETIME(6) NOT NULL,
 			PRIMARY KEY (track_id),
 			KEY idx_track_geo_city_type (city_code, track_type),
-			KEY idx_track_geo_center (center_lat, center_lng)
+			KEY idx_track_geo_center (center_lat, center_lng),
+			KEY idx_track_geo_start (start_lat, start_lng)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='轨迹地图空间索引表';`,
 		`CREATE TABLE IF NOT EXISTS track_route_groups (
 			group_id VARCHAR(64) NOT NULL COMMENT '路线组ID',
@@ -623,6 +624,9 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 	if err := ensureMySQLTrackRouteGroupAreaID(ctx, db); err != nil {
+		return err
+	}
+	if err := ensureMySQLTrackGeoStartIndex(ctx, db); err != nil {
 		return err
 	}
 	if err := ensureMySQLUserIDColumnsBigint(ctx, db); err != nil {
@@ -1370,6 +1374,22 @@ func ensureMySQLTrackRouteGroupAreaID(ctx context.Context, db *sql.DB) error {
 	}
 	if _, err := db.ExecContext(ctx, `ALTER TABLE track_route_groups ADD INDEX idx_track_route_group_area (area_id)`); err != nil {
 		return fmt.Errorf("add track_route_groups area index: %w", err)
+	}
+	return nil
+}
+
+func ensureMySQLTrackGeoStartIndex(ctx context.Context, db *sql.DB) error {
+	var count int
+	if err := db.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM information_schema.STATISTICS
+		WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'track_geo_indexes' AND INDEX_NAME = 'idx_track_geo_start'
+	`).Scan(&count); err != nil {
+		return fmt.Errorf("check track_geo_indexes start index: %w", err)
+	}
+	if count == 0 {
+		if _, err := db.ExecContext(ctx, `ALTER TABLE track_geo_indexes ADD INDEX idx_track_geo_start (start_lat, start_lng)`); err != nil {
+			return fmt.Errorf("add track_geo_indexes start index: %w", err)
+		}
 	}
 	return nil
 }

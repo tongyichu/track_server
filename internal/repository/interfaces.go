@@ -265,6 +265,7 @@ type TrackMapRepository interface {
 	FindRouteGroupByTrackID(ctx context.Context, trackID string) (*models.TrackRouteGroup, error)
 	CountRouteGroupsByCity(ctx context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackMapClusterItem, error)
 	CountRouteGroupsByArea(ctx context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackMapClusterItem, error)
+	VisitRouteDepartures(ctx context.Context, filter models.TrackMapQueryFilter, visit func(models.TrackMapDeparture)) error
 }
 
 // UserRepository defines persistence operations for User entities.

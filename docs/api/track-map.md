@@ -39,8 +39,20 @@ GET /api/v1/track-map/view?latitude=22.3000&longitude=114.1700&radius_m=10000&tr
 | `longitude` | number | 附近模式必填 | 用户当前位置经度 |
 | `radius_m` | int | 否 | 附近半径，默认 `10000`，最大 `50000` |
 | `city_code` | string | 否 | 城市 Code |
+| `browse_mode` | string | 否 | `departure` 启用按出发点浏览。省略时使用旧地图分层 |
+| `district_id` | string | 否 | `departure` 模式下，区县气泡返回的 `area.id` |
+| `scenic_id` | string | 否 | `departure` 模式下，景点气泡返回的 `area.id`，同时传出发区县或城市 |
 | `track_type` | string | 否 | 运动类型 code；`all` 表示不过滤运动类型，不传或空值默认 `hiking`。兼容传中文名，如 `徒步` |
 | `limit` | int | 否 | 默认 `100`，最大 `200` |
+
+### 按出发点浏览
+
+请求 `browse_mode=departure` 后，成功响应带 `browse_mode=departure`。查询使用已完成且公开的路线组成员，从已有空间索引读取起点。城市和区县由起点匹配内置边界，边界未覆盖时沿用轨迹的城市代码。附近和视野模式均按起点过滤。
+
+- 无范围选择时，按缩放返回 `city`、`district` 或 `route`。点击城市传 `city_code`，返回区县气泡。无下辖区县或无区县边界的起点可直接呈现景点或具体路线。
+- 点击 `area_type=district` 的气泡传 `district_id`，返回 `view_level=places`，其中可以同时有 `area_cluster`（已有景点关联）和 `route_group`（独立路线）。点景点时保留当前城市或区县，再传 `scenic_id`，返回该范围内的路线。
+- 在每个城市、区县或景点气泡内按 `group_id` 去重。已有公开轨迹实际从不同区县出发时，同一 `group_id` 可以在多个区县出现。路线标记用 `group_id` 与 `departure_scope_id` 联合识别。
+- 路线标记的 `center` 和 `bbox` 表示出发点，`departure_track_id` 指向该方向的实际公开轨迹。另可返回 `district_name`、`distance_m` 及跨区终点 `arrival_name`。查询路线组详情仍用 `group_id`。
 
 ### 响应：route
 
@@ -226,6 +238,8 @@ Authorization: Bearer <token>
 ```
 
 返回同一路线组下的具体用户轨迹列表。第一版不额外返回路线组人数或轨迹总数，避免冷启动阶段暴露人气不足。
+
+可选传 `departure_track_id`。该轨迹仍是当前路线组的公开、已完成成员时，会排在列表首位。客户端可使用地图标记返回的同名字段。
 
 响应：
 

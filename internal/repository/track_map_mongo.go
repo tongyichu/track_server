@@ -26,6 +26,16 @@ func NewMongoTrackMapRepository(jobs, index, tracks, groups, members *mongo.Coll
 	return &MongoTrackMapRepository{jobs: jobs, index: index, tracks: tracks, groups: groups, members: members, introductions: groups.Database().Collection("track_route_introductions")}
 }
 
+func (r *MongoTrackMapRepository) EnsureDepartureIndexes(ctx context.Context) error {
+	if _, err := r.index.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys: bson.D{{Key: "start_lat", Value: 1}, {Key: "start_lng", Value: 1}},
+	}); err != nil {
+		return err
+	}
+	_, err := r.members.Indexes().CreateOne(ctx, mongo.IndexModel{Keys: bson.D{{Key: "track_id", Value: 1}}})
+	return err
+}
+
 func (r *MongoTrackMapRepository) EnqueueIndexJob(ctx context.Context, trackID string, runAt time.Time) error {
 	trackID = strings.TrimSpace(trackID)
 	if trackID == "" {

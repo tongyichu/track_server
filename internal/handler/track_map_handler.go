@@ -33,6 +33,9 @@ func (h *TrackMapHandler) View(ctx context.Context, c *app.RequestContext) {
 		c.JSON(http.StatusBadRequest, utils.H{"error": err.Error()})
 		return
 	}
+	input.BrowseMode = string(c.Query("browse_mode"))
+	input.DistrictID = string(c.Query("district_id"))
+	input.ScenicID = string(c.Query("scenic_id"))
 	resp, err := h.trackMapSvc.View(ctx, input)
 	if err != nil {
 		writeTrackMapError(c, err)
@@ -80,7 +83,9 @@ func (h *TrackMapHandler) ListGroupTracks(ctx context.Context, c *app.RequestCon
 		return
 	}
 	limit := parseQueryInt(c, "limit")
-	resp, err := h.trackMapSvc.ListGroupTracks(ctx, meta.AuthUserID, c.Param("group_id"), service.TrackMapGroupTracksInput{Limit: limit})
+	resp, err := h.trackMapSvc.ListGroupTracks(ctx, meta.AuthUserID, c.Param("group_id"), service.TrackMapGroupTracksInput{
+		Limit: limit, DepartureTrackID: string(c.Query("departure_track_id")),
+	})
 	if err != nil {
 		writeTrackMapError(c, err)
 		return

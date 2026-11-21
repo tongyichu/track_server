@@ -360,7 +360,8 @@ CREATE TABLE `track_geo_indexes` (
                                      `updated_at` DATETIME(6) NOT NULL,
                                      PRIMARY KEY (`track_id`),
                                      KEY `idx_track_geo_city_type` (`city_code`, `track_type`),
-                                     KEY `idx_track_geo_center` (`center_lat`, `center_lng`)
+                                     KEY `idx_track_geo_center` (`center_lat`, `center_lng`),
+                                     KEY `idx_track_geo_start` (`start_lat`, `start_lng`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='轨迹地图空间索引表';
 
 CREATE TABLE `track_route_groups` (

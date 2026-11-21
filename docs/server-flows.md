@@ -129,6 +129,8 @@ track/create(is_running=false) 或 track upload/update 完成轨迹
 ```
 首页地图模式客户端接口挂在 auth 组：`GET /api/v1/track-map/view`、`GET /api/v1/track-map/groups`、`GET /api/v1/track-map/groups/:group_id/detail`、`GET /api/v1/track-map/groups/:group_id/tracks`。区域介绍页 `GET /api/v1/track-map/areas/:area_id/introduction.html` 和聚合路线介绍页 `GET /api/v1/track-map/groups/:group_id/introduction.html` 是公开 H5，不走业务 JWT。只有 `track_route_introductions.status=published` 时路线对象才返回 `introduction_url`；介绍以 `anchor_track_id` 为稳定锚点，路线组全量重建后仓储必须按新成员关系更新 `current_group_id`，禁止把运营介绍直接存进会被清空的 `track_route_groups`。`group_id` 来自 `track_route_groups.group_id`，不等同于单条 `track_id`；列表和地图聚合使用 RouteGroup 数量口径，不返回 `user_count` / `track_count`。调整字段、缩放分层、区域/路线介绍协议、聚合数量口径或 group_id 语义时，同步更新 `docs/api/track-map.md`、`docs/api/route-index.md` 与 `track_map.md`。
 管理中心聚合路线列表和详情展示路线组摘要，以及已存 `area_id` 对应的区域名称、类型、城市与介绍页入口；admin 请求链路只按 ID 查询目录，不重新执行空间匹配。RouteGroup 对客户端表示聚合区域，使用 `center` + `radius_m` 绘制，不再下发代表路线折线。
+
+新版地图视野显式传 `browse_mode=departure` 时，仓储从已有空间索引批量读取公开成员的起终点，按起点范围预筛。服务用内置边界确认市和区县，区县下再按既有景点关联聚合或显示独立路线。跨区两端均有公开出发轨迹时复用同一组 ID，路线组轨迹列表可优先返回所选方向。
 路线组离线重建必须先通过 `ListAllRouteGroups` / `ListAllRouteGroupMembers` 读取历史身份，按成员重合复用 `group_id`；人工改名后的 `manual/mixed` 名称不得被自动任务覆盖。medoid 或展示代表变化都不能据此无条件更换已有 GroupID；仍属于新组的人工代表优先保留。
 
 ### 短信登录等级信息

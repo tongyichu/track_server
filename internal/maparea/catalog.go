@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"math"
 	"regexp"
 	"sort"
 	"strings"
@@ -81,8 +82,10 @@ func (d Definition) HasIntroduction() bool {
 
 // Catalog is an immutable in-process map-area directory.
 type Catalog struct {
-	byID  map[string]Definition
-	areas []Definition
+	byID          map[string]Definition
+	areas         []Definition
+	districtCells map[[2]int][]int
+	cityBounds    map[string]Bounds
 }
 
 type catalogFile struct {
@@ -183,9 +186,60 @@ func ParseCatalogFiles(raw, districtsRaw []byte) (*Catalog, error) {
 		if catalog.areas[i].Priority != catalog.areas[j].Priority {
 			return catalog.areas[i].Priority > catalog.areas[j].Priority
 		}
-		return catalog.areas[i].Bounds.size() < catalog.areas[j].Bounds.size()
+		if catalog.areas[i].Bounds.size() != catalog.areas[j].Bounds.size() {
+			return catalog.areas[i].Bounds.size() < catalog.areas[j].Bounds.size()
+		}
+		return catalog.areas[i].ID < catalog.areas[j].ID
 	})
+	catalog.districtCells = make(map[[2]int][]int)
+	catalog.cityBounds = make(map[string]Bounds)
+	for i, area := range catalog.areas {
+		if area.Type != TypeDistrict {
+			continue
+		}
+		b := area.Bounds
+		if current, ok := catalog.cityBounds[area.CityCode]; ok {
+			catalog.cityBounds[area.CityCode] = mergeBounds(current, b)
+		} else {
+			catalog.cityBounds[area.CityCode] = b
+		}
+		for lat := districtCell(b.MinLatitude); lat <= districtCell(b.MaxLatitude); lat++ {
+			for lng := districtCell(b.MinLongitude); lng <= districtCell(b.MaxLongitude); lng++ {
+				key := [2]int{lat, lng}
+				catalog.districtCells[key] = append(catalog.districtCells[key], i)
+			}
+		}
+	}
 	return catalog, nil
+}
+
+func districtCell(coordinate float64) int {
+	return int(math.Floor(coordinate / 2))
+}
+
+func mergeBounds(a, b Bounds) Bounds {
+	return Bounds{
+		MinLatitude:  min(a.MinLatitude, b.MinLatitude),
+		MinLongitude: min(a.MinLongitude, b.MinLongitude),
+		MaxLatitude:  max(a.MaxLatitude, b.MaxLatitude),
+		MaxLongitude: max(a.MaxLongitude, b.MaxLongitude),
+	}
+}
+
+// DistrictCityBounds returns the search envelope for a city's district polygons.
+func (c *Catalog) DistrictCityBounds(cityCodes []string) (Bounds, bool) {
+	var result Bounds
+	found := false
+	for _, code := range cityCodes {
+		if b, ok := c.cityBounds[code]; ok {
+			if found {
+				result = mergeBounds(result, b)
+			} else {
+				result, found = b, true
+			}
+		}
+	}
+	return result, found
 }
 
 func normalizeDefinition(area Definition) (Definition, error) {
@@ -279,9 +333,9 @@ func (c *Catalog) ResolveDistrict(latitude, longitude float64) *Definition {
 	if c == nil {
 		return nil
 	}
-	for i := range c.areas {
+	for _, i := range c.districtCells[[2]int{districtCell(latitude), districtCell(longitude)}] {
 		a := c.areas[i]
-		if a.Type != TypeDistrict || !a.Bounds.contains(latitude, longitude) {
+		if !a.Bounds.contains(latitude, longitude) {
 			continue
 		}
 		if a.Geometry != nil && !a.Geometry.contains(latitude, longitude) {

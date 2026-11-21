@@ -266,13 +266,19 @@ func main() {
 				db.Collection("recommend_user_profiles"),
 				db.Collection("recommend_item_stats_daily"),
 			)
-			trackMapRepo = repository.NewMongoTrackMapRepository(
+			mongoTrackMap := repository.NewMongoTrackMapRepository(
 				db.Collection("track_map_index_jobs"),
 				db.Collection("track_geo_indexes"),
 				db.Collection("tracks"),
 				db.Collection("track_route_groups"),
 				db.Collection("track_route_group_members"),
 			)
+			departureIndexCtx, departureIndexCancel := context.WithTimeout(ctx, 5*time.Second)
+			if err := mongoTrackMap.EnsureDepartureIndexes(departureIndexCtx); err != nil {
+				log.Printf("track map departure mongo indexes unavailable: %v", err)
+			}
+			departureIndexCancel()
+			trackMapRepo = mongoTrackMap
 			companionRepo = repository.NewMongoCompanionRepository(
 				db.Collection("companion_sessions"),
 				db.Collection("companion_session_members"),

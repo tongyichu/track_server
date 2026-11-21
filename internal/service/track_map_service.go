@@ -38,18 +38,22 @@ type TrackMapService struct {
 }
 
 type TrackMapViewInput struct {
-	BBox      string
-	Zoom      float64
-	Latitude  *float64
-	Longitude *float64
-	RadiusM   int
-	CityCode  string
-	TrackType string
-	Limit     int
+	BBox       string
+	Zoom       float64
+	Latitude   *float64
+	Longitude  *float64
+	RadiusM    int
+	CityCode   string
+	TrackType  string
+	Limit      int
+	BrowseMode string
+	DistrictID string
+	ScenicID   string
 }
 
 type TrackMapGroupTracksInput struct {
-	Limit int
+	Limit            int
+	DepartureTrackID string
 }
 
 func NewTrackMapService(maps repository.TrackMapRepository, tracks repository.TrackRepository, trackSvc *TrackService) *TrackMapService {
@@ -62,6 +66,9 @@ func (s *TrackMapService) View(ctx context.Context, input TrackMapViewInput) (*m
 	filter, viewLevel, err := s.buildFilter(input)
 	if err != nil {
 		return nil, err
+	}
+	if input.BrowseMode == trackMapBrowseDeparture {
+		return s.departureView(ctx, input, filter, viewLevel)
 	}
 	switch viewLevel {
 	case trackMapViewCity:
@@ -168,22 +175,37 @@ func (s *TrackMapService) ListGroupTracks(ctx context.Context, userID int64, gro
 	if err != nil {
 		return nil, err
 	}
-	tracks := make([]*models.Track, 0, len(members))
-	for _, member := range members {
-		if member == nil || member.TrackID == "" {
-			continue
-		}
-		track, err := s.tracks.FindByID(ctx, member.TrackID)
-		if err != nil {
-			if errors.Is(err, repository.ErrNotFound) {
-				continue
-			}
+	preferred := strings.TrimSpace(input.DepartureTrackID)
+	if preferred != "" {
+		departureGroup, err := s.maps.FindRouteGroupByTrackID(ctx, preferred)
+		if err != nil && !errors.Is(err, repository.ErrNotFound) {
 			return nil, err
 		}
-		if track.Status != models.TrackStatusNormal || track.IsRunning {
-			continue
+		if departureGroup == nil || departureGroup.GroupID != groupID {
+			preferred = ""
 		}
-		tracks = append(tracks, track)
+	}
+	trackIDs := make([]string, 0, len(members)+1)
+	if preferred != "" {
+		trackIDs = append(trackIDs, preferred)
+	}
+	for _, member := range members {
+		if member != nil && member.TrackID != "" && member.TrackID != preferred {
+			trackIDs = append(trackIDs, member.TrackID)
+		}
+	}
+	tracksByID, err := s.tracks.FindByIDs(ctx, trackIDs)
+	if err != nil {
+		return nil, err
+	}
+	tracks := make([]*models.Track, 0, len(members))
+	for _, id := range trackIDs {
+		if track := tracksByID[id]; publicMapTrack(track) {
+			tracks = append(tracks, track)
+			if len(tracks) == limit {
+				break
+			}
+		}
 	}
 	summaries := toSummaries(tracks)
 	if s.trackSvc != nil {
@@ -211,6 +233,9 @@ func (s *TrackMapService) ListGroupTracks(ctx context.Context, userID int64, gro
 				}
 				sort.SliceStable(summaries, func(i, j int) bool {
 					rank := func(item *models.TrackSummary) int {
+						if item.ID == preferred {
+							return -1
+						}
 						if item.ID == group.RepresentativeTrackID {
 							return 0
 						}
@@ -388,7 +413,8 @@ func (s *TrackMapService) buildFilter(input TrackMapViewInput) (models.TrackMapQ
 		filter.Center = &models.TrackMapPoint{Latitude: *input.Latitude, Longitude: *input.Longitude}
 		filter.RadiusM = radius
 	}
-	if filter.BBox == nil && filter.Center == nil && filter.CityCode == "" {
+	if filter.BBox == nil && filter.Center == nil && filter.CityCode == "" &&
+		(input.BrowseMode != trackMapBrowseDeparture || strings.TrimSpace(input.DistrictID) == "") {
 		return filter, "", invalidArg("bbox, city_code, or latitude/longitude is required")
 	}
 	return filter, chooseTrackMapViewLevel(input.Zoom, filter), nil

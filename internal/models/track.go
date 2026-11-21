@@ -434,6 +434,21 @@ type TrackMapQueryFilter struct {
 	Offset int
 }
 
+// TrackMapDeparture is a public route-group member's indexed departure and finish.
+type TrackMapDeparture struct {
+	GroupID               string        `bson:"group_id"`
+	GroupName             string        `bson:"group_name"`
+	AreaID                string        `bson:"area_id"`
+	RepresentativeTrackID string        `bson:"representative_track_id"`
+	MemberCount           int64         `bson:"member_count"`
+	TrackID               string        `bson:"track_id"`
+	CityCode              string        `bson:"city_code"`
+	TrackType             string        `bson:"track_type"`
+	Start                 TrackMapPoint `bson:"start"`
+	End                   TrackMapPoint `bson:"end"`
+	Distance              float64       `bson:"distance"`
+}
+
 // TrackMapCoverTrack is a lightweight representative track payload.
 type TrackMapCoverTrack struct {
 	PreviewImages      TrackPreviewImages `json:"preview_images"`
@@ -456,6 +471,11 @@ type TrackMapRouteGroupItem struct {
 	RadiusM          float64             `json:"radius_m"`
 	BBox             TrackMapBBox        `json:"bbox"`
 	CoverTrack       *TrackMapCoverTrack `json:"cover_track,omitempty"`
+	DepartureTrackID string              `json:"departure_track_id,omitempty"`
+	DepartureScopeID string              `json:"departure_scope_id,omitempty"`
+	DistrictName     string              `json:"district_name,omitempty"`
+	ArrivalName      string              `json:"arrival_name,omitempty"`
+	DistanceM        float64             `json:"distance_m,omitempty"`
 	RawTrackID       string              `json:"-"`
 	SourceGeoIndex   *TrackGeoIndex      `json:"-"`
 	Track            *Track              `json:"-"`
@@ -491,6 +511,7 @@ type TrackMapViewResponse struct {
 	ViewLevel        string      `json:"view_level"`
 	CoordinateSystem string      `json:"coordinate_system"`
 	Items            interface{} `json:"items"`
+	BrowseMode       string      `json:"browse_mode,omitempty"`
 }
 
 // TrackMapRouteGroupList is the response for direct route group listing.
