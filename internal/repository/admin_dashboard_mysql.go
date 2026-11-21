@@ -367,12 +367,13 @@ func (r *mysqlAdminDashboardRepository) loadEngagement(ctx context.Context, q mo
 		COALESCE(c.cnt,0),COALESCE(n.cnt,0),COALESCE(l.cnt,0),COALESCE(m.cnt,0),
 		COALESCE(c.cnt,0)+COALESCE(n.cnt,0)+COALESCE(l.cnt,0)+COALESCE(m.cnt,0) score
 		FROM track_records t
-		LEFT JOIN (SELECT track_id,COUNT(*) cnt FROM track_collects GROUP BY track_id) c ON c.track_id=t.id
-		LEFT JOIN (SELECT track_id,COUNT(*) cnt FROM track_navigations GROUP BY track_id) n ON n.track_id=t.id
-		LEFT JOIN (SELECT track_id,COUNT(*) cnt FROM track_likes GROUP BY track_id) l ON l.track_id=t.id
-		LEFT JOIN (SELECT track_id,COUNT(*) cnt FROM track_comments WHERE deleted=0 GROUP BY track_id) m ON m.track_id=t.id
-		WHERE t.deleted_at IS NULL AND t.status=1 AND t.is_running=0
-		ORDER BY score DESC,t.id LIMIT 10`)
+		LEFT JOIN (SELECT track_id,COUNT(*) cnt FROM track_collects WHERE created_at>=? AND created_at<? GROUP BY track_id) c ON c.track_id=t.id
+		LEFT JOIN (SELECT track_id,COUNT(*) cnt FROM track_navigations WHERE created_at>=? AND created_at<? GROUP BY track_id) n ON n.track_id=t.id
+		LEFT JOIN (SELECT track_id,COUNT(*) cnt FROM track_likes WHERE created_at>=? AND created_at<? GROUP BY track_id) l ON l.track_id=t.id
+		LEFT JOIN (SELECT track_id,COUNT(*) cnt FROM track_comments WHERE deleted=0 AND created_at>=? AND created_at<? GROUP BY track_id) m ON m.track_id=t.id
+		WHERE t.status=1 AND `+completedTrackAliasSQL+` AND (c.cnt IS NOT NULL OR n.cnt IS NOT NULL OR l.cnt IS NOT NULL OR m.cnt IS NOT NULL)
+		ORDER BY COALESCE(n.cnt,0) DESC,COALESCE(c.cnt,0) DESC,COALESCE(l.cnt,0) DESC,COALESCE(m.cnt,0) DESC,t.id LIMIT 10`,
+		q.Start, q.End, q.Start, q.End, q.Start, q.End, q.Start, q.End)
 	if err != nil {
 		return fmt.Errorf("dashboard top tracks: %w", err)
 	}

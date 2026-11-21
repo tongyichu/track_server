@@ -5,6 +5,7 @@
 | 接口 | 方法 | 路径 | 需要认证 | 文档 |
 | --- | --- | --- | --- | --- |
 | 作者查看跟随成果轨迹 | GET | `/track/:track_id/navigation/results` | JWT，仅原轨迹作者；不开放他人私密成果 | [跟随成果列表](collect-navigation.md#作者查看跟随成果轨迹) |
+| 后台工作台管理表格 | GET | `/admin/api/dashboard/tables` | 后台 session、dashboard 及表格对应模块读取权限 | [工作台统计](../admin-workflows.md#运营工作台统计) |
 | 后台实时通信统计、连接与近期异常 | GET | `/admin/api/realtime/summary`, `/admin/api/realtime/clients`, `/admin/api/realtime/events` | 后台session，realtime查看权限 | [admin-realtime](admin-realtime.md) |
 | 在线私信关系图 / 同行房间圈选、群聊与成员事件 | GET | `/admin/api/realtime/network`, `/admin/api/realtime/network/room` | 后台session，realtime查看权限；同行网络与房间详情另需companions查看权限 | [admin-realtime](admin-realtime.md#在线关系图) |
 | 后台连接详情与账号私信流 | GET | `/admin/api/realtime/clients/detail`, `/admin/api/realtime/clients/conversations`, `/admin/api/realtime/clients/messages` | 后台session，realtime查看权限；房间弹幕另需companions查看权限 | [admin-realtime](admin-realtime.md#连接详情与消息内容) |

@@ -115,3 +115,7 @@
   .workbench-table tbody td:first-child { flex: 0 0 100%; font-size: 13px; }
   .workbench-table tbody td:not(:first-child)::before { content: attr(data-label) " "; color: var(--workbench-muted); font-size: 11px; }
 }
+
+
+.workbench-table-note { margin-bottom: 8px; color: var(--workbench-muted); font-size: 12px; }
+.workbench-table-note [data-table-status]:not(:empty) { margin-inline-start: 6px; }

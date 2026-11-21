@@ -7,16 +7,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import "./workbench.css";
 
-const todos = [
-  { id: "reviewPending", label: "投稿待审核", read: "track_submissions", href: "/admin/track_submissions.html?status=pending" },
-  { id: "feedbackPending", label: "反馈待处理", read: "feedbacks", href: "/admin/feedbacks.html?status=pending" },
-  { id: "feedbackProcessing", label: "反馈处理中", read: "feedbacks", href: "/admin/feedbacks.html?status=processing" },
-];
-
 const growth = [
-  { id: "activeUsers", label: "活跃用户", read: "users" },
+  { id: "activeUsers", label: "登录用户", read: "users" },
   { id: "newUsers", label: "新增用户", read: "users" },
-  { id: "uploadedTracks", label: "新增轨迹", read: "tracks" },
+  { id: "uploadedTracks", label: "新增云端轨迹", read: "tracks" },
   { id: "uploadUsers", label: "上传用户", read: "tracks" },
   { id: "submissions", label: "新增投稿", read: "track_submissions" },
 ];
@@ -24,7 +18,7 @@ const growth = [
 const quality = [
   { id: "avgDistance", label: "平均距离" },
   { id: "avgDuration", label: "平均时长" },
-  { id: "staleRunning", label: "长时间运行中", tone: "warning" },
+  { id: "staleRunning", label: "运行超过 24 小时", tone: "warning" },
   { id: "zeroDistance", label: "零距离轨迹", tone: "warning" },
   { id: "failedMapJobs", label: "索引失败", read: "route_groups", tone: "danger" },
   { id: "pendingMapJobs", label: "待建索引", read: "route_groups" },
@@ -132,6 +126,24 @@ function Header() {
   );
 }
 
+function ManagementTable({ id, title, read, note, columns, link, period = false }) {
+  return (
+    <Section id={id + "Section"} title={title} read={read}
+      action={link && <a className="workbench-link" href={link[0]}>{link[1]}</a>}>
+      <Card data-workbench-table={id} data-workbench-period={period ? "" : undefined}
+        className="workbench-panel min-w-0 gap-0 rounded-xl border-border py-0 shadow-none">
+        <CardContent className="min-w-0 px-4 py-3">
+          <p className="workbench-table-note">{note} <span data-table-status aria-live="polite" /></p>
+          <Table className="workbench-table">
+            <TableHeader><TableRow>{columns.map((label) => <TableHead key={label} scope="col">{label}</TableHead>)}</TableRow></TableHeader>
+            <TableBody><TableRow><td colSpan={columns.length}>正在读取数据…</td></TableRow></TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </Section>
+  );
+}
+
 function Workbench() {
   useLayoutEffect(() => {
     window.AdminAccess.apply();
@@ -143,17 +155,16 @@ function Workbench() {
       <Header />
       <p id="dashboardStatus" className="workbench-time" role="status" hidden />
       <Alert variant="destructive" id="dashboardError" className="hidden workbench-alert block" />
-      <Section id="dashboardTodos" title="当前待办" hidden>
-        <Metrics items={todos} className="workbench-todos" />
-        <div className="workbench-backlog" aria-live="polite">
-          <span data-admin-read="track_submissions" id="reviewBacklog" hidden />
-          <span data-admin-read="feedbacks" id="feedbackBacklog" hidden />
-        </div>
-      </Section>
       <Section id="dashboardGrowth" title="本期增长" hidden>
         <Metrics items={growth} comparison />
       </Section>
       <Alert variant="destructive" id="dashboardChartError" className="hidden workbench-alert block" />
+      <ManagementTable id="cities" title="城市路线供需" read="tracks" period
+        note="按路线所在城市统计，依据本期导航次数排列。供给是当前公开、已完成且有原始文件的路线。"
+        columns={["城市", "路线存量", "本期新增", "新增收藏人数", "导航上报", "较上期"]} />
+      <ManagementTable id="cohorts" title="新用户留存与首条轨迹" read="users tracks"
+        note="近 6 个注册周。回访以成功登录为准，观察期结束后显示比例。"
+        columns={["注册周", "注册人数", "7 天内首条云端轨迹", "次日登录回访", "第 7 日登录回访"]} />
       <Section title="增长与转化">
         <div className="workbench-grid workbench-grid-main">
           <Panel title="用户与轨迹趋势" read="users tracks" detail={<span id="trendRangeHint" className="workbench-time" />}>
@@ -164,38 +175,17 @@ function Workbench() {
           </Panel>
         </div>
       </Section>
-      <Section id="dashboardEfficiency" title="本期运营效率" hidden>
-        <div className="workbench-grid workbench-grid-equal">
-          <Panel title="投稿审核" read="track_submissions">
-            <Fact id="approvalRate" label="审核通过率" />
-            <Fact id="avgReviewHours" label="平均审核耗时" />
-            <details id="reviewBreakdown" className="workbench-disclosure" hidden>
-              <summary>审核结果分布</summary>
-              <Ring id="reviewChart" size="small" label="审核结果分布" />
-            </details>
-          </Panel>
-          <Panel title="意见反馈" read="feedbacks">
-            <Fact id="feedbackResolvedPeriod" label="已解决反馈" />
-            <Fact id="avgResolutionHours" label="平均解决耗时" />
-            <details id="feedbackBreakdown" className="workbench-disclosure" hidden>
-              <summary>当前状态与本期来源</summary>
-              <div className="workbench-grid workbench-grid-equal">
-                <Ring id="feedbackStatusChart" size="small" label="当前反馈状态分布" />
-                <Chart id="feedbackVersionChart" size="small" label="本期反馈来源分布" />
-              </div>
-            </details>
-          </Panel>
-        </div>
-      </Section>
       <Section title="内容供给与质量" read="tracks"
         action={<a className="workbench-link" href="/admin/tracks.html">管理轨迹</a>}>
         <Metrics items={quality} className="workbench-quality" />
-        <div className="workbench-grid workbench-grid-thirds">
+        <div className="workbench-grid workbench-grid-equal">
           <Panel title="公开状态"><Ring id="trackStatusChart" label="轨迹公开状态" /></Panel>
           <Panel title="运动类型"><Ring id="trackTypeChart" label="运动类型" /></Panel>
-          <Panel title="热门城市"><Chart id="trackCityChart" label="轨迹热门城市" /></Panel>
         </div>
       </Section>
+      <ManagementTable id="versions" title="安卓版本表现" read="releases" link={["/admin/index.html", "查看发布管理"]}
+        note="近 7 个北京时间自然日，活跃设备按最近上报版本归属，按版本名合并构建。"
+        columns={["版本", "发布记录日期", "活跃设备", "设备占比", "反馈"]} />
       <Section title="互动与同行">
         <div className="workbench-grid workbench-grid-main">
           <Panel title="本期内容互动" read="tracks">
@@ -211,22 +201,48 @@ function Workbench() {
             <Fact id="companionCreated" label="本周期新增" />
             <Fact id="companionEnded" label="本周期结束" />
             <Fact id="companionAutoEnded" label="自动结束" />
-            <Fact id="companionParticipants" label="平均参与人数" />
-          </Panel>
-        </div>
-        <div className="workbench-top-tracks">
-          <Panel title="本期热门轨迹" read="tracks">
-            <Table className="workbench-table">
-              <TableHeader>
-                <TableRow>
-                  {["轨迹", "收藏", "导航", "点赞", "评论", "总互动"].map((label) => <TableHead key={label}>{label}</TableHead>)}
-                </TableRow>
-              </TableHeader>
-              <TableBody id="topTracks" />
-            </Table>
+            <Fact id="companionParticipants" label="新增房间平均参与人数" />
           </Panel>
         </div>
       </Section>
+      <ManagementTable id="companions" title="与友同行完成情况" read="companions tracks" period
+        link={["/admin/companions.html", "查看同行房间"]}
+        note="按房间结束时间归期。同一用户参加不同房间分别计入人次。"
+        columns={["运动类型", "已结束房间", "成员人次", "轨迹已生成", "待同步", "无有效轨迹点", "轨迹不可用"]} />
+      <Section title="本期路线使用排行" read="tracks">
+        <Panel title="按导航上报次数排序" detail={<span className="workbench-time">并列时按收藏、点赞、评论排列</span>}>
+          <Table className="workbench-table">
+            <TableHeader><TableRow>{["轨迹", "导航上报", "收藏", "点赞", "评论"].map((label) => <TableHead key={label} scope="col">{label}</TableHead>)}</TableRow></TableHeader>
+            <TableBody id="topTracks" />
+          </Table>
+        </Panel>
+      </Section>
+      <Section id="dashboardEfficiency" title="本期运营效率" hidden>
+        <div className="workbench-grid workbench-grid-equal">
+          <Panel title="投稿审核" read="track_submissions">
+            <Fact id="approvalRate" label="审核通过率" />
+            <Fact id="avgReviewHours" label="平均审核耗时" />
+            <details id="reviewBreakdown" className="workbench-disclosure" hidden>
+              <summary>审核结果分布</summary>
+              <Ring id="reviewChart" size="small" label="审核结果分布" />
+            </details>
+          </Panel>
+          <Panel title="意见反馈" read="feedbacks">
+            <Fact id="feedbackResolvedPeriod" label="已解决反馈" />
+            <Fact id="avgResolutionHours" label="平均解决耗时" />
+            <details id="feedbackBreakdown" className="workbench-disclosure" hidden>
+              <summary>当前状态与本期反馈平台</summary>
+              <div className="workbench-grid workbench-grid-equal">
+                <Ring id="feedbackStatusChart" size="small" label="当前反馈状态分布" />
+                <Chart id="feedbackVersionChart" size="small" label="本期反馈平台分布" />
+              </div>
+            </details>
+          </Panel>
+        </div>
+      </Section>
+      <ManagementTable id="backlog" title="待办与积压"
+        note="当前快照。超过提交或可执行时间 24 小时计为积压。注销文件等待凭证到期期间不计积压。"
+        columns={["事项", "未结数", "积压数", "最长等待", "处理入口"]} />
     </>
   );
 }

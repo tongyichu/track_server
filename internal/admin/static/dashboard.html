@@ -38,30 +38,37 @@
     <p id="dashboardStatus" class="admin-stats-meta dashboard-status" role="status" hidden></p>
     <div id="dashboardError" class="notice error hidden" role="alert"></div>
 
-    <section id="dashboardTodos" class="dashboard-section" aria-labelledby="dashboardTodosHeading" hidden>
-      <div class="section-heading"><h2 id="dashboardTodosHeading">当前待办</h2></div>
-      <div class="admin-metrics dashboard-todos">
-        <a href="/admin/track_submissions.html?status=pending" data-admin-read="track_submissions" class="admin-metric" data-admin-metric="" data-label="投稿待审核" data-value-id="reviewPending"></a>
-        <a href="/admin/feedbacks.html?status=pending" data-admin-read="feedbacks" class="admin-metric" data-admin-metric="" data-label="反馈待处理" data-value-id="feedbackPending"></a>
-        <a href="/admin/feedbacks.html?status=processing" data-admin-read="feedbacks" class="admin-metric" data-admin-metric="" data-label="反馈处理中" data-value-id="feedbackProcessing"></a>
-      </div>
-      <div class="dashboard-backlog admin-stats-meta" aria-live="polite">
-        <span data-admin-read="track_submissions" id="reviewBacklog" hidden></span>
-        <span data-admin-read="feedbacks" id="feedbackBacklog" hidden></span>
-      </div>
-    </section>
-
     <section id="dashboardGrowth" class="dashboard-section" aria-labelledby="dashboardGrowthHeading" hidden>
       <div class="section-heading"><h2 id="dashboardGrowthHeading">本期增长</h2></div>
       <div class="admin-metrics" aria-live="polite">
-        <article data-admin-read="users" class="admin-metric" data-admin-metric="" data-label="活跃用户" data-value-id="activeUsers" data-note-id="activeUsersDelta"></article>
+        <article data-admin-read="users" class="admin-metric" data-admin-metric="" data-label="登录用户" data-value-id="activeUsers" data-note-id="activeUsersDelta"></article>
         <article data-admin-read="users" class="admin-metric" data-admin-metric="" data-label="新增用户" data-value-id="newUsers" data-note-id="newUsersDelta"></article>
-        <article data-admin-read="tracks" class="admin-metric" data-admin-metric="" data-label="新增轨迹" data-value-id="uploadedTracks" data-note-id="uploadedTracksDelta"></article>
+        <article data-admin-read="tracks" class="admin-metric" data-admin-metric="" data-label="新增云端轨迹" data-value-id="uploadedTracks" data-note-id="uploadedTracksDelta"></article>
         <article data-admin-read="tracks" class="admin-metric" data-admin-metric="" data-label="上传用户" data-value-id="uploadUsers" data-note-id="uploadUsersDelta"></article>
         <article data-admin-read="track_submissions" class="admin-metric" data-admin-metric="" data-label="新增投稿" data-value-id="submissions" data-note-id="submissionsDelta"></article>
       </div>
     </section>
 
+    <section id="citiesSection" class="dashboard-section" data-admin-read="tracks">
+      <div class="section-heading"><h2>城市路线供需</h2></div>
+      <article class="panel dashboard-card" data-workbench-table="cities" data-workbench-period>
+        <div class="dashboard-card-body dashboard-table-wrap">
+          <p class="admin-stats-meta">按路线所在城市统计，依据本期导航次数排列。供给是当前公开、已完成且有原始文件的路线。 <span data-table-status aria-live="polite"></span></p>
+          <table class="data dashboard-table"><thead><tr><th scope="col">城市</th><th scope="col">路线存量</th><th scope="col">本期新增</th><th scope="col">新增收藏人数</th><th scope="col">导航上报</th><th scope="col">较上期</th></tr></thead>
+            <tbody><tr><td colspan="6">正在读取数据…</td></tr></tbody></table>
+        </div>
+      </article>
+    </section>
+    <section id="cohortsSection" class="dashboard-section" data-admin-read="users tracks">
+      <div class="section-heading"><h2>新用户留存与首条轨迹</h2></div>
+      <article class="panel dashboard-card" data-workbench-table="cohorts">
+        <div class="dashboard-card-body dashboard-table-wrap">
+          <p class="admin-stats-meta">近 6 个注册周。回访以成功登录为准，观察期结束后显示比例。 <span data-table-status aria-live="polite"></span></p>
+          <table class="data dashboard-table"><thead><tr><th scope="col">注册周</th><th scope="col">注册人数</th><th scope="col">7 天内首条云端轨迹</th><th scope="col">次日登录回访</th><th scope="col">第 7 日登录回访</th></tr></thead>
+            <tbody><tr><td colspan="5">正在读取数据…</td></tr></tbody></table>
+        </div>
+      </article>
+    </section>
     <p id="dashboardChartError" class="notice error hidden" role="alert"></p>
     <section class="dashboard-section">
       <div class="section-heading"><div><h2>增长与转化</h2></div></div>
@@ -77,47 +84,33 @@
       </div>
     </section>
 
-    <section id="dashboardEfficiency" class="dashboard-section" hidden>
-      <div class="section-heading"><div><h2>本期运营效率</h2></div></div>
-      <div class="dashboard-layout dashboard-layout-equal">
-        <article class="panel dashboard-card" data-admin-read="track_submissions">
-          <div class="dashboard-card-header"><div><h3>投稿审核</h3></div></div>
-          <div class="dashboard-card-body">
-            <div class="dashboard-detail-row"><span>审核通过率</span><strong id="approvalRate">—</strong></div>
-            <div class="dashboard-detail-row"><span>平均审核耗时</span><strong id="avgReviewHours">—</strong></div>
-            <details id="reviewBreakdown" class="admin-stat-disclosure"><summary>审核结果分布</summary><div class="dashboard-ring"><div id="reviewChart" class="dashboard-chart chart-small" role="img" aria-label="审核结果分布"></div><div id="reviewChartLegend" class="admin-user-legend"></div></div></details>
-          </div>
-        </article>
-
-        <article class="panel dashboard-card" data-admin-read="feedbacks">
-          <div class="dashboard-card-header"><div><h3>意见反馈</h3></div></div>
-          <div class="dashboard-card-body">
-            <div class="dashboard-detail-row"><span>已解决反馈</span><strong id="feedbackResolvedPeriod">—</strong></div>
-            <div class="dashboard-detail-row"><span>平均解决耗时</span><strong id="avgResolutionHours">—</strong></div>
-            <details id="feedbackBreakdown" class="admin-stat-disclosure"><summary>当前状态与本期来源</summary><div class="split-charts"><div class="dashboard-ring"><div id="feedbackStatusChart" class="dashboard-chart chart-small" role="img" aria-label="当前反馈状态分布"></div><div id="feedbackStatusChartLegend" class="admin-user-legend"></div></div><div id="feedbackVersionChart" class="dashboard-chart chart-small" role="img" aria-label="本期反馈来源分布"></div></div></details>
-          </div>
-        </article>
-      </div>
-    </section>
-
     <section class="dashboard-section" data-admin-read="tracks">
       <div class="section-heading"><div><h2>内容供给与质量</h2></div><a class="section-link" href="/admin/tracks.html">管理轨迹</a></div>
       <div class="quality-strip admin-metrics">
         <article class="admin-metric" data-admin-metric="" data-label="平均距离" data-value-id="avgDistance"></article>
         <article class="admin-metric" data-admin-metric="" data-label="平均时长" data-value-id="avgDuration"></article>
-        <article class="admin-metric" data-admin-metric="" data-label="长时间运行中" data-value-id="staleRunning" data-tone="warning"></article>
+        <article class="admin-metric" data-admin-metric="" data-label="运行超过 24 小时" data-value-id="staleRunning" data-tone="warning"></article>
         <article class="admin-metric" data-admin-metric="" data-label="零距离轨迹" data-value-id="zeroDistance" data-tone="warning"></article>
         <article class="admin-metric" data-admin-metric="" data-label="索引失败" data-value-id="failedMapJobs" data-admin-read="route_groups" data-tone="danger"></article>
         <article class="admin-metric" data-admin-metric="" data-label="待建索引" data-value-id="pendingMapJobs" data-admin-read="route_groups"></article>
         <article class="admin-metric" data-admin-metric="" data-label="有效路线组" data-value-id="activeRouteGroups" data-admin-read="route_groups"></article>
       </div>
-      <div class="dashboard-layout dashboard-layout-thirds">
+      <div class="dashboard-layout dashboard-layout-equal">
         <article class="panel dashboard-card"><div class="dashboard-card-header"><div><h3>公开状态</h3></div></div><div class="dashboard-card-body"><div class="dashboard-ring"><div id="trackStatusChart" class="dashboard-chart chart-medium" role="img" aria-label="轨迹公开状态"></div><div id="trackStatusChartLegend" class="admin-user-legend"></div></div></div></article>
         <article class="panel dashboard-card"><div class="dashboard-card-header"><div><h3>运动类型</h3></div></div><div class="dashboard-card-body"><div class="dashboard-ring"><div id="trackTypeChart" class="dashboard-chart chart-medium" role="img" aria-label="运动类型"></div><div id="trackTypeChartLegend" class="admin-user-legend"></div></div></div></article>
-        <article class="panel dashboard-card"><div class="dashboard-card-header"><div><h3>热门城市</h3></div></div><div class="dashboard-card-body"><div id="trackCityChart" class="dashboard-chart chart-medium"></div></div></article>
       </div>
     </section>
 
+    <section id="versionsSection" class="dashboard-section" data-admin-read="releases">
+      <div class="section-heading"><h2>安卓版本表现</h2><a href="/admin/index.html">查看发布管理</a></div>
+      <article class="panel dashboard-card" data-workbench-table="versions">
+        <div class="dashboard-card-body dashboard-table-wrap">
+          <p class="admin-stats-meta">近 7 个北京时间自然日，活跃设备按最近上报版本归属，按版本名合并构建。 <span data-table-status aria-live="polite"></span></p>
+          <table class="data dashboard-table"><thead><tr><th scope="col">版本</th><th scope="col">发布记录日期</th><th scope="col">活跃设备</th><th scope="col">设备占比</th><th scope="col">反馈</th></tr></thead>
+            <tbody><tr><td colspan="5">正在读取数据…</td></tr></tbody></table>
+        </div>
+      </article>
+    </section>
     <section class="dashboard-section">
       <div class="section-heading"><div><h2>互动与同行</h2></div></div>
       <div class="dashboard-layout dashboard-layout-main">
@@ -141,22 +134,67 @@
             <div class="dashboard-detail-row"><span>本周期新增</span><strong id="companionCreated">--</strong></div>
             <div class="dashboard-detail-row"><span>本周期结束</span><strong id="companionEnded">--</strong></div>
             <div class="dashboard-detail-row"><span>自动结束</span><strong id="companionAutoEnded">--</strong></div>
-            <div class="dashboard-detail-row"><span>平均参与人数</span><strong id="companionParticipants">--</strong></div>
+            <div class="dashboard-detail-row"><span>新增房间平均参与人数</span><strong id="companionParticipants">--</strong></div>
           </div>
         </article>
       </div>
 
+    </section>
+
+    <section id="companionsSection" class="dashboard-section" data-admin-read="companions tracks">
+      <div class="section-heading"><h2>与友同行完成情况</h2><a href="/admin/companions.html">查看同行房间</a></div>
+      <article class="panel dashboard-card" data-workbench-table="companions" data-workbench-period>
+        <div class="dashboard-card-body dashboard-table-wrap">
+          <p class="admin-stats-meta">按房间结束时间归期。同一用户参加不同房间分别计入人次。 <span data-table-status aria-live="polite"></span></p>
+          <table class="data dashboard-table"><thead><tr><th scope="col">运动类型</th><th scope="col">已结束房间</th><th scope="col">成员人次</th><th scope="col">轨迹已生成</th><th scope="col">待同步</th><th scope="col">无有效轨迹点</th><th scope="col">轨迹不可用</th></tr></thead>
+            <tbody><tr><td colspan="7">正在读取数据…</td></tr></tbody></table>
+        </div>
+      </article>
+    </section>
+    <section class="dashboard-section" data-admin-read="tracks">
       <article class="panel dashboard-card top-tracks-card" data-admin-read="tracks">
-        <div class="dashboard-card-header"><div><h3>本期热门轨迹</h3></div></div>
+        <div class="dashboard-card-header"><div><h3>本期路线使用排行</h3></div><span class="admin-stats-meta">按导航上报、收藏、点赞、评论排列</span></div>
         <div class="dashboard-card-body dashboard-table-wrap">
           <table class="data dashboard-table">
-            <thead><tr><th>轨迹</th><th>收藏</th><th>导航</th><th>点赞</th><th>评论</th><th>总互动</th></tr></thead>
+            <thead><tr><th>轨迹</th><th>导航上报</th><th>收藏</th><th>点赞</th><th>评论</th></tr></thead>
             <tbody id="topTracks"></tbody>
           </table>
         </div>
       </article>
     </section>
+    <section id="dashboardEfficiency" class="dashboard-section" hidden>
+      <div class="section-heading"><div><h2>本期运营效率</h2></div></div>
+      <div class="dashboard-layout dashboard-layout-equal">
+        <article class="panel dashboard-card" data-admin-read="track_submissions">
+          <div class="dashboard-card-header"><div><h3>投稿审核</h3></div></div>
+          <div class="dashboard-card-body">
+            <div class="dashboard-detail-row"><span>审核通过率</span><strong id="approvalRate">—</strong></div>
+            <div class="dashboard-detail-row"><span>平均审核耗时</span><strong id="avgReviewHours">—</strong></div>
+            <details id="reviewBreakdown" class="admin-stat-disclosure"><summary>审核结果分布</summary><div class="dashboard-ring"><div id="reviewChart" class="dashboard-chart chart-small" role="img" aria-label="审核结果分布"></div><div id="reviewChartLegend" class="admin-user-legend"></div></div></details>
+          </div>
+        </article>
 
+        <article class="panel dashboard-card" data-admin-read="feedbacks">
+          <div class="dashboard-card-header"><div><h3>意见反馈</h3></div></div>
+          <div class="dashboard-card-body">
+            <div class="dashboard-detail-row"><span>已解决反馈</span><strong id="feedbackResolvedPeriod">—</strong></div>
+            <div class="dashboard-detail-row"><span>平均解决耗时</span><strong id="avgResolutionHours">—</strong></div>
+            <details id="feedbackBreakdown" class="admin-stat-disclosure"><summary>当前状态与本期反馈平台</summary><div class="split-charts"><div class="dashboard-ring"><div id="feedbackStatusChart" class="dashboard-chart chart-small" role="img" aria-label="当前反馈状态分布"></div><div id="feedbackStatusChartLegend" class="admin-user-legend"></div></div><div id="feedbackVersionChart" class="dashboard-chart chart-small" role="img" aria-label="本期反馈平台分布"></div></div></details>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section id="backlogSection" class="dashboard-section">
+      <div class="section-heading"><h2>待办与积压</h2></div>
+      <article class="panel dashboard-card" data-workbench-table="backlog">
+        <div class="dashboard-card-body dashboard-table-wrap">
+          <p class="admin-stats-meta">当前快照。超过提交或可执行时间 24 小时计为积压。注销文件等待凭证到期期间不计积压。 <span data-table-status aria-live="polite"></span></p>
+          <table class="data dashboard-table"><thead><tr><th scope="col">事项</th><th scope="col">未结数</th><th scope="col">积压数</th><th scope="col">最长等待</th><th scope="col">处理入口</th></tr></thead>
+            <tbody><tr><td colspan="5">正在读取数据…</td></tr></tbody></table>
+        </div>
+      </article>
+    </section>
   </main>
   <script src="/admin/static/admin-components.js"></script>
   <script src="/admin/static/shell.js"></script>

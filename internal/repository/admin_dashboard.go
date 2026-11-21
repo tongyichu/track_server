@@ -21,6 +21,7 @@ type adminDashboardDependencies struct {
 	submissions TrackSubmissionRepository
 	likes       TrackLikeRepository
 	comments    CommentRepository
+	appClients  AppClientStatsRepository
 }
 
 // NewAdminDashboardStatisticsRepository selects a read-only aggregator for the
@@ -38,11 +39,15 @@ func NewAdminDashboardStatisticsRepository(
 	submissions TrackSubmissionRepository,
 	likes TrackLikeRepository,
 	comments CommentRepository,
+	appClients ...AppClientStatsRepository,
 ) AdminDashboardStatisticsRepository {
 	deps := adminDashboardDependencies{
 		users: users, tracks: tracks, collects: collects, loginLogs: loginLogs,
 		navigations: navigations, companions: companions, feedback: feedback,
 		trackMap: trackMap, submissions: submissions, likes: likes, comments: comments,
+	}
+	if len(appClients) != 0 {
+		deps.appClients = appClients[0]
 	}
 	switch repo := users.(type) {
 	case *MySQLUserRepository:
@@ -393,7 +398,9 @@ func (r *memoryAdminDashboardRepository) GetAdminDashboardStatistics(_ context.C
 		collects.mu.RLock()
 		for _, byTrack := range collects.collects {
 			for trackID, item := range byTrack {
-				ensureTrack(trackID).Collections++
+				if dashboardBetween(item.CreatedAt, query.Start, query.End) {
+					ensureTrack(trackID).Collections++
+				}
 				addEngagementCount(&statistics.Engagement, &statistics.Trend, dailyIndex, location, item.CreatedAt, query, "collection")
 			}
 		}
@@ -403,7 +410,9 @@ func (r *memoryAdminDashboardRepository) GetAdminDashboardStatistics(_ context.C
 		navigations.mu.RLock()
 		for trackID, items := range navigations.byTrack {
 			for _, item := range items {
-				ensureTrack(trackID).Navigations++
+				if dashboardBetween(item.CreatedAt, query.Start, query.End) {
+					ensureTrack(trackID).Navigations++
+				}
 				addEngagementCount(&statistics.Engagement, &statistics.Trend, dailyIndex, location, item.CreatedAt, query, "navigation")
 			}
 		}
@@ -413,7 +422,9 @@ func (r *memoryAdminDashboardRepository) GetAdminDashboardStatistics(_ context.C
 		likes.mu.RLock()
 		for trackID, usersByID := range likes.likes {
 			for _, item := range usersByID {
-				ensureTrack(trackID).Likes++
+				if dashboardBetween(item.CreatedAt, query.Start, query.End) {
+					ensureTrack(trackID).Likes++
+				}
 				addEngagementCount(&statistics.Engagement, &statistics.Trend, dailyIndex, location, item.CreatedAt, query, "like")
 			}
 		}
@@ -425,23 +436,20 @@ func (r *memoryAdminDashboardRepository) GetAdminDashboardStatistics(_ context.C
 			if item.Deleted {
 				continue
 			}
-			ensureTrack(item.TrackID).Comments++
+			if dashboardBetween(item.CreatedAt, query.Start, query.End) {
+				ensureTrack(item.TrackID).Comments++
+			}
 			addEngagementCount(&statistics.Engagement, &statistics.Trend, dailyIndex, location, item.CreatedAt, query, "comment")
 		}
 		comments.mu.RUnlock()
 	}
 	for _, item := range trackEngagement {
 		item.Score = item.Collections + item.Navigations + item.Likes + item.Comments
-		if track := trackByID[item.TrackID]; track != nil && track.Status == models.TrackStatusNormal && !track.IsRunning {
+		if track := trackByID[item.TrackID]; track != nil && track.Status == models.TrackStatusNormal && memoryWorkbenchTrack(track) {
 			statistics.Engagement.TopTracks = append(statistics.Engagement.TopTracks, *item)
 		}
 	}
-	sort.Slice(statistics.Engagement.TopTracks, func(i, j int) bool {
-		if statistics.Engagement.TopTracks[i].Score == statistics.Engagement.TopTracks[j].Score {
-			return statistics.Engagement.TopTracks[i].TrackID < statistics.Engagement.TopTracks[j].TrackID
-		}
-		return statistics.Engagement.TopTracks[i].Score > statistics.Engagement.TopTracks[j].Score
-	})
+	sortWorkbenchTopTracks(statistics.Engagement.TopTracks)
 	if len(statistics.Engagement.TopTracks) > 10 {
 		statistics.Engagement.TopTracks = statistics.Engagement.TopTracks[:10]
 	}

@@ -31,6 +31,9 @@ func pageModule(name string) string {
 func requestPermission(c *app.RequestContext) (string, bool) {
 	route := strings.TrimPrefix(c.FullPath(), "/admin/api/")
 	write := string(c.Method()) != http.MethodGet && string(c.Method()) != http.MethodHead
+	if route == "dashboard/tables" {
+		return "dashboard", false
+	}
 	if route == "dashboard" {
 		scope := string(c.Query("scope"))
 		switch scope {

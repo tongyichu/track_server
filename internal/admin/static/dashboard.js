@@ -11,6 +11,7 @@
   const colors = AdminChartStyle.colors;
   let latestData = null;
   let healthRequest = null;
+  const tableRequests = new Map();
 
   async function loadAnalyticsHealth() {
     const node = document.getElementById('analyticsHealth');
@@ -112,14 +113,14 @@
     chartOption('trendChart', {
       color: [colors[0], colors[1], colors[2]],
       tooltip: axisTooltip(),
-      legend: { data: ['活跃用户', '新增用户', '新增轨迹'], bottom: 0, itemWidth: 14, itemHeight: 8 },
+      legend: { data: ['登录用户', '新增用户', '新增云端轨迹'], bottom: 0, itemWidth: 14, itemHeight: 8 },
       grid: baseGrid(34),
       xAxis: { type: 'category', boundaryGap: false, data: items.map(function (item) { return item.date.slice(5); }), axisLine: { lineStyle: { color: '#dce1e8' } }, axisTick: { show: false } },
       yAxis: { type: 'value', minInterval: 1, splitLine: { lineStyle: { color: '#edf0f5' } } },
       series: [
-        { name: '活跃用户', type: 'line', smooth: true, symbol: 'none', lineStyle: { width: 3 }, areaStyle: { opacity: .07 }, data: items.map(function (item) { return item.active_users; }) },
+        { name: '登录用户', type: 'line', smooth: true, symbol: 'none', lineStyle: { width: 3 }, areaStyle: { opacity: .07 }, data: items.map(function (item) { return item.active_users; }) },
         { name: '新增用户', type: 'line', smooth: true, symbol: 'none', lineStyle: { width: 2 }, data: items.map(function (item) { return item.new_users; }) },
-        { name: '新增轨迹', type: 'line', smooth: true, symbol: 'none', lineStyle: { width: 2 }, data: items.map(function (item) { return item.uploaded_tracks; }) }
+        { name: '新增云端轨迹', type: 'line', smooth: true, symbol: 'none', lineStyle: { width: 2 }, data: items.map(function (item) { return item.uploaded_tracks; }) }
       ]
     });
   }
@@ -148,31 +149,11 @@
     return (items || []).map(function (item) { return { name: item.label || item.key || '未知', value: number(item.count) }; });
   }
 
-  function renderBacklog(id, label, stats, oldest) {
-    const element = document.getElementById(id);
-    const over72 = number(stats?.pending_over_72h);
-    const between24And72 = Math.max(0, number(stats?.pending_over_24h) - over72);
-    element.hidden = !between24And72 && !over72 && !oldest;
-    element.replaceChildren(label);
-    function addAge(text, className) {
-      const age = document.createElement('span');
-      age.textContent = text;
-      age.className = className;
-      element.append(' · ', age);
-    }
-    if (between24And72) addAge('24–72 小时 ' + formatNumber(between24And72) + ' 条', 'backlog-warning');
-    if (over72) addAge('超 72 小时 ' + formatNumber(over72) + ' 条', 'backlog-danger');
-    if (oldest) element.append(' · 最早 ' + oldest);
-  }
-
-  function renderReviewMetrics(review, pendingSubmissions) {
-    const pending = review?.pending ?? pendingSubmissions;
+  function renderReviewMetrics(review) {
     const reviewed = review && number(review.approved) + number(review.rejected) > 0;
     const empty = review ? '暂无样本' : '—';
-    setText('reviewPending', pending == null ? '—' : formatNumber(pending));
     setText('approvalRate', reviewed ? (number(review.approval_rate) * 100).toFixed(1) + '%' : empty);
     setText('avgReviewHours', reviewed ? formatDurationHours(review.avg_review_hours) : empty);
-    renderBacklog('reviewBacklog', '投稿积压', review, AdminTime.dateTime(review?.oldest_pending, ''));
     document.getElementById('reviewBreakdown').hidden = !review;
   }
 
@@ -185,13 +166,10 @@
   }
 
   function renderFeedbackMetrics(feedback) {
-    setText('feedbackPending', feedback ? formatNumber(feedback.pending) : '—');
-    setText('feedbackProcessing', feedback ? formatNumber(feedback.processing) : '—');
     setText('feedbackResolvedPeriod', feedback ? formatNumber(feedback.resolved_in_period) : '—');
     const resolved = feedback && number(feedback.resolved_in_period) > 0;
     const empty = feedback ? '暂无样本' : '—';
     setText('avgResolutionHours', resolved ? formatDurationHours(feedback.avg_resolution_hours) : empty);
-    renderBacklog('feedbackBacklog', '反馈积压', feedback);
     document.getElementById('feedbackBreakdown').hidden = !feedback;
   }
 
@@ -204,8 +182,7 @@
       { name: '已忽略', value: number(feedback.ignored) }
     ], ['#f59f00', '#206bc4', '#2fb344', '#adb5bd']));
     const source = [];
-    (feedback.platforms || []).forEach(function (item) { source.push({ name: '平台 · ' + (item.label || item.key), value: number(item.count) }); });
-    (feedback.versions || []).slice(0, 5).forEach(function (item) { source.push({ name: '版本 · ' + (item.label || item.key), value: number(item.count) }); });
+    (feedback.platforms || []).forEach(function (item) { source.push({ name: item.label || item.key, value: number(item.count) }); });
     chartOption('feedbackVersionChart', horizontalBarOption(source));
   }
 
@@ -230,7 +207,6 @@
     content = content || {};
     chartOption('trackStatusChart', pieOption(distributionData(content.statuses), ['#2fb344', '#f59f00', '#d63939']));
     chartOption('trackTypeChart', pieOption(distributionData(content.types), colors));
-    chartOption('trackCityChart', horizontalBarOption(distributionData(content.cities)));
   }
 
   function renderEngagementMetrics(engagement) {
@@ -280,7 +256,7 @@
     body.replaceChildren();
     if (!items.length) {
       const cell = body.insertRow().insertCell();
-      cell.colSpan = 6;
+      cell.colSpan = 5;
       cell.className = 'text-secondary text-center';
       cell.textContent = '暂无互动数据';
       return;
@@ -295,12 +271,9 @@
       id.className = 'dashboard-track-id mono text-secondary';
       id.textContent = item.track_id;
       track.append(link, id);
-      ['collections', 'navigations', 'likes', 'comments'].forEach(function (key) {
+      ['navigations', 'collections', 'likes', 'comments'].forEach(function (key) {
         row.insertCell().textContent = formatNumber(item[key]);
       });
-      const score = document.createElement('strong');
-      score.textContent = formatNumber(item.score);
-      row.insertCell().appendChild(score);
       Array.from(row.cells).forEach(function (cell, index) {
         cell.dataset.label = body.parentElement.tHead.rows[0].cells[index].textContent;
       });
@@ -332,6 +305,138 @@
     return from === to ? from : from + ' 至 ' + to;
   }
 
+  function tableNumber(value) {
+    return value == null ? '—' : formatNumber(value);
+  }
+
+  function cohortRate(count, total) {
+    if (!total) return '—';
+    return count == null ? '待观察' : formatNumber(count * 100 / total, 1) + '%';
+  }
+
+  const backlogEntries = {
+    review: ['投稿待审核', '/admin/track_submissions.html?status=pending', '处理投稿'],
+    feedback: ['反馈待处理或处理中', '/admin/feedbacks.html', '查看反馈'],
+    index: ['待建地图索引', '/admin/route_groups.html', '查看路线组'],
+    index_failed: ['地图索引失败', '/admin/route_groups.html', '查看路线组'],
+    deletion_records: ['注销待清理资料'],
+    deletion_files: ['注销待清理文件']
+  };
+
+  const managementRows = {
+    cities: function (item) {
+      const delta = item.navigations - item.previous_navigations;
+      return [item.name, tableNumber(item.supply), tableNumber(item.added), tableNumber(item.collectors),
+        tableNumber(item.navigations), (delta > 0 ? '+' : '') + formatNumber(delta)];
+    },
+    cohorts: function (item) {
+      return [item.week + ' 起', tableNumber(item.registered),
+        cohortRate(item.first_track, item.registered), cohortRate(item.day_one_login, item.registered),
+        cohortRate(item.day_seven_login, item.registered)];
+    },
+    versions: function (item) {
+      return [item.version, item.release_recorded_at ? AdminTime.date(item.release_recorded_at) : '—',
+        tableNumber(item.devices), item.share == null ? '—' : formatNumber(item.share * 100, 1) + '%',
+        tableNumber(item.feedback)];
+    },
+    companions: function (item) {
+      return [item.name, tableNumber(item.rooms), tableNumber(item.members), tableNumber(item.ready),
+        tableNumber(item.pending), tableNumber(item.empty), tableNumber(item.unavailable)];
+    },
+    backlog: function (item, data) {
+      const entry = backlogEntries[item.key];
+      if (!entry) return null;
+      let action = '—';
+      if (entry[1]) {
+        action = document.createElement('a');
+        action.href = entry[1];
+        action.textContent = entry[2];
+      }
+      const waiting = item.oldest && (Date.parse(data.range.end) - Date.parse(item.oldest)) / 3600000;
+      return [entry[0], tableNumber(item.open), tableNumber(item.overdue),
+        item.oldest ? formatDurationHours(Math.max(0, waiting)) : '—', action];
+    }
+  };
+
+  function replaceManagementRows(panel, data) {
+    const head = panel.querySelector('thead');
+    const body = panel.querySelector('tbody');
+    const headers = Array.from(head.rows[0].cells, function (cell) { return cell.textContent; });
+    const fragment = document.createDocumentFragment();
+    const format = managementRows[panel.dataset.workbenchTable];
+    data.rows.forEach(function (item) {
+      const values = format(item, data);
+      if (!values) return;
+      const row = document.createElement('tr');
+      values.forEach(function (value, index) {
+        const cell = row.insertCell();
+        cell.dataset.label = headers[index];
+        if (value instanceof Node) cell.append(value);
+        else cell.textContent = value;
+      });
+      fragment.append(row);
+    });
+    if (!fragment.childElementCount) {
+      const row = document.createElement('tr');
+      const cell = row.insertCell();
+      cell.colSpan = headers.length;
+      cell.textContent = '暂无数据';
+      fragment.append(row);
+    }
+    body.replaceChildren(fragment);
+  }
+
+  async function loadManagementTable(panel, period) {
+    const key = panel.dataset.workbenchTable;
+    tableRequests.get(panel)?.abort();
+    const controller = new AbortController();
+    tableRequests.set(panel, controller);
+    const status = panel.querySelector('[data-table-status]');
+    const previous = panel.dataset.loadedPeriod;
+    status.textContent = '正在读取…';
+    panel.setAttribute('aria-busy', 'true');
+    try {
+      const params = new URLSearchParams({ table: key, period: period });
+      const response = await fetch('/admin/api/dashboard/tables?' + params, { signal: controller.signal });
+      if (controller.signal.aborted) return;
+      if (response.status === 403) {
+        panel.closest('section').hidden = true;
+        return;
+      }
+      if (!response.ok) throw new Error('table unavailable');
+      const payload = await response.json();
+      if (controller.signal.aborted) return;
+      const data = payload.data;
+      if (!data?.range || !Array.isArray(data.rows)) throw new Error('invalid table');
+      replaceManagementRows(panel, data);
+      panel.dataset.loadedPeriod = data.period;
+      status.textContent = panel.hasAttribute('data-workbench-period') ? dateRange(data.range.start, data.range.end) : '';
+    } catch (_) {
+      if (controller.signal.aborted) return;
+      const previousLabel = panel.hasAttribute('data-workbench-period') ? periodLabels[previous] : '上次';
+      status.textContent = previous ? '读取失败，保留' + previousLabel + '结果。' : '读取失败，请刷新重试。';
+      if (!previous) {
+        const cell = panel.querySelector('tbody td');
+        if (cell) cell.textContent = '数据暂不可用';
+      }
+    } finally {
+      if (tableRequests.get(panel) === controller) {
+        tableRequests.delete(panel);
+        panel.removeAttribute('aria-busy');
+      }
+    }
+  }
+
+  function loadManagementTables(period, includeFixed) {
+    document.querySelectorAll('[data-workbench-table]').forEach(function (panel) {
+      const section = panel.closest('section');
+      if (!section.hidden && !section.classList.contains('admin-permission-hidden') &&
+          (includeFixed || panel.hasAttribute('data-workbench-period'))) {
+        loadManagementTable(panel, period);
+      }
+    });
+  }
+
   function renderDashboard(data) {
     const metrics = data.metrics || {};
     setMetric('activeUsers', metrics.active_users);
@@ -345,7 +450,7 @@
     const trendRange = trend.length ? dateRange(trend[0].date, trend[trend.length - 1].date) : '';
     setText('trendRangeHint', trendRange);
     setText('engagementRangeHint', trendRange ? '每日趋势 · ' + trendRange : '');
-    renderReviewMetrics(data.review, metrics.pending_submissions);
+    renderReviewMetrics(data.review);
     renderFeedbackMetrics(data.feedback);
     renderContentMetrics(data.content);
     renderEngagementMetrics(data.engagement);
@@ -419,6 +524,7 @@
   periodButtons.forEach(function (button) {
     button.addEventListener('click', function () {
       loadDashboard(button.dataset.period);
+      loadManagementTables(button.dataset.period, false);
     });
   });
   ['reviewBreakdown', 'feedbackBreakdown'].forEach(function (id) {
@@ -438,24 +544,30 @@
   });
   document.getElementById('refreshDashboard').addEventListener('click', function () {
     loadDashboard();
+    loadManagementTables(requestedPeriod, true);
     loadAnalyticsHealth();
   });
   window.addEventListener('pagehide', function () {
     if (dashboardRequest) dashboardRequest.abort();
+    tableRequests.forEach(function (request) { request.abort(); });
     if (healthRequest) { const request = healthRequest; healthRequest = null; request.abort(); }
   });
   window.addEventListener('pageshow', function (event) {
     if (event.persisted) {
       loadDashboard();
+      loadManagementTables(requestedPeriod, true);
       loadAnalyticsHealth();
     }
   });
   window.addEventListener('resize', function () { Object.keys(charts).forEach(function (key) { charts[key].resize(); }); });
   const canReview = AdminAccess.can('track_submissions', false);
   const canReadFeedback = AdminAccess.can('feedbacks', false);
-  document.getElementById('dashboardTodos').hidden = !canReview && !canReadFeedback;
+  document.getElementById('backlogSection').hidden = ![
+    'track_submissions', 'feedbacks', 'route_groups', 'users'
+  ].some(function (module) { return AdminAccess.can(module, false); });
   document.getElementById('dashboardEfficiency').hidden = !canReview && !canReadFeedback;
   document.getElementById('dashboardGrowth').hidden = !canReview && !AdminAccess.can('users', false) && !AdminAccess.can('tracks', false);
   loadDashboard();
+  loadManagementTables(requestedPeriod, true);
   loadAnalyticsHealth();
 });

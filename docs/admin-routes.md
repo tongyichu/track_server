@@ -44,6 +44,7 @@
 | GET | `/admin/api/me` | 公开 | 返回当前会话；未登录返回 401 |
 | GET | `/admin/api/releases` | 鉴权 | 列出发布记录，支持 `platform` / `status` 过滤 |
 | GET | `/admin/api/dashboard` | 鉴权 | 业务库即时统计；`period=day|week|month`，返回同进度上周期对比、用户转化、审核/反馈效率、内容质量、互动、同行与日趋势 |
+| GET | `/admin/api/dashboard/tables` | 工作台与对应模块读取权限 | 指定 `table=cities、cohorts、versions、companions、backlog`，城市与同行接受 `period=day、week、month` |
 | GET | `/admin/api/users/statistics` | 用户查看 | 用户总数、性别/星座/年龄分布、`track_output` 云端轨迹产出分层；`user_cities` 返回规范化 `region_id/name/country_code/province_id/province_name/province_map_code/count`，按目录合并新旧城市编码，每人只计入一个城市，未知编码归入未知；见 [地域统计](api/admin-regions.md#用户地域统计) |
 | GET | `/admin/api/companions/statistics` | 鉴权 | 同行会话当前活跃数、所选周期创建/结束/自动结束数、平均参与人数 |
 | GET | `/admin/api/companions/usage-statistics` | 鉴权 | days=1/7/30，创建与结束趋势、按本周期创建房间统计的实际参与人数分布 |

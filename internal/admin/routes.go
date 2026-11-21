@@ -212,6 +212,7 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	api.GET("/releases/client-statistics", m.Handler.GetReleaseClientStatistics)
 	api.POST("/releases/upload-package", m.Handler.UploadPackage)
 	api.GET("/dashboard", m.Handler.GetDashboard)
+	api.GET("/dashboard/tables", m.Handler.GetWorkbenchTable)
 	api.GET("/users/statistics", m.Handler.GetAdminUserStatistics)
 	api.GET("/companions/statistics", m.Handler.GetAdminCompanionStatistics)
 	api.GET("/companions/usage-statistics", m.Handler.GetAdminCompanionUsageStatistics)

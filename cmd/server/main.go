@@ -777,7 +777,7 @@ func main() {
 		adminModule.Handler.SetPixabayClient(regions.NewPixabayClient(cfg.PixabayAPIKey, filepath.Join(cfg.LogDir, "pixabay-cache")))
 		adminModule.Handler.SetDashboardStatisticsRepository(repository.NewAdminDashboardStatisticsRepository(
 			userRepo, trackRepo, collectRepo, loginLogRepo, navigationRepo, companionRepo,
-			feedbackRepo, trackMapRepo, trackSubmissionRepo, likeRepo, commentRepo,
+			feedbackRepo, trackMapRepo, trackSubmissionRepo, likeRepo, commentRepo, appClientStatsRepo,
 		))
 		adminModule.Handler.SetScreenshotCache(screenshotCache)
 		adminModule.Handler.SetTrackAssetCaches(rawTrackCache, previewCache)

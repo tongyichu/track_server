@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sort"
 	"time"
 
 	"github.com/tongyichu/track_server/internal/models"
@@ -453,14 +452,9 @@ func (r *mongoAdminDashboardRepository) loadContentAndEngagement(ctx context.Con
 	top := make(map[string]*models.AdminDashboardTopTrack)
 	for _, source := range collections {
 		collection := r.db.Collection(source.name)
-		filter := bson.M{}
-		if source.key == "comment" {
-			filter["deleted"] = false
-		}
 		currentFilter := bson.M{"created_at": mongoTimeRange(q.Start, q.End)}
 		previousFilter := bson.M{"created_at": mongoTimeRange(q.PreviousStart, q.PreviousEnd)}
 		if source.key == "navigation" {
-			filter["track_id"] = bson.M{"$ne": ""}
 			currentFilter["track_id"], previousFilter["track_id"] = bson.M{"$ne": ""}, bson.M{"$ne": ""}
 		}
 		if source.key == "comment" {
@@ -476,7 +470,7 @@ func (r *mongoAdminDashboardRepository) loadContentAndEngagement(ctx context.Con
 		}
 		setEngagementTotal(&result.Engagement.Current, source.key, current)
 		setEngagementTotal(&result.Engagement.Previous, source.key, previous)
-		counts, err := mongoGroupCounts(ctx, collection, filter, "track_id")
+		counts, err := mongoGroupCounts(ctx, collection, currentFilter, "track_id")
 		if err != nil {
 			return err
 		}
@@ -503,7 +497,7 @@ func (r *mongoAdminDashboardRepository) loadContentAndEngagement(ctx context.Con
 		ids = append(ids, trackID)
 	}
 	if len(ids) > 0 {
-		cursor, err := tracks.Find(ctx, bson.M{"_id": bson.M{"$in": ids}, "status": models.TrackStatusNormal, "is_running": false}, options.Find().SetProjection(bson.M{"_id": 1, "title": 1}))
+		cursor, err := tracks.Find(ctx, bson.M{"_id": bson.M{"$in": ids}, "status": models.TrackStatusNormal, "is_running": false, "raw_track_url": bson.M{"$nin": bson.A{nil, ""}}, "deleted_at": bson.M{"$in": bson.A{nil, time.Time{}}}}, options.Find().SetProjection(bson.M{"_id": 1, "title": 1}))
 		if err != nil {
 			return err
 		}
@@ -525,9 +519,7 @@ func (r *mongoAdminDashboardRepository) loadContentAndEngagement(ctx context.Con
 			return err
 		}
 	}
-	sort.Slice(result.Engagement.TopTracks, func(i, j int) bool {
-		return result.Engagement.TopTracks[i].Score > result.Engagement.TopTracks[j].Score
-	})
+	sortWorkbenchTopTracks(result.Engagement.TopTracks)
 	if len(result.Engagement.TopTracks) > 10 {
 		result.Engagement.TopTracks = result.Engagement.TopTracks[:10]
 	}
