@@ -1,10 +1,10 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/tongyichu/track_server/internal/config"
 	"log"
 	"net/url"
 	"path"
@@ -14,6 +14,7 @@ import (
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/requests"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/sts"
 	ossclient "github.com/aliyun/aliyun-oss-go-sdk/oss"
+	"github.com/tongyichu/track_server/internal/config"
 )
 
 // OSSTemporaryCredential 表示服务端向客户端返回的 OSS 临时凭证。
@@ -571,8 +572,15 @@ func (s *OSSTokenService) DeleteUserObjects(userID int64, objectURLs []string) e
 		}
 		keys = append(keys, key)
 	}
+	return s.deleteExactObjects(context.Background(), keys)
+}
+
+func (s *OSSTokenService) deleteExactObjects(ctx context.Context, keys []string) error {
 	if len(keys) == 0 {
 		return nil
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	resources := make([]string, 0, len(keys))
 	for _, key := range keys {
@@ -599,6 +607,8 @@ func (s *OSSTokenService) DeleteUserObjects(userID int64, objectURLs []string) e
 	req.RoleSessionName = roleSessionName
 	req.DurationSeconds = requests.NewInteger(int(s.durationSeconds))
 	req.Policy = string(policyJSON)
+	req.SetConnectTimeout(5 * time.Second)
+	req.SetReadTimeout(15 * time.Second)
 	resp, err := s.stsClient.AssumeRole(req)
 	if err != nil {
 		return err
@@ -607,7 +617,7 @@ func (s *OSSTokenService) DeleteUserObjects(userID int64, objectURLs []string) e
 	if cred.AccessKeyId == "" || cred.AccessKeySecret == "" || cred.SecurityToken == "" {
 		return errors.New("sts returned empty credentials")
 	}
-	cli, err := ossclient.New(s.ossInternalEndpoint, cred.AccessKeyId, cred.AccessKeySecret, ossclient.SecurityToken(cred.SecurityToken))
+	cli, err := ossclient.New(s.ossInternalEndpoint, cred.AccessKeyId, cred.AccessKeySecret, ossclient.SecurityToken(cred.SecurityToken), ossclient.Timeout(10, 30))
 	if err != nil {
 		return err
 	}
@@ -615,15 +625,14 @@ func (s *OSSTokenService) DeleteUserObjects(userID int64, objectURLs []string) e
 	if err != nil {
 		return err
 	}
-	var failed []string
+	failed := 0
 	for _, key := range keys {
-		if err := bkt.DeleteObject(key); err != nil {
-			log.Printf("[OSSDelete] delete_object_error user_id=%d object_key=%s err=%v", userID, key, err)
-			failed = append(failed, key)
+		if err := bkt.DeleteObject(key, ossclient.WithContext(ctx)); err != nil {
+			failed++
 		}
 	}
-	if len(failed) > 0 {
-		return fmt.Errorf("failed to delete %d/%d oss objects", len(failed), len(keys))
+	if failed > 0 {
+		return fmt.Errorf("failed to delete %d/%d oss objects", failed, len(keys))
 	}
 	return nil
 }

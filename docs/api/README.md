@@ -19,7 +19,7 @@
 | 点赞、取消点赞、轨迹点赞数和个人获赞数 | [track-likes.md](track-likes.md) |
 | OSS 直传临时凭证 | [oss.md](oss.md) |
 | 按设备上报和查看应用权限状态 | [permission-snapshots.md](permission-snapshots.md) |
-| 用户详情、个人信息更新、关注/粉丝关系 | [user.md](user.md) |
+| 用户详情、个人信息更新、自助注销、关注/粉丝关系 | [user.md](user.md) |
 | 后台实时通信、MQTT连接、提醒待处理与异常 | [admin-realtime.md](admin-realtime.md) |
 | 后台用户列表、资料编辑、背景图、级别与互动数据 | [admin-users.md](admin-users.md) |
 | 地区目录、客户端本地缓存、后台城市管理 | [regions.md](regions.md) |

@@ -15,6 +15,7 @@ const (
 	DefaultSTSRegion                   = "cn-hangzhou"
 	DefaultSTSDurationSeconds          = 900
 	DefaultRoleSessionPref             = "trackapp-"
+	DefaultJWTSecret                   = "track_server_default_jwt_secret"
 	DefaultCompanionMQTTTopic          = "companion"
 	DefaultCompanionMQTTTTL            = 3600
 	DefaultCompanionMQTTPublishTimeout = 5
@@ -61,6 +62,8 @@ type Config struct {
 	EnableTLS          bool
 	JWTSecret          string
 	TrackTypes         []string // 客户端可选运动类型列表，默认：徒步/跑步/爬山/骑行/自驾。
+
+	AccountDeletionTestMode bool
 
 	EMQXBrokerURL                    string
 	EMQXManagementURL                string
@@ -193,6 +196,7 @@ func Load() *Config {
 		LogDir:                           getEnv("LOG_DIR", "/var/log/track_server"),
 		WechatAppID:                      os.Getenv("WECHAT_APP_ID"),
 		WechatAppSecret:                  os.Getenv("WECHAT_APP_SECRET"),
+		AccountDeletionTestMode:          getEnv("ACCOUNT_DELETION_TEST_MODE", "false") == "true",
 		AMapWebKey:                       aMapWebKey,
 		AMapRESTKey:                      aMapRestKey,
 		AMapSecurityJSCode:               aMapSecurityJSCode,
@@ -211,7 +215,7 @@ func Load() *Config {
 		TLSCertFile:                      tlsCert,
 		TLSKeyFile:                       tlsKey,
 		EnableTLS:                        tlsCert != "" && tlsKey != "",
-		JWTSecret:                        getEnv("JWT_SECRET", "track_server_default_jwt_secret"),
+		JWTSecret:                        getEnv("JWT_SECRET", DefaultJWTSecret),
 		TrackTypes:                       ParseTrackTypes(os.Getenv("TRACK_TYPES")),
 		EMQXBrokerURL:                    getEnv("EMQX_BROKER_URL", ""),
 		EMQXManagementURL:                os.Getenv("EMQX_MANAGEMENT_URL"),

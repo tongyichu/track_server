@@ -17,7 +17,7 @@
 - 点赞轨迹：`POST /api/v1/track/:track_id/like`
 - 修改个人信息：`PUT /api/v1/user/profile/update`、`PUT /api/v1/user/profile/location`、`PUT /api/v1/user/profile/phone`、`PUT /api/v1/user/profile/client_language`
 
-取消点赞、取消收藏、取消关注、退出登录、浏览和查询类接口不受账号限制影响。
+取消点赞、取消收藏、取消关注、退出登录、自助注销账号、浏览和查询类接口不受账号限制影响。
 
 客户端可通过 `GET /api/v1/user/:user_id/detail` 查看自己的当前账号限制状态：当 `user_id` 等于当前登录用户且存在生效限制时，响应 `data.account_restriction` 返回限制记录；查看他人或未被限制时不返回该字段。
 

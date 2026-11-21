@@ -27,6 +27,7 @@ type LoginService struct {
 	wechatAppID     string
 	wechatAppSecret string
 	jwtSecret       string
+	accountDeletion *repository.MySQLAccountDeletionStore
 	mu              sync.RWMutex
 	smsCodes        map[string]smsCodeEntry
 	captchas        map[string]CaptchaEntry
@@ -90,11 +91,18 @@ func normalizeTokenVersion(v int64) int64 {
 }
 
 func (s *LoginService) GenerateToken(userID int64, tokenVersion int64) (string, error) {
+	return s.GenerateSessionToken(userID, tokenVersion, false)
+}
+
+func (s *LoginService) GenerateSessionToken(userID, tokenVersion int64, wechatVerified bool) (string, error) {
 	claims := jwt.MapClaims{
 		"user_id":       userID,
 		"token_version": normalizeTokenVersion(tokenVersion),
 		"exp":           time.Now().Add(jwtTokenExpiry).Unix(),
 		"iat":           time.Now().Unix(),
+	}
+	if wechatVerified {
+		claims["wechat_verified"] = true
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(s.jwtSecret))
@@ -108,11 +116,36 @@ func (s *LoginService) GetUserTokenVersion(ctx context.Context, userID int64) (i
 	if userID <= 0 {
 		return 0, errors.New("user_id is required")
 	}
+	if s.accountDeletion != nil {
+		version, err := s.accountDeletion.ActiveTokenVersion(ctx, userID)
+		if err != nil {
+			return 0, err
+		}
+		return normalizeTokenVersion(version), nil
+	}
 	user, err := s.users.FindByID(ctx, userID)
 	if err != nil {
 		return 0, err
 	}
 	return normalizeTokenVersion(user.TokenVersion), nil
+}
+
+func (s *LoginService) SetAccountDeletionStore(store *repository.MySQLAccountDeletionStore) {
+	s.accountDeletion = store
+}
+
+func (s *LoginService) checkAccountDeletion(ctx context.Context, userID int64) error {
+	if s.accountDeletion == nil {
+		return nil
+	}
+	blocked, err := s.accountDeletion.Blocked(ctx, userID)
+	if err != nil {
+		return errors.New("account status unavailable")
+	}
+	if blocked {
+		return errors.New("account deletion has been requested")
+	}
+	return nil
 }
 
 func (s *LoginService) JWTSecret() string {
@@ -245,6 +278,9 @@ func (s *LoginService) LoginBySMS(ctx context.Context, phone, code, ip, deviceID
 		if idErr != nil {
 			return nil, idErr
 		}
+		if err := s.checkAccountDeletion(ctx, userID); err != nil {
+			return nil, err
+		}
 
 		nickname, genErr := s.generateUniqueDefaultNickname(ctx)
 		if genErr != nil {
@@ -271,6 +307,9 @@ func (s *LoginService) LoginBySMS(ctx context.Context, phone, code, ip, deviceID
 	}
 	if user.Phone != phone {
 		return nil, repository.ErrConflict
+	}
+	if err := s.checkAccountDeletion(ctx, user.ID); err != nil {
+		return nil, err
 	}
 
 	_ = s.loginLogs.Create(ctx, &models.LoginLog{
@@ -346,10 +385,16 @@ func (s *LoginService) LoginByWechat(ctx context.Context, code, ip, deviceID, pl
 	}
 
 	userID := wechatOpenIDToUserID(session.OpenID)
+	if err := s.checkAccountDeletion(ctx, userID); err != nil {
+		return nil, err
+	}
 	user, err := s.users.CreateIfNotExists(ctx, &models.User{
 		ID: userID,
 	})
 	if err != nil {
+		return nil, err
+	}
+	if err := s.checkAccountDeletion(ctx, user.ID); err != nil {
 		return nil, err
 	}
 
@@ -361,7 +406,7 @@ func (s *LoginService) LoginByWechat(ctx context.Context, code, ip, deviceID, pl
 		Platform:  platform,
 	})
 
-	token, err := s.GenerateToken(user.ID, user.TokenVersion)
+	token, err := s.GenerateSessionToken(user.ID, user.TokenVersion, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate token: %w", err)
 	}
@@ -375,6 +420,9 @@ func (s *LoginService) LoginByApple(ctx context.Context, appleUserID, identityTo
 	}
 
 	userID := appleUserIDToUserID(appleUserID)
+	if err := s.checkAccountDeletion(ctx, userID); err != nil {
+		return nil, err
+	}
 	user, err := s.users.CreateIfNotExists(ctx, &models.User{
 		ID: userID,
 	})

@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
@@ -45,7 +46,7 @@ func JWTAuthMiddleware(loginSvc *service.LoginService, blacklist *TokenBlacklist
 				return nil, jwt.ErrSignatureInvalid
 			}
 			return []byte(loginSvc.JWTSecret()), nil
-		})
+		}, jwt.WithJSONNumber())
 		if err != nil || !token.Valid {
 			c.JSON(http.StatusUnauthorized, utils.H{"error": "invalid or expired token"})
 			c.Abort()
@@ -61,8 +62,8 @@ func JWTAuthMiddleware(loginSvc *service.LoginService, blacklist *TokenBlacklist
 
 		var userID int64
 		switch v := claims["user_id"].(type) {
-		case float64:
-			userID = int64(v)
+		case json.Number:
+			userID, _ = v.Int64()
 		case string:
 			userID, _ = strconv.ParseInt(v, 10, 64)
 		}
@@ -75,8 +76,8 @@ func JWTAuthMiddleware(loginSvc *service.LoginService, blacklist *TokenBlacklist
 
 		tokenVersion := int64(1)
 		switch v := claims["token_version"].(type) {
-		case float64:
-			tokenVersion = int64(v)
+		case json.Number:
+			tokenVersion, _ = v.Int64()
 		case string:
 			if parsed, err := strconv.ParseInt(v, 10, 64); err == nil && parsed > 0 {
 				tokenVersion = parsed
@@ -96,14 +97,16 @@ func JWTAuthMiddleware(loginSvc *service.LoginService, blacklist *TokenBlacklist
 		}
 
 		var expiresAt time.Time
-		if exp, ok := claims["exp"].(float64); ok {
-			expiresAt = time.Unix(int64(exp), 0)
+		if exp, err := claims.GetExpirationTime(); err == nil && exp != nil {
+			expiresAt = exp.Time
 		}
 		shouldRenew := !expiresAt.IsZero() && time.Until(expiresAt) <= loginSvc.RenewWindow()
 
+		wechatVerified, _ := claims["wechat_verified"].(bool)
 		meta := GetRequestMeta(c)
 		if meta != nil {
 			meta.AuthUserID = userID
+			meta.AuthWechatVerified = wechatVerified
 			meta.RawUserID = strconv.FormatInt(userID, 10)
 		}
 
@@ -116,7 +119,7 @@ func JWTAuthMiddleware(loginSvc *service.LoginService, blacklist *TokenBlacklist
 		if err != nil || latestVersion != tokenVersion {
 			return
 		}
-		renewedToken, err := loginSvc.GenerateToken(userID, tokenVersion)
+		renewedToken, err := loginSvc.GenerateSessionToken(userID, tokenVersion, wechatVerified)
 		if err != nil {
 			return
 		}
@@ -151,7 +154,7 @@ func OptionalAnalyticsJWTAuthMiddleware(loginSvc *service.LoginService, blacklis
 				return nil, jwt.ErrSignatureInvalid
 			}
 			return []byte(loginSvc.JWTSecret()), nil
-		})
+		}, jwt.WithJSONNumber())
 		if err != nil || !token.Valid {
 			reject()
 			return
@@ -163,8 +166,8 @@ func OptionalAnalyticsJWTAuthMiddleware(loginSvc *service.LoginService, blacklis
 		}
 		var userID int64
 		switch value := claims["user_id"].(type) {
-		case float64:
-			userID = int64(value)
+		case json.Number:
+			userID, _ = value.Int64()
 		case string:
 			userID, _ = strconv.ParseInt(value, 10, 64)
 		}
@@ -174,8 +177,8 @@ func OptionalAnalyticsJWTAuthMiddleware(loginSvc *service.LoginService, blacklis
 		}
 		tokenVersion := int64(1)
 		switch value := claims["token_version"].(type) {
-		case float64:
-			tokenVersion = int64(value)
+		case json.Number:
+			tokenVersion, _ = value.Int64()
 		case string:
 			if parsed, parseErr := strconv.ParseInt(value, 10, 64); parseErr == nil && parsed > 0 {
 				tokenVersion = parsed

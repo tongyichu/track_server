@@ -33,6 +33,7 @@ type Deps struct {
 	CompanionService           *service.CompanionService
 	AchievementService         *service.AchievementService
 	AccountRestrictionService  *service.AccountRestrictionService
+	AccountDeletionService     *service.AccountDeletionService
 	FeedbackService            *service.FeedbackService
 	AnalyticsService           *service.AnalyticsService
 	JWTSecret                  string
@@ -196,6 +197,9 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 	}
 
 	auth.POST("/logout", loginHandler.Logout)
+	accountDeletion := accountDeletionHandler{service: deps.AccountDeletionService}
+	auth.GET("/user/account/deletion", accountDeletion.availability)
+	auth.POST("/user/account/deletion", accountDeletion.request)
 	auth.GET("/login/log", loginHandler.GetLoginLog)
 	auth.POST("/feedback", feedbackHandler.Submit)
 	auth.GET("/feedback/list", feedbackHandler.ListMine)

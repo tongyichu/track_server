@@ -22,6 +22,7 @@
 - [后台批量导入轨迹流程](#后台批量导入轨迹流程)
 - [典型业务调用链](#典型业务调用链)
 - [账号限制流程](#账号限制流程)
+- [自助注销流程](#自助注销流程)
 - [意见反馈流程](#意见反馈流程)
 - [资源缓存与静态发布包](#资源缓存与静态发布包)
 - [静态轨迹预览图](#静态轨迹预览图)
@@ -183,6 +184,16 @@ HTTP Request
 
 ### 账号限制流程
 管理中心/运维通过 `/api/v1/ops/users/:user_id/restrictions*` 写入或解除 `user_account_restrictions`；当前生效条件为 `status=active AND (expires_at IS NULL OR expires_at > now)`。业务 JWT 通过后，`AccountRestrictionMiddleware` 只拦截上传内容（含上传用 OSS STS、轨迹创建/上传/更新）、发起同行、关注、收藏、点赞、修改个人信息；取消点赞、取消收藏、取消关注、退出登录和查询类接口放行。限制错误返回 `403`，`message` 使用“账号已被限制，禁止...”动作文案。新增会产生内容、关系或用户资料变更的业务接口时，需要评估是否加入 `internal/middleware/account_restriction.go` 的受限路由表，并同步更新 `docs/api/account-restriction.md` 与 `docs/api/route-index.md`。
+
+### 自助注销流程
+
+`POST /api/v1/user/account/deletion` 使用本人 JWT 和二次确认字段向 MySQL 写入 `user_account_deletions`。从受理起，登录及业务鉴权拒绝该账号，重复受理由唯一账号 ID 去重。清理任务独立于通用 scheduler，跨进程使用数据库租约，失败可重试，服务重启后继续处理。MongoDB 和内存模式不开放入口。
+
+任务先等待已开始的请求完成，然后在一个数据库事务中清理账号资料、云端轨迹和业务关联，并保存待删文件清单。该步骤也清理私信会话及关注、收藏等关系，其他作者对注销用户评论的回复保留在匿名占位下。仍有成员的同行房间转为私密历史，其他成员的轨迹数据保留。服务器本地缓存按本人的资源键清理。OSS 文件等既有短期凭证过期后，使用内网 Endpoint 和精确对象权限分批删除，逐批保存进度。共享分片内有其他记录引用的对象予以保留。
+
+测试环境可设置 `ACCOUNT_DELETION_TEST_MODE=true`，当前登录会话和二次确认即可受理，可沿用返回测试验证码的短信流程。关闭该开关时，仅有非默认 JWT 签名密钥和微信配置的服务向微信验证过的账号开放。实际清理需要 MySQL、OSS 内网地址及可执行 `oss:DeleteObject` 的 RAM 角色。已受理任务继续处理，不受测试开关变化影响。
+
+完成后保留账号 ID 与处理时间等最小记录。旧微信身份映射到同一账号 ID，当前会拒绝用原微信身份重新注册。独立设备上的本地轨迹、未登记或无法确认归属的历史对象、OSS 历史版本、备份和离线分析存档不在该任务中处理，发布方需另行确定保留期限及清理流程。
 
 ### 意见反馈流程
 `POST /api/v1/feedback` 使用 `multipart/form-data` 提交文字与最多 3 张图片；`FeedbackService` 会先检查同一用户未处理反馈数量，`pending` + `processing` 最多 5 条，超限返回 429 且不会写入图片。通过校验后再检查图片真实类型和大小，并私有落盘到 `<LogDir>/feedback/images/<user_id>/<yyyyMMdd>/`，数据库 `user_feedbacks.images_json` 只保存相对路径和元信息。用户历史列表/详情只返回本人的反馈，图片读取必须经业务 JWT 校验归属；`/ops/feedback/*` 使用 `X-Internal-Token` 供运营查看和更新状态，更新为 `resolved` 时 `reply` 必填且会下发给提交用户。调整反馈字段、图片限制、状态枚举、未处理上限、运营回复规则或访问路径时，同步更新 `docs/api/feedback.md` 与 `docs/api/route-index.md`。

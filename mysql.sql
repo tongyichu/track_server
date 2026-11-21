@@ -25,6 +25,18 @@ CREATE TABLE `users` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户基础资料表';
 
 
+CREATE TABLE IF NOT EXISTS user_account_deletions (
+ user_id BIGINT NOT NULL PRIMARY KEY,
+ requested_at DATETIME(6) NOT NULL,
+ next_attempt_at DATETIME(6) NOT NULL,
+ objects_after DATETIME(6) NOT NULL,
+ attempt BIGINT NOT NULL DEFAULT 0,
+ assets JSON DEFAULT NULL,
+ completed_at DATETIME(6) DEFAULT NULL,
+ KEY idx_user_account_deletions_due (completed_at, next_attempt_at, user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
 CREATE TABLE `user_activity_days` (
     `user_id` BIGINT NOT NULL,
     `active_date` DATE NOT NULL COMMENT '北京时间自然日',

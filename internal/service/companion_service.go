@@ -1518,6 +1518,7 @@ func (s *CompanionService) UpdateSessionStats(ctx context.Context, ownerUserID i
 		}
 		session.TotalDuration = *in.TotalDuration
 	}
+	var screenshotResponseURL string
 	if in.TrackScreenshotURL != nil {
 		src := strings.TrimSpace(*in.TrackScreenshotURL)
 		session.TrackScreenshotURL = src
@@ -1527,7 +1528,7 @@ func (s *CompanionService) UpdateSessionStats(ctx context.Context, ownerUserID i
 				log.Printf("remove temp companion screenshot cache failed: session=%s err=%v", session.SessionID, err)
 			}
 			s.screenshotCache.PrefetchAsync(ownerUserID, key, src)
-			session.TrackScreenshotURL = s.screenshotCache.GuessLocalURL(key, src)
+			screenshotResponseURL = s.screenshotCache.GuessLocalURL(key, src)
 		}
 	}
 	if in.ActualParticipantCount != nil {
@@ -1541,6 +1542,9 @@ func (s *CompanionService) UpdateSessionStats(ctx context.Context, ownerUserID i
 	}
 	if err := s.repo.UpdateSession(ctx, session); err != nil {
 		return nil, err
+	}
+	if screenshotResponseURL != "" {
+		session.TrackScreenshotURL = screenshotResponseURL
 	}
 	return companionSessionForResponse(session), nil
 }

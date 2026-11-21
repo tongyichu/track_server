@@ -380,6 +380,11 @@ func main() {
 	likeSvc.SetMessageService(messageSvc)
 	commentSvc.SetMessageService(messageSvc)
 	loginSvc := service.NewLoginService(userRepo, loginLogRepo, cfg.WechatAppID, cfg.WechatAppSecret, cfg.JWTSecret)
+	accountDeletionStore, accountDeletionErr := repository.NewMySQLAccountDeletionStore(ctx, userRepo)
+	loginSvc.SetAccountDeletionStore(accountDeletionStore)
+	if accountDeletionErr != nil {
+		log.Printf("account deletion store unavailable: %v", accountDeletionErr)
+	}
 	if appReleaseChangelogRepo == nil {
 		appReleaseChangelogRepo = repository.NewInMemoryAppReleaseChangelogRepository()
 	}
@@ -620,6 +625,18 @@ func main() {
 	if ossTokenSvc != nil {
 		commentSvc.SetImages(ossTokenSvc, commentImageCache)
 	}
+	var accountDeletionSvc *service.AccountDeletionService
+	verifiedWechatEnabled := cfg.JWTSecret != config.DefaultJWTSecret && cfg.WechatAppID != "" && cfg.WechatAppSecret != ""
+	if accountDeletionErr == nil {
+		accountDeletionSvc = service.NewAccountDeletionService(accountDeletionStore, ossTokenSvc, trackSvc,
+			backgroundCache, submissionImageCache, commentImageCache, filepath.Join(cfg.LogDir, "feedback", "images"),
+			cfg.AccountDeletionTestMode, verifiedWechatEnabled, time.Duration(cfg.CompanionMQTTCredentialTTLSecond)*time.Second)
+	}
+	if accountDeletionSvc != nil {
+		workerCtx, cancelDeletionWorker := context.WithCancel(ctx)
+		defer cancelDeletionWorker()
+		go accountDeletionSvc.Run(workerCtx)
+	}
 
 	var trackMapIndexSvc *service.TrackMapIndexService
 	var trackMapSvc *service.TrackMapService
@@ -726,6 +743,7 @@ func main() {
 		CompanionService:           companionSvc,
 		AchievementService:         achievementSvc,
 		AccountRestrictionService:  accountRestrictionSvc,
+		AccountDeletionService:     accountDeletionSvc,
 		FeedbackService:            feedbackSvc,
 		AnalyticsService:           analyticsSvc,
 		JWTSecret:                  cfg.JWTSecret,
