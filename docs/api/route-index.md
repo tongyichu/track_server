@@ -162,7 +162,7 @@
 
 | 接口 | 方法 | 完整路径 | 需要认证 | 文档 |
 | --- | --- | --- | --- | --- |
-| 后台账号列表与页面目录 | GET | `/admin/api/accounts` | 管理员 session | [admin-accounts.md](admin-accounts.md) |
+| 后台账号列表、登录来源与页面目录 | GET | `/admin/api/accounts` | 管理员 session | [admin-accounts.md](admin-accounts.md) |
 | 投稿审核列表、等待时长筛选、游标分页与展示元数据 | GET | `/admin/api/track-submissions` | 投稿查看 | [track-submission.md](track-submission.md#7-管理后台审核) |
 | 投稿、轨迹与审核记录详情（弹窗） | GET | `/admin/api/track-submissions/:submission_id` | 投稿查看 | [track-submission.md](track-submission.md#7-管理后台审核) |
 | 审核通过或驳回投稿（版本条件保存） | POST | `/admin/api/track-submissions/:submission_id/review` | 投稿操作 | [track-submission.md](track-submission.md#7-管理后台审核) |

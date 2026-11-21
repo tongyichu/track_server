@@ -16,6 +16,10 @@
 
 登录会话仍只存在内存，重启需要重新登录。每个后续受保护请求重新读取账号权限；停用、重置密码或本人改密码都会增加 `security_version`，让所有进程中的旧会话失效。已经开始执行的请求按请求开始时的权限处理。
 
+后台成功登录时在同一次账号状态 CAS 保存 `last_login_at` 和 `last_login_ip`。IP 取连接对端，兼容 IPv4/IPv6；代理转发头不参与取值。存量账号没有历史 IP 的，下次登录后开始显示。账号列表使用服务端本地 City MMDB 库按 IP 查询国家、省级地区和城市。同一列表中的重复 IP 只解析一次，查询不访问外部服务。配置 `ADMIN_IP_GEO_DB` 为容器内可读的文件路径即可启用公网 IP 的近似所在地，例如把 GeoLite2 City 放在已挂载的 `/var/log/track_server/GeoLite2-City.mmdb` 并配置该路径。库未配置、无法打开或 IP 未命中时仍显示 IP；私网、回环和链路本地地址显示“内网地址”。IP 和所在地仅在管理员账号列表下发。
+
+若使用 DB-IP City Lite，账号列表响应附带 `data.login_location_source="db-ip"`，账号管理页展示来源链接。 [DB-IP City Lite 下载与授权](https://db-ip.com/db/download/ip-to-city-lite)
+
 邮箱、验证时间、各用途验证码摘要/错误次数/有效期、发信配额与管理员重置迁移开关也保存在同一账号 JSON 中，使用相同 CAS，不新增表或内存验证码回退。绑定/更换邮箱和邮箱找回成功同样增加 security_version，并清理全部旧挑战。完整机制、SMTP 配置与人工验收边界见 [邮箱找回配置说明](../admin-email-recovery.md)。
 
 账号库不可用或状态损坏时拒绝登录与受保护操作，不使用环境变量直接鉴权，不回退到内存账号。`USE_IN_MEMORY` 不提供后台账号服务。无初始账号且数据库未初始化时不挂载后台；初始化后移除初始账号环境变量不会禁用已有账号。
@@ -41,7 +45,7 @@
 
 | 方法 | 路径 | 权限 | 请求/响应 |
 | --- | --- | --- | --- |
-| GET | `/admin/api/accounts` | 管理员 | `data.items` 账号列表、`data.modules` 页面目录；各账号增加 recovery_email_bound/can_reset_password，不返回完整邮箱、密码哈希或挑战信息 |
+| GET | `/admin/api/accounts` | 管理员 | `data.items` 账号列表、`data.modules` 页面目录；账号含 `recovery_email_bound`、`can_reset_password` 及可选 `last_login_ip`、`last_login_location`，不返回完整邮箱、密码哈希或挑战信息 |
 | POST | `/admin/api/accounts` | 管理员 | `username, display_name, role, enabled, permissions, password` |
 | PUT | `/admin/api/accounts/:username` | 管理员 | `display_name, role, enabled, permissions, revision`；整体替换页面权限，未包含项默认无权限 |
 | POST | `/admin/api/accounts/:username/reset-password` | 迁移期管理员 | `password, revision`；仅目标未验证邮箱且旧入口未永久关闭时可应急重置，否则 403；重置使旧登录/验证码失效并要求改密 |

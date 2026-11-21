@@ -376,6 +376,7 @@
     var ownerToggle = document.getElementById('trackImportOwnerToggle');
     var ownerCurrent = document.getElementById('trackImportOwnerCurrent');
     var ownerMenu = document.getElementById('trackImportOwnerMenu');
+    var ownerPopup;
     var typeSelect = document.getElementById('trackImportType');
     var coordSelect = document.getElementById('trackImportCoord');
     var fileInput = document.getElementById('trackImportFiles');
@@ -395,6 +396,8 @@
       submitBtn.disabled = importing || !selectedOwner || !fileInput.files.length;
     }
     function closeOwnerMenu() {
+      ownerPopup?.close();
+      ownerPopup = null;
       ownerMenu.hidden = true;
       ownerToggle.setAttribute('aria-expanded', 'false');
     }
@@ -433,6 +436,7 @@
       closeOwnerMenu();
       if (open) {
         ownerMenu.hidden = false;
+        ownerPopup = AdminComponents.anchorPopup(ownerToggle, ownerMenu, { matchWidth: true, minWidth: 240, maxHeight: 280 });
         ownerToggle.setAttribute('aria-expanded', 'true');
         loadOwners();
       }
@@ -440,6 +444,7 @@
     document.addEventListener('click', function (event) {
       if (!ownerMenu.hidden && !document.getElementById('trackImportOwner').contains(event.target)) closeOwnerMenu();
     });
+    window.addEventListener('pagehide', closeOwnerMenu);
 
     fileInput.addEventListener('change', function () {
       var count = fileInput.files.length;

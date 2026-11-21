@@ -132,7 +132,7 @@
 | GET | `/admin/password.html` | 登录 | 本人账号安全，临时密码账号仅可先改密 |
 | GET | `/admin/forgot-password.html` | 公开 | 邮箱找回密码页面 |
 | GET | `/admin/access.html` | 登录 | 授权页面入口；无权限时联系管理员 |
-| GET | `/admin/api/accounts` | 管理员 | 账号列表与模块目录，不下发密码哈希 |
+| GET | `/admin/api/accounts` | 管理员 | 账号列表与模块目录，含可选 `last_login_ip`、`last_login_location`，不下发密码哈希 |
 | POST | `/admin/api/accounts` | 管理员 | 新建账号，临时密码必须修改 |
 | PUT | `/admin/api/accounts/:username` | 管理员 | 按 revision 修改名称、身份、状态和权限 |
 | POST | `/admin/api/accounts/:username/reset-password` | 管理员且迁移期 | 仅未绑定邮箱、旧入口未永久关闭时可应急重置 |

@@ -22,12 +22,20 @@ func (a *Authenticator) emailAvailable(c *app.RequestContext) bool {
 }
 
 func recoveryClientKey(c *app.RequestContext, operation string) string {
+	return operation + ":" + adminPeerHost(c)
+}
+
+func adminPeerHost(c *app.RequestContext) string {
 	// Use the socket peer, not client-controlled forwarded headers.
-	remote := c.RemoteAddr().String()
+	peer := c.RemoteAddr()
+	if peer == nil {
+		return ""
+	}
+	remote := peer.String()
 	if host, _, err := net.SplitHostPort(remote); err == nil {
 		remote = host
 	}
-	return operation + ":" + remote
+	return remote
 }
 
 func recoveryCodeValid(code string) bool {

@@ -9,6 +9,7 @@ require (
 	github.com/eclipse/paho.mqtt.golang v1.5.0
 	github.com/go-sql-driver/mysql v1.8.1
 	github.com/golang-jwt/jwt/v5 v5.3.1
+	github.com/oschwald/maxminddb-golang v1.13.1
 	go.mongodb.org/mongo-driver v1.17.9
 	golang.org/x/crypto v0.26.0
 	golang.org/x/image v0.24.0

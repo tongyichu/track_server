@@ -434,7 +434,7 @@ table.data.table .btn { white-space: nowrap; }
 .companion-type-filter { position: relative; }
 .companion-type-toggle { display: flex; align-items: center; white-space: nowrap; }
 .companion-type-current { display: inline-flex; align-items: center; gap: 4px; }
-.companion-type-menu { position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; min-width: 100%; margin: 0; padding: 6px; list-style: none; background: var(--admin-bg-surface); border: 1px solid var(--admin-border-color); border-radius: var(--admin-border-radius); box-shadow: 0 8px 24px rgba(15, 23, 42, .12); }
+.companion-type-menu { position: fixed; z-index: 1800; inset: auto; margin: 0; padding: 6px; overflow: auto; overscroll-behavior: contain; list-style: none; background: var(--admin-bg-surface); border: 1px solid var(--admin-border-color); border-radius: var(--admin-border-radius); box-shadow: 0 8px 24px rgba(15, 23, 42, .12); }
 .companion-type-menu li { padding: 6px 8px; border-radius: var(--admin-border-radius); cursor: pointer; white-space: nowrap; }
 .companion-type-menu li:hover { background: var(--admin-bg-surface-secondary); }
 .companion-type-menu li[aria-selected="true"] { background: var(--admin-primary-lt, rgba(32, 107, 196, .08)); }
@@ -815,6 +815,8 @@ table.admin-audit-table { width: 100%; min-width: 680px; table-layout: fixed; }
 .account-self { color: var(--admin-secondary-color); font-size: 11px; margin-inline-start: 8px; }
 .account-password-pending { color: var(--admin-warning-text-emphasis, #8a5a00); }
 .account-login-time { font-variant-numeric: tabular-nums; }
+.account-login-source { font-variant-numeric: tabular-nums; white-space: normal; overflow-wrap: anywhere; }
+.account-login-location { display: block; }
 .account-row-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .accounts-migration { margin: 8px 0 0; }
 .accounts-audit-filters > select { max-width: 100%; }
@@ -853,9 +855,11 @@ table.admin-audit-table { width: 100%; min-width: 680px; table-layout: fixed; }
   .accounts-list .account-row-actions { flex-wrap: nowrap; gap: 4px; }
   .accounts-list .account-recovery { grid-area: 2 / 1; }
   .accounts-list .account-login-time { grid-area: 2 / 2 / 3 / -1; text-align: end; }
-  .accounts-list :is(.account-recovery, .account-login-time) { color: var(--admin-secondary-color); font-size: 12px; }
+  .accounts-list .account-login-source { grid-area: 3 / 1 / 4 / -1; }
+  .accounts-list :is(.account-recovery, .account-login-time, .account-login-source) { color: var(--admin-secondary-color); font-size: 12px; }
   .accounts-list table.data.admin-card-table .account-recovery::before { display: inline; content: '邮箱 '; font-size: inherit; font-weight: 400; }
   .accounts-list table.data.admin-card-table .account-login-time::before { display: inline; content: '登录 '; font-size: inherit; font-weight: 400; }
+  .accounts-list table.data.admin-card-table .account-login-source::before { display: inline; content: '登录 IP '; font-size: inherit; font-weight: 400; }
   .account-form-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .account-permission-groups { grid-template-columns: 1fr; }
 }
@@ -949,7 +953,7 @@ table.admin-audit-table { width: 100%; min-width: 680px; table-layout: fixed; }
 .route-type-select { position: relative; }
 .route-type-toggle { display: flex; align-items: center; gap: 8px; }
 .route-type-toggle-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.route-type-menu { position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; right: 0; display: grid; gap: 2px; padding: 6px; border: 1px solid var(--admin-border-color); border-radius: 10px; background: var(--admin-bg-surface); box-shadow: 0 8px 24px rgba(0, 0, 0, .12); }
+.route-type-menu { position: fixed; z-index: 1800; inset: auto; display: grid; gap: 2px; padding: 6px; overflow: auto; overscroll-behavior: contain; border: 1px solid var(--admin-border-color); border-radius: 10px; background: var(--admin-bg-surface); box-shadow: 0 8px 24px rgba(0, 0, 0, .12); }
 .route-type-option { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 10px; border: none; border-radius: 7px; background: transparent; color: var(--admin-body-color); font-size: 13px; text-align: left; cursor: pointer; }
 .route-type-option:hover, .route-type-option:focus-visible { background: rgba(var(--admin-primary-rgb), .08); outline: none; }
 .route-type-option.active { background: rgba(var(--admin-primary-rgb), .12); font-weight: 600; }

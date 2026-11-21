@@ -62,6 +62,7 @@ type accountRecord struct {
 	CreatedAt          time.Time         `json:"created_at"`
 	UpdatedAt          time.Time         `json:"updated_at"`
 	LastLoginAt        *time.Time        `json:"last_login_at,omitempty"`
+	LastLoginIP        string            `json:"last_login_ip,omitempty"`
 	Email              string            `json:"email,omitempty"`
 	EmailVerifiedAt    *time.Time        `json:"email_verified_at,omitempty"`
 	EmailBinding       *emailChallenge   `json:"email_binding,omitempty"`
@@ -94,6 +95,12 @@ type accountView struct {
 
 func (a *accountRecord) view() accountView {
 	return accountView{a.ID, a.Username, a.DisplayName, a.Role, a.Enabled, a.Permissions, a.MustChangePassword, a.Revision, a.CreatedAt, a.UpdatedAt, a.LastLoginAt, a.recoveryReady(), false}
+}
+
+type accountListView struct {
+	accountView
+	LastLoginIP       string `json:"last_login_ip,omitempty"`
+	LastLoginLocation string `json:"last_login_location,omitempty"`
 }
 
 func (a *accountRecord) allows(module string, write bool) bool {
@@ -341,16 +348,16 @@ func (m *AccountManager) saveAccount(ctx context.Context, actor, username string
 	})
 }
 
-func (m *AccountManager) list(ctx context.Context) ([]accountView, error) {
+func (m *AccountManager) list(ctx context.Context) ([]accountListView, error) {
 	state, _, err := m.load(ctx)
 	if err != nil {
 		return nil, err
 	}
-	items := make([]accountView, 0, len(state.Accounts))
+	items := make([]accountListView, 0, len(state.Accounts))
 	for _, account := range state.Accounts {
 		item := account.view()
 		item.CanResetPassword = !state.LegacyPasswordResetDisabled && !account.recoveryReady()
-		items = append(items, item)
+		items = append(items, accountListView{accountView: item, LastLoginIP: account.LastLoginIP})
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].Username < items[j].Username })
 	return items, nil

@@ -32,7 +32,21 @@ func (a *Authenticator) HandleAccounts(ctx context.Context, c *app.RequestContex
 		writeAccountError(c, err)
 		return
 	}
-	c.JSON(200, utils.H{"code": 0, "data": utils.H{"items": items, "modules": permissionModules}})
+	locations := make(map[string]string, len(items))
+	for i := range items {
+		ip := items[i].LastLoginIP
+		location, ok := locations[ip]
+		if !ok && ip != "" {
+			location = a.loginGeo.lookup(ip)
+			locations[ip] = location
+		}
+		items[i].LastLoginLocation = location
+	}
+	data := utils.H{"items": items, "modules": permissionModules}
+	if a.loginGeo.isDBIP() {
+		data["login_location_source"] = "db-ip"
+	}
+	c.JSON(200, utils.H{"code": 0, "data": data})
 }
 
 func (a *Authenticator) HandleSaveAccount(ctx context.Context, c *app.RequestContext) {

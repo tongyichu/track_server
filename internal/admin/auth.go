@@ -29,6 +29,7 @@ type Authenticator struct {
 	store    *SessionStore
 	manager  *AccountManager
 	recovery *emailRecovery
+	loginGeo *loginLocationDatabase
 }
 
 // AccountCount 返回已加载的有效管理员账号数量。
@@ -53,11 +54,15 @@ func (a *Authenticator) AccountCount() int {
 // 侧信道加固：未命中用户名时也执行一次 bcrypt 占位比较，
 // 让失败分支的总耗时接近命中分支，降低通过时间差枚举用户名的可能性。
 func (a *Authenticator) Verify(username, password string) (*Session, error) {
+	return a.verify(context.Background(), username, password, "")
+}
+
+func (a *Authenticator) verify(ctx context.Context, username, password, loginIP string) (*Session, error) {
 	if a == nil {
 		return nil, errAccountStoreUnavailable
 	}
 	if a.manager != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
 		account, err := a.manager.get(ctx, username)
 		if err != nil {
@@ -70,6 +75,10 @@ func (a *Authenticator) Verify(username, password string) (*Session, error) {
 		if bcrypt.CompareHashAndPassword([]byte(account.PasswordHash), []byte(password)) != nil || !account.Enabled {
 			return nil, accountFailure(401, "用户名或密码错误")
 		}
+		sess, err := a.store.Create(username)
+		if err != nil {
+			return nil, err
+		}
 		err = a.manager.mutate(ctx, "", func(state *accountState) error {
 			current := state.Accounts[username]
 			if current == nil || !current.Enabled || current.SecurityVersion != account.SecurityVersion || current.PasswordHash != account.PasswordHash {
@@ -77,14 +86,12 @@ func (a *Authenticator) Verify(username, password string) (*Session, error) {
 			}
 			now := time.Now().UTC()
 			current.LastLoginAt = &now
+			current.LastLoginIP = loginIP
 			account = current
 			return nil
 		})
 		if err != nil {
-			return nil, err
-		}
-		sess, err := a.store.Create(username)
-		if err != nil {
+			a.store.Delete(sess.Token)
 			return nil, err
 		}
 		sess.AccountID, sess.SecurityVersion = account.ID, account.SecurityVersion
@@ -112,7 +119,7 @@ func (a *Authenticator) HandleLogin(ctx context.Context, c *app.RequestContext) 
 	if !readAccountBody(c, &body) {
 		return
 	}
-	sess, err := a.Verify(body.Username, body.Password)
+	sess, err := a.verify(ctx, body.Username, body.Password, adminLoginIP(c))
 	if err != nil {
 		status, message := http.StatusUnauthorized, "用户名或密码错误"
 		if a.manager != nil {

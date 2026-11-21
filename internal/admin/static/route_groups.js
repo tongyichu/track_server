@@ -111,6 +111,7 @@
   // ---------- 运动类型下拉（icon + 文字） ----------
   var typeToggle = document.getElementById('trackTypeToggle');
   var typeMenu = document.getElementById('trackTypeMenu');
+  var typePopup;
 
   function typeOptionHTML(value, iconMeta, label) {
     return '<button type="button" class="route-type-option' + (value === selectedTrackType ? ' active' : '') + '" role="option" data-type-value="' + esc(value) + '" aria-selected="' + (value === selectedTrackType) + '">' +
@@ -136,11 +137,15 @@
     });
   }
   function openTypeMenu() {
+    if (!typeMenu.hidden) return;
     renderTypeMenu();
     typeMenu.hidden = false;
+    typePopup = AdminComponents.anchorPopup(typeToggle, typeMenu, { matchWidth: true });
     typeToggle.setAttribute('aria-expanded', 'true');
   }
   function closeTypeMenu() {
+    typePopup?.close();
+    typePopup = null;
     typeMenu.hidden = true;
     typeToggle.setAttribute('aria-expanded', 'false');
   }
@@ -165,6 +170,7 @@
   document.addEventListener('click', function (event) {
     if (!typeMenu.hidden && !document.getElementById('trackTypeSelect').contains(event.target)) closeTypeMenu();
   });
+  window.addEventListener('pagehide', closeTypeMenu);
 
   // ---------- 省 / 市级联 ----------
   var provinceSelect = document.getElementById('provinceCodeInput');

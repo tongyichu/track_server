@@ -107,6 +107,7 @@ type Config struct {
 	// 无初始化账号且数据库无后台账号时禁用后台；账号库不可用时拒绝鉴权，不回退到内存。
 	// 哈希生成示例：htpasswd -nbBC 10 "" "<plain>" | tr -d ':\n' | sed 's/^$2y/$2a/'
 	AdminAccounts     map[string]string
+	AdminIPGeoDB      string
 	AdminSMTPHost     string
 	AdminSMTPPort     int
 	AdminSMTPUsername string
@@ -254,6 +255,7 @@ func Load() *Config {
 
 		// 管理后台登录凭证（独立于业务用户鉴权）
 		AdminAccounts:     parseAdminAccounts(os.Getenv("ADMIN_ACCOUNTS"), os.Getenv("ADMIN_USERNAME"), os.Getenv("ADMIN_PASSWORD_HASH")),
+		AdminIPGeoDB:      strings.TrimSpace(os.Getenv("ADMIN_IP_GEO_DB")),
 		AdminSMTPHost:     strings.TrimSpace(os.Getenv("ADMIN_SMTP_HOST")),
 		AdminSMTPPort:     int(getEnvInt64("ADMIN_SMTP_PORT", 465)),
 		AdminSMTPUsername: os.Getenv("ADMIN_SMTP_USERNAME"),

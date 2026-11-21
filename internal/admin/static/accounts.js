@@ -62,6 +62,14 @@
     statusCell.appendChild(statusLabel);
     cell(row, account.recovery_email_bound ? '已验证' : '未绑定').className = 'account-recovery';
     cell(row, time(account.last_login_at)).className = 'account-login-time';
+    const loginSource = cell(row, account.last_login_ip || '—');
+    loginSource.className = 'account-login-source';
+    if (account.last_login_ip) {
+      const location = document.createElement('small');
+      location.className = 'account-login-location text-secondary';
+      location.textContent = account.last_login_location || '所在地未知';
+      loginSource.append(location);
+    }
 
     const actions = document.createElement('div');
     actions.className = 'account-row-actions';
@@ -99,6 +107,7 @@
       const data = await api('/accounts');
       modules = data.modules || [];
       const accounts = data.items || [];
+      $('loginLocationAttribution').hidden = data.login_location_source !== 'db-ip';
       updateAuditAccounts(accounts);
       const ownAccount = accounts.find(account => account.username === username);
       const needsOwnEmail = ownAccount && !ownAccount.recovery_email_bound;
@@ -107,12 +116,12 @@
       $('verifyOwnRecoveryEmail').hidden = !needsOwnEmail;
       $('emailMigrationText').textContent = canReset ? '未验证邮箱的账号暂可应急重置，全部启用账号验证后永久关闭。' : '当前账号还未验证找回邮箱。';
       if (accounts.length) $('accountsList').replaceChildren(...accounts.map(renderAccount));
-      else listState($('accountsList'), 5, '暂无后台账号');
+      else listState($('accountsList'), 6, '暂无后台账号');
       showError($('accountsError'), '');
       $('createAccount').disabled = false;
     } catch (error) {
       showError($('accountsError'), error.message);
-      if ($('createAccount').disabled) listState($('accountsList'), 5, '账号加载失败，请刷新重试');
+      if ($('createAccount').disabled) listState($('accountsList'), 6, '账号加载失败，请刷新重试');
     }
     finally { $('refreshAccounts').disabled = false; }
   }

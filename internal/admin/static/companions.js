@@ -107,6 +107,7 @@
   var typeToggle = document.getElementById('trackTypeToggle');
   var typeCurrent = document.getElementById('trackTypeCurrent');
   var typeMenu = document.getElementById('trackTypeMenu');
+  var typePopup;
   function typeOptionHTML(code) {
     if (!code) return '<span class="companion-type-any">全部类型</span>';
     var type = typeVisuals[code] || fallbackTypeVisual;
@@ -130,6 +131,8 @@
     closeTypeMenu();
   }
   function closeTypeMenu() {
+    typePopup?.close();
+    typePopup = null;
     typeMenu.hidden = true;
     typeToggle.setAttribute('aria-expanded', 'false');
   }
@@ -138,6 +141,7 @@
     closeTypeMenu();
     if (open) {
       typeMenu.hidden = false;
+      typePopup = AdminComponents.anchorPopup(typeToggle, typeMenu, { matchWidth: true });
       typeToggle.setAttribute('aria-expanded', 'true');
     }
   });
@@ -485,6 +489,7 @@
   detailModal.addEventListener('close', function () { if (!detailSuspended) { detailRequest += 1; currentSessionID = ''; if (detailController) detailController.abort(); } });
   detailModal.addEventListener('click', function (event) { if (event.target === detailModal) detailModal.close(); });
   window.addEventListener('pagehide', function () {
+    closeTypeMenu();
     detailRequest += 1;
     currentSessionID = '';
     detailController?.abort();

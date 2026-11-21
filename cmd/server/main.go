@@ -737,6 +737,12 @@ func main() {
 
 	// 后台账号独立持久化；环境变量仅用于首次初始化，数据库降级不放开后台鉴权。
 	adminModule := admin.NewModule(cfg.AdminAccounts, appReleaseSvc, ossTokenSvc, staticRoot, userRepo, trackRepo, collectRepo, trackMapRepo, companionRepo, analyticsRepo, userSvc, feedbackSvc, accountRestrictionSvc, trackRouteGroupSvc, adminAccountStorage)
+	if geoDB, err := adminModule.ConfigureLoginLocation(cfg.AdminIPGeoDB); err != nil {
+		log.Print("admin login IP location unavailable: check ADMIN_IP_GEO_DB")
+	} else if geoDB != nil {
+		defer geoDB.Close()
+		log.Print("admin login IP location database loaded")
+	}
 	adminModule.Handler.SetMusicService(musicSvc)
 	adminModule.Handler.SetMessageService(messageSvc)
 	adminModule.Handler.SetAnalyticsHealth(admin.AnalyticsHealthConfig{

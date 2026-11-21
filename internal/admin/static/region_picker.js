@@ -27,10 +27,11 @@
     }
     const provinces = column('省份'), cities = column('城市');
     cities.list.id = popup.id + 'Cities';
-    control.append(toggle, clear); host.append(label, control); provinceSource.before(host); document.body.appendChild(popup);
+    control.append(toggle, clear); host.append(label, control); provinceSource.before(host);
+    (toggle.closest('dialog') || document.body).appendChild(popup);
     provinceSource.classList.add('admin-region-source'); citySource.classList.add('admin-region-source');
     [...province.labels, ...city.labels].forEach(source => source.classList.add('admin-region-source'));
-    let data = regions || [], browsingProvince = '', renderedProvince = null;
+    let data = regions || [], browsingProvince = '', renderedProvince = null, floating;
 
     function childCities(code) { return data.filter(item => item.level === 'city' && item.province_code === code); }
 
@@ -43,17 +44,15 @@
       clear.disabled = toggle.disabled; toggle.classList.toggle('is-clearable', !clear.hidden);
       if (toggle.disabled) close(false);
     }
-    function close(focus) { popup.hidden = true; toggle.setAttribute('aria-expanded', 'false'); if (focus) toggle.focus(); }
+    function close(focus) {
+      floating?.close(); floating = null;
+      popup.hidden = true; toggle.setAttribute('aria-expanded', 'false'); if (focus) toggle.focus();
+    }
     function position() {
-      const rect = toggle.getBoundingClientRect(), fullWidth = Math.min(400, window.innerWidth - 24), provinceWidth = Math.round(fullWidth * .4);
+      const fullWidth = Math.min(400, (window.visualViewport?.width ?? window.innerWidth) - 16), provinceWidth = Math.round(fullWidth * .4);
       popup.style.setProperty('--admin-region-province-width', provinceWidth + 'px');
       popup.style.width = (cities.pane.hidden ? provinceWidth : fullWidth) + 'px';
-      popup.style.left = Math.max(12, Math.min(rect.left, window.innerWidth - fullWidth - 12)) + 'px';
-      const below = window.innerHeight - rect.bottom - 12, above = rect.top - 12;
-      const useBelow = below >= Math.min(320, above);
-      const height = Math.max(90, Math.min(360, (useBelow ? below : above) - 4));
-      popup.style.height = height + 'px';
-      popup.style.top = (useBelow ? rect.bottom + 4 : Math.max(12, rect.top - height - 4)) + 'px';
+      floating?.place();
     }
     function commit(provinceCode, cityCode) {
       if (province.disabled) return;
@@ -112,7 +111,9 @@
     }
     function open(focus) {
       sync(); if (toggle.disabled) return;
+      if (floating) { if (focus) focusOption(provinces.list); return; }
       popup.hidden = false; toggle.setAttribute('aria-expanded', 'true'); render(); position();
+      floating = AdminComponents.anchorPopup(toggle, popup, { fillHeight: true, gap: 4 });
       if (focus) focusOption(provinces.list);
       else provinces.list.querySelector('.is-browsing')?.scrollIntoView({ block: 'nearest' });
     }

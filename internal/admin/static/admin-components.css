@@ -246,6 +246,19 @@ dialog.modal::backdrop { background: #16213570; }
   color: var(--admin-body-color); background: var(--admin-bg-surface); border: 1px solid var(--admin-border-color); border-radius: 8px; box-shadow: var(--admin-box-shadow-dropdown);
 }
 .dropdown-menu.show { display: block; }
+.admin-anchored-popup { box-sizing: border-box; margin: 0; }
+.admin-select-popup { z-index: 1800; }
+.admin-select-option {
+  padding: 6px 8px; border-radius: 5px; min-height: 34px; font-size: 13px;
+  line-height: 22px; overflow-wrap: anywhere; cursor: pointer;
+}
+.admin-select-option[aria-selected="true"] { font-weight: 650; }
+.admin-select-option[aria-disabled="true"] { color: var(--admin-secondary-color); opacity: .6; cursor: default; }
+.admin-select-option.is-active, .admin-select-option:not([aria-disabled="true"]):hover { background: var(--admin-primary-lt); }
+.admin-select-group { padding: 6px 8px; font-size: 12px; color: var(--admin-secondary-color); }
+@media (forced-colors: active) {
+  .admin-select-option.is-active { outline: 1px solid Highlight; outline-offset: -1px; }
+}
 .dropdown-item {
   display: flex; align-items: center; width: 100%; min-height: 34px; padding: 6px 8px; border: 0; border-radius: 5px;
   background: transparent; color: inherit; font-size: 13px; text-align: start; text-decoration: none; cursor: pointer;
