@@ -34,7 +34,7 @@ GET /api/v1/track-map/view?latitude=22.3000&longitude=114.1700&radius_m=10000&tr
 | 参数 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
 | `bbox` | string | 地图视野模式必填 | `minLng,minLat,maxLng,maxLat` |
-| `zoom` | number | 否 | 地图缩放级别；`<=9` 返回城市聚合，`<=11` 返回区域聚合，更大返回路线组 |
+| `zoom` | number | 否 | 旧模式按城市、区域、路线组分层。按出发点浏览的缩放规则见下文 |
 | `latitude` | number | 附近模式必填 | 用户当前位置纬度 |
 | `longitude` | number | 附近模式必填 | 用户当前位置经度 |
 | `radius_m` | int | 否 | 附近半径，默认 `10000`，最大 `50000` |
@@ -49,8 +49,8 @@ GET /api/v1/track-map/view?latitude=22.3000&longitude=114.1700&radius_m=10000&tr
 
 请求 `browse_mode=departure` 后，成功响应带 `browse_mode=departure`。查询使用已完成且公开的路线组成员，从已有空间索引读取起点。城市和区县由起点匹配内置边界，边界未覆盖时沿用轨迹的城市代码。附近和视野模式均按起点过滤。
 
-- 无范围选择时，按缩放返回 `city`、`district` 或 `route`。点击城市传 `city_code`，返回区县气泡。无下辖区县或无区县边界的起点可直接呈现景点或具体路线。
-- 点击 `area_type=district` 的气泡传 `district_id`，返回 `view_level=places`，其中可以同时有 `area_cluster`（已有景点关联）和 `route_group`（独立路线）。点景点时保留当前城市或区县，再传 `scenic_id`，返回该范围内的路线。
+- 仅传视野和缩放时，`zoom <= 9` 返回 `city`，`9 < zoom <= 11` 返回 `district`，`11 < zoom <= 13` 返回 `places`，`zoom > 13` 返回 `route`。景点层可以同时展示 `area_cluster`（景点）和 `route_group`（独立路线）。无下辖区县的城市可从城市气泡直接放大到景点和独立路线。
+- 显式传 `district_id` 或 `scenic_id` 的调用仍可固定查看对应范围，分别返回景点层或路线层。Android 地图通过地图缩放切换层级。
 - 区县内按公开成员的当前主景点关联分组。已保存的新增、改绑、移除和景点归档在下一次查询生效，无需等待路线组重算。一个出发范围内同一路线组只展示一次，多个成员景点不同时优先运营关联。同一组仍有有效关联时，移除单个成员的景点后可继续按其余关联展示。
 - 在每个城市、区县或景点气泡内按 `group_id` 去重。已有公开轨迹实际从不同区县出发时，同一 `group_id` 可以在多个区县出现。路线标记用 `group_id` 与 `departure_scope_id` 联合识别。
 - 路线标记的 `center` 和 `bbox` 表示出发点，`departure_track_id` 指向该方向的实际公开轨迹。另可返回 `district_name`、`distance_m` 及跨区终点 `arrival_name`。查询路线组详情仍用 `group_id`。

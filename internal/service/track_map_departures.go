@@ -17,6 +17,7 @@ const (
 	trackMapBrowseDeparture = "departure"
 	trackMapViewDistrict    = "district"
 	trackMapViewPlaces      = "places"
+	trackMapPlacesMaxZoom   = 13
 )
 
 type mapDeparture struct {
@@ -98,8 +99,10 @@ func (s *TrackMapService) departureView(ctx context.Context, input TrackMapViewI
 		level = trackMapViewRoute
 	case districtID != "":
 		level = trackMapViewPlaces
-	case cityCode != "" || legacyLevel == trackMapViewArea:
+	case legacyLevel == trackMapViewArea || cityCode != "" && input.Zoom <= 0:
 		level = trackMapViewDistrict
+	case input.Zoom > trackMapAreaMaxZoom && input.Zoom <= trackMapPlacesMaxZoom:
+		level = trackMapViewPlaces
 	}
 	response := &models.TrackMapViewResponse{
 		ViewLevel: level, CoordinateSystem: "GCJ02", BrowseMode: trackMapBrowseDeparture, Items: []any{},
