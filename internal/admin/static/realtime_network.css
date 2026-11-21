@@ -69,22 +69,22 @@ body:has(.rt-network-sheet[open]){overflow:hidden}
 .rt-graph-underlay{fill:var(--admin-bg-surface-secondary);pointer-events:none}
 .rt-graph-border{fill:none;stroke:transparent;stroke-width:3;pointer-events:none;vector-effect:non-scaling-stroke}
 .rt-graph-surface{fill:var(--admin-bg-surface);stroke:var(--admin-border-color);stroke-width:1.5}
-.rt-graph-owner rect{fill:var(--admin-primary)}
-.rt-graph-owner text{fill:var(--admin-primary-fg,#fff);font-size:9px;font-weight:600}
-.rt-graph-initial{fill:var(--admin-primary);font-size:15px}
+.rt-graph-owner rect{fill:var(--admin-chart-accent)}
+.rt-graph-owner text{fill:#fff;font-size:9px;font-weight:600}
+.rt-graph-initial{fill:var(--admin-chart-accent);font-size:15px}
 .rt-graph-label{fill:var(--admin-body-color);font-size:calc(12px / var(--rt-graph-scale,1))}
 .rt-graph-count{fill:var(--admin-secondary);font-size:calc(11px / var(--rt-graph-scale,1))}
 .rt-graph-line{fill:none;stroke:var(--admin-secondary);stroke-width:1.6;opacity:.55;pointer-events:none;vector-effect:non-scaling-stroke}
 .rt-graph-hit{fill:none;stroke:transparent;stroke-width:16;cursor:pointer;outline:none;vector-effect:non-scaling-stroke}
 .rt-graph-edge.is-muted .rt-graph-line{opacity:.12}
-.rt-graph-edge.is-selected .rt-graph-line,.rt-graph-hit:focus-visible+.rt-graph-line{stroke:var(--admin-primary);stroke-width:3;opacity:1}
-.rt-graph-node.is-selected .rt-graph-border,.rt-graph-node:focus-visible .rt-graph-border{stroke:var(--admin-primary)}
+.rt-graph-edge.is-selected .rt-graph-line,.rt-graph-hit:focus-visible+.rt-graph-line{stroke:var(--admin-chart-accent);stroke-width:3;opacity:1}
+.rt-graph-node.is-selected .rt-graph-border,.rt-graph-node:focus-visible .rt-graph-border{stroke:var(--admin-chart-accent)}
 .rt-graph-node.is-muted .rt-graph-avatar,.rt-graph-node.is-muted .rt-graph-label,.rt-graph-node.is-muted .rt-graph-count,.rt-graph-node.is-muted .rt-graph-owner{opacity:.22}
 .rt-graph-room{cursor:grab;outline:none}
 .rt-graph-room:active{cursor:grabbing}
 .rt-graph-room>.rt-graph-label{font-size:12px}
 .rt-graph-room>.rt-graph-count{font-size:11px}
-.rt-graph-room-region{fill:var(--admin-primary);fill-opacity:.035;stroke:var(--admin-primary);stroke-opacity:.35;stroke-width:1.5;vector-effect:non-scaling-stroke}
+.rt-graph-room-region{fill:var(--admin-chart-accent);fill-opacity:.035;stroke:var(--admin-chart-accent);stroke-opacity:.35;stroke-width:1.5;vector-effect:non-scaling-stroke}
 .rt-graph-room.is-selected .rt-graph-room-region,.rt-graph-room:focus-visible .rt-graph-room-region{fill-opacity:.1;stroke-opacity:1;stroke-width:2.5}
 .rt-graph-room.is-muted{opacity:.28}
 @media(max-width:1100px){.rt-network-canvas{height:500px}}

@@ -27,7 +27,8 @@ function componentFor(node, inTable) {
     const variant = classes.has("btn-danger") ? "destructive"
       : classes.has("btn-link") ? "link"
       : [...classes].some((value) => value.startsWith("btn-outline-")) ? "outline"
-      : classes.has("btn-primary") || classes.has("btn-secondary") || classes.has("btn-success") ? "default"
+      : classes.has("btn-secondary") ? "secondary"
+      : classes.has("btn-primary") || classes.has("btn-success") ? "default"
       : "ghost";
     return ["button", { variant, size: classes.has("btn-icon") ? "icon" : classes.has("btn-sm") ? "sm" : "default" }];
   }
@@ -67,7 +68,8 @@ function applyRecipe(node, recipe) {
 
 const vite = await createServer({ root: frontend, server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: "custom" });
 try {
-  const { componentMarkup } = await vite.ssrLoadModule("/src/static-components.jsx");
+  const { componentMarkup, sidebarPartsMarkup } = await vite.ssrLoadModule("/src/static-components.jsx");
+  const sidebarParts = sidebarPartsMarkup();
   const recipes = new Map();
   await mkdir(output, { recursive: true });
   for (const name of pages) {
@@ -81,6 +83,9 @@ try {
       applyRecipe(node, recipes.get(key));
     });
     let compiled = serialize(doc);
+    if (compiled.includes('src="/admin/static/shell.js"')) {
+      compiled = compiled.replace("</head>", sidebarParts + "</head>");
+    }
     if (!compiled.includes(stylesheet)) {
       compiled = compiled.replace("</head>", '<link rel="stylesheet" href="' + stylesheet + '"></head>');
     }

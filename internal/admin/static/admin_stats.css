@@ -49,7 +49,7 @@ button.admin-metric:hover, a.admin-metric:hover { color: inherit; background: va
   min-height: 26px; min-width: 30px; margin: 0; padding: 3px 8px; border: 0; border-radius: 4px !important;
   color: var(--admin-secondary-color); background: transparent; box-shadow: none; font-size: 12px; line-height: 1.4;
 }
-.admin-period-tabs button.active, .admin-period-tabs button[aria-pressed="true"] { color: var(--admin-primary); background: var(--admin-bg-surface); box-shadow: 0 1px 3px #18243312; }
+.admin-period-tabs button.active, .admin-period-tabs button[aria-pressed="true"] { color: var(--admin-primary); background: var(--admin-bg-surface); box-shadow: var(--admin-box-shadow); }
 .admin-chart-panel { margin: 0; }
 .admin-chart-panel h3 { margin: 0 0 8px; font-size: 13px; font-weight: 600; }
 .admin-chart-panel > p.hint { margin: 4px 0; font-size: 11px; }
