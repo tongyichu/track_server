@@ -261,6 +261,11 @@ func (s *TrackPlaceService) DismissPlaceCandidate(ctx context.Context, trackID s
 	if err := s.save(ctx, "match:"+trackID, match, time.Time{}, ""); err != nil {
 		return err
 	}
+	if s.scenicCatalog != nil {
+		if err := s.scenicCatalog.SyncLegacyTrack(ctx, trackID); err != nil {
+			return err
+		}
+	}
 	return s.refreshGroup(ctx, index, match)
 }
 

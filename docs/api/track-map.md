@@ -51,6 +51,7 @@ GET /api/v1/track-map/view?latitude=22.3000&longitude=114.1700&radius_m=10000&tr
 
 - 无范围选择时，按缩放返回 `city`、`district` 或 `route`。点击城市传 `city_code`，返回区县气泡。无下辖区县或无区县边界的起点可直接呈现景点或具体路线。
 - 点击 `area_type=district` 的气泡传 `district_id`，返回 `view_level=places`，其中可以同时有 `area_cluster`（已有景点关联）和 `route_group`（独立路线）。点景点时保留当前城市或区县，再传 `scenic_id`，返回该范围内的路线。
+- 区县内按公开成员的当前主景点关联分组。已保存的新增、改绑、移除和景点归档在下一次查询生效，无需等待路线组重算。一个出发范围内同一路线组只展示一次，多个成员景点不同时优先运营关联。同一组仍有有效关联时，移除单个成员的景点后可继续按其余关联展示。
 - 在每个城市、区县或景点气泡内按 `group_id` 去重。已有公开轨迹实际从不同区县出发时，同一 `group_id` 可以在多个区县出现。路线标记用 `group_id` 与 `departure_scope_id` 联合识别。
 - 路线标记的 `center` 和 `bbox` 表示出发点，`departure_track_id` 指向该方向的实际公开轨迹。另可返回 `district_name`、`distance_m` 及跨区终点 `arrival_name`。查询路线组详情仍用 `group_id`。
 

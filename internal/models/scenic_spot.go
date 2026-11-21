@@ -65,7 +65,7 @@ type ScenicSpotSource struct {
 type TrackScenicSpotLink struct {
 	TrackID    string    `json:"track_id" bson:"_id"`
 	SpotID     string    `json:"scenic_spot_id" bson:"scenic_spot_id"`
-	Origin     string    `json:"origin" bson:"origin"` // auto, manual, merge, backfill
+	Origin     string    `json:"origin" bson:"origin"` // removed with an empty SpotID records an explicit unassignment
 	Provider   string    `json:"provider,omitempty" bson:"provider,omitempty"`
 	Confidence float64   `json:"confidence,omitempty" bson:"confidence,omitempty"`
 	UpdatedAt  time.Time `json:"updated_at" bson:"updated_at"`

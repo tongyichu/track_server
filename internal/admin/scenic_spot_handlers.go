@@ -609,7 +609,7 @@ func (h *Handler) UnassignScenicSpotTrack(ctx context.Context, c *app.RequestCon
 	if !h.scenicSpotServiceReady(c) {
 		return
 	}
-	if err := h.scenicSpotSvc.UnassignTrack(ctx, h.adminOperator(c), c.Param("track_id")); err != nil {
+	if err := h.scenicSpotSvc.UnassignTrack(ctx, h.adminOperator(c), c.Param("spot_id"), c.Param("track_id")); err != nil {
 		h.scenicSpotServiceError(c, err)
 		return
 	}

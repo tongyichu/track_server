@@ -27,7 +27,7 @@ func (s *ScenicSpotCatalogService) syncCompanionLink(ctx context.Context, target
 	original, err := s.spots.GetTrackScenicSpotLink(ctx, source)
 	if errors.Is(err, repository.ErrNotFound) {
 		if clearMissing && current != nil {
-			if err = s.spots.DeleteTrackScenicSpotLink(ctx, target, current.SpotID); errors.Is(err, repository.ErrConflict) {
+			if err = s.spots.DeleteTrackScenicSpotLink(ctx, target, current.SpotID, current.Origin); errors.Is(err, repository.ErrConflict) {
 				return false, nil
 			}
 			return false, err
@@ -38,18 +38,18 @@ func (s *ScenicSpotCatalogService) syncCompanionLink(ctx context.Context, target
 		return false, err
 	}
 	if current != nil && current.SpotID == original.SpotID && current.Origin == "companion" && current.UpdatedBy == source {
-		return false, nil
+		return original.SpotID == "", nil
 	}
 	link := &models.TrackScenicSpotLink{TrackID: target, SpotID: original.SpotID, Origin: "companion", Provider: original.Provider, Confidence: original.Confidence, UpdatedAt: time.Now(), UpdatedBy: source}
-	expected := ""
 	if current != nil {
-		expected = current.SpotID
+		err = s.spots.SetTrackScenicSpotLink(ctx, link, current.SpotID, false, current.Origin)
+	} else {
+		err = s.spots.SetTrackScenicSpotLink(ctx, link, "", true)
 	}
-	err = s.spots.SetTrackScenicSpotLink(ctx, link, expected, current == nil)
 	if errors.Is(err, repository.ErrConflict) {
 		return false, nil
 	}
-	return false, err
+	return original.SpotID == "" && err == nil, err
 }
 
 func (s *TrackPlaceService) reuseCompanionPlace(ctx context.Context, index *models.TrackGeoIndex, track, source *models.Track, out *TrackPlaceRunResult) error {

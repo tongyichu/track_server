@@ -178,7 +178,7 @@ func (r *MongoScenicSpotRepository) GetTrackScenicSpotLinks(ctx context.Context,
 	}
 	return out, cur.Err()
 }
-func (r *MongoScenicSpotRepository) SetTrackScenicSpotLink(ctx context.Context, v *models.TrackScenicSpotLink, expected string, absent bool) error {
+func (r *MongoScenicSpotRepository) SetTrackScenicSpotLink(ctx context.Context, v *models.TrackScenicSpotLink, expected string, absent bool, expectedOrigin ...string) error {
 	filter := bson.M{"_id": v.TrackID}
 	if absent {
 		_, err := r.links.InsertOne(ctx, v)
@@ -188,6 +188,9 @@ func (r *MongoScenicSpotRepository) SetTrackScenicSpotLink(ctx context.Context, 
 		return err
 	}
 	filter["scenic_spot_id"] = expected
+	if len(expectedOrigin) > 0 {
+		filter["origin"] = expectedOrigin[0]
+	}
 	res, err := r.links.ReplaceOne(ctx, filter, v)
 	if err != nil {
 		return err
@@ -197,8 +200,12 @@ func (r *MongoScenicSpotRepository) SetTrackScenicSpotLink(ctx context.Context, 
 	}
 	return nil
 }
-func (r *MongoScenicSpotRepository) DeleteTrackScenicSpotLink(ctx context.Context, id, expected string) error {
-	res, err := r.links.DeleteOne(ctx, bson.M{"_id": id, "scenic_spot_id": expected})
+func (r *MongoScenicSpotRepository) DeleteTrackScenicSpotLink(ctx context.Context, id, expected string, expectedOrigin ...string) error {
+	filter := bson.M{"_id": id, "scenic_spot_id": expected}
+	if len(expectedOrigin) > 0 {
+		filter["origin"] = expectedOrigin[0]
+	}
+	res, err := r.links.DeleteOne(ctx, filter)
 	if err != nil {
 		return err
 	}

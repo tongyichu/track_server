@@ -220,7 +220,7 @@ func (r *MySQLScenicSpotRepository) GetTrackScenicSpotLinks(ctx context.Context,
 	}
 	return out, rows.Err()
 }
-func (r *MySQLScenicSpotRepository) SetTrackScenicSpotLink(ctx context.Context, link *models.TrackScenicSpotLink, expected string, absent bool) error {
+func (r *MySQLScenicSpotRepository) SetTrackScenicSpotLink(ctx context.Context, link *models.TrackScenicSpotLink, expected string, absent bool, expectedOrigin ...string) error {
 	data, err := json.Marshal(link)
 	if err != nil {
 		return err
@@ -229,7 +229,13 @@ func (r *MySQLScenicSpotRepository) SetTrackScenicSpotLink(ctx context.Context, 
 		_, err = r.db.ExecContext(ctx, `INSERT INTO track_scenic_spot_links(track_id,spot_id,data_json,updated_at) VALUES(?,?,?,?)`, link.TrackID, link.SpotID, string(data), link.UpdatedAt)
 		return mapMySQLConflict(err)
 	}
-	res, err := r.db.ExecContext(ctx, `UPDATE track_scenic_spot_links SET spot_id=?,data_json=?,updated_at=? WHERE track_id=? AND spot_id=?`, link.SpotID, string(data), link.UpdatedAt, link.TrackID, expected)
+	query := `UPDATE track_scenic_spot_links SET spot_id=?,data_json=?,updated_at=? WHERE track_id=? AND spot_id=?`
+	args := []any{link.SpotID, string(data), link.UpdatedAt, link.TrackID, expected}
+	if len(expectedOrigin) > 0 {
+		query += ` AND COALESCE(JSON_UNQUOTE(JSON_EXTRACT(data_json,'$.origin')),'')=?`
+		args = append(args, expectedOrigin[0])
+	}
+	res, err := r.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return err
 	}
@@ -242,8 +248,14 @@ func (r *MySQLScenicSpotRepository) SetTrackScenicSpotLink(ctx context.Context, 
 	}
 	return nil
 }
-func (r *MySQLScenicSpotRepository) DeleteTrackScenicSpotLink(ctx context.Context, trackID, expected string) error {
-	res, err := r.db.ExecContext(ctx, `DELETE FROM track_scenic_spot_links WHERE track_id=? AND spot_id=?`, trackID, expected)
+func (r *MySQLScenicSpotRepository) DeleteTrackScenicSpotLink(ctx context.Context, trackID, expected string, expectedOrigin ...string) error {
+	query := `DELETE FROM track_scenic_spot_links WHERE track_id=? AND spot_id=?`
+	args := []any{trackID, expected}
+	if len(expectedOrigin) > 0 {
+		query += ` AND COALESCE(JSON_UNQUOTE(JSON_EXTRACT(data_json,'$.origin')),'')=?`
+		args = append(args, expectedOrigin[0])
+	}
+	res, err := r.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return err
 	}

@@ -660,12 +660,19 @@ func (s *ScenicSpotCatalogService) AssignedSpotID(ctx context.Context, trackID s
 	}
 	return link.SpotID, nil
 }
-func (s *ScenicSpotCatalogService) UnassignTrack(ctx context.Context, operator, trackID string) error {
+func (s *ScenicSpotCatalogService) UnassignTrack(ctx context.Context, operator, spotID, trackID string) error {
 	old, err := s.spots.GetTrackScenicSpotLink(ctx, trackID)
 	if err != nil {
 		return err
 	}
-	if err := s.spots.DeleteTrackScenicSpotLink(ctx, trackID, old.SpotID); err != nil {
+	if old.Origin == "removed" {
+		return nil
+	}
+	if old.SpotID != spotID {
+		return repository.ErrConflict
+	}
+	removed := &models.TrackScenicSpotLink{TrackID: trackID, Origin: "removed", UpdatedAt: time.Now(), UpdatedBy: operator}
+	if err := s.spots.SetTrackScenicSpotLink(ctx, removed, old.SpotID, false, old.Origin); err != nil {
 		return err
 	}
 	s.audit(ctx, old.SpotID, "track_unassign", operator, trackID, old, nil)
@@ -1027,7 +1034,7 @@ func (s *ScenicSpotCatalogService) BackfillLegacy(ctx context.Context, cursor *m
 }
 
 func (s *ScenicSpotCatalogService) backfillLegacySpotName(ctx context.Context, trackID string, link *models.TrackScenicSpotLink) error {
-	if link == nil {
+	if link == nil || link.SpotID == "" {
 		return nil
 	}
 	spot, err := s.spots.GetScenicSpot(ctx, link.SpotID)
@@ -1120,7 +1127,7 @@ func (s *ScenicSpotCatalogService) hasLegacyProviderID(ctx context.Context, trac
 	return json.Unmarshal([]byte(placeRecord.Data), &place) == nil && place.Provider != "" && place.ProviderID != ""
 }
 
-// SyncLegacyTrack links newly completed provider matches to the internal catalog.
+// SyncLegacyTrack updates automatically managed links from completed provider matches.
 // It is called by the background place scanner, never by client list requests.
 func (s *ScenicSpotCatalogService) SyncLegacyTrack(ctx context.Context, trackID string) error {
 	return s.syncTrackPlaceMatch(ctx, trackID, "system", "auto_link", "background primary match linked to internal spot")
@@ -1138,10 +1145,13 @@ func (s *ScenicSpotCatalogService) syncTrackPlaceMatch(ctx context.Context, trac
 	if s == nil || s.spots == nil || s.places == nil {
 		return nil
 	}
-	if _, err := s.spots.GetTrackScenicSpotLink(ctx, trackID); err == nil {
-		return nil
-	} else if !errors.Is(err, repository.ErrNotFound) {
+	old, err := s.spots.GetTrackScenicSpotLink(ctx, trackID)
+	if err != nil && !errors.Is(err, repository.ErrNotFound) {
 		return err
+	}
+	manualConfirm := action == "manual_confirm"
+	if old != nil && old.Origin != "auto" && old.Origin != "backfill" && !(manualConfirm && old.Origin == "removed") {
+		return nil
 	}
 	records, err := s.places.GetPlaceRecords(ctx, []string{"match:" + trackID})
 	if err != nil {
@@ -1149,7 +1159,17 @@ func (s *ScenicSpotCatalogService) syncTrackPlaceMatch(ctx context.Context, trac
 	}
 	var match models.TrackPlaceMatch
 	record := records["match:"+trackID]
-	if record == nil || json.Unmarshal([]byte(record.Data), &match) != nil || match.Status != "matched" || match.PrimaryPlaceID == "" {
+	if !trackPlaceRecordFresh(record) || json.Unmarshal([]byte(record.Data), &match) != nil || match.TrackID != trackID {
+		return nil
+	}
+	if match.Status != "matched" || match.PrimaryPlaceID == "" {
+		if !manualConfirm && old != nil && (match.Status == "candidate" || match.Status == "unmatched") {
+			if err := s.spots.DeleteTrackScenicSpotLink(ctx, trackID, old.SpotID, old.Origin); err == nil {
+				s.audit(ctx, old.SpotID, "auto_unlink", operator, "primary match withdrawn", old, nil)
+			} else if !errors.Is(err, repository.ErrConflict) && !errors.Is(err, repository.ErrNotFound) {
+				return err
+			}
+		}
 		return nil
 	}
 	placeRecords, err := s.places.GetPlaceRecords(ctx, []string{"place:" + match.PrimaryPlaceID})
@@ -1186,14 +1206,26 @@ func (s *ScenicSpotCatalogService) syncTrackPlaceMatch(ctx context.Context, trac
 		return err
 	}
 	origin := "auto"
-	if action == "manual_confirm" {
+	if manualConfirm {
 		origin = "manual"
 	}
 	link := &models.TrackScenicSpotLink{TrackID: trackID, SpotID: spot.ID, Origin: origin, Provider: place.Provider, Confidence: 1, UpdatedAt: time.Now(), UpdatedBy: operator}
-	if err = s.spots.SetTrackScenicSpotLink(ctx, link, "", true); err != nil && !errors.Is(err, repository.ErrConflict) {
+	expected := ""
+	var expectedOrigin []string
+	if old != nil {
+		if old.SpotID == spot.ID && (!manualConfirm || old.Origin == origin) {
+			return nil
+		}
+		expected = old.SpotID
+		expectedOrigin = append(expectedOrigin, old.Origin)
+	}
+	if err = s.spots.SetTrackScenicSpotLink(ctx, link, expected, old == nil, expectedOrigin...); err != nil {
+		if errors.Is(err, repository.ErrConflict) {
+			return nil
+		}
 		return err
 	}
-	s.audit(ctx, spot.ID, action, operator, details, nil, link)
+	s.audit(ctx, spot.ID, action, operator, details, old, link)
 	if created {
 		go s.autoCollectScenicGrade(spot.ID)
 		// 新户外目的地异步生成简介，不阻塞识别任务；失败保留空简介，可由后台手动补齐。
@@ -1285,22 +1317,42 @@ func (s *ScenicSpotCatalogService) RefreshExpiredSources(ctx context.Context, tr
 	return nil
 }
 
-func (s *ScenicSpotCatalogService) PrimarySpots(ctx context.Context, trackIDs []string) (map[string]*models.TrackPrimaryScenicSpot, error) {
-	out := map[string]*models.TrackPrimaryScenicSpot{}
+func (s *ScenicSpotCatalogService) primarySpotRecords(ctx context.Context, trackIDs []string) (map[string]*models.TrackScenicSpotLink, map[string]*models.ScenicSpot, error) {
 	if !s.Enabled() || len(trackIDs) == 0 {
-		return out, nil
+		return nil, nil, nil
 	}
 	links, err := s.spots.GetTrackScenicSpotLinks(ctx, trackIDs)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	ids := make([]string, 0, len(links))
 	for _, link := range links {
-		ids = append(ids, link.SpotID)
+		if link.SpotID != "" {
+			ids = append(ids, link.SpotID)
+		}
 	}
 	spots, err := s.spots.GetScenicSpots(ctx, ids)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+	return links, spots, nil
+}
+
+func (s *ScenicSpotCatalogService) PrimarySpots(ctx context.Context, trackIDs []string) (map[string]*models.TrackPrimaryScenicSpot, error) {
+	out, _, err := s.primarySpots(ctx, trackIDs)
+	return out, err
+}
+
+func (s *ScenicSpotCatalogService) PrimarySpotAssignment(ctx context.Context, trackID string) (*models.TrackPrimaryScenicSpot, *models.TrackScenicSpotLink, error) {
+	spots, links, err := s.primarySpots(ctx, []string{trackID})
+	return spots[trackID], links[trackID], err
+}
+
+func (s *ScenicSpotCatalogService) primarySpots(ctx context.Context, trackIDs []string) (map[string]*models.TrackPrimaryScenicSpot, map[string]*models.TrackScenicSpotLink, error) {
+	out := map[string]*models.TrackPrimaryScenicSpot{}
+	links, spots, err := s.primarySpotRecords(ctx, trackIDs)
+	if err != nil {
+		return nil, nil, err
 	}
 	for trackID, link := range links {
 		spot := spots[link.SpotID]
@@ -1327,5 +1379,5 @@ func (s *ScenicSpotCatalogService) PrimarySpots(ctx context.Context, trackIDs []
 		}
 		out[trackID] = item
 	}
-	return out, nil
+	return out, links, nil
 }

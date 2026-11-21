@@ -353,6 +353,11 @@ func (s *TrackPlaceService) processWithOptions(ctx context.Context, index *model
 	if !refreshMissing && trackPlaceRecordFresh(previousRecord) && previous.SourceVersion == source && previous.RuleVersion == trackPlaceRuleVersion {
 		if previous.Status == "matched" || previous.Status == "candidate" || previous.Status == "unmatched" {
 			out.Reused++
+			if s.scenicCatalog != nil {
+				if err := s.scenicCatalog.SyncLegacyTrack(ctx, index.TrackID); err != nil {
+					return err
+				}
+			}
 		} else {
 			out.Deferred++
 		}
@@ -503,7 +508,7 @@ func (s *TrackPlaceService) processWithOptions(ctx context.Context, index *model
 	if err := s.save(ctx, key, &match, expires, owner); err != nil {
 		return err
 	}
-	if match.Status == "matched" && s.scenicCatalog != nil {
+	if (match.Status == "matched" || match.Status == "candidate" || match.Status == "unmatched") && s.scenicCatalog != nil {
 		if err := s.scenicCatalog.SyncLegacyTrack(ctx, index.TrackID); err != nil {
 			log.Printf("scenic spot catalog link failed track_id=%s", index.TrackID)
 		}

@@ -6,6 +6,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/tongyichu/track_server/internal/config"
 	"github.com/tongyichu/track_server/internal/maparea"
@@ -24,6 +25,15 @@ type mapDeparture struct {
 	cityName     string
 	districtID   string
 	districtName string
+	scenic       *departureScenicMatch
+}
+
+type departureScenicMatch struct {
+	id        string
+	name      string
+	provider  string
+	rank      int
+	updatedAt time.Time
 }
 
 func (d mapDeparture) scopeID() string {
@@ -109,6 +119,13 @@ func (s *TrackMapService) departureView(ctx context.Context, input TrackMapViewI
 	}
 
 	departures := make(map[[2]string]mapDeparture)
+	var scenicCandidates []mapDeparture
+	addDeparture := func(d mapDeparture) {
+		key := [2]string{d.GroupID, d.scopeID()}
+		if previous, exists := departures[key]; !exists || preferScenicDeparture(d, previous) {
+			departures[key] = d
+		}
+	}
 	err := s.maps.VisitRouteDepartures(ctx, query, func(row models.TrackMapDeparture) {
 		if !validMapLatLng(row.Start.Latitude, row.Start.Longitude) ||
 			(filter.Center != nil && haversineDistance(filter.Center.Latitude, filter.Center.Longitude, row.Start.Latitude, row.Start.Longitude) > float64(filter.RadiusM)) {
@@ -118,45 +135,36 @@ func (s *TrackMapService) departureView(ctx context.Context, input TrackMapViewI
 		if cityCode != "" && d.cityCode != cityCode || districtID != "" && d.districtID != districtID {
 			return
 		}
-		if scenicID != "" && d.AreaID != scenicID {
+		if scenicID != "" || level == trackMapViewPlaces || level == trackMapViewDistrict && cityCode != "" && d.districtID == "" {
+			scenicCandidates = append(scenicCandidates, d)
 			return
 		}
-		key := [2]string{d.GroupID, d.scopeID()}
-		if previous, exists := departures[key]; !exists || preferDeparture(d, previous) {
-			departures[key] = d
-		}
+		addDeparture(d)
 	})
 	if err != nil {
 		return nil, err
 	}
 
+	scenicMatches, err := s.departureScenicMatches(ctx, scenicCandidates)
+	if err != nil {
+		return nil, err
+	}
+	for _, d := range scenicCandidates {
+		d.scenic = scenicMatches[d.TrackID]
+		addDeparture(d)
+	}
 	ordered := make([]mapDeparture, 0, len(departures))
-	var placeIDs []string
 	for _, d := range departures {
-		ordered = append(ordered, d)
-		if strings.HasPrefix(d.AreaID, "place-") &&
-			(level == trackMapViewPlaces || level == trackMapViewDistrict && d.districtID == "" && cityCode != "" || scenicID != "") {
-			placeIDs = append(placeIDs, d.AreaID)
+		if scenicID == "" || d.scenic != nil && d.scenic.id == scenicID {
+			ordered = append(ordered, d)
 		}
 	}
 	sort.Slice(ordered, func(i, j int) bool { return preferDeparture(ordered[i], ordered[j]) })
 
-	places := make(map[string]*models.TrackPlace)
-	if s.places.Enabled() && len(placeIDs) > 0 {
-		slices.Sort(placeIDs)
-		places, err = s.places.GetPlaces(ctx, slices.Compact(placeIDs))
-		if err != nil {
-			return nil, err
-		}
-	}
-	if scenicID != "" && s.departureScenic(scenicID, places) == nil {
-		return response, nil
-	}
-
 	clusters := make(map[string]*departureCluster)
 	routes := make([]mapDeparture, 0, filter.Limit)
 	for _, d := range ordered {
-		cluster := s.departureClusterItem(d, level, cityCode, places)
+		cluster := s.departureClusterItem(d, level, cityCode)
 		if cluster == nil {
 			if len(routes) < filter.Limit {
 				routes = append(routes, d)
@@ -232,7 +240,92 @@ func preferDeparture(a, b mapDeparture) bool {
 	return a.TrackID < b.TrackID
 }
 
-func (s *TrackMapService) departureClusterItem(d mapDeparture, level, cityCode string, places map[string]*models.TrackPlace) *models.TrackMapClusterItem {
+func preferScenicDeparture(a, b mapDeparture) bool {
+	switch {
+	case a.scenic != nil && b.scenic == nil:
+		return true
+	case a.scenic == nil && b.scenic != nil:
+		return false
+	case a.scenic != nil && b.scenic != nil:
+		if a.scenic.rank != b.scenic.rank {
+			return a.scenic.rank > b.scenic.rank
+		}
+		if a.scenic.rank == departureScenicManual && !a.scenic.updatedAt.Equal(b.scenic.updatedAt) {
+			return a.scenic.updatedAt.After(b.scenic.updatedAt)
+		}
+	}
+	return preferDeparture(a, b)
+}
+
+const (
+	departureScenicLegacy = iota + 1
+	departureScenicAutomatic
+	departureScenicManual
+)
+
+func (s *TrackMapService) departureScenicMatches(ctx context.Context, departures []mapDeparture) (map[string]*departureScenicMatch, error) {
+	matches := make(map[string]*departureScenicMatch)
+	if len(departures) == 0 {
+		return matches, nil
+	}
+	trackIDs := make([]string, 0, len(departures))
+	for _, d := range departures {
+		trackIDs = append(trackIDs, d.TrackID)
+	}
+	slices.Sort(trackIDs)
+	trackIDs = slices.Compact(trackIDs)
+
+	var catalog *ScenicSpotCatalogService
+	if s.trackSvc != nil {
+		catalog = s.trackSvc.scenicCatalog
+	}
+	var legacyIDs []string
+	for start := 0; start < len(trackIDs); start += 200 {
+		batch := trackIDs[start:min(start+200, len(trackIDs))]
+		links, spots, err := catalog.primarySpotRecords(ctx, batch)
+		if err != nil {
+			return nil, err
+		}
+		for _, id := range batch {
+			link := links[id]
+			if link == nil {
+				legacyIDs = append(legacyIDs, id)
+				continue
+			}
+			// An explicit unassignment or an inactive catalog entry takes precedence over older recognition results.
+			matches[id] = nil
+			if spot := spots[link.SpotID]; scenicSpotClientVisible(spot) && strings.TrimSpace(spot.Name) != "" {
+				rank := departureScenicAutomatic
+				if link.Origin == "manual" || link.Origin == "merge" {
+					rank = departureScenicManual
+				}
+				matches[id] = &departureScenicMatch{
+					id: spot.ID, name: spot.Name, provider: link.Provider, rank: rank, updatedAt: link.UpdatedAt,
+				}
+			}
+		}
+	}
+	legacy, err := s.places.PrimaryScenicSpots(ctx, legacyIDs)
+	if err != nil {
+		return nil, err
+	}
+	for id, spot := range legacy {
+		matches[id] = &departureScenicMatch{id: spot.ID, name: spot.Name, provider: spot.Provider, rank: departureScenicLegacy}
+	}
+	if !s.places.Enabled() {
+		for _, d := range departures {
+			if _, resolved := matches[d.TrackID]; resolved {
+				continue
+			}
+			if area := s.areas.Find(d.AreaID); area != nil && area.Type == maparea.TypeScenicSpot {
+				matches[d.TrackID] = &departureScenicMatch{id: area.ID, name: area.Name(), rank: departureScenicLegacy}
+			}
+		}
+	}
+	return matches, nil
+}
+
+func (s *TrackMapService) departureClusterItem(d mapDeparture, level, cityCode string) *models.TrackMapClusterItem {
 	switch {
 	case (level == trackMapViewCity || level == trackMapViewDistrict && cityCode == "" && d.districtID == "") && d.cityCode != "":
 		return &models.TrackMapClusterItem{
@@ -244,32 +337,27 @@ func (s *TrackMapService) departureClusterItem(d mapDeparture, level, cityCode s
 			CityCode: d.cityCode, CityName: d.cityName, Area: &models.TrackMapAreaReference{ID: d.districtID},
 		}
 	case level == trackMapViewPlaces || level == trackMapViewDistrict && cityCode != "":
-		if item := s.departureScenic(d.AreaID, places); item != nil {
-			item.ClusterID += "_" + d.scopeID()
-			item.CityCode, item.CityName = d.cityCode, d.cityName
-			return item
+		if d.scenic != nil {
+			return s.departureScenic(d)
 		}
 	}
 	return nil
 }
 
-func (s *TrackMapService) departureScenic(id string, places map[string]*models.TrackPlace) *models.TrackMapClusterItem {
+func (s *TrackMapService) departureScenic(d mapDeparture) *models.TrackMapClusterItem {
+	spot := d.scenic
 	item := &models.TrackMapClusterItem{
-		Type: "area_cluster", ClusterID: "scenic_" + id, AreaType: maparea.TypeScenicSpot,
-		Area: &models.TrackMapAreaReference{ID: id},
+		Type: "area_cluster", ClusterID: "scenic_" + spot.id + "_" + d.scopeID(), AreaType: maparea.TypeScenicSpot,
+		Area: &models.TrackMapAreaReference{ID: spot.id}, Name: spot.name,
+		CityCode: d.cityCode, CityName: d.cityName, PlaceProvider: spot.provider,
 	}
-	if place := places[id]; place != nil {
-		item.Name, item.PlaceProvider, item.PlaceMatchMethod = place.Name, place.Provider, "track_relation"
-		return item
+	if spot.provider != "" {
+		item.PlaceMatchMethod = "track_relation"
 	}
-	if area := s.areas.Find(id); area != nil && area.Type == maparea.TypeScenicSpot {
-		item.Name = area.Name()
-		if area.HasIntroduction() {
-			item.Area.IntroductionURL = mapAreaIntroductionURL(id, area.ContentVersion)
-		}
-		return item
+	if area := s.areas.Find(spot.id); area != nil && area.HasIntroduction() {
+		item.Area.IntroductionURL = mapAreaIntroductionURL(spot.id, area.ContentVersion)
 	}
-	return nil
+	return item
 }
 
 func (s *TrackMapService) departureRouteItems(ctx context.Context, routes []mapDeparture) ([]*models.TrackMapRouteGroupItem, error) {

@@ -161,27 +161,27 @@ func (r *MemoryScenicSpotRepository) GetTrackScenicSpotLinks(_ context.Context, 
 	}
 	return out, nil
 }
-func (r *MemoryScenicSpotRepository) SetTrackScenicSpotLink(_ context.Context, link *models.TrackScenicSpotLink, expected string, absent bool) error {
+func (r *MemoryScenicSpotRepository) SetTrackScenicSpotLink(_ context.Context, link *models.TrackScenicSpotLink, expected string, absent bool, expectedOrigin ...string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	current := r.links[link.TrackID]
 	if absent && current != nil {
 		return ErrConflict
 	}
-	if !absent && (current == nil || current.SpotID != expected) {
+	if !absent && (current == nil || current.SpotID != expected || len(expectedOrigin) > 0 && current.Origin != expectedOrigin[0]) {
 		return ErrConflict
 	}
 	r.links[link.TrackID] = cloneScenic(link)
 	return nil
 }
-func (r *MemoryScenicSpotRepository) DeleteTrackScenicSpotLink(_ context.Context, trackID, expected string) error {
+func (r *MemoryScenicSpotRepository) DeleteTrackScenicSpotLink(_ context.Context, trackID, expected string, expectedOrigin ...string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	current := r.links[trackID]
 	if current == nil {
 		return ErrNotFound
 	}
-	if current.SpotID != expected {
+	if current.SpotID != expected || len(expectedOrigin) > 0 && current.Origin != expectedOrigin[0] {
 		return ErrConflict
 	}
 	delete(r.links, trackID)

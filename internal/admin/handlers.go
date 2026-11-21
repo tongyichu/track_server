@@ -1652,15 +1652,16 @@ func (h *Handler) GetTrack(ctx context.Context, c *app.RequestContext) {
 	}
 	read(func() {
 		if h.scenicSpotSvc != nil {
-			if id, err := h.scenicSpotSvc.AssignedSpotID(ctx, track.ID); err == nil {
-				spotID, spotIDReady = id, true
-			}
-			if spots, err := h.scenicSpotSvc.PrimarySpots(ctx, []string{track.ID}); err == nil && spots[track.ID] != nil {
-				primarySpot = spots[track.ID]
-				return
+			spot, link, err := h.scenicSpotSvc.PrimarySpotAssignment(ctx, track.ID)
+			if err == nil {
+				spotIDReady = true
+				if link != nil {
+					spotID, primarySpot = link.SpotID, spot
+					return
+				}
 			}
 		}
-		// 已有目录主景点时不再读取旧识别记录；未关联或目录不可用时保留旧回退。
+		// 目录尚无关联时保留旧识别记录回退。
 		if h.trackPlaceSvc != nil {
 			if spots, err := h.trackPlaceSvc.PrimaryScenicSpots(ctx, []string{track.ID}); err == nil {
 				primarySpot = spots[track.ID]

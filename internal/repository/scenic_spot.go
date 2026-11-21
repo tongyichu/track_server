@@ -26,8 +26,8 @@ type ScenicSpotRepository interface {
 	UpdateScenicSpot(context.Context, *models.ScenicSpot, int64) error
 	GetTrackScenicSpotLink(context.Context, string) (*models.TrackScenicSpotLink, error)
 	GetTrackScenicSpotLinks(context.Context, []string) (map[string]*models.TrackScenicSpotLink, error)
-	SetTrackScenicSpotLink(context.Context, *models.TrackScenicSpotLink, string, bool) error
-	DeleteTrackScenicSpotLink(context.Context, string, string) error
+	SetTrackScenicSpotLink(ctx context.Context, link *models.TrackScenicSpotLink, expectedSpotID string, absent bool, expectedOrigin ...string) error
+	DeleteTrackScenicSpotLink(ctx context.Context, trackID, expectedSpotID string, expectedOrigin ...string) error
 	ListTrackScenicSpotLinks(context.Context, string, string, int) ([]*models.TrackScenicSpotLink, error)
 	AppendScenicSpotAudit(context.Context, *models.ScenicSpotAudit) error
 	ListScenicSpotAudit(context.Context, string, string, int) ([]*models.ScenicSpotAudit, error)

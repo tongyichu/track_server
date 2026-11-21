@@ -84,8 +84,13 @@ func (s *TrackService) primaryScenicSpots(ctx context.Context, ids []string) map
 		places = map[string]*models.TrackPrimaryScenicSpot{}
 	}
 	if s.scenicCatalog != nil {
-		catalog, catalogErr := s.scenicCatalog.PrimarySpots(ctx, ids)
+		catalog, links, catalogErr := s.scenicCatalog.primarySpots(ctx, ids)
 		if catalogErr == nil {
+			for id := range links {
+				if catalog[id] == nil {
+					delete(places, id)
+				}
+			}
 			for id, spot := range catalog {
 				// 目录条目名称可能尚未回填，保留识别记录中的名称，避免空名覆盖导致客户端标签缺失。
 				if existing := places[id]; existing != nil && spot != nil && strings.TrimSpace(spot.Name) == "" {
