@@ -1405,6 +1405,7 @@ func (h *Handler) adminOperator(c *app.RequestContext) string {
 // ListTracks 处理 GET /admin/api/tracks
 //
 // query：
+//   - q:                 轨迹标题或编号的关键词；
 //   - cursor_start_time: RFC3339 时间，上一页最后一条的 start_time；
 //   - cursor_id:         上一页最后一条轨迹 ID；
 //   - limit:             每页条数（默认 20，最大 100）。
@@ -1415,6 +1416,7 @@ func (h *Handler) ListTracks(ctx context.Context, c *app.RequestContext) {
 	}
 	limit := parseAdminListLimit(string(c.Query("limit")))
 	title := strings.TrimSpace(string(c.Query("title")))
+	keyword := strings.TrimSpace(string(c.Query("q")))
 	trackType := strings.TrimSpace(string(c.Query("track_type")))
 	trackTypes := make([]utils.H, 0, len(config.DefaultTrackTypeConfigs))
 	validType := trackType == ""
@@ -1438,6 +1440,10 @@ func (h *Handler) ListTracks(ctx context.Context, c *app.RequestContext) {
 	}
 	if utf8.RuneCountInString(title) > 128 {
 		c.JSON(http.StatusBadRequest, utils.H{"error": "title exceeds 128 characters"})
+		return
+	}
+	if utf8.RuneCountInString(keyword) > 128 {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "q exceeds 128 characters"})
 		return
 	}
 	if utf8.RuneCountInString(userName) > 128 {
@@ -1501,7 +1507,7 @@ func (h *Handler) ListTracks(ctx context.Context, c *app.RequestContext) {
 		c.JSON(http.StatusInternalServerError, utils.H{"error": "track list filters not configured"})
 		return
 	}
-	filter := repository.AdminTrackListFilter{Title: title, TrackType: trackType, CityCode: cityCode, Status: status, UserIDs: matchedUserIDs, Missing: missing}
+	filter := repository.AdminTrackListFilter{Title: title, Keyword: keyword, TrackType: trackType, CityCode: cityCode, Status: status, UserIDs: matchedUserIDs, Missing: missing}
 	if cityCode == "" && provinceCode != "" {
 		filter.CityCodes = adminCityCodesOfProvince(provinceCode)
 	}

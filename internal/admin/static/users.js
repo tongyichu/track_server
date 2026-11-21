@@ -645,15 +645,27 @@
     if (button) openUserDetail(button.dataset.userId);
   });
 
-  refreshBtn.addEventListener('click', function () { loadPage(failedListView || listView); });
-  function resetSearch() { loadPage({ filters: readFilters(), cursors: [null], index: 0, next: null }); }
+  var liveSearch = AdminSearch.bind([titleFilter], resetSearch, function () {
+    listController?.abort();
+    prevBtn.disabled = nextBtn.disabled = true;
+  });
+  refreshBtn.addEventListener('click', function () {
+    if (liveSearch.pending) resetSearch();
+    else loadPage(failedListView || listView);
+  });
+  function resetSearch() {
+    liveSearch.cancel();
+    return loadPage({ filters: readFilters(), cursors: [null], index: 0, next: null });
+  }
   extraFilterToggle.addEventListener('click', function () {
     extraFilters.hidden = !extraFilters.hidden;
     extraFilterToggle.setAttribute('aria-expanded', String(!extraFilters.hidden));
     if (extraFilters.hidden) userRegionPicker.close();
   });
   searchBtn.addEventListener('click', resetSearch);
-  titleFilter.addEventListener('keydown', function (event) { if (event.key === 'Enter') resetSearch(); });
+  titleFilter.addEventListener('keydown', function (event) {
+    if (event.key === 'Enter' && !event.isComposing) resetSearch();
+  });
   provinceFilter.addEventListener('change', function () { populateFilterCities(); resetSearch(); });
   [internalFilter, cityFilter, genderFilter, levelFilter, restrictedFilter].forEach(function (filter) {
     filter.addEventListener('change', resetSearch);
@@ -685,6 +697,7 @@
   }
 
   function refreshVisibleList() {
+    if (liveSearch.pending) return resetSearch();
     var view = pendingListView || listView;
     return loadPage(view);
   }
@@ -708,7 +721,7 @@
     try {
       var resp = await fetch('/admin/api/users?' + params.toString(), { signal: controller.signal });
       var body = await resp.json();
-      if (listController !== controller) return;
+      if (listController !== controller || controller.signal.aborted) return;
       if (!resp.ok || body.code !== 0) throw new Error(body.error || String(resp.status));
       var data = body.data || {};
       var items = data.items || [];
@@ -758,7 +771,7 @@
       pageHint.textContent = hasRows ? '当前显示上次加载的结果。请点击“刷新”重试。' : '加载失败，请点击“刷新”重试。';
       return false;
     } finally {
-      if (listController === controller) {
+      if (listController === controller && !controller.signal.aborted) {
         pendingListView = null;
         tbody.removeAttribute('aria-busy');
         prevBtn.disabled = listView.index <= 0;
@@ -767,7 +780,6 @@
       }
     }
   }
-
   loadCities();
   resetSearch();
   window.addEventListener('resize', resizeUserCharts);

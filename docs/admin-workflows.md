@@ -54,7 +54,7 @@
 - 纠错处理结果与状态分离：corrected/unchanged 配 resolved，unverified 配 ignored；新版后台提交 revision 作条件更新，终态必须填写结果及用户可见回复，冲突返回 409 且保留草稿。处理人只从后台 session 取值。服务与仓储入口为 internal/service/feedback_resolution.go 和 internal/repository/feedback_resolution.go；复用 correction_json/BSON，不新增表列。
 - 纠错详情按轨迹查看权限异步读取当前资料，并复用共享 track_editor.js；来源 source_feedback_id 的轨迹保存同时要求轨迹操作与反馈操作权限，核对纠错与轨迹一致后，只在实际保存成功且字段变化时记录最近关联修改的字段名、处理人和时间。轨迹写入与反馈关联非跨仓储事务，关联失败返回 correction_warning，页面必须明确提示轨迹已保存。仅修改反馈状态不视为轨迹已修正；历史无结构化快照时不能伪造关联。后台详情额外返回 handled_by/track_change，业务客户端不下发管理员身份及内部改动记录。
 
-- 用户管理支持昵称模糊搜索，以及内部人员、资料所在城市、性别、用户等级和当前账号限制状态组合筛选；同行管理按会话标题、运动类型、发起人昵称和发起人资料省市筛选（昵称/省市先在用户仓储解析为发起人 ID 集合，再由 `AdminCompanionListRepository` 在仓储层参与总数与游标分页，列表批量补充发起人昵称/头像和成员记录数），轨迹管理按标题和用户名提供服务端模糊搜索，轨迹列表还支持运动类型、地区、状态和资料缺项组合筛选，均保留游标分页；缺项下拉显示当前其他筛选条件下的各项总数，移除“任意缺项”。
+- 用户管理支持昵称模糊搜索，以及内部人员、资料所在城市、性别、用户等级和当前账号限制状态组合筛选；同行管理按会话标题、运动类型、发起人昵称和发起人资料省市筛选（昵称/省市先在用户仓储解析为发起人 ID 集合，再由 `AdminCompanionListRepository` 在仓储层参与总数与游标分页，列表批量补充发起人昵称/头像和成员记录数），轨迹管理按标题、部分编号和用户名提供服务端模糊搜索，轨迹列表还支持运动类型、地区、状态和资料缺项组合筛选，均保留游标分页；缺项下拉显示当前其他筛选条件下的各项总数，移除“任意缺项”。
 
 模块通过 `admin.NewModule(...)`、`Module.ConfigureEmailRecovery(...)`、`Module.RegisterRoutes(h)` 注入和注册，不被业务 handler 引用；Close 同时停止会话 GC 与邮件 worker。
 
@@ -265,7 +265,8 @@ GET /admin/api/users
 ```text
 [admin UI] /admin/tracks.html
   → 首屏展示筛选和轨迹列表，GET /admin/api/tracks 拉取结果
-  → 输入完整 NO. 编号直达共享编辑弹窗，复用轨迹详情 GET 接口，保留当前列表筛选和页码
+  → 输入标题或编号片段即时刷新列表，重置到第一页，清空输入恢复其余筛选条件下的结果
+  → 提交完整 NO. 编号直达共享编辑弹窗，复用轨迹详情 GET 接口
   → 点标题区「批量导入」展开表单，选择归属人（内部人员下拉，头像+昵称，GET /admin/api/users?is_internal=true）、运动类型、坐标系与多个轨迹文件
   → POST /admin/api/tracks/import（multipart）
        → AdminTrackImportService 逐文件解析（复用地图索引解析器）→ 服务端直传 OSS 归属人目录

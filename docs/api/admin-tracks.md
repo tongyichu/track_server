@@ -42,8 +42,9 @@
 
 列表项增量返回 `city_name`，由服务端使用当前持久化地区目录与旧编号兼容映射解析，支持新 `region_id`、旧行政区码及旧目录键；不依赖城市选择器仅包含的新编号，不修改轨迹存储值或发起地图供应商请求。详情响应同级 `data.city_name` 与批量导入结果的 `track.city_name` 使用相同解析规则，编辑/删除后刷新导入结果仍保留正确城市显示。无法匹配时名称为空，前端区分“未填写城市”和“未匹配城市（原编号）”，不猜测或伪造地名。
 
-`GET /admin/api/tracks` 保留 `title`、`user_name`、`city_code`、`status`、`limit`、`cursor_start_time`、`cursor_id`，支持可选 `track_type`、`province_code` 与 `missing`：
+`GET /admin/api/tracks` 保留 `title`、`user_name`、`city_code`、`status`、`limit`、`cursor_start_time`、`cursor_id`，支持可选 `q`、`track_type`、`province_code` 与 `missing`：
 
+- `q`：标题或轨迹编号的子串，去除首尾空白，最多 128 个字符，留空不筛选。编号匹配忽略大小写，例如 `1Y`、`no.000` 均可查询。与 `title` 一起传入时，`title` 仍作为独立的标题条件。
 - `track_type`：运动类型稳定code，留空/不传表示全部；选项来自DefaultTrackTypeConfigs，未知值返回400（不使用地图查询的all哨兵）。响应附带 `track_types:[{code,name}]` 供筛选器消费。
 - `province_code`：省级 Code，服务端展开为该省全部城市 Code 后按 `city_code IN (...)` 筛选；与 `city_code` 同时传时 `city_code` 优先。
 - `status`：`1` 公开、`2` 私密、`0` 已下架（软删除，页面文案为「已下架」，含客户端用户删除与后台删除）。默认（不传或传 1/2）排除已下架记录；传 `0` 改为只列已下架（`status=0`）的轨迹。
@@ -68,7 +69,7 @@
 
 未关联景点也包含正常的非景区轨迹，是运营筛选条件。缺预览图表示四图不完整，即使列表当前使用的日间横图存在，也可能命中。
 
-运动类型及缺项切换清空分页位置，可与标题、用户名、省市、状态组合。响应新增 `missing_counts:{all,place_candidate,scenic_spot,description,city,previews}`，按上述其他筛选条件统计全部结果，忽略当前missing与游标；各项独立计数，可以重叠。下拉显示“待确认景点（10）”等完整数量，不按当前页计算，也不把各项相加当总数。MySQL条件聚合、Mongo共享关联后的facet、内存一次遍历，复用列表基础过滤与缺项判定；候选ID同一次请求读取并复用，不调用供应商。
+运动类型及缺项切换清空分页位置，可与标题、编号关键词、用户名、省市、状态组合。响应新增 `missing_counts:{all,place_candidate,scenic_spot,description,city,previews}`，按上述其他筛选条件统计全部结果，忽略当前missing与游标；各项独立计数，可以重叠。下拉显示“待确认景点（10）”等完整数量，不按当前页计算，也不把各项相加当总数。MySQL条件聚合、Mongo共享关联后的facet、内存一次遍历，复用列表基础过滤与缺项判定；候选ID同一次请求读取并复用，不调用供应商。
 
 `missing_counts_unavailable=true` 表示部分或全部计数失败；主列表继续返回可查询结果，缺失的计数显示“—”而非0，并提示刷新。仅候选读取失败时，未选候选筛选仍返回列表及其他计数；正在按候选筛选时保持失败语义，不能静默返回错误结果。换其他筛选条件时先清除不属于新范围的旧数量，同范围刷新保留内容。快速切换取消并忽略旧请求，相同轨迹行复用、失败保留上次列表；候选处理或编辑成功后刷新列表与数量。
 

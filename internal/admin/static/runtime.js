@@ -57,6 +57,40 @@
     return date.toISOString().slice(0, 10);
   }
   window.AdminTime = Object.freeze({ timeZone, dateTime, date: calendarDate, time: clock, short: shortDate, toInput, fromInput, shiftDate });
+
+  function bindSearch(inputs, apply, invalidate) {
+    let timer = null;
+    let resumeSearch = false;
+    function cancel() {
+      clearTimeout(timer);
+      timer = null;
+    }
+    function schedule(event) {
+      cancel();
+      invalidate();
+      if (!event.isComposing) {
+        timer = setTimeout(() => {
+          timer = null;
+          apply();
+        }, 250);
+      }
+    }
+    inputs.forEach(input => {
+      input.addEventListener('input', schedule);
+      input.addEventListener('compositionend', schedule);
+    });
+    window.addEventListener('pagehide', () => {
+      resumeSearch = timer !== null;
+      cancel();
+    });
+    window.addEventListener('pageshow', event => {
+      if (event.persisted && resumeSearch) apply();
+      resumeSearch = false;
+    });
+    return { cancel, get pending() { return timer !== null; } };
+  }
+  window.AdminSearch = { bind: bindSearch };
+
   const version = document.querySelector('meta[name="admin-assets-version"]');
   let chartsPromise;
   function url(path) {

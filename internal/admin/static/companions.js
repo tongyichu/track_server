@@ -83,6 +83,7 @@
   }
 
   var cursorStack = [null], pageIndex = 0, lastNextCursor = null, listRequest = 0;
+  var listController = null;
   var applied = { title: '', ownerName: '', status: '', trackType: '', provinceCode: '', cityCode: '' };
   var tbody = document.getElementById('companionList');
   var prevBtn = document.getElementById('prevBtn');
@@ -119,7 +120,7 @@
       li.setAttribute('aria-selected', String(code === selectedType));
       li.dataset.value = code;
       li.innerHTML = typeOptionHTML(code);
-      li.addEventListener('click', function () { selectType(code); });
+      li.addEventListener('click', function () { selectType(code); updateResetButton(); });
       typeMenu.appendChild(li);
     });
   }
@@ -149,7 +150,7 @@
   renderTypeMenu();
 
   // 省份 / 城市级联（数据源 /admin/api/cities）
-  var regionsPromise = null;
+  var regionsPromise = null, regionPicker;
   function loadRegions() {
     if (!regionsPromise) {
       regionsPromise = apiJSON('/admin/api/cities').then(function (payload) {
@@ -172,106 +173,102 @@
   loadRegions().then(function (regions) {
     populateProvinceOptions(regions);
     populateCityOptions(regions, '');
-    AdminRegionPicker.enhance(provinceFilter, cityFilter, regions, { label: '发起人所在地' });
+    regionPicker = AdminRegionPicker.enhance(provinceFilter, cityFilter, regions, { label: '发起人所在地' });
   }).catch(function () { /* 省市选项加载失败时保留输入筛选可用 */ });
   provinceFilter.addEventListener('change', function () {
+    updateResetButton();
     loadRegions().then(function (regions) { populateCityOptions(regions, provinceFilter.value); }).catch(function () {});
   });
 
-  function hasActiveFilter() {
-    return !!(applied.title || applied.ownerName || applied.status || applied.trackType || applied.provinceCode || applied.cityCode);
-  }
-  function pendingFilterChange() {
-    return titleFilter.value.trim() !== applied.title || ownerNameFilter.value.trim() !== applied.ownerName || statusFilter.value !== applied.status ||
-      selectedType !== applied.trackType || provinceFilter.value !== applied.provinceCode || cityFilter.value !== applied.cityCode;
+  function updateResetButton() {
+    resetBtn.hidden = !(statusFilter.value || selectedType || provinceFilter.value || cityFilter.value ||
+      applied.status || applied.trackType || applied.provinceCode || applied.cityCode);
   }
   function resetSearch() {
-    applied = {
+    liveSearch.cancel();
+    updateResetButton();
+    loadPage(0, {
       title: titleFilter.value.trim(),
       ownerName: ownerNameFilter.value.trim(),
       status: statusFilter.value,
       trackType: selectedType,
       provinceCode: provinceFilter.value,
       cityCode: cityFilter.value
-    };
-    resetBtn.hidden = !hasActiveFilter();
-    cursorStack = [null];
-    pageIndex = 0;
-    loadPage();
+    }, null);
   }
+  var liveSearch = AdminSearch.bind([titleFilter, ownerNameFilter], resetSearch, function () {
+    listController?.abort();
+    prevBtn.disabled = nextBtn.disabled = true;
+  });
   document.getElementById('companionSearch').addEventListener('submit', function (event) {
     event.preventDefault();
     resetSearch();
   });
   function clearFilters(status) {
-    titleFilter.value = '';
-    ownerNameFilter.value = '';
     statusFilter.value = status;
     selectType('');
     provinceFilter.value = '';
     cityFilter.value = '';
+    regionPicker?.sync();
     loadRegions().then(function (regions) { populateCityOptions(regions, ''); }).catch(function () {});
     resetSearch();
   }
   resetBtn.addEventListener('click', function () { clearFilters(''); });
   activeRooms.addEventListener('click', function () {
+    titleFilter.value = '';
+    ownerNameFilter.value = '';
     clearFilters('active');
     document.getElementById('companionSearch').scrollIntoView({ block: 'nearest' });
   });
-  statusFilter.addEventListener('change', function () { resetBtn.hidden = !hasActiveFilter() && !pendingFilterChange(); });
-  [titleFilter, ownerNameFilter].forEach(function (input) {
-    input.addEventListener('input', function () { resetBtn.hidden = !hasActiveFilter() && !pendingFilterChange() && !input.value; });
-  });
+  statusFilter.addEventListener('change', updateResetButton);
+  cityFilter.addEventListener('change', updateResetButton);
   document.getElementById('refreshBtn').addEventListener('click', function () {
     loadCompanionStatistics();
     if (window.AdminCompanionUsage) window.AdminCompanionUsage.refresh();
-    cursorStack = [null];
-    pageIndex = 0;
-    loadPage();
+    resetSearch();
   });
   prevBtn.addEventListener('click', function () {
     if (pageIndex <= 0) return;
-    pageIndex -= 1;
-    cursorStack = cursorStack.slice(0, pageIndex + 1);
-    loadPage();
+    loadPage(pageIndex - 1);
   });
   nextBtn.addEventListener('click', function () {
     if (!lastNextCursor) return;
-    pageIndex += 1;
-    cursorStack[pageIndex] = lastNextCursor;
-    loadPage();
+    loadPage(pageIndex + 1, applied, lastNextCursor);
   });
 
   function showEmpty(body, columns, message) {
     body.innerHTML = '<tr><td colspan="' + columns + '" class="companion-table-state">' + esc(message) + '</td></tr>';
   }
-  async function loadPage() {
+  async function loadPage(targetPage = pageIndex, filters = applied, cursor = cursorStack[targetPage]) {
+    listController?.abort();
+    var controller = listController = new AbortController();
     var request = ++listRequest;
     var params = new URLSearchParams({ limit: '20' });
-    if (applied.title) params.set('title', applied.title);
-    if (applied.ownerName) params.set('owner_name', applied.ownerName);
-    if (applied.status) params.set('status', applied.status);
-    if (applied.trackType) params.set('track_type', applied.trackType);
-    if (applied.provinceCode) params.set('province_code', applied.provinceCode);
-    if (applied.cityCode) params.set('city_code', applied.cityCode);
-    var cur = cursorStack[pageIndex];
-    if (cur) {
-      params.set('cursor_started_at', cur.started_at);
-      params.set('cursor_session_id', cur.session_id);
+    if (filters.title) params.set('title', filters.title);
+    if (filters.ownerName) params.set('owner_name', filters.ownerName);
+    if (filters.status) params.set('status', filters.status);
+    if (filters.trackType) params.set('track_type', filters.trackType);
+    if (filters.provinceCode) params.set('province_code', filters.provinceCode);
+    if (filters.cityCode) params.set('city_code', filters.cityCode);
+    if (cursor) {
+      params.set('cursor_started_at', cursor.started_at);
+      params.set('cursor_session_id', cursor.session_id);
     }
     prevBtn.disabled = nextBtn.disabled = true;
-    lastNextCursor = null;
-    totalHint.textContent = '';
     pageHint.textContent = '正在加载…';
     tbody.setAttribute('aria-busy', 'true');
-    showEmpty(tbody, 7, '正在加载房间…');
     try {
-      var data = await apiJSON('/admin/api/companions?' + params.toString());
-      if (request !== listRequest) return;
+      var data = await apiJSON('/admin/api/companions?' + params.toString(), { signal: controller.signal });
+      if (request !== listRequest || controller.signal.aborted) return;
       var items = data.items || [];
+      applied = filters;
+      updateResetButton();
+      pageIndex = targetPage;
+      cursorStack = cursorStack.slice(0, targetPage + 1);
+      cursorStack[targetPage] = cursor;
       activeRooms.setAttribute('aria-pressed', String(applied.status === 'active'));
       lastNextCursor = data.next_cursor || null;
-      tbody.replaceChildren();
+      var rows = document.createDocumentFragment();
       items.forEach(function (it) {
         var ownerAvatar = safeImageURL(it.owner_avatar_url);
         var tr = document.createElement('tr');
@@ -284,20 +281,21 @@
           '<td>' + esc(fmtDuration(it.started_at, it.status === 'active' ? null : it.ended_at)) + '</td>' +
           '<td>' + esc(Number(it.member_count || 0) + ' / ' + (it.max_members || 0)) + '</td>';
         tr.querySelector('.companion-room-link').addEventListener('click', function () { loadDetail(it.session_id); });
-        tbody.appendChild(tr);
+        rows.appendChild(tr);
       });
-      if (!items.length) showEmpty(tbody, 7, hasActiveFilter() ? '未找到匹配的房间，请调整筛选条件。' : '暂无同行房间。');
-      nextBtn.disabled = !lastNextCursor;
+      if (items.length) tbody.replaceChildren(rows);
+      else showEmpty(tbody, 7, Object.values(filters).some(Boolean) ? '未找到匹配的房间，请调整筛选条件。' : '暂无同行房间。');
       totalHint.textContent = '共 ' + Number(data.total || 0).toLocaleString() + ' 个房间';
       pageHint.textContent = '第 ' + (pageIndex + 1) + ' 页 · 本页 ' + items.length + ' 个房间';
     } catch (error) {
-      if (request !== listRequest) return;
-      showEmpty(tbody, 7, '加载失败：' + error.message + '。请点击“刷新数据”重试。');
-      pageHint.textContent = '加载失败';
+      if (request !== listRequest || controller.signal.aborted) return;
+      if (!totalHint.textContent) showEmpty(tbody, 7, '加载失败，请点击“刷新数据”重试。');
+      pageHint.textContent = '加载失败：' + error.message + '。请点击“刷新数据”重试。';
     } finally {
-      if (request === listRequest) {
+      if (request === listRequest && !controller.signal.aborted) {
         tbody.removeAttribute('aria-busy');
         prevBtn.disabled = pageIndex <= 0;
+        nextBtn.disabled = !lastNextCursor;
       }
     }
   }
@@ -486,7 +484,11 @@
   document.getElementById('closeCompanionDetail').addEventListener('click', function () { detailModal.close(); });
   detailModal.addEventListener('close', function () { if (!detailSuspended) { detailRequest += 1; currentSessionID = ''; if (detailController) detailController.abort(); } });
   detailModal.addEventListener('click', function (event) { if (event.target === detailModal) detailModal.close(); });
-  window.addEventListener('pagehide', function () { detailRequest += 1; currentSessionID = ''; if (detailController) detailController.abort(); });
+  window.addEventListener('pagehide', function () {
+    detailRequest += 1;
+    currentSessionID = '';
+    detailController?.abort();
+  });
 
   loadCompanionStatistics();
   loadPage();

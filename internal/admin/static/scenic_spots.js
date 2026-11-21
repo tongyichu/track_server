@@ -178,6 +178,7 @@
   async function loadList(append) {
     append = append === true;
     if (append && (!listQuery || !state.listHasMore)) return;
+    if (!append) liveSearch.cancel();
     listController?.abort();
     const controller = listController = new AbortController();
     const button = $('loadMoreSpotsBtn');
@@ -204,7 +205,10 @@
       $('spotCount').textContent = listQuery ? '加载失败，仍显示上次结果' : '加载失败';
       if (!listQuery) setListMessage('请点击「查询」重试');
     } finally {
-      if (controller === listController) { button.disabled = false; button.hidden = !state.listHasMore; }
+      if (controller === listController && !controller.signal.aborted) {
+        button.disabled = false;
+        button.hidden = !state.listHasMore;
+      }
     }
   }
   const trackTypeNames={hiking:'徒步',running:'跑步',climbing:'爬山',riding:'骑行',driving:'自驾'};
@@ -774,7 +778,23 @@
     catch(error){toast('复制失败，请手动复制：'+id,'danger');}
   }
 
-  $('searchBtn').addEventListener('click',()=>loadList());$('missingFilter').addEventListener('change',()=>loadList());$('showIncompleteBtn').addEventListener('click',()=>filterMissing('any'));$('loadMoreSpotsBtn').addEventListener('click',()=>loadList(true));$('searchInput').addEventListener('keydown',event=>{if(event.key==='Enter')loadList();});$('statusFilter').addEventListener('change',()=>loadList());$('cityFilter').addEventListener('change',()=>loadList());$('provinceFilter').addEventListener('change',()=>{$('cityFilter').value='';updateCityOptions();loadList();});$('refreshStatsBtn').addEventListener('click',loadStats);
+  const liveSearch = AdminSearch.bind([$('searchInput')], loadList, () => {
+    listController?.abort();
+    $('loadMoreSpotsBtn').disabled = true;
+  });
+  $('searchInput').addEventListener('keydown', event => {
+    if (event.key === 'Enter' && !event.isComposing) loadList();
+  });
+  $('searchBtn').addEventListener('click', () => loadList());
+  ['missingFilter', 'statusFilter', 'cityFilter'].forEach(id => $(id).addEventListener('change', () => loadList()));
+  $('provinceFilter').addEventListener('change', () => {
+    $('cityFilter').value = '';
+    updateCityOptions();
+    loadList();
+  });
+  $('showIncompleteBtn').addEventListener('click', () => filterMissing('any'));
+  $('loadMoreSpotsBtn').addEventListener('click', () => loadList(true));
+  $('refreshStatsBtn').addEventListener('click', loadStats);
   $('syncProviderBtn').addEventListener('click', () => AdminUI.runOnce('scenic-provider-sync', syncProviderContent));
   $('newProvinceSelect').addEventListener('change',()=>{const code=$('newProvinceSelect').value;populateCityOptions(code);const province=(state.regions||[]).find(item=>item.code===code);updateCurrentCity(province);focusRegion(code);});$('newCitySelect').addEventListener('change',()=>{const region=selectedRegion();updateCurrentCity(region);focusRegion(region&&region.code);});$('useClickedLocationBtn').addEventListener('click',useClickedMapLocation);$('applyPoiDraftBtn').addEventListener('click',applyPOIDraft);
   $('newBtn').addEventListener('click',()=>{if(state.saving||!canLeavePhotos())return;detailLoadVersion++;if(detailController)detailController.abort();state.newSpot=true;fillForm({status:'active',manual_edited:true});});$('closeDetailBtn').addEventListener('click',closeDetail);$('detailModal').addEventListener('click',event=>{if(event.target===$('detailModal'))closeDetail();});

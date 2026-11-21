@@ -64,7 +64,7 @@
   var pageIndex = 0;
   var lastNextCursor = null;
   var totalCount = 0;
-  var searchTitle = '', searchUserName = '', openingByID = false, regionPicker;
+  var searchKeyword = '', searchUserName = '', openingByID = false, regionPicker;
 
   var tbody = document.getElementById('trackList');
   var prevBtn = document.getElementById('prevBtn');
@@ -114,37 +114,35 @@
   refreshBtn.addEventListener('click', function () {
     resetSearch();
   });
-  function resetSearch() { cursorStack = [null]; pageIndex = 0; loadPage(); }
+  function resetSearch() {
+    liveSearch.cancel();
+    searchKeyword = titleFilter.value.trim();
+    searchUserName = userNameFilter.value.trim();
+    cursorStack = [null];
+    pageIndex = 0;
+    return loadPage();
+  }
   var trackIDPattern = /^NO\.[0-9A-Z]{8}$/;
   document.getElementById('trackSearchForm').addEventListener('submit', async function (event) {
     event.preventDefault();
     if (openingByID) return;
-    var keyword = titleFilter.value.trim();
-    lookupStatus.hidden = true;
-    if (/^NO\.[0-9A-Z]*$/i.test(keyword)) {
-      var trackID = keyword.toUpperCase();
-      lookupStatus.hidden = false;
-      if (!trackIDPattern.test(trackID)) {
-        lookupStatus.textContent = '请输入完整的轨迹编号，例如 NO.000000AB';
-        return;
-      }
-      lookupStatus.textContent = '正在打开 ' + trackID + '…';
-      openingByID = true; searchBtn.disabled = true;
-      try { await citiesLoaded; await editTrack(trackID); }
-      catch (err) { AdminUI.alert('读取轨迹失败: ' + (err.message || err), 'danger'); }
-      finally {
-        openingByID = false; searchBtn.disabled = false; lookupStatus.hidden = true;
-        if (titleFilter.value.trim() === keyword) titleFilter.value = searchTitle;
-      }
-      return;
-    }
-    searchTitle = keyword; searchUserName = userNameFilter.value.trim();
     resetSearch();
+    var trackID = searchKeyword.toUpperCase();
+    if (!trackIDPattern.test(trackID)) return;
+    lookupStatus.hidden = false;
+    lookupStatus.textContent = '正在打开 ' + trackID + '…';
+    openingByID = true; searchBtn.disabled = true;
+    try { await citiesLoaded; await editTrack(trackID); }
+    catch (err) { AdminUI.alert('读取轨迹失败: ' + (err.message || err), 'danger'); }
+    finally {
+      openingByID = false; searchBtn.disabled = false; lookupStatus.hidden = true;
+    }
   });
-  titleFilter.addEventListener('input', function () { if (!openingByID) lookupStatus.hidden = true; });
+  var liveSearch = AdminSearch.bind([titleFilter, userNameFilter], resetSearch, function () {
+    if (pageController) pageController.abort();
+    prevBtn.disabled = true; nextBtn.disabled = true;
+  });
   document.getElementById('trackClearFilters').addEventListener('click', function () {
-    searchTitle = ''; searchUserName = '';
-    titleFilter.value = ''; userNameFilter.value = '';
     trackTypeFilter.value = ''; statusFilter.value = ''; missingFilter.value = '';
     provinceFilter.value = ''; populateCityOptions(cityOptions, '');
     if (regionPicker) { regionPicker.close(); regionPicker.sync(); }
@@ -215,11 +213,10 @@
     trackListError.hidden = true; trackListError.textContent = '';
     var hints = { scenic_spot: '未关联景点包含正常的非景区轨迹，可结合其他条件筛选。', previews: '四种日夜预览图中任意一张缺失，即视为预览图不完整。' };
     var selected = function (select) { return select.value ? select.selectedOptions[0]?.textContent : ''; };
-    var labels = [searchTitle && '标题 ' + searchTitle, searchUserName && '用户名 ' + searchUserName,
-      selected(trackTypeFilter), selected(cityFilter) || selected(provinceFilter), selected(statusFilter), missingFilter.value && missingLabels[missingFilter.value]];
+    var labels = [selected(trackTypeFilter), selected(cityFilter) || selected(provinceFilter), selected(statusFilter), missingFilter.value && missingLabels[missingFilter.value]];
     var params = new URLSearchParams();
     params.set('limit', String(pageSize));
-    if (searchTitle) params.set('title', searchTitle);
+    if (searchKeyword) params.set('q', searchKeyword);
     if (searchUserName) params.set('user_name', searchUserName);
     if (trackTypeFilter.value) params.set('track_type', trackTypeFilter.value);
     if (provinceFilter.value) params.set('province_code', provinceFilter.value);
@@ -269,7 +266,9 @@
     }
   }
 
-  window.addEventListener('pagehide', function () { if (pageController) pageController.abort(); });
+  window.addEventListener('pagehide', function () {
+    if (pageController) pageController.abort();
+  });
 
   async function handleTrackEdit(ev) {
     var editBtn = ev.target && ev.target.closest ? ev.target.closest('.js-edit-track') : null;
@@ -327,7 +326,7 @@
   }
 
   async function editTrack(trackID) {
-    function refreshLists() { return Promise.all([loadPage(), refreshImportedTrack(trackID)]); }
+    function refreshLists() { return Promise.all([liveSearch.pending ? resetSearch() : loadPage(), refreshImportedTrack(trackID)]); }
     return window.AdminTrackEditor.open(trackID, { cities: cityOptions, onSaved: refreshLists, onDeleted: refreshLists });
   }
 
@@ -359,7 +358,7 @@
   }
 
   var citiesLoaded = loadCities();
-  citiesLoaded.then(loadPage);
+  citiesLoaded.then(function () { if (!pageRequest && !liveSearch.pending) loadPage(); });
   var linkedTrackID = new URLSearchParams(window.location.search).get('track_id');
   if (linkedTrackID) {
     if (trackIDPattern.test(linkedTrackID)) {

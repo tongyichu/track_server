@@ -118,6 +118,7 @@ type AdminTrackListFilterRepository interface {
 
 type AdminTrackListFilter struct {
 	Title     string
+	Keyword   string
 	TrackType string
 	// CityCode 单城市精确筛选；CityCodes 为省份展开的城市集合，两者同时存在时取交集语义中的 CityCode 优先。
 	CityCode               string

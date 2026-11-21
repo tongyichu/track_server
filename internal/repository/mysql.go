@@ -2377,6 +2377,10 @@ func adminTrackSQLBase(filter AdminTrackListFilter) (string, []any) {
 		base += ` AND title LIKE ? ESCAPE '!'`
 		args = append(args, "%"+escapeAdminLike(filter.Title)+"%")
 	}
+	if filter.Keyword != "" {
+		base += ` AND (title LIKE ? ESCAPE '!' OR CAST(UPPER(id) AS BINARY) LIKE ? ESCAPE '!')`
+		args = append(args, "%"+escapeAdminLike(filter.Keyword)+"%", "%"+escapeAdminLike(strings.ToUpper(filter.Keyword))+"%")
+	}
 	if filter.TrackType != "" {
 		base += ` AND track_type = ?`
 		args = append(args, filter.TrackType)
@@ -2446,16 +2450,15 @@ func (r *MySQLTrackRepository) ListAdminTracks(ctx context.Context, filter Admin
 	if err := rows.Err(); err != nil {
 		return nil, 0, err
 	}
+	tracksByID, err := r.FindByIDs(ctx, ids)
+	if err != nil {
+		return nil, 0, err
+	}
 	items := make([]*models.Track, 0, len(ids))
 	for _, id := range ids {
-		item, err := r.FindByID(ctx, id)
-		if err != nil {
-			if errors.Is(err, ErrNotFound) {
-				continue
-			}
-			return nil, 0, err
+		if track := tracksByID[id]; track != nil {
+			items = append(items, track)
 		}
-		items = append(items, item)
 	}
 	return items, total, nil
 }

@@ -21,6 +21,12 @@ func adminTrackMatchesBase(track *models.Track, filter AdminTrackListFilter, use
 	if filter.Title != "" && !strings.Contains(strings.ToLower(track.Title), strings.ToLower(filter.Title)) {
 		return false
 	}
+	if filter.Keyword != "" {
+		keyword := strings.ToLower(filter.Keyword)
+		if !strings.Contains(strings.ToLower(track.Title), keyword) && !strings.Contains(strings.ToLower(track.ID), keyword) {
+			return false
+		}
+	}
 	if filter.TrackType != "" && track.TrackType != filter.TrackType {
 		return false
 	}
@@ -43,7 +49,7 @@ func adminTrackMatchesBase(track *models.Track, filter AdminTrackListFilter, use
 	return true
 }
 
-func (r *InMemoryTrackRepository) ListAdminTracks(_ context.Context, filter AdminTrackListFilter, cursor *models.TrackListCursor, limit int) ([]*models.Track, int64, error) {
+func (r *InMemoryTrackRepository) ListAdminTracks(ctx context.Context, filter AdminTrackListFilter, cursor *models.TrackListCursor, limit int) ([]*models.Track, int64, error) {
 	if limit <= 0 {
 		limit = 20
 	}
@@ -65,6 +71,9 @@ func (r *InMemoryTrackRepository) ListAdminTracks(_ context.Context, filter Admi
 	items := make([]*models.Track, 0)
 	var total int64
 	for _, track := range r.tracks {
+		if err := ctx.Err(); err != nil {
+			return nil, 0, err
+		}
 		if !adminTrackMatchesBase(track, filter, userIDs, cityCodes) {
 			continue
 		}

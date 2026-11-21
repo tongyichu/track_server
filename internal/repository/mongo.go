@@ -511,6 +511,10 @@ func adminTrackMongoBase(filter AdminTrackListFilter) bson.M {
 	if filter.Title != "" {
 		query["title"] = primitive.Regex{Pattern: regexp.QuoteMeta(filter.Title), Options: "i"}
 	}
+	if filter.Keyword != "" {
+		pattern := primitive.Regex{Pattern: regexp.QuoteMeta(filter.Keyword), Options: "i"}
+		query["$or"] = bson.A{bson.M{"title": pattern}, bson.M{"_id": pattern}}
+	}
 	if filter.TrackType != "" {
 		query["track_type"] = filter.TrackType
 	}
@@ -542,7 +546,10 @@ func (r *MongoTrackRepository) ListAdminTracks(ctx context.Context, filter Admin
 		return nil, 0, err
 	}
 	if cursor != nil && !cursor.StartTime.IsZero() {
-		query["$or"] = []bson.M{{"start_time": bson.M{"$lt": cursor.StartTime}}, {"start_time": cursor.StartTime, "_id": bson.M{"$lt": cursor.ID}}}
+		query = bson.M{"$and": bson.A{query, bson.M{"$or": bson.A{
+			bson.M{"start_time": bson.M{"$lt": cursor.StartTime}},
+			bson.M{"start_time": cursor.StartTime, "_id": bson.M{"$lt": cursor.ID}},
+		}}}}
 	}
 	items, err := r.listTracks(ctx, query, options.Find().SetSort(bson.D{{Key: "start_time", Value: -1}, {Key: "_id", Value: -1}}).SetLimit(int64(limit)))
 	return items, total, err
