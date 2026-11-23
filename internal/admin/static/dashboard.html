@@ -56,6 +56,13 @@
           <p class="admin-stats-meta">按路线所在城市统计，依据本期导航次数排列。供给是当前公开、已完成且有原始文件的路线。 <span data-table-status aria-live="polite"></span></p>
           <table class="data dashboard-table"><thead><tr><th scope="col">城市</th><th scope="col">路线存量</th><th scope="col">本期新增</th><th scope="col">新增收藏人数</th><th scope="col">导航上报</th><th scope="col">较上期</th></tr></thead>
             <tbody><tr><td colspan="6">正在读取数据…</td></tr></tbody></table>
+          <nav class="dashboard-city-pagination" aria-label="城市路线供需分页" data-city-pagination hidden>
+            <span data-city-page-status aria-live="polite"></span>
+            <div class="dashboard-city-page-actions" data-city-page-actions hidden>
+              <button type="button" class="btn btn-outline-secondary btn-sm" data-city-page-step="-1" disabled>上一页</button>
+              <button type="button" class="btn btn-outline-secondary btn-sm" data-city-page-step="1" disabled>下一页</button>
+            </div>
+          </nav>
         </div>
       </article>
     </section>

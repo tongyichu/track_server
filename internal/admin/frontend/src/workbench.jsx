@@ -138,6 +138,15 @@ function ManagementTable({ id, title, read, note, columns, link, period = false 
             <TableHeader><TableRow>{columns.map((label) => <TableHead key={label} scope="col">{label}</TableHead>)}</TableRow></TableHeader>
             <TableBody><TableRow><td colSpan={columns.length}>正在读取数据…</td></TableRow></TableBody>
           </Table>
+          {id === "cities" && (
+            <nav className="dashboard-city-pagination" aria-label="城市路线供需分页" data-city-pagination hidden>
+              <span data-city-page-status aria-live="polite" />
+              <div className="dashboard-city-page-actions" data-city-page-actions hidden>
+                <Button type="button" variant="outline" size="sm" data-city-page-step="-1" disabled>上一页</Button>
+                <Button type="button" variant="outline" size="sm" data-city-page-step="1" disabled>下一页</Button>
+              </div>
+            </nav>
+          )}
         </CardContent>
       </Card>
     </Section>

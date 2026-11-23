@@ -20,10 +20,7 @@ type AdminWorkbenchRepository interface {
 	WorkbenchBacklogs(context.Context, time.Time, []string) ([]models.WorkbenchBacklog, error)
 }
 
-const (
-	workbenchRows = 12
-	cohortWeeks   = 6
-)
+const cohortWeeks = 6
 
 type workbenchCities struct {
 	query  models.AdminDashboardQuery
@@ -100,7 +97,7 @@ func (r *workbenchCities) rows() []models.WorkbenchCity {
 		}
 		return a.Code < b.Code
 	})
-	return rows[:min(len(rows), workbenchRows)]
+	return rows
 }
 
 func workbenchMidnight(value time.Time) time.Time {

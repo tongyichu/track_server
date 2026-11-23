@@ -187,3 +187,7 @@ button.admin-metric:hover, a.admin-metric:hover { color: inherit; background: va
 .dashboard-health [data-state="normal"] .health-dot { color: var(--admin-success); }
 .dashboard-health [data-state="warning"], .dashboard-health [data-state="unknown"] { color: var(--admin-warning); }
 .dashboard-health [data-state="error"] { color: var(--admin-danger); }
+
+.dashboard-city-pagination { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 12px; margin-top: 10px; color: var(--admin-secondary-color); font-size: 12px; }
+.dashboard-city-page-actions { display: flex; gap: 8px; }
+.dashboard-city-pagination[hidden], .dashboard-city-page-actions[hidden] { display: none; }

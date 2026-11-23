@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -56,11 +57,30 @@ func (h *Handler) GetWorkbenchTable(ctx context.Context, c *app.RequestContext) 
 	start, previous, previousEnd, _, period := dashboardPeriodBounds(now, strings.TrimSpace(string(c.Query("period"))))
 	q := models.AdminDashboardQuery{Start: start, End: now, PreviousStart: previous, PreviousEnd: previousEnd, Now: now}
 
+	data := utils.H{"period": period, "range": utils.H{"start": start, "end": now}}
 	var rows any
 	var err error
 	switch table {
 	case "cities":
-		rows, err = repo.WorkbenchCities(ctx, q)
+		page := 1
+		if raw := string(c.Query("page")); raw != "" {
+			page, err = strconv.Atoi(raw)
+			if err != nil || page < 1 {
+				c.JSON(http.StatusBadRequest, utils.H{"error": "页码必须是正整数"})
+				return
+			}
+		}
+		var cities []models.WorkbenchCity
+		cities, err = repo.WorkbenchCities(ctx, q)
+		if err == nil {
+			const pageSize = 10
+			total := len(cities)
+			pages := 1 + max(0, total-1)/pageSize
+			page = min(page, pages)
+			offset := (page - 1) * pageSize
+			rows = cities[offset:min(offset+pageSize, total)]
+			data["pagination"] = utils.H{"page": page, "pages": pages, "page_size": pageSize, "total": total}
+		}
 	case "cohorts":
 		rows, err = repo.WorkbenchCohorts(ctx, now)
 	case "versions":
@@ -83,7 +103,8 @@ func (h *Handler) GetWorkbenchTable(ctx context.Context, c *app.RequestContext) 
 		return
 	}
 	c.Header("Cache-Control", "no-store")
-	c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"rows": rows, "period": period, "range": utils.H{"start": start, "end": now}}})
+	data["rows"] = rows
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": data})
 }
 
 type workbenchVersion struct {

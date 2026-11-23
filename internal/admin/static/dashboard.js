@@ -12,6 +12,10 @@
   let latestData = null;
   let healthRequest = null;
   const tableRequests = new Map();
+  const cityPanel = document.querySelector('[data-workbench-table="cities"]');
+  const cityPager = cityPanel.querySelector('[data-city-pagination]');
+  const cityPageButtons = cityPager.querySelectorAll('[data-city-page-step]');
+  let cityPage = null;
 
   async function loadAnalyticsHealth() {
     const node = document.getElementById('analyticsHealth');
@@ -386,17 +390,33 @@
     body.replaceChildren(fragment);
   }
 
-  async function loadManagementTable(panel, period) {
+  function updateCityPager() {
+    if (!cityPage) return;
+    cityPager.hidden = false;
+    const multiplePages = cityPage.pages > 1;
+    const total = '共 ' + formatNumber(cityPage.total) + ' 个城市';
+    cityPager.querySelector('[data-city-page-status]').textContent =
+      multiplePages ? total + ' · 第 ' + cityPage.page + ' / ' + cityPage.pages + ' 页' : total;
+    cityPager.querySelector('[data-city-page-actions]').hidden = !multiplePages;
+    cityPageButtons.forEach(function (button) {
+      const target = cityPage.page + Number(button.dataset.cityPageStep);
+      button.disabled = tableRequests.has(cityPanel) || target < 1 || target > cityPage.pages;
+    });
+  }
+
+  async function loadManagementTable(panel, period, page = 1) {
     const key = panel.dataset.workbenchTable;
     tableRequests.get(panel)?.abort();
     const controller = new AbortController();
     tableRequests.set(panel, controller);
+    if (panel === cityPanel) updateCityPager();
     const status = panel.querySelector('[data-table-status]');
     const previous = panel.dataset.loadedPeriod;
     status.textContent = '正在读取…';
     panel.setAttribute('aria-busy', 'true');
     try {
       const params = new URLSearchParams({ table: key, period: period });
+      if (panel === cityPanel) params.set('page', page);
       const response = await fetch('/admin/api/dashboard/tables?' + params, { signal: controller.signal });
       if (controller.signal.aborted) return;
       if (response.status === 403) {
@@ -408,8 +428,10 @@
       if (controller.signal.aborted) return;
       const data = payload.data;
       if (!data?.range || !Array.isArray(data.rows)) throw new Error('invalid table');
+      if (panel === cityPanel && !data.pagination) throw new Error('invalid city pagination');
       replaceManagementRows(panel, data);
       panel.dataset.loadedPeriod = data.period;
+      if (panel === cityPanel) cityPage = data.pagination;
       status.textContent = panel.hasAttribute('data-workbench-period') ? dateRange(data.range.start, data.range.end) : '';
     } catch (_) {
       if (controller.signal.aborted) return;
@@ -423,6 +445,7 @@
       if (tableRequests.get(panel) === controller) {
         tableRequests.delete(panel);
         panel.removeAttribute('aria-busy');
+        if (panel === cityPanel) updateCityPager();
       }
     }
   }
@@ -432,7 +455,8 @@
       const section = panel.closest('section');
       if (!section.hidden && !section.classList.contains('admin-permission-hidden') &&
           (includeFixed || panel.hasAttribute('data-workbench-period'))) {
-        loadManagementTable(panel, period);
+        const page = panel === cityPanel && panel.dataset.loadedPeriod === period ? cityPage?.page : undefined;
+        loadManagementTable(panel, period, page);
       }
     });
   }
@@ -520,6 +544,13 @@
       }
     }
   }
+
+  cityPageButtons.forEach(function (button) {
+    button.addEventListener('click', function () {
+      const page = cityPage.page + Number(button.dataset.cityPageStep);
+      loadManagementTable(cityPanel, cityPanel.dataset.loadedPeriod, page);
+    });
+  });
 
   periodButtons.forEach(function (button) {
     button.addEventListener('click', function () {
