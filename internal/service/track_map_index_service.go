@@ -173,7 +173,7 @@ func (s *TrackMapIndexService) processJob(ctx context.Context, trackID string) e
 	if err != nil {
 		return fmt.Errorf("cache raw track through internal OSS endpoint: %w", err)
 	}
-	points, rawCoordinate, err := parseTrackPointsFileWithCoordinate(localPath, track)
+	points, rawCoordinate, err := parseTrackPointsFileWithCoordinate(localPath, true)
 	if err != nil {
 		return err
 	}
@@ -217,11 +217,11 @@ func retryDelay(attempts int) time.Duration {
 }
 
 func parseTrackPointsFile(path string) ([]models.TrackPoint, error) {
-	points, _, err := parseTrackPointsFileWithCoordinate(path, nil)
+	points, _, err := parseTrackPointsFileWithCoordinate(path, false)
 	return points, err
 }
 
-func parseTrackPointsFileWithCoordinate(path string, track *models.Track) ([]models.TrackPoint, string, error) {
+func parseTrackPointsFileWithCoordinate(path string, readCoordinateSystem bool) ([]models.TrackPoint, string, error) {
 	fi, err := os.Stat(path)
 	if err != nil {
 		return nil, "", err
@@ -245,13 +245,13 @@ func parseTrackPointsFileWithCoordinate(path string, track *models.Track) ([]mod
 		return nil, "", fmt.Errorf("raw track file exceeds %d bytes", maxRawTrackIndexFileBytes)
 	}
 	if strings.EqualFold(filepath.Ext(path), ".kmz") || isZipData(data) {
-		return parseKMZPointsWithCoordinate(data, track)
+		return parseKMZPointsWithCoordinate(data, readCoordinateSystem)
 	}
 	points, err := parseRawTrackPoints(data, path)
-	if err != nil || track == nil {
+	if err != nil || !readCoordinateSystem {
 		return points, "", err
 	}
-	return points, exportedKMLCoordinateSystem(data, track), nil
+	return points, exportedKMLCoordinateSystem(data), nil
 }
 
 func parseRawTrackPoints(data []byte, path string) ([]models.TrackPoint, error) {
@@ -302,11 +302,11 @@ func isZipData(data []byte) bool {
 }
 
 func parseKMZPoints(data []byte) ([]models.TrackPoint, error) {
-	points, _, err := parseKMZPointsWithCoordinate(data, nil)
+	points, _, err := parseKMZPointsWithCoordinate(data, false)
 	return points, err
 }
 
-func parseKMZPointsWithCoordinate(data []byte, track *models.Track) ([]models.TrackPoint, string, error) {
+func parseKMZPointsWithCoordinate(data []byte, readCoordinateSystem bool) ([]models.TrackPoint, string, error) {
 	reader, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
 	if err != nil {
 		return nil, "", err
@@ -336,7 +336,10 @@ func parseKMZPointsWithCoordinate(data []byte, track *models.Track) ([]models.Tr
 		}
 		points, err := parseKMLPoints(kmlData)
 		if err == nil && len(points) > 0 {
-			return points, exportedKMLCoordinateSystem(kmlData, track), nil
+			if readCoordinateSystem {
+				return points, exportedKMLCoordinateSystem(kmlData), nil
+			}
+			return points, "", nil
 		}
 		lastErr = err
 	}
