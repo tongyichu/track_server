@@ -78,6 +78,9 @@
   var collapsedAreas = Object.create(null);
   var groupList = document.getElementById('groupList');
   var memberList = document.getElementById('memberList');
+  var memberMatchDetails = document.getElementById('memberMatchDetails');
+  var routeMemberTable = document.getElementById('routeMemberTable');
+  var introAdvancedFields = document.getElementById('introAdvancedFields');
   var totalHint = document.getElementById('totalHint');
   var detailHint = document.getElementById('detailHint');
   var statusHint = document.getElementById('statusHint');
@@ -86,6 +89,11 @@
   var introPanel = document.querySelector('[data-route-panel="introduction"]');
   var cityNames = Object.create(null);
   var detailModal = new AdminComponents.Dialog(document.getElementById('detailModal'));
+  function showMemberMatchDetails(show) {
+    memberMatchDetails.checked = show;
+    routeMemberTable.classList.toggle('show-match-details', show);
+  }
+  memberMatchDetails.addEventListener('change', function () { showMemberMatchDetails(memberMatchDetails.checked); });
   document.getElementById('detailModal').addEventListener('admin:dialog-closing', function (event) {
     if (introWriting) { event.preventDefault(); return; }
     if (!allowIntroClose && introDirty()) {
@@ -98,6 +106,8 @@
       return;
     }
     allowIntroClose = false; introBaseline = '';
+    showMemberMatchDetails(false);
+    introAdvancedFields.open = false;
     cancelIntroGeneration();
     detailRequest++; detailLoadingID = '';
     if (detailController) detailController.abort();
@@ -428,6 +438,11 @@
 
   async function loadDetail(groupID) {
     if (detailLoadingID === groupID || introWriting) return;
+    if (selectedGroupID !== groupID) {
+      memberList.replaceChildren();
+      showMemberMatchDetails(false);
+      introAdvancedFields.open = false;
+    }
     var preserveIntro = selectedGroupID === groupID && introDirty();
     if (!preserveIntro) { introBaseline = ''; introPanel.inert = true; }
     showIntroError('');
@@ -615,19 +630,22 @@
     items.forEach(function (row) {
       var m = row.member || {};
       var geo = row.geo_index || {};
+      var isRepresentative = m.track_id === representativeTrackID;
+      var distance = Number(geo.distance);
+      var distanceLabel = Number.isFinite(distance) && distance > 0
+        ? (distance >= 1000 ? (distance / 1000).toFixed(1) + ' 公里' : Math.round(distance) + ' 米') : '—';
       var tr = document.createElement('tr');
-      tr.innerHTML = '<td class="mono">' + esc(m.track_id) + '</td>' +
-        '<td>' + esc(m.role || '') + '</td>' +
-        '<td>' + esc(m.match_direction || '') + '</td>' +
-        '<td>' + (m.similarity_score != null ? Number(m.similarity_score).toFixed(3) : '') + '</td>' +
-        '<td>' + esc(cityNames[geo.city_code] || geo.city_code || '') + '</td>' +
-        '<td>' + (geo.distance != null ? Number(geo.distance).toFixed(1) : '') + '</td>' +
-        '<td>' + (geo.point_count || '') + '</td>' +
-        '<td>' + esc(m.source || '') + '</td>' +
+      tr.innerHTML = '<td><code>' + esc(m.track_id) + '</code>' + (isRepresentative ? ' <span class="route-type-badge route-type-other">代表</span>' : '') + '</td>' +
+        '<td>' + distanceLabel + '</td>' +
+        '<td class="route-member-diagnostic">' + esc(({ forward: '正向', reverse: '反向' })[m.match_direction] || m.match_direction || '—') + '</td>' +
+        '<td class="route-member-diagnostic">' + (m.similarity_score != null ? Number(m.similarity_score).toFixed(3) : '—') + '</td>' +
+        '<td class="route-member-diagnostic">' + esc(cityNames[geo.city_code] || geo.city_code || '—') + '</td>' +
+        '<td class="route-member-diagnostic">' + esc(geo.point_count || '—') + '</td>' +
+        '<td class="route-member-diagnostic">' + esc(m.source || '—') + '</td>' +
         '<td class="row-actions"></td>';
       var actions = tr.querySelector('.row-actions');
       actions.dataset.adminWrite = 'route_groups';
-      if (m.track_id !== representativeTrackID) {
+      if (!isRepresentative) {
         var repBtn = document.createElement('button');
         repBtn.textContent = '设代表';
         repBtn.addEventListener('click', function () { setRepresentative(m.track_id); });

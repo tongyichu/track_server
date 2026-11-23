@@ -86,19 +86,29 @@
     <section class="route-workspace" id="detailPanel" hidden>
       <div class="route-detail-meta"><strong id="detailTrackType"></strong><span><strong id="detailMemberCount"></strong> 条成员轨迹</span></div>
       <nav class="route-workspace-tabs" aria-label="路线组工作区">
-        <button type="button" class="active" data-route-tab="members">成员与代表路线</button>
+        <button type="button" class="active" data-route-tab="members">成员轨迹</button>
         <button type="button" data-route-tab="introduction">路线介绍</button>
         <button type="button" data-route-tab="maintenance">路线组管理</button>
       </nav>
 
       <section class="route-tab-panel" data-route-panel="members">
+        <label class="route-member-display-option"><input type="checkbox" id="memberMatchDetails" aria-controls="routeMemberTable" />显示匹配信息</label>
         <div class="route-table-wrap">
-          <table class="data route-member-table"><thead><tr><th>轨迹 ID</th><th>角色</th><th>匹配方向</th><th>相似度</th><th>城市</th><th>距离</th><th>点数</th><th>来源</th><th>操作</th></tr></thead><tbody id="memberList"></tbody></table>
+          <table class="data route-member-table" id="routeMemberTable">
+            <thead><tr><th>轨迹</th><th>距离</th><th class="route-member-diagnostic">匹配方向</th><th class="route-member-diagnostic">相似度</th><th class="route-member-diagnostic">城市</th><th class="route-member-diagnostic">点数</th><th class="route-member-diagnostic">来源</th><th>操作</th></tr></thead>
+            <tbody id="memberList"></tbody>
+          </table>
         </div>
       </section>
 
       <section class="route-tab-panel" data-route-panel="introduction" hidden>
-        <div class="route-panel-heading"><div><h3>路线介绍</h3></div><span class="hint" id="introStatus"></span></div>
+        <div class="route-panel-heading"><span class="hint" id="introStatus"></span><button type="button" id="introGenerateBtn" data-admin-write="route_groups" class="btn btn-outline-secondary">AI 生成草稿</button></div>
+        <div class="route-intro-primary">
+          <label>标题<input data-admin-input="route_groups" id="introZhName" type="text" placeholder="麦理浩径" /></label>
+          <label>摘要<textarea data-admin-input="route_groups" id="introZhSummary" rows="3"></textarea></label>
+        </div>
+        <details class="route-intro-options" id="introAdvancedFields">
+          <summary>更多介绍字段</summary>
         <div class="route-intro-section"><h4>基本信息</h4><div class="route-intro-grid">
           <label>难度<input data-admin-input="route_groups" id="introDifficulty" type="text" placeholder="easy / medium / hard" /></label>
           <label>适宜季节（逗号分隔）<input data-admin-input="route_groups" id="introBestSeasons" type="text" placeholder="autumn,winter" /></label>
@@ -106,9 +116,7 @@
           <label>预计最长时长（分钟）<input data-admin-input="route_groups" id="introDurationMax" type="number" min="0" /></label>
         </div></div>
         <div class="route-intro-language-grid">
-          <div class="route-language-card"><h4>简体中文</h4>
-            <label>标题<input data-admin-input="route_groups" id="introZhName" type="text" placeholder="麦理浩径徒步路线" /></label>
-            <label>摘要<textarea data-admin-input="route_groups" id="introZhSummary" rows="3"></textarea></label>
+          <div class="route-language-card"><h4>中文补充</h4>
             <label>路线介绍（每行一段）<textarea data-admin-input="route_groups" id="introZhDescription" rows="5"></textarea></label>
             <label>路线亮点（每行一项）<textarea data-admin-input="route_groups" id="introZhHighlights" rows="4"></textarea></label>
             <label>出行提示（每行一项）<textarea data-admin-input="route_groups" id="introZhTips" rows="4"></textarea></label>
@@ -121,8 +129,9 @@
             <label>Tips (one item per line)<textarea data-admin-input="route_groups" id="introEnTips" rows="4"></textarea></label>
           </div>
         </div>
+        </details>
         <p id="introWriteError" class="text-danger" role="alert" hidden></p>
-        <div class="actions route-intro-actions"><button type="button" id="introGenerateBtn" data-admin-write="route_groups" class="btn btn-outline-secondary">AI 生成草稿</button><button id="introSaveBtn" data-admin-write="route_groups" class="btn btn-outline-primary">保存草稿</button><button id="introPublishBtn" data-admin-write="route_groups" class="btn btn-primary">保存并发布</button><button id="introUnpublishBtn" data-admin-write="route_groups" class="btn btn-outline-danger">下线</button><a id="introPreviewLink" class="admin-link" target="_blank" rel="noopener" hidden>查看公开介绍</a></div>
+        <div class="actions route-intro-actions"><button id="introSaveBtn" data-admin-write="route_groups" class="btn btn-outline-primary">保存草稿</button><button id="introPublishBtn" data-admin-write="route_groups" class="btn btn-primary">保存并发布</button><button id="introUnpublishBtn" data-admin-write="route_groups" class="btn btn-outline-danger">下线</button><a id="introPreviewLink" class="admin-link" target="_blank" rel="noopener" hidden>查看公开介绍</a></div>
       </section>
 
       <section class="route-tab-panel" data-route-panel="maintenance" hidden>
