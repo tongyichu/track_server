@@ -30,8 +30,7 @@
 
   <main class="container wide route-groups-page">
     <div class="page-heading route-page-heading">
-      <div><h1>地图模式</h1><p>按运动类型、省份和城市查找地图路线组，维护成员轨迹、代表轨迹和路线介绍。</p></div>
-      <span class="route-total-pill" id="totalHint"></span>
+      <h1>地图模式</h1>
     </div>
     <details id="routeStatistics" class="panel feature-stats admin-stats-panel">
       <summary>路线覆盖与规模分布</summary>
@@ -43,7 +42,7 @@
       </div>
     </details>
     <section class="panel route-groups-list-card">
-      <div class="route-list-heading"><h2>路线组</h2></div>
+      <div class="route-list-heading"><h2>路线组</h2><span id="listSummaryHint" role="status"></span></div>
       <div class="route-groups-toolbar">
         <div class="route-type-field">
           <span class="route-filter-label">运动类型</span>
@@ -52,10 +51,10 @@
             <div class="route-type-menu" id="trackTypeMenu" role="listbox" hidden></div>
           </div>
         </div>
-        <label>路线覆盖省份
+        <label>覆盖省份
           <select id="provinceCodeInput"><option value="">全部省份</option></select>
         </label>
-        <label>路线覆盖城市
+        <label>覆盖城市
           <select id="cityCodeInput"><option value="">全部城市</option></select>
         </label>
         <button id="refreshBtn" class="btn btn-outline-secondary">刷新列表</button>
@@ -63,12 +62,11 @@
       </div>
       <div class="route-table-wrap">
         <table class="data route-group-table">
-          <thead><tr><th>路线名称</th><th>聚合归属</th><th>类型</th><th>成员</th><th>代表轨迹</th><th>最近更新</th><th>操作</th></tr></thead>
+          <thead><tr><th scope="col">地区 / 路线</th><th scope="col">类型</th><th scope="col">成员</th><th scope="col">操作</th></tr></thead>
           <tbody id="groupList"></tbody>
         </table>
       </div>
       <div class="route-list-footer">
-        <span class="hint" id="listSummaryHint"></span>
         <button id="loadMoreBtn" class="btn btn-outline-primary" hidden>加载更多</button>
       </div>
     </section>
@@ -79,7 +77,12 @@
     <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-xl" role="document">
       <div class="modal-content">
         <div class="modal-header route-modal-header">
-          <div><h2 class="modal-title" id="detailName"></h2><span class="hint" id="detailHint"></span></div>
+          <div class="route-modal-heading">
+            <h2 class="modal-title" id="detailName"></h2>
+            <p id="detailPath" class="route-detail-path" hidden></p>
+            <span class="hint" id="detailHint" role="status" hidden></span>
+            <button type="button" id="detailRetryBtn" class="btn btn-sm btn-outline-secondary" hidden>重试</button>
+          </div>
           <button type="button" class="btn-close" data-admin-dismiss="dialog" aria-label="关闭"></button>
         </div>
         <div class="modal-body route-modal-body">
@@ -99,9 +102,15 @@
             <tbody id="memberList"></tbody>
           </table>
         </div>
+        <p id="memberListHint" class="hint" hidden></p>
       </section>
 
       <section class="route-tab-panel" data-route-panel="introduction" hidden>
+        <div id="introLoadState" class="route-form-state" hidden>
+          <span id="introLoadHint" role="status"></span>
+          <button type="button" id="introRetryBtn" class="btn btn-sm btn-outline-secondary" hidden>重试</button>
+        </div>
+        <div id="introEditor" hidden>
         <div class="route-panel-heading"><span class="hint" id="introStatus"></span><button type="button" id="introGenerateBtn" data-admin-write="route_groups" class="btn btn-outline-secondary">AI 生成草稿</button></div>
         <div class="route-intro-primary">
           <label>标题<input data-admin-input="route_groups" id="introZhName" type="text" placeholder="麦理浩径" /></label>
@@ -132,6 +141,7 @@
         </details>
         <p id="introWriteError" class="text-danger" role="alert" hidden></p>
         <div class="actions route-intro-actions"><button id="introSaveBtn" data-admin-write="route_groups" class="btn btn-outline-primary">保存草稿</button><button id="introPublishBtn" data-admin-write="route_groups" class="btn btn-primary">保存并发布</button><button id="introUnpublishBtn" data-admin-write="route_groups" class="btn btn-outline-danger">下线</button><a id="introPreviewLink" class="admin-link" target="_blank" rel="noopener" hidden>查看公开介绍</a></div>
+        </div>
       </section>
 
       <section class="route-tab-panel" data-route-panel="maintenance" hidden>

@@ -2925,14 +2925,14 @@ func (h *Handler) GetRouteGroup(ctx context.Context, c *app.RequestContext) {
 		writeAdminRouteGroupError(c, err)
 		return
 	}
-	if h.trackRepo != nil {
+	if h.trackRepo != nil && len(detail.Members) > 0 {
+		ids := make([]string, 0, len(detail.Members))
 		for _, member := range detail.Members {
-			if member == nil || member.Member == nil {
-				continue
-			}
-			track, err := h.trackRepo.FindByID(ctx, member.Member.TrackID)
-			if err == nil {
-				member.Track = track
+			ids = append(ids, member.Member.TrackID)
+		}
+		if tracks, err := h.trackRepo.FindByIDs(ctx, ids); err == nil {
+			for _, member := range detail.Members {
+				member.Track = tracks[member.Member.TrackID]
 			}
 		}
 	}

@@ -5,9 +5,6 @@
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
-  function fmtTime(s) {
-    return esc(AdminTime.dateTime(s));
-  }
   var TRACK_TYPES = [
     { type: 'hiking', name: '徒步', icon: 'mingcute-hiking-line-v1.svg', color: '#00875A' },
     { type: 'running', name: '跑步', icon: 'mingcute-run-line-v1.svg', color: '#F26A4B' },
@@ -66,27 +63,33 @@
   }
 
   var PAGE_SIZE = 50;
-  var selectedGroupID = '', detailRequest = 0, detailController = null, detailLoadingID = '';
+  var selectedGroupID = '', detailRequest = 0, detailSession = 0, detailController = null, detailLoadingID = '';
   var introBaseline = '', introWriting = false, introClosePrompt = false, allowIntroClose = false;
-  var introStatus = '', introAIController = null;
+  var introStatus = '', introAIController = null, introLoadController = null;
   var selectedTrackType = '';
   var loadedGroups = [];
   var nextOffset = 0;
   var totalCount = 0;
   var listLoading = false, listController = null;
   var listLoadSeq = 0;
-  var collapsedAreas = Object.create(null);
+  var areaExpansion = new Map();
   var groupList = document.getElementById('groupList');
   var memberList = document.getElementById('memberList');
   var memberMatchDetails = document.getElementById('memberMatchDetails');
   var routeMemberTable = document.getElementById('routeMemberTable');
   var introAdvancedFields = document.getElementById('introAdvancedFields');
-  var totalHint = document.getElementById('totalHint');
   var detailHint = document.getElementById('detailHint');
+  var detailRetryBtn = document.getElementById('detailRetryBtn');
+  var detailPanel = document.getElementById('detailPanel');
+  var detailPath = document.getElementById('detailPath');
   var statusHint = document.getElementById('statusHint');
   var listSummaryHint = document.getElementById('listSummaryHint');
   var loadMoreBtn = document.getElementById('loadMoreBtn');
   var introPanel = document.querySelector('[data-route-panel="introduction"]');
+  var introEditor = document.getElementById('introEditor');
+  var introLoadState = document.getElementById('introLoadState');
+  var introLoadHint = document.getElementById('introLoadHint');
+  var introRetryBtn = document.getElementById('introRetryBtn');
   var cityNames = Object.create(null);
   var detailModal = new AdminComponents.Dialog(document.getElementById('detailModal'));
   function showMemberMatchDetails(show) {
@@ -105,20 +108,32 @@
       }).finally(function () { introClosePrompt = false; });
       return;
     }
-    allowIntroClose = false; introBaseline = '';
+    allowIntroClose = false;
     showMemberMatchDetails(false);
     introAdvancedFields.open = false;
-    cancelIntroGeneration();
-    detailRequest++; detailLoadingID = '';
+    resetIntroduction();
+    selectedGroupID = '';
+    detailSession++;
+    detailRequest++;
+    detailLoadingID = '';
     if (detailController) detailController.abort();
+    renderGroupsFromSelection();
   });
 
-  document.querySelectorAll('[data-route-tab]').forEach(function (button) {
-    button.addEventListener('click', function () {
-      document.querySelectorAll('[data-route-tab]').forEach(function (item) { item.classList.toggle('active', item === button); });
-      document.querySelectorAll('[data-route-panel]').forEach(function (panel) { panel.hidden = panel.dataset.routePanel !== button.dataset.routeTab; });
+  function selectRouteTab(tab) {
+    document.querySelectorAll('[data-route-tab]').forEach(function (button) {
+      var selected = button.dataset.routeTab === tab;
+      button.classList.toggle('active', selected);
+      button.setAttribute('aria-pressed', String(selected));
     });
+    document.querySelectorAll('[data-route-panel]').forEach(function (panel) { panel.hidden = panel.dataset.routePanel !== tab; });
+    if (tab === 'introduction') loadIntroduction();
+  }
+  document.querySelectorAll('[data-route-tab]').forEach(function (button) {
+    button.addEventListener('click', function () { selectRouteTab(button.dataset.routeTab); });
   });
+  detailRetryBtn.addEventListener('click', function () { loadDetail(selectedGroupID); });
+  introRetryBtn.addEventListener('click', loadIntroduction);
 
   // ---------- 运动类型下拉（icon + 文字） ----------
   var typeToggle = document.getElementById('trackTypeToggle');
@@ -205,15 +220,23 @@
   citySelect.addEventListener('change', function () { resetAndLoad(); });
 
   // ---------- 列表加载与分页 ----------
-  document.getElementById('refreshBtn').addEventListener('click', function () { resetAndLoad(); });
+  document.getElementById('refreshBtn').addEventListener('click', reloadKeepingPage);
   loadMoreBtn.addEventListener('click', function () { loadGroups(false); });
 
   function resetAndLoad() {
     loadedGroups = [];
     nextOffset = 0;
     totalCount = 0;
-    collapsedAreas = Object.create(null);
+    areaExpansion.clear();
     loadGroups(true);
+  }
+
+  function listParams(offset, limit) {
+    var params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+    if (selectedTrackType) params.set('track_type', selectedTrackType);
+    if (citySelect.value) params.set('city_code', citySelect.value);
+    else if (provinceSelect.value) params.set('province_code', provinceSelect.value);
+    return params;
   }
 
   async function loadGroups(reset) {
@@ -223,25 +246,16 @@
     listLoading = true;
     var seq = ++listLoadSeq;
     if (reset) {
-      groupList.innerHTML = '<tr><td colspan="7"><div class="route-table-state">加载中...</div></td></tr>';
+      groupList.innerHTML = '<tr><td colspan="4"><div class="route-table-state">加载中…</div></td></tr>';
+      listSummaryHint.textContent = '';
     }
     statusHint.textContent = '加载中...';
     loadMoreBtn.hidden = true;
-    var params = new URLSearchParams();
-    params.set('limit', String(PAGE_SIZE));
-    params.set('offset', String(reset ? 0 : nextOffset));
-    if (selectedTrackType) params.set('track_type', selectedTrackType);
-    var provinceCode = provinceSelect.value;
-    var cityCode = citySelect.value;
-    if (cityCode) {
-      params.set('city_code', cityCode);
-    } else if (provinceCode) {
-      params.set('province_code', provinceCode);
-    }
+    var params = listParams(reset ? 0 : nextOffset, PAGE_SIZE);
     try {
       var data = await apiJSON('/admin/api/route-groups?' + params.toString(), { signal: controller.signal });
       if (seq !== listLoadSeq) return;
-      loadedGroups = reset ? (data.items || []) : loadedGroups.concat(data.items || []);
+      replaceLoadedGroups(reset ? [] : loadedGroups, data.items || []);
       totalCount = Number(data.total || 0);
       nextOffset = Number(data.next_offset || loadedGroups.length);
       renderGroups();
@@ -250,7 +264,7 @@
     } catch (err) {
       if (seq !== listLoadSeq) return;
       if (reset) {
-        groupList.innerHTML = '<tr><td colspan="7"><div class="route-table-state route-table-error">加载失败：' + esc(err.message) + '</div></td></tr>';
+        groupList.innerHTML = '<tr><td colspan="4"><div class="route-table-state route-table-error">加载失败 · ' + esc(err.message) + '</div></td></tr>';
       } else {
         AdminUI.alert('加载失败：' + err.message, 'danger');
         loadMoreBtn.hidden = false;
@@ -261,6 +275,12 @@
     }
   }
 
+  function replaceLoadedGroups(previous, incoming) {
+    loadedGroups = Array.from(new Map(previous.concat(incoming).map(function (group) {
+      return [group.group_id, group];
+    })).values());
+  }
+
   function routeGroupLocation(g) {
     var location = g.grouping || {};
     return {
@@ -269,93 +289,97 @@
       districtID: location.district_id,
       districtName: location.district_name || '区县未标注',
       scenicID: location.scenic_id,
-      scenicName: location.scenic_name
+      scenicName: location.scenic_name || (location.scenic_id ? '未命名景点' : '')
     };
   }
 
   function buildAreaTree(items) {
     var root = { key: '', children: new Map() };
-    function addGroup(parent, type, id, name, group) {
+    function addGroup(parent, type, id, name) {
       var key = parent.key + '/' + type + ':' + encodeURIComponent(id || '');
       var bucket = parent.children.get(key);
       if (!bucket) {
-        bucket = { key: key, type: type, name: name, children: new Map(), groups: [], count: 0, memberTotal: 0, types: new Set() };
+        bucket = { key: key, id: id, type: type, name: name, children: new Map(), groups: [], count: 0 };
         parent.children.set(key, bucket);
       }
       bucket.count++;
-      bucket.memberTotal += Number(group.member_count || 0);
-      if (group.track_type) bucket.types.add(group.track_type);
       return bucket;
     }
     items.forEach(function (g) {
       var location = routeGroupLocation(g);
-      var city = addGroup(root, 'city', location.cityCode, location.cityName, g);
-      var district = addGroup(city, 'district', location.districtID, location.districtName, g);
-      var leaf = location.scenicID ? addGroup(district, 'scenic', location.scenicID, location.scenicName, g) : district;
+      var city = addGroup(root, 'city', location.cityCode, location.cityName);
+      var district = addGroup(city, 'district', location.districtID, location.districtName);
+      var leaf = location.scenicID ? addGroup(district, 'scenic', location.scenicID, location.scenicName) : district;
       leaf.groups.push(g);
     });
     return root.children;
   }
 
   function renderGroups(focusKey) {
-    totalHint.textContent = '共 ' + totalCount + ' 组';
-    listSummaryHint.textContent = '已加载 ' + loadedGroups.length + ' / ' + totalCount + ' 组';
+    var partial = nextOffset < totalCount;
+    listSummaryHint.textContent = partial ? '已加载 ' + loadedGroups.length + ' / ' + totalCount + ' 组' : '共 ' + totalCount + ' 组';
     groupList.innerHTML = '';
     if (!loadedGroups.length) {
-      groupList.innerHTML = '<tr><td colspan="7"><div class="route-table-state"><strong>没有找到路线组</strong><span>可以调整运动类型、省份或城市条件后重新查询。</span></div></td></tr>';
+      groupList.innerHTML = '<tr><td colspan="4"><div class="route-table-state">没有符合当前筛选的路线组</div></td></tr>';
       return;
     }
     var rows = document.createDocumentFragment();
     var focusedToggle;
-    function appendBucket(bucket) {
-      var header = renderAreaHeader(bucket);
+    var cities = buildAreaTree(loadedGroups);
+    var cityFilter = citySelect.value;
+    var regionFiltered = cityFilter || provinceSelect.value;
+    function appendBucket(bucket, level) {
+      var expandedByFilter = level === 0 && regionFiltered && (bucket.id === cityFilter || cities.size === 1);
+      var expanded = areaExpansion.has(bucket.key) ? areaExpansion.get(bucket.key) : !!expandedByFilter;
+      var header = renderAreaHeader(bucket, level, expanded, partial);
       rows.appendChild(header);
       if (bucket.key === focusKey) focusedToggle = header.querySelector('.route-area-toggle');
-      if (collapsedAreas[bucket.key]) return;
-      bucket.children.forEach(appendBucket);
-      bucket.groups.forEach(function (g) { rows.appendChild(renderGroupRow(g)); });
+      if (!expanded) return;
+      Array.from(bucket.children.values()).sort(compareAreas).forEach(function (child) { appendBucket(child, level + 1); });
+      if (bucket.type === 'district' && bucket.children.size && bucket.groups.length) {
+        var divider = document.createElement('tr');
+        divider.className = 'route-area-divider route-tree-depth-' + (level + 1);
+        divider.innerHTML = '<td colspan="4" class="route-tree-cell">独立路线</td>';
+        rows.appendChild(divider);
+      }
+      bucket.groups.forEach(function (g) { rows.appendChild(renderGroupRow(g, level + 1)); });
     }
-    buildAreaTree(loadedGroups).forEach(appendBucket);
+    Array.from(cities.values()).sort(function (a, b) {
+      return (cityFilter ? Number(b.id === cityFilter) - Number(a.id === cityFilter) : 0) || compareAreas(a, b);
+    }).forEach(function (bucket) { appendBucket(bucket, 0); });
     groupList.appendChild(rows);
     if (focusedToggle) focusedToggle.focus({ preventScroll: true });
   }
 
-  function renderAreaHeader(bucket) {
+  function compareAreas(a, b) {
+    return Number(!a.id) - Number(!b.id) || a.name.localeCompare(b.name, 'zh-CN');
+  }
+
+  function renderAreaHeader(bucket, level, expanded, partial) {
     var tr = document.createElement('tr');
-    tr.className = 'route-area-header route-area-level-' + bucket.type;
-    var collapsed = !!collapsedAreas[bucket.key];
-    var typeIcons = TRACK_TYPES.filter(function (meta) { return bucket.types.has(meta.type); }).map(function (meta) {
-      return typeIconHTML(meta, 'route-type-option-icon route-area-type-icon');
-    }).join('');
-    tr.innerHTML = '<td colspan="7">' +
-      '<button type="button" class="route-area-toggle" aria-expanded="' + (!collapsed) + '" title="' + esc(bucket.name) + '">' +
+    tr.className = 'route-area-header route-area-level-' + bucket.type + ' route-tree-depth-' + level;
+    tr.innerHTML = '<td colspan="4" class="route-tree-cell">' +
+      '<button type="button" class="route-area-toggle" aria-expanded="' + expanded + '" title="' + esc(bucket.name) + '">' +
       '<span class="route-area-chevron" aria-hidden="true"></span>' +
-      '<span class="route-area-title"><strong>' + esc(bucket.name) + '</strong>' + (bucket.type === 'scenic' ? '<span class="route-type-badge route-type-other">景点</span>' : '') + '</span>' +
-      '<span class="route-area-type-icons">' + typeIcons + '</span>' +
-      '<span class="route-area-stats">' + bucket.count + ' 组路线 · ' + bucket.memberTotal.toLocaleString() + ' 条轨迹</span>' +
+      '<span class="route-area-title">' + esc(bucket.name) + '</span>' +
+      '<span class="route-area-stats">' + (partial ? '已加载 ' : '') + bucket.count.toLocaleString() + ' 组</span>' +
       '</button></td>';
     tr.querySelector('.route-area-toggle').addEventListener('click', function () {
-      collapsedAreas[bucket.key] = !collapsedAreas[bucket.key];
+      areaExpansion.set(bucket.key, !expanded);
       renderGroups(bucket.key);
     });
     return tr;
   }
 
-  function renderGroupRow(g) {
+  function renderGroupRow(g, level) {
     var tr = document.createElement('tr');
+    tr.className = 'route-group-row route-tree-depth-' + level;
     tr.dataset.groupId = g.group_id;
     if (g.group_id === selectedGroupID) tr.classList.add('selected');
-    var location = routeGroupLocation(g);
-    var areaName = location.scenicName || location.districtName;
-    var cityLabel = location.scenicID ? location.cityName + ' / ' + location.districtName : location.cityName;
-    var representativeID = g.representative_track_id || '';
-    tr.innerHTML = '<td class="route-name-cell"><strong title="' + esc(g.name || '') + '">' + esc(g.name || '未命名路线') + '</strong><small title="' + esc(g.group_id) + '">路线组 · ' + esc(g.group_id) + '</small></td>' +
-      '<td class="route-area-cell"><strong title="' + esc(areaName) + '">' + esc(areaName) + '</strong><small title="' + esc(cityLabel) + '">' + esc(cityLabel) + '</small></td>' +
+    tr.innerHTML = '<td class="route-tree-cell route-name-cell"><strong title="' + esc(g.name || '') + '">' + esc(g.name || '未命名路线') + '</strong><code>' + esc(g.group_id) + '</code></td>' +
       '<td>' + typeBadgeHTML(g.track_type) + '</td>' +
-      '<td><span class="route-member-count">' + Number(g.member_count || 0).toLocaleString() + '</span><small class="route-cell-caption">条轨迹</small></td>' +
-      '<td class="route-representative-cell" title="' + esc(representativeID) + '">' + (representativeID ? '<code>' + esc(representativeID) + '</code>' : '<span class="hint">未设置</span>') + '</td>' +
-      '<td class="route-updated-cell">' + (g.updated_at ? fmtTime(g.updated_at) : '<span class="hint">—</span>') + '</td>' +
-      '<td><button class="btn btn-sm btn-outline-primary route-manage-button" data-id="' + esc(g.group_id) + '">管理</button></td>';
+      '<td class="route-member-count">' + Number(g.member_count || 0).toLocaleString() + '</td>' +
+      '<td><button type="button" class="route-manage-button">管理</button></td>';
     tr.querySelector('button').addEventListener('click', function () {
       loadDetail(g.group_id);
     });
@@ -364,32 +388,33 @@
 
   document.getElementById('renameBtn').addEventListener('click', async function () {
     if (!selectedGroupID || detailLoadingID) return;
+    var groupID = selectedGroupID, session = detailSession;
     var name = document.getElementById('renameInput').value.trim();
     if (!name) { AdminUI.alert('请输入新名称', 'danger'); return; }
     try {
-      await apiJSON('/admin/api/route-groups/' + encodeURIComponent(selectedGroupID) + '/name', {
+      await apiJSON('/admin/api/route-groups/' + encodeURIComponent(groupID) + '/name', {
         method: 'PUT',
         body: JSON.stringify({ name: name })
       });
-      await loadDetail(selectedGroupID);
-      await reloadKeepingPage();
+      await refreshGroupAfterChange(groupID, session);
     } catch (err) {
       AdminUI.alert(err.message, 'danger');
     }
   });
   document.getElementById('mergeBtn').addEventListener('click', async function () {
     if (!selectedGroupID || detailLoadingID) return;
+    var groupID = selectedGroupID, session = detailSession;
     var sourceGroupID = document.getElementById('mergeInput').value.trim();
     if (!sourceGroupID) { AdminUI.alert('请输入源路线组ID', 'danger'); return; }
-    if (!await AdminUI.confirm({ title: '合并路线组', message: '确认把 ' + sourceGroupID + ' 合并到 ' + selectedGroupID + '？', confirmText: '确认合并', danger: true })) return;
+    if (!await AdminUI.confirm({ title: '合并路线组', message: '确认把 ' + sourceGroupID + ' 合并到 ' + groupID + '？', confirmText: '确认合并', danger: true })) return;
+    if (!isCurrentDetail(groupID, session)) return;
     try {
-      await apiJSON('/admin/api/route-groups/' + encodeURIComponent(selectedGroupID) + '/merge', {
+      await apiJSON('/admin/api/route-groups/' + encodeURIComponent(groupID) + '/merge', {
         method: 'POST',
         body: JSON.stringify({ source_group_id: sourceGroupID })
       });
-      document.getElementById('mergeInput').value = '';
-      await loadDetail(selectedGroupID);
-      await reloadKeepingPage();
+      if (isCurrentDetail(groupID, session)) document.getElementById('mergeInput').value = '';
+      await refreshGroupAfterChange(groupID, session);
     } catch (err) {
       AdminUI.alert(err.message, 'danger');
     }
@@ -405,24 +430,22 @@
     var controller = listController = new AbortController();
     listLoading = true;
     var seq = ++listLoadSeq;
-    statusHint.textContent = '刷新中...';
+    statusHint.textContent = '刷新中…';
     try {
-      var params = new URLSearchParams();
-      params.set('limit', String(Math.max(loadedGroups.length, PAGE_SIZE)));
-      params.set('offset', '0');
-      if (selectedTrackType) params.set('track_type', selectedTrackType);
-      var provinceCode = provinceSelect.value;
-      var cityCode = citySelect.value;
-      if (cityCode) {
-        params.set('city_code', cityCode);
-      } else if (provinceCode) {
-        params.set('province_code', provinceCode);
-      }
-      var data = await apiJSON('/admin/api/route-groups?' + params.toString(), { signal: controller.signal });
-      if (seq !== listLoadSeq) return;
-      loadedGroups = data.items || [];
+      var target = Math.max(nextOffset, PAGE_SIZE);
+      var batch = [], offset = 0, data;
+      do {
+        var params = listParams(offset, Math.min(PAGE_SIZE, target - offset));
+        data = await apiJSON('/admin/api/route-groups?' + params.toString(), { signal: controller.signal });
+        if (seq !== listLoadSeq) return;
+        batch = batch.concat(data.items || []);
+        var next = Number(data.next_offset || batch.length);
+        if (next <= offset) break;
+        offset = next;
+      } while (data.has_more && offset < target);
+      replaceLoadedGroups([], batch);
       totalCount = Number(data.total || 0);
-      nextOffset = Number(data.next_offset || loadedGroups.length);
+      nextOffset = offset;
       renderGroups();
       loadMoreBtn.hidden = !data.has_more;
       statusHint.textContent = '';
@@ -437,46 +460,54 @@
   }
 
   async function loadDetail(groupID) {
-    if (detailLoadingID === groupID || introWriting) return;
-    if (selectedGroupID !== groupID) {
+    if (!groupID || detailLoadingID === groupID || introWriting) return;
+    if (selectedGroupID !== groupID || !detailModal.root.open) {
+      detailSession++;
       memberList.replaceChildren();
       showMemberMatchDetails(false);
       introAdvancedFields.open = false;
+      resetIntroduction();
+      detailPanel.hidden = true;
+      var cached = loadedGroups.find(function (group) { return group.group_id === groupID; });
+      document.getElementById('detailName').textContent = cached && cached.name || '路线组';
+      renderDetailPath(cached);
+      selectRouteTab('members');
     }
-    var preserveIntro = selectedGroupID === groupID && introDirty();
-    if (!preserveIntro) { introBaseline = ''; introPanel.inert = true; }
-    showIntroError('');
-    cancelIntroGeneration();
     if (detailController) detailController.abort();
     var controller = detailController = new AbortController(), request = ++detailRequest;
     detailLoadingID = groupID;
     selectedGroupID = groupID;
-    document.getElementById('detailPanel').hidden = false;
-    document.getElementById('detailName').textContent = '路线组管理';
     detailModal.show();
-    document.querySelectorAll('[data-route-tab]').forEach(function (item) { item.classList.toggle('active', item.dataset.routeTab === 'members'); });
-    document.querySelectorAll('[data-route-panel]').forEach(function (panel) { panel.hidden = panel.dataset.routePanel !== 'members'; });
     renderGroupsFromSelection();
-    detailHint.textContent = '加载中...';
+    showDetailState('加载中…', false);
     try {
-      await Promise.all([
-        apiJSON('/admin/api/route-groups/' + encodeURIComponent(groupID) + '?limit=100', { signal: controller.signal }).then(function (data) {
-          if (request === detailRequest && !controller.signal.aborted) renderDetail(data);
-        }),
-        preserveIntro ? Promise.resolve() : loadIntroduction(groupID, controller.signal)
-      ]);
-      if (request === detailRequest) detailHint.textContent = '';
+      var data = await apiJSON('/admin/api/route-groups/' + encodeURIComponent(groupID) + '?limit=100', { signal: controller.signal });
+      if (request !== detailRequest || controller.signal.aborted) return;
+      renderDetail(data);
+      detailPanel.hidden = false;
+      showDetailState('', false);
     } catch (err) {
       if (request === detailRequest && !controller.signal.aborted) {
-        controller.abort();
-        selectedGroupID = ''; detailHint.textContent = '加载失败: ' + err.message;
+        showDetailState('详情加载失败 · ' + err.message, true);
       }
     } finally {
-      if (request === detailRequest) {
-        detailLoadingID = '';
-        introPanel.inert = !introBaseline;
-      }
+      if (request === detailRequest) detailLoadingID = '';
     }
+  }
+
+  function showDetailState(message, retry) {
+    detailHint.textContent = message;
+    detailHint.hidden = !message;
+    detailRetryBtn.hidden = !retry;
+  }
+
+  function isCurrentDetail(groupID, session) {
+    return detailModal.root.open && selectedGroupID === groupID && detailSession === session;
+  }
+
+  async function refreshGroupAfterChange(groupID, session) {
+    if (isCurrentDetail(groupID, session)) await loadDetail(groupID);
+    await reloadKeepingPage();
   }
 
   function renderGroupsFromSelection() {
@@ -487,14 +518,36 @@
 
   function lines(id) { return document.getElementById(id).value.split('\n').map(function (s) { return s.trim(); }).filter(Boolean); }
   function putLines(id, values) { document.getElementById(id).value = (values || []).join('\n'); }
-  async function loadIntroduction(groupID, signal) {
-    var request = detailRequest;
-    signal = signal || (detailController && detailController.signal);
-    var intro;
-    try { intro = await apiJSON('/admin/api/route-groups/' + encodeURIComponent(groupID) + '/introduction', { signal: signal }); }
-    catch (error) { if (signal && signal.aborted) return; throw error; }
-    if (request !== detailRequest || selectedGroupID !== groupID || signal && signal.aborted) return;
-    renderIntroduction(intro, groupID);
+  function resetIntroduction() {
+    if (introLoadController) introLoadController.abort();
+    introLoadController = null;
+    cancelIntroGeneration();
+    introBaseline = '';
+    introEditor.hidden = true;
+    introLoadState.hidden = true;
+    showIntroError('');
+  }
+
+  async function loadIntroduction() {
+    if (!selectedGroupID || introBaseline || introLoadController) return;
+    var groupID = selectedGroupID;
+    var controller = introLoadController = new AbortController();
+    introLoadHint.textContent = '正在读取路线介绍…';
+    introLoadState.hidden = false;
+    introRetryBtn.hidden = true;
+    try {
+      var intro = await apiJSON('/admin/api/route-groups/' + encodeURIComponent(groupID) + '/introduction', { signal: controller.signal });
+      if (introLoadController !== controller) return;
+      renderIntroduction(intro, groupID);
+      introEditor.hidden = false;
+      introLoadState.hidden = true;
+    } catch (err) {
+      if (introLoadController !== controller) return;
+      introLoadHint.textContent = '路线介绍加载失败 · ' + err.message;
+      introRetryBtn.hidden = false;
+    } finally {
+      if (introLoadController === controller) introLoadController = null;
+    }
   }
   function renderIntroduction(intro, groupID) {
     var zh = intro.zh || {}, en = intro.en || {};
@@ -549,19 +602,19 @@
 
   async function generateIntroductionDraft() {
     if (!selectedGroupID || !introBaseline || detailLoadingID || introWriting || introAIController || !AdminAccess.can('route_groups', true)) return;
-    var groupID = selectedGroupID, request = detailRequest;
+    var groupID = selectedGroupID, session = detailSession;
     var field = document.getElementById('introZhSummary');
     var previous = field.value;
     if (previous.trim() && (introStatus !== 'automatic' || previous.trim() !== JSON.parse(introBaseline).zh.summary)) {
       if (!await AdminUI.confirm({ title: '替换当前中文摘要？', message: 'AI 草稿会填入中文摘要，保存或发布前可以继续编辑。', confirmText: '生成草稿', waitForHidden: true })) return;
     }
-    if (selectedGroupID !== groupID || request !== detailRequest || introAIController || introWriting || previous !== field.value) return;
+    if (selectedGroupID !== groupID || session !== detailSession || introAIController || introWriting || previous !== field.value) return;
     var controller = introAIController = new AbortController();
     showIntroError('');
     setIntroGenerationBusy(true);
     try {
       var result = await apiJSON('/admin/api/route-groups/' + encodeURIComponent(groupID) + '/introduction/generate', { method: 'POST', signal: controller.signal });
-      if (introAIController !== controller || request !== detailRequest) return;
+      if (introAIController !== controller) return;
       if (field.value !== previous) {
         showIntroError('生成期间摘要已修改，已保留当前内容。');
         return;
@@ -584,10 +637,10 @@
       showIntroError('路线介绍有未保存修改。保存草稿会同时下线，或撤销修改后再下线。');
       return;
     }
-    var groupID = selectedGroupID, request = detailRequest;
+    var groupID = selectedGroupID, session = detailSession;
     if (action === 'draft' && introStatus === 'published') {
       if (!await AdminUI.confirm({ title: '下线并保存草稿？', message: '公开页面会改为展示自动简介。', confirmText: '下线并保存', waitForHidden: true })) return;
-      if (groupID !== selectedGroupID || request !== detailRequest || introWriting) return;
+      if (groupID !== selectedGroupID || session !== detailSession || introWriting) return;
     }
     cancelIntroGeneration();
     var path = '/admin/api/route-groups/' + encodeURIComponent(groupID) + '/introduction';
@@ -613,29 +666,48 @@
     var g = data.group || {};
     document.getElementById('detailGroupID').textContent = g.group_id || '';
     document.getElementById('detailName').textContent = g.name || '未命名路线';
+    var cached = loadedGroups.find(function (group) { return group.group_id === g.group_id; });
+    renderDetailPath(data.grouping ? { grouping: data.grouping } : cached);
     var meta = trackTypeMeta(g.track_type);
     document.getElementById('detailTrackType').textContent = meta ? meta.name : (g.track_type || '-');
-    document.getElementById('detailCities').textContent = groupCities(g) || (data.area && data.area.city_name) || '-';
+    document.getElementById('detailCities').textContent = (data.coverage_city_names || []).join('、') || groupCities(g) || (data.area && data.area.city_name) || '—';
     document.getElementById('detailAreaID').textContent = g.area_id || '-';
     document.getElementById('detailAreaInfo').innerHTML = areaInfoHTML(data.area);
     document.getElementById('detailSource').textContent = g.source || '-';
     document.getElementById('detailMemberCount').textContent = String(g.member_count || 0);
     document.getElementById('detailRepresentative').textContent = g.representative_track_id || '';
     document.getElementById('renameInput').value = g.name || '';
-    renderMembers(data.members || [], g.representative_track_id || '');
+    renderMembers(data.members || [], g.representative_track_id || '', Number(g.member_count || 0));
   }
 
-  function renderMembers(items, representativeTrackID) {
+  function renderDetailPath(group) {
+    detailPath.hidden = !group || !group.grouping;
+    if (detailPath.hidden) return;
+    var path = routeGroupLocation(group);
+    detailPath.textContent = [path.cityName, path.districtName, path.scenicName || '独立路线'].join(' / ');
+  }
+
+  function renderMembers(items, representativeTrackID, total) {
     memberList.innerHTML = '';
+    var hint = document.getElementById('memberListHint');
+    hint.textContent = items.length < total ? '已显示 ' + items.length + ' / ' + total + ' 条' : '';
+    hint.hidden = !hint.textContent;
+    if (!items.length) {
+      memberList.innerHTML = '<tr class="admin-empty-row"><td colspan="8">暂无成员轨迹</td></tr>';
+      return;
+    }
     items.forEach(function (row) {
       var m = row.member || {};
       var geo = row.geo_index || {};
+      var track = row.track || {};
       var isRepresentative = m.track_id === representativeTrackID;
-      var distance = Number(geo.distance);
+      var title = String(track.title || '').trim() || '未命名轨迹';
+      var distance = Number(geo.distance || track.distance);
       var distanceLabel = Number.isFinite(distance) && distance > 0
         ? (distance >= 1000 ? (distance / 1000).toFixed(1) + ' 公里' : Math.round(distance) + ' 米') : '—';
       var tr = document.createElement('tr');
-      tr.innerHTML = '<td><code>' + esc(m.track_id) + '</code>' + (isRepresentative ? ' <span class="route-type-badge route-type-other">代表</span>' : '') + '</td>' +
+      tr.innerHTML = '<td class="route-member-name"><strong title="' + esc(title) + '">' + esc(title) + '</strong>' +
+        '<small><code>' + esc(m.track_id) + '</code>' + (isRepresentative ? ' <span class="route-member-role">代表轨迹</span>' : '') + '</small></td>' +
         '<td>' + distanceLabel + '</td>' +
         '<td class="route-member-diagnostic">' + esc(({ forward: '正向', reverse: '反向' })[m.match_direction] || m.match_direction || '—') + '</td>' +
         '<td class="route-member-diagnostic">' + (m.similarity_score != null ? Number(m.similarity_score).toFixed(3) : '—') + '</td>' +
@@ -644,45 +716,52 @@
         '<td class="route-member-diagnostic">' + esc(m.source || '—') + '</td>' +
         '<td class="row-actions"></td>';
       var actions = tr.querySelector('.row-actions');
-      actions.dataset.adminWrite = 'route_groups';
-      if (!isRepresentative) {
-        var repBtn = document.createElement('button');
-        repBtn.textContent = '设代表';
-        repBtn.addEventListener('click', function () { setRepresentative(m.track_id); });
-        actions.appendChild(repBtn);
-      }
-      var removeBtn = document.createElement('button');
-      removeBtn.className = 'danger';
-      removeBtn.textContent = '移除';
-      removeBtn.addEventListener('click', function () { removeMember(m.track_id); });
-      actions.appendChild(removeBtn);
+      actions.innerHTML = '<a class="admin-link route-member-view" data-admin-read="tracks" href="/admin/tracks.html?track_id=' + encodeURIComponent(m.track_id) + '" aria-label="查看轨迹 ' + esc(m.track_id) + '">查看</a>' +
+        '<div class="dropdown" data-admin-write="route_groups">' +
+        '<button type="button" class="route-member-menu" data-admin-menu aria-haspopup="menu" aria-expanded="false" aria-label="轨迹 ' + esc(m.track_id) + ' 的操作">⋯</button>' +
+        '<div class="dropdown-menu dropdown-menu-end" role="menu">' +
+        (isRepresentative ? '' : '<button type="button" class="dropdown-item" role="menuitem" data-route-representative>设为代表轨迹</button>') +
+        '<button type="button" class="dropdown-item" role="menuitem" data-route-remove>从组内移除</button></div></div>';
+      actions.querySelector('a').addEventListener('click', guardTrackLink);
+      actions.querySelector('[data-route-representative]')?.addEventListener('click', function () { setRepresentative(m.track_id); });
+      actions.querySelector('[data-route-remove]').addEventListener('click', function () { removeMember(m.track_id); });
       memberList.appendChild(tr);
     });
   }
 
+  async function guardTrackLink(event) {
+    if (!introDirty() || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    var url = event.currentTarget.href;
+    var groupID = selectedGroupID, session = detailSession;
+    var confirmed = await AdminUI.confirm({ title: '放弃未保存的路线介绍？', message: '前往轨迹详情前，请确认是否放弃当前修改。', confirmText: '放弃并查看', waitForHidden: true });
+    if (confirmed && isCurrentDetail(groupID, session)) window.location.assign(url);
+  }
+
   async function setRepresentative(trackID) {
-    if (!selectedGroupID || !trackID || detailLoadingID) return;
+    if (!selectedGroupID || !trackID || detailLoadingID || !AdminAccess.can('route_groups', true)) return;
+    var groupID = selectedGroupID, session = detailSession;
     try {
-      await apiJSON('/admin/api/route-groups/' + encodeURIComponent(selectedGroupID) + '/representative', {
+      await apiJSON('/admin/api/route-groups/' + encodeURIComponent(groupID) + '/representative', {
         method: 'PUT',
         body: JSON.stringify({ track_id: trackID })
       });
-      await loadDetail(selectedGroupID);
-      await reloadKeepingPage();
+      await refreshGroupAfterChange(groupID, session);
     } catch (err) {
       AdminUI.alert(err.message, 'danger');
     }
   }
 
   async function removeMember(trackID) {
-    if (!selectedGroupID || !trackID || detailLoadingID) return;
-    if (!await AdminUI.confirm({ title: '移除成员轨迹', message: '确认从当前路线组移除轨迹 ' + trackID + '？', confirmText: '确认移除', danger: true })) return;
+    if (!selectedGroupID || !trackID || detailLoadingID || !AdminAccess.can('route_groups', true)) return;
+    var groupID = selectedGroupID, session = detailSession;
+    if (!await AdminUI.confirm({ title: '移除成员轨迹', message: '确认从当前路线组移除轨迹 ' + trackID + '？', confirmText: '确认移除', danger: true, waitForHidden: true })) return;
+    if (!isCurrentDetail(groupID, session)) return;
     try {
-      await apiJSON('/admin/api/route-groups/' + encodeURIComponent(selectedGroupID) + '/members/' + encodeURIComponent(trackID), {
+      await apiJSON('/admin/api/route-groups/' + encodeURIComponent(groupID) + '/members/' + encodeURIComponent(trackID), {
         method: 'DELETE'
       });
-      await loadDetail(selectedGroupID);
-      await reloadKeepingPage();
+      await refreshGroupAfterChange(groupID, session);
     } catch (err) {
       AdminUI.alert(err.message, 'danger');
     }
@@ -706,7 +785,7 @@
       });
       provinceSelect.innerHTML = '<option value="">全部省份</option>' + provinceOptions;
       renderCityOptions('');
-      AdminRegionPicker.enhance(provinceSelect, citySelect, items, { label: '路线覆盖地区' });
+      AdminRegionPicker.enhance(provinceSelect, citySelect, items, { label: '覆盖地区' });
     } catch (_) { /* 省市目录不可用时保留“全部”，不阻塞路线组管理。 */ }
   }
 

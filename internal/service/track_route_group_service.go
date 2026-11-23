@@ -63,9 +63,11 @@ type AdminRouteGroupSummary struct {
 }
 
 type AdminRouteGroupDetail struct {
-	Group   *models.TrackRouteGroup      `json:"group"`
-	Area    *AdminRouteGroupArea         `json:"area,omitempty"`
-	Members []*AdminRouteGroupMemberView `json:"members"`
+	Group             *models.TrackRouteGroup      `json:"group"`
+	Area              *AdminRouteGroupArea         `json:"area,omitempty"`
+	Grouping          *AdminRouteGroupGrouping     `json:"grouping,omitempty"`
+	CoverageCityNames []string                     `json:"coverage_city_names,omitempty"`
+	Members           []*AdminRouteGroupMemberView `json:"members"`
 }
 
 type routeGroupCluster struct {
@@ -136,18 +138,40 @@ func (s *TrackRouteGroupService) GetRouteGroupDetail(ctx context.Context, groupI
 	if err != nil {
 		return nil, err
 	}
-	views := make([]*AdminRouteGroupMemberView, 0, len(members))
+	detail := &AdminRouteGroupDetail{Group: group, Members: make([]*AdminRouteGroupMemberView, 0, len(members))}
+	if summaries, err := s.buildAdminRouteGroupSummaries(ctx, []*models.TrackRouteGroup{group}); err == nil && len(summaries) > 0 {
+		detail.Area, detail.Grouping = summaries[0].Area, &summaries[0].Grouping
+	} else {
+		detail.Area = s.adminRouteGroupArea(ctx, group.AreaID)
+	}
+	for _, code := range compactCityCodes(group.CityCodes) {
+		if name := config.CityNameByCode(code); name != "" {
+			detail.CoverageCityNames = append(detail.CoverageCityNames, name)
+		}
+	}
+	ids := make([]string, 0, len(members))
+	for _, member := range members {
+		if member != nil {
+			ids = append(ids, member.TrackID)
+		}
+	}
+	var indexes map[string]*models.TrackGeoIndex
+	if reader, ok := s.repo.(repository.TrackPlaceIndexReader); ok && len(ids) > 0 {
+		if result, err := reader.FindPlaceGeoIndexes(ctx, ids); err == nil {
+			indexes = result
+		}
+	}
 	for _, member := range members {
 		if member == nil {
 			continue
 		}
-		view := &AdminRouteGroupMemberView{Member: member}
-		if index, err := s.repo.FindTrackGeoIndex(ctx, member.TrackID); err == nil {
-			view.GeoIndex = index
+		index := indexes[member.TrackID]
+		if indexes == nil {
+			index, _ = s.repo.FindTrackGeoIndex(ctx, member.TrackID)
 		}
-		views = append(views, view)
+		detail.Members = append(detail.Members, &AdminRouteGroupMemberView{Member: member, GeoIndex: index})
 	}
-	return &AdminRouteGroupDetail{Group: group, Area: s.adminRouteGroupArea(ctx, group.AreaID), Members: views}, nil
+	return detail, nil
 }
 
 func (s *TrackRouteGroupService) adminRouteGroupArea(ctx context.Context, areaID string) *AdminRouteGroupArea {
