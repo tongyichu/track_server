@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -301,6 +302,84 @@ func TestAdminRouteGroupOperations(t *testing.T) {
 	}
 	if got.Name != "麦理浩径徒步路线" || got.RepresentativeTrackID != "NO.00001002" || got.MemberCount != 1 {
 		t.Fatalf("unexpected route group after ops: %+v", got)
+	}
+}
+
+func TestAdminRouteGroupDirectoryAndMemberPagination(t *testing.T) {
+	ctx := context.Background()
+	mapRepo := repository.NewInMemoryTrackMapRepository(nil)
+	for i := 0; i < 51; i++ {
+		if err := mapRepo.UpsertRouteGroup(ctx, &models.TrackRouteGroup{
+			GroupID: fmt.Sprintf("RG.%08d", i+1), TrackType: "hiking", Status: models.TrackRouteGroupStatusActive,
+			CityCodes: []string{"110100"}, MemberCount: 2,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	const lateGroupID = "RG.00000052"
+	if err := mapRepo.UpsertRouteGroup(ctx, &models.TrackRouteGroup{
+		GroupID: lateGroupID, TrackType: "hiking", Status: models.TrackRouteGroupStatusActive,
+		CityCodes: []string{"510100"}, MemberCount: 1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for _, member := range []*models.TrackRouteGroupMember{
+		{GroupID: "RG.00000001", TrackID: "NO.00000001", Role: models.TrackRouteGroupMemberRoleRepresentative},
+		{GroupID: "RG.00000001", TrackID: "NO.00000002", Role: models.TrackRouteGroupMemberRoleMember},
+	} {
+		if err := mapRepo.UpsertRouteGroupMember(ctx, member); err != nil {
+			t.Fatal(err)
+		}
+	}
+	h := server.Default()
+	module := NewModule(map[string]string{"admin": string(placeholderPasswordHash)}, nil, nil, t.TempDir(), nil, nil, nil, mapRepo, nil, nil, nil, nil, nil, service.NewTrackRouteGroupService(mapRepo), &adminAccountTestStorage{})
+	module.RegisterRoutes(h)
+	defer module.Close()
+	session, err := createAdminHandlerSession(module)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cookie := ut.Header{Key: "Cookie", Value: sessionCookieName + "=" + session.Token}
+	for _, query := range []struct {
+		url   string
+		total int
+	}{
+		{"/admin/api/route-groups?view=directory&track_type=hiking&limit=50", 52},
+		{"/admin/api/route-groups?view=directory&city_code=510100", 1},
+	} {
+		resp := ut.PerformRequest(h.Engine, http.MethodGet, query.url, nil, cookie)
+		if resp.Code != http.StatusOK {
+			t.Fatalf("directory status=%d body=%s", resp.Code, resp.Body.String())
+		}
+		var result struct {
+			Data struct {
+				Items []service.AdminRouteGroupDirectoryItem `json:"items"`
+				Total int                                    `json:"total"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal(resp.Body.Bytes(), &result); err != nil {
+			t.Fatal(err)
+		}
+		if result.Data.Total != query.total || len(result.Data.Items) != query.total {
+			t.Fatalf("incomplete directory: got %d groups, want %d", len(result.Data.Items), query.total)
+		}
+		last := result.Data.Items[query.total-1]
+		if last.GroupID != lateGroupID || last.Grouping.CityCode == "" {
+			t.Fatalf("missing city beyond the first page: %+v", last)
+		}
+	}
+	resp := ut.PerformRequest(h.Engine, http.MethodGet, "/admin/api/route-groups/RG.00000001?limit=1&offset=1", nil, cookie)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("route group members page status=%d body=%s", resp.Code, resp.Body.String())
+	}
+	var detail struct {
+		Data service.AdminRouteGroupDetail `json:"data"`
+	}
+	if err := json.Unmarshal(resp.Body.Bytes(), &detail); err != nil {
+		t.Fatal(err)
+	}
+	if detail.Data.MemberOffset != 1 || len(detail.Data.Members) != 1 || detail.Data.Members[0].Member.TrackID != "NO.00000002" {
+		t.Fatalf("wrong second page of member tracks: %+v", detail.Data)
 	}
 }
 

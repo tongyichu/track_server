@@ -324,7 +324,7 @@
   }
 
   function enhanceButton(button) {
-    if (button.matches('.admin-metric, .form-select, .route-type-option') || button.closest('.admin-period-tabs')) return;
+    if (button.matches('.admin-metric, .form-select, .route-type-option, .route-group-open, .route-member-open') || button.closest('.admin-period-tabs')) return;
     if (button.matches('.scenic-photo-picker, .region-photo-picker, .admin-photo-picker, .admin-photo-remove, .admin-photo-download')) return;
     if (button.hasAttribute('data-period') || button.hasAttribute('data-stat-period') || button.classList.contains('btn-close') || button.matches('.dropdown-item, [data-admin-menu]')) return;
     if (button.closest('.region-country-bar, .region-tree, .admin-region-field, .admin-region-popup')) return;

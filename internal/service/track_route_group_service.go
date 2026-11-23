@@ -68,6 +68,7 @@ type AdminRouteGroupDetail struct {
 	Grouping          *AdminRouteGroupGrouping     `json:"grouping,omitempty"`
 	CoverageCityNames []string                     `json:"coverage_city_names,omitempty"`
 	Members           []*AdminRouteGroupMemberView `json:"members"`
+	MemberOffset      int                          `json:"member_offset"`
 }
 
 type routeGroupCluster struct {
@@ -115,11 +116,11 @@ func (s *TrackRouteGroupService) ListRouteGroupSummaries(ctx context.Context, fi
 	if err != nil {
 		return nil, 0, err
 	}
-	items, err := s.buildAdminRouteGroupSummaries(ctx, groups)
+	items, err := s.buildAdminRouteGroupSummaries(ctx, groups, true)
 	return items, total, err
 }
 
-func (s *TrackRouteGroupService) GetRouteGroupDetail(ctx context.Context, groupID string, limit int) (*AdminRouteGroupDetail, error) {
+func (s *TrackRouteGroupService) GetRouteGroupDetail(ctx context.Context, groupID string, limit, offset int) (*AdminRouteGroupDetail, error) {
 	if s == nil || s.repo == nil {
 		return nil, fmt.Errorf("track route group service is not configured")
 	}
@@ -134,12 +135,16 @@ func (s *TrackRouteGroupService) GetRouteGroupDetail(ctx context.Context, groupI
 	if err != nil {
 		return nil, err
 	}
-	members, err := s.repo.ListRouteGroupMembers(ctx, groupID, limit)
+	offset = max(0, offset)
+	if int64(offset) >= group.MemberCount {
+		offset = int(max(0, group.MemberCount-1) / int64(limit) * int64(limit))
+	}
+	members, err := s.repo.ListRouteGroupMembersPage(ctx, groupID, limit, offset)
 	if err != nil {
 		return nil, err
 	}
-	detail := &AdminRouteGroupDetail{Group: group, Members: make([]*AdminRouteGroupMemberView, 0, len(members))}
-	if summaries, err := s.buildAdminRouteGroupSummaries(ctx, []*models.TrackRouteGroup{group}); err == nil && len(summaries) > 0 {
+	detail := &AdminRouteGroupDetail{Group: group, Members: make([]*AdminRouteGroupMemberView, 0, len(members)), MemberOffset: offset}
+	if summaries, err := s.buildAdminRouteGroupSummaries(ctx, []*models.TrackRouteGroup{group}, true); err == nil && len(summaries) > 0 {
 		detail.Area, detail.Grouping = summaries[0].Area, &summaries[0].Grouping
 	} else {
 		detail.Area = s.adminRouteGroupArea(ctx, group.AreaID)

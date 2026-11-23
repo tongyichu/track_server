@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"strings"
 
@@ -19,7 +20,43 @@ type AdminRouteGroupGrouping struct {
 	ScenicName   string `json:"scenic_name,omitempty"`
 }
 
-func (s *TrackRouteGroupService) buildAdminRouteGroupSummaries(ctx context.Context, groups []*models.TrackRouteGroup) ([]*AdminRouteGroupSummary, error) {
+type AdminRouteGroupDirectoryItem struct {
+	GroupID     string                  `json:"group_id"`
+	Name        string                  `json:"name"`
+	TrackType   string                  `json:"track_type"`
+	MemberCount int64                   `json:"member_count"`
+	Grouping    AdminRouteGroupGrouping `json:"grouping"`
+}
+
+func (s *TrackRouteGroupService) ListRouteGroupDirectory(ctx context.Context, filter models.TrackMapQueryFilter) ([]AdminRouteGroupDirectoryItem, error) {
+	if s == nil || s.repo == nil {
+		return nil, fmt.Errorf("track route group service is not configured")
+	}
+	groups, err := s.repo.ListRouteGroupDirectory(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	const batchSize = 200
+	items := make([]AdminRouteGroupDirectoryItem, 0, len(groups))
+	for start := 0; start < len(groups); start += batchSize {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		batch, err := s.buildAdminRouteGroupSummaries(ctx, groups[start:min(start+batchSize, len(groups))], false)
+		if err != nil {
+			return nil, err
+		}
+		for _, row := range batch {
+			items = append(items, AdminRouteGroupDirectoryItem{
+				GroupID: row.GroupID, Name: row.Name, TrackType: row.TrackType,
+				MemberCount: row.MemberCount, Grouping: row.Grouping,
+			})
+		}
+	}
+	return items, nil
+}
+
+func (s *TrackRouteGroupService) buildAdminRouteGroupSummaries(ctx context.Context, groups []*models.TrackRouteGroup, includeArea bool) ([]*AdminRouteGroupSummary, error) {
 	items := make([]*AdminRouteGroupSummary, 0, len(groups))
 	groupIDs := make([]string, 0, len(groups))
 	var placeIDs []string
@@ -28,9 +65,12 @@ func (s *TrackRouteGroupService) buildAdminRouteGroupSummaries(ctx context.Conte
 			continue
 		}
 		groupIDs = append(groupIDs, group.GroupID)
-		item := &AdminRouteGroupSummary{TrackRouteGroup: group, Area: s.adminCatalogArea(group.AreaID)}
-		if item.Area == nil && s.places.Enabled() && strings.HasPrefix(strings.TrimSpace(group.AreaID), "place-") {
-			placeIDs = append(placeIDs, strings.TrimSpace(group.AreaID))
+		item := &AdminRouteGroupSummary{TrackRouteGroup: group}
+		if includeArea {
+			item.Area = s.adminCatalogArea(group.AreaID)
+			if item.Area == nil && s.places.Enabled() && strings.HasPrefix(strings.TrimSpace(group.AreaID), "place-") {
+				placeIDs = append(placeIDs, strings.TrimSpace(group.AreaID))
+			}
 		}
 		items = append(items, item)
 	}
@@ -53,7 +93,7 @@ func (s *TrackRouteGroupService) buildAdminRouteGroupSummaries(ctx context.Conte
 	}
 	scenicGroups := make(map[string]AdminRouteGroupGrouping)
 	for _, item := range items {
-		if item.Area == nil {
+		if includeArea && item.Area == nil {
 			item.Area = adminRouteGroupPlaceArea(places[strings.TrimSpace(item.AreaID)])
 		}
 		d := departures[item.GroupID]

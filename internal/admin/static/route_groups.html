@@ -6,6 +6,7 @@
   <title>时光轨迹 - 控制台</title>
   <link rel="stylesheet" href="/admin/static/admin-components.css" />
   <link rel="stylesheet" href="/admin/static/style.css" />
+  <link rel="stylesheet" href="/admin/static/track_editor.css" />
   <link rel="stylesheet" href="/admin/static/admin_stats.css" />
 </head>
 <body>
@@ -62,103 +63,129 @@
       </div>
       <div class="route-table-wrap">
         <table class="data route-group-table">
-          <thead><tr><th scope="col">地区 / 路线</th><th scope="col">类型</th><th scope="col">成员</th><th scope="col">操作</th></tr></thead>
+          <thead><tr><th scope="col">地区 / 路线</th><th scope="col">类型</th><th scope="col">成员</th></tr></thead>
           <tbody id="groupList"></tbody>
         </table>
-      </div>
-      <div class="route-list-footer">
-        <button id="loadMoreBtn" class="btn btn-outline-primary" hidden>加载更多</button>
       </div>
     </section>
 
   </main>
 
-  <dialog class="modal route-management-modal" id="detailModal" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-xl" role="document">
+  <dialog class="modal route-management-modal" id="detailModal" aria-labelledby="detailName" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-xl">
       <div class="modal-content">
         <div class="modal-header route-modal-header">
           <div class="route-modal-heading">
             <h2 class="modal-title" id="detailName"></h2>
-            <p id="detailPath" class="route-detail-path" hidden></p>
+            <div class="route-detail-context">
+              <p id="detailPath" class="route-detail-path" hidden></p>
+              <span id="detailTrackType" class="route-detail-type"></span>
+            </div>
             <span class="hint" id="detailHint" role="status" hidden></span>
             <button type="button" id="detailRetryBtn" class="btn btn-sm btn-outline-secondary" hidden>重试</button>
           </div>
           <button type="button" class="btn-close" data-admin-dismiss="dialog" aria-label="关闭"></button>
         </div>
         <div class="modal-body route-modal-body">
-    <section class="route-workspace" id="detailPanel" hidden>
-      <div class="route-detail-meta"><strong id="detailTrackType"></strong><span><strong id="detailMemberCount"></strong> 条成员轨迹</span></div>
-      <nav class="route-workspace-tabs" aria-label="路线组工作区">
-        <button type="button" class="active" data-route-tab="members">成员轨迹</button>
-        <button type="button" data-route-tab="introduction">路线介绍</button>
-        <button type="button" data-route-tab="maintenance">路线组管理</button>
-      </nav>
+          <div class="route-workspace" id="detailPanel" hidden>
+            <div class="route-detail-columns">
+              <section class="route-detail-section" id="introSection" aria-labelledby="introHeading">
+                <div class="route-panel-heading">
+                  <h3 id="introHeading">路线介绍</h3><span id="introStatus" class="hint"></span>
+                </div>
+                <div id="introLoadState" class="route-form-state" hidden>
+                  <span id="introLoadHint" role="status"></span>
+                  <button type="button" id="introRetryBtn" class="btn btn-sm btn-outline-secondary" hidden>重试</button>
+                </div>
+                <div id="introEditor" hidden>
+                  <div class="route-intro-primary">
+                    <label>标题<input data-admin-input="route_groups" id="introZhName" type="text" /></label>
+                    <label>摘要<textarea data-admin-input="route_groups" id="introZhSummary" rows="2"></textarea></label>
+                  </div>
+                  <p id="introWriteError" class="text-danger" role="alert" hidden></p>
+                  <div class="route-intro-toolbar">
+                    <button id="introAdvancedBtn" type="button" class="btn btn-sm btn-link" aria-haspopup="dialog">完整字段</button>
+                    <a id="introPreviewLink" class="admin-link" target="_blank" rel="noopener" hidden>公开介绍</a>
+                    <span class="route-intro-actions">
+                      <button id="introGenerateBtn" data-admin-write="route_groups" class="btn btn-sm btn-outline-secondary">AI 草稿</button>
+                      <button id="introSaveBtn" data-admin-write="route_groups" class="btn btn-sm btn-outline-secondary">保存草稿</button>
+                      <button id="introPublishBtn" data-admin-write="route_groups" class="btn btn-sm btn-primary">发布</button>
+                      <button id="introUnpublishBtn" data-admin-write="route_groups" class="btn btn-sm btn-outline-danger">下线</button>
+                    </span>
+                  </div>
+                </div>
+              </section>
 
-      <section class="route-tab-panel" data-route-panel="members">
-        <label class="route-member-display-option"><input type="checkbox" id="memberMatchDetails" aria-controls="routeMemberTable" />显示匹配信息</label>
-        <div class="route-table-wrap">
-          <table class="data route-member-table" id="routeMemberTable">
-            <thead><tr><th>轨迹</th><th>距离</th><th class="route-member-diagnostic">匹配方向</th><th class="route-member-diagnostic">相似度</th><th class="route-member-diagnostic">城市</th><th class="route-member-diagnostic">点数</th><th class="route-member-diagnostic">来源</th><th>操作</th></tr></thead>
-            <tbody id="memberList"></tbody>
-          </table>
-        </div>
-        <p id="memberListHint" class="hint" hidden></p>
-      </section>
+              <section class="route-detail-section" aria-labelledby="maintenanceHeading">
+                <div class="route-panel-heading">
+                  <h3 id="maintenanceHeading">路线组管理</h3><code id="detailGroupID"></code>
+                </div>
+                <div class="route-maintenance-fields" data-admin-write="route_groups">
+                  <div class="route-inline-form">
+                    <label for="renameInput">组名</label>
+                    <input data-admin-input="route_groups" id="renameInput" type="text" />
+                    <button id="renameBtn" type="button" class="btn btn-sm btn-outline-secondary">改名</button>
+                  </div>
+                  <div class="route-inline-form">
+                    <label for="mergeInput">源组</label>
+                    <input data-admin-input="route_groups" id="mergeInput" type="text" placeholder="输入要并入的路线组编号" />
+                    <button id="mergeBtn" type="button" class="btn btn-sm btn-outline-secondary">合并</button>
+                  </div>
+                </div>
+                <a id="detailAreaLink" class="admin-link route-area-link" target="_blank" rel="noopener" hidden>区域介绍</a>
+              </section>
+            </div>
 
-      <section class="route-tab-panel" data-route-panel="introduction" hidden>
-        <div id="introLoadState" class="route-form-state" hidden>
-          <span id="introLoadHint" role="status"></span>
-          <button type="button" id="introRetryBtn" class="btn btn-sm btn-outline-secondary" hidden>重试</button>
-        </div>
-        <div id="introEditor" hidden>
-        <div class="route-panel-heading"><span class="hint" id="introStatus"></span><button type="button" id="introGenerateBtn" data-admin-write="route_groups" class="btn btn-outline-secondary">AI 生成草稿</button></div>
-        <div class="route-intro-primary">
-          <label>标题<input data-admin-input="route_groups" id="introZhName" type="text" placeholder="麦理浩径" /></label>
-          <label>摘要<textarea data-admin-input="route_groups" id="introZhSummary" rows="3"></textarea></label>
-        </div>
-        <details class="route-intro-options" id="introAdvancedFields">
-          <summary>更多介绍字段</summary>
-        <div class="route-intro-section"><h4>基本信息</h4><div class="route-intro-grid">
-          <label>难度<input data-admin-input="route_groups" id="introDifficulty" type="text" placeholder="easy / medium / hard" /></label>
-          <label>适宜季节（逗号分隔）<input data-admin-input="route_groups" id="introBestSeasons" type="text" placeholder="autumn,winter" /></label>
-          <label>预计最短时长（分钟）<input data-admin-input="route_groups" id="introDurationMin" type="number" min="0" /></label>
-          <label>预计最长时长（分钟）<input data-admin-input="route_groups" id="introDurationMax" type="number" min="0" /></label>
-        </div></div>
-        <div class="route-intro-language-grid">
-          <div class="route-language-card"><h4>中文补充</h4>
-            <label>路线介绍（每行一段）<textarea data-admin-input="route_groups" id="introZhDescription" rows="5"></textarea></label>
-            <label>路线亮点（每行一项）<textarea data-admin-input="route_groups" id="introZhHighlights" rows="4"></textarea></label>
-            <label>出行提示（每行一项）<textarea data-admin-input="route_groups" id="introZhTips" rows="4"></textarea></label>
+            <section class="route-detail-section route-members" aria-labelledby="memberHeading">
+              <div class="route-panel-heading">
+                <h3 id="memberHeading">成员轨迹</h3><span class="hint" id="detailMemberCount"></span>
+              </div>
+              <ul class="route-member-list" id="memberList"></ul>
+              <nav class="route-member-pagination" id="memberPager" aria-label="成员轨迹分页" hidden>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="memberPrevBtn">上一页</button>
+                <span id="memberPageHint" class="hint" role="status"></span>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="memberNextBtn">下一页</button>
+              </nav>
+            </section>
           </div>
-          <div class="route-language-card"><h4>English</h4>
-            <label>Title<input data-admin-input="route_groups" id="introEnName" type="text" placeholder="MacLehose Trail Hiking Route" /></label>
-            <label>Summary<textarea data-admin-input="route_groups" id="introEnSummary" rows="3"></textarea></label>
-            <label>Description (one paragraph per line)<textarea data-admin-input="route_groups" id="introEnDescription" rows="5"></textarea></label>
-            <label>Highlights (one item per line)<textarea data-admin-input="route_groups" id="introEnHighlights" rows="4"></textarea></label>
-            <label>Tips (one item per line)<textarea data-admin-input="route_groups" id="introEnTips" rows="4"></textarea></label>
-          </div>
         </div>
-        </details>
-        <p id="introWriteError" class="text-danger" role="alert" hidden></p>
-        <div class="actions route-intro-actions"><button id="introSaveBtn" data-admin-write="route_groups" class="btn btn-outline-primary">保存草稿</button><button id="introPublishBtn" data-admin-write="route_groups" class="btn btn-primary">保存并发布</button><button id="introUnpublishBtn" data-admin-write="route_groups" class="btn btn-outline-danger">下线</button><a id="introPreviewLink" class="admin-link" target="_blank" rel="noopener" hidden>查看公开介绍</a></div>
-        </div>
-      </section>
+      </div>
+    </div>
+  </dialog>
 
-      <section class="route-tab-panel" data-route-panel="maintenance" hidden>
-        <div class="route-workspace-heading"><div id="detailAreaInfo" class="route-area-summary"></div></div>
-        <div class="route-detail-meta"><span>路线组 <code id="detailGroupID"></code></span><span>区域 <code id="detailAreaID"></code></span><span>覆盖城市 <strong id="detailCities"></strong></span><span>代表轨迹 <code id="detailRepresentative"></code></span><span>来源 <code id="detailSource"></code></span></div>
-        <div class="route-maintenance-grid">
-          <article class="route-maintenance-card"><h4>调整路线名称</h4><p>修改聚合路线在管理端和客户端使用的名称。</p>
-            <label>新名称<input data-admin-input="route_groups" id="renameInput" type="text" placeholder="例如：麦理浩径徒步路线" /></label>
-            <button id="renameBtn" data-admin-write="route_groups" class="btn btn-primary">保存名称</button>
-          </article>
-          <article class="route-maintenance-card route-maintenance-warning"><h4>合并重复路线组</h4><p>将源路线组并入当前路线组，源组会被归档。</p>
-            <label>源路线组 ID<input data-admin-input="route_groups" id="mergeInput" type="text" placeholder="RG.00000000" /></label>
-            <button id="mergeBtn" data-admin-write="route_groups" class="btn btn-outline-danger">合并路线组</button>
-          </article>
+  <dialog class="modal route-intro-modal" id="introFieldsModal" aria-labelledby="introFieldsTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 id="introFieldsTitle" class="modal-title">路线介绍字段</h2>
+          <button type="button" class="btn-close" data-admin-dismiss="dialog" aria-label="关闭"></button>
         </div>
-      </section>
-    </section>
+        <div class="modal-body">
+          <section class="route-intro-section">
+            <h3>出行信息</h3>
+            <div class="route-intro-grid">
+              <label>难度<input data-admin-input="route_groups" id="introDifficulty" type="text" placeholder="easy / moderate / hard" /></label>
+              <label>适宜季节（逗号分隔）<input data-admin-input="route_groups" id="introBestSeasons" type="text" placeholder="autumn,winter" /></label>
+              <label>预计最短时长（分钟）<input data-admin-input="route_groups" id="introDurationMin" type="number" min="0" /></label>
+              <label>预计最长时长（分钟）<input data-admin-input="route_groups" id="introDurationMax" type="number" min="0" /></label>
+            </div>
+          </section>
+          <div class="route-intro-language-grid">
+            <section class="route-language-card">
+              <h3>中文补充</h3>
+              <label>正文（每行一段）<textarea data-admin-input="route_groups" id="introZhDescription" rows="4"></textarea></label>
+              <label>亮点（每行一项）<textarea data-admin-input="route_groups" id="introZhHighlights" rows="3"></textarea></label>
+              <label>提示（每行一项）<textarea data-admin-input="route_groups" id="introZhTips" rows="3"></textarea></label>
+            </section>
+            <section class="route-language-card">
+              <h3>英文介绍</h3>
+              <label>英文标题<input data-admin-input="route_groups" id="introEnName" type="text" /></label>
+              <label>英文摘要<textarea data-admin-input="route_groups" id="introEnSummary" rows="2"></textarea></label>
+              <label>英文正文（每行一段）<textarea data-admin-input="route_groups" id="introEnDescription" rows="3"></textarea></label>
+              <label>英文亮点（每行一项）<textarea data-admin-input="route_groups" id="introEnHighlights" rows="2"></textarea></label>
+              <label>英文提示（每行一项）<textarea data-admin-input="route_groups" id="introEnTips" rows="2"></textarea></label>
+            </section>
+          </div>
         </div>
       </div>
     </div>
@@ -171,6 +198,9 @@
 
   <script src="/admin/static/admin_usage_charts.js"></script>
 <script src="/admin/static/region_picker.js"></script>
+  <script src="/admin/static/place_candidates.js"></script>
+  <script src="/admin/static/track_map_preview.js"></script>
+  <script src="/admin/static/track_editor.js"></script>
   <script src="/admin/static/route_groups.js"></script>
   <script src="/admin/static/feature_statistics.js"></script>
 </body>

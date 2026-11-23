@@ -2885,6 +2885,15 @@ func (h *Handler) ListRouteGroups(ctx context.Context, c *app.RequestContext) {
 	if provinceCode := strings.TrimSpace(string(c.Query("province_code"))); provinceCode != "" {
 		filter.CityCodes = adminCityCodesOfProvince(provinceCode)
 	}
+	if string(c.Query("view")) == "directory" {
+		items, err := h.routeGroupSvc.ListRouteGroupDirectory(ctx, filter)
+		if err != nil {
+			writeAdminRouteGroupError(c, err)
+			return
+		}
+		c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"items": items, "total": len(items)}})
+		return
+	}
 	items, total, err := h.routeGroupSvc.ListRouteGroupSummaries(ctx, filter)
 	if err != nil {
 		writeAdminRouteGroupError(c, err)
@@ -2920,7 +2929,9 @@ func (h *Handler) GetRouteGroup(ctx context.Context, c *app.RequestContext) {
 		c.JSON(http.StatusInternalServerError, utils.H{"error": "route group service not configured"})
 		return
 	}
-	detail, err := h.routeGroupSvc.GetRouteGroupDetail(ctx, c.Param("group_id"), parseAdminListLimit(string(c.Query("limit"))))
+	limit := parseAdminListLimit(string(c.Query("limit")))
+	offset := parseAdminListOffset(string(c.Query("offset")))
+	detail, err := h.routeGroupSvc.GetRouteGroupDetail(ctx, c.Param("group_id"), limit, offset)
 	if err != nil {
 		writeAdminRouteGroupError(c, err)
 		return

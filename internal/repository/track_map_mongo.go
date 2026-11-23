@@ -479,12 +479,24 @@ func (r *MongoTrackMapRepository) ListRouteGroups(ctx context.Context, filter mo
 }
 
 func (r *MongoTrackMapRepository) ListRouteGroupSummaries(ctx context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackRouteGroup, error) {
-	limit := normalizeTrackMapQueryLimit(filter.Limit)
-	opts := options.Find().
-		SetSort(bson.D{{Key: "member_count", Value: -1}, {Key: "updated_at", Value: -1}, {Key: "_id", Value: 1}}).
-		SetLimit(int64(limit))
-	if filter.Offset > 0 {
-		opts.SetSkip(int64(filter.Offset))
+	return r.listRouteGroupSummaries(ctx, filter, true)
+}
+
+func (r *MongoTrackMapRepository) ListRouteGroupDirectory(ctx context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackRouteGroup, error) {
+	return r.listRouteGroupSummaries(ctx, filter, false)
+}
+
+func (r *MongoTrackMapRepository) listRouteGroupSummaries(ctx context.Context, filter models.TrackMapQueryFilter, paginate bool) ([]*models.TrackRouteGroup, error) {
+	opts := options.Find().SetSort(bson.D{{Key: "member_count", Value: -1}, {Key: "updated_at", Value: -1}, {Key: "_id", Value: 1}})
+	var limit int
+	if paginate {
+		limit = normalizeTrackMapQueryLimit(filter.Limit)
+		opts.SetLimit(int64(limit))
+		if filter.Offset > 0 {
+			opts.SetSkip(int64(filter.Offset))
+		}
+	} else {
+		opts.SetProjection(bson.M{"name": 1, "track_type": 1, "city_codes": 1, "member_count": 1})
 	}
 	cur, err := r.groups.Find(ctx, mongoTrackRouteGroupFilter(filter), opts)
 	if err != nil {
@@ -815,10 +827,16 @@ func (r *MongoTrackMapRepository) ArchiveRouteGroup(ctx context.Context, groupID
 }
 
 func (r *MongoTrackMapRepository) ListRouteGroupMembers(ctx context.Context, groupID string, limit int) ([]*models.TrackRouteGroupMember, error) {
+	return r.ListRouteGroupMembersPage(ctx, groupID, limit, 0)
+}
+
+func (r *MongoTrackMapRepository) ListRouteGroupMembersPage(ctx context.Context, groupID string, limit, offset int) ([]*models.TrackRouteGroupMember, error) {
 	if limit <= 0 {
 		limit = 20
 	}
-	cur, err := r.members.Find(ctx, bson.M{"group_id": groupID}, options.Find().SetSort(bson.D{{Key: "role", Value: -1}, {Key: "created_at", Value: -1}, {Key: "track_id", Value: 1}}).SetLimit(int64(limit)))
+	opts := options.Find().SetSort(bson.D{{Key: "role", Value: -1}, {Key: "created_at", Value: -1}, {Key: "track_id", Value: 1}}).
+		SetLimit(int64(limit)).SetSkip(int64(max(0, offset)))
+	cur, err := r.members.Find(ctx, bson.M{"group_id": groupID}, opts)
 	if err != nil {
 		return nil, err
 	}

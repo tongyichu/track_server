@@ -30,73 +30,53 @@
     var name = meta ? meta.name : (type || '-');
     return '<span class="route-type-badge route-type-' + typeClass + '">' + typeIconHTML(meta, 'route-type-badge-icon') + esc(name) + '</span>';
   }
-  function groupCities(g) {
-    return (g.city_codes || []).map(function (code) { return cityNames[code] || code; }).join(', ');
-  }
-  function areaTypeName(type) {
-    if (type === 'scenic_spot') return '景区';
-    if (type === 'district') return '区县';
-    return type || '';
-  }
-  function areaInfoHTML(area) {
-    if (!area || !area.name) return '<div class="route-area-overview"><span class="route-area-label">离线聚合区域</span><strong>未关联区域</strong><span class="hint">未命中区域目录</span></div>';
-    var html = '<div class="route-area-overview"><span class="route-area-label">离线聚合区域</span><div class="route-area-value"><strong>' + esc(area.name) + '</strong>';
-    var typeName = areaTypeName(area.type);
-    if (typeName) html += ' <span class="route-type-badge route-type-other">' + esc(typeName) + '</span>';
-    html += '</div>';
-    if (area.city_name) html += '<span class="route-area-city">' + esc(area.city_name) + '</span>';
-    if (area.introduction_url && area.introduction_url.indexOf('/api/v1/track-map/areas/') === 0) {
-      html += '<a class="admin-link" href="' + esc(area.introduction_url) + '" target="_blank" rel="noopener">查看区域介绍</a>';
-    }
-    return html + '</div>';
-  }
   function apiJSON(url, options) {
     options = options || {};
     options.headers = Object.assign({ 'Content-Type': 'application/json' }, options.headers || {});
     return fetch(url, options).then(async function (resp) {
       var body = await resp.json().catch(function () { return {}; });
       if (!resp.ok) {
-        throw new Error(body.error || ('HTTP ' + resp.status));
+        var error = new Error(body.error || ('HTTP ' + resp.status));
+        error.status = resp.status;
+        throw error;
       }
       return body.data;
     });
   }
 
-  var PAGE_SIZE = 50;
+  var ROUTES_PER_BRANCH = 20;
+  var MEMBER_PAGE_SIZE = 5;
   var selectedGroupID = '', detailRequest = 0, detailSession = 0, detailController = null, detailLoadingID = '';
+  var memberOffset = 0, memberTotal = 0, representativeWriting = false;
   var introBaseline = '', introWriting = false, introClosePrompt = false, allowIntroClose = false;
   var introStatus = '', introAIController = null, introLoadController = null;
   var selectedTrackType = '';
-  var loadedGroups = [];
-  var nextOffset = 0;
-  var totalCount = 0;
-  var listLoading = false, listController = null;
-  var listLoadSeq = 0;
+  var routeGroups = new Map(), areaTree = new Map();
+  var listController = null, loadedQuery = '';
   var areaExpansion = new Map();
+  var visibleRouteCounts = new Map();
   var groupList = document.getElementById('groupList');
   var memberList = document.getElementById('memberList');
-  var memberMatchDetails = document.getElementById('memberMatchDetails');
-  var routeMemberTable = document.getElementById('routeMemberTable');
-  var introAdvancedFields = document.getElementById('introAdvancedFields');
+  var memberPager = document.getElementById('memberPager');
+  var memberPageHint = document.getElementById('memberPageHint');
+  var memberPrevBtn = document.getElementById('memberPrevBtn');
+  var memberNextBtn = document.getElementById('memberNextBtn');
   var detailHint = document.getElementById('detailHint');
   var detailRetryBtn = document.getElementById('detailRetryBtn');
   var detailPanel = document.getElementById('detailPanel');
   var detailPath = document.getElementById('detailPath');
   var statusHint = document.getElementById('statusHint');
   var listSummaryHint = document.getElementById('listSummaryHint');
-  var loadMoreBtn = document.getElementById('loadMoreBtn');
-  var introPanel = document.querySelector('[data-route-panel="introduction"]');
+  var introPanel = document.getElementById('introSection');
   var introEditor = document.getElementById('introEditor');
   var introLoadState = document.getElementById('introLoadState');
   var introLoadHint = document.getElementById('introLoadHint');
   var introRetryBtn = document.getElementById('introRetryBtn');
   var cityNames = Object.create(null);
+  var regionOptions;
   var detailModal = new AdminComponents.Dialog(document.getElementById('detailModal'));
-  function showMemberMatchDetails(show) {
-    memberMatchDetails.checked = show;
-    routeMemberTable.classList.toggle('show-match-details', show);
-  }
-  memberMatchDetails.addEventListener('change', function () { showMemberMatchDetails(memberMatchDetails.checked); });
+  var introFieldsModal = new AdminComponents.Dialog(document.getElementById('introFieldsModal'));
+  document.getElementById('introAdvancedBtn').addEventListener('click', function () { introFieldsModal.show(); });
   document.getElementById('detailModal').addEventListener('admin:dialog-closing', function (event) {
     if (introWriting) { event.preventDefault(); return; }
     if (!allowIntroClose && introDirty()) {
@@ -109,8 +89,6 @@
       return;
     }
     allowIntroClose = false;
-    showMemberMatchDetails(false);
-    introAdvancedFields.open = false;
     resetIntroduction();
     selectedGroupID = '';
     detailSession++;
@@ -120,20 +98,10 @@
     renderGroupsFromSelection();
   });
 
-  function selectRouteTab(tab) {
-    document.querySelectorAll('[data-route-tab]').forEach(function (button) {
-      var selected = button.dataset.routeTab === tab;
-      button.classList.toggle('active', selected);
-      button.setAttribute('aria-pressed', String(selected));
-    });
-    document.querySelectorAll('[data-route-panel]').forEach(function (panel) { panel.hidden = panel.dataset.routePanel !== tab; });
-    if (tab === 'introduction') loadIntroduction();
-  }
-  document.querySelectorAll('[data-route-tab]').forEach(function (button) {
-    button.addEventListener('click', function () { selectRouteTab(button.dataset.routeTab); });
-  });
   detailRetryBtn.addEventListener('click', function () { loadDetail(selectedGroupID); });
   introRetryBtn.addEventListener('click', loadIntroduction);
+  memberPrevBtn.addEventListener('click', function () { loadDetail(selectedGroupID, memberOffset - MEMBER_PAGE_SIZE); });
+  memberNextBtn.addEventListener('click', function () { loadDetail(selectedGroupID, memberOffset + MEMBER_PAGE_SIZE); });
 
   // ---------- 运动类型下拉（icon + 文字） ----------
   var typeToggle = document.getElementById('trackTypeToggle');
@@ -159,7 +127,7 @@
         selectedTrackType = option.dataset.typeValue || '';
         renderTypeToggle();
         closeTypeMenu();
-        resetAndLoad();
+        loadGroups();
       });
     });
   }
@@ -215,70 +183,55 @@
   }
   provinceSelect.addEventListener('change', function () {
     renderCityOptions(provinceSelect.value);
-    resetAndLoad();
+    loadGroups();
   });
-  citySelect.addEventListener('change', function () { resetAndLoad(); });
+  citySelect.addEventListener('change', loadGroups);
 
-  // ---------- 列表加载与分页 ----------
-  document.getElementById('refreshBtn').addEventListener('click', reloadKeepingPage);
-  loadMoreBtn.addEventListener('click', function () { loadGroups(false); });
+  // ---------- 地区目录与分支内路线 ----------
+  document.getElementById('refreshBtn').addEventListener('click', loadGroups);
 
-  function resetAndLoad() {
-    loadedGroups = [];
-    nextOffset = 0;
-    totalCount = 0;
-    areaExpansion.clear();
-    loadGroups(true);
-  }
-
-  function listParams(offset, limit) {
-    var params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  function listParams() {
+    var params = new URLSearchParams({ view: 'directory' });
     if (selectedTrackType) params.set('track_type', selectedTrackType);
     if (citySelect.value) params.set('city_code', citySelect.value);
     else if (provinceSelect.value) params.set('province_code', provinceSelect.value);
     return params;
   }
 
-  async function loadGroups(reset) {
-    if (listLoading && !reset) return;
+  async function loadGroups() {
     if (listController) listController.abort();
     var controller = listController = new AbortController();
-    listLoading = true;
-    var seq = ++listLoadSeq;
-    if (reset) {
-      groupList.innerHTML = '<tr><td colspan="4"><div class="route-table-state">加载中…</div></td></tr>';
-      listSummaryHint.textContent = '';
+    var query = listParams().toString();
+    if (!loadedQuery) {
+      groupList.innerHTML = '<tr><td colspan="3"><div class="route-table-state">加载中…</div></td></tr>';
     }
-    statusHint.textContent = '加载中...';
-    loadMoreBtn.hidden = true;
-    var params = listParams(reset ? 0 : nextOffset, PAGE_SIZE);
+    statusHint.textContent = loadedQuery ? '更新中…' : '';
     try {
-      var data = await apiJSON('/admin/api/route-groups?' + params.toString(), { signal: controller.signal });
-      if (seq !== listLoadSeq) return;
-      replaceLoadedGroups(reset ? [] : loadedGroups, data.items || []);
-      totalCount = Number(data.total || 0);
-      nextOffset = Number(data.next_offset || loadedGroups.length);
+      var data = await apiJSON('/admin/api/route-groups?' + query, { signal: controller.signal });
+      if (listController !== controller) return;
+      var nextGroups = new Map(data.items.map(function (group) { return [group.group_id, group]; }));
+      if (data.total !== nextGroups.size) throw new Error('地区目录不完整，请刷新列表');
+      var nextTree = buildAreaTree(nextGroups);
+      if (loadedQuery !== query) {
+        areaExpansion.clear();
+        visibleRouteCounts.clear();
+      }
+      loadedQuery = query;
+      routeGroups = nextGroups;
+      areaTree = nextTree;
       renderGroups();
       statusHint.textContent = '';
-      loadMoreBtn.hidden = !data.has_more;
     } catch (err) {
-      if (seq !== listLoadSeq) return;
-      if (reset) {
-        groupList.innerHTML = '<tr><td colspan="4"><div class="route-table-state route-table-error">加载失败 · ' + esc(err.message) + '</div></td></tr>';
-      } else {
-        AdminUI.alert('加载失败：' + err.message, 'danger');
-        loadMoreBtn.hidden = false;
+      if (listController !== controller) return;
+      if (!loadedQuery) {
+        groupList.innerHTML = '<tr><td colspan="3"><div class="route-table-state route-table-error">加载失败 · ' + esc(err.message) + '</div></td></tr>';
+        return;
       }
-      statusHint.textContent = '';
+      statusHint.textContent = loadedQuery === query ? '刷新失败 · 仍显示上次结果' : '筛选未更新 · 仍显示上次结果';
+      AdminUI.alert(err.message, 'danger');
     } finally {
-      if (seq === listLoadSeq) listLoading = false;
+      if (listController === controller) listController = null;
     }
-  }
-
-  function replaceLoadedGroups(previous, incoming) {
-    loadedGroups = Array.from(new Map(previous.concat(incoming).map(function (group) {
-      return [group.group_id, group];
-    })).values());
   }
 
   function routeGroupLocation(g) {
@@ -315,58 +268,76 @@
     return root.children;
   }
 
-  function renderGroups(focusKey) {
-    var partial = nextOffset < totalCount;
-    listSummaryHint.textContent = partial ? '已加载 ' + loadedGroups.length + ' / ' + totalCount + ' 组' : '共 ' + totalCount + ' 组';
+  function renderGroups(focusKey, focusGroupID) {
+    listSummaryHint.textContent = '共 ' + routeGroups.size.toLocaleString() + ' 组';
     groupList.innerHTML = '';
-    if (!loadedGroups.length) {
-      groupList.innerHTML = '<tr><td colspan="4"><div class="route-table-state">没有符合当前筛选的路线组</div></td></tr>';
+    if (!routeGroups.size) {
+      groupList.innerHTML = '<tr><td colspan="3"><div class="route-table-state">没有符合当前筛选的路线组</div></td></tr>';
       return;
     }
     var rows = document.createDocumentFragment();
-    var focusedToggle;
-    var cities = buildAreaTree(loadedGroups);
-    var cityFilter = citySelect.value;
-    var regionFiltered = cityFilter || provinceSelect.value;
+    var focusTarget;
+    var filters = new URLSearchParams(loadedQuery);
+    var cityFilter = filters.get('city_code');
+    var regionFiltered = cityFilter || filters.get('province_code');
     function appendBucket(bucket, level) {
-      var expandedByFilter = level === 0 && regionFiltered && (bucket.id === cityFilter || cities.size === 1);
+      var expandedByFilter = level === 0 && regionFiltered && (bucket.id === cityFilter || areaTree.size === 1);
       var expanded = areaExpansion.has(bucket.key) ? areaExpansion.get(bucket.key) : !!expandedByFilter;
-      var header = renderAreaHeader(bucket, level, expanded, partial);
+      var header = renderAreaHeader(bucket, level, expanded);
       rows.appendChild(header);
-      if (bucket.key === focusKey) focusedToggle = header.querySelector('.route-area-toggle');
+      if (bucket.key === focusKey) focusTarget = header.querySelector('.route-area-toggle');
       if (!expanded) return;
       Array.from(bucket.children.values()).sort(compareAreas).forEach(function (child) { appendBucket(child, level + 1); });
       if (bucket.type === 'district' && bucket.children.size && bucket.groups.length) {
         var divider = document.createElement('tr');
         divider.className = 'route-area-divider route-tree-depth-' + (level + 1);
-        divider.innerHTML = '<td colspan="4" class="route-tree-cell">独立路线</td>';
+        divider.innerHTML = '<td colspan="3" class="route-tree-cell">独立路线</td>';
         rows.appendChild(divider);
       }
-      bucket.groups.forEach(function (g) { rows.appendChild(renderGroupRow(g, level + 1)); });
+      var visible = visibleRouteCounts.get(bucket.key) || ROUTES_PER_BRANCH;
+      bucket.groups.slice(0, visible).forEach(function (g) {
+        var row = renderGroupRow(g, level + 1);
+        rows.appendChild(row);
+        if (g.group_id === focusGroupID) focusTarget = row.querySelector('button');
+      });
+      if (bucket.groups.length > visible) rows.appendChild(renderBranchMore(bucket, level + 1, visible));
     }
-    Array.from(cities.values()).sort(function (a, b) {
+    Array.from(areaTree.values()).sort(function (a, b) {
       return (cityFilter ? Number(b.id === cityFilter) - Number(a.id === cityFilter) : 0) || compareAreas(a, b);
     }).forEach(function (bucket) { appendBucket(bucket, 0); });
     groupList.appendChild(rows);
-    if (focusedToggle) focusedToggle.focus({ preventScroll: true });
+    if (focusTarget) focusTarget.focus({ preventScroll: true });
   }
 
   function compareAreas(a, b) {
     return Number(!a.id) - Number(!b.id) || a.name.localeCompare(b.name, 'zh-CN');
   }
 
-  function renderAreaHeader(bucket, level, expanded, partial) {
+  function renderAreaHeader(bucket, level, expanded) {
     var tr = document.createElement('tr');
     tr.className = 'route-area-header route-area-level-' + bucket.type + ' route-tree-depth-' + level;
-    tr.innerHTML = '<td colspan="4" class="route-tree-cell">' +
+    tr.innerHTML = '<td colspan="3" class="route-tree-cell">' +
       '<button type="button" class="route-area-toggle" aria-expanded="' + expanded + '" title="' + esc(bucket.name) + '">' +
       '<span class="route-area-chevron" aria-hidden="true"></span>' +
       '<span class="route-area-title">' + esc(bucket.name) + '</span>' +
-      '<span class="route-area-stats">' + (partial ? '已加载 ' : '') + bucket.count.toLocaleString() + ' 组</span>' +
+      '<span class="route-area-stats">' + bucket.count.toLocaleString() + ' 组</span>' +
       '</button></td>';
     tr.querySelector('.route-area-toggle').addEventListener('click', function () {
       areaExpansion.set(bucket.key, !expanded);
       renderGroups(bucket.key);
+    });
+    return tr;
+  }
+
+  function renderBranchMore(bucket, level, visible) {
+    var tr = document.createElement('tr');
+    tr.className = 'route-branch-more route-tree-depth-' + level;
+    tr.innerHTML = '<td colspan="3" class="route-tree-cell"><button type="button" class="btn btn-sm btn-outline-secondary">显示更多路线</button></td>';
+    var button = tr.querySelector('button');
+    button.setAttribute('aria-label', bucket.name + '：显示更多路线');
+    button.addEventListener('click', function () {
+      visibleRouteCounts.set(bucket.key, visible + ROUTES_PER_BRANCH);
+      renderGroups('', bucket.groups[visible].group_id);
     });
     return tr;
   }
@@ -376,11 +347,11 @@
     tr.className = 'route-group-row route-tree-depth-' + level;
     tr.dataset.groupId = g.group_id;
     if (g.group_id === selectedGroupID) tr.classList.add('selected');
-    tr.innerHTML = '<td class="route-tree-cell route-name-cell"><strong title="' + esc(g.name || '') + '">' + esc(g.name || '未命名路线') + '</strong><code>' + esc(g.group_id) + '</code></td>' +
+    tr.innerHTML = '<td class="route-tree-cell route-name-cell"><button type="button" class="route-group-open" aria-haspopup="dialog"><strong title="' + esc(g.name || '') + '">' + esc(g.name || '未命名路线') + '</strong><code>' + esc(g.group_id) + '</code></button></td>' +
       '<td>' + typeBadgeHTML(g.track_type) + '</td>' +
-      '<td class="route-member-count">' + Number(g.member_count || 0).toLocaleString() + '</td>' +
-      '<td><button type="button" class="route-manage-button">管理</button></td>';
-    tr.querySelector('button').addEventListener('click', function () {
+      '<td class="route-member-count">' + Number(g.member_count || 0).toLocaleString() + '</td>';
+    tr.addEventListener('click', function () {
+      tr.querySelector('button').focus({ preventScroll: true });
       loadDetail(g.group_id);
     });
     return tr;
@@ -424,75 +395,70 @@
   document.getElementById('introPublishBtn').addEventListener('click', function () { writeIntroduction('publish'); });
   document.getElementById('introUnpublishBtn').addEventListener('click', function () { writeIntroduction('unpublish'); });
 
-  // 变更后重新加载已加载的全部页，保持列表与详情一致。
-  async function reloadKeepingPage() {
-    if (listLoading) return;
-    var controller = listController = new AbortController();
-    listLoading = true;
-    var seq = ++listLoadSeq;
-    statusHint.textContent = '刷新中…';
-    try {
-      var target = Math.max(nextOffset, PAGE_SIZE);
-      var batch = [], offset = 0, data;
-      do {
-        var params = listParams(offset, Math.min(PAGE_SIZE, target - offset));
-        data = await apiJSON('/admin/api/route-groups?' + params.toString(), { signal: controller.signal });
-        if (seq !== listLoadSeq) return;
-        batch = batch.concat(data.items || []);
-        var next = Number(data.next_offset || batch.length);
-        if (next <= offset) break;
-        offset = next;
-      } while (data.has_more && offset < target);
-      replaceLoadedGroups([], batch);
-      totalCount = Number(data.total || 0);
-      nextOffset = offset;
-      renderGroups();
-      loadMoreBtn.hidden = !data.has_more;
-      statusHint.textContent = '';
-    } catch (err) {
-      if (seq === listLoadSeq) {
-        statusHint.textContent = '';
-        AdminUI.alert('刷新失败：' + err.message, 'danger');
-      }
-    } finally {
-      if (seq === listLoadSeq) listLoading = false;
-    }
-  }
-
-  async function loadDetail(groupID) {
-    if (!groupID || detailLoadingID === groupID || introWriting) return;
-    if (selectedGroupID !== groupID || !detailModal.root.open) {
+  async function loadDetail(groupID, requestedOffset) {
+    if (!groupID || introWriting || (requestedOffset != null && detailLoadingID === groupID)) return;
+    var opening = selectedGroupID !== groupID || !detailModal.root.open;
+    if (opening) {
       detailSession++;
       memberList.replaceChildren();
-      showMemberMatchDetails(false);
-      introAdvancedFields.open = false;
+      memberOffset = memberTotal = 0;
       resetIntroduction();
+      document.getElementById('mergeInput').value = '';
       detailPanel.hidden = true;
-      var cached = loadedGroups.find(function (group) { return group.group_id === groupID; });
+      var cached = routeGroups.get(groupID);
       document.getElementById('detailName').textContent = cached && cached.name || '路线组';
+      document.getElementById('detailTrackType').textContent = '';
       renderDetailPath(cached);
-      selectRouteTab('members');
     }
+    var paging = !opening && requestedOffset != null;
+    var offset = paging ? requestedOffset : memberOffset;
+    var pageError = '';
     if (detailController) detailController.abort();
     var controller = detailController = new AbortController(), request = ++detailRequest;
     detailLoadingID = groupID;
     selectedGroupID = groupID;
     detailModal.show();
     renderGroupsFromSelection();
-    showDetailState('加载中…', false);
+    if (!paging) showDetailState('加载中…', false);
+    updateMemberPager(true);
     try {
-      var data = await apiJSON('/admin/api/route-groups/' + encodeURIComponent(groupID) + '?limit=100', { signal: controller.signal });
+      var url = '/admin/api/route-groups/' + encodeURIComponent(groupID) + '?limit=' + MEMBER_PAGE_SIZE + '&offset=' + offset;
+      var data = await apiJSON(url, { signal: controller.signal });
       if (request !== detailRequest || controller.signal.aborted) return;
-      renderDetail(data);
+      if (!paging) renderDetail(data);
+      var group = data.group || {};
+      memberOffset = Number(data.member_offset || 0);
+      memberTotal = Number(group.member_count || 0);
+      document.getElementById('detailMemberCount').textContent = memberTotal.toLocaleString() + ' 条';
+      renderMembers(data.members || [], group.representative_track_id);
       detailPanel.hidden = false;
       showDetailState('', false);
+      if (!paging && introLoadState.hidden) loadIntroduction();
     } catch (err) {
       if (request === detailRequest && !controller.signal.aborted) {
-        showDetailState('详情加载失败 · ' + err.message, true);
+        if (err.status === 404) {
+          detailPanel.hidden = true;
+          showDetailState(err.message, true);
+        } else if (paging) {
+          pageError = '翻页失败，可重试';
+        } else {
+          showDetailState('详情加载失败 · ' + err.message, true);
+        }
       }
     } finally {
-      if (request === detailRequest) detailLoadingID = '';
+      if (request === detailRequest) {
+        detailLoadingID = '';
+        updateMemberPager(false, pageError);
+      }
     }
+  }
+
+  function updateMemberPager(busy, message) {
+    memberPager.hidden = memberTotal <= MEMBER_PAGE_SIZE;
+    memberPrevBtn.disabled = busy || memberOffset === 0;
+    memberNextBtn.disabled = busy || memberOffset + MEMBER_PAGE_SIZE >= memberTotal;
+    memberPageHint.textContent = message || (busy ? '加载中…' : '第 ' + (Math.floor(memberOffset / MEMBER_PAGE_SIZE) + 1) + ' / ' + Math.max(1, Math.ceil(memberTotal / MEMBER_PAGE_SIZE)) + ' 页');
+    memberList.setAttribute('aria-busy', String(busy));
   }
 
   function showDetailState(message, retry) {
@@ -507,7 +473,7 @@
 
   async function refreshGroupAfterChange(groupID, session) {
     if (isCurrentDetail(groupID, session)) await loadDetail(groupID);
-    await reloadKeepingPage();
+    await loadGroups();
   }
 
   function renderGroupsFromSelection() {
@@ -523,6 +489,8 @@
     introLoadController = null;
     cancelIntroGeneration();
     introBaseline = '';
+    introFieldsModal.hide();
+    document.getElementById('introStatus').textContent = '';
     introEditor.hidden = true;
     introLoadState.hidden = true;
     showIntroError('');
@@ -590,7 +558,7 @@
   function setIntroGenerationBusy(busy) {
     var button = document.getElementById('introGenerateBtn');
     button.disabled = busy || !AdminAccess.can('route_groups', true);
-    button.textContent = busy ? '正在生成…' : 'AI 生成草稿';
+    button.textContent = busy ? '正在生成…' : 'AI 草稿';
   }
 
   function cancelIntroGeneration() {
@@ -659,25 +627,22 @@
     }
     detailModal.hide();
     AdminUI.alert(({ draft: '草稿已保存', publish: '路线介绍已发布', unpublish: '路线介绍已下线' })[action], 'success');
-    await reloadKeepingPage();
+    await loadGroups();
   }
 
   function renderDetail(data) {
     var g = data.group || {};
     document.getElementById('detailGroupID').textContent = g.group_id || '';
     document.getElementById('detailName').textContent = g.name || '未命名路线';
-    var cached = loadedGroups.find(function (group) { return group.group_id === g.group_id; });
+    var cached = routeGroups.get(g.group_id);
     renderDetailPath(data.grouping ? { grouping: data.grouping } : cached);
     var meta = trackTypeMeta(g.track_type);
     document.getElementById('detailTrackType').textContent = meta ? meta.name : (g.track_type || '-');
-    document.getElementById('detailCities').textContent = (data.coverage_city_names || []).join('、') || groupCities(g) || (data.area && data.area.city_name) || '—';
-    document.getElementById('detailAreaID').textContent = g.area_id || '-';
-    document.getElementById('detailAreaInfo').innerHTML = areaInfoHTML(data.area);
-    document.getElementById('detailSource').textContent = g.source || '-';
-    document.getElementById('detailMemberCount').textContent = String(g.member_count || 0);
-    document.getElementById('detailRepresentative').textContent = g.representative_track_id || '';
+    var areaLink = document.getElementById('detailAreaLink');
+    var url = data.area && data.area.introduction_url || '';
+    areaLink.hidden = !url.startsWith('/api/v1/track-map/areas/');
+    if (!areaLink.hidden) areaLink.href = url;
     document.getElementById('renameInput').value = g.name || '';
-    renderMembers(data.members || [], g.representative_track_id || '', Number(g.member_count || 0));
   }
 
   function renderDetailPath(group) {
@@ -687,68 +652,89 @@
     detailPath.textContent = [path.cityName, path.districtName, path.scenicName || '独立路线'].join(' / ');
   }
 
-  function renderMembers(items, representativeTrackID, total) {
-    memberList.innerHTML = '';
-    var hint = document.getElementById('memberListHint');
-    hint.textContent = items.length < total ? '已显示 ' + items.length + ' / ' + total + ' 条' : '';
-    hint.hidden = !hint.textContent;
+  function renderMembers(items, representativeTrackID) {
+    memberList.replaceChildren();
     if (!items.length) {
-      memberList.innerHTML = '<tr class="admin-empty-row"><td colspan="8">暂无成员轨迹</td></tr>';
+      memberList.innerHTML = '<li class="route-member-empty">暂无成员轨迹</li>';
       return;
     }
+    var canViewTrack = AdminAccess.can('tracks', false);
     items.forEach(function (row) {
       var m = row.member || {};
       var geo = row.geo_index || {};
       var track = row.track || {};
-      var isRepresentative = m.track_id === representativeTrackID;
+      var trackID = m.track_id;
+      var isRepresentative = trackID === representativeTrackID;
       var title = String(track.title || '').trim() || '未命名轨迹';
       var distance = Number(geo.distance || track.distance);
       var distanceLabel = Number.isFinite(distance) && distance > 0
         ? (distance >= 1000 ? (distance / 1000).toFixed(1) + ' 公里' : Math.round(distance) + ' 米') : '—';
-      var tr = document.createElement('tr');
-      tr.innerHTML = '<td class="route-member-name"><strong title="' + esc(title) + '">' + esc(title) + '</strong>' +
-        '<small><code>' + esc(m.track_id) + '</code>' + (isRepresentative ? ' <span class="route-member-role">代表轨迹</span>' : '') + '</small></td>' +
-        '<td>' + distanceLabel + '</td>' +
-        '<td class="route-member-diagnostic">' + esc(({ forward: '正向', reverse: '反向' })[m.match_direction] || m.match_direction || '—') + '</td>' +
-        '<td class="route-member-diagnostic">' + (m.similarity_score != null ? Number(m.similarity_score).toFixed(3) : '—') + '</td>' +
-        '<td class="route-member-diagnostic">' + esc(cityNames[geo.city_code] || geo.city_code || '—') + '</td>' +
-        '<td class="route-member-diagnostic">' + esc(geo.point_count || '—') + '</td>' +
-        '<td class="route-member-diagnostic">' + esc(m.source || '—') + '</td>' +
-        '<td class="row-actions"></td>';
-      var actions = tr.querySelector('.row-actions');
-      actions.innerHTML = '<a class="admin-link route-member-view" data-admin-read="tracks" href="/admin/tracks.html?track_id=' + encodeURIComponent(m.track_id) + '" aria-label="查看轨迹 ' + esc(m.track_id) + '">查看</a>' +
-        '<div class="dropdown" data-admin-write="route_groups">' +
-        '<button type="button" class="route-member-menu" data-admin-menu aria-haspopup="menu" aria-expanded="false" aria-label="轨迹 ' + esc(m.track_id) + ' 的操作">⋯</button>' +
-        '<div class="dropdown-menu dropdown-menu-end" role="menu">' +
-        (isRepresentative ? '' : '<button type="button" class="dropdown-item" role="menuitem" data-route-representative>设为代表轨迹</button>') +
-        '<button type="button" class="dropdown-item" role="menuitem" data-route-remove>从组内移除</button></div></div>';
-      actions.querySelector('a').addEventListener('click', guardTrackLink);
-      actions.querySelector('[data-route-representative]')?.addEventListener('click', function () { setRepresentative(m.track_id); });
-      actions.querySelector('[data-route-remove]').addEventListener('click', function () { removeMember(m.track_id); });
-      memberList.appendChild(tr);
+      var score = m.similarity_score;
+      var similarity = Number.isFinite(score) ? (score * 100).toFixed(1) + '%' : '—';
+      var preview = track.preview_images || {};
+      var variant = canViewTrack && ['landscape_day', 'square_day', 'landscape_night', 'square_night'].find(function (key) { return preview[key + '_url']; });
+      var previewURL = variant ? '/admin/api/tracks/' + encodeURIComponent(trackID) + '/assets/' + variant : '';
+      var item = document.createElement('li');
+      item.className = 'route-member-row' + (canViewTrack ? ' route-member-clickable' : '');
+      item.dataset.trackId = trackID;
+      var content = '<span class="route-member-thumb" data-no-preview aria-hidden="true">' +
+        (previewURL ? '<img alt="" loading="lazy" src="' + esc(previewURL) + '">' : '') +
+        '<span' + (previewURL ? ' hidden' : '') + '>—</span></span>' +
+        '<span class="route-member-name"><strong title="' + esc(title) + '">' + esc(title) + '</strong>' +
+        '<small><code>' + esc(trackID) + '</code>' + (isRepresentative ? ' <span class="route-member-role">代表轨迹</span>' : '') + '</small></span>' +
+        '<span class="route-member-metrics"><span>' + distanceLabel + '</span><span>相似度 ' + similarity + '</span></span>';
+      item.innerHTML = (canViewTrack ? '<button type="button" class="route-member-summary route-member-open" aria-haspopup="dialog">' + content + '</button>' : '<div class="route-member-summary">' + content + '</div>') +
+        '<div class="route-member-actions" data-admin-write="route_groups">' +
+        (isRepresentative ? '' : '<button type="button" class="btn btn-sm btn-outline-secondary" data-route-representative>设为代表</button>') +
+        '<div class="dropdown"><button type="button" class="route-member-menu" data-admin-menu aria-haspopup="menu" aria-expanded="false" aria-label="轨迹 ' + esc(trackID) + ' 的操作">⋯</button>' +
+        '<div class="dropdown-menu dropdown-menu-end" role="menu"><button type="button" class="dropdown-item" role="menuitem" data-route-remove>从组内移除</button></div></div></div>';
+      var image = item.querySelector('img');
+      image?.addEventListener('error', function () {
+        image.nextElementSibling.hidden = false;
+        image.remove();
+      });
+      if (canViewTrack) item.addEventListener('click', function (event) {
+        if (!event.target.closest('.route-member-actions')) openMemberTrack(trackID, item.querySelector('.route-member-open'));
+      });
+      item.querySelector('[data-route-representative]')?.addEventListener('click', function (event) { setRepresentative(trackID, event.currentTarget); });
+      item.querySelector('[data-route-remove]').addEventListener('click', function () { removeMember(trackID); });
+      memberList.appendChild(item);
     });
   }
 
-  async function guardTrackLink(event) {
-    if (!introDirty() || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-    event.preventDefault();
-    var url = event.currentTarget.href;
+  async function openMemberTrack(trackID, trigger) {
+    if (!trackID || !selectedGroupID || !detailModal.root.open || detailLoadingID || introWriting || !AdminAccess.can('tracks', false)) return;
     var groupID = selectedGroupID, session = detailSession;
-    var confirmed = await AdminUI.confirm({ title: '放弃未保存的路线介绍？', message: '前往轨迹详情前，请确认是否放弃当前修改。', confirmText: '放弃并查看', waitForHidden: true });
-    if (confirmed && isCurrentDetail(groupID, session)) window.location.assign(url);
+    trigger.focus({ preventScroll: true });
+    var refresh = function () { return refreshGroupAfterChange(groupID, session); };
+    try {
+      await window.AdminTrackEditor.open(trackID, { cities: regionOptions, onSaved: refresh, onDeleted: refresh });
+    } catch (err) {
+      AdminUI.alert('打开轨迹失败 · ' + err.message, 'danger');
+    } finally {
+      if (isCurrentDetail(groupID, session) && !trigger.isConnected) {
+        var item = Array.from(memberList.children).find(function (row) { return row.dataset.trackId === trackID; });
+        var focus = item ? item.querySelector('.route-member-open') : detailModal.root.querySelector('.btn-close');
+        focus?.focus({ preventScroll: true });
+      }
+    }
   }
 
-  async function setRepresentative(trackID) {
-    if (!selectedGroupID || !trackID || detailLoadingID || !AdminAccess.can('route_groups', true)) return;
+  async function setRepresentative(trackID, button) {
+    if (!selectedGroupID || !trackID || detailLoadingID || representativeWriting || !AdminAccess.can('route_groups', true)) return;
     var groupID = selectedGroupID, session = detailSession;
+    representativeWriting = button.disabled = true;
     try {
       await apiJSON('/admin/api/route-groups/' + encodeURIComponent(groupID) + '/representative', {
         method: 'PUT',
         body: JSON.stringify({ track_id: trackID })
       });
       await refreshGroupAfterChange(groupID, session);
+      AdminUI.alert('已设为代表轨迹', 'success');
     } catch (err) {
       AdminUI.alert(err.message, 'danger');
+    } finally {
+      representativeWriting = button.disabled = false;
     }
   }
 
@@ -770,6 +756,7 @@
   async function loadRegions() {
     try {
       var items = await apiJSON('/admin/api/cities');
+      regionOptions = (items || []).filter(function (item) { return item.level === 'city'; });
       var provinceOptions = '';
       (items || []).forEach(function (item) {
         if (item.level === 'province') {
@@ -791,8 +778,12 @@
 
   renderTypeToggle();
   window.AdminRouteGroups = { openDetail: loadDetail };
-  resetAndLoad();
-  loadRegions().then(function () { if (loadedGroups.length) renderGroups(); });
+  loadGroups();
+  loadRegions().then(function () {
+    if (!routeGroups.size) return;
+    areaTree = buildAreaTree(routeGroups);
+    renderGroups();
+  });
   var groupFromURL = new URLSearchParams(window.location.search).get('group_id');
   if (groupFromURL) loadDetail(groupFromURL);
 })();

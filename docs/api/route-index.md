@@ -195,6 +195,7 @@
 | 后台轨迹列表（标题/编号搜索、运动类型/省市/缺项筛选及各缺项计数） | GET | `/admin/api/tracks` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |
 | 后台轨迹类型与贡献用户前十（天/周/月） | GET | `/admin/api/tracks/statistics` | 轨迹查看 | [admin-tracks.md](admin-tracks.md#轨迹类型与用户贡献统计) |
 | 后台地图模式路线组列表（城市、区县、景点分组） | GET | `/admin/api/route-groups` | 地图模式查看 | [后台路线组聚合](../admin-workflows.md#运营聚合路线) |
+| 后台地图模式完整地区目录 | GET | `/admin/api/route-groups?view=directory` | 地图模式查看 | [后台路线组聚合](../admin-workflows.md#运营聚合路线) |
 | 后台路线组详情（聚合归属与成员） | GET | `/admin/api/route-groups/:group_id` | 地图模式查看 | [后台路线组聚合](../admin-workflows.md#运营聚合路线) |
 | 后台手动生成路线组介绍草稿 | POST | `/admin/api/route-groups/:group_id/introduction/generate` | 地图模式操作 | [后台路线组聚合](../admin-workflows.md#运营聚合路线) |
 | 后台轨迹坐标系预览 | GET | `/admin/api/tracks/:track_id/map-preview` | 轨迹查看 | [admin-tracks.md](admin-tracks.md#编辑字段与坐标预览) |

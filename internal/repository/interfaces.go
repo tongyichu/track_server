@@ -250,6 +250,7 @@ type TrackMapRepository interface {
 	ListAllRouteGroups(ctx context.Context) ([]*models.TrackRouteGroup, error)
 	ListAllRouteGroupMembers(ctx context.Context) ([]*models.TrackRouteGroupMember, error)
 	ListRouteGroupSummaries(ctx context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackRouteGroup, error)
+	ListRouteGroupDirectory(ctx context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackRouteGroup, error)
 	CountRouteGroupSummaries(ctx context.Context, filter models.TrackMapQueryFilter) (int64, error)
 	ListRouteGroupCandidates(ctx context.Context, index *models.TrackGeoIndex, limit int) ([]*models.TrackRouteGroupCandidate, error)
 	ListGeoIndexesWithoutRouteGroup(ctx context.Context, limit int) ([]*models.TrackGeoIndex, error)
@@ -262,6 +263,7 @@ type TrackMapRepository interface {
 	DeleteRouteGroupMember(ctx context.Context, groupID, trackID string) error
 	ArchiveRouteGroup(ctx context.Context, groupID string, now time.Time) error
 	ListRouteGroupMembers(ctx context.Context, groupID string, limit int) ([]*models.TrackRouteGroupMember, error)
+	ListRouteGroupMembersPage(ctx context.Context, groupID string, limit, offset int) ([]*models.TrackRouteGroupMember, error)
 	FindRouteGroupByTrackID(ctx context.Context, trackID string) (*models.TrackRouteGroup, error)
 	CountRouteGroupsByCity(ctx context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackMapClusterItem, error)
 	CountRouteGroupsByArea(ctx context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackMapClusterItem, error)

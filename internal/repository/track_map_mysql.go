@@ -528,13 +528,25 @@ func (r *MySQLTrackMapRepository) ListRouteGroups(ctx context.Context, filter mo
 }
 
 func (r *MySQLTrackMapRepository) ListRouteGroupSummaries(ctx context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackRouteGroup, error) {
-	limit := normalizeTrackMapQueryLimit(filter.Limit)
+	return r.listRouteGroupSummaries(ctx, filter, true)
+}
+
+func (r *MySQLTrackMapRepository) ListRouteGroupDirectory(ctx context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackRouteGroup, error) {
+	return r.listRouteGroupSummaries(ctx, filter, false)
+}
+
+func (r *MySQLTrackMapRepository) listRouteGroupSummaries(ctx context.Context, filter models.TrackMapQueryFilter, paginate bool) ([]*models.TrackRouteGroup, error) {
 	where, args := buildTrackRouteGroupWhere(filter)
-	query := `SELECT ` + trackRouteGroupSummaryColumns("track_route_groups") + ` FROM track_route_groups` + where + ` ORDER BY member_count DESC, updated_at DESC, group_id LIMIT ?`
-	args = append(args, limit)
-	if filter.Offset > 0 {
-		query += ` OFFSET ?`
-		args = append(args, filter.Offset)
+	query := `SELECT ` + trackRouteGroupSummaryColumns("track_route_groups") + ` FROM track_route_groups` + where + ` ORDER BY member_count DESC, updated_at DESC, group_id`
+	var limit int
+	if paginate {
+		limit = normalizeTrackMapQueryLimit(filter.Limit)
+		query += ` LIMIT ?`
+		args = append(args, limit)
+		if filter.Offset > 0 {
+			query += ` OFFSET ?`
+			args = append(args, filter.Offset)
+		}
 	}
 	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -963,6 +975,10 @@ func (r *MySQLTrackMapRepository) ArchiveRouteGroup(ctx context.Context, groupID
 }
 
 func (r *MySQLTrackMapRepository) ListRouteGroupMembers(ctx context.Context, groupID string, limit int) ([]*models.TrackRouteGroupMember, error) {
+	return r.ListRouteGroupMembersPage(ctx, groupID, limit, 0)
+}
+
+func (r *MySQLTrackMapRepository) ListRouteGroupMembersPage(ctx context.Context, groupID string, limit, offset int) ([]*models.TrackRouteGroupMember, error) {
 	if limit <= 0 {
 		limit = 20
 	}
@@ -971,8 +987,8 @@ func (r *MySQLTrackMapRepository) ListRouteGroupMembers(ctx context.Context, gro
 		FROM track_route_group_members
 		WHERE group_id = ?
 		ORDER BY role = 'representative' DESC, created_at DESC, track_id ASC
-		LIMIT ?
-	`, groupID, limit)
+		LIMIT ? OFFSET ?
+	`, groupID, limit, max(0, offset))
 	if err != nil {
 		return nil, err
 	}

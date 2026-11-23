@@ -2046,6 +2046,14 @@ func (r *InMemoryTrackMapRepository) FindRouteGroup(_ context.Context, groupID s
 }
 
 func (r *InMemoryTrackMapRepository) ListRouteGroups(_ context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackRouteGroup, error) {
+	return r.listRouteGroupSummaries(filter, true)
+}
+
+func (r *InMemoryTrackMapRepository) ListRouteGroupDirectory(_ context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackRouteGroup, error) {
+	return r.listRouteGroupSummaries(filter, false)
+}
+
+func (r *InMemoryTrackMapRepository) listRouteGroupSummaries(filter models.TrackMapQueryFilter, paginate bool) ([]*models.TrackRouteGroup, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	limit := normalizeTrackMapQueryLimit(filter.Limit)
@@ -2065,6 +2073,9 @@ func (r *InMemoryTrackMapRepository) ListRouteGroups(_ context.Context, filter m
 		}
 		return items[i].MemberCount > items[j].MemberCount
 	})
+	if !paginate {
+		return items, nil
+	}
 	if filter.Offset > 0 {
 		if filter.Offset >= len(items) {
 			return []*models.TrackRouteGroup{}, nil
@@ -2376,7 +2387,11 @@ func (r *InMemoryTrackMapRepository) ArchiveRouteGroup(_ context.Context, groupI
 	return nil
 }
 
-func (r *InMemoryTrackMapRepository) ListRouteGroupMembers(_ context.Context, groupID string, limit int) ([]*models.TrackRouteGroupMember, error) {
+func (r *InMemoryTrackMapRepository) ListRouteGroupMembers(ctx context.Context, groupID string, limit int) ([]*models.TrackRouteGroupMember, error) {
+	return r.ListRouteGroupMembersPage(ctx, groupID, limit, 0)
+}
+
+func (r *InMemoryTrackMapRepository) ListRouteGroupMembersPage(_ context.Context, groupID string, limit, offset int) ([]*models.TrackRouteGroupMember, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	if limit <= 0 {
@@ -2400,10 +2415,8 @@ func (r *InMemoryTrackMapRepository) ListRouteGroupMembers(_ context.Context, gr
 		}
 		return items[i].Role == models.TrackRouteGroupMemberRoleRepresentative
 	})
-	if len(items) > limit {
-		items = items[:limit]
-	}
-	return items, nil
+	start := min(max(0, offset), len(items))
+	return items[start : start+min(limit, len(items)-start)], nil
 }
 
 func (r *InMemoryTrackMapRepository) FindRouteGroupByTrackID(_ context.Context, trackID string) (*models.TrackRouteGroup, error) {
