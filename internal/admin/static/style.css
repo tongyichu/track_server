@@ -828,6 +828,7 @@ table.admin-audit-table { width: 100%; min-width: 680px; table-layout: fixed; }
 .account-login-time { font-variant-numeric: tabular-nums; }
 .account-login-source { font-variant-numeric: tabular-nums; white-space: normal; overflow-wrap: anywhere; }
 .account-login-location { display: block; }
+.account-location-credit-mobile { display: none; }
 .account-row-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .accounts-migration { margin: 8px 0 0; }
 .accounts-audit-filters > select { max-width: 100%; }
@@ -870,7 +871,8 @@ table.admin-audit-table { width: 100%; min-width: 680px; table-layout: fixed; }
   .accounts-list :is(.account-recovery, .account-login-time, .account-login-source) { color: var(--admin-secondary-color); font-size: 12px; }
   .accounts-list table.data.admin-card-table .account-recovery::before { display: inline; content: '邮箱 '; font-size: inherit; font-weight: 400; }
   .accounts-list table.data.admin-card-table .account-login-time::before { display: inline; content: '登录 '; font-size: inherit; font-weight: 400; }
-  .accounts-list table.data.admin-card-table .account-login-source::before { display: inline; content: '登录 IP '; font-size: inherit; font-weight: 400; }
+  .accounts-list table.data.admin-card-table .account-login-source::before { display: inline; content: '最近登陆IP '; font-size: inherit; font-weight: 400; }
+  .accounts-list table.data.admin-card-table .account-location-credit-mobile { display: inline; }
   .account-form-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .account-permission-groups { grid-template-columns: 1fr; }
 }

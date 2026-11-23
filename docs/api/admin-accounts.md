@@ -18,7 +18,7 @@
 
 后台成功登录时在同一次账号状态 CAS 保存 `last_login_at` 和 `last_login_ip`。IP 取连接对端，兼容 IPv4/IPv6；代理转发头不参与取值。存量账号没有历史 IP 的，下次登录后开始显示。账号列表使用服务端本地 City MMDB 库按 IP 查询国家、省级地区和城市。同一列表中的重复 IP 只解析一次，查询不访问外部服务。配置 `ADMIN_IP_GEO_DB` 为容器内可读的文件路径即可启用公网 IP 的近似所在地，例如把 GeoLite2 City 放在已挂载的 `/var/log/track_server/GeoLite2-City.mmdb` 并配置该路径。库未配置、无法打开或 IP 未命中时仍显示 IP；私网、回环和链路本地地址显示“内网地址”。IP 和所在地仅在管理员账号列表下发。
 
-若使用 DB-IP City Lite，账号列表响应附带 `data.login_location_source="db-ip"`，账号管理页展示来源链接。 [DB-IP City Lite 下载与授权](https://db-ip.com/db/download/ip-to-city-lite)
+若使用 DB-IP City Lite，账号列表响应附带 `data.login_location_source="db-ip"`，查到公网所在地时，账号管理页在「最近登陆IP」列标题旁展示 DB-IP 来源链接，窄屏卡片视图在首个对应的 IP 标签旁展示该链接。 [DB-IP City Lite 下载与授权](https://db-ip.com/db/download/ip-to-city-lite)
 
 邮箱、验证时间、各用途验证码摘要/错误次数/有效期、发信配额与管理员重置迁移开关也保存在同一账号 JSON 中，使用相同 CAS，不新增表或内存验证码回退。绑定/更换邮箱和邮箱找回成功同样增加 security_version，并清理全部旧挑战。完整机制、SMTP 配置与人工验收边界见 [邮箱找回配置说明](../admin-email-recovery.md)。
 

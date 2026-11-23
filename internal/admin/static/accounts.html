@@ -13,11 +13,10 @@
     <div class="page-heading"><h1>账号管理</h1><div class="d-flex gap-2"><button id="refreshAccounts" class="btn btn-outline-secondary btn-touch">刷新账号</button><button id="createAccount" class="btn btn-primary">新增账号</button></div></div>
     <p id="accountsError" class="alert alert-danger" hidden role="alert"></p>
     <section class="panel p-0 accounts-list" aria-label="后台账号">
-      <table class="table data"><thead><tr><th>账号</th><th>状态</th><th>找回邮箱</th><th>最近登录</th><th>最近登录 IP 及所在地</th><th>操作</th></tr></thead>
+      <table class="table data"><thead><tr><th>账号</th><th>状态</th><th>找回邮箱</th><th>最近登录</th><th>最近登陆IP <a id="loginLocationAttribution" href="https://db-ip.com" target="_blank" rel="noopener noreferrer" aria-label="IP 归属地数据来源 DB-IP" hidden>DB-IP</a></th><th>操作</th></tr></thead>
         <tbody id="accountsList"><tr><td colspan="6" class="text-secondary text-center">正在加载账号…</td></tr></tbody>
       </table>
     </section>
-    <p id="loginLocationAttribution" class="small text-secondary mt-2" hidden><a href="https://db-ip.com" target="_blank" rel="noopener noreferrer">IP 归属地数据由 DB-IP 提供</a></p>
     <p id="emailMigrationHint" class="small text-secondary accounts-migration" hidden><span id="emailMigrationText"></span> <a href="/admin/password.html" id="verifyOwnRecoveryEmail" hidden>前往账号安全</a></p>
     <section class="panel mt-3">
       <div class="admin-section-heading flex-wrap gap-2">

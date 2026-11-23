@@ -34,7 +34,7 @@
     list.replaceChildren(row);
   }
 
-  function renderAccount(account) {
+  function renderAccount(account, showLocationSource) {
     const row = document.createElement('tr');
     const name = document.createElement('strong');
     name.textContent = account.display_name || account.username;
@@ -68,6 +68,16 @@
       const location = document.createElement('small');
       location.className = 'account-login-location text-secondary';
       location.textContent = account.last_login_location || '所在地未知';
+      if (showLocationSource) {
+        const source = document.createElement('a');
+        source.href = 'https://db-ip.com';
+        source.target = '_blank';
+        source.rel = 'noopener noreferrer';
+        source.className = 'account-location-credit-mobile';
+        source.textContent = 'DB-IP';
+        source.setAttribute('aria-label', 'IP 归属地数据来源 DB-IP');
+        loginSource.prepend(source, ' · ');
+      }
       loginSource.append(location);
     }
 
@@ -107,7 +117,10 @@
       const data = await api('/accounts');
       modules = data.modules || [];
       const accounts = data.items || [];
-      $('loginLocationAttribution').hidden = data.login_location_source !== 'db-ip';
+      const locationSourceRow = data.login_location_source === 'db-ip'
+        ? accounts.find(account => account.last_login_ip && account.last_login_location && account.last_login_location !== '内网地址')
+        : undefined;
+      $('loginLocationAttribution').hidden = !locationSourceRow;
       updateAuditAccounts(accounts);
       const ownAccount = accounts.find(account => account.username === username);
       const needsOwnEmail = ownAccount && !ownAccount.recovery_email_bound;
@@ -115,7 +128,7 @@
       $('emailMigrationHint').hidden = !canReset && !needsOwnEmail;
       $('verifyOwnRecoveryEmail').hidden = !needsOwnEmail;
       $('emailMigrationText').textContent = canReset ? '未验证邮箱的账号暂可应急重置，全部启用账号验证后永久关闭。' : '当前账号还未验证找回邮箱。';
-      if (accounts.length) $('accountsList').replaceChildren(...accounts.map(renderAccount));
+      if (accounts.length) $('accountsList').replaceChildren(...accounts.map(account => renderAccount(account, account === locationSourceRow)));
       else listState($('accountsList'), 6, '暂无后台账号');
       showError($('accountsError'), '');
       $('createAccount').disabled = false;
