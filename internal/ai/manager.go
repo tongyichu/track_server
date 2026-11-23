@@ -27,6 +27,7 @@ var ErrBusy = errors.New("AI 任务繁忙，请稍后重试")
 
 var Features = []struct{ ID, Name string }{
 	{"track_auto", "自动路线说明与图案"}, {"track_description", "路线说明联网填写"}, {"track_shape", "手动轨迹图案识别"}, {"shape_learning", "人工改标学习复核"}, {"scenic_description", "景点介绍"},
+	{"route_group_introduction", "手动路线组介绍"},
 }
 
 func IsControlError(err error) bool {

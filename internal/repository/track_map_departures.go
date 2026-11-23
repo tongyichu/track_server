@@ -14,6 +14,12 @@ import (
 func (r *MySQLTrackMapRepository) VisitRouteDepartures(ctx context.Context, filter models.TrackMapQueryFilter, visit func(models.TrackMapDeparture)) error {
 	conds := []string{"g.status = ?", "t.status = ?", "t.is_running = 0", "t.deleted_at IS NULL"}
 	args := []any{models.TrackRouteGroupStatusActive, models.TrackStatusNormal}
+	if ids := filter.DepartureGroupIDs; len(ids) > 0 {
+		conds = append(conds, "m.group_id IN ("+strings.Repeat("?,", len(ids)-1)+"?)")
+		for _, id := range ids {
+			args = append(args, id)
+		}
+	}
 	if len(filter.TrackIDs) > 0 {
 		conds = append(conds, "i.track_id IN ("+strings.TrimSuffix(strings.Repeat("?,", len(filter.TrackIDs)), ",")+")")
 		for _, id := range filter.TrackIDs {
@@ -74,25 +80,39 @@ func (r *MongoTrackMapRepository) VisitRouteDepartures(ctx context.Context, filt
 	if filter.TrackType != "" {
 		groupMatch["group.track_type"] = filter.TrackType
 	}
-	cursor, err := r.index.Aggregate(ctx, mongo.Pipeline{
+	collection := r.index
+	pipeline := mongo.Pipeline{
 		{{Key: "$match", Value: indexMatch}},
 		{{Key: "$lookup", Value: bson.M{"from": r.members.Name(), "localField": "track_id", "foreignField": "track_id", "as": "member"}}},
 		{{Key: "$unwind", Value: "$member"}},
-		{{Key: "$lookup", Value: bson.M{"from": r.groups.Name(), "localField": "member.group_id", "foreignField": "_id", "as": "group"}}},
-		{{Key: "$unwind", Value: "$group"}},
-		{{Key: "$match", Value: groupMatch}},
-		{{Key: "$lookup", Value: bson.M{"from": r.tracks.Name(), "localField": "track_id", "foreignField": "_id", "as": "track"}}},
-		{{Key: "$unwind", Value: "$track"}},
-		{{Key: "$match", Value: bson.M{"track.status": models.TrackStatusNormal, "track.is_running": bson.M{"$ne": true},
+	}
+	if ids := filter.DepartureGroupIDs; len(ids) > 0 {
+		collection = r.members
+		pipeline = mongo.Pipeline{
+			{{Key: "$match", Value: bson.M{"group_id": bson.M{"$in": ids}}}},
+			{{Key: "$lookup", Value: bson.M{"from": r.index.Name(), "localField": "track_id", "foreignField": "track_id", "as": "geo"}}},
+			{{Key: "$unwind", Value: "$geo"}},
+			{{Key: "$replaceRoot", Value: bson.M{"newRoot": bson.M{"$mergeObjects": bson.A{"$geo", bson.M{"member": bson.M{"group_id": "$group_id"}}}}}}},
+			{{Key: "$match", Value: indexMatch}},
+		}
+	}
+	pipeline = append(pipeline,
+		bson.D{{Key: "$lookup", Value: bson.M{"from": r.groups.Name(), "localField": "member.group_id", "foreignField": "_id", "as": "group"}}},
+		bson.D{{Key: "$unwind", Value: "$group"}},
+		bson.D{{Key: "$match", Value: groupMatch}},
+		bson.D{{Key: "$lookup", Value: bson.M{"from": r.tracks.Name(), "localField": "track_id", "foreignField": "_id", "as": "track"}}},
+		bson.D{{Key: "$unwind", Value: "$track"}},
+		bson.D{{Key: "$match", Value: bson.M{"track.status": models.TrackStatusNormal, "track.is_running": bson.M{"$ne": true},
 			"$or": bson.A{bson.M{"track.deleted_at": nil}, bson.M{"track.deleted_at": time.Time{}}}}}},
-		{{Key: "$project", Value: bson.M{
+		bson.D{{Key: "$project", Value: bson.M{
 			"group_id": "$group._id", "group_name": "$group.name", "area_id": "$group.area_id",
 			"representative_track_id": "$group.representative_track_id", "member_count": "$group.member_count",
 			"track_type": "$group.track_type", "track_id": 1, "city_code": 1, "distance": 1,
 			"start": bson.M{"latitude": "$start_lat", "longitude": "$start_lng"},
 			"end":   bson.M{"latitude": "$end_lat", "longitude": "$end_lng"},
 		}}},
-	})
+	)
+	cursor, err := collection.Aggregate(ctx, pipeline)
 	if err != nil {
 		return err
 	}
@@ -117,7 +137,14 @@ func (r *InMemoryTrackMapRepository) VisitRouteDepartures(ctx context.Context, f
 	for _, id := range filter.TrackIDs {
 		trackIDs[id] = struct{}{}
 	}
+	groupIDs := make(map[string]struct{}, len(filter.DepartureGroupIDs))
+	for _, id := range filter.DepartureGroupIDs {
+		groupIDs[id] = struct{}{}
+	}
 	for groupID, members := range r.routeMembers {
+		if _, wanted := groupIDs[groupID]; len(groupIDs) > 0 && !wanted {
+			continue
+		}
 		group := r.routeGroups[groupID]
 		if group == nil || group.Status != models.TrackRouteGroupStatusActive || filter.TrackType != "" && group.TrackType != filter.TrackType {
 			continue

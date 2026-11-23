@@ -17,7 +17,7 @@
 | 参数 | 语义 |
 | --- | --- |
 | from / to | 北京时间 YYYY-MM-DD，均包含当天；默认今天，最大 366 天 |
-| feature | track_auto / track_description / track_shape / shape_learning / scenic_description |
+| feature | track_auto / track_description / track_shape / shape_learning / scenic_description / route_group_introduction |
 | provider / model | 实际调用供应商与模型，当前供应商 moonshot |
 | mode | auto / manual（后台重试为 manual） |
 | status | queued / running / cancelling / success / failed / cancelled / interrupted / paused / deferred |
@@ -72,6 +72,7 @@
 - 路线说明生成返回新增 `task_id`；独立保存可携带 `{description,source_version,task_id}`，校验任务与对象/输入版本后保存，记为applied。业务保存成功但采用记录失败仅记日志，不误报保存失败。
 - 图案生成返回 `task_id`，完整诊断也含task_id；详情保存支持 `shape_ai_task_id`，须同时提交shape_label并匹配当前输入版本。人工编辑后未采用候选不冒记。
 - 景点介绍生成返回 `task_id`；创建景点可附 `ai_description_task_id`，更新在 `{expected_version,spot,ai_description_task_id}` 的顶层携带。验证功能/对象/操作者；未保存草稿在创建成功后绑定新景点ID。修改后的已确认候选仍可计为采用，结果日志保留原生成内容。
+- 路线组介绍的手动生成使用 `route_group_introduction`，通过地图模式的路线组介绍表单发起，候选填入中文摘要后沿用路线组发布流程。AI 使用页提供任务详情、额度和中断控制。
 - 原调用方不携带task_id仍兼容保存，未记录来源的人工输入不推测为AI采用。
 
 ## 实时配额与独立调整

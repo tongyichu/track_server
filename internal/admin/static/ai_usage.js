@@ -1,7 +1,7 @@
 (function () {
   'use strict';
   const $ = id => document.getElementById(id);
-  const featureNames = { track_auto: '自动路线说明与图案', track_description: '路线说明联网填写', track_shape: '手动轨迹图案识别', shape_learning: '人工改标学习复核', scenic_description: '景点介绍' };
+  const featureNames = { track_auto: '自动路线说明与图案', track_description: '路线说明联网填写', track_shape: '手动轨迹图案识别', shape_learning: '人工改标学习复核', scenic_description: '景点介绍', route_group_introduction: '手动路线组介绍' };
   const states = { queued: '排队中', running: '执行中', cancelling: '正在中断', success: '生成成功', failed: '失败', cancelled: '已中断', interrupted: '进程中断', paused: '因暂停停止', deferred: '等待额度', not_sent: '未发出', unknown: '结果未知' };
   const stages = { waiting: '等待执行', preparing: '准备资料', search: '联网检索', generation: '模型生成', balance: '账户状态诊断', saving: '保存结果', finished: '已结束' };
   const adoptions = { pending: '待确认', applied: '已采用', cached: '已缓存待写回', not_generated: '尚未生成', not_applied: '未采用', no_result: '无可用内容', stale: '资料已变化' };
@@ -157,10 +157,14 @@
   function showError(key, error) { if (error.name !== 'AbortError') $(key).textContent = error.message || '读取失败，请重试'; }
   function button(text, action, permission) { const el = node('button', text, 'btn btn-sm btn-outline-primary'); el.type = 'button'; if (permission) el.dataset.adminWrite = permission; el.addEventListener('click', action); return el; }
   function objectLink(t) {
-    const module = t.feature === 'scenic_description' ? 'scenic_spots' : 'tracks';
+    const source = {
+      scenic_description: ['scenic_spots', 'spot_id'],
+      route_group_introduction: ['route_groups', 'group_id']
+    };
+    const [module, parameter] = source[t.feature] || ['tracks', 'track_id'];
     const title = (t.object_name || '') + (t.object_id ? ' · ' + t.object_id : '');
     if (!t.object_id || !can(module)) return node('span', title || '未保存的景点草稿');
-    const a = node('a', title); a.href = '/admin/' + module + '.html?' + (module === 'tracks' ? 'track_id' : 'spot_id') + '=' + encodeURIComponent(t.object_id); return a;
+    const a = node('a', title); a.href = '/admin/' + module + '.html?' + parameter + '=' + encodeURIComponent(t.object_id); return a;
   }
   function taskActions(t, target, inDetail) {
     if (!inDetail) target.append(button('详情', () => openDetail(t.id)));
@@ -168,7 +172,7 @@
       const b = button(t.cancel_requested ? '正在中断…' : '中断', () => mutate(t, 'cancel'), 'ai_tasks'); b.disabled = !!t.cancel_requested; target.append(b);
     }
     const source = t.feature === 'scenic_description' ? 'scenic_spots' : 'tracks';
-    if (t.object_id && ['failed', 'cancelled', 'interrupted'].includes(t.status) && can('ai_tasks', true) && can(source, true) && !t.retry_task_id) target.append(button('重试', () => mutate(t, 'retry'), 'ai_tasks'));
+    if (t.feature !== 'route_group_introduction' && t.object_id && ['failed', 'cancelled', 'interrupted'].includes(t.status) && can('ai_tasks', true) && can(source, true) && !t.retry_task_id) target.append(button('重试', () => mutate(t, 'retry'), 'ai_tasks'));
   }
   async function mutate(t, action) {
     if (operations.has(t.id)) return; operations.add(t.id);
@@ -388,7 +392,7 @@
   function renderPolicies(controls) {
     const root = $('policies'); root.replaceChildren(); controls.forEach(c => { const p = Object.assign({},c.policy), row = node('tr'); controlPolicies.set(p.feature,p); const title = node('td', feature(p.feature));
       const paused = node('input'); paused.type = 'checkbox'; paused.checked = p.pause_automatic; paused.dataset.adminInput = 'ai_settings'; paused.setAttribute('aria-label', '暂停' + feature(p.feature) + '的自动任务');
-      const limits = [numberInput(p.max_concurrent, 1, 16), numberInput(p.token_alert, 0, 1000000000), numberInput(p.cost_alert_cny, 0, 100000, '0.01')]; row.append(title); const pauseCell = node('td'); const pauseLabel = node('label', '', 'form-check'); pauseLabel.append(paused, document.createTextNode('暂停自动')); if (['track_description','track_shape'].includes(p.feature)) {pauseCell.append(node('span','仅手动入口','hint'));} else {pauseCell.append(pauseLabel);} row.append(pauseCell); limits.forEach((input, i) => { input.setAttribute('aria-label', feature(p.feature) + ['最大并发', 'Token 提醒阈值', '费用提醒阈值'][i]); const td = node('td'); td.append(input); row.append(td); });
+      const limits = [numberInput(p.max_concurrent, 1, 16), numberInput(p.token_alert, 0, 1000000000), numberInput(p.cost_alert_cny, 0, 100000, '0.01')]; row.append(title); const pauseCell = node('td'); const pauseLabel = node('label', '', 'form-check'); pauseLabel.append(paused, document.createTextNode('暂停自动')); if (['track_description','track_shape','route_group_introduction'].includes(p.feature)) {pauseCell.append(node('span','仅手动入口','hint'));} else {pauseCell.append(pauseLabel);} row.append(pauseCell); limits.forEach((input, i) => { input.setAttribute('aria-label', feature(p.feature) + ['最大并发', 'Token 提醒阈值', '费用提醒阈值'][i]); const td = node('td'); td.append(input); row.append(td); });
       [paused].concat(limits).forEach(input => input.addEventListener('change', () => { policyDirty = true; })); const action = node('td'); const save = button('保存', async () => {
         if (busySettings) return; if (limits.some(input => !input.reportValidity())) return; busySettings = true; save.disabled = true;
         try { await request('policies/' + encodeURIComponent(p.feature), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({}, p, { pause_automatic: paused.checked, max_concurrent: Number(limits[0].value), token_alert: Number(limits[1].value), cost_alert_cny: Number(limits[2].value) })) }); $('policyMessage').textContent = feature(p.feature) + '配置已保存。'; p.revision++; policyDirty = true; }
@@ -438,8 +442,9 @@
         let result; try { result = JSON.parse(t.result); } catch (_) { /* Preserve non-JSON historical output below. */ }
         const output = node('pre', null, 'ai-detail-result'); output.textContent = result ? JSON.stringify(result, null, 2) : t.result;
         technical.append(node('h3', '完整结果'), output);
-        if (result && (result.description || result.shape_label || result.decision_summary)) {
+        if (result && (result.summary || result.description || result.shape_label || result.decision_summary)) {
           root.append(node('h3', '生成内容'));
+          if (result.summary) root.append(node('p', result.summary, 'ai-result-text'));
           if (result.description) root.append(node('p', result.description, 'ai-result-text'));
           if (result.shape_label) root.append(node('p', '图案：' + result.shape_label));
           if (result.decision_summary) root.append(node('p', result.decision_summary, 'ai-result-text'));

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -324,14 +325,14 @@ func TestTrackRouteGroupService_UsesAreaAndManualSeedNames(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if areaGroup.Name != "西湖徒步路线" {
+	if !strings.Contains(areaGroup.Name, "约 3 公里路线") {
 		t.Fatalf("area name=%q", areaGroup.Name)
 	}
 	seedGroup, err := mapRepo.FindRouteGroupByTrackID(ctx, seedIndex.TrackID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if seedGroup.Name != "豆腐皮古道徒步路线" {
+	if seedGroup.Name != "豆腐皮古道" {
 		t.Fatalf("seed name=%q", seedGroup.Name)
 	}
 }

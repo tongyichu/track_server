@@ -240,7 +240,7 @@ GET /admin/api/users
 ```text
 [admin UI] /admin/route_groups.html
   → GET /admin/api/route-groups?track_type=&province_code=&city_code=&limit=&offset=
-       → 运动类型为 icon+文字下拉，省→市级联；列表按关联区域分组成可展开的两级结构（区域 → 路线组），路线组行点「管理」打开详情弹窗
+       → 按运动类型和路线覆盖省市筛选，列表可按城市 → 区县 → 景点 → 路线组逐级展开，路线组行点「管理」打开详情弹窗
   → GET /admin/api/route-groups/:group_id 查看成员轨迹与 geo index
   → TrackRouteGroupService 按已存 area_id 补区域名称、类型、城市与介绍页链接
   → PUT /admin/api/route-groups/:group_id/name {name}
@@ -248,12 +248,17 @@ GET /admin/api/users
   → DELETE /admin/api/route-groups/:group_id/members/:track_id
   → PUT /admin/api/route-groups/:group_id/representative {track_id}
   → PUT /admin/api/route-groups/:group_id/introduction 保存中英文介绍
+  → POST /admin/api/route-groups/:group_id/introduction/generate 手动生成摘要候选
   → POST /admin/api/route-groups/:group_id/introduction/publish 提交当前编辑内容并发布
   → POST /admin/api/route-groups/:group_id/introduction/unpublish 下线
        → TrackRouteGroupService 校验运动类型、成员关系与代表轨迹
        → TrackMapRepository 更新 track_route_groups / track_route_group_members
 ```
-路线组列表页展示路线组摘要及离线 `area_id` 对应的区域摘要，详情页展示同样的区域信息与介绍页入口；不得在 admin 请求链路重新做 Polygon/MultiPolygon 匹配。代表轨迹只用于封面/运营参考，RouteGroup 不再保存或下发代表折线，客户端用聚合中心点与 `radius_m` 画区域。
+路线组列表按页批量读取有效成员的起点索引和当前主景点关联。一个路线组只展示一次。组内存在多个景点关联时，优先采用最近的人工关联，其次是自动关联、历史识别；同优先级采用代表轨迹，再按轨迹 ID 确定。景点按自身坐标所在区县归类，同一景点的路线可跨运动类型与出发地。无景点关联时，按代表轨迹起点归至区县，缺少代表起点时用组内有效成员的起点。按现有本地行政区索引解析坐标，无法解析区县时标为「区县未标注」。路线覆盖城市筛选沿用路线组的 `city_codes`，分组展示时使用景点或起点的归属城市。后台读取过程不访问外部供应商、不改写离线 `area_id` 或起点索引，景点关联变化后重新加载列表即可看到新分组。
+
+详情默认展示类型、成员数与成员列表，离线区域和内部编号在「路线组管理」查看。路线介绍的默认表单来自自动简介，可单独编辑保存和发布。点击「AI 生成草稿」才会使用当前路线组的位置、走法与景点事实生成中文摘要候选；预算和请求记录由 AI 使用管理维护。候选只填入当前表单，保存或发布由运营发起，已发布内容下线后切回自动简介。
+
+路线组使用聚合中心与 `radius_m` 表示区域，代表轨迹可供封面和运营参考。
 人工改名会把 RouteGroup 标记为 `mixed`，离线重聚合通过历史成员重合复用 GroupID 并保留该名称；不要把名称重新改为城市级默认值。离线任务先按 medoid 计算几何结果，再按“存量人工代表 > approved 投稿候选 > medoid”选择展示代表；人工代表只要仍属于重建后的组就必须保留。
 
 ### 审核轨迹投稿

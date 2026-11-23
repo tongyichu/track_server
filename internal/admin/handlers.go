@@ -2967,7 +2967,7 @@ func (h *Handler) GetRouteGroupIntroduction(ctx context.Context, c *app.RequestC
 		c.JSON(http.StatusInternalServerError, utils.H{"error": "route group service not configured"})
 		return
 	}
-	introduction, err := h.routeGroupSvc.GetRouteIntroduction(ctx, c.Param("group_id"))
+	introduction, err := h.routeGroupSvc.GetRouteIntroductionForEditing(ctx, c.Param("group_id"))
 	if errors.Is(err, repository.ErrNotFound) {
 		c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"status": models.TrackRouteIntroductionStatusDraft}})
 		return

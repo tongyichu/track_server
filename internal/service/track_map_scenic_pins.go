@@ -18,17 +18,22 @@ const (
 )
 
 func catalogScenicMapMatch(spot *models.ScenicSpot) *departureScenicMatch {
-	match := &departureScenicMatch{
+	return &departureScenicMatch{
 		id: spot.ID, name: spot.Name, cityCode: config.CanonicalCityCode(spot.CityCode),
 		catalog: true, rank: departureScenicAutomatic,
+		point: scenicMapPoint(spot.Latitude, spot.Longitude, spot.CoordinateSystem),
 	}
-	if validProviderCoordinate(spot.Latitude, spot.Longitude) {
-		point, err := mapPointToGCJ02(models.TrackPoint{Latitude: spot.Latitude, Longitude: spot.Longitude}, spot.CoordinateSystem)
-		if err == nil && validMapLatLng(point.Latitude, point.Longitude) {
-			match.point = &models.TrackMapPoint{Latitude: point.Latitude, Longitude: point.Longitude}
-		}
+}
+
+func scenicMapPoint(latitude, longitude float64, coordinateSystem string) *models.TrackMapPoint {
+	if !validProviderCoordinate(latitude, longitude) {
+		return nil
 	}
-	return match
+	point, err := mapPointToGCJ02(models.TrackPoint{Latitude: latitude, Longitude: longitude}, coordinateSystem)
+	if err != nil || !validMapLatLng(point.Latitude, point.Longitude) {
+		return nil
+	}
+	return &models.TrackMapPoint{Latitude: point.Latitude, Longitude: point.Longitude}
 }
 
 func departurePointVisible(point models.TrackMapPoint, filter models.TrackMapQueryFilter) bool {

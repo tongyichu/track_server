@@ -654,10 +654,14 @@ func main() {
 		trackRouteGroupSvc.SetTrackRepository(trackRepo)
 		trackRouteGroupSvc.SetTrackSubmissionService(trackSubmissionSvc)
 		trackMapSvc = service.NewTrackMapService(trackMapRepo, trackRepo, trackSvc)
+		trackRouteGroupSvc.SetTrackMapService(trackMapSvc)
 		if trackPlaceRepo == nil {
 			trackPlaceRepo = repository.NewMemoryTrackPlaceRepository()
 		}
 		_, memoryFallback := trackRepo.(*repository.InMemoryTrackRepository)
+		if !memoryFallback && cfg.MoonshotAPIKey != "" {
+			trackRouteGroupSvc.ConfigureIntroductionAI(aiManager, cfg.MoonshotAPIKey, cfg.TrackNarrativeModel)
+		}
 		amapKey := cfg.AMapRESTKey
 		if amapKey == "" {
 			amapKey = cfg.AMapWebKey

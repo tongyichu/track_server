@@ -27,12 +27,16 @@ func NewMongoTrackMapRepository(jobs, index, tracks, groups, members *mongo.Coll
 }
 
 func (r *MongoTrackMapRepository) EnsureDepartureIndexes(ctx context.Context) error {
-	if _, err := r.index.Indexes().CreateOne(ctx, mongo.IndexModel{
-		Keys: bson.D{{Key: "start_lat", Value: 1}, {Key: "start_lng", Value: 1}},
+	if _, err := r.index.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{Keys: bson.D{{Key: "start_lat", Value: 1}, {Key: "start_lng", Value: 1}}},
+		{Keys: bson.D{{Key: "track_id", Value: 1}}},
 	}); err != nil {
 		return err
 	}
-	_, err := r.members.Indexes().CreateOne(ctx, mongo.IndexModel{Keys: bson.D{{Key: "track_id", Value: 1}}})
+	_, err := r.members.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{Keys: bson.D{{Key: "track_id", Value: 1}}},
+		{Keys: bson.D{{Key: "group_id", Value: 1}}},
+	})
 	return err
 }
 
@@ -814,7 +818,7 @@ func (r *MongoTrackMapRepository) ListRouteGroupMembers(ctx context.Context, gro
 	if limit <= 0 {
 		limit = 20
 	}
-	cur, err := r.members.Find(ctx, bson.M{"group_id": groupID}, options.Find().SetSort(bson.D{{Key: "role", Value: -1}, {Key: "created_at", Value: -1}}).SetLimit(int64(limit)))
+	cur, err := r.members.Find(ctx, bson.M{"group_id": groupID}, options.Find().SetSort(bson.D{{Key: "role", Value: -1}, {Key: "created_at", Value: -1}, {Key: "track_id", Value: 1}}).SetLimit(int64(limit)))
 	if err != nil {
 		return nil, err
 	}

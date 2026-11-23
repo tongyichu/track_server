@@ -140,6 +140,10 @@ func (h *Handler) RetryAITask(ctx context.Context, c *app.RequestContext) {
 		aiError(c, err)
 		return
 	}
+	if t.Feature == "route_group_introduction" {
+		c.JSON(400, utils.H{"error": "请在对应路线组中点击 AI 生成草稿"})
+		return
+	}
 	session := h.auth.SessionFromRequest(c)
 	source := "tracks"
 	if t.Feature == "scenic_description" {

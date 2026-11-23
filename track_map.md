@@ -395,7 +395,7 @@ track_type=hiking
 - RouteGroup 的 `area_id` 由 `track_route_group` 离线任务计算：先按 `bounds` 预筛，再用 Polygon/MultiPolygon 判断 RouteGroup medoid 中心，无 geometry 的人工区域按 `bounds` 兜底。接口只根据已存 `area_id` 查询内置 GCJ-02 区域目录，并返回可选的 `name`、`area_type`、`area`、`city_code`、`city_name`；相同 `area_id` 的 RouteGroup 聚合为一个气泡，空 `area_id` 继续按原网格聚合。
 - 生成边界覆盖 DataV 全国索引的 2,875 个末级行政区域、34 个省级区域：2,840 个区县、34 个无下辖区县的城市/直辖单位及台湾省级兜底。`admin_level` 记录源层级，客户端仍沿用 `area_type=district`；城市选择表缺失的直属单位以自身名称补齐气泡 `city_name`。快照日期不等于源区划的生效日期，覆盖清单和来源摘要见 `internal/maparea/districts.manifest.json`，通过 `cmd/update-map-districts` 批量维护。`catalog.json` 中的人工景区/区县条目可按稳定 ID 覆盖基线，同 ID 人工区县未提供 geometry 时继承生成区县 geometry；景区优先于行政区，同优先级选择范围更小的区域，未命中时保持原数量气泡响应。发布后需由 `track_route_group` 重聚合更新存量 `area_id`。
 - `area.id` 是稳定区域 ID；有介绍内容时，公开的 `area.introduction_url` 可由客户端 WebView 打开，支持 `lang=english` 和 `is_dark=true`。
-- RouteGroup 的运营介绍独立存储在 `track_route_introductions`，已发布时在路线视野、列表和详情对象中返回公开 `introduction_url`。介绍以代表轨迹作为稳定锚点，离线全量重聚合后按锚点所在成员关系自动更新 `current_group_id`，避免内容随 `track_route_groups` 重建丢失。
+- 路线组的 `introduction_url` 打开已发布介绍或规则版简介。运营文案独立存储在 `track_route_introductions`，路线组重建后按 `anchor_track_id` 所在成员关系更新 `current_group_id`。
 - 客户端点击 `city_cluster` 或 `area_cluster` 后，只需要放大地图并重新请求 `/track-map/view`。
 - 客户端点击 `route_group` 后，请求路线组详情或具体轨迹列表。
 
@@ -476,7 +476,7 @@ city_code=810000
 | --- | --- | --- |
 | `group_id` | string | 路线组 ID |
 | `name` | string | 路线展示名称 |
-| `introduction_url` | string | 可选；仅路线介绍已发布时返回的公开 H5 地址 |
+| `introduction_url` | string | 可选，路线组公开 H5 地址，展示已发布介绍或规则版简介 |
 | `city_code` | string | 城市 Code |
 | `city_name` | string | 城市名称 |
 | `track_type` | string | 运动类型 |
@@ -523,9 +523,9 @@ GET /api/v1/track-map/groups/:group_id/detail
 }
 ```
 
-详情第一版同样不展示人数和轨迹数量。如果客户端需要列表入口，直接展示“相关轨迹”。已发布路线介绍时，详情和列表均返回相同的 `introduction_url`。
+详情和列表均可返回 `introduction_url`，轨迹列表仍由相关轨迹接口提供。
 
-聚合路线介绍页使用公开路由 `GET /api/v1/track-map/groups/:group_id/introduction.html`；仅发布内容可访问，并支持 `lang=english` 与 `is_dark=true`。内容由管理中心按结构化中英文文案维护，不接受任意 HTML。
+公开路线介绍页通过 `GET /api/v1/track-map/groups/:group_id/introduction.html` 访问，支持 `lang=english` 和 `is_dark=true`。已发布的结构化运营介绍优先，其次按公开成员事实生成基础简介。AI 只由后台路线组操作员点击生成中文摘要候选，沿用现有编辑和发布流程。
 
 ### 5.4 查询路线组下的具体轨迹列表
 
@@ -778,6 +778,8 @@ OSS 下载要求：
 - `center_lat` / `center_lng`、`distance` 使用 medoid 轨迹口径；`bbox` 使用成员 bbox 并集，`radius_m` 覆盖全部成员。
 - `area_id` 使用 medoid 中心离线匹配；人工合并或移除成员导致中心变化时同步重算。
 - 新结果按成员重合数和 Jaccard 比例匹配历史 RouteGroup；匹配成功时复用历史 `group_id`，并保留人工/混合来源名称和已发布介绍名称。
+- 自动标题由既有离线聚合任务刷新。优先使用符合路线名格式的已审核投稿或人工种子标题，否则采用可识别的出发地点、景点、跨区终点、走法和约略距离。环线沿用闭合及面积判断，原路往返需检验折线前后两段重合。
+- 基础简介在打开时按最近的最多 50 个公开成员读取事实，按录制会话去重。地点与走法采用过半支持的事实；至少三次有效记录时展示里程、爬升与运动耗时的中间区间，样本较少时展示一条记录的实际数据。景点读取当前已保存的主景点关联。
 - 自动名称优先使用人工冷启动轨迹标题或成员标题共识，其次使用内置区域名，最后回退城市名。
 - 聚合任务仍会重建替换 `track_route_groups` / `track_route_group_members`；MySQL 实现使用事务，运营介绍通过独立表和锚点轨迹重绑定。
 

@@ -42,8 +42,8 @@
     return type || '';
   }
   function areaInfoHTML(area) {
-    if (!area || !area.name) return '<div class="route-area-overview"><span class="route-area-label">关联区域</span><strong>未关联区域</strong><span class="hint">未命中区域目录</span></div>';
-    var html = '<div class="route-area-overview"><span class="route-area-label">关联区域</span><div class="route-area-value"><strong>' + esc(area.name) + '</strong>';
+    if (!area || !area.name) return '<div class="route-area-overview"><span class="route-area-label">离线聚合区域</span><strong>未关联区域</strong><span class="hint">未命中区域目录</span></div>';
+    var html = '<div class="route-area-overview"><span class="route-area-label">离线聚合区域</span><div class="route-area-value"><strong>' + esc(area.name) + '</strong>';
     var typeName = areaTypeName(area.type);
     if (typeName) html += ' <span class="route-type-badge route-type-other">' + esc(typeName) + '</span>';
     html += '</div>';
@@ -68,6 +68,7 @@
   var PAGE_SIZE = 50;
   var selectedGroupID = '', detailRequest = 0, detailController = null, detailLoadingID = '';
   var introBaseline = '', introWriting = false, introClosePrompt = false, allowIntroClose = false;
+  var introStatus = '', introAIController = null;
   var selectedTrackType = '';
   var loadedGroups = [];
   var nextOffset = 0;
@@ -97,6 +98,7 @@
       return;
     }
     allowIntroClose = false; introBaseline = '';
+    cancelIntroGeneration();
     detailRequest++; detailLoadingID = '';
     if (detailController) detailController.abort();
   });
@@ -249,38 +251,43 @@
     }
   }
 
-  // ---------- 按区域分组渲染 ----------
-  function areaKeyOf(g) {
-    return (g.area && g.area.id) ? g.area.id : '__no_area__';
-  }
-  function areaNameOf(g) {
-    return (g.area && g.area.name) ? g.area.name : '未关联区域';
-  }
-  function buildAreaGroups(items) {
-    var order = [];
-    var map = Object.create(null);
-    items.forEach(function (g) {
-      var key = areaKeyOf(g);
-      if (!map[key]) {
-        map[key] = { key: key, name: areaNameOf(g), area: g.area || null, groups: [], memberTotal: 0, types: Object.create(null), cities: Object.create(null) };
-        order.push(key);
-      }
-      var bucket = map[key];
-      bucket.groups.push(g);
-      bucket.memberTotal += Number(g.member_count || 0);
-      if (g.track_type) bucket.types[g.track_type] = true;
-      (g.city_codes || []).forEach(function (code) { bucket.cities[cityNames[code] || code] = true; });
-    });
-    return order.map(function (key) {
-      var bucket = map[key];
-      bucket.typeList = Object.keys(bucket.types);
-      var cityList = Object.keys(bucket.cities);
-      bucket.cityLabel = cityList.length ? cityList.join('、') : ((bucket.area && bucket.area.city_name) || '');
-      return bucket;
-    });
+  function routeGroupLocation(g) {
+    var location = g.grouping || {};
+    return {
+      cityCode: location.city_code,
+      cityName: location.city_name || cityNames[location.city_code] || location.city_code || '城市未标注',
+      districtID: location.district_id,
+      districtName: location.district_name || '区县未标注',
+      scenicID: location.scenic_id,
+      scenicName: location.scenic_name
+    };
   }
 
-  function renderGroups() {
+  function buildAreaTree(items) {
+    var root = { key: '', children: new Map() };
+    function addGroup(parent, type, id, name, group) {
+      var key = parent.key + '/' + type + ':' + encodeURIComponent(id || '');
+      var bucket = parent.children.get(key);
+      if (!bucket) {
+        bucket = { key: key, type: type, name: name, children: new Map(), groups: [], count: 0, memberTotal: 0, types: new Set() };
+        parent.children.set(key, bucket);
+      }
+      bucket.count++;
+      bucket.memberTotal += Number(group.member_count || 0);
+      if (group.track_type) bucket.types.add(group.track_type);
+      return bucket;
+    }
+    items.forEach(function (g) {
+      var location = routeGroupLocation(g);
+      var city = addGroup(root, 'city', location.cityCode, location.cityName, g);
+      var district = addGroup(city, 'district', location.districtID, location.districtName, g);
+      var leaf = location.scenicID ? addGroup(district, 'scenic', location.scenicID, location.scenicName, g) : district;
+      leaf.groups.push(g);
+    });
+    return root.children;
+  }
+
+  function renderGroups(focusKey) {
     totalHint.textContent = '共 ' + totalCount + ' 组';
     listSummaryHint.textContent = '已加载 ' + loadedGroups.length + ' / ' + totalCount + ' 组';
     groupList.innerHTML = '';
@@ -288,46 +295,49 @@
       groupList.innerHTML = '<tr><td colspan="7"><div class="route-table-state"><strong>没有找到路线组</strong><span>可以调整运动类型、省份或城市条件后重新查询。</span></div></td></tr>';
       return;
     }
-    buildAreaGroups(loadedGroups).forEach(function (bucket) {
-      groupList.appendChild(renderAreaHeader(bucket));
-      bucket.groups.forEach(function (g) {
-        groupList.appendChild(renderGroupRow(g, bucket.key, collapsedAreas[bucket.key]));
-      });
-    });
+    var rows = document.createDocumentFragment();
+    var focusedToggle;
+    function appendBucket(bucket) {
+      var header = renderAreaHeader(bucket);
+      rows.appendChild(header);
+      if (bucket.key === focusKey) focusedToggle = header.querySelector('.route-area-toggle');
+      if (collapsedAreas[bucket.key]) return;
+      bucket.children.forEach(appendBucket);
+      bucket.groups.forEach(function (g) { rows.appendChild(renderGroupRow(g)); });
+    }
+    buildAreaTree(loadedGroups).forEach(appendBucket);
+    groupList.appendChild(rows);
+    if (focusedToggle) focusedToggle.focus({ preventScroll: true });
   }
 
   function renderAreaHeader(bucket) {
     var tr = document.createElement('tr');
-    tr.className = 'route-area-header';
-    tr.dataset.areaKey = bucket.key;
+    tr.className = 'route-area-header route-area-level-' + bucket.type;
     var collapsed = !!collapsedAreas[bucket.key];
-    var typeIcons = bucket.typeList.map(function (type) {
-      return typeIconHTML(trackTypeMeta(type), 'route-type-option-icon route-area-type-icon');
+    var typeIcons = TRACK_TYPES.filter(function (meta) { return bucket.types.has(meta.type); }).map(function (meta) {
+      return typeIconHTML(meta, 'route-type-option-icon route-area-type-icon');
     }).join('');
-    var typeName = areaTypeName(bucket.area && bucket.area.type);
     tr.innerHTML = '<td colspan="7">' +
       '<button type="button" class="route-area-toggle" aria-expanded="' + (!collapsed) + '" title="' + esc(bucket.name) + '">' +
       '<span class="route-area-chevron" aria-hidden="true"></span>' +
-      '<span class="route-area-title"><strong>' + esc(bucket.name) + '</strong>' + (typeName ? '<span class="route-type-badge route-type-other">' + esc(typeName) + '</span>' : '') + '</span>' +
-      (bucket.cityLabel ? '<span class="route-area-cities">' + esc(bucket.cityLabel) + '</span>' : '') +
+      '<span class="route-area-title"><strong>' + esc(bucket.name) + '</strong>' + (bucket.type === 'scenic' ? '<span class="route-type-badge route-type-other">景点</span>' : '') + '</span>' +
       '<span class="route-area-type-icons">' + typeIcons + '</span>' +
-      '<span class="route-area-stats">' + bucket.groups.length + ' 条路线 · ' + Number(bucket.memberTotal).toLocaleString() + ' 条轨迹</span>' +
+      '<span class="route-area-stats">' + bucket.count + ' 组路线 · ' + bucket.memberTotal.toLocaleString() + ' 条轨迹</span>' +
       '</button></td>';
     tr.querySelector('.route-area-toggle').addEventListener('click', function () {
       collapsedAreas[bucket.key] = !collapsedAreas[bucket.key];
-      renderGroups();
+      renderGroups(bucket.key);
     });
     return tr;
   }
 
-  function renderGroupRow(g, areaKey, hidden) {
+  function renderGroupRow(g) {
     var tr = document.createElement('tr');
     tr.dataset.groupId = g.group_id;
-    tr.dataset.areaKey = areaKey;
-    if (hidden) tr.classList.add('route-group-row-collapsed');
     if (g.group_id === selectedGroupID) tr.classList.add('selected');
-    var areaName = g.area && g.area.name ? g.area.name : '未关联区域';
-    var cityLabel = groupCities(g) || (g.area && g.area.city_name) || '城市未标注';
+    var location = routeGroupLocation(g);
+    var areaName = location.scenicName || location.districtName;
+    var cityLabel = location.scenicID ? location.cityName + ' / ' + location.districtName : location.cityName;
     var representativeID = g.representative_track_id || '';
     tr.innerHTML = '<td class="route-name-cell"><strong title="' + esc(g.name || '') + '">' + esc(g.name || '未命名路线') + '</strong><small title="' + esc(g.group_id) + '">路线组 · ' + esc(g.group_id) + '</small></td>' +
       '<td class="route-area-cell"><strong title="' + esc(areaName) + '">' + esc(areaName) + '</strong><small title="' + esc(cityLabel) + '">' + esc(cityLabel) + '</small></td>' +
@@ -375,6 +385,7 @@
     }
   });
   document.getElementById('introSaveBtn').addEventListener('click', function () { writeIntroduction('draft'); });
+  document.getElementById('introGenerateBtn').addEventListener('click', generateIntroductionDraft);
   document.getElementById('introPublishBtn').addEventListener('click', function () { writeIntroduction('publish'); });
   document.getElementById('introUnpublishBtn').addEventListener('click', function () { writeIntroduction('unpublish'); });
 
@@ -420,6 +431,7 @@
     var preserveIntro = selectedGroupID === groupID && introDirty();
     if (!preserveIntro) { introBaseline = ''; introPanel.inert = true; }
     showIntroError('');
+    cancelIntroGeneration();
     if (detailController) detailController.abort();
     var controller = detailController = new AbortController(), request = ++detailRequest;
     detailLoadingID = groupID;
@@ -482,12 +494,14 @@
     document.getElementById('introBestSeasons').value = (intro.best_seasons || []).join(',');
     document.getElementById('introDurationMin').value = intro.estimated_duration_min || 0;
     document.getElementById('introDurationMax').value = intro.estimated_duration_max || 0;
-    var published = intro.status === 'published';
-    document.getElementById('introStatus').textContent = (published ? '已发布' : '草稿') + (intro.content_version ? ' · 第 ' + intro.content_version + ' 版' : '');
+    introStatus = intro.status;
+    var published = introStatus === 'published';
+    var statusText = published ? '已发布' : introStatus === 'automatic' ? '自动简介' : '草稿';
+    document.getElementById('introStatus').textContent = statusText + (intro.content_version ? ' · 第 ' + intro.content_version + ' 版' : '');
     document.getElementById('introUnpublishBtn').hidden = !published;
     var link = document.getElementById('introPreviewLink');
-    link.hidden = !published;
-    link.href = '/api/v1/track-map/groups/' + encodeURIComponent(groupID) + '/introduction.html?v=' + (intro.content_version || 1);
+    link.hidden = !published && introStatus !== 'automatic';
+    link.href = '/api/v1/track-map/groups/' + encodeURIComponent(groupID) + '/introduction.html' + (published ? '?v=' + intro.content_version : '');
     introBaseline = JSON.stringify(introductionPayload());
   }
   function introductionPayload() {
@@ -504,13 +518,63 @@
     node.textContent = message;
     node.hidden = !message;
   }
+
+  function setIntroGenerationBusy(busy) {
+    var button = document.getElementById('introGenerateBtn');
+    button.disabled = busy || !AdminAccess.can('route_groups', true);
+    button.textContent = busy ? '正在生成…' : 'AI 生成草稿';
+  }
+
+  function cancelIntroGeneration() {
+    if (!introAIController) return;
+    introAIController.abort();
+    introAIController = null;
+    setIntroGenerationBusy(false);
+  }
+
+  async function generateIntroductionDraft() {
+    if (!selectedGroupID || !introBaseline || detailLoadingID || introWriting || introAIController || !AdminAccess.can('route_groups', true)) return;
+    var groupID = selectedGroupID, request = detailRequest;
+    var field = document.getElementById('introZhSummary');
+    var previous = field.value;
+    if (previous.trim() && (introStatus !== 'automatic' || previous.trim() !== JSON.parse(introBaseline).zh.summary)) {
+      if (!await AdminUI.confirm({ title: '替换当前中文摘要？', message: 'AI 草稿会填入中文摘要，保存或发布前可以继续编辑。', confirmText: '生成草稿', waitForHidden: true })) return;
+    }
+    if (selectedGroupID !== groupID || request !== detailRequest || introAIController || introWriting || previous !== field.value) return;
+    var controller = introAIController = new AbortController();
+    showIntroError('');
+    setIntroGenerationBusy(true);
+    try {
+      var result = await apiJSON('/admin/api/route-groups/' + encodeURIComponent(groupID) + '/introduction/generate', { method: 'POST', signal: controller.signal });
+      if (introAIController !== controller || request !== detailRequest) return;
+      if (field.value !== previous) {
+        showIntroError('生成期间摘要已修改，已保留当前内容。');
+        return;
+      }
+      field.value = result.summary;
+      field.focus({ preventScroll: true });
+    } catch (err) {
+      if (!controller.signal.aborted) showIntroError(err.message);
+    } finally {
+      if (introAIController === controller) {
+        introAIController = null;
+        setIntroGenerationBusy(false);
+      }
+    }
+  }
+
   async function writeIntroduction(action) {
     if (!selectedGroupID || !introBaseline || detailLoadingID || introWriting || !AdminAccess.can('route_groups', true)) return;
     if (action === 'unpublish' && introDirty()) {
       showIntroError('路线介绍有未保存修改。保存草稿会同时下线，或撤销修改后再下线。');
       return;
     }
-    var groupID = selectedGroupID;
+    var groupID = selectedGroupID, request = detailRequest;
+    if (action === 'draft' && introStatus === 'published') {
+      if (!await AdminUI.confirm({ title: '下线并保存草稿？', message: '公开页面会改为展示自动简介。', confirmText: '下线并保存', waitForHidden: true })) return;
+      if (groupID !== selectedGroupID || request !== detailRequest || introWriting) return;
+    }
+    cancelIntroGeneration();
     var path = '/admin/api/route-groups/' + encodeURIComponent(groupID) + '/introduction';
     var options = { method: action === 'draft' ? 'PUT' : 'POST' };
     if (action !== 'unpublish') options.body = JSON.stringify(introductionPayload());
@@ -624,7 +688,7 @@
       });
       provinceSelect.innerHTML = '<option value="">全部省份</option>' + provinceOptions;
       renderCityOptions('');
-      AdminRegionPicker.enhance(provinceSelect, citySelect, items);
+      AdminRegionPicker.enhance(provinceSelect, citySelect, items, { label: '路线覆盖地区' });
     } catch (_) { /* 省市目录不可用时保留“全部”，不阻塞路线组管理。 */ }
   }
 
@@ -632,4 +696,6 @@
   window.AdminRouteGroups = { openDetail: loadDetail };
   resetAndLoad();
   loadRegions().then(function () { if (loadedGroups.length) renderGroups(); });
+  var groupFromURL = new URLSearchParams(window.location.search).get('group_id');
+  if (groupFromURL) loadDetail(groupFromURL);
 })();

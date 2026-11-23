@@ -2393,6 +2393,9 @@ func (r *InMemoryTrackMapRepository) ListRouteGroupMembers(_ context.Context, gr
 	}
 	sort.SliceStable(items, func(i, j int) bool {
 		if items[i].Role == items[j].Role {
+			if items[i].CreatedAt.Equal(items[j].CreatedAt) {
+				return items[i].TrackID < items[j].TrackID
+			}
 			return items[i].CreatedAt.After(items[j].CreatedAt)
 		}
 		return items[i].Role == models.TrackRouteGroupMemberRoleRepresentative

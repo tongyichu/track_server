@@ -114,7 +114,7 @@
 | 查询路线组下的具体轨迹列表 | GET | `/track-map/groups/:group_id/tracks` | 是 | [track-map.md](track-map.md#51-查询路线组下的具体轨迹列表) |
 | 查询景点图钉下的轨迹列表 | GET | `/track-map/scenic-spots/:spot_id/tracks` | 是 | [track-map.md](track-map.md#查询景点图钉下的轨迹列表) |
 | 查看地图区域介绍页 | GET | `/track-map/areas/:area_id/introduction.html` | 否 | [track-map.md](track-map.md#52-查看地图区域介绍页) |
-| 查看聚合路线介绍页 | GET | `/track-map/groups/:group_id/introduction.html` | 否 | [track-map.md](track-map.md#53-查看聚合路线介绍页) |
+| 查看聚合路线介绍页（发布版或自动简介） | GET | `/track-map/groups/:group_id/introduction.html` | 否 | [track-map.md](track-map.md#53-查看聚合路线介绍页) |
 | 创建同行会话 | POST | `/companion/session/create` | 是 | [companion.md](companion.md#17-创建同行会话) |
 | 加入同行会话 | POST | `/companion/session/join` | 是 | [companion.md](companion.md#18-加入同行会话) |
 | 预览同行会话 | GET | `/companion/session/preview` | 是 | [companion.md](companion.md#181-预览同行会话) |
@@ -194,6 +194,8 @@
 | 最近后台操作日志及对象名称（按操作人和操作类型筛选） | GET | `/admin/api/audit-logs` | 管理员 session | [admin-accounts.md](admin-accounts.md) |
 | 后台轨迹列表（标题/编号搜索、运动类型/省市/缺项筛选及各缺项计数） | GET | `/admin/api/tracks` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |
 | 后台轨迹类型与贡献用户前十（天/周/月） | GET | `/admin/api/tracks/statistics` | 轨迹查看 | [admin-tracks.md](admin-tracks.md#轨迹类型与用户贡献统计) |
+| 后台地图模式路线组列表（城市、区县、景点分组） | GET | `/admin/api/route-groups` | 地图模式查看 | [后台路线组聚合](../admin-workflows.md#运营聚合路线) |
+| 后台手动生成路线组介绍草稿 | POST | `/admin/api/route-groups/:group_id/introduction/generate` | 地图模式操作 | [后台路线组聚合](../admin-workflows.md#运营聚合路线) |
 | 后台轨迹坐标系预览 | GET | `/admin/api/tracks/:track_id/map-preview` | 轨迹查看 | [admin-tracks.md](admin-tracks.md#编辑字段与坐标预览) |
 | 后台批量导入轨迹（逐文件结果含轨迹表格摘要） | POST | `/admin/api/tracks/import` | 轨迹操作 | [admin-tracks.md](admin-tracks.md) |
 | 后台轨迹详情（含图案/景点AI状态快照；归属和文件指标只读） | GET | `/admin/api/tracks/:track_id` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |

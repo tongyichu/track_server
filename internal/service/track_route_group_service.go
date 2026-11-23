@@ -30,6 +30,8 @@ type TrackRouteGroupService struct {
 	tracks      repository.TrackRepository
 	submissions *TrackSubmissionService
 	places      *TrackPlaceService
+	trackMap    *TrackMapService
+	introAI     *routeGroupIntroductionAI
 }
 
 type TrackRouteGroupRunResult struct {
@@ -56,7 +58,8 @@ type AdminRouteGroupArea struct {
 
 type AdminRouteGroupSummary struct {
 	*models.TrackRouteGroup
-	Area *AdminRouteGroupArea `json:"area,omitempty"`
+	Area     *AdminRouteGroupArea    `json:"area,omitempty"`
+	Grouping AdminRouteGroupGrouping `json:"grouping"`
 }
 
 type AdminRouteGroupDetail struct {
@@ -76,6 +79,8 @@ func NewTrackRouteGroupService(repo repository.TrackMapRepository) *TrackRouteGr
 }
 
 func (s *TrackRouteGroupService) SetPlaceService(places *TrackPlaceService) { s.places = places }
+
+func (s *TrackRouteGroupService) SetTrackMapService(trackMap *TrackMapService) { s.trackMap = trackMap }
 
 func (s *TrackRouteGroupService) SetTrackRepository(tracks repository.TrackRepository) {
 	if s != nil {
@@ -108,17 +113,8 @@ func (s *TrackRouteGroupService) ListRouteGroupSummaries(ctx context.Context, fi
 	if err != nil {
 		return nil, 0, err
 	}
-	items := make([]*AdminRouteGroupSummary, 0, len(groups))
-	for _, group := range groups {
-		if group == nil {
-			continue
-		}
-		items = append(items, &AdminRouteGroupSummary{
-			TrackRouteGroup: group,
-			Area:            s.adminRouteGroupArea(ctx, group.AreaID),
-		})
-	}
-	return items, total, nil
+	items, err := s.buildAdminRouteGroupSummaries(ctx, groups)
+	return items, total, err
 }
 
 func (s *TrackRouteGroupService) GetRouteGroupDetail(ctx context.Context, groupID string, limit int) (*AdminRouteGroupDetail, error) {
@@ -156,18 +152,27 @@ func (s *TrackRouteGroupService) GetRouteGroupDetail(ctx context.Context, groupI
 
 func (s *TrackRouteGroupService) adminRouteGroupArea(ctx context.Context, areaID string) *AdminRouteGroupArea {
 	areaID = strings.TrimSpace(areaID)
-	if s == nil || s.areas == nil || areaID == "" {
+	if area := s.adminCatalogArea(areaID); area != nil {
+		return area
+	}
+	if s.places.Enabled() && strings.HasPrefix(areaID, "place-") {
+		if items, err := s.places.GetPlaces(ctx, []string{areaID}); err == nil {
+			return adminRouteGroupPlaceArea(items[areaID])
+		}
+	}
+	return nil
+}
+
+func adminRouteGroupPlaceArea(place *models.TrackPlace) *AdminRouteGroupArea {
+	if place == nil {
 		return nil
 	}
+	return &AdminRouteGroupArea{ID: place.ID, Name: place.Name, Type: maparea.TypeScenicSpot}
+}
+
+func (s *TrackRouteGroupService) adminCatalogArea(areaID string) *AdminRouteGroupArea {
 	area := s.areas.Find(areaID)
 	if area == nil {
-		if s.places.Enabled() && strings.HasPrefix(areaID, "place-") {
-			if items, err := s.places.GetPlaces(ctx, []string{areaID}); err == nil {
-				if place := items[areaID]; place != nil {
-					return &AdminRouteGroupArea{ID: place.ID, Name: place.Name, Type: maparea.TypeScenicSpot}
-				}
-			}
-		}
 		return nil
 	}
 	result := &AdminRouteGroupArea{
@@ -212,6 +217,22 @@ func (s *TrackRouteGroupService) GetRouteIntroduction(ctx context.Context, group
 		return nil, err
 	}
 	return s.repo.FindRouteIntroductionByGroupID(ctx, strings.TrimSpace(groupID))
+}
+
+func (s *TrackRouteGroupService) GetRouteIntroductionForEditing(ctx context.Context, groupID string) (*models.TrackRouteIntroduction, error) {
+	group, err := s.repo.FindRouteGroup(ctx, strings.TrimSpace(groupID))
+	if err != nil {
+		return nil, err
+	}
+	introduction, err := s.repo.FindRouteIntroductionByGroupID(ctx, group.GroupID)
+	if s.trackMap == nil || !errors.Is(err, repository.ErrNotFound) {
+		return introduction, err
+	}
+	facts, err := s.trackMap.loadRouteGroupFacts(ctx, group)
+	if err != nil {
+		return nil, err
+	}
+	return facts.introduction(group), nil
 }
 
 func (s *TrackRouteGroupService) SaveRouteIntroduction(ctx context.Context, groupID string, input *models.TrackRouteIntroduction) (*models.TrackRouteIntroduction, error) {
@@ -640,7 +661,10 @@ func (s *TrackRouteGroupService) RunOnce(ctx context.Context) (*TrackRouteGroupR
 	for _, group := range groups {
 		s.assignRouteGroupArea(group)
 	}
-	semanticNames := s.routeClusterSemanticNames(ctx, clusters)
+	semanticNames, err := s.routeClusterRuleNames(ctx, clusters)
+	if err != nil {
+		return result, err
+	}
 	applyRouteGroupHistory(clusters, oldGroups, oldMembers, introductions, semanticNames, s.areas)
 	if err := s.applySubmissionRepresentatives(ctx, clusters, oldMembers); err != nil {
 		return result, err

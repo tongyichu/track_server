@@ -29,6 +29,7 @@ type mapRouteIntroductionPageData struct {
 	Description, Highlights, Tips, BestSeasons               []string
 	Distance                                                 string
 	Duration                                                 string
+	Elevation, SampleNote                                    string
 	HighlightsTitle, TipsTitle, DescriptionTitle, FactsTitle string
 }
 
@@ -41,7 +42,7 @@ func (h *MapRouteIntroductionHandler) IntroductionPage(ctx context.Context, c *a
 		c.String(http.StatusNotFound, "route introduction not found")
 		return
 	}
-	group, introduction, err := h.service.GetPublishedRouteIntroduction(ctx, c.Param("group_id"))
+	group, introduction, err := h.service.GetPublicRouteIntroduction(ctx, c.Param("group_id"))
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			c.String(http.StatusNotFound, "route introduction not found")
@@ -60,6 +61,21 @@ func (h *MapRouteIntroductionHandler) IntroductionPage(ctx context.Context, c *a
 		content = introduction.English
 		data.Language, data.DescriptionTitle, data.HighlightsTitle, data.TipsTitle, data.FactsTitle = "en", "About the Route", "Highlights", "Before You Go", "Route Facts"
 	}
+	if introduction.ObservedSampleCount > 0 {
+		distance := introduction.ObservedDistanceMin
+		data.Distance = formatRouteDistance(float64(distance))
+		if introduction.ObservedDistanceMax > distance {
+			data.Distance += " – " + formatRouteDistance(float64(introduction.ObservedDistanceMax))
+		}
+		low, high := introduction.ObservedElevationMin, introduction.ObservedElevationMax
+		if data.Language == "en" {
+			data.SampleNote = fmt.Sprintf("Based on %d recorded activities.", introduction.ObservedSampleCount)
+			data.Elevation = formatRouteElevation(low, high, " m ascent")
+		} else {
+			data.SampleNote = fmt.Sprintf("参考 %d 次活动记录。", introduction.ObservedSampleCount)
+			data.Elevation = formatRouteElevation(low, high, " 米爬升")
+		}
+	}
 	data.Name, data.Summary, data.Description, data.Highlights, data.Tips = content.Name, content.Summary, content.Description, content.Highlights, content.Tips
 	var rendered bytes.Buffer
 	if err := mapRouteIntroductionTemplate.Execute(&rendered, data); err != nil {
@@ -67,9 +83,22 @@ func (h *MapRouteIntroductionHandler) IntroductionPage(ctx context.Context, c *a
 		return
 	}
 	c.Response.Header.Set("Cache-Control", "public, max-age=300")
+	if introduction.ObservedSampleCount > 0 {
+		c.Response.Header.Set("Cache-Control", "public, max-age=60")
+	}
 	c.Response.Header.Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; img-src https: data:; base-uri 'none'; frame-ancestors *")
 	c.Response.Header.Set("X-Content-Type-Options", "nosniff")
 	c.Data(http.StatusOK, "text/html; charset=utf-8", rendered.Bytes())
+}
+
+func formatRouteElevation(low, high int, unit string) string {
+	if low <= 0 {
+		return ""
+	}
+	if high > low {
+		return fmt.Sprintf("%d–%d%s", low, high, unit)
+	}
+	return strconv.Itoa(low) + unit
 }
 
 func formatRouteDistance(distance float64) string {

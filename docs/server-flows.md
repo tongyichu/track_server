@@ -123,12 +123,13 @@ track/create(is_running=false) 或 track upload/update 完成轨迹
   → 全量读取 eligible track_geo_indexes，按 track_type 严格隔离；中心距离召回后按距离比例、正反向起终点、离散 Fréchet 折线相似度构建候选关系图
   → 连通分量按 medoid 直接相似约束拆组，先用 medoid 计算 center、radius_m、bbox、member_count 与相似度
   → 再按人工代表、approved 投稿候选、medoid 的优先级选择 representative_track_id
-  → 按新旧成员重合复用历史 group_id 与人工名称；自动名称按人工种子/标题共识、区域名、城市名依次兜底
+  → 按新旧成员重合复用历史 group_id 与人工名称；自动名称优先采用可信专名，否则用已知地点、走法和约略距离组合
   → 用内置区域目录离线匹配 medoid 中心并写入 area_id；未命中保持空字符串
   → 重建替换 track_route_groups / track_route_group_members（存量聚合结果可清空重算；MySQL 实现使用事务）
 ```
-首页地图模式客户端接口挂在 auth 组：`GET /api/v1/track-map/view`、`GET /api/v1/track-map/groups`、`GET /api/v1/track-map/groups/:group_id/detail`、`GET /api/v1/track-map/groups/:group_id/tracks`。区域介绍页 `GET /api/v1/track-map/areas/:area_id/introduction.html` 和聚合路线介绍页 `GET /api/v1/track-map/groups/:group_id/introduction.html` 是公开 H5，不走业务 JWT。只有 `track_route_introductions.status=published` 时路线对象才返回 `introduction_url`；介绍以 `anchor_track_id` 为稳定锚点，路线组全量重建后仓储必须按新成员关系更新 `current_group_id`，禁止把运营介绍直接存进会被清空的 `track_route_groups`。`group_id` 来自 `track_route_groups.group_id`，不等同于单条 `track_id`；列表和地图聚合使用 RouteGroup 数量口径，不返回 `user_count` / `track_count`。调整字段、缩放分层、区域/路线介绍协议、聚合数量口径或 group_id 语义时，同步更新 `docs/api/track-map.md`、`docs/api/route-index.md` 与 `track_map.md`。
-管理中心聚合路线列表和详情展示路线组摘要，以及已存 `area_id` 对应的区域名称、类型、城市与介绍页入口；admin 请求链路只按 ID 查询目录，不重新执行空间匹配。RouteGroup 对客户端表示聚合区域，使用 `center` + `radius_m` 绘制，不再下发代表路线折线。
+首页地图模式客户端接口仍使用业务鉴权。区域和路线介绍为公开 H5，路线的 `introduction_url` 优先指向已发布的运营内容，其次指向按公开成员事实生成的基础简介。运营介绍用 `anchor_track_id` 保持独立存储，路线组重建后根据成员关系更新 `current_group_id`。`group_id` 标识路线组；列表和地图聚合以路线组为计数单位。协议见 [地图 API](api/track-map.md) 和 [路线组方案](../track_map.md)。
+
+管理中心的列表按城市、区县、景点展示路线组，详情在「路线组管理」提供离线 `area_id` 和区域链接。客户端使用 `center` 和 `radius_m` 表示旧版聚合区域。
 
 新版地图视野显式传 `browse_mode=departure` 时，仓储从已有空间索引批量读取公开成员的起终点，按起点范围预筛。服务用内置边界确认市和区县，区县下再按既有景点关联聚合或显示独立路线。跨区两端均有公开出发轨迹时复用同一组 ID，路线组轨迹列表可优先返回所选方向。
 路线组离线重建必须先通过 `ListAllRouteGroups` / `ListAllRouteGroupMembers` 读取历史身份，按成员重合复用 `group_id`；人工改名后的 `manual/mixed` 名称不得被自动任务覆盖。medoid 或展示代表变化都不能据此无条件更换已有 GroupID；仍属于新组的人工代表优先保留。

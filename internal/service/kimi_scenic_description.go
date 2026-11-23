@@ -157,13 +157,17 @@ func (g *KimiScenicSpotDescriptionGenerator) Generate(ctx context.Context, spot 
 }
 
 func (g *KimiScenicSpotDescriptionGenerator) postJSON(ctx context.Context, endpoint string, body []byte, output any) error {
+	return kimiPostJSON(ctx, g.client, g.apiKey, endpoint, body, output)
+}
+
+func kimiPostJSON(ctx context.Context, client *http.Client, apiKey, endpoint string, body []byte, output any) error {
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
-	request.Header.Set("Authorization", "Bearer "+g.apiKey)
+	request.Header.Set("Authorization", "Bearer "+apiKey)
 	request.Header.Set("Content-Type", "application/json")
-	response, err := ai.Observe(ctx, g.client, request, func() string {
+	response, err := ai.Observe(ctx, client, request, func() string {
 		if strings.Contains(endpoint, "/tools/") {
 			return "search"
 		}

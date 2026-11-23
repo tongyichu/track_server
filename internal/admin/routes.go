@@ -296,6 +296,7 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	api.PUT("/route-groups/:group_id/representative", m.Handler.SetRouteGroupRepresentative)
 	api.GET("/route-groups/:group_id/introduction", m.Handler.GetRouteGroupIntroduction)
 	api.PUT("/route-groups/:group_id/introduction", m.Handler.SaveRouteGroupIntroduction)
+	api.POST("/route-groups/:group_id/introduction/generate", m.Handler.GenerateRouteGroupIntroduction)
 	api.POST("/route-groups/:group_id/introduction/publish", m.Handler.PublishRouteGroupIntroduction)
 	api.POST("/route-groups/:group_id/introduction/unpublish", m.Handler.UnpublishRouteGroupIntroduction)
 	api.GET("/companions", m.Handler.ListCompanions)

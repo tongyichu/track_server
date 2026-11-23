@@ -970,7 +970,7 @@ func (r *MySQLTrackMapRepository) ListRouteGroupMembers(ctx context.Context, gro
 		SELECT group_id, track_id, similarity_score, match_direction, role, source, created_at, updated_at
 		FROM track_route_group_members
 		WHERE group_id = ?
-		ORDER BY role = 'representative' DESC, created_at DESC
+		ORDER BY role = 'representative' DESC, created_at DESC, track_id ASC
 		LIMIT ?
 	`, groupID, limit)
 	if err != nil {

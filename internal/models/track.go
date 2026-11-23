@@ -355,6 +355,7 @@ type TrackRouteGroup struct {
 }
 
 const (
+	TrackRouteIntroductionStatusAutomatic = "automatic" // Derived at read time.
 	TrackRouteIntroductionStatusDraft     = "draft"
 	TrackRouteIntroductionStatusPublished = "published"
 	TrackRouteIntroductionStatusArchived  = "archived"
@@ -386,6 +387,11 @@ type TrackRouteIntroduction struct {
 	CreatedAt            time.Time                     `json:"created_at" bson:"created_at"`
 	UpdatedAt            time.Time                     `json:"updated_at" bson:"updated_at"`
 	PublishedAt          *time.Time                    `json:"published_at,omitempty" bson:"published_at,omitempty"`
+	ObservedDistanceMin  int                           `json:"-" bson:"-"`
+	ObservedDistanceMax  int                           `json:"-" bson:"-"`
+	ObservedElevationMin int                           `json:"-" bson:"-"`
+	ObservedElevationMax int                           `json:"-" bson:"-"`
+	ObservedSampleCount  int                           `json:"-" bson:"-"`
 }
 
 // TrackRouteGroupMember stores the many-to-many membership between groups and tracks.
@@ -426,6 +432,8 @@ type TrackMapQueryFilter struct {
 	CityCode  string
 	// TrackIDs limits the departure query to specific indexed route-group members.
 	TrackIDs []string
+	// DepartureGroupIDs limits the departure query to members of these route groups.
+	DepartureGroupIDs []string
 	// CityCodes matches groups covering any of the given cities (admin province filter).
 	CityCodes []string
 	BBox      *TrackMapBBox

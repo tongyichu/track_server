@@ -1,7 +1,6 @@
 package service
 
 import (
-	"context"
 	"sort"
 	"strings"
 	"time"
@@ -9,64 +8,6 @@ import (
 	"github.com/tongyichu/track_server/internal/maparea"
 	"github.com/tongyichu/track_server/internal/models"
 )
-
-func (s *TrackRouteGroupService) routeClusterSemanticNames(ctx context.Context, clusters []*routeGroupCluster) map[int]string {
-	result := make(map[int]string)
-	if s == nil || s.tracks == nil {
-		return result
-	}
-	for clusterIndex, cluster := range clusters {
-		if cluster == nil {
-			continue
-		}
-		manual, common := make(map[string]int), make(map[string]int)
-		validTitles := 0
-		for _, index := range cluster.indexes {
-			if index == nil {
-				continue
-			}
-			track, err := s.tracks.FindByID(ctx, index.TrackID)
-			if err != nil || track == nil {
-				continue
-			}
-			title := normalizeRouteTitle(track.Title)
-			if title == "" {
-				continue
-			}
-			validTitles++
-			common[title]++
-			if track.SourceTag == "manual_seed" {
-				manual[title]++
-			}
-		}
-		if title, count := mostFrequentRouteTitle(manual); count > 0 {
-			result[clusterIndex] = title
-			continue
-		}
-		if title, count := mostFrequentRouteTitle(common); count >= 2 && count*2 >= validTitles {
-			result[clusterIndex] = title
-		}
-	}
-	return result
-}
-
-func normalizeRouteTitle(title string) string {
-	title = strings.TrimSpace(title)
-	if title == "" || title == "新的轨迹" {
-		return ""
-	}
-	return title
-}
-
-func mostFrequentRouteTitle(counts map[string]int) (string, int) {
-	best, bestCount := "", 0
-	for title, count := range counts {
-		if count > bestCount || (count == bestCount && (best == "" || title < best)) {
-			best, bestCount = title, count
-		}
-	}
-	return best, bestCount
-}
 
 type routeGroupHistoryMatch struct {
 	clusterIndex int
@@ -139,7 +80,7 @@ func applyRouteGroupHistory(clusters []*routeGroupCluster, oldGroups []*models.T
 			protectedNames[match.clusterIndex] = true
 		}
 		if introduction := introductions[old.GroupID]; introduction != nil && strings.TrimSpace(introduction.Chinese.Name) != "" {
-			cluster.group.Name = routeNameWithTrackType(introduction.Chinese.Name, cluster.group.TrackType)
+			cluster.group.Name = strings.TrimSpace(introduction.Chinese.Name)
 			cluster.group.Source = routeGroupSourceAfterManual(cluster.group.Source)
 			protectedNames[match.clusterIndex] = true
 		}
@@ -150,7 +91,7 @@ func applyRouteGroupHistory(clusters []*routeGroupCluster, oldGroups []*models.T
 			continue
 		}
 		if !protectedNames[clusterIndex] && strings.TrimSpace(semanticNames[clusterIndex]) != "" {
-			cluster.group.Name = routeNameWithTrackType(semanticNames[clusterIndex], cluster.group.TrackType)
+			cluster.group.Name = semanticNames[clusterIndex]
 		} else if strings.TrimSpace(cluster.group.Name) == "" || cluster.group.Source == models.TrackRouteGroupSourceAuto {
 			cluster.group.Name = defaultRouteGroupNameForArea(cluster.group, areas)
 		}

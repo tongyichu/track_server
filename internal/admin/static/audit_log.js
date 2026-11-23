@@ -70,6 +70,7 @@
     ['DELETE', 'route-groups/:group/members/:track', '移除组内轨迹', '路线组 {group} · 轨迹 {track}'],
     ['PUT', 'route-groups/:group/representative', '设置代表轨迹', '路线组 {group}', '历史记录未保存选中的代表轨迹编号。'],
     ['PUT', 'route-groups/:group/introduction', '保存路线介绍', '路线组 {group}'],
+    ['POST', 'route-groups/:group/introduction/generate', '生成路线介绍草稿', '路线组 {group}'],
     ['POST', 'route-groups/:group/introduction/publish', '发布路线介绍', '路线组 {group}'],
     ['POST', 'route-groups/:group/introduction/unpublish', '下线路线介绍', '路线组 {group}'],
     ['PUT', 'feedback-correction-config', '更新纠错选项', '反馈与纠错'],

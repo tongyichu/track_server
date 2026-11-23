@@ -441,14 +441,30 @@ const (
 )
 
 func (s *TrackMapService) departureScenicMatches(ctx context.Context, departures []mapDeparture) (map[string]*departureScenicMatch, error) {
-	matches := make(map[string]*departureScenicMatch)
-	if len(departures) == 0 {
-		return matches, nil
-	}
 	trackIDs := make([]string, 0, len(departures))
 	for _, d := range departures {
 		trackIDs = append(trackIDs, d.TrackID)
 	}
+	matches, err := s.trackScenicMatches(ctx, trackIDs)
+	if err != nil {
+		return nil, err
+	}
+	if !s.places.Enabled() {
+		for _, d := range departures {
+			if _, resolved := matches[d.TrackID]; resolved {
+				continue
+			}
+			if area := s.areas.Find(d.AreaID); area != nil && area.Type == maparea.TypeScenicSpot {
+				matches[d.TrackID] = &departureScenicMatch{id: area.ID, name: area.Name(), rank: departureScenicLegacy}
+			}
+		}
+	}
+	return matches, nil
+}
+
+// trackScenicMatches reads current track associations, including explicit unassignments.
+func (s *TrackMapService) trackScenicMatches(ctx context.Context, trackIDs []string) (map[string]*departureScenicMatch, error) {
+	matches := make(map[string]*departureScenicMatch)
 	slices.Sort(trackIDs)
 	trackIDs = slices.Compact(trackIDs)
 
@@ -488,16 +504,6 @@ func (s *TrackMapService) departureScenicMatches(ctx context.Context, departures
 	}
 	for id, spot := range legacy {
 		matches[id] = &departureScenicMatch{id: spot.ID, name: spot.Name, provider: spot.Provider, rank: departureScenicLegacy}
-	}
-	if !s.places.Enabled() {
-		for _, d := range departures {
-			if _, resolved := matches[d.TrackID]; resolved {
-				continue
-			}
-			if area := s.areas.Find(d.AreaID); area != nil && area.Type == maparea.TypeScenicSpot {
-				matches[d.TrackID] = &departureScenicMatch{id: area.ID, name: area.Name(), rank: departureScenicLegacy}
-			}
-		}
 	}
 	return matches, nil
 }
@@ -576,7 +582,12 @@ func (s *TrackMapService) departureRouteItems(ctx context.Context, routes []mapD
 			}
 		}
 		if intro := introductions[d.GroupID]; intro != nil {
+			if name := strings.TrimSpace(intro.Chinese.Name); name != "" {
+				item.Name = name
+			}
 			item.IntroductionURL = mapRouteIntroductionURL(d.GroupID, intro.ContentVersion)
+		} else {
+			item.IntroductionURL = mapRouteIntroductionURL(d.GroupID, 0)
 		}
 		items = append(items, item)
 	}
