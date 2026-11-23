@@ -273,7 +273,7 @@
     root.innerHTML = '<div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg"><div class="modal-content">' +
       '<div class="modal-header"><div><h2 id="releaseDetailTitle" class="modal-title"></h2><p class="hint mb-0"></p></div>' +
       '<button type="button" class="btn-close" aria-label="关闭"></button></div><div class="modal-body"></div>' +
-      '<div class="modal-footer"><button type="button" class="btn btn-outline-secondary release-detail-close">关闭</button></div></div></div>';
+      '<div class="modal-footer"></div></div></div>';
     root.querySelector('.modal-title').textContent = releaseName(item);
     root.querySelector('.hint').textContent = [
       item === currentRelease(releases || []) ? '当前下发' : statusLabels[item.status] || item.status,
@@ -317,7 +317,6 @@
     const modal = new AdminComponents.Dialog(root);
     let removing = false;
     root.querySelector('.btn-close').addEventListener('click', () => modal.hide());
-    root.querySelector('.release-detail-close').addEventListener('click', () => modal.hide());
     if (canWrite()) {
       const remove = document.createElement('button');
       remove.type = 'button'; remove.className = 'btn btn-outline-danger';
@@ -325,6 +324,7 @@
       remove.addEventListener('click', () => { removing = true; modal.hide(); });
       footer.prepend(remove);
     }
+    footer.hidden = !footer.childElementCount;
     root.addEventListener('admin:dialog-closed', () => {
       releaseDetailRoot = null;
       modal.dispose(); root.remove();
@@ -367,12 +367,10 @@
     root.innerHTML = '<div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg"><div class="modal-content">' +
       '<div class="modal-header"><h5 class="modal-title">更新日志</h5><button type="button" class="btn-close" aria-label="关闭"></button></div>' +
       '<div class="modal-body"><div class="changelog-loading">加载中…</div></div>' +
-      '<div class="modal-footer"><button type="button" class="btn btn-outline-secondary">关闭</button></div>' +
       '</div></div>';
     document.body.appendChild(root);
     const modal = new AdminComponents.Dialog(root);
     root.querySelector('.btn-close').addEventListener('click', function () { modal.hide(); });
-    root.querySelector('.modal-footer button').addEventListener('click', function () { modal.hide(); });
     root.addEventListener('admin:dialog-closing', function () { controller.abort(); });
     root.addEventListener('admin:dialog-closed', function () { changelogRoot = null; modal.dispose(); root.remove(); });
     modal.show();

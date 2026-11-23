@@ -631,7 +631,7 @@
   function updateSaveButton() {
     const button = $('saveBtn');
     button.disabled = state.saving || photoEditor.busy || !hasUnsavedForm();
-    button.textContent = state.newSpot ? '保存基本信息' : '保存景点资料';
+    button.textContent = state.newSpot ? '保存并继续添加图片' : '保存景点资料';
     const remove = $('deleteSpotBtn');
     remove.hidden = state.newSpot || !state.current?.id || state.current.status !== 'active';
     remove.disabled = state.saving || photoEditor.busy;

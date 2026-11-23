@@ -149,7 +149,8 @@
     try { const notice = await api('/' + encodeURIComponent(id), { signal: controller.signal }); if (generation === detailGeneration && !controller.signal.aborted) bind(notice); }
     catch (error) { if (!controller.signal.aborted) AdminUI.alert(error.message, 'danger'); }
   }
-  async function close() { if (!await canLeave()) return; detailGeneration++; detailController?.abort(); current = null; if (editorVisible) { editorClosing = true; editor.hide(); } }
+  function dismissEditor() { detailGeneration++; detailController?.abort(); current = null; if (editorVisible) { editorClosing = true; editor.hide(); } }
+  async function close() { if (await canLeave()) dismissEditor(); }
   async function save(nextStatus) {
     if (saveGate || saving) return;
     saveGate = true;
@@ -195,7 +196,13 @@
         expires_at: inputTime($('noticeExpiresAt').value, owner?.expires_at) || null
       };
       const result = await api(owner.id ? '/' + encodeURIComponent(owner.id) : '', { method: owner.id ? 'PUT' : 'POST', signal: controller.signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ expected_version: owner.revision || 0, notice }) });
-      if (current !== owner) return; bind(result); await load();
+      if (current !== owner) return;
+      if (!result?.id) throw new Error('保存结果未确认，请刷新核对。');
+      dismissEditor();
+      const message = ({ cancelled: '已取消定时发布', withdrawn: '通知已撤回', draft: '草稿已保存' })[nextStatus]
+        || (live ? '通知已保存' : phase(result) === 'scheduled' ? '已安排定时发布' : '通知已发布');
+      AdminUI.alert(message, 'success');
+      await load();
     } catch (error) { if (current === owner) $('noticeSaveError').textContent = error.name === 'AbortError' ? '保存超时，请刷新核对后重试' : error.message; }
     finally { clearTimeout(timeout); saving = false; $('noticeForm').inert = false; }
   }

@@ -162,7 +162,7 @@
         sidebar.append(node('h3', '连接信息', 'realtime-detail-title'), metadata); layout.append(sidebar, chatHost);
         let chat;
         const stop = () => chat?.stop();
-        return AdminUI.form({ title: '消息连接详情', wide: true, className: 'realtime-chat-dialog', readOnly: true, waitForHidden: true, cancelText: '关闭', beforeFields: layout, fields: [],
+        return AdminUI.form({ title: '消息连接详情', wide: true, className: 'realtime-chat-dialog', readOnly: true, waitForHidden: true, beforeFields: layout, fields: [],
           onReady({ signal }) {
             chat = RealtimeChat.mount({ host: chatHost, sidebar, item, signal, api, onMetadata: renderMetadata });
             closeDetail = stop; refreshDetail = () => chat.refresh();
@@ -177,7 +177,7 @@
       const messages = node('div', null, 'realtime-messages'); content.append(toolbar, messages);
       let controller, generation = 0, rendered = null;
       const stop = () => { controller?.abort(); generation++; refresh.disabled = false; };
-      return AdminUI.form({ title: '连接详情', wide: true, readOnly: true, waitForHidden: true, cancelText: '关闭', beforeFields: content, fields: [],
+      return AdminUI.form({ title: '连接详情', wide: true, readOnly: true, waitForHidden: true, beforeFields: content, fields: [],
         onReady({ signal }) {
           closeDetail = stop;
           signal.addEventListener('abort', stop, { once: true });

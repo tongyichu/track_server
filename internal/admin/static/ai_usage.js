@@ -21,7 +21,7 @@
   const modal = new AdminComponents.Dialog($('detailModal'));
   function localDate(d) { return AdminTime.date(d); }
   let quotaLoading = false, quotaSnapshot = null, tasksLoading = false, statisticsLoading = false;
-  const quotaNodes = new Map(), quotaDrafts = new Map(), controlPolicies = new Map();
+  const quotaNodes = new Map(), controlPolicies = new Map();
   async function loadQuotas(force) {
     if (quotaLoading && !force) return;
     const ctrl = replaceController('quotas'); quotaLoading = true; $('refreshQuota').disabled = true;
@@ -74,7 +74,7 @@
   function editQuota(id) {
     if (!can('ai_settings', true)) return;
     return AdminUI.runOnce('ai-quota:' + id, async () => {
-      let baseline = null;
+      let baseline = null, limit;
       const values = await AdminUI.form({
         title: '调整配额 · ' + feature(id), confirmText: '保存并立即生效', waitForHidden: true,
         load: async signal => {
@@ -83,25 +83,22 @@
           baseline = item.policy;
           const intro = node('p', '今日已用 ' + n(item.used) + ' 次；当前日配额' + (item.unlimited ? '不限' : n(baseline.daily_requests) + ' 次') + '。', 'hint');
           const note = node('p', '填 0 表示不限。仅调整每日请求配额，用量和其他配置保留；低于今日已用次数时，后续请求将等待配额恢复。', 'hint');
-          return { beforeFields: intro, afterFields: note, fields: [{ name: 'daily_requests', label: '每日请求配额（0＝不限）', type: 'number', value: quotaDrafts.has(id) ? quotaDrafts.get(id) : baseline.daily_requests, min: 0, step: 1, required: true }] };
+          return { beforeFields: intro, afterFields: note, fields: [{ name: 'daily_requests', label: '每日请求配额（0＝不限）', type: 'number', value: baseline.daily_requests, min: 0, step: 1, required: true }] };
         },
-        onReady: view => { const input = view.form.elements.daily_requests; input.max = '100000'; input.dataset.adminInput = 'ai_settings'; const submit = view.root.querySelector('button[type="submit"]'); if (submit) submit.dataset.adminWrite = 'ai_settings'; }
+        onReady: view => { const input = view.form.elements.daily_requests; input.max = '100000'; input.dataset.adminInput = 'ai_settings'; const submit = view.root.querySelector('button[type="submit"]'); if (submit) submit.dataset.adminWrite = 'ai_settings'; },
+        onSubmit: async values => {
+          limit = Number(values.daily_requests);
+          if (!Number.isInteger(limit) || limit < 0 || limit > 100000) throw new Error('每日配额需为 0～100000。');
+          const ctrl = replaceController('quota-save:' + id);
+          const data = await request('policies/' + encodeURIComponent(id) + '/quota', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, signal: ctrl.signal, body: JSON.stringify({ revision: baseline.revision, daily_requests: limit }) });
+          if (!data?.saved || !data.policy) throw new Error('保存结果未确认，请刷新核实');
+          const existing = controlPolicies.get(id);
+          if (existing && existing.revision === baseline.revision) Object.assign(existing, { revision: data.policy.revision, daily_requests: data.policy.daily_requests, updated_by: data.policy.updated_by, updated_at: data.policy.updated_at });
+        }
       });
-      if (!values || !baseline) return;
-      const limit = Number(values.daily_requests); quotaDrafts.set(id, values.daily_requests);
-      if (!Number.isInteger(limit) || limit < 0 || limit > 100000) { $('quotaMessage').textContent = '每日配额需为 0～100000，输入已保留。'; return; }
-      const ctrl = replaceController('quota-save:' + id);
-      try {
-        const data = await request('policies/' + encodeURIComponent(id) + '/quota', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, signal: ctrl.signal, body: JSON.stringify({ revision: baseline.revision, daily_requests: limit }) });
-        if (!data.saved || !data.policy) throw new Error('保存结果未确认，请刷新核实');
-        quotaDrafts.delete(id);
-        const existing = controlPolicies.get(id);
-        if (existing && existing.revision === baseline.revision) Object.assign(existing, { revision: data.policy.revision, daily_requests: data.policy.daily_requests, updated_by: data.policy.updated_by, updated_at: data.policy.updated_at });
-        $('quotaMessage').textContent = feature(id) + '的日配额已设为' + (limit === 0 ? '不限' : n(limit) + ' 次') + '，对后续请求立即生效，已有用量保留。';
-        await loadQuotas(true); loadSettings();
-      } catch (error) {
-        if (error.name !== 'AbortError') $('quotaMessage').textContent = error.message + '；新配额输入已保留，重新调整时可继续使用。';
-      }
+      if (!values) return;
+      $('quotaMessage').textContent = feature(id) + '的日配额已设为' + (limit === 0 ? '不限' : n(limit) + ' 次') + '，对后续请求立即生效，已有用量保留。';
+      await loadQuotas(true); loadSettings();
     });
   }
 

@@ -180,7 +180,25 @@
     if (!trackID) return false;
     if (!window.AdminAccess.can('tracks', false)) { window.AdminUI.alert('没有轨迹管理的查看权限', 'warning'); return false; }
     const readOnly = !window.AdminAccess.can('tracks', true);
-    let track = null, isDeleted = false;
+    let track = null, isDeleted = false, saved = null;
+    async function saveTrack(values, signal) {
+      const body = {
+        source_feedback_id: options.sourceFeedbackID || undefined,
+        session_id: values.session_id, title: values.title, city_code: values.city_code,
+        shape_label: values.shape_label !== (track.shape_label || '') ? values.shape_label : undefined,
+        locate_addr: values.locate_addr, track_type: values.track_type, source_tag: values.source_tag,
+        coordinate_system: values.coordinate_system,
+        description: values.description !== (track.description || '') ? values.description : undefined,
+        status: Number(values.status)
+      };
+      const response = await fetch('/admin/api/tracks/' + encodeURIComponent(trackID), {
+        method: 'PUT', signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(result?.error || '保存失败：HTTP ' + response.status);
+      if (!result) throw new Error('保存结果未确认，请重新打开轨迹核对。');
+      saved = result;
+    }
     const values = await window.AdminUI.form({
       title: (readOnly ? '查看轨迹 ' : '编辑轨迹 ') + trackID,
       wide: true, className: 'admin-track-editor', waitForHidden: true,
@@ -484,7 +502,8 @@
           onClosed: function () { labelAbort.abort(); if (mapPreview) mapPreview.dispose(); if (placeCandidates) placeCandidates.dispose(); },
           waitForHidden: true,
           confirmText: isDeleted ? '彻底删除' : '保存修改',
-          cancelText: readOnly ? '关闭' : (isDeleted ? '恢复' : '下架轨迹'),
+          onSubmit: readOnly || isDeleted ? null : saveTrack,
+          cancelText: isDeleted ? '恢复' : '下架轨迹',
           cancelDanger: !readOnly && !isDeleted,
           onCancel: readOnly ? null : isDeleted ? async function () {
             const confirmed = await window.AdminUI.confirm({ title: '恢复轨迹', message: '确认恢复轨迹 ' + trackID + '？恢复后状态为公开，并会重新排队地图索引；删除时清理的收藏与路线组成员关系不会恢复。', confirmText: '恢复轨迹' });
@@ -597,32 +616,15 @@
       if (typeof options.onDeleted === 'function') await options.onDeleted();
       return false;
     }
-    const body = {
-      source_feedback_id: options.sourceFeedbackID || undefined,
-      session_id: values.session_id, title: values.title, city_code: values.city_code,
-      shape_label: values.shape_label !== (track.shape_label || '') ? values.shape_label : undefined,
-      locate_addr: values.locate_addr, track_type: values.track_type, source_tag: values.source_tag,
-      coordinate_system: values.coordinate_system,
-      description: values.description !== (track.description || '') ? values.description : undefined,
-      status: Number(values.status)
-    };
+    if (!saved) return false;
+    const warnings = [saved.learning_warning, saved.correction_warning].filter(Boolean);
+    window.AdminUI.alert(warnings.length ? warnings.join('；') : '轨迹已保存', warnings.length ? 'warning' : 'success');
     try {
-      const response = await fetch('/admin/api/tracks/' + encodeURIComponent(trackID), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-      if (!response.ok) {
-        let message = '保存失败: ' + response.status;
-        try { const result = await response.json(); if (result && result.error) message += ' ' + result.error; } catch (_) {}
-        window.AdminUI.alert(message, 'danger');
-        return false;
-      }
-      const saved = await response.json();
-      if (saved.learning_warning || saved.correction_warning) window.AdminUI.alert([saved.learning_warning, saved.correction_warning].filter(Boolean).join('；'), 'warning');
-      else window.AdminUI.alert('轨迹已保存', 'success');
       if (typeof options.onSaved === 'function') await options.onSaved();
-      return true;
-    } catch (error) {
-      window.AdminUI.alert('保存失败: ' + (error.message || error), 'danger');
-      return false;
+    } catch (_) {
+      window.AdminUI.alert('轨迹已保存，列表刷新失败。', 'warning');
     }
+    return true;
   }
 
   window.AdminTrackEditor = {

@@ -316,10 +316,10 @@
   function hasProfileChanges() { return Object.keys(profileChanges()).length > 0; }
   function updateDetailActions() {
     var busy = profileSaving || restrictionBusy;
-    detailSave.disabled = busy || !profileReady || discardPrompt || !hasProfileChanges() || !AdminAccess.can('users', true);
+    var writable = AdminAccess.can('users', true);
+    detailSave.closest('.modal-footer').hidden = !writable && !discardPrompt;
+    detailSave.disabled = busy || !profileReady || discardPrompt || !hasProfileChanges() || !writable;
     detailSave.textContent = profileSaving ? '保存中…' : '保存资料';
-    document.getElementById('userDetailClose').hidden = discardPrompt;
-    document.getElementById('userDetailClose').disabled = busy;
     document.getElementById('userDetailCloseIcon').disabled = busy;
     document.getElementById('userDetailKeepEditing').hidden = !discardPrompt;
     document.getElementById('userDetailDiscard').hidden = !discardPrompt;
@@ -625,20 +625,22 @@
       detailMessage('请输入昵称', true); detailForm.elements.nickname.focus(); return;
     }
     var userID = activeDetailUserID, request = userDetailRequest;
+    var saved = false;
     profileSaving = true; profileFields.disabled = true; detailMessage(''); renderRestriction();
     try {
-      var user = await userJSON(encodeURIComponent(userID), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-      if (currentDetail(userID, request)) { renderProfile(user); detailMessage('资料已保存'); }
-      refreshVisibleList().then(function (updated) {
-        if (updated === false && currentDetail(userID, request) && !hasProfileChanges()) {
-          detailMessage('资料已保存，用户列表刷新失败。', true);
-        }
-      });
+      await userJSON(encodeURIComponent(userID), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      if (currentDetail(userID, request)) { profileBaseline = profileValues(); saved = true; }
     } catch (error) {
       if (currentDetail(userID, request)) detailMessage('保存失败：' + error.message, true);
     } finally {
       if (currentDetail(userID, request)) { profileSaving = false; profileFields.disabled = !profileReady; renderRestriction(); }
     }
+    if (!saved) return;
+    detailModal.hide();
+    AdminUI.alert('资料已保存', 'success');
+    refreshVisibleList().then(function (updated) {
+      if (updated === false) AdminUI.alert('资料已保存，用户列表刷新失败。', 'warning');
+    });
   });
   tbody.addEventListener('click', function (event) {
     var button = event.target.closest('[data-action="detail"]');

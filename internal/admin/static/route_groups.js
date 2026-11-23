@@ -519,13 +519,15 @@
     try {
       var intro = await apiJSON(path + (action === 'draft' ? '' : '/' + action), options);
       renderIntroduction(intro, groupID);
-      AdminUI.alert(({ draft: '草稿已保存', publish: '路线介绍已发布', unpublish: '路线介绍已下线' })[action], 'success');
-      if (action !== 'draft') await reloadKeepingPage();
     } catch (err) {
       showIntroError(err.message);
+      return;
     } finally {
       introWriting = introPanel.inert = false;
     }
+    detailModal.hide();
+    AdminUI.alert(({ draft: '草稿已保存', publish: '路线介绍已发布', unpublish: '路线介绍已下线' })[action], 'success');
+    await reloadKeepingPage();
   }
 
   function renderDetail(data) {

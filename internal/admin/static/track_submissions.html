@@ -67,7 +67,7 @@
             <h3>审核意见</h3><label for="reviewReason" class="form-label">备注或驳回原因</label><textarea id="reviewReason" data-admin-input="track_submissions" class="form-control" rows="3" placeholder="驳回时必须填写原因；通过时可填写备注。"></textarea><p id="reviewError" class="text-danger" role="alert" hidden></p>
           </section>
         </div>
-        <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-admin-dismiss="dialog">关闭</button><button id="rejectBtn" type="button" data-admin-write="track_submissions" class="btn btn-danger" hidden>驳回投稿</button><button id="approveBtn" type="button" data-admin-write="track_submissions" class="btn btn-primary" hidden>通过投稿</button></div>
+        <div class="modal-footer" hidden><button id="rejectBtn" type="button" data-admin-write="track_submissions" class="btn btn-danger" hidden>驳回投稿</button><button id="approveBtn" type="button" data-admin-write="track_submissions" class="btn btn-primary" hidden>通过投稿</button></div>
       </div>
     </div>
   </dialog>

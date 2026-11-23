@@ -103,9 +103,9 @@
       const close = root.querySelector('.btn-close');
       const modal = new AdminComponents.Dialog(root, { backdrop: 'static' });
       const controller = new AbortController();
-      let config = options, settled = false, hidden = false, loading = false, pendingValue = null, form = null;
+      let config = options, settled = false, hidden = false, loading = false, submitting = false, pendingValue = null, form = null;
       function finish(value) {
-        if (settled || hidden) return;
+        if (settled || hidden || submitting) return;
         settled = true; pendingValue = value;
         controller.abort();
         if (!config.waitForHidden) resolve(value);
@@ -120,7 +120,10 @@
       root.addEventListener('admin:dialog-shown', function () {
         focusField();
       });
-      root.addEventListener('admin:dialog-closing', function () { controller.abort(); });
+      root.addEventListener('admin:dialog-closing', function (event) {
+        if (submitting) { event.preventDefault(); return; }
+        controller.abort();
+      });
       root.addEventListener('admin:dialog-closed', function () {
         hidden = true; controller.abort();
         try { if (typeof config.onClosed === 'function') config.onClosed(); }
@@ -163,8 +166,9 @@
         const cancel = document.createElement('button'); cancel.type = 'button';
         cancel.className = config.cancelDanger ? 'btn btn-outline-danger' : 'btn btn-outline-secondary'; cancel.textContent = config.cancelText || '取消';
         const submit = document.createElement('button'); submit.type = 'submit'; submit.className = 'btn btn-primary'; submit.textContent = config.confirmText || '保存';
-        if (config.readOnly) submit.hidden = true;
-        footer.append(cancel, submit);
+        if (!config.readOnly || typeof config.onCancel === 'function') footer.appendChild(cancel);
+        if (!config.readOnly) footer.appendChild(submit);
+        footer.hidden = !footer.childElementCount;
         let cancelling = false;
         cancel.addEventListener('click', async function () {
           if (settled || cancelling) return;
@@ -174,11 +178,34 @@
           catch (error) { window.AdminUI.alert(error.message || String(error), 'danger'); }
           finally { cancelling = false; cancel.disabled = false; }
         });
-        form.addEventListener('submit', function (event) {
+        const errorText = document.createElement('span');
+        errorText.className = 'text-danger me-auto';
+        errorText.setAttribute('role', 'alert');
+        errorText.hidden = true;
+        if (typeof config.onSubmit === 'function') footer.prepend(errorText);
+        form.addEventListener('submit', async function (event) {
           event.preventDefault();
-          if (settled || cancelling || config.readOnly || !form.reportValidity()) return;
+          if (settled || cancelling || submitting || config.readOnly || !form.reportValidity()) return;
           const values = {};
           new FormData(form).forEach(function (value, key) { values[key] = String(value); });
+          if (typeof config.onSubmit === 'function') {
+            const focused = document.activeElement;
+            errorText.hidden = true;
+            submitting = body.inert = close.disabled = cancel.disabled = submit.disabled = true;
+            submit.textContent = '保存中…';
+            try {
+              await config.onSubmit(values, controller.signal);
+            } catch (error) {
+              errorText.textContent = error.message || String(error);
+              errorText.hidden = false;
+              return;
+            } finally {
+              submitting = body.inert = close.disabled = cancel.disabled = submit.disabled = false;
+              submit.textContent = config.confirmText || '保存';
+              window.AdminAccess?.apply();
+              if (!errorText.hidden) focused?.focus();
+            }
+          }
           finish(values);
         });
         submit.addEventListener('click', function () { form.requestSubmit(); });
@@ -188,19 +215,17 @@
       async function load() {
         if (loading || settled || hidden || controller.signal.aborted) return;
         loading = true;
-        body.setAttribute('aria-busy', 'true'); body.replaceChildren(); footer.replaceChildren();
+        body.setAttribute('aria-busy', 'true'); body.replaceChildren(); footer.replaceChildren(); footer.hidden = true;
         const status = document.createElement('div'); status.className = 'd-flex align-items-center gap-2 py-4'; status.setAttribute('role', 'status');
         const spinner = document.createElement('span'); spinner.className = 'spinner-border spinner-border-sm'; spinner.setAttribute('aria-hidden', 'true');
         const message = document.createElement('span'); message.textContent = '正在加载详情…'; status.append(spinner, message); body.appendChild(status);
-        const cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'btn btn-outline-secondary'; cancel.textContent = '关闭';
-        cancel.addEventListener('click', function () { finish(null); }); footer.appendChild(cancel);
         try { render(await options.load(controller.signal)); }
         catch (error) {
           if (settled || hidden || controller.signal.aborted) return;
           body.removeAttribute('aria-busy'); status.replaceChildren();
           message.textContent = error.message || '详情加载失败'; status.appendChild(message);
           const retry = document.createElement('button'); retry.type = 'button'; retry.className = 'btn btn-primary'; retry.textContent = '重试';
-          retry.addEventListener('click', load); footer.prepend(retry);
+          retry.addEventListener('click', load); footer.appendChild(retry); footer.hidden = false;
         } finally { loading = false; }
       }
       if (typeof options.load === 'function') load(); else render(options);

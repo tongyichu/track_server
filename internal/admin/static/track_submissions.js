@@ -191,6 +191,7 @@
   function canReview() { return !!selected && selected.status === 'pending' && !!window.AdminAccess && AdminAccess.can('track_submissions', true); }
   function updateReviewState() {
     var allowed = canReview(); $('reviewSection').hidden = !allowed;
+    modalRoot.querySelector('.modal-footer').hidden = !allowed;
     ['approveBtn', 'rejectBtn'].forEach(function (id) { $(id).hidden = !allowed; $(id).disabled = !allowed || reviewing; });
     $('approveBtn').textContent = reviewing ? '正在提交…' : '通过投稿';
     $('reviewReason').disabled = !allowed || reviewing;

@@ -112,7 +112,8 @@
       finally { button.disabled = !currentIssue || !window.AdminAccess.can('tracks', false); }
     });
   });
-  document.getElementById('detailModal').addEventListener('admin:dialog-closing', function () {
+  document.getElementById('detailModal').addEventListener('admin:dialog-closing', function (event) {
+    if (saving) { event.preventDefault(); return; }
     detailRequest += 1;
     if (detailController) detailController.abort();
     loadingDetailID = '';
@@ -179,15 +180,16 @@
         saveErr.textContent = j.error || ('保存失败: ' + resp.status);
         return;
       }
-      AdminUI.alert('已保存处理结果', 'success');
-      if (currentID === feedbackID) await loadDetail(feedbackID);
-      await Promise.all([loadPage(), loadStats()]);
     } catch (err) {
       saveErr.textContent = err.message || String(err);
+      return;
     } finally {
       saving = false;
       Array.from(statusForm.elements).forEach(function (input) { input.disabled = false; });
     }
+    if (currentID === feedbackID) detailModal.hide();
+    AdminUI.alert('已保存处理结果', 'success');
+    await Promise.all([loadPage(), loadStats()]);
   });
 
   function resetAndLoad() {
