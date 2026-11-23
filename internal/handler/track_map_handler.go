@@ -36,6 +36,7 @@ func (h *TrackMapHandler) View(ctx context.Context, c *app.RequestContext) {
 	input.BrowseMode = string(c.Query("browse_mode"))
 	input.DistrictID = string(c.Query("district_id"))
 	input.ScenicID = string(c.Query("scenic_id"))
+	input.ScenicPins = string(c.Query("scenic_pins")) == "1"
 	resp, err := h.trackMapSvc.View(ctx, input)
 	if err != nil {
 		writeTrackMapError(c, err)
@@ -85,6 +86,22 @@ func (h *TrackMapHandler) ListGroupTracks(ctx context.Context, c *app.RequestCon
 	limit := parseQueryInt(c, "limit")
 	resp, err := h.trackMapSvc.ListGroupTracks(ctx, meta.AuthUserID, c.Param("group_id"), service.TrackMapGroupTracksInput{
 		Limit: limit, DepartureTrackID: string(c.Query("departure_track_id")),
+	})
+	if err != nil {
+		writeTrackMapError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, successResponse(resp))
+}
+
+func (h *TrackMapHandler) ListScenicTracks(ctx context.Context, c *app.RequestContext) {
+	if !ensureAuthenticated(c) {
+		return
+	}
+	resp, err := h.trackMapSvc.ListScenicTracks(ctx, middleware.GetRequestMeta(c).AuthUserID, service.TrackMapScenicTracksInput{
+		ScenicID: c.Param("spot_id"), ScopeID: string(c.Query("departure_scope_id")),
+		TrackType: string(c.Query("track_type")), BBox: string(c.Query("bbox")),
+		Cursor: string(c.Query("cursor")), Limit: parseQueryInt(c, "limit"),
 	})
 	if err != nil {
 		writeTrackMapError(c, err)

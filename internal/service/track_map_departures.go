@@ -33,6 +33,9 @@ type departureScenicMatch struct {
 	id        string
 	name      string
 	provider  string
+	cityCode  string
+	point     *models.TrackMapPoint
+	catalog   bool
 	rank      int
 	updatedAt time.Time
 }
@@ -45,16 +48,34 @@ func (d mapDeparture) scopeID() string {
 }
 
 type departureCluster struct {
-	item   *models.TrackMapClusterItem
-	groups map[string]struct{}
+	item          *models.TrackMapClusterItem
+	groups        map[string]struct{}
+	anchor        *models.TrackMapPoint
+	anchorTrackID string
+}
+
+type TrackMapScenicTracksInput struct {
+	ScenicID, ScopeID, TrackType, BBox, Cursor string
+	Limit                                      int
 }
 
 func (c *departureCluster) add(d mapDeparture) {
+	item := c.item
+	if c.anchorTrackID != "" && item.RouteCount != 0 {
+		c.includeDeparture(d.Start)
+	}
 	if _, found := c.groups[d.GroupID]; found {
 		return
 	}
 	c.groups[d.GroupID] = struct{}{}
-	item := c.item
+	if c.anchor != nil {
+		item.Center = *c.anchor
+		if c.anchorTrackID == "" || item.RouteCount == 0 {
+			item.BBox = departurePointBounds(*c.anchor)
+		}
+		item.RouteCount++
+		return
+	}
 	n := float64(item.RouteCount)
 	item.Center.Latitude = (item.Center.Latitude*n + d.Start.Latitude) / (n + 1)
 	item.Center.Longitude = (item.Center.Longitude*n + d.Start.Longitude) / (n + 1)
@@ -62,10 +83,15 @@ func (c *departureCluster) add(d mapDeparture) {
 		item.BBox = departurePointBounds(d.Start)
 	}
 	item.RouteCount++
-	item.BBox.MinLatitude = min(item.BBox.MinLatitude, d.Start.Latitude)
-	item.BBox.MinLongitude = min(item.BBox.MinLongitude, d.Start.Longitude)
-	item.BBox.MaxLatitude = max(item.BBox.MaxLatitude, d.Start.Latitude)
-	item.BBox.MaxLongitude = max(item.BBox.MaxLongitude, d.Start.Longitude)
+	c.includeDeparture(d.Start)
+}
+
+func (c *departureCluster) includeDeparture(start models.TrackMapPoint) {
+	bounds := &c.item.BBox
+	bounds.MinLatitude = min(bounds.MinLatitude, start.Latitude)
+	bounds.MinLongitude = min(bounds.MinLongitude, start.Longitude)
+	bounds.MaxLatitude = max(bounds.MaxLatitude, start.Latitude)
+	bounds.MaxLongitude = max(bounds.MaxLongitude, start.Longitude)
 }
 
 func (s *TrackMapService) departureView(ctx context.Context, input TrackMapViewInput, filter models.TrackMapQueryFilter, legacyLevel string) (*models.TrackMapViewResponse, error) {
@@ -74,24 +100,9 @@ func (s *TrackMapService) departureView(ctx context.Context, input TrackMapViewI
 	if len(scenicID) > 128 || scenicID != "" && districtID == "" && filter.CityCode == "" {
 		return nil, invalidArg("scenic_id requires a valid city_code or district_id")
 	}
-	cityCode := filter.CityCode
-	var bounds *models.TrackMapBBox
-	if districtID != "" {
-		district := s.areas.Find(districtID)
-		if district == nil || !isDepartureDistrict(district) {
-			return nil, invalidArg("unknown district_id")
-		}
-		if districtCity := config.CanonicalCityCode(district.CityCode); cityCode != "" && districtCity != cityCode {
-			return nil, invalidArg("district_id does not belong to city_code")
-		} else {
-			cityCode = districtCity
-		}
-		bounds = departureMapBounds(district.Bounds)
-	} else if cityCode != "" {
-		codes := config.CityCodeCandidates(cityCode)
-		if b, ok := s.areas.DistrictCityBounds(codes); ok {
-			bounds = departureMapBounds(b)
-		}
+	query, cityCode, err := s.departureQuery(filter, districtID)
+	if err != nil {
+		return nil, err
 	}
 	level := legacyLevel
 	switch {
@@ -101,27 +112,16 @@ func (s *TrackMapService) departureView(ctx context.Context, input TrackMapViewI
 		level = trackMapViewPlaces
 	case legacyLevel == trackMapViewArea || cityCode != "" && input.Zoom <= 0:
 		level = trackMapViewDistrict
-	case input.Zoom > trackMapAreaMaxZoom && input.Zoom <= trackMapPlacesMaxZoom:
+	case legacyLevel == trackMapViewRoute && input.ScenicPins,
+		input.Zoom > trackMapAreaMaxZoom && input.Zoom <= trackMapPlacesMaxZoom:
 		level = trackMapViewPlaces
 	}
 	response := &models.TrackMapViewResponse{
 		ViewLevel: level, CoordinateSystem: "GCJ02", BrowseMode: trackMapBrowseDeparture, Items: []any{},
 	}
-	query := filter
-	// The geographic envelope is a prefilter; city assignment comes from the start point.
-	if bounds != nil {
-		query.CityCode = ""
-	}
-	if query.Center != nil {
-		radiusBounds := departureRadiusBounds(*query.Center, query.RadiusM)
-		query.BBox = intersectDepartureBounds(query.BBox, &radiusBounds)
-	}
-	query.BBox = intersectDepartureBounds(query.BBox, bounds)
-	if b := query.BBox; b != nil && (b.MinLatitude > b.MaxLatitude || b.MinLongitude > b.MaxLongitude) {
-		return response, nil
-	}
-
 	departures := make(map[[2]string]mapDeparture)
+	clusters := make(map[string]*departureCluster)
+	fixedScenicPins := input.ScenicPins && (level == trackMapViewPlaces || level == trackMapViewDistrict && cityCode != "")
 	var scenicCandidates []mapDeparture
 	addDeparture := func(d mapDeparture) {
 		key := [2]string{d.GroupID, d.scopeID()}
@@ -129,15 +129,40 @@ func (s *TrackMapService) departureView(ctx context.Context, input TrackMapViewI
 			departures[key] = d
 		}
 	}
-	err := s.maps.VisitRouteDepartures(ctx, query, func(row models.TrackMapDeparture) {
-		if !validMapLatLng(row.Start.Latitude, row.Start.Longitude) ||
-			(filter.Center != nil && haversineDistance(filter.Center.Latitude, filter.Center.Longitude, row.Start.Latitude, row.Start.Longitude) > float64(filter.RadiusM)) {
+	addScenic := func(d mapDeparture) {
+		addDeparture(d)
+		spot := d.scenic
+		if spot.point != nil && !departurePointVisible(*spot.point, query) {
 			return
 		}
-		d := s.locateDeparture(row)
-		if cityCode != "" && d.cityCode != cityCode || districtID != "" && d.districtID != districtID {
-			return
+		key := "scenic_" + spot.id
+		cluster := clusters[key]
+		if cluster == nil {
+			item := s.departureScenic(d)
+			item.ClusterID = key
+			if spot.catalog {
+				item.DepartureScopeID = scenicWholeSpotScope
+				if spot.cityCode != "" {
+					item.CityCode = spot.cityCode
+					item.CityName = config.CityNameByCode(spot.cityCode)
+				}
+			}
+			cluster = &departureCluster{item: item, anchor: spot.point, groups: make(map[string]struct{})}
+			clusters[key] = cluster
 		}
+		if spot.point == nil && (cluster.anchorTrackID == "" || d.TrackID < cluster.anchorTrackID) {
+			// A real departure stays visible when zooming around this pin, even without catalog coordinates.
+			cluster.anchorTrackID = d.TrackID
+			cluster.anchor = &d.Start
+			cluster.item.Center = d.Start
+			if !spot.catalog {
+				cluster.item.DepartureScopeID = d.scopeID()
+				cluster.item.CityCode, cluster.item.CityName = d.cityCode, d.cityName
+			}
+		}
+		cluster.add(d)
+	}
+	err = s.visitMapDepartures(ctx, query, cityCode, districtID, func(d mapDeparture) {
 		if scenicID != "" || level == trackMapViewPlaces || level == trackMapViewDistrict && cityCode != "" && d.districtID == "" {
 			scenicCandidates = append(scenicCandidates, d)
 			return
@@ -154,7 +179,22 @@ func (s *TrackMapService) departureView(ctx context.Context, input TrackMapViewI
 	}
 	for _, d := range scenicCandidates {
 		d.scenic = scenicMatches[d.TrackID]
+		if fixedScenicPins && d.scenic != nil {
+			addScenic(d)
+			continue
+		}
 		addDeparture(d)
+	}
+	if fixedScenicPins {
+		err := s.visitVisibleScenicPins(ctx, query, func(d mapDeparture) {
+			if (cityCode == "" || cityCode == d.cityCode) && (districtID == "" || districtID == d.districtID) &&
+				(level == trackMapViewPlaces || d.districtID == "") {
+				addScenic(d)
+			}
+		})
+		if err != nil {
+			return nil, err
+		}
 	}
 	ordered := make([]mapDeparture, 0, len(departures))
 	for _, d := range departures {
@@ -164,9 +204,11 @@ func (s *TrackMapService) departureView(ctx context.Context, input TrackMapViewI
 	}
 	sort.Slice(ordered, func(i, j int) bool { return preferDeparture(ordered[i], ordered[j]) })
 
-	clusters := make(map[string]*departureCluster)
 	routes := make([]mapDeparture, 0, filter.Limit)
 	for _, d := range ordered {
+		if fixedScenicPins && d.scenic != nil {
+			continue
+		}
 		cluster := s.departureClusterItem(d, level, cityCode)
 		if cluster == nil {
 			if len(routes) < filter.Limit {
@@ -207,6 +249,138 @@ func (s *TrackMapService) departureView(ctx context.Context, input TrackMapViewI
 	}
 	response.Items = items
 	return response, nil
+}
+
+func (s *TrackMapService) departureQuery(filter models.TrackMapQueryFilter, districtID string) (models.TrackMapQueryFilter, string, error) {
+	cityCode := filter.CityCode
+	var bounds *models.TrackMapBBox
+	if districtID != "" {
+		district := s.areas.Find(districtID)
+		if district == nil || !isDepartureDistrict(district) {
+			return filter, "", invalidArg("unknown district_id")
+		}
+		districtCity := config.CanonicalCityCode(district.CityCode)
+		if cityCode != "" && districtCity != cityCode {
+			return filter, "", invalidArg("district_id does not belong to city_code")
+		}
+		cityCode = districtCity
+		bounds = departureMapBounds(district.Bounds)
+	} else if cityCode != "" {
+		if b, ok := s.areas.DistrictCityBounds(config.CityCodeCandidates(cityCode)); ok {
+			bounds = departureMapBounds(b)
+		}
+	}
+	// The geographic envelope is a prefilter; city assignment comes from the start point.
+	if bounds != nil {
+		filter.CityCode = ""
+	}
+	if filter.Center != nil {
+		radiusBounds := departureRadiusBounds(*filter.Center, filter.RadiusM)
+		filter.BBox = intersectDepartureBounds(filter.BBox, &radiusBounds)
+	}
+	filter.BBox = intersectDepartureBounds(filter.BBox, bounds)
+	return filter, cityCode, nil
+}
+
+func (s *TrackMapService) visitMapDepartures(ctx context.Context, query models.TrackMapQueryFilter, cityCode, districtID string, visit func(mapDeparture)) error {
+	if b := query.BBox; b != nil && (b.MinLatitude > b.MaxLatitude || b.MinLongitude > b.MaxLongitude) {
+		return nil
+	}
+	return s.maps.VisitRouteDepartures(ctx, query, func(row models.TrackMapDeparture) {
+		if !validMapLatLng(row.Start.Latitude, row.Start.Longitude) ||
+			(query.Center != nil && haversineDistance(query.Center.Latitude, query.Center.Longitude, row.Start.Latitude, row.Start.Longitude) > float64(query.RadiusM)) {
+			return
+		}
+		d := s.locateDeparture(row)
+		if (cityCode == "" || d.cityCode == cityCode) && (districtID == "" || d.districtID == districtID) {
+			visit(d)
+		}
+	})
+}
+
+func (s *TrackMapService) ListScenicTracks(ctx context.Context, userID int64, selection TrackMapScenicTracksInput) (*models.TrackSummaryPage, error) {
+	scenicID := strings.TrimSpace(selection.ScenicID)
+	scopeID := strings.TrimSpace(selection.ScopeID)
+	cursor := strings.TrimSpace(selection.Cursor)
+	if scenicID == "" || len(scenicID) > 128 || scopeID == "" || len(scopeID) > 128 || len(cursor) > 32 {
+		return nil, invalidArg("invalid scenic_id, departure_scope_id or cursor")
+	}
+	if scopeID == scenicWholeSpotScope {
+		return s.listWholeScenicSpotTracks(ctx, userID, scenicID, selection.TrackType, cursor, selection.Limit)
+	}
+	input := TrackMapViewInput{BrowseMode: trackMapBrowseDeparture, TrackType: selection.TrackType}
+	if cityCode, isCity := strings.CutPrefix(scopeID, "city:"); isCity {
+		input.CityCode = cityCode
+		if cityCode == "" {
+			input.BBox = selection.BBox
+		}
+	} else {
+		input.DistrictID = scopeID
+	}
+	filter, _, err := s.buildFilter(input)
+	if err != nil {
+		return nil, err
+	}
+	query, cityCode, err := s.departureQuery(filter, input.DistrictID)
+	if err != nil {
+		return nil, err
+	}
+	var candidates []mapDeparture
+	err = s.visitMapDepartures(ctx, query, cityCode, input.DistrictID, func(d mapDeparture) {
+		if d.scopeID() == scopeID && d.TrackID > cursor {
+			candidates = append(candidates, d)
+		}
+	})
+	if err != nil {
+		return nil, err
+	}
+	sort.Slice(candidates, func(i, j int) bool { return candidates[i].TrackID < candidates[j].TrackID })
+	limit := normalizeTrackPageLimit(selection.Limit)
+	tracks := make([]*models.Track, 0, limit+1)
+	for start := 0; start < len(candidates) && len(tracks) <= limit; start += 200 {
+		batch := candidates[start:min(start+200, len(candidates))]
+		matches, err := s.departureScenicMatches(ctx, batch)
+		if err != nil {
+			return nil, err
+		}
+		ids := make([]string, 0, len(matches))
+		for _, departure := range batch {
+			if spot := matches[departure.TrackID]; spot != nil && spot.id == scenicID {
+				ids = append(ids, departure.TrackID)
+			}
+		}
+		if len(ids) == 0 {
+			continue
+		}
+		byID, err := s.tracks.FindByIDs(ctx, ids)
+		if err != nil {
+			return nil, err
+		}
+		for _, id := range ids {
+			if track := byID[id]; publicMapTrack(track) && track.RawTrackURL != "" {
+				tracks = append(tracks, track)
+				if len(tracks) > limit {
+					break
+				}
+			}
+		}
+	}
+	return s.scenicTracksPage(ctx, userID, tracks, limit)
+}
+
+func (s *TrackMapService) scenicTracksPage(ctx context.Context, userID int64, tracks []*models.Track, limit int) (*models.TrackSummaryPage, error) {
+	page := &models.TrackSummaryPage{HasMore: len(tracks) > limit}
+	if page.HasMore {
+		tracks = tracks[:limit]
+		page.NextCursor = tracks[limit-1].ID
+	}
+	if s.trackSvc == nil {
+		page.Items = toSummaries(tracks)
+		return page, nil
+	}
+	var err error
+	page.Items, err = s.trackSvc.BuildTrackSummaries(ctx, userID, tracks)
+	return page, err
 }
 
 func isDepartureDistrict(district *maparea.Definition) bool {
@@ -302,9 +476,9 @@ func (s *TrackMapService) departureScenicMatches(ctx context.Context, departures
 				if link.Origin == "manual" || link.Origin == "merge" {
 					rank = departureScenicManual
 				}
-				matches[id] = &departureScenicMatch{
-					id: spot.ID, name: spot.Name, provider: link.Provider, rank: rank, updatedAt: link.UpdatedAt,
-				}
+				match := catalogScenicMapMatch(spot)
+				match.provider, match.rank, match.updatedAt = link.Provider, rank, link.UpdatedAt
+				matches[id] = match
 			}
 		}
 	}
@@ -352,7 +526,7 @@ func (s *TrackMapService) departureScenic(d mapDeparture) *models.TrackMapCluste
 	item := &models.TrackMapClusterItem{
 		Type: "area_cluster", ClusterID: "scenic_" + spot.id + "_" + d.scopeID(), AreaType: maparea.TypeScenicSpot,
 		Area: &models.TrackMapAreaReference{ID: spot.id}, Name: spot.name,
-		CityCode: d.cityCode, CityName: d.cityName, PlaceProvider: spot.provider,
+		CityCode: d.cityCode, CityName: d.cityName, PlaceProvider: spot.provider, DepartureScopeID: d.scopeID(),
 	}
 	if spot.provider != "" {
 		item.PlaceMatchMethod = "track_relation"

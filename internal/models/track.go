@@ -424,6 +424,8 @@ type TrackMapPoint struct {
 type TrackMapQueryFilter struct {
 	TrackType string
 	CityCode  string
+	// TrackIDs limits the departure query to specific indexed route-group members.
+	TrackIDs []string
 	// CityCodes matches groups covering any of the given cities (admin province filter).
 	CityCodes []string
 	BBox      *TrackMapBBox
@@ -500,6 +502,7 @@ type TrackMapClusterItem struct {
 	Area             *TrackMapAreaReference `json:"area,omitempty"`
 	CityCode         string                 `json:"city_code,omitempty"`
 	CityName         string                 `json:"city_name,omitempty"`
+	DepartureScopeID string                 `json:"departure_scope_id,omitempty"`
 	TrackType        string                 `json:"track_type"`
 	Center           TrackMapPoint          `json:"center"`
 	BBox             TrackMapBBox           `json:"bbox"`

@@ -287,6 +287,7 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 		auth.GET("/track-map/groups", trackMapHandler.ListGroups)
 		auth.GET("/track-map/groups/:group_id/detail", trackMapHandler.GetGroupDetail)
 		auth.GET("/track-map/groups/:group_id/tracks", trackMapHandler.ListGroupTracks)
+		auth.GET("/track-map/scenic-spots/:spot_id/tracks", trackMapHandler.ListScenicTracks)
 	}
 
 	// achievement center

@@ -14,6 +14,12 @@ import (
 func (r *MySQLTrackMapRepository) VisitRouteDepartures(ctx context.Context, filter models.TrackMapQueryFilter, visit func(models.TrackMapDeparture)) error {
 	conds := []string{"g.status = ?", "t.status = ?", "t.is_running = 0", "t.deleted_at IS NULL"}
 	args := []any{models.TrackRouteGroupStatusActive, models.TrackStatusNormal}
+	if len(filter.TrackIDs) > 0 {
+		conds = append(conds, "i.track_id IN ("+strings.TrimSuffix(strings.Repeat("?,", len(filter.TrackIDs)), ",")+")")
+		for _, id := range filter.TrackIDs {
+			args = append(args, id)
+		}
+	}
 	if filter.TrackType != "" {
 		conds = append(conds, "g.track_type = ?")
 		args = append(args, filter.TrackType)
@@ -54,6 +60,9 @@ func (r *MySQLTrackMapRepository) VisitRouteDepartures(ctx context.Context, filt
 
 func (r *MongoTrackMapRepository) VisitRouteDepartures(ctx context.Context, filter models.TrackMapQueryFilter, visit func(models.TrackMapDeparture)) error {
 	indexMatch := bson.M{}
+	if len(filter.TrackIDs) > 0 {
+		indexMatch["track_id"] = bson.M{"$in": filter.TrackIDs}
+	}
 	if codes := regionCodeCandidates([]string{filter.CityCode}); len(codes) > 0 {
 		indexMatch["city_code"] = bson.M{"$in": codes}
 	}
@@ -104,12 +113,19 @@ func (r *InMemoryTrackMapRepository) VisitRouteDepartures(ctx context.Context, f
 	r.tracks.mu.RLock()
 	defer r.tracks.mu.RUnlock()
 	codes := regionCodeCandidates([]string{filter.CityCode})
+	trackIDs := make(map[string]struct{}, len(filter.TrackIDs))
+	for _, id := range filter.TrackIDs {
+		trackIDs[id] = struct{}{}
+	}
 	for groupID, members := range r.routeMembers {
 		group := r.routeGroups[groupID]
 		if group == nil || group.Status != models.TrackRouteGroupStatusActive || filter.TrackType != "" && group.TrackType != filter.TrackType {
 			continue
 		}
 		for trackID := range members {
+			if _, wanted := trackIDs[trackID]; len(trackIDs) > 0 && !wanted {
+				continue
+			}
 			if err := ctx.Err(); err != nil {
 				return err
 			}

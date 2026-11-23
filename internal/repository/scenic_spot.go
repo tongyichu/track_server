@@ -23,12 +23,14 @@ type ScenicSpotRepository interface {
 	GetScenicSpots(context.Context, []string) (map[string]*models.ScenicSpot, error)
 	FindScenicSpotBySource(context.Context, string, string) (*models.ScenicSpot, error)
 	ListScenicSpots(context.Context, ScenicSpotListFilter) ([]*models.ScenicSpot, int64, error)
+	ListScenicMapSpots(context.Context, models.TrackMapBBox) ([]*models.ScenicSpot, error)
 	UpdateScenicSpot(context.Context, *models.ScenicSpot, int64) error
 	GetTrackScenicSpotLink(context.Context, string) (*models.TrackScenicSpotLink, error)
 	GetTrackScenicSpotLinks(context.Context, []string) (map[string]*models.TrackScenicSpotLink, error)
 	SetTrackScenicSpotLink(ctx context.Context, link *models.TrackScenicSpotLink, expectedSpotID string, absent bool, expectedOrigin ...string) error
 	DeleteTrackScenicSpotLink(ctx context.Context, trackID, expectedSpotID string, expectedOrigin ...string) error
 	ListTrackScenicSpotLinks(context.Context, string, string, int) ([]*models.TrackScenicSpotLink, error)
+	VisitScenicMapLinks(ctx context.Context, spotIDs []string, visit func(trackID, spotID string)) error
 	AppendScenicSpotAudit(context.Context, *models.ScenicSpotAudit) error
 	ListScenicSpotAudit(context.Context, string, string, int) ([]*models.ScenicSpotAudit, error)
 	IncrementScenicSpotProviderUsage(context.Context, string, string, string, string, bool) error

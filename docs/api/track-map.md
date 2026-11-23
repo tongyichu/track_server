@@ -40,6 +40,7 @@ GET /api/v1/track-map/view?latitude=22.3000&longitude=114.1700&radius_m=10000&tr
 | `radius_m` | int | 否 | 附近半径，默认 `10000`，最大 `50000` |
 | `city_code` | string | 否 | 城市 Code |
 | `browse_mode` | string | 否 | `departure` 启用按出发点浏览。省略时使用旧地图分层 |
+| `scenic_pins` | int | 否 | 按出发点浏览时传 `1`，区县以下始终同时展示景点图钉和独立路线。每个景点 ID 只显示一个图钉 |
 | `district_id` | string | 否 | `departure` 模式下，区县气泡返回的 `area.id` |
 | `scenic_id` | string | 否 | `departure` 模式下，景点气泡返回的 `area.id`，同时传出发区县或城市 |
 | `track_type` | string | 否 | 运动类型 code；`all` 表示不过滤运动类型，不传或空值默认 `hiking`。兼容传中文名，如 `徒步` |
@@ -47,11 +48,12 @@ GET /api/v1/track-map/view?latitude=22.3000&longitude=114.1700&radius_m=10000&tr
 
 ### 按出发点浏览
 
-请求 `browse_mode=departure` 后，成功响应带 `browse_mode=departure`。查询使用已完成且公开的路线组成员，从已有空间索引读取起点。城市和区县由起点匹配内置边界，边界未覆盖时沿用轨迹的城市代码。附近和视野模式均按起点过滤。
+请求 `browse_mode=departure` 后，成功响应带 `browse_mode=departure`。查询使用已完成且公开的路线组成员，从已有空间索引读取起点。城市和区县由起点匹配内置边界，边界未覆盖时沿用轨迹的城市代码。独立路线在附近和视野模式下均按起点过滤。
 
-- 仅传视野和缩放时，`zoom <= 9` 返回 `city`，`9 < zoom <= 11` 返回 `district`，`11 < zoom <= 13` 返回 `places`，`zoom > 13` 返回 `route`。景点层可以同时展示 `area_cluster`（景点）和 `route_group`（独立路线）。无下辖区县的城市可从城市气泡直接放大到景点和独立路线。
-- 显式传 `district_id` 或 `scenic_id` 的调用仍可固定查看对应范围，分别返回景点层或路线层。Android 地图通过地图缩放切换层级。
-- 区县内按公开成员的当前主景点关联分组。已保存的新增、改绑、移除和景点归档在下一次查询生效，无需等待路线组重算。一个出发范围内同一路线组只展示一次，多个成员景点不同时优先运营关联。同一组仍有有效关联时，移除单个成员的景点后可继续按其余关联展示。
+- 仅传视野和缩放时，`zoom <= 9` 返回 `city`，`9 < zoom <= 11` 返回 `district`，`11 < zoom <= 13` 返回 `places`。`zoom > 13` 默认返回 `route`，传 `scenic_pins=1` 时继续返回 `places`。景点在 `places` 层使用 `area_cluster`，独立路线使用 `route_group`。无下辖区县的城市可从城市气泡直接放大到景点和独立路线。
+- 显式传 `district_id` 或 `scenic_id` 的调用仍可固定查看对应范围，分别返回景点层或路线层。Android 点景点图钉时用 `area.id` 和 `departure_scope_id` [读取轨迹列表](#查询景点图钉下的轨迹列表)。
+- 区县内按公开成员的当前主景点关联分组。已保存的新增、改绑、移除和景点归档在下一次查询生效，无需等待路线组重算。
+- 在 `scenic_pins=1` 的末级地图中，同一景点 ID 对应一个图钉，轨迹的运动类型和出发区县都不会拆分图钉。目录有坐标时，按景点位置筛选视野和附近范围，并返回该坐标作为 `center`。只要景点仍在视野内，即使关联轨迹的起点全部移出视野，图钉仍可显示。目录缺少坐标或景点仍用历史 ID 时，暂以可见关联轨迹中 ID 最小的轨迹起点定位。
 - 在每个城市、区县或景点气泡内按 `group_id` 去重。已有公开轨迹实际从不同区县出发时，同一 `group_id` 可以在多个区县出现。路线标记用 `group_id` 与 `departure_scope_id` 联合识别。
 - 路线标记的 `center` 和 `bbox` 表示出发点，`departure_track_id` 指向该方向的实际公开轨迹。另可返回 `district_name`、`distance_m` 及跨区终点 `arrival_name`。查询路线组详情仍用 `group_id`。
 
@@ -274,6 +276,19 @@ Authorization: Bearer <token>
   }
 }
 ```
+
+## 查询景点图钉下的轨迹列表
+
+**需要认证**
+
+```http
+GET /api/v1/track-map/scenic-spots/:spot_id/tracks?departure_scope_id=<scope>&track_type=all&limit=20
+Authorization: Bearer <token>
+```
+
+- `:spot_id` 使用图钉的 `area.id`，并传该图钉的 `departure_scope_id`。目录景点返回 `spot`，轨迹列表覆盖整个景点。历史图钉继续使用出发区县 ID 或 `city:<城市编号>`，范围为 `city:` 时还需传图钉原始 `bbox`（`minLng,minLat,maxLng,maxLat`）。
+- `track_type` 沿用地图当前运动筛选。`all` 返回各种运动类型，省略时默认徒步。
+- 按图钉范围和当前有效的主景点关联查询，返回公开、已完成且有原始文件的轨迹摘要。按轨迹 ID 顺序分页，响应字段为 `items`、`has_more` 及可选的 `next_cursor`。下一页将 `next_cursor` 作为 `cursor` 回传。
 
 ## 52. 查看地图区域介绍页
 

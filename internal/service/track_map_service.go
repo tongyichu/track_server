@@ -49,6 +49,7 @@ type TrackMapViewInput struct {
 	BrowseMode string
 	DistrictID string
 	ScenicID   string
+	ScenicPins bool
 }
 
 type TrackMapGroupTracksInput struct {
@@ -378,14 +379,8 @@ func (s *TrackMapService) buildFilter(input TrackMapViewInput) (models.TrackMapQ
 	if limit > maxTrackMapLimit {
 		limit = maxTrackMapLimit
 	}
-	trackType := normalizeTrackTypeCode(input.TrackType)
-	if strings.EqualFold(strings.TrimSpace(input.TrackType), "all") {
-		trackType = ""
-	} else if trackType == "" {
-		trackType = "hiking"
-	}
 	filter := models.TrackMapQueryFilter{
-		TrackType: trackType,
+		TrackType: trackMapTypeFilter(input.TrackType),
 		CityCode:  config.CanonicalCityCode(input.CityCode),
 		Limit:     limit,
 	}
@@ -418,6 +413,16 @@ func (s *TrackMapService) buildFilter(input TrackMapViewInput) (models.TrackMapQ
 		return filter, "", invalidArg("bbox, city_code, or latitude/longitude is required")
 	}
 	return filter, chooseTrackMapViewLevel(input.Zoom, filter), nil
+}
+
+func trackMapTypeFilter(trackType string) string {
+	if strings.EqualFold(strings.TrimSpace(trackType), "all") {
+		return ""
+	}
+	if code := normalizeTrackTypeCode(trackType); code != "" {
+		return code
+	}
+	return "hiking"
 }
 
 func chooseTrackMapViewLevel(zoom float64, filter models.TrackMapQueryFilter) string {
