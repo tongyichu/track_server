@@ -81,10 +81,7 @@
       <div class="modal-content">
         <div class="modal-header route-modal-header">
           <div class="route-modal-heading">
-            <div class="route-title-row">
-              <h2 class="modal-title" id="detailName"></h2>
-              <button id="editRouteTitleBtn" type="button" class="btn btn-sm btn-link" data-admin-write="route_groups" aria-haspopup="dialog" hidden>改标题</button>
-            </div>
+            <h2 class="modal-title" id="detailName">路线组详情</h2>
             <div class="route-detail-context">
               <p id="detailPath" class="route-detail-path" hidden></p>
               <span id="detailTrackType" class="route-detail-type"></span>
@@ -97,22 +94,25 @@
         </div>
         <div class="modal-body route-modal-body">
           <div class="route-workspace" id="detailPanel" hidden>
-            <section class="route-detail-section" id="introSection" aria-labelledby="introHeading">
-              <div class="route-panel-heading route-intro-toolbar">
-                <h3 id="introHeading"><label for="introZhSummary">简介</label></h3>
-                <div class="route-intro-actions" id="introActions" hidden>
-                  <button id="introAdvancedBtn" type="button" class="btn btn-sm btn-link" aria-haspopup="dialog">完整字段</button>
-                  <button id="introGenerateBtn" type="button" data-admin-write="route_groups" class="btn btn-sm btn-outline-secondary">AI 生成</button>
-                  <button id="introSaveBtn" type="button" data-admin-write="route_groups" class="btn btn-sm btn-primary">保存</button>
-                </div>
+            <form class="route-edit-form" id="routeEditForm">
+              <label class="form-label" for="routeTitleInput">标题</label>
+              <input id="routeTitleInput" class="form-control" data-admin-input="route_groups" type="text" required />
+
+              <div class="route-intro-heading">
+                <label class="form-label" for="introZhSummary">简介</label>
+                <button id="introGenerateBtn" type="button" class="btn btn-sm btn-link" data-admin-write="route_groups" aria-controls="introCandidate" hidden>AI 生成</button>
               </div>
               <div id="introLoadState" class="route-form-state" hidden>
                 <span id="introLoadHint" role="status"></span>
-                <button type="button" class="btn btn-sm btn-outline-secondary" id="introRetryBtn" hidden>重试</button>
+                <button type="button" id="introRetryBtn" class="btn btn-sm btn-outline-secondary" hidden>重试</button>
               </div>
               <textarea id="introZhSummary" class="form-control route-intro-summary" data-admin-input="route_groups" rows="2" hidden></textarea>
-              <p id="introWriteError" class="text-danger route-intro-error" role="alert" hidden></p>
-            </section>
+              <section id="introCandidate" class="route-intro-candidate" aria-label="AI 生成结果" hidden>
+                <p id="introCandidateText" aria-live="polite"></p>
+                <button id="introApplyBtn" type="button" class="btn btn-sm btn-outline-secondary" data-admin-write="route_groups">一键代入</button>
+              </section>
+              <p id="introGenerateError" class="text-danger route-edit-error" role="alert" hidden></p>
+            </form>
 
             <section class="route-detail-section route-members" aria-labelledby="memberHeading">
               <div class="route-panel-heading">
@@ -126,6 +126,11 @@
               </nav>
             </section>
           </div>
+        </div>
+        <div class="modal-footer route-edit-footer" id="routeEditFooter" hidden>
+          <button id="introAdvancedBtn" type="button" class="btn btn-sm btn-link" aria-haspopup="dialog" hidden>完整字段</button>
+          <p id="routeEditError" class="text-danger route-edit-error" role="alert" hidden></p>
+          <button id="routeSaveBtn" type="submit" form="routeEditForm" class="btn btn-sm btn-primary" data-admin-write="route_groups">保存</button>
         </div>
       </div>
     </div>

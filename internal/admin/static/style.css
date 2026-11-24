@@ -699,8 +699,6 @@ table.data td.companion-table-state { padding: 32px 14px; color: var(--admin-sec
 .route-modal-header { align-items: flex-start; padding: 16px 24px; }
 .route-modal-header .modal-title { margin: 0; font-size: 20px; font-weight: 600; overflow-wrap: anywhere; }
 .route-modal-heading { min-width: 0; }
-.route-title-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; }
-.route-title-row > .btn-link { min-height: 24px; padding: 0; font-size: 12px; }
 .route-modal-header .hint { margin: 4px 0; }
 .route-detail-context { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; }
 .route-detail-path, .route-detail-type { margin: 0; color: var(--admin-secondary-color); font-size: 12px; overflow-wrap: anywhere; }
@@ -737,11 +735,20 @@ table.data td.companion-table-state { padding: 32px 14px; color: var(--admin-sec
 .route-member-empty { padding: 16px 4px; color: var(--admin-secondary-color); }
 .route-member-pagination { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 .route-member-pagination .hint { margin: 0; font-variant-numeric: tabular-nums; }
-.route-intro-toolbar, .route-intro-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; }
-.route-intro-toolbar label { color: inherit; font-size: inherit; }
-.route-intro-actions { margin-inline-start: auto; }
+.route-edit-form > .form-label { margin: 0 0 6px; }
+.route-intro-heading { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; margin: 12px 0 6px; }
+.route-intro-heading .form-label { margin: 0; }
+.route-intro-heading > .btn-link { min-height: 24px; padding: 0; font-size: 12px; }
 .route-intro-summary { width: 100%; min-height: 64px; line-height: 1.5; resize: vertical; }
-.route-intro-error { margin: 8px 0 0; font-size: 12px; }
+.route-intro-candidate { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 8px 12px; margin-top: 8px; padding: 10px 12px; border: 1px solid var(--admin-border-color); border-radius: 8px; background: var(--admin-bg-surface-secondary); }
+.route-intro-candidate p { flex: 1 1 230px; min-width: 0; margin: 0; line-height: 1.55; white-space: pre-line; overflow-wrap: anywhere; }
+.route-intro-candidate > .btn { margin-inline-start: auto; white-space: nowrap; }
+.route-edit-footer { justify-content: flex-start; padding: 12px 24px; }
+.route-edit-footer > .btn-link { padding-inline: 0; }
+.route-edit-footer > .btn-primary { margin-inline-start: auto; }
+.route-edit-error { margin: 0; font-size: 12px; overflow-wrap: anywhere; }
+.route-edit-form > .route-edit-error { margin-top: 8px; }
+.route-edit-footer > .route-edit-error { flex: 1 1 160px; }
 .route-intro-modal .modal-title { font-size: 16px; }
 .route-intro-modal .modal-body { padding: 16px; }
 .route-intro-section, .route-language-card { min-width: 0; padding: 12px; border: 1px solid var(--admin-border-color); border-radius: 8px; background: var(--admin-bg-surface); }
@@ -773,6 +780,7 @@ table.data td.companion-table-state { padding: 32px 14px; color: var(--admin-sec
   .route-management-modal .modal-dialog { max-width: calc(100vw - 12px); margin: 6px auto; }
   .route-modal-header { padding: 12px 16px; }
   .route-workspace { padding: 12px; }
+  .route-edit-footer { padding-inline: 12px; }
   .route-intro-language-grid { grid-template-columns: 1fr; }
   .route-member-row { gap: 4px; }
   .route-member-summary { grid-template-columns: 48px minmax(0, 1fr); gap: 4px 8px; }

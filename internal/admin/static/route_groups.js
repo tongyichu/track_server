@@ -47,9 +47,9 @@
   var ROUTES_PER_BRANCH = 20;
   var MEMBER_PAGE_SIZE = 5;
   var selectedGroupID = '', detailRequest = 0, detailSession = 0, detailController = null, detailLoadingID = '';
-  var memberOffset = 0, memberTotal = 0, representativeWriting = false;
-  var introBaseline = '', introWriting = false, introClosePrompt = false, allowIntroClose = false;
-  var introAutomatic = false, introAIController = null, introLoadController = null;
+  var memberOffset = 0, memberTotal = 0, memberWriting = false;
+  var titleBaseline = null, introBaseline = '', detailWriting = false, detailClosePrompt = false, allowDetailClose = false;
+  var introAIController = null, introLoadController = null;
   var selectedTrackType = '';
   var routeGroups = new Map(), areaTree = new Map();
   var listController = null, loadedQuery = '', directoryError = '';
@@ -67,11 +67,17 @@
   var detailPath = document.getElementById('detailPath');
   var statusHint = document.getElementById('statusHint');
   var listSummaryHint = document.getElementById('listSummaryHint');
-  var introPanel = document.getElementById('introSection');
-  var introActions = document.getElementById('introActions');
+  var routeEditForm = document.getElementById('routeEditForm');
+  var routeEditFooter = document.getElementById('routeEditFooter');
+  var routeEditError = document.getElementById('routeEditError');
+  var routeSaveBtn = document.getElementById('routeSaveBtn');
+  var routeTitleInput = document.getElementById('routeTitleInput');
   var introSummary = document.getElementById('introZhSummary');
-  var editTitleBtn = document.getElementById('editRouteTitleBtn');
-  var detailName = document.getElementById('detailName');
+  var introAdvancedBtn = document.getElementById('introAdvancedBtn');
+  var introGenerateBtn = document.getElementById('introGenerateBtn');
+  var introCandidate = document.getElementById('introCandidate');
+  var introCandidateText = document.getElementById('introCandidateText');
+  var introGenerateError = document.getElementById('introGenerateError');
   var introLoadState = document.getElementById('introLoadState');
   var introLoadHint = document.getElementById('introLoadHint');
   var introRetryBtn = document.getElementById('introRetryBtn');
@@ -82,20 +88,20 @@
   var scenicInfoModal = new AdminComponents.Dialog(document.getElementById('scenicInfoModal'));
   var scenicSelection = null, scenicController = null, scenicOffset = 0, scenicTotal = 0;
   var introFieldsModal = new AdminComponents.Dialog(document.getElementById('introFieldsModal'));
-  document.getElementById('introAdvancedBtn').addEventListener('click', function () { introFieldsModal.show(); });
+  introAdvancedBtn.addEventListener('click', function () { introFieldsModal.show(); });
   document.getElementById('detailModal').addEventListener('admin:dialog-closing', function (event) {
-    if (introWriting) { event.preventDefault(); return; }
-    if (!allowIntroClose && introDirty()) {
+    if (detailWriting) { event.preventDefault(); return; }
+    if (!allowDetailClose && detailDirty()) {
       event.preventDefault();
-      if (introClosePrompt) return;
-      introClosePrompt = true;
-      AdminUI.confirm({ title: '放弃未保存的路线介绍？', message: '当前编辑的路线介绍尚未保存。', confirmText: '放弃修改', waitForHidden: true }).then(function (confirmed) {
-        if (confirmed) { allowIntroClose = true; detailModal.hide(); }
-      }).finally(function () { introClosePrompt = false; });
+      if (detailClosePrompt) return;
+      detailClosePrompt = true;
+      AdminUI.confirm({ title: '放弃未保存的修改？', message: '当前路线组的修改尚未保存。', confirmText: '放弃修改', waitForHidden: true }).then(function (confirmed) {
+        if (confirmed) { allowDetailClose = true; detailModal.hide(); }
+      }).finally(function () { detailClosePrompt = false; });
       return;
     }
-    allowIntroClose = false;
-    resetIntroduction();
+    allowDetailClose = false;
+    resetRouteEditor();
     selectedGroupID = '';
     detailSession++;
     detailRequest++;
@@ -394,40 +400,27 @@
     return tr;
   }
 
-  editTitleBtn.addEventListener('click', function () {
-    if (!selectedGroupID || detailLoadingID || introWriting || !AdminAccess.can('route_groups', true)) return;
-    var groupID = selectedGroupID, session = detailSession;
-    AdminUI.runOnce('route-group-title', async function () {
-      var saved = await AdminUI.form({
-        title: '修改路线标题',
-        fields: [{ name: 'name', label: '标题', value: detailName.textContent, required: true }],
-        waitForHidden: true,
-        onSubmit: async function (values, signal) {
-          var group = await apiJSON('/admin/api/route-groups/' + encodeURIComponent(groupID) + '/name', {
-            method: 'PUT', body: JSON.stringify({ name: values.name.trim() }), signal: signal
-          });
-          if (isCurrentDetail(groupID, session)) detailName.textContent = group.name;
-        }
-      });
-      if (saved) await loadGroups();
-    });
+  routeEditForm.addEventListener('submit', saveRouteDetails);
+  introGenerateBtn.addEventListener('click', generateIntroductionCandidate);
+  document.getElementById('introApplyBtn').addEventListener('click', function () {
+    if (!selectedGroupID || detailWriting || introCandidate.hidden || !AdminAccess.can('route_groups', true)) return;
+    introSummary.value = introCandidateText.textContent;
+    introCandidate.hidden = true;
+    introCandidateText.textContent = '';
+    introSummary.focus();
   });
-  document.getElementById('introSaveBtn').addEventListener('click', saveIntroduction);
-  document.getElementById('introGenerateBtn').addEventListener('click', generateIntroductionDraft);
 
   async function loadDetail(groupID, requestedOffset) {
-    if (!groupID || introWriting || (requestedOffset != null && detailLoadingID === groupID)) return;
+    if (!groupID || detailWriting || (requestedOffset != null && detailLoadingID === groupID)) return;
     var opening = selectedGroupID !== groupID || !detailModal.root.open;
     if (opening) {
       detailSession++;
       memberList.replaceChildren();
       memberOffset = memberTotal = 0;
-      resetIntroduction();
+      resetRouteEditor();
       detailPanel.hidden = true;
       var cached = routeGroups.get(groupID);
-      detailName.textContent = cached && cached.name || '路线组';
       document.getElementById('detailGroupID').textContent = groupID;
-      editTitleBtn.hidden = true;
       document.getElementById('detailTrackType').textContent = '';
       renderDetailPath(cached);
     }
@@ -459,7 +452,7 @@
       if (request === detailRequest && !controller.signal.aborted) {
         if (err.status === 404) {
           detailPanel.hidden = true;
-          editTitleBtn.hidden = true;
+          routeEditFooter.hidden = true;
           showDetailState(err.message, true);
         } else if (paging) {
           pageError = '翻页失败，可重试';
@@ -507,16 +500,22 @@
 
   function lines(id) { return document.getElementById(id).value.split('\n').map(function (s) { return s.trim(); }).filter(Boolean); }
   function putLines(id, values) { document.getElementById(id).value = (values || []).join('\n'); }
-  function resetIntroduction() {
+  function resetRouteEditor() {
     if (introLoadController) introLoadController.abort();
     introLoadController = null;
     cancelIntroGeneration();
+    titleBaseline = null;
     introBaseline = '';
     introFieldsModal.hide();
-    introActions.hidden = true;
+    routeEditFooter.hidden = true;
+    introAdvancedBtn.hidden = true;
+    introGenerateBtn.hidden = true;
     introSummary.hidden = true;
     introLoadState.hidden = true;
-    showIntroError('');
+    introCandidate.hidden = true;
+    introCandidateText.textContent = '';
+    setFeedback(routeEditError, '');
+    setFeedback(introGenerateError, '');
   }
 
   async function loadIntroduction() {
@@ -530,7 +529,9 @@
       var intro = await apiJSON('/admin/api/route-groups/' + encodeURIComponent(groupID) + '/introduction', { signal: controller.signal });
       if (introLoadController !== controller) return;
       renderIntroduction(intro);
-      introActions.hidden = false;
+      routeEditFooter.hidden = false;
+      introAdvancedBtn.hidden = false;
+      introGenerateBtn.hidden = false;
       introSummary.hidden = false;
       introLoadState.hidden = true;
     } catch (err) {
@@ -553,7 +554,6 @@
     document.getElementById('introBestSeasons').value = (intro.best_seasons || []).join(',');
     document.getElementById('introDurationMin').value = intro.estimated_duration_min || 0;
     document.getElementById('introDurationMax').value = intro.estimated_duration_max || 0;
-    introAutomatic = intro.status === 'automatic';
     introBaseline = JSON.stringify(introductionPayload());
   }
   function introductionPayload() {
@@ -562,19 +562,18 @@
       difficulty:document.getElementById('introDifficulty').value.trim(),best_seasons:document.getElementById('introBestSeasons').value.split(',').map(function(s){return s.trim();}).filter(Boolean),
       estimated_duration_min:Number(document.getElementById('introDurationMin').value||0),estimated_duration_max:Number(document.getElementById('introDurationMax').value||0)};
   }
-  function introDirty() {
-    return !!introBaseline && JSON.stringify(introductionPayload()) !== introBaseline;
+  function detailDirty() {
+    return (titleBaseline !== null && routeTitleInput.value.trim() !== titleBaseline) ||
+      (!!introBaseline && JSON.stringify(introductionPayload()) !== introBaseline);
   }
-  function showIntroError(message) {
-    var node = document.getElementById('introWriteError');
+  function setFeedback(node, message) {
     node.textContent = message;
     node.hidden = !message;
   }
 
   function setIntroGenerationBusy(busy) {
-    var button = document.getElementById('introGenerateBtn');
-    button.disabled = busy || !AdminAccess.can('route_groups', true);
-    button.textContent = busy ? '正在生成…' : 'AI 生成';
+    introGenerateBtn.disabled = busy || !AdminAccess.can('route_groups', true);
+    introGenerateBtn.textContent = busy ? '正在生成…' : 'AI 生成';
   }
 
   function cancelIntroGeneration() {
@@ -584,29 +583,23 @@
     setIntroGenerationBusy(false);
   }
 
-  async function generateIntroductionDraft() {
-    if (!selectedGroupID || !introBaseline || detailLoadingID || introWriting || introAIController || !AdminAccess.can('route_groups', true)) return;
-    var groupID = selectedGroupID, session = detailSession;
-    var field = introSummary;
-    var previous = field.value;
-    if (previous.trim() && (!introAutomatic || previous.trim() !== JSON.parse(introBaseline).zh.summary)) {
-      if (!await AdminUI.confirm({ title: '替换当前简介？', message: '生成的简介会填入编辑框，保存前可以继续修改。', confirmText: '生成', waitForHidden: true })) return;
-    }
-    if (selectedGroupID !== groupID || session !== detailSession || introAIController || introWriting || previous !== field.value) return;
+  async function generateIntroductionCandidate() {
+    if (!selectedGroupID || !introBaseline || detailWriting || introAIController || !AdminAccess.can('route_groups', true)) return;
+    var groupID = selectedGroupID;
     var controller = introAIController = new AbortController();
-    showIntroError('');
+    setFeedback(introGenerateError, '');
+    introCandidate.hidden = true;
+    introCandidateText.textContent = '';
     setIntroGenerationBusy(true);
     try {
       var result = await apiJSON('/admin/api/route-groups/' + encodeURIComponent(groupID) + '/introduction/generate', { method: 'POST', signal: controller.signal });
       if (introAIController !== controller) return;
-      if (field.value !== previous) {
-        showIntroError('生成期间摘要已修改，已保留当前内容。');
-        return;
-      }
-      field.value = result.summary;
-      field.focus({ preventScroll: true });
+      var summary = result && typeof result.summary === 'string' ? result.summary.trim() : '';
+      if (!summary) throw new Error('未生成可用的简介，请重试。');
+      introCandidate.hidden = false;
+      introCandidateText.textContent = summary;
     } catch (err) {
-      if (!controller.signal.aborted) showIntroError(err.message);
+      if (!controller.signal.aborted) setFeedback(introGenerateError, err.message);
     } finally {
       if (introAIController === controller) {
         introAIController = null;
@@ -615,23 +608,53 @@
     }
   }
 
-  async function saveIntroduction() {
-    if (!selectedGroupID || !introBaseline || detailLoadingID || introWriting || !AdminAccess.can('route_groups', true)) return;
+  async function saveRouteDetails(event) {
+    event.preventDefault();
+    if (!selectedGroupID || titleBaseline === null || detailLoadingID || detailWriting || !AdminAccess.can('route_groups', true)) return;
+    if (memberWriting) { setFeedback(routeEditError, '成员轨迹正在更新，请稍后保存。'); return; }
+    var name = routeTitleInput.value.trim();
+    if (!name || [...name].length > 128) {
+      setFeedback(routeEditError, '请输入 1 到 128 个字符的标题。');
+      routeTitleInput.focus();
+      return;
+    }
     var payload = introductionPayload();
-    if (!payload.zh.summary) { showIntroError('请输入简介。'); introSummary.focus(); return; }
+    var nameChanged = name !== titleBaseline;
+    var introChanged = !!introBaseline && JSON.stringify(payload) !== introBaseline;
+    if (introChanged && !payload.zh.summary) {
+      setFeedback(routeEditError, '请输入简介。');
+      introSummary.focus();
+      return;
+    }
+    var min = payload.estimated_duration_min, max = payload.estimated_duration_max;
+    if (introChanged && (!Number.isSafeInteger(min) || !Number.isSafeInteger(max) || min < 0 || max < 0 || (max > 0 && max < min))) {
+      setFeedback(routeEditError, '请检查完整字段中的预计时长。');
+      return;
+    }
+    if (!nameChanged && !introChanged) { detailModal.hide(); return; }
     cancelIntroGeneration();
-    showIntroError('');
-    introWriting = introPanel.inert = true;
+    setFeedback(routeEditError, '');
+    detailWriting = detailPanel.inert = routeEditFooter.inert = true;
+    routeSaveBtn.textContent = '保存中…';
+    var path = '/admin/api/route-groups/' + encodeURIComponent(selectedGroupID);
+    var nameSaved = false;
     try {
-      var intro = await apiJSON('/admin/api/route-groups/' + encodeURIComponent(selectedGroupID) + '/introduction', {
-        method: 'PUT', body: JSON.stringify(payload)
-      });
-      renderIntroduction(intro);
+      if (nameChanged) {
+        var group = await apiJSON(path + '/name', { method: 'PUT', body: JSON.stringify({ name: name }) });
+        nameSaved = true;
+        routeTitleInput.value = titleBaseline = group.name;
+      }
+      if (introChanged) {
+        var intro = await apiJSON(path + '/introduction', { method: 'PUT', body: JSON.stringify(payload) });
+        renderIntroduction(intro);
+      }
     } catch (err) {
-      showIntroError(err.message);
+      setFeedback(routeEditError, nameSaved ? '标题已保存，简介未确认保存 · ' + err.message : err.message);
       return;
     } finally {
-      introWriting = introPanel.inert = false;
+      detailWriting = detailPanel.inert = routeEditFooter.inert = false;
+      routeSaveBtn.textContent = '保存';
+      if (nameSaved) loadGroups();
     }
     detailModal.hide();
     AdminUI.alert('已保存', 'success');
@@ -640,8 +663,10 @@
   function renderDetail(data) {
     var g = data.group || {};
     document.getElementById('detailGroupID').textContent = g.group_id || '';
-    detailName.textContent = g.name || '未命名路线';
-    editTitleBtn.hidden = false;
+    var name = (g.name || '').trim();
+    if (titleBaseline === null || routeTitleInput.value.trim() === titleBaseline) routeTitleInput.value = name;
+    titleBaseline = name;
+    routeEditFooter.hidden = !introBaseline && !AdminAccess.can('route_groups', true);
     var cached = routeGroups.get(g.group_id);
     renderDetailPath(data.grouping ? { grouping: data.grouping } : cached);
     var meta = trackTypeMeta(g.track_type);
@@ -838,7 +863,7 @@
   });
 
   async function openMemberTrack(trackID, trigger) {
-    if (!trackID || !selectedGroupID || !detailModal.root.open || detailLoadingID || introWriting || !AdminAccess.can('tracks', false)) return;
+    if (!trackID || !selectedGroupID || !detailModal.root.open || detailLoadingID || detailWriting || !AdminAccess.can('tracks', false)) return;
     var groupID = selectedGroupID, session = detailSession;
     trigger.focus({ preventScroll: true });
     var refresh = function () { return refreshGroupAfterChange(groupID, session); };
@@ -856,9 +881,9 @@
   }
 
   async function setRepresentative(trackID, button) {
-    if (!selectedGroupID || !trackID || detailLoadingID || representativeWriting || !AdminAccess.can('route_groups', true)) return;
+    if (!selectedGroupID || !trackID || detailLoadingID || detailWriting || memberWriting || !AdminAccess.can('route_groups', true)) return;
     var groupID = selectedGroupID, session = detailSession;
-    representativeWriting = button.disabled = true;
+    memberWriting = button.disabled = true;
     try {
       await apiJSON('/admin/api/route-groups/' + encodeURIComponent(groupID) + '/representative', {
         method: 'PUT',
@@ -869,15 +894,16 @@
     } catch (err) {
       AdminUI.alert(err.message, 'danger');
     } finally {
-      representativeWriting = button.disabled = false;
+      memberWriting = button.disabled = false;
     }
   }
 
   async function removeMember(trackID) {
-    if (!selectedGroupID || !trackID || detailLoadingID || !AdminAccess.can('route_groups', true)) return;
+    if (!selectedGroupID || !trackID || detailLoadingID || detailWriting || memberWriting || !AdminAccess.can('route_groups', true)) return;
     var groupID = selectedGroupID, session = detailSession;
     if (!await AdminUI.confirm({ title: '移除成员轨迹', message: '确认从当前路线组移除轨迹 ' + trackID + '？', confirmText: '确认移除', danger: true, waitForHidden: true })) return;
-    if (!isCurrentDetail(groupID, session)) return;
+    if (!isCurrentDetail(groupID, session) || memberWriting || detailWriting) return;
+    memberWriting = true;
     try {
       await apiJSON('/admin/api/route-groups/' + encodeURIComponent(groupID) + '/members/' + encodeURIComponent(trackID), {
         method: 'DELETE'
@@ -885,6 +911,8 @@
       await refreshGroupAfterChange(groupID, session);
     } catch (err) {
       AdminUI.alert(err.message, 'danger');
+    } finally {
+      memberWriting = false;
     }
   }
 
