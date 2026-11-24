@@ -103,7 +103,8 @@
 | GET | `/admin/api/analytics/sync-summaries` | 鉴权 | 埋点 OSS 同步摘要列表，支持 `status` / `limit` / `offset` |
 | GET | `/admin/api/analytics/health` | analytics 读取权限 | 工作台只读归档健康状态，独立异步加载；不触发同步或 OSS 请求 |
 | GET | `/admin/api/route-groups` | 鉴权 | 路线组列表，支持 `track_type` / `province_code`（服务端展开为省内城市集合）/ `city_code` 筛选与 `limit` / `offset` 分页；仅返回有已完成公开成员的路线组，`member_count` 为这些成员的数量。返回 `total`、`next_offset`、`has_more`、`area_id`、目录区域摘要和 `grouping`。见[聚合规则](admin-workflows.md#运营聚合路线)。 |
-| GET | `/admin/api/route-groups?view=directory` | 地图模式查看 | 按同样的运动类型及覆盖省市筛选返回完整轻量目录。`data.total` 是匹配的路线组数，`items` 每项包含 `group_id`、`name`、`track_type`、`member_count` 和 `grouping`。`limit` 和 `offset` 只适用于默认列表模式。 |
+| GET | `/admin/api/route-groups?view=directory` | 地图模式查看 | 按同样的运动类型及覆盖省市筛选返回完整轻量目录。`data.total` 是匹配的原始路线组数，`items` 每项包含 `group_id`、`name`、`track_type`、`member_count`、`grouping` 及可选的 GCJ02 `map_point`。`limit` 和 `offset` 只适用于默认列表模式。 |
+| GET | `/admin/api/route-groups/scenic-members` | 地图模式查看 | 按 `scenic_id`、归属 `grouping_city_code`、`district_id` 和与目录相同的运动类型及覆盖省市筛选定位景点。按 `limit` / `offset` 分页返回该节点的公开成员，包含 `items`、`total`、`member_offset`。成员的 `group_id` 用于从单条轨迹进入已有路线组维护。 |
 | GET | `/admin/api/route-groups/:group_id` | 鉴权 | 路线组详情、与列表同口径的 `grouping`、可识别的 `coverage_city_names`、`area_id` 对应区域信息及成员轨迹。只统计并分页返回已完成公开的成员，无此类成员时返回 404。返回实际 `member_offset`，越界时定位到最后一页。归属读取失败时可省略 `grouping` |
 | PUT | `/admin/api/route-groups/:group_id/name` | 鉴权 | 人工改名 |
 | POST | `/admin/api/route-groups/:group_id/merge` | 鉴权 | 将 `source_group_id` 合并到当前路线组，并归档源路线组 |

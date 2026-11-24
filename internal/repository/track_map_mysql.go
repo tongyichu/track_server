@@ -986,31 +986,50 @@ func (r *MySQLTrackMapRepository) ArchiveRouteGroup(ctx context.Context, groupID
 }
 
 func (r *MySQLTrackMapRepository) ListRouteGroupMembers(ctx context.Context, groupID string, limit int) ([]*models.TrackRouteGroupMember, error) {
-	return r.listRouteGroupMembersPage(ctx, groupID, limit, 0, false)
+	return r.listRouteGroupMembersPage(ctx, []string{groupID}, limit, 0, false)
 }
 
-func (r *MySQLTrackMapRepository) ListVisibleRouteGroupMembersPage(ctx context.Context, groupID string, limit, offset int) ([]*models.TrackRouteGroupMember, error) {
-	return r.listRouteGroupMembersPage(ctx, groupID, limit, offset, true)
+func (r *MySQLTrackMapRepository) ListVisibleRouteGroupMembersPage(ctx context.Context, groupIDs []string, limit, offset int) ([]*models.TrackRouteGroupMember, error) {
+	return r.listRouteGroupMembersPage(ctx, groupIDs, limit, offset, true)
 }
 
-func (r *MySQLTrackMapRepository) CountVisibleRouteGroupMembers(ctx context.Context, groupID string) (int64, error) {
+func mysqlRouteGroupMemberScope(groupIDs []string) (string, []any) {
+	args := make([]any, 0, len(groupIDs))
+	for _, id := range groupIDs {
+		args = append(args, id)
+	}
+	return `m.group_id IN (` + strings.Repeat("?,", len(groupIDs)-1) + `?)`, args
+}
+
+func (r *MySQLTrackMapRepository) CountVisibleRouteGroupMembers(ctx context.Context, groupIDs []string) (int64, error) {
+	if len(groupIDs) == 0 {
+		return 0, nil
+	}
+	scope, args := mysqlRouteGroupMemberScope(groupIDs)
 	var count int64
-	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*)`+mysqlVisibleRouteGroupMembersSource+` AND m.group_id = ?`, models.TrackStatusNormal, groupID).Scan(&count)
+	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*)`+mysqlVisibleRouteGroupMembersSource+` AND `+scope, append([]any{models.TrackStatusNormal}, args...)...).Scan(&count)
 	return count, err
 }
 
-func (r *MySQLTrackMapRepository) listRouteGroupMembersPage(ctx context.Context, groupID string, limit, offset int, visibleOnly bool) ([]*models.TrackRouteGroupMember, error) {
+func (r *MySQLTrackMapRepository) listRouteGroupMembersPage(ctx context.Context, groupIDs []string, limit, offset int, visibleOnly bool) ([]*models.TrackRouteGroupMember, error) {
+	if len(groupIDs) == 0 {
+		return nil, nil
+	}
 	if limit <= 0 {
 		limit = 20
 	}
-	source := ` FROM track_route_group_members m WHERE m.group_id = ?`
-	args := []interface{}{groupID, limit, max(0, offset)}
+	scope, args := mysqlRouteGroupMemberScope(groupIDs)
+	source := ` FROM track_route_group_members m WHERE ` + scope
 	if visibleOnly {
-		source = mysqlVisibleRouteGroupMembersSource + ` AND m.group_id = ?`
-		args = append([]interface{}{models.TrackStatusNormal}, args...)
+		source = mysqlVisibleRouteGroupMembersSource + ` AND ` + scope
+		args = append([]any{models.TrackStatusNormal}, args...)
+	}
+	order := ` ORDER BY m.created_at DESC, m.track_id ASC`
+	if len(groupIDs) == 1 {
+		order = ` ORDER BY m.role = 'representative' DESC, m.created_at DESC, m.track_id ASC`
 	}
 	rows, err := r.db.QueryContext(ctx, `SELECT m.group_id, m.track_id, m.similarity_score, m.match_direction, m.role, m.source, m.created_at, m.updated_at`+
-		source+` ORDER BY m.role = 'representative' DESC, m.created_at DESC, m.track_id ASC LIMIT ? OFFSET ?`, args...)
+		source+order+` LIMIT ? OFFSET ?`, append(args, limit, max(0, offset))...)
 	if err != nil {
 		return nil, err
 	}

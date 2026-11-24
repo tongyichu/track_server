@@ -2876,15 +2876,7 @@ func (h *Handler) ListRouteGroups(ctx context.Context, c *app.RequestContext) {
 		c.JSON(http.StatusInternalServerError, utils.H{"error": "route group service not configured"})
 		return
 	}
-	filter := models.TrackMapQueryFilter{
-		TrackType: strings.TrimSpace(string(c.Query("track_type"))),
-		CityCode:  strings.TrimSpace(string(c.Query("city_code"))),
-		Limit:     parseAdminListLimit(string(c.Query("limit"))),
-		Offset:    parseAdminListOffset(string(c.Query("offset"))),
-	}
-	if provinceCode := strings.TrimSpace(string(c.Query("province_code"))); provinceCode != "" {
-		filter.CityCodes = adminCityCodesOfProvince(provinceCode)
-	}
+	filter := adminRouteGroupFilter(c)
 	if string(c.Query("view")) == "directory" {
 		items, err := h.routeGroupSvc.ListRouteGroupDirectory(ctx, filter)
 		if err != nil {
@@ -2902,6 +2894,62 @@ func (h *Handler) ListRouteGroups(ctx context.Context, c *app.RequestContext) {
 	nextOffset := filter.Offset + len(items)
 	hasMore := int64(nextOffset) < total
 	c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"items": items, "total": total, "next_offset": nextOffset, "has_more": hasMore}})
+}
+
+func adminRouteGroupFilter(c *app.RequestContext) models.TrackMapQueryFilter {
+	filter := models.TrackMapQueryFilter{
+		TrackType: strings.TrimSpace(c.Query("track_type")),
+		CityCode:  strings.TrimSpace(c.Query("city_code")),
+		Limit:     parseAdminListLimit(c.Query("limit")),
+		Offset:    parseAdminListOffset(c.Query("offset")),
+	}
+	if province := strings.TrimSpace(c.Query("province_code")); province != "" {
+		filter.CityCodes = adminCityCodesOfProvince(province)
+	}
+	return filter
+}
+
+func (h *Handler) ListScenicRouteGroupMembers(ctx context.Context, c *app.RequestContext) {
+	if h == nil || h.routeGroupSvc == nil {
+		c.JSON(http.StatusServiceUnavailable, utils.H{"error": "route group service not configured"})
+		return
+	}
+	scope := service.AdminScenicMembersScope{
+		ScenicID: strings.TrimSpace(c.Query("scenic_id")), CityCode: strings.TrimSpace(c.Query("grouping_city_code")),
+		DistrictID: strings.TrimSpace(c.Query("district_id")),
+	}
+	members, total, offset, err := h.routeGroupSvc.ListAdminScenicMembers(ctx, adminRouteGroupFilter(c), scope)
+	if err != nil {
+		writeAdminRouteGroupError(c, err)
+		return
+	}
+	ids := make([]string, 0, len(members))
+	for _, member := range members {
+		ids = append(ids, member.TrackID)
+	}
+	var tracks map[string]*models.Track
+	if h.trackRepo != nil && len(ids) != 0 {
+		tracks, err = h.trackRepo.FindByIDs(ctx, ids)
+		if err != nil {
+			writeAdminRouteGroupError(c, err)
+			return
+		}
+	}
+	items := make([]utils.H, 0, len(members))
+	for _, member := range members {
+		item := utils.H{"track_id": member.TrackID, "group_id": member.GroupID}
+		if track := tracks[member.TrackID]; track != nil {
+			item["title"], item["distance"], item["track_type"] = track.Title, track.Distance, track.TrackType
+			for _, variant := range []string{"landscape_day", "square_day", "landscape_night", "square_night"} {
+				if track.PreviewImages.Variant(variant) != "" {
+					item["preview_variant"] = variant
+					break
+				}
+			}
+		}
+		items = append(items, item)
+	}
+	c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"items": items, "total": total, "member_offset": offset}})
 }
 
 // adminCityCodesOfProvince 展开省份 Code 为该省全部城市 Code（含省级 Code 本身），用于路线组省份筛选。

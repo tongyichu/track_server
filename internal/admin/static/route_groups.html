@@ -38,7 +38,12 @@
       <div class="admin-stats-heading mt-2"><span id="mapStatisticsScope" class="hint">全量有效路线组</span><button id="refreshMapStatistics" type="button" class="btn btn-sm btn-outline-secondary">刷新统计</button></div>
       <p id="mapStatisticsError" class="error" role="alert" hidden></p>
       <div class="feature-stats-grid admin-chart-grid">
-        <section><div class="feature-chart-heading admin-stats-heading"><h3>路线空间覆盖</h3><button id="resetRouteMap" type="button" class="btn btn-sm btn-outline-secondary">全国视图</button></div><div class="feature-chart-stage"><div id="routeSpatialChart" class="feature-chart" role="img" aria-label="有效路线组空间覆盖分布"></div><p id="routeSpatialError" class="feature-chart-error" hidden></p></div><p id="routeSpatialSummary" class="hint feature-chart-note"></p><div id="routeMapSelection" class="feature-map-selection" hidden><label for="routeMapGroup" class="visually-hidden">选择路线组</label><select id="routeMapGroup" class="form-select form-select-sm"></select><button id="openRouteMapGroup" type="button" class="btn btn-sm btn-outline-primary">查看详情</button></div></section>
+        <section>
+          <div class="feature-chart-heading admin-stats-heading"><h3>路线空间覆盖</h3><button id="resetRouteMap" type="button" class="btn btn-sm btn-outline-secondary">全国视图</button></div>
+          <div class="feature-chart-stage"><div id="routeSpatialChart" class="feature-chart" role="img" aria-label="按地区显示的路线空间覆盖"></div><p id="routeSpatialError" class="feature-chart-error" hidden></p></div>
+          <p id="routeSpatialSummary" class="hint feature-chart-note" role="status"></p>
+          <div id="routeMapSelection" class="feature-map-selection" hidden><label for="routeMapGroup" class="visually-hidden">选择地图位置</label><select id="routeMapGroup" class="form-select form-select-sm"></select><button id="openRouteMapGroup" type="button" class="btn btn-sm btn-outline-primary">定位或查看</button></div>
+        </section>
         <section><div class="feature-chart-heading admin-stats-heading"><h3>路线组规模分布</h3><span class="hint">按组内轨迹数</span></div><div id="routeSizeChart" class="feature-chart" role="img" aria-label="路线组内轨迹数量分布"></div></section>
       </div>
     </details>
@@ -186,6 +191,27 @@
               <label>英文提示（每行一项）<textarea data-admin-input="route_groups" id="introEnTips" rows="2"></textarea></label>
             </section>
           </div>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog class="modal route-management-modal" id="scenicMembersModal" aria-labelledby="scenicMembersName" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header route-modal-header">
+          <div class="route-modal-heading"><h2 class="modal-title" id="scenicMembersName"></h2><p class="route-detail-path" id="scenicMembersPath"></p></div>
+          <button type="button" class="btn-close" data-admin-dismiss="dialog" aria-label="关闭"></button>
+        </div>
+        <div class="modal-body route-modal-body">
+          <section class="route-workspace" aria-labelledby="scenicTracksHeading">
+            <div class="route-panel-heading"><h3 id="scenicTracksHeading">景点轨迹</h3><span id="scenicTracksCount" class="hint"></span></div>
+            <ul id="scenicTracksList" class="route-member-list"></ul>
+            <div class="route-form-state" id="scenicTracksState" hidden><span id="scenicTracksHint" role="status"></span><button type="button" class="btn btn-sm btn-outline-secondary" id="scenicTracksRetry" hidden>重试</button></div>
+            <nav class="route-member-pagination" id="scenicTracksPager" aria-label="景点轨迹分页" hidden>
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="scenicTracksPrev">上一页</button><span class="hint" id="scenicTracksPage" role="status"></span><button type="button" class="btn btn-sm btn-outline-secondary" id="scenicTracksNext">下一页</button>
+            </nav>
+          </section>
         </div>
       </div>
     </div>

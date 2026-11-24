@@ -8,6 +8,7 @@ import (
 
 	"github.com/tongyichu/track_server/internal/config"
 	"github.com/tongyichu/track_server/internal/models"
+	"github.com/tongyichu/track_server/internal/repository"
 )
 
 // AdminRouteGroupGrouping is the display path of a route group in the admin list.
@@ -26,6 +27,7 @@ type AdminRouteGroupDirectoryItem struct {
 	TrackType   string                  `json:"track_type"`
 	MemberCount int64                   `json:"member_count"`
 	Grouping    AdminRouteGroupGrouping `json:"grouping"`
+	MapPoint    *models.TrackMapPoint   `json:"map_point,omitempty"`
 }
 
 func (s *TrackRouteGroupService) ListRouteGroupDirectory(ctx context.Context, filter models.TrackMapQueryFilter) ([]AdminRouteGroupDirectoryItem, error) {
@@ -47,13 +49,45 @@ func (s *TrackRouteGroupService) ListRouteGroupDirectory(ctx context.Context, fi
 			return nil, err
 		}
 		for _, row := range batch {
+			point := row.mapPoint
+			center := models.TrackMapPoint{Latitude: row.CenterLat, Longitude: row.CenterLng}
+			if point == nil && adminRouteGroupHasStart(center) {
+				point = &center
+			}
 			items = append(items, AdminRouteGroupDirectoryItem{
 				GroupID: row.GroupID, Name: row.Name, TrackType: row.TrackType,
-				MemberCount: row.MemberCount, Grouping: row.Grouping,
+				MemberCount: row.MemberCount, Grouping: row.Grouping, MapPoint: point,
 			})
 		}
 	}
 	return items, nil
+}
+
+type AdminScenicMembersScope struct {
+	ScenicID   string
+	CityCode   string
+	DistrictID string
+}
+
+func (s *TrackRouteGroupService) ListAdminScenicMembers(ctx context.Context, filter models.TrackMapQueryFilter, scope AdminScenicMembersScope) ([]*models.TrackRouteGroupMember, int64, int, error) {
+	if scope.ScenicID == "" || len(scope.ScenicID) > 128 {
+		return nil, 0, 0, invalidArg("invalid scenic_id")
+	}
+	directory, err := s.ListRouteGroupDirectory(ctx, filter)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+	var groupIDs []string
+	for _, row := range directory {
+		g := row.Grouping
+		if g.ScenicID == scope.ScenicID && g.CityCode == scope.CityCode && g.DistrictID == scope.DistrictID {
+			groupIDs = append(groupIDs, row.GroupID)
+		}
+	}
+	if len(groupIDs) == 0 {
+		return nil, 0, 0, repository.ErrNotFound
+	}
+	return s.visibleAdminRouteGroupMembers(ctx, groupIDs, max(1, filter.Limit), filter.Offset)
 }
 
 func (s *TrackRouteGroupService) buildAdminRouteGroupSummaries(ctx context.Context, groups []*models.TrackRouteGroup, includeArea bool) ([]*AdminRouteGroupSummary, error) {
@@ -91,37 +125,44 @@ func (s *TrackRouteGroupService) buildAdminRouteGroupSummaries(ctx context.Conte
 			return nil, err
 		}
 	}
-	scenicGroups := make(map[string]AdminRouteGroupGrouping)
+	type scenicLocation struct {
+		grouping AdminRouteGroupGrouping
+		point    *models.TrackMapPoint
+	}
+	scenicGroups := make(map[string]scenicLocation)
 	for _, item := range items {
 		if includeArea && item.Area == nil {
 			item.Area = adminRouteGroupPlaceArea(places[strings.TrimSpace(item.AreaID)])
 		}
 		d := departures[item.GroupID]
+		if adminRouteGroupHasStart(d.Start) {
+			item.mapPoint = &d.Start
+		}
 		if d.scenic == nil {
 			cityCode := d.CityCode
 			if cityCode == "" && len(item.CityCodes) == 1 {
 				cityCode = item.CityCodes[0]
 			}
-			var point *models.TrackMapPoint
-			if adminRouteGroupHasStart(d.Start) {
-				point = &d.Start
-			}
-			item.Grouping = s.adminRouteGroupLocation(cityCode, point)
+			item.Grouping = s.adminRouteGroupLocation(cityCode, item.mapPoint)
 			continue
 		}
 		spot := d.scenic
-		grouping, ok := scenicGroups[spot.id]
+		location, ok := scenicGroups[spot.id]
 		if !ok {
 			cityCode, point := spot.cityCode, spot.point
 			if place := places[spot.id]; !spot.catalog && place != nil {
 				cityCode = place.CityCode
 				point = scenicMapPoint(place.Latitude, place.Longitude, place.CoordinateSystem)
 			}
-			grouping = s.adminRouteGroupLocation(cityCode, point)
+			grouping := s.adminRouteGroupLocation(cityCode, point)
 			grouping.ScenicID, grouping.ScenicName = spot.id, spot.name
-			scenicGroups[spot.id] = grouping
+			location = scenicLocation{grouping: grouping, point: point}
+			scenicGroups[spot.id] = location
 		}
-		item.Grouping = grouping
+		item.Grouping = location.grouping
+		if location.point != nil {
+			item.mapPoint = location.point
+		}
 	}
 	return items, nil
 }

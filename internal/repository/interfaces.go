@@ -263,8 +263,8 @@ type TrackMapRepository interface {
 	DeleteRouteGroupMember(ctx context.Context, groupID, trackID string) error
 	ArchiveRouteGroup(ctx context.Context, groupID string, now time.Time) error
 	ListRouteGroupMembers(ctx context.Context, groupID string, limit int) ([]*models.TrackRouteGroupMember, error)
-	ListVisibleRouteGroupMembersPage(ctx context.Context, groupID string, limit, offset int) ([]*models.TrackRouteGroupMember, error)
-	CountVisibleRouteGroupMembers(ctx context.Context, groupID string) (int64, error)
+	ListVisibleRouteGroupMembersPage(ctx context.Context, groupIDs []string, limit, offset int) ([]*models.TrackRouteGroupMember, error)
+	CountVisibleRouteGroupMembers(ctx context.Context, groupIDs []string) (int64, error)
 	FindRouteGroupByTrackID(ctx context.Context, trackID string) (*models.TrackRouteGroup, error)
 	CountRouteGroupsByCity(ctx context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackMapClusterItem, error)
 	CountRouteGroupsByArea(ctx context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackMapClusterItem, error)

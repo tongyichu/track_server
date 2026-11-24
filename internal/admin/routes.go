@@ -217,6 +217,7 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	api.GET("/companions/statistics", m.Handler.GetAdminCompanionStatistics)
 	api.GET("/companions/usage-statistics", m.Handler.GetAdminCompanionUsageStatistics)
 	api.GET("/route-groups/statistics", m.Handler.GetAdminMapModeStatistics)
+	api.GET("/route-groups/scenic-members", m.Handler.ListScenicRouteGroupMembers)
 
 	// 用户 / 轨迹 / 同行 列表（仅查询，提供基础翻页）
 	api.GET("/static/*filepath", m.Handler.GetStaticAsset)

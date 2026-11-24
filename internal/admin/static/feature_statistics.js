@@ -9,7 +9,12 @@
     return result.data;
   }
   if ($('routeSpatialChart')) {
-    const map = kit.createSpatialMap({ chart: 'routeSpatialChart', summary: 'routeSpatialSummary', error: 'routeSpatialError', reset: 'resetRouteMap', selection: 'routeMapSelection', select: 'routeMapGroup', open: 'openRouteMapGroup', idKey: 'id', unit: '组' });
+    const routes = window.AdminRouteGroups;
+    const map = kit.createRouteCoverageMap({
+      chart: 'routeSpatialChart', summary: 'routeSpatialSummary', error: 'routeSpatialError', reset: 'resetRouteMap',
+      selection: 'routeMapSelection', select: 'routeMapGroup', open: 'openRouteMapGroup',
+      openRoute: routes.openDetail, openScenic: routes.openScenic
+    });
     const details = $('routeStatistics');
     let request = 0, loaded = false;
     async function load() {
@@ -24,16 +29,17 @@
         await AdminAssets.loadCharts();
         if (current !== request || !details.open) return;
         kit.bars('routeSizeChart', data.distribution || [], '组');
-        await map.render(data, id => window.AdminRouteGroups.openDetail(id));
         loaded = true;
       } catch (error) {
         if (current === request) { $('mapStatisticsError').textContent = '统计刷新失败，请重试：' + error.message; $('mapStatisticsError').hidden = false; }
       } finally { if (current === request) { button.disabled = false; button.textContent = '刷新数据'; kit.loading('routeSizeChart', false); } }
     }
-    $('refreshMapStatistics').addEventListener('click', load);
+    function renderCoverage() { if (details.open) map.render(routes.directory()); }
+    $('refreshMapStatistics').addEventListener('click', () => { routes.refreshDirectory(); load(); });
     window.addEventListener('admin:route-groups-changed', () => { loaded = false; load(); });
-    AdminStats.onExpand(details, () => { if (loaded) kit.resize(); else load(); });
-    if (details.open) load();
+    window.addEventListener('admin:route-directory-updated', renderCoverage);
+    AdminStats.onExpand(details, () => { renderCoverage(); if (loaded) kit.resize(); else load(); });
+    if (details.open) { renderCoverage(); load(); }
   }
   if ($('companionTrendChart')) {
     const details = $('companionUsage');

@@ -60,6 +60,7 @@ type AdminRouteGroupSummary struct {
 	*models.TrackRouteGroup
 	Area     *AdminRouteGroupArea    `json:"area,omitempty"`
 	Grouping AdminRouteGroupGrouping `json:"grouping"`
+	mapPoint *models.TrackMapPoint
 }
 
 type AdminRouteGroupDetail struct {
@@ -135,7 +136,7 @@ func (s *TrackRouteGroupService) GetRouteGroupDetail(ctx context.Context, groupI
 	if err != nil {
 		return nil, err
 	}
-	memberCount, err := s.repo.CountVisibleRouteGroupMembers(ctx, groupID)
+	members, memberCount, offset, err := s.visibleAdminRouteGroupMembers(ctx, []string{groupID}, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -143,14 +144,6 @@ func (s *TrackRouteGroupService) GetRouteGroupDetail(ctx context.Context, groupI
 		return nil, repository.ErrNotFound
 	}
 	group.MemberCount = memberCount
-	offset = max(0, offset)
-	if int64(offset) >= group.MemberCount {
-		offset = int(max(0, group.MemberCount-1) / int64(limit) * int64(limit))
-	}
-	members, err := s.repo.ListVisibleRouteGroupMembersPage(ctx, groupID, limit, offset)
-	if err != nil {
-		return nil, err
-	}
 	detail := &AdminRouteGroupDetail{Group: group, Members: make([]*AdminRouteGroupMemberView, 0, len(members)), MemberOffset: offset}
 	if summaries, err := s.buildAdminRouteGroupSummaries(ctx, []*models.TrackRouteGroup{group}, true); err == nil && len(summaries) > 0 {
 		detail.Area, detail.Grouping = summaries[0].Area, &summaries[0].Grouping
@@ -185,6 +178,19 @@ func (s *TrackRouteGroupService) GetRouteGroupDetail(ctx context.Context, groupI
 		detail.Members = append(detail.Members, &AdminRouteGroupMemberView{Member: member, GeoIndex: index})
 	}
 	return detail, nil
+}
+
+func (s *TrackRouteGroupService) visibleAdminRouteGroupMembers(ctx context.Context, groupIDs []string, limit, offset int) ([]*models.TrackRouteGroupMember, int64, int, error) {
+	total, err := s.repo.CountVisibleRouteGroupMembers(ctx, groupIDs)
+	if err != nil || total == 0 {
+		return nil, 0, 0, err
+	}
+	offset = max(0, offset)
+	if int64(offset) >= total {
+		offset = int((total - 1) / int64(limit) * int64(limit))
+	}
+	members, err := s.repo.ListVisibleRouteGroupMembersPage(ctx, groupIDs, limit, offset)
+	return members, total, offset, err
 }
 
 func (s *TrackRouteGroupService) adminRouteGroupArea(ctx context.Context, areaID string) *AdminRouteGroupArea {

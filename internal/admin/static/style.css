@@ -995,6 +995,8 @@ table.admin-audit-table { width: 100%; min-width: 680px; table-layout: fixed; }
 .route-group-table .route-area-toggle:hover { background: rgba(var(--admin-primary-rgb), .035); }
 .route-group-table .route-area-toggle:focus-visible { outline: 2px solid var(--admin-primary); outline-offset: -2px; }
 .route-area-chevron { flex: 0 0 auto; width: 7px; height: 7px; border-inline-end: 1.5px solid currentColor; border-block-end: 1.5px solid currentColor; color: var(--admin-secondary-color); transform: rotate(-45deg); }
+.route-scenic-dot { flex: 0 0 7px; width: 7px; height: 7px; border-radius: 50%; background: #267568; }
+#scenicMembersModal .route-member-actions { min-width: 0; }
 .route-area-toggle[aria-expanded="true"] .route-area-chevron { transform: rotate(45deg); }
 .route-area-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .route-area-stats { flex: 0 0 auto; color: var(--admin-secondary-color); font-size: 12px; font-weight: 400; font-variant-numeric: tabular-nums; }

@@ -880,21 +880,31 @@ func (r *MongoTrackMapRepository) ListRouteGroupMembers(ctx context.Context, gro
 	return decodeMongoRouteGroupMembers(ctx, cur, limit)
 }
 
-func (r *MongoTrackMapRepository) visibleRouteGroupMemberStages(groupID string) mongo.Pipeline {
-	return append(mongo.Pipeline{{{Key: "$match", Value: bson.M{"group_id": groupID}}}}, r.visibleRouteGroupTrackStages()...)
+func (r *MongoTrackMapRepository) visibleRouteGroupMemberStages(groupIDs []string) mongo.Pipeline {
+	return append(mongo.Pipeline{{{Key: "$match", Value: bson.M{"group_id": bson.M{"$in": groupIDs}}}}}, r.visibleRouteGroupTrackStages()...)
 }
 
-func (r *MongoTrackMapRepository) CountVisibleRouteGroupMembers(ctx context.Context, groupID string) (int64, error) {
-	return countMongoVisibleRouteRows(ctx, r.members, r.visibleRouteGroupMemberStages(groupID))
+func (r *MongoTrackMapRepository) CountVisibleRouteGroupMembers(ctx context.Context, groupIDs []string) (int64, error) {
+	if len(groupIDs) == 0 {
+		return 0, nil
+	}
+	return countMongoVisibleRouteRows(ctx, r.members, r.visibleRouteGroupMemberStages(groupIDs))
 }
 
-func (r *MongoTrackMapRepository) ListVisibleRouteGroupMembersPage(ctx context.Context, groupID string, limit, offset int) ([]*models.TrackRouteGroupMember, error) {
+func (r *MongoTrackMapRepository) ListVisibleRouteGroupMembersPage(ctx context.Context, groupIDs []string, limit, offset int) ([]*models.TrackRouteGroupMember, error) {
+	if len(groupIDs) == 0 {
+		return nil, nil
+	}
 	if limit <= 0 {
 		limit = 20
 	}
-	pipeline := append(r.visibleRouteGroupMemberStages(groupID),
+	order := bson.D{{Key: "created_at", Value: -1}, {Key: "track_id", Value: 1}}
+	if len(groupIDs) == 1 {
+		order = append(bson.D{{Key: "role", Value: -1}}, order...)
+	}
+	pipeline := append(r.visibleRouteGroupMemberStages(groupIDs),
 		bson.D{{Key: "$project", Value: bson.M{"track": 0}}},
-		bson.D{{Key: "$sort", Value: bson.D{{Key: "role", Value: -1}, {Key: "created_at", Value: -1}, {Key: "track_id", Value: 1}}}},
+		bson.D{{Key: "$sort", Value: order}},
 		bson.D{{Key: "$skip", Value: int64(max(0, offset))}},
 		bson.D{{Key: "$limit", Value: int64(limit)}},
 	)

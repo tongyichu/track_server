@@ -52,7 +52,7 @@
   var introStatus = '', introAIController = null, introLoadController = null;
   var selectedTrackType = '';
   var routeGroups = new Map(), areaTree = new Map();
-  var listController = null, loadedQuery = '';
+  var listController = null, loadedQuery = '', directoryError = '';
   var areaExpansion = new Map();
   var visibleRouteCounts = new Map();
   var groupList = document.getElementById('groupList');
@@ -75,6 +75,8 @@
   var cityNames = Object.create(null);
   var regionOptions;
   var detailModal = new AdminComponents.Dialog(document.getElementById('detailModal'));
+  var scenicMembersModal = new AdminComponents.Dialog(document.getElementById('scenicMembersModal'));
+  var scenicSelection = null, scenicController = null, scenicOffset = 0, scenicTotal = 0;
   var introFieldsModal = new AdminComponents.Dialog(document.getElementById('introFieldsModal'));
   document.getElementById('introAdvancedBtn').addEventListener('click', function () { introFieldsModal.show(); });
   document.getElementById('detailModal').addEventListener('admin:dialog-closing', function (event) {
@@ -217,14 +219,18 @@
         visibleRouteCounts.clear();
       }
       loadedQuery = query;
+      directoryError = '';
       routeGroups = nextGroups;
       areaTree = nextTree;
       renderGroups();
       statusHint.textContent = '';
+      window.dispatchEvent(new Event('admin:route-directory-updated'));
     } catch (err) {
       if (listController !== controller) return;
       if (!loadedQuery) {
+        directoryError = err.message;
         groupList.innerHTML = '<tr><td colspan="3"><div class="route-table-state route-table-error">加载失败 · ' + esc(err.message) + '</div></td></tr>';
+        window.dispatchEvent(new Event('admin:route-directory-updated'));
         return;
       }
       statusHint.textContent = loadedQuery === query ? '刷新失败 · 仍显示上次结果' : '筛选未更新 · 仍显示上次结果';
@@ -247,15 +253,14 @@
   }
 
   function buildAreaTree(items) {
-    var root = { key: '', children: new Map() };
+    var root = { key: '', path: [], children: new Map() };
     function addGroup(parent, type, id, name) {
       var key = parent.key + '/' + type + ':' + encodeURIComponent(id || '');
       var bucket = parent.children.get(key);
       if (!bucket) {
-        bucket = { key: key, id: id, type: type, name: name, children: new Map(), groups: [], count: 0 };
+        bucket = { key: key, id: id, type: type, name: name, path: parent.path.concat(name), children: new Map(), groups: [], scenicCount: 0, independentCount: 0, memberCount: 0 };
         parent.children.set(key, bucket);
       }
-      bucket.count++;
       return bucket;
     }
     items.forEach(function (g) {
@@ -264,12 +269,37 @@
       var district = addGroup(city, 'district', location.districtID, location.districtName);
       var leaf = location.scenicID ? addGroup(district, 'scenic', location.scenicID, location.scenicName) : district;
       leaf.groups.push(g);
+      if (location.scenicID) {
+        leaf.location = location;
+        leaf.memberCount += Number(g.member_count || 0);
+      } else {
+        district.independentCount++;
+      }
+    });
+    root.children.forEach(function (city) {
+      city.children.forEach(function (district) {
+        district.scenicCount = district.children.size;
+        city.scenicCount += district.scenicCount;
+        city.independentCount += district.independentCount;
+      });
     });
     return root.children;
   }
 
+  function routeDirectoryCount(scenicCount, independentCount) {
+    var labels = [];
+    if (scenicCount) labels.push(scenicCount.toLocaleString() + ' 处景点');
+    if (independentCount) labels.push(independentCount.toLocaleString() + ' 组独立路线');
+    return labels.join(' · ') || '共 0 项';
+  }
+
   function renderGroups(focusKey, focusGroupID) {
-    listSummaryHint.textContent = '共 ' + routeGroups.size.toLocaleString() + ' 组';
+    var totals = Array.from(areaTree.values()).reduce(function (result, city) {
+      result.scenic += city.scenicCount;
+      result.independent += city.independentCount;
+      return result;
+    }, { scenic: 0, independent: 0 });
+    listSummaryHint.textContent = routeDirectoryCount(totals.scenic, totals.independent);
     groupList.innerHTML = '';
     if (!routeGroups.size) {
       groupList.innerHTML = '<tr><td colspan="3"><div class="route-table-state">没有符合当前筛选的路线组</div></td></tr>';
@@ -286,7 +316,7 @@
       var header = renderAreaHeader(bucket, level, expanded);
       rows.appendChild(header);
       if (bucket.key === focusKey) focusTarget = header.querySelector('.route-area-toggle');
-      if (!expanded) return;
+      if (!expanded || bucket.type === 'scenic') return;
       Array.from(bucket.children.values()).sort(compareAreas).forEach(function (child) { appendBucket(child, level + 1); });
       if (bucket.type === 'district' && bucket.children.size && bucket.groups.length) {
         var divider = document.createElement('tr');
@@ -315,14 +345,16 @@
 
   function renderAreaHeader(bucket, level, expanded) {
     var tr = document.createElement('tr');
+    var scenic = bucket.type === 'scenic';
     tr.className = 'route-area-header route-area-level-' + bucket.type + ' route-tree-depth-' + level;
     tr.innerHTML = '<td colspan="3" class="route-tree-cell">' +
-      '<button type="button" class="route-area-toggle" aria-expanded="' + expanded + '" title="' + esc(bucket.name) + '">' +
-      '<span class="route-area-chevron" aria-hidden="true"></span>' +
+      '<button type="button" class="route-area-toggle" ' + (scenic ? 'aria-haspopup="dialog"' : 'aria-expanded="' + expanded + '"') + ' title="' + esc(bucket.name) + '">' +
+      '<span class="' + (scenic ? 'route-scenic-dot' : 'route-area-chevron') + '" aria-hidden="true"></span>' +
       '<span class="route-area-title">' + esc(bucket.name) + '</span>' +
-      '<span class="route-area-stats">' + bucket.count.toLocaleString() + ' 组</span>' +
+      '<span class="route-area-stats">' + (scenic ? bucket.memberCount.toLocaleString() + ' 条轨迹' : routeDirectoryCount(bucket.scenicCount, bucket.independentCount)) + '</span>' +
       '</button></td>';
     tr.querySelector('.route-area-toggle').addEventListener('click', function () {
+      if (scenic) { openScenicMembers(bucket); return; }
       areaExpansion.set(bucket.key, !expanded);
       renderGroups(bucket.key);
     });
@@ -653,6 +685,36 @@
     detailPath.textContent = [path.cityName, path.districtName, path.scenicName || '独立路线'].join(' / ');
   }
 
+  function memberTrackItem(track, trackID, distance, extraMetrics, representative, onOpen) {
+    var title = String(track.title || '').trim() || '未命名轨迹';
+    var distanceLabel = Number.isFinite(distance) && distance > 0
+      ? (distance >= 1000 ? (distance / 1000).toFixed(1) + ' 公里' : Math.round(distance) + ' 米') : '—';
+    var preview = track.preview_images || {};
+    var variant = onOpen && ['landscape_day', 'square_day', 'landscape_night', 'square_night'].find(function (key) {
+      return track.preview_variant === key || preview[key + '_url'];
+    });
+    var previewURL = variant ? '/admin/api/tracks/' + encodeURIComponent(trackID) + '/assets/' + variant : '';
+    var item = document.createElement('li');
+    item.className = 'route-member-row' + (onOpen ? ' route-member-clickable' : '');
+    item.dataset.trackId = trackID;
+    var content = '<span class="route-member-thumb" data-no-preview aria-hidden="true">' +
+      (previewURL ? '<img alt="" loading="lazy" src="' + esc(previewURL) + '">' : '') +
+      '<span' + (previewURL ? ' hidden' : '') + '>—</span></span>' +
+      '<span class="route-member-name"><strong title="' + esc(title) + '">' + esc(title) + '</strong>' +
+      '<small><code>' + esc(trackID) + '</code>' + (representative ? ' <span class="route-member-role">代表轨迹</span>' : '') + '</small></span>' +
+      '<span class="route-member-metrics"><span>' + distanceLabel + '</span>' + extraMetrics + '</span>';
+    item.innerHTML = onOpen ? '<button type="button" class="route-member-summary route-member-open" aria-haspopup="dialog">' + content + '</button>' : '<div class="route-member-summary">' + content + '</div>';
+    var image = item.querySelector('img');
+    image?.addEventListener('error', function () {
+      image.nextElementSibling.hidden = false;
+      image.remove();
+    });
+    if (onOpen) item.addEventListener('click', function (event) {
+      if (!event.target.closest('.route-member-actions')) onOpen(trackID, item.querySelector('.route-member-open'));
+    });
+    return item;
+  }
+
   function renderMembers(items, representativeTrackID) {
     memberList.replaceChildren();
     if (!items.length) {
@@ -666,42 +728,129 @@
       var track = row.track || {};
       var trackID = m.track_id;
       var isRepresentative = trackID === representativeTrackID;
-      var title = String(track.title || '').trim() || '未命名轨迹';
-      var distance = Number(geo.distance || track.distance);
-      var distanceLabel = Number.isFinite(distance) && distance > 0
-        ? (distance >= 1000 ? (distance / 1000).toFixed(1) + ' 公里' : Math.round(distance) + ' 米') : '—';
       var score = m.similarity_score;
       var similarity = Number.isFinite(score) ? (score * 100).toFixed(1) + '%' : '—';
-      var preview = track.preview_images || {};
-      var variant = canViewTrack && ['landscape_day', 'square_day', 'landscape_night', 'square_night'].find(function (key) { return preview[key + '_url']; });
-      var previewURL = variant ? '/admin/api/tracks/' + encodeURIComponent(trackID) + '/assets/' + variant : '';
-      var item = document.createElement('li');
-      item.className = 'route-member-row' + (canViewTrack ? ' route-member-clickable' : '');
-      item.dataset.trackId = trackID;
-      var content = '<span class="route-member-thumb" data-no-preview aria-hidden="true">' +
-        (previewURL ? '<img alt="" loading="lazy" src="' + esc(previewURL) + '">' : '') +
-        '<span' + (previewURL ? ' hidden' : '') + '>—</span></span>' +
-        '<span class="route-member-name"><strong title="' + esc(title) + '">' + esc(title) + '</strong>' +
-        '<small><code>' + esc(trackID) + '</code>' + (isRepresentative ? ' <span class="route-member-role">代表轨迹</span>' : '') + '</small></span>' +
-        '<span class="route-member-metrics"><span>' + distanceLabel + '</span><span>相似度 ' + similarity + '</span></span>';
-      item.innerHTML = (canViewTrack ? '<button type="button" class="route-member-summary route-member-open" aria-haspopup="dialog">' + content + '</button>' : '<div class="route-member-summary">' + content + '</div>') +
+      var item = memberTrackItem(track, trackID, Number(geo.distance || track.distance), '<span>相似度 ' + similarity + '</span>', isRepresentative, canViewTrack && openMemberTrack);
+      item.insertAdjacentHTML('beforeend',
         '<div class="route-member-actions" data-admin-write="route_groups">' +
         (isRepresentative ? '' : '<button type="button" class="btn btn-sm btn-outline-secondary" data-route-representative>设为代表</button>') +
         '<div class="dropdown"><button type="button" class="route-member-menu" data-admin-menu aria-haspopup="menu" aria-expanded="false" aria-label="轨迹 ' + esc(trackID) + ' 的操作">⋯</button>' +
-        '<div class="dropdown-menu dropdown-menu-end" role="menu"><button type="button" class="dropdown-item" role="menuitem" data-route-remove>从组内移除</button></div></div></div>';
-      var image = item.querySelector('img');
-      image?.addEventListener('error', function () {
-        image.nextElementSibling.hidden = false;
-        image.remove();
-      });
-      if (canViewTrack) item.addEventListener('click', function (event) {
-        if (!event.target.closest('.route-member-actions')) openMemberTrack(trackID, item.querySelector('.route-member-open'));
-      });
+        '<div class="dropdown-menu dropdown-menu-end" role="menu"><button type="button" class="dropdown-item" role="menuitem" data-route-remove>从组内移除</button></div></div></div>');
       item.querySelector('[data-route-representative]')?.addEventListener('click', function (event) { setRepresentative(trackID, event.currentTarget); });
       item.querySelector('[data-route-remove]').addEventListener('click', function () { removeMember(trackID); });
       memberList.appendChild(item);
     });
   }
+
+  var scenicTracksList = document.getElementById('scenicTracksList');
+  var scenicTracksState = document.getElementById('scenicTracksState');
+  var scenicTracksHint = document.getElementById('scenicTracksHint');
+  var scenicTracksRetry = document.getElementById('scenicTracksRetry');
+  var scenicTracksPager = document.getElementById('scenicTracksPager');
+  var scenicTracksPrev = document.getElementById('scenicTracksPrev');
+  var scenicTracksNext = document.getElementById('scenicTracksNext');
+
+  function openScenicMembers(bucket) {
+    if (!bucket || bucket.type !== 'scenic') return;
+    scenicSelection = { location: bucket.location, query: loadedQuery };
+    scenicOffset = scenicTotal = 0;
+    scenicTracksList.replaceChildren();
+    scenicTracksPager.hidden = true;
+    document.getElementById('scenicTracksCount').textContent = '';
+    document.getElementById('scenicMembersName').textContent = bucket.name;
+    document.getElementById('scenicMembersPath').textContent = bucket.path.slice(0, -1).join(' / ');
+    scenicMembersModal.show();
+    loadScenicMembers(0);
+  }
+
+  async function loadScenicMembers(offset) {
+    if (!scenicSelection || !scenicMembersModal.root.open) return;
+    if (scenicController) scenicController.abort();
+    var controller = scenicController = new AbortController();
+    var location = scenicSelection.location;
+    var params = new URLSearchParams(scenicSelection.query);
+    params.delete('view');
+    params.set('scenic_id', location.scenicID);
+    params.set('grouping_city_code', location.cityCode || '');
+    params.set('district_id', location.districtID || '');
+    params.set('limit', String(MEMBER_PAGE_SIZE));
+    params.set('offset', String(Math.max(0, offset)));
+    scenicTracksState.hidden = false;
+    scenicTracksHint.textContent = '正在加载景点轨迹…';
+    scenicTracksRetry.hidden = true;
+    scenicTracksPrev.disabled = scenicTracksNext.disabled = true;
+    try {
+      var data = await apiJSON('/admin/api/route-groups/scenic-members?' + params.toString(), { signal: controller.signal });
+      if (scenicController !== controller) return;
+      scenicOffset = Number(data.member_offset || 0);
+      scenicTotal = Number(data.total || 0);
+      renderScenicMembers(data.items || []);
+      scenicTracksState.hidden = true;
+    } catch (err) {
+      if (scenicController !== controller) return;
+      if (err.status === 404) {
+        scenicOffset = scenicTotal = 0;
+        renderScenicMembers([]);
+        scenicTracksState.hidden = true;
+      } else {
+        scenicTracksHint.textContent = '景点轨迹加载失败 · ' + err.message;
+        scenicTracksRetry.hidden = false;
+        scenicTracksRetry.onclick = function () { loadScenicMembers(offset); };
+      }
+    } finally {
+      if (scenicController === controller) {
+        scenicController = null;
+        scenicTracksPager.hidden = scenicTotal <= MEMBER_PAGE_SIZE;
+        scenicTracksPrev.disabled = scenicOffset === 0;
+        scenicTracksNext.disabled = scenicOffset + MEMBER_PAGE_SIZE >= scenicTotal;
+        document.getElementById('scenicTracksPage').textContent = '第 ' + (Math.floor(scenicOffset / MEMBER_PAGE_SIZE) + 1) + ' / ' + Math.max(1, Math.ceil(scenicTotal / MEMBER_PAGE_SIZE)) + ' 页';
+      }
+    }
+  }
+
+  function renderScenicMembers(tracks) {
+    scenicTracksList.replaceChildren();
+    document.getElementById('scenicTracksCount').textContent = scenicTotal.toLocaleString() + ' 条';
+    if (!tracks.length) {
+      scenicTracksList.innerHTML = '<li class="route-member-empty">暂无可显示的轨迹</li>';
+      return;
+    }
+    var canViewTrack = AdminAccess.can('tracks', false);
+    tracks.forEach(function (track) {
+      var item = memberTrackItem(track, track.track_id, Number(track.distance), typeBadgeHTML(track.track_type), false, canViewTrack && openScenicTrack);
+      item.insertAdjacentHTML('beforeend', '<div class="route-member-actions"><div class="dropdown">' +
+        '<button type="button" class="route-member-menu" data-admin-menu aria-haspopup="menu" aria-expanded="false" aria-label="轨迹 ' + esc(track.track_id) + ' 的操作">⋯</button>' +
+        '<div class="dropdown-menu dropdown-menu-end" role="menu"><button type="button" class="dropdown-item" role="menuitem" data-scenic-group>维护所属路线组</button></div></div></div>');
+      item.querySelector('[data-scenic-group]').addEventListener('click', function () { loadDetail(track.group_id); });
+      scenicTracksList.appendChild(item);
+    });
+  }
+
+  async function openScenicTrack(trackID, trigger) {
+    if (!AdminAccess.can('tracks', false) || !scenicMembersModal.root.open || scenicController) return;
+    trigger.focus({ preventScroll: true });
+    try {
+      await window.AdminTrackEditor.open(trackID, { cities: regionOptions, onSaved: refreshDirectoryAfterEdit, onDeleted: refreshDirectoryAfterEdit });
+    } catch (err) {
+      AdminUI.alert('打开轨迹失败 · ' + err.message, 'danger');
+    }
+  }
+
+  async function refreshDirectoryAfterEdit() {
+    await loadGroups();
+    window.dispatchEvent(new Event('admin:route-groups-changed'));
+  }
+
+  scenicTracksPrev.addEventListener('click', function () { loadScenicMembers(scenicOffset - MEMBER_PAGE_SIZE); });
+  scenicTracksNext.addEventListener('click', function () { loadScenicMembers(scenicOffset + MEMBER_PAGE_SIZE); });
+  scenicMembersModal.root.addEventListener('admin:dialog-closed', function () {
+    if (scenicController) scenicController.abort();
+    scenicController = null;
+    scenicSelection = null;
+  });
+  window.addEventListener('admin:route-directory-updated', function () {
+    if (scenicSelection && scenicMembersModal.root.open) loadScenicMembers(scenicOffset);
+  });
 
   async function openMemberTrack(trackID, trigger) {
     if (!trackID || !selectedGroupID || !detailModal.root.open || detailLoadingID || introWriting || !AdminAccess.can('tracks', false)) return;
@@ -778,12 +927,18 @@
   }
 
   renderTypeToggle();
-  window.AdminRouteGroups = { openDetail: loadDetail };
+  window.AdminRouteGroups = {
+    openDetail: loadDetail,
+    openScenic: openScenicMembers,
+    refreshDirectory: loadGroups,
+    directory: function () { return { tree: areaTree, query: loadedQuery, ready: Boolean(loadedQuery), error: directoryError }; }
+  };
   loadGroups();
   loadRegions().then(function () {
     if (!routeGroups.size) return;
     areaTree = buildAreaTree(routeGroups);
     renderGroups();
+    window.dispatchEvent(new Event('admin:route-directory-updated'));
   });
   var groupFromURL = new URLSearchParams(window.location.search).get('group_id');
   if (groupFromURL) loadDetail(groupFromURL);
