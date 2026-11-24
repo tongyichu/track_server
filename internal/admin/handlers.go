@@ -750,6 +750,57 @@ func (h *Handler) PublishRelease(ctx context.Context, c *app.RequestContext) {
 	c.JSON(http.StatusOK, utils.H{"code": 0, "data": rel})
 }
 
+type upgradePolicyFields struct {
+	MinSupportedVersionCode *int64 `json:"min_supported_version_code"`
+	ForceUpdate             *bool  `json:"force_update"`
+}
+
+func (h *Handler) UpdateCurrentReleasePolicy(ctx context.Context, c *app.RequestContext) {
+	if h == nil || h.releaseSvc == nil {
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "release service not configured"})
+		return
+	}
+	versionCode, err := strconv.ParseInt(c.Param("version_code"), 10, 64)
+	if err != nil || versionCode <= 0 {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "当前下发的构建号无效"})
+		return
+	}
+	var body struct {
+		Expected upgradePolicyFields `json:"expected"`
+		Policy   upgradePolicyFields `json:"policy"`
+	}
+	data, err := c.Body()
+	if err != nil || json.Unmarshal(data, &body) != nil ||
+		body.Expected.MinSupportedVersionCode == nil || body.Expected.ForceUpdate == nil ||
+		body.Policy.MinSupportedVersionCode == nil || body.Policy.ForceUpdate == nil {
+		c.JSON(http.StatusBadRequest, utils.H{"error": "请提交原升级策略和新的最低支持构建号、强制更新开关"})
+		return
+	}
+	release, err := h.releaseSvc.UpdateCurrentAndroidPolicy(ctx, models.AppReleasePolicyUpdate{
+		VersionCode: versionCode,
+		Expected: models.AppReleaseUpgradePolicy{
+			MinSupportedVersionCode: *body.Expected.MinSupportedVersionCode,
+			ForceUpdate:             *body.Expected.ForceUpdate,
+		},
+		Policy: models.AppReleaseUpgradePolicy{
+			MinSupportedVersionCode: *body.Policy.MinSupportedVersionCode,
+			ForceUpdate:             *body.Policy.ForceUpdate,
+		},
+	})
+	var invalid *service.InvalidArgumentError
+	switch {
+	case err == nil:
+		c.JSON(http.StatusOK, utils.H{"code": 0, "data": release})
+	case errors.As(err, &invalid):
+		c.JSON(http.StatusBadRequest, utils.H{"error": invalid.Error()})
+	case errors.Is(err, repository.ErrConflict):
+		c.JSON(http.StatusConflict, utils.H{"error": "当前下发版本或升级策略已变化，请按最新记录重新核对"})
+	default:
+		log.Printf("update current release policy failed: version_code=%d err=%v", versionCode, err)
+		c.JSON(http.StatusInternalServerError, utils.H{"error": "升级策略保存失败，请重试"})
+	}
+}
+
 // DeleteRelease 处理 DELETE /admin/api/releases/:id
 //
 // 删除发布记录的同时尽力删除本机静态目录中的安装包文件；

@@ -218,3 +218,16 @@ curl --fail-with-body \
 - `500 Internal Server Error`：文件落盘或发布记录写入失败。
 
 ---
+
+## 后台修改当前升级策略
+
+`PUT /admin/api/releases/:version_code/policy` 需要发布管理写权限，沿用后台同源校验和操作审计。路径使用 Android 构建号，JSON 中的 `expected` 是读到的原策略，`policy` 是希望保存的策略。两者均须提供 `min_supported_version_code` 和 `force_update`。
+
+```json
+{
+  "expected": {"min_supported_version_code": 0, "force_update": false},
+  "policy": {"min_supported_version_code": 38, "force_update": false}
+}
+```
+
+最低支持构建号须在 0 到当前下发构建号之间。成功时 `data` 返回更新后的版本记录，已达到目标策略的重试也返回成功。目标构建已非当前下发，或当前策略与原值和目标值均不同，返回 409。此次操作更新升级策略，沿用原安装包、发布状态和更新日志。

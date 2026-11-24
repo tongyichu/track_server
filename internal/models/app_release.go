@@ -49,6 +49,24 @@ type AppReleaseListFilter struct {
 	Status   AppReleaseStatus
 }
 
+type AppReleaseUpgradePolicy struct {
+	MinSupportedVersionCode int64
+	ForceUpdate             bool
+}
+
+func (r *AppRelease) UpgradePolicy() AppReleaseUpgradePolicy {
+	return AppReleaseUpgradePolicy{
+		MinSupportedVersionCode: r.MinSupportedVersionCode,
+		ForceUpdate:             r.ForceUpdate,
+	}
+}
+
+type AppReleasePolicyUpdate struct {
+	VersionCode int64
+	Expected    AppReleaseUpgradePolicy
+	Policy      AppReleaseUpgradePolicy
+}
+
 // AppReleaseChangelog 是独立留存的版本更新日志。
 //
 // 设计要点：

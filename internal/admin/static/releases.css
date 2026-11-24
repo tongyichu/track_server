@@ -16,13 +16,17 @@
 .release-policy > label:not(.form-switch) { flex: 0 1 184px; margin: 0; }
 .release-policy .form-select, .release-policy .form-control { margin-top: 4px; }
 .release-policy .form-switch { margin-top: 32px; }
-.release-table { min-width: 580px; }
-.release-table th:first-child { width: 23%; }
-.release-table th:nth-child(2) { width: 15%; }
-.release-table th:nth-child(3) { width: 22%; }
+.release-table { min-width: 690px; }
+.release-table th:first-child { width: 16%; }
+.release-table th:nth-child(2) { width: 11%; }
+.release-table th:nth-child(3) { width: 38%; }
+.release-table th:nth-child(4) { width: 16%; }
 .release-table .release-version-link { min-height: 28px; padding: 0; font-weight: 600; }
 .release-table .release-version-meta { display: block; color: var(--admin-secondary-color); font-size: 12px; }
 .release-table .release-current-label { color: var(--admin-primary); font-weight: 600; }
+.release-policy-editor { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.release-policy-editor label { display: inline-flex; align-items: center; gap: 6px; margin: 0; white-space: nowrap; font-size: 12px; }
+.release-policy-editor .form-control { width: 82px; }
 .release-notes-preview {
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
   overflow: hidden; overflow-wrap: anywhere; line-height: 1.5;
@@ -51,7 +55,8 @@
   table.release-table.admin-card-table tbody td { display:block; padding:0; }
   table.release-table.admin-card-table tbody td::before { display:none; }
   .release-table.admin-card-table tbody td:nth-child(2) { justify-self:end; }
-  .release-table.admin-card-table tbody td:nth-child(3) { grid-column:1 / -1; color:var(--admin-secondary); font-size:12px; }
-  table.release-table.admin-card-table tbody td:nth-child(4) { display:none; }
+  .release-table.admin-card-table tbody .release-policy-cell { grid-column:1 / -1; }
+  .release-table.admin-card-table tbody .release-updated-at { grid-column:1 / -1; color:var(--admin-secondary); font-size:12px; }
+  table.release-table.admin-card-table tbody .release-notes-cell { display:none; }
   .release-table .release-version-link { min-height:36px; }
 }

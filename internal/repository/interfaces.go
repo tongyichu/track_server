@@ -432,6 +432,7 @@ type AppReleaseRepository interface {
 	GetByPlatformVersion(ctx context.Context, platform models.AppReleasePlatform, versionCode int64) (*models.AppRelease, error)
 	List(ctx context.Context, filter models.AppReleaseListFilter) ([]*models.AppRelease, error)
 	GetLatestPublished(ctx context.Context, platform models.AppReleasePlatform) (*models.AppRelease, error)
+	UpdateLatestPublishedPolicy(ctx context.Context, platform models.AppReleasePlatform, update models.AppReleasePolicyUpdate) (*models.AppRelease, error)
 	Delete(ctx context.Context, id int64) error
 }
 

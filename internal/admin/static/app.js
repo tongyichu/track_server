@@ -8,13 +8,15 @@
   const notesList = $('releaseNotesList'), uploadHint = $('uploadHint'), packageMetadata = $('packageMetadata');
   const statusInput = publishForm.elements.status, minVersion = publishForm.elements.min_supported_version_code;
   let packageInfo = null, upload = null, publishing = false;
-  let releases = null, listRequest = null;
+  let releases = null, listRequest = null, savingPolicy = false, updatePolicyEditor = null;
   let releaseDetailRoot = null, changelogRoot = null;
 
   async function request(path, options) {
     const response = await fetch('/admin/api/releases' + path, options);
     const result = await response.json().catch(() => ({}));
-    if (!response.ok || result.code !== 0) throw new Error(result.error || '请求失败（' + response.status + '）');
+    if (!response.ok || result.code !== 0) {
+      throw Object.assign(new Error(result.error || '请求失败（' + response.status + '）'), { status: response.status });
+    }
     return result.data;
   }
 
@@ -208,6 +210,67 @@
 
   const filterStatus = $('filterStatus'), releaseList = $('releaseList');
   const releaseTable = releaseList.closest('table'), listMessage = $('releaseListMessage');
+  function renderPolicyCell(cell, item, editable) {
+    cell.className = 'release-policy-cell';
+    if (!editable) {
+      cell.textContent = item.force_update ? '全部旧版强制更新'
+        : item.min_supported_version_code > 0 ? '低于构建 ' + item.min_supported_version_code + ' 强制更新' : '可选更新';
+      return;
+    }
+    const form = document.createElement('form');
+    form.className = 'release-policy-editor';
+    form.dataset.adminWrite = 'releases';
+    form.setAttribute('aria-label', '当前下发版本的升级策略');
+    form.innerHTML = '<label>最低支持构建号 <input class="form-control form-control-sm" type="number" name="minimum" min="0" step="1" required></label>' +
+      '<label class="form-check form-switch release-force-switch"><input class="form-check-input" type="checkbox" role="switch" name="force">' +
+      '<span>强制更新</span></label><button class="btn btn-sm btn-outline-primary" type="submit">保存</button>';
+    const minimum = form.elements.minimum, force = form.elements.force;
+    const save = form.querySelector('button');
+    const expected = {
+      min_supported_version_code: item.min_supported_version_code,
+      force_update: item.force_update
+    };
+    minimum.max = String(item.version_code);
+    minimum.value = String(expected.min_supported_version_code);
+    force.checked = expected.force_update;
+    const dirty = () => minimum.valueAsNumber !== expected.min_supported_version_code || force.checked !== expected.force_update;
+    function updateSave() {
+      minimum.disabled = force.disabled = savingPolicy;
+      save.disabled = savingPolicy || !minimum.validity.valid || !dirty();
+    }
+    form.addEventListener('input', updateSave);
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      if (savingPolicy || !canWrite() || !dirty() || !form.reportValidity()) return;
+      const policy = { min_supported_version_code: minimum.valueAsNumber, force_update: force.checked };
+      savingPolicy = true;
+      updateSave();
+      save.textContent = '保存中…';
+      try {
+        const updated = await request('/' + encodeURIComponent(item.version_code) + '/policy', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ expected, policy })
+        });
+        if (currentRelease(releases) === item) {
+          releases = releases.map(record => record === item ? updated : record);
+        }
+        Object.assign(expected, policy);
+        AdminUI.alert('升级策略已保存', 'success');
+        refreshReleaseData();
+      } catch (error) {
+        if (error.status === 409) refreshReleaseData();
+        AdminUI.alert(error instanceof TypeError ? '保存结果未确认，请刷新版本记录核对。' : error.message, 'danger');
+      } finally {
+        savingPolicy = false;
+        save.textContent = '保存';
+        updatePolicyEditor?.();
+      }
+    });
+    updatePolicyEditor = updateSave;
+    updateSave();
+    cell.appendChild(form);
+  }
+
   function renderReleaseList() {
     if (!releases) return;
     const current = currentRelease(releases);
@@ -216,6 +279,7 @@
     releaseTable.hidden = !items.length;
     listMessage.hidden = Boolean(items.length);
     if (!items.length) listMessage.textContent = releases.length ? '此状态暂无版本' : '暂无版本记录';
+    updatePolicyEditor = null;
     releaseList.replaceChildren();
     items.forEach(item => {
       const row = releaseList.insertRow();
@@ -233,11 +297,16 @@
       const state = row.insertCell();
       state.textContent = item === current ? '当前下发' : statusLabels[item.status] || item.status || '—';
       if (item === current) state.className = 'release-current-label';
-      row.insertCell().textContent = AdminTime.dateTime(item.updated_at);
+      renderPolicyCell(row.insertCell(), item, item === current && canWrite());
+      const time = row.insertCell();
+      time.className = 'release-updated-at';
+      time.textContent = AdminTime.dateTime(item.updated_at);
       const notes = document.createElement('span');
       notes.className = 'release-notes-preview';
       notes.textContent = String(item.release_notes || '').split('\n').map(line => line.trim()).filter(Boolean).join(' · ') || '—';
-      row.insertCell().appendChild(notes);
+      const notesCell = row.insertCell();
+      notesCell.className = 'release-notes-cell';
+      notesCell.appendChild(notes);
     });
   }
 

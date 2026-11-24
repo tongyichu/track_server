@@ -26,6 +26,7 @@
     ['DELETE', 'music/:music', '删除音乐', '音乐 {music}'],
     ['PUT', 'music/:music', '更新音乐', '音乐 {music}'],
     ['POST', 'releases', '保存发布版本', 'App 版本 · 未记录版本号'],
+    ['PUT', 'releases/:version/policy', '保存升级策略', 'Android 构建 {version}'],
     ['DELETE', 'releases/:release', '删除发布版本', '版本记录 {release}'],
     ['GET', 'releases/upload-token', '申请上传凭证', '安装包上传', '申请凭证不代表安装包已经上传或发布。'],
     ['POST', 'releases/upload-package', '上传安装包', 'App 安装包', '上传成功不代表已发布版本。'],

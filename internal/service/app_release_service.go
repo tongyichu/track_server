@@ -206,6 +206,19 @@ func (s *AppReleaseService) Publish(ctx context.Context, in PublishReleaseInput)
 	return release, nil
 }
 
+func (s *AppReleaseService) UpdateCurrentAndroidPolicy(ctx context.Context, update models.AppReleasePolicyUpdate) (*models.AppRelease, error) {
+	if s == nil || s.repo == nil {
+		return nil, errors.New("app release service not configured")
+	}
+	if update.VersionCode <= 0 {
+		return nil, invalidArg("当前下发的构建号无效")
+	}
+	if min := update.Policy.MinSupportedVersionCode; min < 0 || min > update.VersionCode {
+		return nil, invalidArg("最低支持构建号须介于 0 和当前下发构建号之间")
+	}
+	return s.repo.UpdateLatestPublishedPolicy(ctx, models.AppReleasePlatformAndroid, update)
+}
+
 // List 返回发布列表（管理后台用）。
 func (s *AppReleaseService) List(ctx context.Context, filter models.AppReleaseListFilter) ([]*models.AppRelease, error) {
 	if s == nil || s.repo == nil {

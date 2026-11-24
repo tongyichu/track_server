@@ -1691,6 +1691,15 @@ func (r *InMemoryAppReleaseRepository) List(_ context.Context, filter models.App
 func (r *InMemoryAppReleaseRepository) GetLatestPublished(_ context.Context, platform models.AppReleasePlatform) (*models.AppRelease, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+	latest := r.latestPublishedLocked(platform)
+	if latest == nil {
+		return nil, ErrNotFound
+	}
+	clone := *latest
+	return &clone, nil
+}
+
+func (r *InMemoryAppReleaseRepository) latestPublishedLocked(platform models.AppReleasePlatform) *models.AppRelease {
 	var latest *models.AppRelease
 	for _, item := range r.releases {
 		if item.Platform != platform {
@@ -1703,11 +1712,29 @@ func (r *InMemoryAppReleaseRepository) GetLatestPublished(_ context.Context, pla
 			latest = item
 		}
 	}
-	if latest == nil {
-		return nil, ErrNotFound
+	return latest
+}
+
+func (r *InMemoryAppReleaseRepository) UpdateLatestPublishedPolicy(ctx context.Context, platform models.AppReleasePlatform, update models.AppReleasePolicyUpdate) (*models.AppRelease, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
-	clone := *latest
-	return &clone, nil
+	latest := r.latestPublishedLocked(platform)
+	if latest == nil || latest.VersionCode != update.VersionCode {
+		return nil, ErrConflict
+	}
+	if latest.UpgradePolicy() != update.Policy {
+		if latest.UpgradePolicy() != update.Expected {
+			return nil, ErrConflict
+		}
+		latest.MinSupportedVersionCode = update.Policy.MinSupportedVersionCode
+		latest.ForceUpdate = update.Policy.ForceUpdate
+		latest.UpdatedAt = time.Now()
+	}
+	result := *latest
+	return &result, nil
 }
 
 // Delete removes a release by id.

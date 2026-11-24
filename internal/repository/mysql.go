@@ -3773,6 +3773,45 @@ func (r *MySQLAppReleaseRepository) GetLatestPublished(ctx context.Context, plat
 	return scanAppReleaseRow(row)
 }
 
+func (r *MySQLAppReleaseRepository) UpdateLatestPublishedPolicy(ctx context.Context, platform models.AppReleasePlatform, update models.AppReleasePolicyUpdate) (*models.AppRelease, error) {
+	tx, err := r.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	// Lock the latest published row and the index range above it until the policy write commits.
+	current, err := scanAppReleaseRow(tx.QueryRowContext(ctx, appReleaseSelectSQL()+
+		` FORCE INDEX (idx_platform_status_code) WHERE platform=? AND status=? ORDER BY version_code DESC LIMIT 1 FOR UPDATE`,
+		platform, models.AppReleaseStatusPublished))
+	if errors.Is(err, ErrNotFound) {
+		return nil, ErrConflict
+	}
+	if err != nil {
+		return nil, err
+	}
+	if current.VersionCode != update.VersionCode {
+		return nil, ErrConflict
+	}
+	if current.UpgradePolicy() != update.Policy {
+		if current.UpgradePolicy() != update.Expected {
+			return nil, ErrConflict
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE app_releases SET min_supported_version_code=?, force_update=? WHERE id=?`,
+			update.Policy.MinSupportedVersionCode, boolToInt(update.Policy.ForceUpdate), current.ID); err != nil {
+			return nil, err
+		}
+		current, err = scanAppReleaseRow(tx.QueryRowContext(ctx, appReleaseSelectSQL()+` WHERE id=?`, current.ID))
+		if err != nil {
+			return nil, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return current, nil
+}
+
 func (r *MySQLAppReleaseRepository) Delete(ctx context.Context, id int64) error {
 	res, err := r.db.ExecContext(ctx, `DELETE FROM app_releases WHERE id=?`, id)
 	if err != nil {

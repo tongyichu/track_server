@@ -1443,6 +1443,10 @@ func (r *MongoAppReleaseRepository) GetLatestPublished(context.Context, models.A
 	return nil, errors.New("MongoAppReleaseRepository.GetLatestPublished not implemented")
 }
 
+func (r *MongoAppReleaseRepository) UpdateLatestPublishedPolicy(context.Context, models.AppReleasePlatform, models.AppReleasePolicyUpdate) (*models.AppRelease, error) {
+	return nil, errors.New("MongoAppReleaseRepository.UpdateLatestPublishedPolicy not implemented")
+}
+
 func (r *MongoAppReleaseRepository) Delete(context.Context, int64) error {
 	return errors.New("MongoAppReleaseRepository.Delete not implemented")
 }
