@@ -118,10 +118,12 @@
 
   function routeCoverageLayers(tree) {
     const layers = { city: [], district: [], places: [] };
-    let missing = 0;
+    const markers = new Map();
+    const totals = { scenic: 0, routes: 0 };
     function coordinate(group) {
       const p = group.map_point;
-      return p && Number.isFinite(p.longitude) && Number.isFinite(p.latitude) && (p.longitude || p.latitude)
+      return p && Number.isFinite(p.longitude) && Number.isFinite(p.latitude) && (p.longitude || p.latitude) &&
+        Math.abs(p.longitude) <= 180 && Math.abs(p.latitude) <= 90
         ? [p.longitude, p.latitude] : null;
     }
     function center(points) {
@@ -129,83 +131,133 @@
       const sum = points.reduce((total, p) => [total[0] + p[0], total[1] + p[1]], [0, 0]);
       return sum.map(value => value / points.length);
     }
-    function regionMarker(bucket, points) {
-      if (!points.length) return;
-      const parts = [];
-      if (bucket.scenicCount) parts.push(bucket.scenicCount.toLocaleString() + ' 处景点');
-      if (bucket.independentCount) parts.push(bucket.independentCount.toLocaleString() + ' 组独立路线');
-      layers[bucket.type].push({ id: bucket.key, type: bucket.type, name: bucket.name, path: bucket.path, value: center(points), note: parts.join(' · ') });
+    function add(layer, marker) {
+      layers[layer].push(marker);
+      markers.set(marker.id, marker);
+      return marker;
+    }
+    function regionMarker(bucket, parentID, children, places) {
+      const counts = { scenic: bucket.scenicCount, routes: bucket.independentCount };
+      return add(bucket.type, {
+        id: bucket.key, parentID, type: bucket.type, name: bucket.name, path: bucket.path, children, places,
+        value: center(places.map(marker => marker.value).filter(Boolean)), note: coverageCount(counts)
+      });
     }
     tree.forEach(city => {
-      const cityPoints = [];
+      const districts = [];
       city.children.forEach(district => {
-        const districtPoints = [];
+        const places = [];
         district.children.forEach(scenic => {
-          const value = center(scenic.groups.map(coordinate).filter(Boolean));
-          if (!value) { missing++; return; }
-          districtPoints.push(value);
-          layers.places.push({ id: scenic.key, type: 'scenic', name: scenic.name, path: scenic.path, value, scenic, note: scenic.memberCount.toLocaleString() + ' 条轨迹' });
+          places.push(add('places', {
+            id: scenic.key, type: 'scenic', name: scenic.name, path: scenic.path,
+            value: center(scenic.groups.map(coordinate).filter(Boolean)), scenic, note: scenic.memberCount.toLocaleString() + ' 条轨迹'
+          }));
         });
         district.groups.forEach(group => {
-          const value = coordinate(group);
-          if (!value) { missing++; return; }
-          districtPoints.push(value);
           const name = group.name || group.group_id;
-          layers.places.push({ id: group.group_id, type: 'route', name, path: district.path.concat(name), value, groupID: group.group_id, note: Number(group.member_count || 0).toLocaleString() + ' 条轨迹' });
+          places.push(add('places', {
+            id: group.group_id, type: 'route', name, path: district.path.concat(name),
+            value: coordinate(group), groupID: group.group_id, note: Number(group.member_count || 0).toLocaleString() + ' 条轨迹'
+          }));
         });
-        regionMarker(district, districtPoints);
-        districtPoints.forEach(point => cityPoints.push(point));
+        districts.push(regionMarker(district, city.key, places, places));
       });
-      regionMarker(city, cityPoints);
+      regionMarker(city, '', districts, districts.flatMap(district => district.places));
+      totals.scenic += city.scenicCount;
+      totals.routes += city.independentCount;
     });
-    return { layers, missing };
+    return { layers, markers, totals };
+  }
+
+  function coverageCount(counts) {
+    const parts = [];
+    if (counts.scenic) parts.push(counts.scenic.toLocaleString() + ' 处景点');
+    if (counts.routes) parts.push(counts.routes.toLocaleString() + ' 组独立路线');
+    return parts.join(' · ');
   }
 
   function createRouteCoverageMap(options) {
     const el = key => document.getElementById(options[key]);
     const districtZoom = 12, placesZoom = 48;
     const levelNames = { city: '城市', district: '区县', places: '景点与独立路线' };
+    const levelUnits = { city: '个城市', district: '个区县', places: '个点' };
     const colors = { city: '#206bc4', district: '#206bc4', scenic: '#267568', route: '#206bc4' };
-    let instance, data, filterQuery, frame = 0, version = 0, visible = new Map(), optionKey = '';
+    let instance, data, filterQuery, scope, scopeZoom = 1, frame = 0, version = 0, optionKey = '';
+    const chartZoom = () => Number(instance.getOption().geo[0].zoom || 1);
     function schedule() {
       if (frame) return;
       frame = requestAnimationFrame(() => { frame = 0; draw(); });
     }
     function reset() {
+      scope = null;
       if (!instance) return;
       instance.setOption({ geo: { center: [104.5, 35.5], zoom: 1 } });
+      schedule();
+    }
+    function focus(region) {
+      scope = region;
+      const points = region.children.map(marker => marker.value).filter(Boolean);
+      const zoom = chartZoom();
+      scopeZoom = zoom;
+      if (points.length) {
+        const min = [Infinity, Infinity], max = [-Infinity, -Infinity];
+        points.forEach(point => {
+          for (let i = 0; i < 2; i++) {
+            min[i] = Math.min(min[i], point[i]);
+            max[i] = Math.max(max[i], point[i]);
+          }
+        });
+        const a = instance.convertToPixel({ geoIndex: 0 }, min);
+        const b = instance.convertToPixel({ geoIndex: 0 }, max);
+        const fitX = Math.max(1, instance.getWidth() - 80) / Math.max(1, Math.abs(b[0] - a[0]));
+        const fitY = Math.max(1, instance.getHeight() - 64) / Math.max(1, Math.abs(b[1] - a[1]));
+        scopeZoom = Math.max(1, Math.min(region.type === 'city' ? 24 : 96, zoom * fitX, zoom * fitY));
+        instance.setOption({ geo: { center: min.map((value, i) => (value + max[i]) / 2), zoom: scopeZoom } });
+      }
       schedule();
     }
     function follow(marker) {
       if (!marker) return;
       if (marker.type === 'scenic') { options.openScenic(marker.scenic); return; }
       if (marker.type === 'route') { options.openRoute(marker.groupID); return; }
-      instance.setOption({ geo: { center: marker.value, zoom: marker.type === 'city' ? 24 : 96 } });
-      schedule();
+      focus(marker);
     }
     function draw() {
       if (!instance || !data) return;
-      const zoom = Number(instance.getOption().geo[0].zoom || 1);
-      const level = zoom < districtZoom ? 'city' : zoom < placesZoom ? 'district' : 'places';
-      const markers = data.layers[level].filter(marker => {
+      const zoom = chartZoom();
+      const zoomLevel = zoom < districtZoom ? 'city' : zoom < placesZoom ? 'district' : 'places';
+      const level = scope ? (scope.type === 'city' && zoom < Math.max(placesZoom, scopeZoom * 2) ? 'district' : 'places') : zoomLevel;
+      const candidates = scope ? (level === 'district' ? scope.children : scope.places) : data.layers[level];
+      const markers = candidates.filter(marker => {
+        if (!marker.value) return false;
         const p = instance.convertToPixel({ geoIndex: 0 }, marker.value);
         return p && p[0] >= 0 && p[0] <= instance.getWidth() && p[1] >= 0 && p[1] <= instance.getHeight();
       });
-      visible = new Map(markers.map(marker => [marker.id, marker]));
       instance.setOption({ series: [{ id: 'route-coverage-points', data: markers.map(marker => ({
         id: marker.id, name: marker.name, value: marker.value, itemStyle: { color: colors[marker.type] }, symbolSize: marker.type === 'route' ? 9 : 13
       })) }] });
-      const key = markers.map(marker => marker.id + '\n' + marker.path.join('/')).join('\n');
+      const choices = scope || level === 'city' ? candidates : markers;
+      const labels = choices.map(marker => marker.path.join(' / ') + ' · ' + marker.note + (marker.value ? '' : '（缺坐标）'));
+      const key = JSON.stringify([choices.map(marker => marker.id), labels]);
       if (key !== optionKey) {
         optionKey = key;
         const select = el('select'), previous = select.value;
-        select.replaceChildren(new Option('选择地图位置', ''), ...markers.map(marker => new Option(marker.path.join(' / '), marker.id)));
-        select.value = visible.has(previous) ? previous : '';
+        select.replaceChildren(new Option('选择地图位置', ''), ...choices.map((marker, index) => new Option(labels[index], marker.id)));
+        select.value = choices.some(marker => marker.id === previous) ? previous : '';
       }
-      el('selection').hidden = markers.length === 0;
+      el('selection').hidden = choices.length === 0;
       el('open').disabled = !el('select').value;
-      el('summary').textContent = levelNames[level] + ' · 当前视野 ' + markers.length.toLocaleString() + ' 个点' +
-        (data.missing ? ' · 缺坐标 ' + data.missing.toLocaleString() + ' 项' : '');
+      const countLabel = scope ? scope.note : level === 'city' ? coverageCount(data.totals) : '';
+      const summary = [
+        scope ? scope.path.join(' / ') : levelNames[level],
+        '当前视野 ' + markers.length.toLocaleString() + (scope || level === 'city' ? ' / ' + candidates.length.toLocaleString() : '') + ' ' + levelUnits[level]
+      ];
+      if (countLabel) summary.push(countLabel);
+      if (scope || level === 'city') {
+        const missing = (scope ? scope.places : data.layers.places).filter(marker => !marker.value).length;
+        if (missing) summary.push(missing.toLocaleString() + ' 项景点或路线缺坐标，可在所属区县下拉查看');
+      }
+      el('summary').textContent = summary.join(' · ');
     }
     function initialize() {
       instance = echarts.init(el('chart'));
@@ -213,7 +265,7 @@
         animation: false,
         aria: { enabled: true },
         tooltip: { trigger: 'item', confine: true, formatter: info => {
-          const marker = info.data && visible.get(info.data.id);
+          const marker = info.data && data.markers.get(info.data.id);
           if (!marker) return '';
           const action = marker.type === 'scenic' ? '查看景点轨迹' : marker.type === 'route' ? '查看路线组' : '点击进入下一级';
           return esc(marker.path.join(' / ')) + '<br>' + esc(marker.note) + '<br>' + action;
@@ -223,12 +275,19 @@
           label: { show: true, position: 'right', color: '#334155', fontSize: 11, formatter: '{b}' },
           labelLayout: { hideOverlap: true }, zlevel: 1 }]
       });
-      instance.on('georoam', schedule);
-      instance.on('click', 'series.scatter', event => follow(event.data && visible.get(event.data.id)));
+      instance.on('georoam', event => {
+        if (scope && event.zoom < 1 && chartZoom() <= Math.max(1, scopeZoom / 1.4)) {
+          const parent = data.markers.get(scope.parentID);
+          if (parent) focus(parent);
+          else reset();
+        }
+        schedule();
+      });
+      instance.on('click', 'series.scatter', event => follow(event.data && data.markers.get(event.data.id)));
     }
     el('reset').addEventListener('click', reset);
     el('select').addEventListener('change', () => { el('open').disabled = !el('select').value; });
-    el('open').addEventListener('click', () => follow(visible.get(el('select').value)));
+    el('open').addEventListener('click', () => follow(data?.markers.get(el('select').value)));
     const api = {
       async render(directory) {
         const current = ++version;
@@ -244,7 +303,8 @@
           if (current !== version) return;
           data = routeCoverageLayers(directory.tree);
           if (!instance) initialize();
-          if (filterQuery !== directory.query) reset();
+          if (filterQuery !== directory.query || (scope && !data.markers.has(scope.id))) reset();
+          else if (scope) scope = data.markers.get(scope.id);
           filterQuery = directory.query;
           schedule();
         } catch (_) {

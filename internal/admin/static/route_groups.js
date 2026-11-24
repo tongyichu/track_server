@@ -248,6 +248,7 @@
       districtID: location.district_id,
       districtName: location.district_name || '区县未标注',
       scenicID: location.scenic_id,
+      scenicSpotID: location.scenic_spot_id,
       scenicName: location.scenic_name || (location.scenic_id ? '未命名景点' : '')
     };
   }
@@ -759,6 +760,11 @@
     document.getElementById('scenicTracksCount').textContent = '';
     document.getElementById('scenicMembersName').textContent = bucket.name;
     document.getElementById('scenicMembersPath').textContent = bucket.path.slice(0, -1).join(' / ');
+    var infoLink = document.getElementById('scenicMembersInfo');
+    var spotID = scenicSelection.location.scenicSpotID;
+    infoLink.hidden = !spotID;
+    if (spotID) infoLink.href = '/admin/scenic_spot_detail.html?spot_id=' + encodeURIComponent(spotID);
+    else infoLink.removeAttribute('href');
     scenicMembersModal.show();
     loadScenicMembers(0);
   }

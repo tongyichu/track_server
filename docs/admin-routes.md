@@ -26,6 +26,7 @@
 | GET | `/admin/dashboard.html` | 会话 | 响应式运营工作台，服务端返回 HTML 前校验会话 |
 | GET | `/admin/more.html` | 会话 | 移动端低频功能入口，服务端返回 HTML 前校验会话 |
 | GET | `/admin/route_groups.html` | 会话 | 聚合路线运营页，服务端返回 HTML 前校验会话 |
+| GET | `/admin/scenic_spot_detail.html?spot_id=<id>` | 景点查看 | 单个景点的只读详情，复用景点详情接口与后台图片权限 |
 | GET | `/admin/track_submissions.html` | 会话 | 轨迹投稿审核页，服务端返回 HTML 前校验会话 |
 | GET | `/admin/static/*filepath` | 公开 | 内置静态资源 |
 | GET | `/admin/ai_usage.html` | AI 使用查看 | AI 统计、任务、控制与价格估算页面 |
@@ -103,7 +104,7 @@
 | GET | `/admin/api/analytics/sync-summaries` | 鉴权 | 埋点 OSS 同步摘要列表，支持 `status` / `limit` / `offset` |
 | GET | `/admin/api/analytics/health` | analytics 读取权限 | 工作台只读归档健康状态，独立异步加载；不触发同步或 OSS 请求 |
 | GET | `/admin/api/route-groups` | 鉴权 | 路线组列表，支持 `track_type` / `province_code`（服务端展开为省内城市集合）/ `city_code` 筛选与 `limit` / `offset` 分页；仅返回有已完成公开成员的路线组，`member_count` 为这些成员的数量。返回 `total`、`next_offset`、`has_more`、`area_id`、目录区域摘要和 `grouping`。见[聚合规则](admin-workflows.md#运营聚合路线)。 |
-| GET | `/admin/api/route-groups?view=directory` | 地图模式查看 | 按同样的运动类型及覆盖省市筛选返回完整轻量目录。`data.total` 是匹配的原始路线组数，`items` 每项包含 `group_id`、`name`、`track_type`、`member_count`、`grouping` 及可选的 GCJ02 `map_point`。`limit` 和 `offset` 只适用于默认列表模式。 |
+| GET | `/admin/api/route-groups?view=directory` | 地图模式查看 | 按同样的运动类型及覆盖省市筛选返回完整轻量目录。`data.total` 是匹配的原始路线组数，`items` 每项包含 `group_id`、`name`、`track_type`、`member_count`、`grouping` 及可选的 GCJ02 `map_point`。归到主景点目录时，`grouping.scenic_spot_id` 可打开对应景点详情。`limit` 和 `offset` 只适用于默认列表模式。 |
 | GET | `/admin/api/route-groups/scenic-members` | 地图模式查看 | 按 `scenic_id`、归属 `grouping_city_code`、`district_id` 和与目录相同的运动类型及覆盖省市筛选定位景点。按 `limit` / `offset` 分页返回该节点的公开成员，包含 `items`、`total`、`member_offset`。成员的 `group_id` 用于从单条轨迹进入已有路线组维护。 |
 | GET | `/admin/api/route-groups/:group_id` | 鉴权 | 路线组详情、与列表同口径的 `grouping`、可识别的 `coverage_city_names`、`area_id` 对应区域信息及成员轨迹。只统计并分页返回已完成公开的成员，无此类成员时返回 404。返回实际 `member_offset`，越界时定位到最后一页。归属读取失败时可省略 `grouping` |
 | PUT | `/admin/api/route-groups/:group_id/name` | 鉴权 | 人工改名 |

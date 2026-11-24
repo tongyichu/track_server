@@ -150,6 +150,7 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	g.GET("/users.html", serveAdminPage(m.Auth, "static/users.html"))
 	g.GET("/tracks.html", serveAdminPage(m.Auth, "static/tracks.html"))
 	g.GET("/scenic_spots.html", serveAdminPage(m.Auth, "static/scenic_spots.html"))
+	g.GET("/scenic_spot_detail.html", serveAdminPage(m.Auth, "static/scenic_spot_detail.html"))
 	g.GET("/regions.html", serveAdminPage(m.Auth, "static/regions.html"))
 	g.GET("/route_groups.html", serveAdminPage(m.Auth, "static/route_groups.html"))
 	g.GET("/track_submissions.html", serveAdminPage(m.Auth, "static/track_submissions.html"))

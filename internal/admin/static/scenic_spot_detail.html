@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>时光轨迹 - 控制台</title>
+  <link rel="stylesheet" href="/admin/static/admin-components.css" />
+  <link rel="stylesheet" href="/admin/static/style.css" />
+</head>
+<body>
+  <header class="topbar"></header>
+  <main class="container scenic-info-page">
+    <div class="page-heading">
+      <div>
+        <h1 id="scenicInfoName">景点详情</h1>
+        <p id="scenicInfoMeta" hidden></p>
+      </div>
+    </div>
+    <section class="panel" id="scenicInfoState">
+      <p id="scenicInfoMessage" role="status">正在加载景点信息…</p>
+      <button type="button" class="btn btn-sm btn-outline-secondary" id="scenicInfoRetry" hidden>重试</button>
+    </section>
+    <div id="scenicInfoContent" hidden>
+      <section class="panel" aria-labelledby="scenicOverviewTitle">
+        <h2 id="scenicOverviewTitle">景点信息</h2>
+        <dl class="scenic-info-facts">
+          <div><dt>所在地</dt><dd id="scenicInfoCity"></dd></div>
+          <div><dt>地址</dt><dd id="scenicInfoAddress"></dd></div>
+        </dl>
+        <p class="scenic-info-description" id="scenicInfoDescription"></p>
+      </section>
+      <section class="panel" id="scenicInfoGallery" aria-labelledby="scenicGalleryTitle" hidden>
+        <h2 id="scenicGalleryTitle">景点照片</h2>
+        <div class="scenic-info-photos" id="scenicInfoPhotos"></div>
+      </section>
+    </div>
+  </main>
+  <script src="/admin/static/admin-components.js"></script>
+  <script src="/admin/static/shell.js"></script>
+  <script src="/admin/static/ui.js"></script>
+  <script src="/admin/static/scenic_spot_detail.js"></script>
+</body>
+</html>

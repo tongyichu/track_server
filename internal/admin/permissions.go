@@ -22,6 +22,9 @@ func pageModule(name string) string {
 	if page == "/admin/companion_detail.html" {
 		return "companions"
 	}
+	if page == "/admin/scenic_spot_detail.html" {
+		return "scenic_spots"
+	}
 	if page == "/admin/accounts.html" {
 		return "accounts"
 	}

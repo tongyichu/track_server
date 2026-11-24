@@ -10,6 +10,8 @@
 
 ## 景点管理
 
+`/admin/scenic_spot_detail.html?spot_id=<id>` 是后台只读景点详情页，复用 `GET /admin/api/scenic-spots/:spot_id`。页面、接口和本站照片均按景点查看权限校验，照片由 `/admin/api/static/scenic_spots/*` 提供。
+
 `GET /admin/api/scenic-spots` 支持可选 `province_code` 和 `city_code`。城市非空时优先按城市筛选，否则将省份展开为省内城市编码及省级编码本身。
 
 匹配目的地自身 `city_code` 或任一仍存在的关联轨迹 `city_code`；与列表城市展示保持相同关联轨迹范围，不额外排除私密、进行中或软删除轨迹。无地域条件时沿用原目录行为。与 `q`、`missing`、`status` 等条件组合使用，筛选不调用地图供应商。

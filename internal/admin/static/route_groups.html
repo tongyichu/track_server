@@ -200,7 +200,13 @@
     <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
       <div class="modal-content">
         <div class="modal-header route-modal-header">
-          <div class="route-modal-heading"><h2 class="modal-title" id="scenicMembersName"></h2><p class="route-detail-path" id="scenicMembersPath"></p></div>
+          <div class="route-modal-heading">
+            <h2 class="modal-title" id="scenicMembersName"></h2>
+            <div class="route-scenic-meta">
+              <p class="route-detail-path" id="scenicMembersPath"></p>
+              <a id="scenicMembersInfo" target="_blank" rel="noopener" data-admin-read="scenic_spots" aria-label="查看景点信息（在新标签页打开）" hidden>查看景点信息</a>
+            </div>
+          </div>
           <button type="button" class="btn-close" data-admin-dismiss="dialog" aria-label="关闭"></button>
         </div>
         <div class="modal-body route-modal-body">

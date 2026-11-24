@@ -19,6 +19,7 @@ type AdminRouteGroupGrouping struct {
 	DistrictName string `json:"district_name,omitempty"`
 	ScenicID     string `json:"scenic_id,omitempty"`
 	ScenicName   string `json:"scenic_name,omitempty"`
+	ScenicSpotID string `json:"scenic_spot_id,omitempty"`
 }
 
 type AdminRouteGroupDirectoryItem struct {
@@ -156,6 +157,9 @@ func (s *TrackRouteGroupService) buildAdminRouteGroupSummaries(ctx context.Conte
 			}
 			grouping := s.adminRouteGroupLocation(cityCode, point)
 			grouping.ScenicID, grouping.ScenicName = spot.id, spot.name
+			if spot.catalog {
+				grouping.ScenicSpotID = spot.id
+			}
 			location = scenicLocation{grouping: grouping, point: point}
 			scenicGroups[spot.id] = location
 		}
