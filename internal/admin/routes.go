@@ -289,6 +289,14 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	api.DELETE("/tracks/:track_id", m.Handler.DeleteTrack)
 	api.POST("/tracks/:track_id/restore", m.Handler.RestoreTrack)
 	api.POST("/tracks/:track_id/purge", m.Handler.PurgeTrack)
+	if m.Handler.photos != nil {
+		api.GET("/track-photos", m.Handler.photoQueue)
+		api.GET("/track-photos/:id/image", m.Handler.photoImage)
+		api.POST("/track-photos/:id/review", m.Handler.photoReview)
+		api.GET("/scenic-spots/:spot_id/user-photos", m.Handler.scenicUserPhotos)
+		api.GET("/scenic-spots/:spot_id/user-photos/:id/image", m.Handler.scenicUserPhotoImage)
+		api.POST("/scenic-spots/:spot_id/user-photos/:id", m.Handler.scenicPhotoDecision)
+	}
 	api.GET("/track-submissions", m.Handler.ListTrackSubmissions)
 	api.GET("/track-submissions/:submission_id", m.Handler.GetTrackSubmission)
 	api.POST("/track-submissions/:submission_id/review", m.Handler.ReviewTrackSubmission)

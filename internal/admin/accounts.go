@@ -30,7 +30,7 @@ type PermissionModule struct {
 
 var permissionModules = []PermissionModule{
 	{"dashboard", "工作台", "/admin/dashboard.html"},
-	{"track_submissions", "投稿审核", "/admin/track_submissions.html"},
+	{"track_submissions", "内容审核", "/admin/track_submissions.html"},
 	{"feedbacks", "反馈与纠错", "/admin/feedbacks.html"},
 	{"announcements", "活动&通知", "/admin/announcements.html"},
 	{"users", "用户管理", "/admin/users.html"},

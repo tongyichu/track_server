@@ -113,6 +113,12 @@
 | PUT | `/admin/api/route-groups/:group_id/representative` | 鉴权 | 指定代表轨迹 |
 | GET/PUT | `/admin/api/route-groups/:group_id/introduction` | 地图模式查看 / 操作 | 查询或直接保存后台简介和补充字段。PUT 必填 `zh.summary`，中文标题使用路线组名称。尚未保存内容时，GET 返回按规则生成的简介。 |
 | POST | `/admin/api/route-groups/:group_id/introduction/generate` | 地图模式操作 | 手动生成中文简介候选，返回 `summary` 供编辑后保存 |
+| GET | `/admin/api/track-photos` | 内容审核查看 | 按状态分页，每页五条轨迹 |
+| GET | `/admin/api/track-photos/:id/image` | 内容审核查看 | 受保护 JPEG |
+| POST | `/admin/api/track-photos/:id/review` | 内容审核操作 | 按照片版本通过、驳回或撤销通过 |
+| GET | `/admin/api/scenic-spots/:spot_id/user-photos` | 景点查看 | 查看已通过的候选及收录状态，included=1 只读已收录照片 |
+| GET | `/admin/api/scenic-spots/:spot_id/user-photos/:id/image` | 景点查看 | 验证景点关联与公开状态后读取图片 |
+| POST | `/admin/api/scenic-spots/:spot_id/user-photos/:id` | 景点操作 | 按照片版本收录或移出 |
 | GET | `/admin/api/track-submissions` | 鉴权 | 按状态、难度、风险、运动类型、用户和待审时长筛选，支持最早优先及时间/编号游标翻页 |
 | GET | `/admin/api/track-submissions/:submission_id` | 鉴权 | 投稿、轨迹、审核流水及展示元数据；所有状态由当前页详情弹窗展示，见 [投稿接口](api/track-submission.md#7-管理后台审核) |
 | POST | `/admin/api/track-submissions/:submission_id/review` | 鉴权 | 按 expected_revision 通过或驳回投稿 |

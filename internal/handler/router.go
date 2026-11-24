@@ -24,6 +24,7 @@ type Deps struct {
 	TrackLikeService           *service.TrackLikeService
 	TrackService               *service.TrackService
 	TrackMapService            *service.TrackMapService
+	TrackPhotoService          *service.TrackPhotoService
 	TrackSubmissionService     *service.TrackSubmissionService
 	RecommendationService      *service.RecommendationService
 	UserService                *service.UserService
@@ -245,6 +246,15 @@ func RegisterRoutes(h *server.Hertz, deps Deps) {
 	auth.GET("/track/types", trackHandler.ListTrackTypes)
 	auth.GET("/track/types/icons/:icon_file", TrackTypeIcon)
 	auth.HEAD("/track/types/icons/:icon_file", TrackTypeIcon)
+	if deps.TrackPhotoService != nil {
+		photos := photoHandler{deps.TrackPhotoService}
+		auth.GET("/track/:track_id/photos", photos.list)
+		auth.POST("/track/:track_id/photos", photos.upload)
+		auth.GET("/track/:track_id/photos/:id/image", photos.media)
+		auth.DELETE("/track/:track_id/photos/:id", photos.remove)
+		auth.GET("/track/discover/scenic-spots/:spot_id/user-photos", photos.scenic)
+		auth.GET("/track/discover/scenic-spots/:spot_id/user-photos/:id/image", photos.scenicMedia)
+	}
 	if deps.TrackSubmissionService != nil {
 		auth.GET("/track/submission/options", trackSubmissionHandler.Options)
 		auth.POST("/track/:track_id/submission", trackSubmissionHandler.Submit)

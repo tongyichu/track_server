@@ -15,6 +15,7 @@ import (
 
 // InMemoryTrackRepository is an in-memory implementation of TrackRepository for tests and development.
 type InMemoryTrackRepository struct {
+	photos                map[string]storedPhoto
 	deletedResultSessions map[string]bool
 	mu                    sync.RWMutex
 	tracks                map[string]*models.Track

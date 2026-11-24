@@ -122,6 +122,7 @@
       var over72 = Number(review.pending_over_72h || 0);
       var between = Math.max(0, Number(review.pending_over_24h || 0) - over72);
       function set(id, value) { $(id).textContent = value; }
+      set('routePending', Number(review.pending || 0).toLocaleString());
       set('submissionPending', Number(review.pending || 0).toLocaleString());
       set('submissionOver24', between.toLocaleString());
       set('submissionOver72', over72.toLocaleString());

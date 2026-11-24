@@ -14,13 +14,29 @@
     <div class="title">Track 管理后台</div>
     <nav class="nav">
       <a href="/admin/index.html">发布管理</a><a href="/admin/users.html">用户管理</a>
-      <a href="/admin/tracks.html">轨迹管理</a><a class="active" href="/admin/track_submissions.html">投稿审核</a>
+      <a href="/admin/tracks.html">轨迹管理</a><a class="active" href="/admin/track_submissions.html">内容审核</a>
       <a href="/admin/route_groups.html">地图模式</a><a href="/admin/companions.html">与友同行</a>
       <a href="/admin/feedbacks.html">意见反馈</a><a href="/admin/analytics.html">埋点同步</a>
     </nav>
     <div class="spacer"></div><div class="user"><span id="userName"></span><button id="logoutBtn">退出</button></div>
   </header>
   <main class="container wide">
+    <div class="d-flex gap-2 mb-3" aria-label="审核队列">
+      <button id="routesTab" class="btn btn-primary" aria-pressed="true">路线投稿 <span id="routePending"></span></button>
+      <button id="photosTab" class="btn btn-outline-secondary" aria-pressed="false">轨迹照片 <span id="photoPending"></span></button>
+    </div>
+    <section id="photoPanel" class="panel" hidden>
+      <div class="d-flex flex-wrap align-items-center gap-2">
+        <select id="photoFilter" class="form-select w-auto" aria-label="照片状态"><option value="pending">待审核</option><option value="approved">已通过</option><option value="rejected">已驳回</option></select>
+        <button id="photoRefresh" class="btn btn-outline-secondary">刷新</button>
+        <input id="photoReason" class="form-control w-auto" maxlength="250" placeholder="驳回原因" aria-label="驳回原因" data-admin-write="track_submissions">
+        <button id="photoApprove" class="btn btn-primary" data-admin-write="track_submissions">通过所选</button>
+        <button id="photoReject" class="btn btn-danger" data-admin-write="track_submissions">驳回所选</button>
+      </div>
+      <p id="photoMessage" role="status"></p><div id="photoList"></div>
+      <div class="d-flex gap-2"><button id="photoPrev" class="btn btn-outline-secondary">上一页</button><button id="photoNext" class="btn btn-outline-secondary">下一页</button></div>
+    </section>
+    <div id="routesPanel">
     <div class="mb-3" aria-live="polite">
       <section class="submission-stat-section">
         <div class="admin-stats-heading"><h2>待审核队列</h2></div>
@@ -54,7 +70,9 @@
         <article class="admin-metric" data-admin-metric data-label="平均审核时长" data-value-id="submissionAvgHours"></article>
       </div>
     </details>
+    </div>
   </main>
+  <dialog id="photoPreview"><div class="d-flex justify-content-end"><button type="button" class="btn-close" id="photoPreviewClose" aria-label="关闭"></button></div><img id="photoPreviewImage" alt="运动实拍" style="max-width:80vw;max-height:75vh;object-fit:contain"></dialog>
   <dialog class="modal submission-detail-modal" id="submissionDetailModal" aria-hidden="true" aria-labelledby="detailTitle">
     <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-xl">
       <div class="modal-content">
@@ -76,5 +94,6 @@
   <script src="/admin/static/admin_stats.js"></script>
   <script src="/admin/static/ui.js"></script>
   <script src="/admin/static/track_submissions.js"></script>
+  <script src="/admin/static/track_photos.js"></script>
 </body>
 </html>

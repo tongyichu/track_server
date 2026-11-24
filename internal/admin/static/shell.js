@@ -83,7 +83,7 @@
   const navigation = [
     { items: [{ href: dashboardPath, label: '工作台', icon: 'layout-dashboard', primary: true }] },
     { label: '运营', items: [
-      { href: '/admin/track_submissions.html', label: '投稿审核', icon: 'clipboard-check', primary: true },
+      { href: '/admin/track_submissions.html', label: '内容审核', icon: 'clipboard-check', primary: true },
       { href: '/admin/feedbacks.html', label: '反馈与纠错', icon: 'message-report' },
       { href: '/admin/announcements.html', label: '活动&通知', icon: 'bell' },
       { href: '/admin/users.html', label: '用户管理', icon: 'users' }

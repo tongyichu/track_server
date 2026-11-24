@@ -44,6 +44,26 @@
     gallery.hidden = !entries.length;
   }
 
+  let galleryRequest, galleryCursor;
+  async function userPhotos(id, after) {
+    galleryRequest?.abort();
+    const controller = galleryRequest = new AbortController();
+    const base = '/admin/api/scenic-spots/' + encodeURIComponent(id) + '/user-photos';
+    try {
+      const res = await fetch(base + '?included=1&cursor=' + encodeURIComponent(after || ''), {signal:controller.signal});
+      if (!res.ok) throw Error();
+      const {data} = await res.json();
+      if (controller.signal.aborted) return;
+      for (const photo of data.items || []) {
+        const image = new Image(); image.loading = 'lazy'; image.alt = '用户实拍';
+        image.src = base + '/' + encodeURIComponent(photo.id) + '/image'; get('scenicInfoUserPhotos').append(image);
+      }
+      galleryCursor = data.next_cursor;
+      get('scenicInfoUserGallery').hidden = !get('scenicInfoUserPhotos').childElementCount;
+      get('scenicInfoUserMore').hidden = !galleryCursor;
+    } catch { if (!controller.signal.aborted && after) get('scenicInfoUserMore').textContent = '重试'; }
+  }
+  get('scenicInfoUserMore').onclick = () => { if(currentSpot && galleryCursor) userPhotos(currentSpot.spotID,galleryCursor); };
   function render(spot) {
     get('scenicInfoName').textContent = spot.name || '未命名景点';
     const meta = get('scenicInfoMeta');
@@ -54,11 +74,14 @@
     get('scenicInfoAddress').textContent = spot.address || '未填写';
     get('scenicInfoDescription').textContent = spot.description || '暂无简介';
     renderPhotos(spot);
+    userPhotos(spot.id);
     get('scenicInfoState').hidden = true;
     get('scenicInfoContent').hidden = false;
   }
 
   function clear() {
+    galleryRequest?.abort(); galleryCursor=null;
+    get('scenicInfoUserGallery').hidden=true; get('scenicInfoUserPhotos').replaceChildren();
     request?.abort();
     request = null;
     currentSpot = null;

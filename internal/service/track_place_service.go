@@ -32,6 +32,7 @@ type TrackPlaceConfig struct {
 	CacheTTL, GoogleCacheTTL       time.Duration
 }
 type TrackPlaceService struct {
+	Photos        *TrackPhotoService
 	companions    repository.CompanionRepository
 	cfg           TrackPlaceConfig
 	store         repository.TrackPlaceRepository
@@ -165,6 +166,11 @@ func (s *TrackPlaceService) RunOnce(ctx context.Context) (*TrackPlaceRunResult, 
 	}()
 	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
+	if s.Photos != nil {
+		if err := s.Photos.checkLocations(ctx, s); err != nil {
+			log.Printf("track photo location check deferred: %v", err)
+		}
+	}
 	if err := s.reconcileCompanionContentPage(ctx); err != nil {
 		log.Printf("companion shared content reconciliation pending")
 	}

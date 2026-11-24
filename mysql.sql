@@ -173,6 +173,20 @@ CREATE TABLE `track_id_sequences` (
                                      PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='轨迹ID全局序列表';
 
+CREATE TABLE IF NOT EXISTS track_photos (
+  id CHAR(36) NOT NULL PRIMARY KEY,
+  track_id VARCHAR(64) NOT NULL,
+  slot TINYINT UNSIGNED NULL,
+  status VARCHAR(12) NOT NULL,
+  revision BIGINT NOT NULL,
+  metadata JSON NOT NULL,
+  jpeg MEDIUMBLOB NULL,
+  UNIQUE KEY uq_track_photo_slot(track_id,slot),
+  KEY idx_photo_review(status,id),
+  KEY idx_photo_review_track(status,track_id),
+  CONSTRAINT fk_track_photo_track FOREIGN KEY(track_id) REFERENCES track_records(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE `track_submissions` (
   `submission_id` VARCHAR(64) NOT NULL COMMENT '投稿ID',
   `track_id` VARCHAR(64) NOT NULL COMMENT '轨迹ID',

@@ -30,6 +30,7 @@ var accountRestrictedRoutes = []restrictedRoute{
 	{method: http.MethodGet, path: "/api/v1/oss/sts-token", message: service.AccountRestrictionMessageUpload},
 	{method: http.MethodPost, path: "/api/v1/track/create", message: service.AccountRestrictionMessageUpload},
 	{method: http.MethodPut, prefix: "/api/v1/track/", suffix: "/update", message: service.AccountRestrictionMessageUpload},
+	{method: http.MethodPost, prefix: "/api/v1/track/", suffix: "/photos", message: service.AccountRestrictionMessageUpload},
 	{method: http.MethodPost, prefix: "/api/v1/track/", suffix: "/submission", message: service.AccountRestrictionMessageUpload},
 	{method: http.MethodPut, prefix: "/api/v1/track/", suffix: "/submission", message: service.AccountRestrictionMessageUpload},
 	{method: http.MethodPost, prefix: "/api/v1/track/", suffix: "/upload_cloud", message: service.AccountRestrictionMessageUpload},

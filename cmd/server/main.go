@@ -239,7 +239,11 @@ func main() {
 				aiUsageRepo = aiRepo
 				aiDurable = true
 			}
-			trackRepo = repository.NewMongoTrackRepository(db.Collection("tracks"))
+			mongoTracks := repository.NewMongoTrackRepository(db.Collection("tracks"))
+			if err := mongoTracks.EnsurePhotoIndexes(ctx); err != nil {
+				log.Fatalf("track photo indexes: %v", err)
+			}
+			trackRepo = mongoTracks
 			likeRepo = repository.NewMongoTrackLikeRepository(db.Collection("track_likes"))
 			commentRepo = repository.NewMongoCommentRepository(db)
 			userRepo = repository.NewMongoUserRepository(db.Collection("users"))
@@ -350,6 +354,7 @@ func main() {
 	scenicSpotCatalogSvc.SetAIManager(aiManager, cfg.KimiScenicDescriptionModel)
 	aiManager.RegisterRetry("scenic_description", scenicSpotCatalogSvc.RetryAI)
 	trackSvc.SetScenicSpotCatalogService(scenicSpotCatalogSvc)
+	photoSvc := service.NewTrackPhotoService(trackRepo, scenicSpotRepo)
 	trackSubmissionSvc := service.NewTrackSubmissionService(trackSubmissionRepo, trackRepo)
 	recommendationSvc := service.NewRecommendationService(service.RecommendationConfig{
 		Enabled:        cfg.RecommendationEnabled,
@@ -674,6 +679,7 @@ func main() {
 		}, trackPlaceRepo, trackMapRepo, trackRepo, trackMapIndexSvc)
 		scenicSpotCatalogSvc.SetProviderService(trackPlaceSvc)
 		trackPlaceSvc.SetScenicSpotCatalogService(scenicSpotCatalogSvc)
+		trackPlaceSvc.Photos = photoSvc
 		trackPlaceSvc.SetCompanionRepository(companionRepo)
 		trackRouteGroupSvc.SetPlaceService(trackPlaceSvc)
 		trackMapSvc.SetPlaceService(trackPlaceSvc)
@@ -745,6 +751,7 @@ func main() {
 		TrackLikeService:           likeSvc,
 		TrackMapService:            trackMapSvc,
 		TrackSubmissionService:     trackSubmissionSvc,
+		TrackPhotoService:          photoSvc,
 		RecommendationService:      recommendationSvc,
 		UserService:                userSvc,
 		LoginService:               loginSvc,
@@ -792,6 +799,7 @@ func main() {
 		adminModule.Handler.SetScreenshotCache(screenshotCache)
 		adminModule.Handler.SetTrackAssetCaches(rawTrackCache, previewCache)
 		adminModule.Handler.SetTrackService(trackSvc)
+		adminModule.Handler.SetTrackPhotoService(photoSvc)
 		adminModule.Handler.SetTrackSubmissionService(trackSubmissionSvc)
 		adminModule.Handler.SetScenicSpotCatalogService(scenicSpotCatalogSvc)
 		adminModule.Handler.SetTrackPlaceService(trackPlaceSvc)

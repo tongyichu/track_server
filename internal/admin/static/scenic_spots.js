@@ -289,6 +289,7 @@
   }
 
   function fillForm(spot) {
+    ScenicUserPhotos.open(spot.id);
     abortDescriptionGeneration();
     baselineFormSnapshot=null;
     $('deleteSpotError').hidden=true;
@@ -649,6 +650,7 @@
     return true;
   }
 
+  $('detailModal').addEventListener('close',()=>ScenicUserPhotos.open(null));
   function closeDetail() {
     const modal = $('detailModal'), discard = $('discardScenicDialog');
     if (!modal.open || discard.open || state.saving || !canLeavePhotos()) return;

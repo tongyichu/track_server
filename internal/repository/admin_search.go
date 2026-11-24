@@ -122,6 +122,11 @@ func (r *InMemoryTrackRepository) AdminHardDeleteTrack(_ context.Context, trackI
 		}
 		r.deletedResultSessions[navigationResultKey(track.UserID, track.SessionID)] = true
 	}
+	for id, p := range r.photos {
+		if p.meta.TrackID == trackID {
+			delete(r.photos, id)
+		}
+	}
 	delete(r.tracks, trackID)
 	r.mu.Unlock()
 	if r.adminScenicSpots != nil {

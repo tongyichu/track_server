@@ -206,6 +206,8 @@ func ensureMySQLSchema(ctx context.Context, db *sql.DB) error {
 			PRIMARY KEY (track_id, stat_date),
 			KEY idx_recommend_stats_date (stat_date, hot_score)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='推荐物料日统计';`,
+		accountDeletionSchema,
+		trackPhotosDDL,
 		`CREATE TABLE IF NOT EXISTS track_submissions (
 			submission_id VARCHAR(64) NOT NULL,
 			track_id VARCHAR(64) NOT NULL,

@@ -605,7 +605,7 @@ func (r *MongoTrackRepository) AdminHardDeleteTrack(ctx context.Context, trackID
 		_, _ = db.Collection("track_comment_reactions").DeleteMany(ctx, bson.M{"comment_id": bson.M{"$in": commentIDs}})
 	}
 	for _, name := range []string{
-		"track_submissions", "track_waypoints", "track_collects", "track_navigations",
+		"track_photos", "track_submissions", "track_waypoints", "track_collects", "track_navigations",
 		"track_map_index_jobs", "track_geo_indexes", "track_route_group_members",
 		"track_scenic_spot_links", "track_likes", "track_comment_images",
 		"track_comment_stats", "track_comments",

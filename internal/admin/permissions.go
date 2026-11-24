@@ -71,7 +71,7 @@ func requestPermission(c *app.RequestContext) (string, bool) {
 		return "regions", write
 	case "route-groups":
 		return "route_groups", write
-	case "track-submissions":
+	case "track-submissions", "track-photos":
 		return "track_submissions", write
 	case "companions":
 		return "companions", write

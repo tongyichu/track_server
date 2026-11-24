@@ -37,6 +37,7 @@ import (
 
 // Handler 聚合管理后台需要的业务依赖。
 type Handler struct {
+	photos                *service.TrackPhotoService
 	music                 musicapi.Handler
 	realtime              *service.RealtimeMonitor
 	realtimeBroker        *service.RealtimeBroker
