@@ -130,7 +130,7 @@ POST /admin/api/login {username,password}
        → AppReleaseService.Publish → AppReleaseRepository.Upsert
 ```
 
-当前下发版本的行内保存走 `PUT /admin/api/releases/:version_code/policy`。在同一次持久化操作中核对最新已发布 Android 构建与编辑前的策略，只更新最低支持构建号和强制更新开关。
+当前下发版本的开关切换走 `PUT /admin/api/releases/:version_code/policy`，提交该版本保存的最低支持构建号和新的开关值。服务端在同一次持久化操作中核对最新已发布 Android 构建与切换前的策略。
 
 ### 鉴权拦截
 

@@ -8,7 +8,8 @@
   const notesList = $('releaseNotesList'), uploadHint = $('uploadHint'), packageMetadata = $('packageMetadata');
   const statusInput = publishForm.elements.status, minVersion = publishForm.elements.min_supported_version_code;
   let packageInfo = null, upload = null, publishing = false;
-  let releases = null, listRequest = null, savingPolicy = false, updatePolicyEditor = null;
+  let releases = null, listRequest = null;
+  let savingPolicy = false, policySwitch = null;
   let releaseDetailRoot = null, changelogRoot = null;
 
   async function request(path, options) {
@@ -213,62 +214,51 @@
   function renderPolicyCell(cell, item, editable) {
     cell.className = 'release-policy-cell';
     if (!editable) {
-      cell.textContent = item.force_update ? '全部旧版强制更新'
-        : item.min_supported_version_code > 0 ? '低于构建 ' + item.min_supported_version_code + ' 强制更新' : '可选更新';
+      cell.textContent = item.force_update ? '是' : '否';
       return;
     }
-    const form = document.createElement('form');
-    form.className = 'release-policy-editor';
-    form.dataset.adminWrite = 'releases';
-    form.setAttribute('aria-label', '当前下发版本的升级策略');
-    form.innerHTML = '<label>最低支持构建号 <input class="form-control form-control-sm" type="number" name="minimum" min="0" step="1" required></label>' +
-      '<label class="form-check form-switch release-force-switch"><input class="form-check-input" type="checkbox" role="switch" name="force">' +
-      '<span>强制更新</span></label><button class="btn btn-sm btn-outline-primary" type="submit">保存</button>';
-    const minimum = form.elements.minimum, force = form.elements.force;
-    const save = form.querySelector('button');
-    const expected = {
-      min_supported_version_code: item.min_supported_version_code,
-      force_update: item.force_update
-    };
-    minimum.max = String(item.version_code);
-    minimum.value = String(expected.min_supported_version_code);
-    force.checked = expected.force_update;
-    const dirty = () => minimum.valueAsNumber !== expected.min_supported_version_code || force.checked !== expected.force_update;
-    function updateSave() {
-      minimum.disabled = force.disabled = savingPolicy;
-      save.disabled = savingPolicy || !minimum.validity.valid || !dirty();
-    }
-    form.addEventListener('input', updateSave);
-    form.addEventListener('submit', async event => {
-      event.preventDefault();
-      if (savingPolicy || !canWrite() || !dirty() || !form.reportValidity()) return;
-      const policy = { min_supported_version_code: minimum.valueAsNumber, force_update: force.checked };
+    const label = document.createElement('label');
+    label.className = 'form-check form-switch release-force-switch';
+    label.dataset.adminWrite = 'releases';
+    const toggle = document.createElement('input');
+    toggle.className = 'form-check-input';
+    toggle.type = 'checkbox';
+    toggle.setAttribute('role', 'switch');
+    toggle.setAttribute('aria-label', releaseName(item) + '强制更新');
+    toggle.checked = item.force_update;
+    toggle.disabled = savingPolicy;
+    toggle.addEventListener('change', async () => {
+      if (savingPolicy || !canWrite()) {
+        toggle.checked = item.force_update;
+        return;
+      }
+      const expected = {
+        min_supported_version_code: item.min_supported_version_code,
+        force_update: item.force_update
+      };
+      const policy = { ...expected, force_update: toggle.checked };
       savingPolicy = true;
-      updateSave();
-      save.textContent = '保存中…';
+      toggle.disabled = true;
       try {
         const updated = await request('/' + encodeURIComponent(item.version_code) + '/policy', {
           method: 'PUT', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ expected, policy })
         });
-        if (currentRelease(releases) === item) {
-          releases = releases.map(record => record === item ? updated : record);
-        }
-        Object.assign(expected, policy);
-        AdminUI.alert('升级策略已保存', 'success');
+        if (currentRelease(releases) === item) Object.assign(item, updated);
+        AdminUI.alert(updated.force_update ? '强制更新已开启' : '强制更新已关闭', 'success');
         refreshReleaseData();
       } catch (error) {
-        if (error.status === 409) refreshReleaseData();
-        AdminUI.alert(error instanceof TypeError ? '保存结果未确认，请刷新版本记录核对。' : error.message, 'danger');
+        toggle.checked = item.force_update;
+        if (error.status === 409 || error instanceof TypeError) refreshReleaseData();
+        AdminUI.alert(error instanceof TypeError ? '保存结果未确认，正在重新读取版本记录。' : error.message, 'danger');
       } finally {
         savingPolicy = false;
-        save.textContent = '保存';
-        updatePolicyEditor?.();
+        if (policySwitch) policySwitch.disabled = !canWrite();
       }
     });
-    updatePolicyEditor = updateSave;
-    updateSave();
-    cell.appendChild(form);
+    policySwitch = toggle;
+    label.appendChild(toggle);
+    cell.appendChild(label);
   }
 
   function renderReleaseList() {
@@ -279,7 +269,7 @@
     releaseTable.hidden = !items.length;
     listMessage.hidden = Boolean(items.length);
     if (!items.length) listMessage.textContent = releases.length ? '此状态暂无版本' : '暂无版本记录';
-    updatePolicyEditor = null;
+    policySwitch = null;
     releaseList.replaceChildren();
     items.forEach(item => {
       const row = releaseList.insertRow();
