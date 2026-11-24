@@ -189,6 +189,11 @@ func TestAdminRouteGroupOperations(t *testing.T) {
 	now := time.Now()
 	index1 := adminTestGeoIndex("NO.00001001", now)
 	index2 := adminTestGeoIndex("NO.00001002", now)
+	for _, index := range []*models.TrackGeoIndex{index1, index2} {
+		if err := trackRepo.Create(ctx, &models.Track{ID: index.TrackID, Status: models.TrackStatusNormal}); err != nil {
+			t.Fatal(err)
+		}
+	}
 	index2.StartLat += 0.001
 	index2.EndLat += 0.001
 	if err := mapRepo.UpsertTrackGeoIndex(ctx, index1); err != nil {
@@ -307,14 +312,27 @@ func TestAdminRouteGroupOperations(t *testing.T) {
 
 func TestAdminRouteGroupDirectoryAndMemberPagination(t *testing.T) {
 	ctx := context.Background()
-	mapRepo := repository.NewInMemoryTrackMapRepository(nil)
-	for i := 0; i < 51; i++ {
+	trackRepo := repository.NewInMemoryTrackRepository()
+	mapRepo := repository.NewInMemoryTrackMapRepository(trackRepo)
+	seedMember := func(groupID, trackID string, status models.TrackStatus, role models.TrackRouteGroupMemberRole) {
+		t.Helper()
+		if err := trackRepo.Create(ctx, &models.Track{ID: trackID, Status: status}); err != nil {
+			t.Fatal(err)
+		}
+		if err := mapRepo.UpsertRouteGroupMember(ctx, &models.TrackRouteGroupMember{GroupID: groupID, TrackID: trackID, Role: role}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for i := 1; i <= 51; i++ {
+		groupID := fmt.Sprintf("RG.%08d", i)
 		if err := mapRepo.UpsertRouteGroup(ctx, &models.TrackRouteGroup{
-			GroupID: fmt.Sprintf("RG.%08d", i+1), TrackType: "hiking", Status: models.TrackRouteGroupStatusActive,
+			GroupID: groupID, TrackType: "hiking", Status: models.TrackRouteGroupStatusActive,
 			CityCodes: []string{"110100"}, MemberCount: 2,
 		}); err != nil {
 			t.Fatal(err)
 		}
+		seedMember(groupID, fmt.Sprintf("NO.%08d", i*2-1), models.TrackStatusNormal, models.TrackRouteGroupMemberRoleRepresentative)
+		seedMember(groupID, fmt.Sprintf("NO.%08d", i*2), models.TrackStatusNormal, models.TrackRouteGroupMemberRoleMember)
 	}
 	const lateGroupID = "RG.00000052"
 	if err := mapRepo.UpsertRouteGroup(ctx, &models.TrackRouteGroup{
@@ -323,14 +341,16 @@ func TestAdminRouteGroupDirectoryAndMemberPagination(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	for _, member := range []*models.TrackRouteGroupMember{
-		{GroupID: "RG.00000001", TrackID: "NO.00000001", Role: models.TrackRouteGroupMemberRoleRepresentative},
-		{GroupID: "RG.00000001", TrackID: "NO.00000002", Role: models.TrackRouteGroupMemberRoleMember},
-	} {
-		if err := mapRepo.UpsertRouteGroupMember(ctx, member); err != nil {
-			t.Fatal(err)
-		}
+	seedMember(lateGroupID, "NO.00000103", models.TrackStatusNormal, models.TrackRouteGroupMemberRoleRepresentative)
+	const unavailableGroupID = "RG.00000053"
+	if err := mapRepo.UpsertRouteGroup(ctx, &models.TrackRouteGroup{
+		GroupID: unavailableGroupID, TrackType: "hiking", Status: models.TrackRouteGroupStatusActive,
+		CityCodes: []string{"510100"}, MemberCount: 1,
+	}); err != nil {
+		t.Fatal(err)
 	}
+	seedMember(unavailableGroupID, "NO.00000104", models.TrackStatusDeleted, models.TrackRouteGroupMemberRoleRepresentative)
+	seedMember("RG.00000001", "NO.00000000", models.TrackStatusDeleted, models.TrackRouteGroupMemberRoleRepresentative)
 	h := server.Default()
 	module := NewModule(map[string]string{"admin": string(placeholderPasswordHash)}, nil, nil, t.TempDir(), nil, nil, nil, mapRepo, nil, nil, nil, nil, nil, service.NewTrackRouteGroupService(mapRepo), &adminAccountTestStorage{})
 	module.RegisterRoutes(h)
@@ -378,7 +398,7 @@ func TestAdminRouteGroupDirectoryAndMemberPagination(t *testing.T) {
 	if err := json.Unmarshal(resp.Body.Bytes(), &detail); err != nil {
 		t.Fatal(err)
 	}
-	if detail.Data.MemberOffset != 1 || len(detail.Data.Members) != 1 || detail.Data.Members[0].Member.TrackID != "NO.00000002" {
+	if detail.Data.Group.MemberCount != 2 || detail.Data.MemberOffset != 1 || len(detail.Data.Members) != 1 || detail.Data.Members[0].Member.TrackID != "NO.00000002" {
 		t.Fatalf("wrong second page of member tracks: %+v", detail.Data)
 	}
 }

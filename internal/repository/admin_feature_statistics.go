@@ -96,15 +96,21 @@ func addCompanionUsage(out *models.AdminCompanionUsageStatistics, started, ended
 	}
 }
 
-func (r *memoryAdminDashboardRepository) GetAdminMapModeStatistics(_ context.Context) (*models.AdminMapModeStatistics, error) {
+func (r *memoryAdminDashboardRepository) GetAdminMapModeStatistics(ctx context.Context) (*models.AdminMapModeStatistics, error) {
 	repo, ok := r.deps.trackMap.(*InMemoryTrackMapRepository)
 	if !ok || repo == nil {
 		return nil, errAdminStatisticsRepositoriesUnavailable
 	}
+	return getAdminMapModeStatistics(ctx, repo)
+}
+
+func getAdminMapModeStatistics(ctx context.Context, repo TrackMapRepository) (*models.AdminMapModeStatistics, error) {
+	groups, err := repo.ListRouteGroupDirectory(ctx, models.TrackMapQueryFilter{})
+	if err != nil {
+		return nil, err
+	}
 	out, cities := newMapModeStatistics(), make(map[string]struct{})
-	repo.mu.RLock()
-	defer repo.mu.RUnlock()
-	for _, group := range repo.routeGroups {
+	for _, group := range groups {
 		addMapModeGroup(out, cities, group)
 	}
 	out.CityCount = int64(len(cities))

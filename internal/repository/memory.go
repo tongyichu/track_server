@@ -1882,10 +1882,10 @@ func (r *InMemoryTrackMapRepository) ListCompletedTracksMissingGeoIndex(_ contex
 	if r.tracks == nil {
 		return nil, nil
 	}
-	r.tracks.mu.RLock()
-	defer r.tracks.mu.RUnlock()
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+	r.tracks.mu.RLock()
+	defer r.tracks.mu.RUnlock()
 
 	items := make([]*models.Track, 0, limit)
 	for _, track := range r.tracks.tracks {
@@ -2046,23 +2046,34 @@ func (r *InMemoryTrackMapRepository) FindRouteGroup(_ context.Context, groupID s
 }
 
 func (r *InMemoryTrackMapRepository) ListRouteGroups(_ context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackRouteGroup, error) {
-	return r.listRouteGroupSummaries(filter, true)
+	return r.listRouteGroupSummaries(filter, true, false)
 }
 
 func (r *InMemoryTrackMapRepository) ListRouteGroupDirectory(_ context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackRouteGroup, error) {
-	return r.listRouteGroupSummaries(filter, false)
+	return r.listRouteGroupSummaries(filter, false, true)
 }
 
-func (r *InMemoryTrackMapRepository) listRouteGroupSummaries(filter models.TrackMapQueryFilter, paginate bool) ([]*models.TrackRouteGroup, error) {
+func (r *InMemoryTrackMapRepository) listRouteGroupSummaries(filter models.TrackMapQueryFilter, paginate, visibleOnly bool) ([]*models.TrackRouteGroup, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+	if visibleOnly && r.tracks != nil {
+		r.tracks.mu.RLock()
+		defer r.tracks.mu.RUnlock()
+	}
 	limit := normalizeTrackMapQueryLimit(filter.Limit)
 	items := make([]*models.TrackRouteGroup, 0, limit)
 	for _, group := range r.routeGroups {
 		if !routeGroupMatchesFilter(group, filter) {
 			continue
 		}
-		items = append(items, cloneTrackRouteGroup(group))
+		summary := cloneTrackRouteGroup(group)
+		if visibleOnly {
+			summary.MemberCount = r.countVisibleRouteGroupMembers(group.GroupID)
+			if summary.MemberCount == 0 {
+				continue
+			}
+		}
+		items = append(items, summary)
 	}
 	sort.SliceStable(items, func(i, j int) bool {
 		if items[i].MemberCount == items[j].MemberCount {
@@ -2088,16 +2099,20 @@ func (r *InMemoryTrackMapRepository) listRouteGroupSummaries(filter models.Track
 	return items, nil
 }
 
-func (r *InMemoryTrackMapRepository) ListRouteGroupSummaries(ctx context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackRouteGroup, error) {
-	return r.ListRouteGroups(ctx, filter)
+func (r *InMemoryTrackMapRepository) ListRouteGroupSummaries(_ context.Context, filter models.TrackMapQueryFilter) ([]*models.TrackRouteGroup, error) {
+	return r.listRouteGroupSummaries(filter, true, true)
 }
 
 func (r *InMemoryTrackMapRepository) CountRouteGroupSummaries(_ context.Context, filter models.TrackMapQueryFilter) (int64, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+	if r.tracks != nil {
+		r.tracks.mu.RLock()
+		defer r.tracks.mu.RUnlock()
+	}
 	var total int64
 	for _, group := range r.routeGroups {
-		if routeGroupMatchesFilter(group, filter) {
+		if routeGroupMatchesFilter(group, filter) && r.countVisibleRouteGroupMembers(group.GroupID) > 0 {
 			total++
 		}
 	}
@@ -2387,20 +2402,56 @@ func (r *InMemoryTrackMapRepository) ArchiveRouteGroup(_ context.Context, groupI
 	return nil
 }
 
-func (r *InMemoryTrackMapRepository) ListRouteGroupMembers(ctx context.Context, groupID string, limit int) ([]*models.TrackRouteGroupMember, error) {
-	return r.ListRouteGroupMembersPage(ctx, groupID, limit, 0)
+func (r *InMemoryTrackMapRepository) ListRouteGroupMembers(_ context.Context, groupID string, limit int) ([]*models.TrackRouteGroupMember, error) {
+	return r.listRouteGroupMembersPage(groupID, limit, 0, false)
 }
 
-func (r *InMemoryTrackMapRepository) ListRouteGroupMembersPage(_ context.Context, groupID string, limit, offset int) ([]*models.TrackRouteGroupMember, error) {
+func (r *InMemoryTrackMapRepository) ListVisibleRouteGroupMembersPage(_ context.Context, groupID string, limit, offset int) ([]*models.TrackRouteGroupMember, error) {
+	return r.listRouteGroupMembersPage(groupID, limit, offset, true)
+}
+
+func (r *InMemoryTrackMapRepository) CountVisibleRouteGroupMembers(_ context.Context, groupID string) (int64, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+	if r.tracks != nil {
+		r.tracks.mu.RLock()
+		defer r.tracks.mu.RUnlock()
+	}
+	return r.countVisibleRouteGroupMembers(groupID), nil
+}
+
+func (r *InMemoryTrackMapRepository) countVisibleRouteGroupMembers(groupID string) int64 {
+	var count int64
+	for _, member := range r.routeMembers[groupID] {
+		if member != nil && r.isVisibleRouteGroupTrack(member.TrackID) {
+			count++
+		}
+	}
+	return count
+}
+
+func (r *InMemoryTrackMapRepository) isVisibleRouteGroupTrack(trackID string) bool {
+	if r.tracks == nil {
+		return false
+	}
+	track := r.tracks.tracks[trackID]
+	return track != nil && track.Status == models.TrackStatusNormal && !track.IsRunning && track.DeletedAt.IsZero()
+}
+
+func (r *InMemoryTrackMapRepository) listRouteGroupMembersPage(groupID string, limit, offset int, visibleOnly bool) ([]*models.TrackRouteGroupMember, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if visibleOnly && r.tracks != nil {
+		r.tracks.mu.RLock()
+		defer r.tracks.mu.RUnlock()
+	}
 	if limit <= 0 {
 		limit = 20
 	}
 	members := r.routeMembers[groupID]
 	items := make([]*models.TrackRouteGroupMember, 0, len(members))
 	for _, member := range members {
-		if member == nil {
+		if member == nil || visibleOnly && !r.isVisibleRouteGroupTrack(member.TrackID) {
 			continue
 		}
 		clone := *member

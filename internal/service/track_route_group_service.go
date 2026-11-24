@@ -135,11 +135,19 @@ func (s *TrackRouteGroupService) GetRouteGroupDetail(ctx context.Context, groupI
 	if err != nil {
 		return nil, err
 	}
+	memberCount, err := s.repo.CountVisibleRouteGroupMembers(ctx, groupID)
+	if err != nil {
+		return nil, err
+	}
+	if memberCount == 0 {
+		return nil, repository.ErrNotFound
+	}
+	group.MemberCount = memberCount
 	offset = max(0, offset)
 	if int64(offset) >= group.MemberCount {
 		offset = int(max(0, group.MemberCount-1) / int64(limit) * int64(limit))
 	}
-	members, err := s.repo.ListRouteGroupMembersPage(ctx, groupID, limit, offset)
+	members, err := s.repo.ListVisibleRouteGroupMembersPage(ctx, groupID, limit, offset)
 	if err != nil {
 		return nil, err
 	}

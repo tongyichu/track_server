@@ -7,25 +7,15 @@ import (
 	"github.com/tongyichu/track_server/internal/models"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 func (r *mongoAdminDashboardRepository) GetAdminMapModeStatistics(ctx context.Context) (*models.AdminMapModeStatistics, error) {
-	cursor, err := r.db.Collection("track_route_groups").Find(ctx, bson.M{"status": models.TrackRouteGroupStatusActive}, options.Find().SetProjection(bson.M{"_id": 1, "name": 1, "status": 1, "center_lat": 1, "center_lng": 1, "member_count": 1, "city_codes": 1}))
-	if err != nil {
-		return nil, err
+	repo := &MongoTrackMapRepository{
+		tracks:  r.db.Collection("tracks"),
+		groups:  r.db.Collection("track_route_groups"),
+		members: r.db.Collection("track_route_group_members"),
 	}
-	defer cursor.Close(ctx)
-	out, cities := newMapModeStatistics(), make(map[string]struct{})
-	for cursor.Next(ctx) {
-		var group models.TrackRouteGroup
-		if err := cursor.Decode(&group); err != nil {
-			return nil, err
-		}
-		addMapModeGroup(out, cities, &group)
-	}
-	out.CityCount = int64(len(cities))
-	return out, cursor.Err()
+	return getAdminMapModeStatistics(ctx, repo)
 }
 
 func (r *mongoAdminDashboardRepository) GetAdminCompanionUsageStatistics(ctx context.Context, days int, now time.Time) (*models.AdminCompanionUsageStatistics, error) {

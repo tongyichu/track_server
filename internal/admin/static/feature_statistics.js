@@ -31,6 +31,7 @@
       } finally { if (current === request) { button.disabled = false; button.textContent = '刷新数据'; kit.loading('routeSizeChart', false); } }
     }
     $('refreshMapStatistics').addEventListener('click', load);
+    window.addEventListener('admin:route-groups-changed', () => { loaded = false; load(); });
     AdminStats.onExpand(details, () => { if (loaded) kit.resize(); else load(); });
     if (details.open) load();
   }

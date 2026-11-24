@@ -3,32 +3,13 @@ package repository
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"time"
 
 	"github.com/tongyichu/track_server/internal/models"
 )
 
 func (r *mysqlAdminDashboardRepository) GetAdminMapModeStatistics(ctx context.Context) (*models.AdminMapModeStatistics, error) {
-	rows, err := r.db.QueryContext(ctx, `SELECT group_id,name,center_lat,center_lng,member_count,COALESCE(NULLIF(city_codes_json,''),'[]') FROM track_route_groups WHERE status='active'`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out, cities := newMapModeStatistics(), make(map[string]struct{})
-	for rows.Next() {
-		group := &models.TrackRouteGroup{Status: models.TrackRouteGroupStatusActive}
-		var codes string
-		if err := rows.Scan(&group.GroupID, &group.Name, &group.CenterLat, &group.CenterLng, &group.MemberCount, &codes); err != nil {
-			return nil, err
-		}
-		if err := json.Unmarshal([]byte(codes), &group.CityCodes); err != nil {
-			return nil, err
-		}
-		addMapModeGroup(out, cities, group)
-	}
-	out.CityCount = int64(len(cities))
-	return out, rows.Err()
+	return getAdminMapModeStatistics(ctx, NewMySQLTrackMapRepository(r.db))
 }
 
 func (r *mysqlAdminDashboardRepository) GetAdminCompanionUsageStatistics(ctx context.Context, days int, now time.Time) (*models.AdminCompanionUsageStatistics, error) {

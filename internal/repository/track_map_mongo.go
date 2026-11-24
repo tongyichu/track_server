@@ -487,18 +487,20 @@ func (r *MongoTrackMapRepository) ListRouteGroupDirectory(ctx context.Context, f
 }
 
 func (r *MongoTrackMapRepository) listRouteGroupSummaries(ctx context.Context, filter models.TrackMapQueryFilter, paginate bool) ([]*models.TrackRouteGroup, error) {
-	opts := options.Find().SetSort(bson.D{{Key: "member_count", Value: -1}, {Key: "updated_at", Value: -1}, {Key: "_id", Value: 1}})
+	pipeline := append(r.visibleRouteGroupStages(filter), bson.D{{Key: "$sort", Value: bson.D{{Key: "member_count", Value: -1}, {Key: "updated_at", Value: -1}, {Key: "_id", Value: 1}}}})
 	var limit int
 	if paginate {
 		limit = normalizeTrackMapQueryLimit(filter.Limit)
-		opts.SetLimit(int64(limit))
 		if filter.Offset > 0 {
-			opts.SetSkip(int64(filter.Offset))
+			pipeline = append(pipeline, bson.D{{Key: "$skip", Value: int64(filter.Offset)}})
 		}
+		pipeline = append(pipeline, bson.D{{Key: "$limit", Value: int64(limit)}})
 	} else {
-		opts.SetProjection(bson.M{"name": 1, "track_type": 1, "city_codes": 1, "member_count": 1})
+		pipeline = append(pipeline, bson.D{{Key: "$project", Value: bson.M{
+			"name": 1, "track_type": 1, "city_codes": 1, "member_count": 1, "status": 1, "center_lat": 1, "center_lng": 1,
+		}}})
 	}
-	cur, err := r.groups.Find(ctx, mongoTrackRouteGroupFilter(filter), opts)
+	cur, err := r.groups.Aggregate(ctx, pipeline)
 	if err != nil {
 		return nil, err
 	}
@@ -515,7 +517,45 @@ func (r *MongoTrackMapRepository) listRouteGroupSummaries(ctx context.Context, f
 }
 
 func (r *MongoTrackMapRepository) CountRouteGroupSummaries(ctx context.Context, filter models.TrackMapQueryFilter) (int64, error) {
-	return r.groups.CountDocuments(ctx, mongoTrackRouteGroupFilter(filter))
+	return countMongoVisibleRouteRows(ctx, r.groups, r.visibleRouteGroupStages(filter))
+}
+
+func (r *MongoTrackMapRepository) visibleRouteGroupStages(filter models.TrackMapQueryFilter) mongo.Pipeline {
+	members := mongo.Pipeline{
+		{{Key: "$match", Value: bson.M{"$expr": bson.M{"$eq": bson.A{"$group_id", "$$groupID"}}}}},
+	}
+	members = append(members, r.visibleRouteGroupTrackStages()...)
+	members = append(members, bson.D{{Key: "$count", Value: "count"}})
+	return mongo.Pipeline{
+		{{Key: "$match", Value: mongoTrackRouteGroupFilter(filter)}},
+		{{Key: "$lookup", Value: bson.M{"from": r.members.Name(), "let": bson.M{"groupID": "$_id"}, "pipeline": members, "as": "visible_members"}}},
+		{{Key: "$unwind", Value: "$visible_members"}},
+		{{Key: "$set", Value: bson.M{"member_count": "$visible_members.count"}}},
+	}
+}
+
+func (r *MongoTrackMapRepository) visibleRouteGroupTrackStages() mongo.Pipeline {
+	return mongo.Pipeline{
+		{{Key: "$lookup", Value: bson.M{"from": r.tracks.Name(), "localField": "track_id", "foreignField": "_id", "as": "track"}}},
+		{{Key: "$unwind", Value: "$track"}},
+		{{Key: "$match", Value: bson.M{"track.status": models.TrackStatusNormal, "track.is_running": bson.M{"$ne": true},
+			"$or": bson.A{bson.M{"track.deleted_at": nil}, bson.M{"track.deleted_at": time.Time{}}}}}},
+	}
+}
+
+func countMongoVisibleRouteRows(ctx context.Context, collection *mongo.Collection, pipeline mongo.Pipeline) (int64, error) {
+	cur, err := collection.Aggregate(ctx, append(pipeline, bson.D{{Key: "$count", Value: "count"}}))
+	if err != nil {
+		return 0, err
+	}
+	defer cur.Close(ctx)
+	var result struct{ Count int64 }
+	if cur.Next(ctx) {
+		if err := cur.Decode(&result); err != nil {
+			return 0, err
+		}
+	}
+	return result.Count, cur.Err()
 }
 
 func (r *MongoTrackMapRepository) ListAllRouteGroups(ctx context.Context) ([]*models.TrackRouteGroup, error) {
@@ -827,20 +867,46 @@ func (r *MongoTrackMapRepository) ArchiveRouteGroup(ctx context.Context, groupID
 }
 
 func (r *MongoTrackMapRepository) ListRouteGroupMembers(ctx context.Context, groupID string, limit int) ([]*models.TrackRouteGroupMember, error) {
-	return r.ListRouteGroupMembersPage(ctx, groupID, limit, 0)
-}
-
-func (r *MongoTrackMapRepository) ListRouteGroupMembersPage(ctx context.Context, groupID string, limit, offset int) ([]*models.TrackRouteGroupMember, error) {
 	if limit <= 0 {
 		limit = 20
 	}
 	opts := options.Find().SetSort(bson.D{{Key: "role", Value: -1}, {Key: "created_at", Value: -1}, {Key: "track_id", Value: 1}}).
-		SetLimit(int64(limit)).SetSkip(int64(max(0, offset)))
+		SetLimit(int64(limit))
 	cur, err := r.members.Find(ctx, bson.M{"group_id": groupID}, opts)
 	if err != nil {
 		return nil, err
 	}
 	defer cur.Close(ctx)
+	return decodeMongoRouteGroupMembers(ctx, cur, limit)
+}
+
+func (r *MongoTrackMapRepository) visibleRouteGroupMemberStages(groupID string) mongo.Pipeline {
+	return append(mongo.Pipeline{{{Key: "$match", Value: bson.M{"group_id": groupID}}}}, r.visibleRouteGroupTrackStages()...)
+}
+
+func (r *MongoTrackMapRepository) CountVisibleRouteGroupMembers(ctx context.Context, groupID string) (int64, error) {
+	return countMongoVisibleRouteRows(ctx, r.members, r.visibleRouteGroupMemberStages(groupID))
+}
+
+func (r *MongoTrackMapRepository) ListVisibleRouteGroupMembersPage(ctx context.Context, groupID string, limit, offset int) ([]*models.TrackRouteGroupMember, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	pipeline := append(r.visibleRouteGroupMemberStages(groupID),
+		bson.D{{Key: "$project", Value: bson.M{"track": 0}}},
+		bson.D{{Key: "$sort", Value: bson.D{{Key: "role", Value: -1}, {Key: "created_at", Value: -1}, {Key: "track_id", Value: 1}}}},
+		bson.D{{Key: "$skip", Value: int64(max(0, offset))}},
+		bson.D{{Key: "$limit", Value: int64(limit)}},
+	)
+	cur, err := r.members.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+	return decodeMongoRouteGroupMembers(ctx, cur, limit)
+}
+
+func decodeMongoRouteGroupMembers(ctx context.Context, cur *mongo.Cursor, limit int) ([]*models.TrackRouteGroupMember, error) {
 	items := make([]*models.TrackRouteGroupMember, 0, limit)
 	for cur.Next(ctx) {
 		var member models.TrackRouteGroupMember

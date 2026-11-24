@@ -4,7 +4,6 @@ import (
 	"context"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/tongyichu/track_server/internal/models"
 	"go.mongodb.org/mongo-driver/bson"
@@ -12,7 +11,7 @@ import (
 )
 
 func (r *MySQLTrackMapRepository) VisitRouteDepartures(ctx context.Context, filter models.TrackMapQueryFilter, visit func(models.TrackMapDeparture)) error {
-	conds := []string{"g.status = ?", "t.status = ?", "t.is_running = 0", "t.deleted_at IS NULL"}
+	conds := []string{"g.status = ?", mysqlVisibleRouteGroupTrackFilter}
 	args := []any{models.TrackRouteGroupStatusActive, models.TrackStatusNormal}
 	if ids := filter.DepartureGroupIDs; len(ids) > 0 {
 		conds = append(conds, "m.group_id IN ("+strings.Repeat("?,", len(ids)-1)+"?)")
@@ -100,10 +99,9 @@ func (r *MongoTrackMapRepository) VisitRouteDepartures(ctx context.Context, filt
 		bson.D{{Key: "$lookup", Value: bson.M{"from": r.groups.Name(), "localField": "member.group_id", "foreignField": "_id", "as": "group"}}},
 		bson.D{{Key: "$unwind", Value: "$group"}},
 		bson.D{{Key: "$match", Value: groupMatch}},
-		bson.D{{Key: "$lookup", Value: bson.M{"from": r.tracks.Name(), "localField": "track_id", "foreignField": "_id", "as": "track"}}},
-		bson.D{{Key: "$unwind", Value: "$track"}},
-		bson.D{{Key: "$match", Value: bson.M{"track.status": models.TrackStatusNormal, "track.is_running": bson.M{"$ne": true},
-			"$or": bson.A{bson.M{"track.deleted_at": nil}, bson.M{"track.deleted_at": time.Time{}}}}}},
+	)
+	pipeline = append(pipeline, r.visibleRouteGroupTrackStages()...)
+	pipeline = append(pipeline,
 		bson.D{{Key: "$project", Value: bson.M{
 			"group_id": "$group._id", "group_name": "$group.name", "area_id": "$group.area_id",
 			"representative_track_id": "$group.representative_track_id", "member_count": "$group.member_count",
@@ -128,6 +126,9 @@ func (r *MongoTrackMapRepository) VisitRouteDepartures(ctx context.Context, filt
 }
 
 func (r *InMemoryTrackMapRepository) VisitRouteDepartures(ctx context.Context, filter models.TrackMapQueryFilter, visit func(models.TrackMapDeparture)) error {
+	if r.tracks == nil {
+		return nil
+	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	r.tracks.mu.RLock()
@@ -156,8 +157,8 @@ func (r *InMemoryTrackMapRepository) VisitRouteDepartures(ctx context.Context, f
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			index, track := r.indexes[trackID], r.tracks.tracks[trackID]
-			if index == nil || track == nil || track.Status != models.TrackStatusNormal || track.IsRunning || !track.DeletedAt.IsZero() {
+			index := r.indexes[trackID]
+			if index == nil || !r.isVisibleRouteGroupTrack(trackID) {
 				continue
 			}
 			if len(codes) > 0 && !slices.Contains(codes, index.CityCode) {

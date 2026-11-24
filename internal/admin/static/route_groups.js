@@ -474,6 +474,7 @@
   async function refreshGroupAfterChange(groupID, session) {
     if (isCurrentDetail(groupID, session)) await loadDetail(groupID);
     await loadGroups();
+    window.dispatchEvent(new Event('admin:route-groups-changed'));
   }
 
   function renderGroupsFromSelection() {

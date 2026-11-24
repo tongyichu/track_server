@@ -535,9 +535,19 @@ func (r *MySQLTrackMapRepository) ListRouteGroupDirectory(ctx context.Context, f
 	return r.listRouteGroupSummaries(ctx, filter, false)
 }
 
+const mysqlVisibleRouteGroupTrackFilter = `t.status = ? AND t.is_running = 0 AND t.deleted_at IS NULL`
+
+const mysqlVisibleRouteGroupMembersSource = ` FROM track_route_group_members m JOIN track_records t ON t.id = m.track_id WHERE ` + mysqlVisibleRouteGroupTrackFilter
+
+const mysqlVisibleRouteGroupSummarySource = ` FROM track_route_groups
+	JOIN (SELECT m.group_id, COUNT(*) AS visible_member_count` + mysqlVisibleRouteGroupMembersSource + ` GROUP BY m.group_id) visible
+	ON visible.group_id = track_route_groups.group_id`
+
 func (r *MySQLTrackMapRepository) listRouteGroupSummaries(ctx context.Context, filter models.TrackMapQueryFilter, paginate bool) ([]*models.TrackRouteGroup, error) {
 	where, args := buildTrackRouteGroupWhere(filter)
-	query := `SELECT ` + trackRouteGroupSummaryColumns("track_route_groups") + ` FROM track_route_groups` + where + ` ORDER BY member_count DESC, updated_at DESC, group_id`
+	query := `SELECT ` + trackRouteGroupSummaryColumns("track_route_groups") + mysqlVisibleRouteGroupSummarySource + where +
+		` ORDER BY visible.visible_member_count DESC, updated_at DESC, track_route_groups.group_id`
+	args = append([]interface{}{models.TrackStatusNormal}, args...)
 	var limit int
 	if paginate {
 		limit = normalizeTrackMapQueryLimit(filter.Limit)
@@ -566,8 +576,9 @@ func (r *MySQLTrackMapRepository) listRouteGroupSummaries(ctx context.Context, f
 
 func (r *MySQLTrackMapRepository) CountRouteGroupSummaries(ctx context.Context, filter models.TrackMapQueryFilter) (int64, error) {
 	where, args := buildTrackRouteGroupWhere(filter)
+	args = append([]interface{}{models.TrackStatusNormal}, args...)
 	var total int64
-	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM track_route_groups`+where, args...).Scan(&total); err != nil {
+	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*)`+mysqlVisibleRouteGroupSummarySource+where, args...).Scan(&total); err != nil {
 		return 0, err
 	}
 	return total, nil
@@ -975,20 +986,31 @@ func (r *MySQLTrackMapRepository) ArchiveRouteGroup(ctx context.Context, groupID
 }
 
 func (r *MySQLTrackMapRepository) ListRouteGroupMembers(ctx context.Context, groupID string, limit int) ([]*models.TrackRouteGroupMember, error) {
-	return r.ListRouteGroupMembersPage(ctx, groupID, limit, 0)
+	return r.listRouteGroupMembersPage(ctx, groupID, limit, 0, false)
 }
 
-func (r *MySQLTrackMapRepository) ListRouteGroupMembersPage(ctx context.Context, groupID string, limit, offset int) ([]*models.TrackRouteGroupMember, error) {
+func (r *MySQLTrackMapRepository) ListVisibleRouteGroupMembersPage(ctx context.Context, groupID string, limit, offset int) ([]*models.TrackRouteGroupMember, error) {
+	return r.listRouteGroupMembersPage(ctx, groupID, limit, offset, true)
+}
+
+func (r *MySQLTrackMapRepository) CountVisibleRouteGroupMembers(ctx context.Context, groupID string) (int64, error) {
+	var count int64
+	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*)`+mysqlVisibleRouteGroupMembersSource+` AND m.group_id = ?`, models.TrackStatusNormal, groupID).Scan(&count)
+	return count, err
+}
+
+func (r *MySQLTrackMapRepository) listRouteGroupMembersPage(ctx context.Context, groupID string, limit, offset int, visibleOnly bool) ([]*models.TrackRouteGroupMember, error) {
 	if limit <= 0 {
 		limit = 20
 	}
-	rows, err := r.db.QueryContext(ctx, `
-		SELECT group_id, track_id, similarity_score, match_direction, role, source, created_at, updated_at
-		FROM track_route_group_members
-		WHERE group_id = ?
-		ORDER BY role = 'representative' DESC, created_at DESC, track_id ASC
-		LIMIT ? OFFSET ?
-	`, groupID, limit, max(0, offset))
+	source := ` FROM track_route_group_members m WHERE m.group_id = ?`
+	args := []interface{}{groupID, limit, max(0, offset)}
+	if visibleOnly {
+		source = mysqlVisibleRouteGroupMembersSource + ` AND m.group_id = ?`
+		args = append([]interface{}{models.TrackStatusNormal}, args...)
+	}
+	rows, err := r.db.QueryContext(ctx, `SELECT m.group_id, m.track_id, m.similarity_score, m.match_direction, m.role, m.source, m.created_at, m.updated_at`+
+		source+` ORDER BY m.role = 'representative' DESC, m.created_at DESC, m.track_id ASC LIMIT ? OFFSET ?`, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -1098,7 +1120,7 @@ func trackRouteGroupSummaryColumns(alias string) string {
 	p := alias + "."
 	return p + `group_id, ` + p + `name, ` + p + `track_type, ` + p + `status, ` + p + `city_codes_json, ` + p + `area_id, ` + p + `coordinate_system,
 		` + p + `center_lat, ` + p + `center_lng, ` + p + `radius_m, ` + p + `min_lat, ` + p + `min_lng, ` + p + `max_lat, ` + p + `max_lng,
-		` + p + `distance, ` + p + `representative_track_id, ` + p + `member_count,
+		` + p + `distance, ` + p + `representative_track_id, visible.visible_member_count,
 		` + p + `source, ` + p + `created_at, ` + p + `updated_at`
 }
 

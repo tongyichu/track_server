@@ -48,7 +48,7 @@
 | GET | `/admin/api/users/statistics` | 用户查看 | 用户总数、性别/星座/年龄分布、`track_output` 云端轨迹产出分层；`user_cities` 返回规范化 `region_id/name/country_code/province_id/province_name/province_map_code/count`，按目录合并新旧城市编码，每人只计入一个城市，未知编码归入未知；见 [地域统计](api/admin-regions.md#用户地域统计) |
 | GET | `/admin/api/companions/statistics` | 鉴权 | 同行会话当前活跃数、所选周期创建/结束/自动结束数、平均参与人数 |
 | GET | `/admin/api/companions/usage-statistics` | 鉴权 | days=1/7/30，创建与结束趋势、按本周期创建房间统计的实际参与人数分布 |
-| GET | `/admin/api/route-groups/statistics` | 鉴权 | 全量 active 路线组中心点、覆盖城市和成员轨迹数分布，不受列表类型/城市筛选及 100 条上限影响 |
+| GET | `/admin/api/route-groups/statistics` | 鉴权 | 至少有一条已完成公开轨迹的 active 路线组中心点、覆盖城市和公开成员数分布，不受列表类型/城市筛选及 100 条上限影响 |
 | POST | `/admin/api/releases` | 鉴权 | 发布/覆盖一个版本（按 `(platform, version_code)` 幂等） |
 | DELETE | `/admin/api/releases/:id` | 鉴权 | 删除一条发布记录，并尽力删除落在本机 `<LogDir>/static/release/` 的安装包文件；独立留存的 changelog 不受影响 |
 | GET | `/admin/api/releases/changelogs` | 鉴权 | 版本更新日志（`platform` 过滤，默认 android），来自 `app_release_changelogs`，发布记录删除后仍留存 |
@@ -102,9 +102,9 @@
 | GET | `/admin/api/feedbacks/:feedback_id/images/:image_id` | 鉴权 | 读取反馈图片 |
 | GET | `/admin/api/analytics/sync-summaries` | 鉴权 | 埋点 OSS 同步摘要列表，支持 `status` / `limit` / `offset` |
 | GET | `/admin/api/analytics/health` | analytics 读取权限 | 工作台只读归档健康状态，独立异步加载；不触发同步或 OSS 请求 |
-| GET | `/admin/api/route-groups` | 鉴权 | 路线组列表，支持 `track_type` / `province_code`（服务端展开为省内城市集合）/ `city_code` 筛选与 `limit` / `offset` 分页；返回 `total`、`next_offset`、`has_more`、`area_id` 及目录区域摘要。每项的 `grouping` 提供 `city_code`、`city_name`、`district_id`、`district_name`、`scenic_id`、`scenic_name`，缺失字段省略。见[聚合规则](admin-workflows.md#运营聚合路线)。 |
+| GET | `/admin/api/route-groups` | 鉴权 | 路线组列表，支持 `track_type` / `province_code`（服务端展开为省内城市集合）/ `city_code` 筛选与 `limit` / `offset` 分页；仅返回有已完成公开成员的路线组，`member_count` 为这些成员的数量。返回 `total`、`next_offset`、`has_more`、`area_id`、目录区域摘要和 `grouping`。见[聚合规则](admin-workflows.md#运营聚合路线)。 |
 | GET | `/admin/api/route-groups?view=directory` | 地图模式查看 | 按同样的运动类型及覆盖省市筛选返回完整轻量目录。`data.total` 是匹配的路线组数，`items` 每项包含 `group_id`、`name`、`track_type`、`member_count` 和 `grouping`。`limit` 和 `offset` 只适用于默认列表模式。 |
-| GET | `/admin/api/route-groups/:group_id` | 鉴权 | 路线组详情、与列表同口径的 `grouping`、可识别的 `coverage_city_names`、`area_id` 对应区域信息及成员轨迹。成员按 `limit` / `offset` 分页，以 `group.member_count` 计算总页数。返回实际 `member_offset`，越界时定位到最后一页。归属读取失败时可省略 `grouping` |
+| GET | `/admin/api/route-groups/:group_id` | 鉴权 | 路线组详情、与列表同口径的 `grouping`、可识别的 `coverage_city_names`、`area_id` 对应区域信息及成员轨迹。只统计并分页返回已完成公开的成员，无此类成员时返回 404。返回实际 `member_offset`，越界时定位到最后一页。归属读取失败时可省略 `grouping` |
 | PUT | `/admin/api/route-groups/:group_id/name` | 鉴权 | 人工改名 |
 | POST | `/admin/api/route-groups/:group_id/merge` | 鉴权 | 将 `source_group_id` 合并到当前路线组，并归档源路线组 |
 | DELETE | `/admin/api/route-groups/:group_id/members/:track_id` | 鉴权 | 从路线组移除成员轨迹 |
