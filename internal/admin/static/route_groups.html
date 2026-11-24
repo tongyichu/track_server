@@ -81,10 +81,14 @@
       <div class="modal-content">
         <div class="modal-header route-modal-header">
           <div class="route-modal-heading">
-            <h2 class="modal-title" id="detailName"></h2>
+            <div class="route-title-row">
+              <h2 class="modal-title" id="detailName"></h2>
+              <button id="editRouteTitleBtn" type="button" class="btn btn-sm btn-link" data-admin-write="route_groups" aria-haspopup="dialog" hidden>改标题</button>
+            </div>
             <div class="route-detail-context">
               <p id="detailPath" class="route-detail-path" hidden></p>
               <span id="detailTrackType" class="route-detail-type"></span>
+              <code id="detailGroupID" class="route-detail-type"></code>
             </div>
             <span class="hint" id="detailHint" role="status" hidden></span>
             <button type="button" id="detailRetryBtn" class="btn btn-sm btn-outline-secondary" hidden>重试</button>
@@ -93,53 +97,22 @@
         </div>
         <div class="modal-body route-modal-body">
           <div class="route-workspace" id="detailPanel" hidden>
-            <div class="route-detail-columns">
-              <section class="route-detail-section" id="introSection" aria-labelledby="introHeading">
-                <div class="route-panel-heading">
-                  <h3 id="introHeading">路线介绍</h3><span id="introStatus" class="hint"></span>
+            <section class="route-detail-section" id="introSection" aria-labelledby="introHeading">
+              <div class="route-panel-heading route-intro-toolbar">
+                <h3 id="introHeading"><label for="introZhSummary">简介</label></h3>
+                <div class="route-intro-actions" id="introActions" hidden>
+                  <button id="introAdvancedBtn" type="button" class="btn btn-sm btn-link" aria-haspopup="dialog">完整字段</button>
+                  <button id="introGenerateBtn" type="button" data-admin-write="route_groups" class="btn btn-sm btn-outline-secondary">AI 生成</button>
+                  <button id="introSaveBtn" type="button" data-admin-write="route_groups" class="btn btn-sm btn-primary">保存</button>
                 </div>
-                <div id="introLoadState" class="route-form-state" hidden>
-                  <span id="introLoadHint" role="status"></span>
-                  <button type="button" id="introRetryBtn" class="btn btn-sm btn-outline-secondary" hidden>重试</button>
-                </div>
-                <div id="introEditor" hidden>
-                  <div class="route-intro-primary">
-                    <label>标题<input data-admin-input="route_groups" id="introZhName" type="text" /></label>
-                    <label>摘要<textarea data-admin-input="route_groups" id="introZhSummary" rows="2"></textarea></label>
-                  </div>
-                  <p id="introWriteError" class="text-danger" role="alert" hidden></p>
-                  <div class="route-intro-toolbar">
-                    <button id="introAdvancedBtn" type="button" class="btn btn-sm btn-link" aria-haspopup="dialog">完整字段</button>
-                    <a id="introPreviewLink" class="admin-link" target="_blank" rel="noopener" hidden>公开介绍</a>
-                    <span class="route-intro-actions">
-                      <button id="introGenerateBtn" data-admin-write="route_groups" class="btn btn-sm btn-outline-secondary">AI 草稿</button>
-                      <button id="introSaveBtn" data-admin-write="route_groups" class="btn btn-sm btn-outline-secondary">保存草稿</button>
-                      <button id="introPublishBtn" data-admin-write="route_groups" class="btn btn-sm btn-primary">发布</button>
-                      <button id="introUnpublishBtn" data-admin-write="route_groups" class="btn btn-sm btn-outline-danger">下线</button>
-                    </span>
-                  </div>
-                </div>
-              </section>
-
-              <section class="route-detail-section" aria-labelledby="maintenanceHeading">
-                <div class="route-panel-heading">
-                  <h3 id="maintenanceHeading">路线组管理</h3><code id="detailGroupID"></code>
-                </div>
-                <div class="route-maintenance-fields" data-admin-write="route_groups">
-                  <div class="route-inline-form">
-                    <label for="renameInput">组名</label>
-                    <input data-admin-input="route_groups" id="renameInput" type="text" />
-                    <button id="renameBtn" type="button" class="btn btn-sm btn-outline-secondary">改名</button>
-                  </div>
-                  <div class="route-inline-form">
-                    <label for="mergeInput">源组</label>
-                    <input data-admin-input="route_groups" id="mergeInput" type="text" placeholder="输入要并入的路线组编号" />
-                    <button id="mergeBtn" type="button" class="btn btn-sm btn-outline-secondary">合并</button>
-                  </div>
-                </div>
-                <a id="detailAreaLink" class="admin-link route-area-link" target="_blank" rel="noopener" hidden>区域介绍</a>
-              </section>
-            </div>
+              </div>
+              <div id="introLoadState" class="route-form-state" hidden>
+                <span id="introLoadHint" role="status"></span>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="introRetryBtn" hidden>重试</button>
+              </div>
+              <textarea id="introZhSummary" class="form-control route-intro-summary" data-admin-input="route_groups" rows="2" hidden></textarea>
+              <p id="introWriteError" class="text-danger route-intro-error" role="alert" hidden></p>
+            </section>
 
             <section class="route-detail-section route-members" aria-labelledby="memberHeading">
               <div class="route-panel-heading">
@@ -204,7 +177,7 @@
             <h2 class="modal-title" id="scenicMembersName"></h2>
             <div class="route-scenic-meta">
               <p class="route-detail-path" id="scenicMembersPath"></p>
-              <a id="scenicMembersInfo" target="_blank" rel="noopener" data-admin-read="scenic_spots" aria-label="查看景点信息（在新标签页打开）" hidden>查看景点信息</a>
+              <button type="button" class="btn btn-sm btn-link" id="scenicMembersInfo" data-admin-read="scenic_spots" aria-haspopup="dialog" aria-controls="scenicInfoModal" hidden>查看景点信息</button>
             </div>
           </div>
           <button type="button" class="btn-close" data-admin-dismiss="dialog" aria-label="关闭"></button>
@@ -223,6 +196,39 @@
     </div>
   </dialog>
 
+  <dialog class="modal route-management-modal" id="scenicInfoModal" aria-labelledby="scenicInfoName" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header route-modal-header">
+          <div class="route-modal-heading">
+            <h2 class="modal-title" id="scenicInfoName">景点信息</h2>
+            <p class="route-detail-path" id="scenicInfoMeta" hidden></p>
+          </div>
+          <button type="button" class="btn-close" data-admin-dismiss="dialog" aria-label="关闭景点信息" autofocus></button>
+        </div>
+        <div class="modal-body route-modal-body">
+          <div class="route-workspace scenic-info-page">
+            <div class="route-form-state" id="scenicInfoState">
+              <span id="scenicInfoMessage" role="status"></span>
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="scenicInfoRetry" hidden>重试</button>
+            </div>
+            <div id="scenicInfoContent" hidden>
+              <dl class="scenic-info-facts">
+                <div><dt>所在地</dt><dd id="scenicInfoCity"></dd></div>
+                <div><dt>地址</dt><dd id="scenicInfoAddress"></dd></div>
+              </dl>
+              <p class="scenic-info-description" id="scenicInfoDescription"></p>
+              <section class="scenic-info-gallery" id="scenicInfoGallery" aria-labelledby="scenicInfoGalleryTitle" hidden>
+                <h3 id="scenicInfoGalleryTitle">景点照片</h3>
+                <div class="scenic-info-photos" id="scenicInfoPhotos"></div>
+              </section>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
   <script src="/admin/static/admin-components.js"></script>
   <script src="/admin/static/shell.js"></script>
   <script src="/admin/static/admin_stats.js"></script>
@@ -233,6 +239,7 @@
   <script src="/admin/static/place_candidates.js"></script>
   <script src="/admin/static/track_map_preview.js"></script>
   <script src="/admin/static/track_editor.js"></script>
+  <script src="/admin/static/scenic_spot_detail.js"></script>
   <script src="/admin/static/route_groups.js"></script>
   <script src="/admin/static/feature_statistics.js"></script>
 </body>

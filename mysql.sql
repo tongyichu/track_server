@@ -410,7 +410,7 @@ CREATE TABLE `track_route_introductions` (
                                              `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
                                              `anchor_track_id` VARCHAR(64) NOT NULL COMMENT '重聚合后重新绑定路线组的锚点轨迹ID',
                                              `current_group_id` VARCHAR(64) NOT NULL DEFAULT '' COMMENT '当前绑定的路线组ID',
-                                             `status` VARCHAR(16) NOT NULL DEFAULT 'draft' COMMENT 'draft/published/archived',
+                                             `status` VARCHAR(16) NOT NULL DEFAULT 'saved' COMMENT 'saved/archived; compatible with legacy draft/published',
                                              `content_zh_json` MEDIUMTEXT NOT NULL,
                                              `content_en_json` MEDIUMTEXT NOT NULL,
                                              `difficulty` VARCHAR(16) NOT NULL DEFAULT '',

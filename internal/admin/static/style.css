@@ -699,25 +699,20 @@ table.data td.companion-table-state { padding: 32px 14px; color: var(--admin-sec
 .route-modal-header { align-items: flex-start; padding: 16px 24px; }
 .route-modal-header .modal-title { margin: 0; font-size: 20px; font-weight: 600; overflow-wrap: anywhere; }
 .route-modal-heading { min-width: 0; }
+.route-title-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; }
+.route-title-row > .btn-link { min-height: 24px; padding: 0; font-size: 12px; }
 .route-modal-header .hint { margin: 4px 0; }
 .route-detail-context { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; }
 .route-detail-path, .route-detail-type { margin: 0; color: var(--admin-secondary-color); font-size: 12px; overflow-wrap: anywhere; }
-.route-detail-path:not([hidden]) + .route-detail-type:not(:empty) { padding-inline-start: 12px; border-inline-start: 1px solid var(--admin-border-color); }
+.route-detail-context > :not([hidden]):not(:empty) + .route-detail-type:not(:empty) { padding-inline-start: 12px; border-inline-start: 1px solid var(--admin-border-color); }
 .route-detail-type:empty { display: none; }
 .route-modal-body { padding: 0; background: var(--admin-bg-surface); }
 .route-workspace { min-width: 0; padding: 16px 24px; }
-.route-detail-columns { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 24px; align-items: start; }
 .route-detail-section { min-width: 0; }
 .route-members { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--admin-border-color); }
 .route-panel-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
 .route-panel-heading h3 { margin: 0; font-size: 14px; font-weight: 600; }
 .route-panel-heading :is(.hint, code) { margin: 0; color: var(--admin-secondary-color); font-size: 12px; }
-.route-maintenance-fields, .route-intro-primary { display: grid; gap: 8px; }
-.route-inline-form, .route-intro-primary label { display: grid; grid-template-columns: 28px minmax(0, 1fr); align-items: start; gap: 8px; color: var(--admin-secondary-color); font-size: 12px; line-height: 32px; }
-.route-inline-form { grid-template-columns: 28px minmax(0, 1fr) auto; }
-.route-inline-form input, .route-intro-primary :is(input, textarea) { width: 100%; min-width: 0; min-height: 32px; padding: 4px 8px; font-size: 13px; line-height: 20px; }
-.route-inline-form .btn { min-height: 32px; }
-.route-area-link { display: inline-block; margin: 8px 0 0 36px; font-size: 12px; }
 .route-form-state { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 32px; color: var(--admin-secondary-color); }
 .route-form-state[hidden] { display: none; }
 .route-member-list { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--admin-border-color); }
@@ -743,9 +738,10 @@ table.data td.companion-table-state { padding: 32px 14px; color: var(--admin-sec
 .route-member-pagination { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 .route-member-pagination .hint { margin: 0; font-variant-numeric: tabular-nums; }
 .route-intro-toolbar, .route-intro-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; }
-.route-intro-toolbar { margin-top: 8px; font-size: 12px; }
-.route-intro-toolbar > .btn-link { padding-inline: 0; }
+.route-intro-toolbar label { color: inherit; font-size: inherit; }
 .route-intro-actions { margin-inline-start: auto; }
+.route-intro-summary { width: 100%; min-height: 64px; line-height: 1.5; resize: vertical; }
+.route-intro-error { margin: 8px 0 0; font-size: 12px; }
 .route-intro-modal .modal-title { font-size: 16px; }
 .route-intro-modal .modal-body { padding: 16px; }
 .route-intro-section, .route-language-card { min-width: 0; padding: 12px; border: 1px solid var(--admin-border-color); border-radius: 8px; background: var(--admin-bg-surface); }
@@ -777,7 +773,6 @@ table.data td.companion-table-state { padding: 32px 14px; color: var(--admin-sec
   .route-management-modal .modal-dialog { max-width: calc(100vw - 12px); margin: 6px auto; }
   .route-modal-header { padding: 12px 16px; }
   .route-workspace { padding: 12px; }
-  .route-detail-columns { grid-template-columns: 1fr; gap: 16px; }
   .route-intro-language-grid { grid-template-columns: 1fr; }
   .route-member-row { gap: 4px; }
   .route-member-summary { grid-template-columns: 48px minmax(0, 1fr); gap: 4px 8px; }
@@ -997,6 +992,7 @@ table.admin-audit-table { width: 100%; min-width: 680px; table-layout: fixed; }
 .route-area-chevron { flex: 0 0 auto; width: 7px; height: 7px; border-inline-end: 1.5px solid currentColor; border-block-end: 1.5px solid currentColor; color: var(--admin-secondary-color); transform: rotate(-45deg); }
 .route-scenic-dot { flex: 0 0 7px; width: 7px; height: 7px; border-radius: 50%; background: #267568; }
 .route-scenic-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin-top: 4px; font-size: 12px; }
+.route-scenic-meta > .btn-link { min-height: 24px; padding: 0; font-size: inherit; }
 #scenicMembersModal .route-member-actions { min-width: 0; }
 .route-area-toggle[aria-expanded="true"] .route-area-chevron { transform: rotate(45deg); }
 .route-area-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1025,6 +1021,8 @@ table.admin-audit-table { width: 100%; min-width: 680px; table-layout: fixed; }
 .scenic-info-facts dt, .scenic-info-photos figcaption { color: var(--admin-secondary-color); font-size: 12px; }
 .scenic-info-facts dd { margin: 3px 0 0; }
 .scenic-info-description { margin: 16px 0 0; max-width: 76ch; line-height: 1.65; white-space: pre-line; }
+.scenic-info-gallery { margin-top: 20px; }
+.scenic-info-gallery h3 { margin: 0 0 10px; font-size: 14px; font-weight: 600; }
 .scenic-info-photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr)); gap: 14px; }
 .scenic-info-photos figure { margin: 0; }
 .scenic-info-photos img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 8px; background: var(--admin-bg-surface-secondary); }

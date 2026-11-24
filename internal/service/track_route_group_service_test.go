@@ -341,7 +341,7 @@ func TestTrackRouteIntroductionRebindsAfterRegroup(t *testing.T) {
 	ctx := context.Background()
 	mapRepo := repository.NewInMemoryTrackMapRepository(nil)
 	now := time.Now()
-	oldGroup := &models.TrackRouteGroup{GroupID: "RG.old", TrackType: "hiking", Status: models.TrackRouteGroupStatusActive, RepresentativeTrackID: "NO.00000021", CreatedAt: now, UpdatedAt: now}
+	oldGroup := &models.TrackRouteGroup{GroupID: "RG.old", Name: "测试路线", TrackType: "hiking", Status: models.TrackRouteGroupStatusActive, RepresentativeTrackID: "NO.00000021", CreatedAt: now, UpdatedAt: now}
 	if err := mapRepo.UpsertRouteGroup(ctx, oldGroup); err != nil {
 		t.Fatal(err)
 	}
@@ -349,11 +349,8 @@ func TestTrackRouteIntroductionRebindsAfterRegroup(t *testing.T) {
 		t.Fatal(err)
 	}
 	svc := NewTrackRouteGroupService(mapRepo)
-	intro, err := svc.SaveRouteIntroduction(ctx, oldGroup.GroupID, &models.TrackRouteIntroduction{Chinese: models.TrackRouteIntroductionContent{Name: "测试路线", Summary: "测试摘要"}})
+	intro, err := svc.SaveRouteIntroduction(ctx, oldGroup.GroupID, &models.TrackRouteIntroduction{Chinese: models.TrackRouteIntroductionContent{Summary: "测试摘要"}})
 	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := svc.SetRouteIntroductionPublished(ctx, oldGroup.GroupID, true); err != nil {
 		t.Fatal(err)
 	}
 	newGroup := *oldGroup
@@ -366,7 +363,7 @@ func TestTrackRouteIntroductionRebindsAfterRegroup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rebound.Status != models.TrackRouteIntroductionStatusPublished || rebound.AnchorTrackID != intro.AnchorTrackID {
+	if rebound.Status != models.TrackRouteIntroductionStatusSaved || rebound.AnchorTrackID != intro.AnchorTrackID || rebound.Chinese.Name != oldGroup.Name {
 		t.Fatalf("rebound=%+v", rebound)
 	}
 }

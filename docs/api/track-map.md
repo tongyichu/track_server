@@ -70,7 +70,6 @@ GET /api/v1/track-map/view?latitude=22.3000&longitude=114.1700&radius_m=10000&tr
         "type": "route_group",
         "group_id": "RG.00000001",
         "name": "麦理浩径徒步路线",
-        "introduction_url": "/api/v1/track-map/groups/RG.00000001/introduction.html?v=3",
         "city_code": "810000",
         "city_name": "香港",
         "track_type": "hiking",
@@ -168,7 +167,6 @@ GET /api/v1/track-map/view?latitude=22.3000&longitude=114.1700&radius_m=10000&tr
 - 开启自动识别时，采样或环绕规则判定的主要景区优先，其余使用路线组中心点匹配行政区。内置边界覆盖 DataV 全国索引的 2,875 个末级区域：2,840 个区县、34 个无下辖区县的城市/直辖单位及台湾省级兜底，涉及34个省级区域；快照日期不代表最新法定区划日期。行政区兜底统一沿用 `area_type=district` 和 `district-{adcode}`，未命中时继续网格聚合；无下辖区县的单位以自身代码作为 `city_code`，城市表缺失时使用区域名称补齐 `city_name`。关闭自动识别时沿用旧目录的优先级匹配。完整范围、更新工具与数据来源见 `internal/maparea/README.md`；发布后存量归属随 `track_route_group` 重聚合更新。
 - 点击 `city_cluster` / `area_cluster` 后，客户端放大地图并重新请求本接口。
 - 点击 `route_group` 后，请求路线组详情或路线组轨迹列表。
-- `route_group.introduction_url` 指向公开路线介绍，客户端可直接用 WebView 打开。有已发布介绍时优先展示该版本，否则展示规则生成的简介。
 
 ## 49. 查询地图路线组列表
 
@@ -229,7 +227,6 @@ Authorization: Bearer <token>
 
 响应 `data` 为单个 `route_group` 对象，字段同 [查询地图路线组列表](#49-查询地图路线组列表)。
 
-可展示的路线组在视野、列表和详情接口中返回公开 `introduction_url`。已发布版本包含 `v`，基础简介使用不带版本号的地址。
 
 ## 51. 查询路线组下的具体轨迹列表
 
@@ -308,18 +305,8 @@ GET /api/v1/track-map/areas/scenic-west-lake/introduction.html
 
 仅当区域目录中存在介绍内容时，`area_cluster.area.introduction_url` 才会返回。未知 `area_id` 返回 `404`。
 
-## 53. 查看聚合路线介绍页
+## 53. 聚合路线简介
 
-聚合路线的公开介绍 H5，内容由管理中心维护。
-
-**无需认证**
-
-```http
-GET /api/v1/track-map/groups/RG.00000001/introduction.html?lang=english&is_dark=true
-```
-
-优先展示已发布的运营介绍。草稿仅供后台编辑，公众看到基于公开成员轨迹的自动简介。页面支持 `lang=english` 和 `is_dark=true`。不存在的路线组，或没有已发布介绍且没有可用的公开记录，返回 `404`。已发布地址的 `v` 用于缓存失效，自动简介使用短缓存。
-
-后台 `POST /admin/api/route-groups/:group_id/introduction/publish` 需要路线组操作权限。可提交与保存草稿相同的介绍结构，服务端校验并一次写入已发布版本。空请求体继续发布已保存的版本。
+路线组简介由后台地图模式维护，相关接口使用后台会话及地图模式权限。客户端路线组统一使用组名。
 
 地图代表轨迹`cover_track`使用`preview_images`新版四图及可选`cover_url`（投稿封面），不再返回旧版`track_screenshot_url`。

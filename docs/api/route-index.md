@@ -115,7 +115,6 @@
 | 查询路线组下的具体轨迹列表 | GET | `/track-map/groups/:group_id/tracks` | 是 | [track-map.md](track-map.md#51-查询路线组下的具体轨迹列表) |
 | 查询景点图钉下的轨迹列表 | GET | `/track-map/scenic-spots/:spot_id/tracks` | 是 | [track-map.md](track-map.md#查询景点图钉下的轨迹列表) |
 | 查看地图区域介绍页 | GET | `/track-map/areas/:area_id/introduction.html` | 否 | [track-map.md](track-map.md#52-查看地图区域介绍页) |
-| 查看聚合路线介绍页（发布版或自动简介） | GET | `/track-map/groups/:group_id/introduction.html` | 否 | [track-map.md](track-map.md#53-查看聚合路线介绍页) |
 | 创建同行会话 | POST | `/companion/session/create` | 是 | [companion.md](companion.md#17-创建同行会话) |
 | 加入同行会话 | POST | `/companion/session/join` | 是 | [companion.md](companion.md#18-加入同行会话) |
 | 预览同行会话 | GET | `/companion/session/preview` | 是 | [companion.md](companion.md#181-预览同行会话) |
@@ -199,7 +198,8 @@
 | 后台地图模式完整地区目录（含已完成公开成员的路线组） | GET | `/admin/api/route-groups?view=directory` | 地图模式查看 | [后台路线组聚合](../admin-workflows.md#运营聚合路线) |
 | 后台地图模式景点轨迹分页 | GET | `/admin/api/route-groups/scenic-members` | 地图模式查看 | [后台路线组聚合](../admin-workflows.md#运营聚合路线) |
 | 后台路线组详情（聚合归属与成员） | GET | `/admin/api/route-groups/:group_id` | 地图模式查看 | [后台路线组聚合](../admin-workflows.md#运营聚合路线) |
-| 后台手动生成路线组介绍草稿 | POST | `/admin/api/route-groups/:group_id/introduction/generate` | 地图模式操作 | [后台路线组聚合](../admin-workflows.md#运营聚合路线) |
+| 后台查询与保存路线组简介 | GET / PUT | `/admin/api/route-groups/:group_id/introduction` | 地图模式查看 / 操作 | [后台路线组聚合](../admin-workflows.md#运营聚合路线) |
+| 后台手动生成路线组简介候选 | POST | `/admin/api/route-groups/:group_id/introduction/generate` | 地图模式操作 | [后台路线组聚合](../admin-workflows.md#运营聚合路线) |
 | 后台轨迹坐标系预览 | GET | `/admin/api/tracks/:track_id/map-preview` | 轨迹查看 | [admin-tracks.md](admin-tracks.md#编辑字段与坐标预览) |
 | 后台批量导入轨迹（逐文件结果含轨迹表格摘要） | POST | `/admin/api/tracks/import` | 轨迹操作 | [admin-tracks.md](admin-tracks.md) |
 | 后台轨迹详情（含图案/景点AI状态快照；归属和文件指标只读） | GET | `/admin/api/tracks/:track_id` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |

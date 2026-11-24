@@ -797,27 +797,6 @@ func (r *MongoTrackMapRepository) FindRouteIntroductionByGroupID(ctx context.Con
 	return &introduction, err
 }
 
-func (r *MongoTrackMapRepository) ListPublishedRouteIntroductions(ctx context.Context, groupIDs []string) (map[string]*models.TrackRouteIntroduction, error) {
-	result := make(map[string]*models.TrackRouteIntroduction)
-	if len(groupIDs) == 0 {
-		return result, nil
-	}
-	cursor, err := r.introductions.Find(ctx, bson.M{"status": models.TrackRouteIntroductionStatusPublished, "current_group_id": bson.M{"$in": groupIDs}})
-	if err != nil {
-		return nil, err
-	}
-	defer cursor.Close(ctx)
-	for cursor.Next(ctx) {
-		var introduction models.TrackRouteIntroduction
-		if err := cursor.Decode(&introduction); err != nil {
-			return nil, err
-		}
-		clone := introduction
-		result[introduction.CurrentGroupID] = &clone
-	}
-	return result, cursor.Err()
-}
-
 func (r *MongoTrackMapRepository) UpsertRouteIntroduction(ctx context.Context, introduction *models.TrackRouteIntroduction) error {
 	if introduction == nil || strings.TrimSpace(introduction.AnchorTrackID) == "" {
 		return errors.New("route introduction is required")

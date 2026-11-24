@@ -21,13 +21,11 @@ type routeGroupFacts struct {
 	Scenic      string
 	Form        string
 	TrackType   string
-	Distance    routeMetric
 	Duration    routeMetric
-	Elevation   routeMetric
 	SampleCount int
 }
 
-type routeMetric struct{ Low, High, Count int }
+type routeMetric struct{ Low, High int }
 
 func (s *TrackMapService) loadRouteGroupFacts(ctx context.Context, group *models.TrackRouteGroup) (routeGroupFacts, error) {
 	members, err := s.maps.ListRouteGroupMembers(ctx, group.GroupID, routeOverviewSampleLimit)
@@ -89,7 +87,7 @@ func (s *TrackMapService) loadRouteGroupFacts(ctx context.Context, group *models
 	type routeEndpoints struct{ start, finish string }
 	endpoints := make(map[routeEndpoints]int)
 	forms := make(map[string]int)
-	var distances, durations, elevations []int
+	var durations []int
 	orderedIDs := append([]string{refID}, ids...)
 	for _, id := range orderedIDs {
 		track := tracks[id]
@@ -110,18 +108,8 @@ func (s *TrackMapService) loadRouteGroupFacts(ctx context.Context, group *models
 		if location.Start != "" {
 			endpoints[routeEndpoints{location.Start, location.Finish}]++
 		}
-		distance := track.Distance
-		if index != nil && !validRouteMetricDistance(distance) {
-			distance = index.Distance
-		}
-		if validRouteMetricDistance(distance) {
-			distances = append(distances, int(math.Round(distance)))
-		}
 		if track.Duration > 0 {
 			durations = append(durations, max(1, int(math.Round(float64(track.Duration)/60))))
-		}
-		if track.ElevationGain > 0 {
-			elevations = append(elevations, track.ElevationGain)
 		}
 	}
 	if facts.SampleCount > 1 {
@@ -140,7 +128,7 @@ func (s *TrackMapService) loadRouteGroupFacts(ctx context.Context, group *models
 			facts.Finish = ""
 		}
 	}
-	facts.Distance, facts.Duration, facts.Elevation = routeMetricFrom(distances), routeMetricFrom(durations), routeMetricFrom(elevations)
+	facts.Duration = routeMetricFrom(durations)
 	return facts, nil
 }
 
@@ -153,11 +141,11 @@ func routeMetricFrom(values []int) routeMetric {
 	case 0:
 		return routeMetric{}
 	case 1, 2:
-		return routeMetric{Low: values[0], High: values[0], Count: 1}
+		return routeMetric{Low: values[0], High: values[0]}
 	default:
 		slices.Sort(values)
 		last := len(values) - 1
-		return routeMetric{Low: values[last/4], High: values[(3*last+2)/4], Count: len(values)}
+		return routeMetric{Low: values[last/4], High: values[(3*last+2)/4]}
 	}
 }
 
@@ -305,8 +293,5 @@ func (f routeGroupFacts) introduction(group *models.TrackRouteGroup) *models.Tra
 		Chinese:              models.TrackRouteIntroductionContent{Name: name, Summary: zh},
 		English:              models.TrackRouteIntroductionContent{Name: name, Summary: en},
 		EstimatedDurationMin: f.Duration.Low, EstimatedDurationMax: f.Duration.High,
-		ObservedDistanceMin: f.Distance.Low, ObservedDistanceMax: f.Distance.High,
-		ObservedElevationMin: f.Elevation.Low, ObservedElevationMax: f.Elevation.High,
-		ObservedSampleCount: f.SampleCount,
 	}
 }

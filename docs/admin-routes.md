@@ -108,13 +108,10 @@
 | GET | `/admin/api/route-groups/scenic-members` | 地图模式查看 | 按 `scenic_id`、归属 `grouping_city_code`、`district_id` 和与目录相同的运动类型及覆盖省市筛选定位景点。按 `limit` / `offset` 分页返回该节点的公开成员，包含 `items`、`total`、`member_offset`。成员的 `group_id` 用于从单条轨迹进入已有路线组维护。 |
 | GET | `/admin/api/route-groups/:group_id` | 鉴权 | 路线组详情、与列表同口径的 `grouping`、可识别的 `coverage_city_names`、`area_id` 对应区域信息及成员轨迹。只统计并分页返回已完成公开的成员，无此类成员时返回 404。返回实际 `member_offset`，越界时定位到最后一页。归属读取失败时可省略 `grouping` |
 | PUT | `/admin/api/route-groups/:group_id/name` | 鉴权 | 人工改名 |
-| POST | `/admin/api/route-groups/:group_id/merge` | 鉴权 | 将 `source_group_id` 合并到当前路线组，并归档源路线组 |
 | DELETE | `/admin/api/route-groups/:group_id/members/:track_id` | 鉴权 | 从路线组移除成员轨迹 |
 | PUT | `/admin/api/route-groups/:group_id/representative` | 鉴权 | 指定代表轨迹 |
-| GET/PUT | `/admin/api/route-groups/:group_id/introduction` | 鉴权 | 查询或保存结构化双语路线介绍。尚未保存编辑内容时，GET 返回状态 `automatic` 的规则版简介 |
-| POST | `/admin/api/route-groups/:group_id/introduction/generate` | 地图模式操作 | 手动生成路线组中文摘要候选，返回 `summary`，供编辑后发布 |
-| POST | `/admin/api/route-groups/:group_id/introduction/publish` | 鉴权 | 有介绍正文时一次保存并发布，空请求体发布已保存版本 |
-| POST | `/admin/api/route-groups/:group_id/introduction/unpublish` | 鉴权 | 下线已发布文案，公开页面切回自动简介 |
+| GET/PUT | `/admin/api/route-groups/:group_id/introduction` | 地图模式查看 / 操作 | 查询或直接保存后台简介和补充字段。PUT 必填 `zh.summary`，中文标题使用路线组名称。尚未保存内容时，GET 返回按规则生成的简介。 |
+| POST | `/admin/api/route-groups/:group_id/introduction/generate` | 地图模式操作 | 手动生成中文简介候选，返回 `summary` 供编辑后保存 |
 | GET | `/admin/api/track-submissions` | 鉴权 | 按状态、难度、风险、运动类型、用户和待审时长筛选，支持最早优先及时间/编号游标翻页 |
 | GET | `/admin/api/track-submissions/:submission_id` | 鉴权 | 投稿、轨迹、审核流水及展示元数据；所有状态由当前页详情弹窗展示，见 [投稿接口](api/track-submission.md#7-管理后台审核) |
 | POST | `/admin/api/track-submissions/:submission_id/review` | 鉴权 | 按 expected_revision 通过或驳回投稿 |

@@ -2327,27 +2327,6 @@ func (r *InMemoryTrackMapRepository) FindRouteIntroductionByGroupID(_ context.Co
 	return nil, ErrNotFound
 }
 
-func (r *InMemoryTrackMapRepository) ListPublishedRouteIntroductions(_ context.Context, groupIDs []string) (map[string]*models.TrackRouteIntroduction, error) {
-	wanted := make(map[string]struct{}, len(groupIDs))
-	for _, groupID := range groupIDs {
-		wanted[groupID] = struct{}{}
-	}
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	result := make(map[string]*models.TrackRouteIntroduction)
-	for _, introduction := range r.routeIntroductions {
-		if introduction.Status != models.TrackRouteIntroductionStatusPublished {
-			continue
-		}
-		if _, ok := wanted[introduction.CurrentGroupID]; !ok {
-			continue
-		}
-		clone := *introduction
-		result[introduction.CurrentGroupID] = &clone
-	}
-	return result, nil
-}
-
 func (r *InMemoryTrackMapRepository) UpsertRouteIntroduction(_ context.Context, introduction *models.TrackRouteIntroduction) error {
 	if introduction == nil || introduction.AnchorTrackID == "" {
 		return errors.New("route introduction is required")

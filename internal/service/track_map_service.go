@@ -105,23 +105,9 @@ func (s *TrackMapService) ListGroups(ctx context.Context, input TrackMapViewInpu
 	if err != nil {
 		return nil, err
 	}
-	groupIDs := make([]string, 0, len(groups))
-	for _, group := range groups {
-		if group != nil {
-			groupIDs = append(groupIDs, group.GroupID)
-		}
-	}
-	introductions, err := s.maps.ListPublishedRouteIntroductions(ctx, groupIDs)
-	if err != nil {
-		return nil, err
-	}
 	items := make([]*models.TrackMapRouteGroupItem, 0, len(groups))
 	for _, group := range groups {
-		var introduction *models.TrackRouteIntroduction
-		if group != nil {
-			introduction = introductions[group.GroupID]
-		}
-		item, err := s.routeGroupItem(ctx, group, introduction)
+		item, err := s.routeGroupItem(ctx, group)
 		if err != nil {
 			if errors.Is(err, repository.ErrNotFound) {
 				continue
@@ -142,14 +128,7 @@ func (s *TrackMapService) GetGroupDetail(ctx context.Context, groupID string) (*
 	if err != nil {
 		return nil, err
 	}
-	introduction, introErr := s.maps.FindRouteIntroductionByGroupID(ctx, groupID)
-	if introErr != nil && !errors.Is(introErr, repository.ErrNotFound) {
-		return nil, introErr
-	}
-	if introduction != nil && introduction.Status != models.TrackRouteIntroductionStatusPublished {
-		introduction = nil
-	}
-	item, err := s.routeGroupItem(ctx, group, introduction)
+	item, err := s.routeGroupItem(ctx, group)
 	if err == nil && s.places.Enabled() {
 		item.NearbyPlaces, _ = s.places.NearbyPlaces(ctx, group.RepresentativeTrackID)
 	}
@@ -253,7 +232,7 @@ func (s *TrackMapService) ListGroupTracks(ctx context.Context, userID int64, gro
 	return &models.TrackSummaryPage{Items: summaries, HasMore: false}, nil
 }
 
-func (s *TrackMapService) routeGroupItem(ctx context.Context, group *models.TrackRouteGroup, introduction *models.TrackRouteIntroduction) (*models.TrackMapRouteGroupItem, error) {
+func (s *TrackMapService) routeGroupItem(ctx context.Context, group *models.TrackRouteGroup) (*models.TrackMapRouteGroupItem, error) {
 	if group == nil {
 		return nil, repository.ErrNotFound
 	}
@@ -285,47 +264,12 @@ func (s *TrackMapService) routeGroupItem(ctx context.Context, group *models.Trac
 		RawTrackID: track.ID,
 		Track:      track,
 	}
-	if introduction != nil {
-		if name := strings.TrimSpace(introduction.Chinese.Name); name != "" {
-			item.Name = name
-		}
-		item.IntroductionURL = mapRouteIntroductionURL(group.GroupID, introduction.ContentVersion)
-	} else if publicMapTrack(track) {
-		item.IntroductionURL = mapRouteIntroductionURL(group.GroupID, 0)
-	}
 	if s.trackSvc != nil && s.trackSvc.submissions != nil {
 		if sub, subErr := s.trackSvc.submissions.PublicForTrack(ctx, track.ID); subErr == nil && sub != nil && len(sub.Images) > 0 && sub.Images[0] != nil && sub.Images[0].URL != "" {
 			item.CoverTrack.CoverURL = sub.Images[0].URL
 		}
 	}
 	return item, nil
-}
-
-func (s *TrackMapService) GetPublicRouteIntroduction(ctx context.Context, groupID string) (*models.TrackRouteGroup, *models.TrackRouteIntroduction, error) {
-	group, err := s.maps.FindRouteGroup(ctx, strings.TrimSpace(groupID))
-	if err != nil {
-		return nil, nil, err
-	}
-	introduction, err := s.maps.FindRouteIntroductionByGroupID(ctx, group.GroupID)
-	if err != nil && !errors.Is(err, repository.ErrNotFound) {
-		return nil, nil, err
-	}
-	if introduction != nil && introduction.Status == models.TrackRouteIntroductionStatusPublished {
-		return group, introduction, nil
-	}
-	facts, err := s.loadRouteGroupFacts(ctx, group)
-	if err != nil {
-		return nil, nil, err
-	}
-	return group, facts.introduction(group), nil
-}
-
-func mapRouteIntroductionURL(groupID string, version int64) string {
-	path := "/api/v1/track-map/groups/" + url.PathEscape(strings.TrimSpace(groupID)) + "/introduction.html"
-	if version <= 0 {
-		return path
-	}
-	return path + "?v=" + strconv.FormatInt(version, 10)
 }
 
 func routeGroupDisplayName(group *models.TrackRouteGroup) string {

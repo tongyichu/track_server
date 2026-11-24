@@ -255,38 +255,26 @@ func (s *TrackRouteGroupService) RenameRouteGroup(ctx context.Context, groupID, 
 	return group, nil
 }
 
-func (s *TrackRouteGroupService) GetRouteIntroduction(ctx context.Context, groupID string) (*models.TrackRouteIntroduction, error) {
-	if _, err := s.repo.FindRouteGroup(ctx, strings.TrimSpace(groupID)); err != nil {
-		return nil, err
-	}
-	return s.repo.FindRouteIntroductionByGroupID(ctx, strings.TrimSpace(groupID))
-}
-
 func (s *TrackRouteGroupService) GetRouteIntroductionForEditing(ctx context.Context, groupID string) (*models.TrackRouteIntroduction, error) {
 	group, err := s.repo.FindRouteGroup(ctx, strings.TrimSpace(groupID))
 	if err != nil {
 		return nil, err
 	}
 	introduction, err := s.repo.FindRouteIntroductionByGroupID(ctx, group.GroupID)
-	if s.trackMap == nil || !errors.Is(err, repository.ErrNotFound) {
-		return introduction, err
-	}
-	facts, err := s.trackMap.loadRouteGroupFacts(ctx, group)
-	if err != nil {
+	if s.trackMap != nil && errors.Is(err, repository.ErrNotFound) {
+		facts, factsErr := s.trackMap.loadRouteGroupFacts(ctx, group)
+		if factsErr != nil {
+			return nil, factsErr
+		}
+		introduction = facts.introduction(group)
+	} else if err != nil {
 		return nil, err
 	}
-	return facts.introduction(group), nil
+	introduction.Chinese.Name = routeGroupDisplayName(group)
+	return introduction, nil
 }
 
 func (s *TrackRouteGroupService) SaveRouteIntroduction(ctx context.Context, groupID string, input *models.TrackRouteIntroduction) (*models.TrackRouteIntroduction, error) {
-	return s.saveRouteIntroduction(ctx, groupID, input, false)
-}
-
-func (s *TrackRouteGroupService) PublishRouteIntroduction(ctx context.Context, groupID string, input *models.TrackRouteIntroduction) (*models.TrackRouteIntroduction, error) {
-	return s.saveRouteIntroduction(ctx, groupID, input, true)
-}
-
-func (s *TrackRouteGroupService) saveRouteIntroduction(ctx context.Context, groupID string, input *models.TrackRouteIntroduction, published bool) (*models.TrackRouteIntroduction, error) {
 	group, err := s.repo.FindRouteGroup(ctx, strings.TrimSpace(groupID))
 	if err != nil {
 		return nil, err
@@ -294,10 +282,9 @@ func (s *TrackRouteGroupService) saveRouteIntroduction(ctx context.Context, grou
 	if input == nil {
 		return nil, invalidArg("route introduction is required")
 	}
-	input.Chinese.Name = strings.TrimSpace(input.Chinese.Name)
-	input.Chinese.Summary = strings.TrimSpace(input.Chinese.Summary)
-	if input.Chinese.Name == "" || input.Chinese.Summary == "" {
-		return nil, invalidArg("zh.name and zh.summary are required")
+	summary := strings.TrimSpace(input.Chinese.Summary)
+	if summary == "" {
+		return nil, invalidArg("zh.summary is required")
 	}
 	if input.EstimatedDurationMin < 0 || input.EstimatedDurationMax < 0 || (input.EstimatedDurationMax > 0 && input.EstimatedDurationMax < input.EstimatedDurationMin) {
 		return nil, invalidArg("invalid estimated duration")
@@ -306,47 +293,23 @@ func (s *TrackRouteGroupService) saveRouteIntroduction(ctx context.Context, grou
 	if findErr != nil && !errors.Is(findErr, repository.ErrNotFound) {
 		return nil, findErr
 	}
+	intro := &models.TrackRouteIntroduction{
+		AnchorTrackID: group.RepresentativeTrackID, CurrentGroupID: group.GroupID,
+		Status: models.TrackRouteIntroductionStatusSaved, ContentVersion: 1,
+		Chinese: input.Chinese, English: input.English, Difficulty: input.Difficulty,
+		EstimatedDurationMin: input.EstimatedDurationMin, EstimatedDurationMax: input.EstimatedDurationMax,
+		BestSeasons: input.BestSeasons,
+	}
+	intro.Chinese.Name, intro.Chinese.Summary = routeGroupDisplayName(group), summary
 	if existing != nil {
-		input.ID, input.AnchorTrackID, input.CreatedAt, input.PublishedAt = existing.ID, existing.AnchorTrackID, existing.CreatedAt, existing.PublishedAt
-	} else {
-		input.AnchorTrackID = group.RepresentativeTrackID
+		intro.ID, intro.AnchorTrackID, intro.CreatedAt = existing.ID, existing.AnchorTrackID, existing.CreatedAt
+		intro.PublishedAt = existing.PublishedAt
+		intro.ContentVersion = existing.ContentVersion + 1
 	}
-	input.CurrentGroupID = group.GroupID
-	input.Status = models.TrackRouteIntroductionStatusDraft
-	input.PublishedAt = nil
-	if published {
-		now := time.Now()
-		input.Status, input.PublishedAt = models.TrackRouteIntroductionStatusPublished, &now
-	}
-	input.ContentVersion = 1
-	if existing != nil {
-		input.ContentVersion = existing.ContentVersion + 1
-	}
-	if err := s.repo.UpsertRouteIntroduction(ctx, input); err != nil {
+	if err := s.repo.UpsertRouteIntroduction(ctx, intro); err != nil {
 		return nil, err
 	}
-	return input, nil
-}
-
-func (s *TrackRouteGroupService) SetRouteIntroductionPublished(ctx context.Context, groupID string, published bool) (*models.TrackRouteIntroduction, error) {
-	introduction, err := s.GetRouteIntroduction(ctx, groupID)
-	if err != nil {
-		return nil, err
-	}
-	if published {
-		if strings.TrimSpace(introduction.Chinese.Name) == "" || strings.TrimSpace(introduction.Chinese.Summary) == "" {
-			return nil, invalidArg("route introduction content is incomplete")
-		}
-		now := time.Now()
-		introduction.Status, introduction.PublishedAt = models.TrackRouteIntroductionStatusPublished, &now
-	} else {
-		introduction.Status, introduction.PublishedAt = models.TrackRouteIntroductionStatusDraft, nil
-	}
-	introduction.ContentVersion++
-	if err := s.repo.UpsertRouteIntroduction(ctx, introduction); err != nil {
-		return nil, err
-	}
-	return introduction, nil
+	return intro, nil
 }
 
 func (s *TrackRouteGroupService) SetRepresentativeTrack(ctx context.Context, groupID, trackID string) (*models.TrackRouteGroup, error) {
@@ -457,75 +420,6 @@ func (s *TrackRouteGroupService) RemoveRouteGroupMember(ctx context.Context, gro
 		}
 	}
 	return s.rebuildRouteGroupBounds(ctx, groupID)
-}
-
-func (s *TrackRouteGroupService) MergeRouteGroups(ctx context.Context, targetGroupID, sourceGroupID string) (*models.TrackRouteGroup, error) {
-	if s == nil || s.repo == nil {
-		return nil, fmt.Errorf("track route group service is not configured")
-	}
-	targetGroupID = strings.TrimSpace(targetGroupID)
-	sourceGroupID = strings.TrimSpace(sourceGroupID)
-	if targetGroupID == "" || sourceGroupID == "" {
-		return nil, invalidArg("target_group_id and source_group_id are required")
-	}
-	if targetGroupID == sourceGroupID {
-		return nil, invalidArg("cannot merge the same route group")
-	}
-	target, err := s.repo.FindRouteGroup(ctx, targetGroupID)
-	if err != nil {
-		return nil, err
-	}
-	source, err := s.repo.FindRouteGroup(ctx, sourceGroupID)
-	if err != nil {
-		return nil, err
-	}
-	if target.TrackType != source.TrackType {
-		return nil, invalidArg("cannot merge route groups with different track_type")
-	}
-	sourceMembers, err := s.repo.ListRouteGroupMembers(ctx, sourceGroupID, 1000)
-	if err != nil {
-		return nil, err
-	}
-	targetIntroduction, targetIntroErr := s.repo.FindRouteIntroductionByGroupID(ctx, targetGroupID)
-	if targetIntroErr != nil && !errors.Is(targetIntroErr, repository.ErrNotFound) {
-		return nil, targetIntroErr
-	}
-	sourceIntroduction, sourceIntroErr := s.repo.FindRouteIntroductionByGroupID(ctx, sourceGroupID)
-	if sourceIntroErr != nil && !errors.Is(sourceIntroErr, repository.ErrNotFound) {
-		return nil, sourceIntroErr
-	}
-	now := time.Now()
-	for _, member := range sourceMembers {
-		if member == nil {
-			continue
-		}
-		if err := s.repo.DeleteRouteGroupMember(ctx, sourceGroupID, member.TrackID); err != nil && !errors.Is(err, repository.ErrNotFound) {
-			return nil, err
-		}
-		member.GroupID = targetGroupID
-		member.Role = models.TrackRouteGroupMemberRoleMember
-		member.Source = models.TrackRouteGroupSourceManual
-		member.UpdatedAt = now
-		if err := s.repo.UpsertRouteGroupMember(ctx, member); err != nil {
-			return nil, err
-		}
-	}
-	if err := s.repo.ArchiveRouteGroup(ctx, sourceGroupID, now); err != nil {
-		return nil, err
-	}
-	if sourceIntroduction != nil {
-		if targetIntroduction == nil {
-			sourceIntroduction.CurrentGroupID = targetGroupID
-		} else {
-			sourceIntroduction.CurrentGroupID = ""
-			sourceIntroduction.Status = models.TrackRouteIntroductionStatusArchived
-		}
-		sourceIntroduction.ContentVersion++
-		if err := s.repo.UpsertRouteIntroduction(ctx, sourceIntroduction); err != nil {
-			return nil, err
-		}
-	}
-	return s.rebuildRouteGroupBounds(ctx, targetGroupID)
 }
 
 func (s *TrackRouteGroupService) rebuildRouteGroupBounds(ctx context.Context, groupID string) (*models.TrackRouteGroup, error) {
@@ -661,16 +555,6 @@ func (s *TrackRouteGroupService) RunOnce(ctx context.Context) (*TrackRouteGroupR
 	if err != nil {
 		return result, err
 	}
-	oldGroupIDs := make([]string, 0, len(oldGroups))
-	for _, group := range oldGroups {
-		if group != nil {
-			oldGroupIDs = append(oldGroupIDs, group.GroupID)
-		}
-	}
-	introductions, err := s.repo.ListPublishedRouteIntroductions(ctx, oldGroupIDs)
-	if err != nil {
-		return result, err
-	}
 	sort.SliceStable(indexes, func(i, j int) bool {
 		if indexes[i].TrackType == indexes[j].TrackType {
 			if indexes[i].CenterLat == indexes[j].CenterLat {
@@ -708,7 +592,7 @@ func (s *TrackRouteGroupService) RunOnce(ctx context.Context) (*TrackRouteGroupR
 	if err != nil {
 		return result, err
 	}
-	applyRouteGroupHistory(clusters, oldGroups, oldMembers, introductions, semanticNames, s.areas)
+	applyRouteGroupHistory(clusters, oldGroups, oldMembers, semanticNames, s.areas)
 	if err := s.applySubmissionRepresentatives(ctx, clusters, oldMembers); err != nil {
 		return result, err
 	}

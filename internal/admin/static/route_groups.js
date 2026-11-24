@@ -49,7 +49,7 @@
   var selectedGroupID = '', detailRequest = 0, detailSession = 0, detailController = null, detailLoadingID = '';
   var memberOffset = 0, memberTotal = 0, representativeWriting = false;
   var introBaseline = '', introWriting = false, introClosePrompt = false, allowIntroClose = false;
-  var introStatus = '', introAIController = null, introLoadController = null;
+  var introAutomatic = false, introAIController = null, introLoadController = null;
   var selectedTrackType = '';
   var routeGroups = new Map(), areaTree = new Map();
   var listController = null, loadedQuery = '', directoryError = '';
@@ -68,7 +68,10 @@
   var statusHint = document.getElementById('statusHint');
   var listSummaryHint = document.getElementById('listSummaryHint');
   var introPanel = document.getElementById('introSection');
-  var introEditor = document.getElementById('introEditor');
+  var introActions = document.getElementById('introActions');
+  var introSummary = document.getElementById('introZhSummary');
+  var editTitleBtn = document.getElementById('editRouteTitleBtn');
+  var detailName = document.getElementById('detailName');
   var introLoadState = document.getElementById('introLoadState');
   var introLoadHint = document.getElementById('introLoadHint');
   var introRetryBtn = document.getElementById('introRetryBtn');
@@ -76,6 +79,7 @@
   var regionOptions;
   var detailModal = new AdminComponents.Dialog(document.getElementById('detailModal'));
   var scenicMembersModal = new AdminComponents.Dialog(document.getElementById('scenicMembersModal'));
+  var scenicInfoModal = new AdminComponents.Dialog(document.getElementById('scenicInfoModal'));
   var scenicSelection = null, scenicController = null, scenicOffset = 0, scenicTotal = 0;
   var introFieldsModal = new AdminComponents.Dialog(document.getElementById('introFieldsModal'));
   document.getElementById('introAdvancedBtn').addEventListener('click', function () { introFieldsModal.show(); });
@@ -390,43 +394,26 @@
     return tr;
   }
 
-  document.getElementById('renameBtn').addEventListener('click', async function () {
-    if (!selectedGroupID || detailLoadingID) return;
+  editTitleBtn.addEventListener('click', function () {
+    if (!selectedGroupID || detailLoadingID || introWriting || !AdminAccess.can('route_groups', true)) return;
     var groupID = selectedGroupID, session = detailSession;
-    var name = document.getElementById('renameInput').value.trim();
-    if (!name) { AdminUI.alert('请输入新名称', 'danger'); return; }
-    try {
-      await apiJSON('/admin/api/route-groups/' + encodeURIComponent(groupID) + '/name', {
-        method: 'PUT',
-        body: JSON.stringify({ name: name })
+    AdminUI.runOnce('route-group-title', async function () {
+      var saved = await AdminUI.form({
+        title: '修改路线标题',
+        fields: [{ name: 'name', label: '标题', value: detailName.textContent, required: true }],
+        waitForHidden: true,
+        onSubmit: async function (values, signal) {
+          var group = await apiJSON('/admin/api/route-groups/' + encodeURIComponent(groupID) + '/name', {
+            method: 'PUT', body: JSON.stringify({ name: values.name.trim() }), signal: signal
+          });
+          if (isCurrentDetail(groupID, session)) detailName.textContent = group.name;
+        }
       });
-      await refreshGroupAfterChange(groupID, session);
-    } catch (err) {
-      AdminUI.alert(err.message, 'danger');
-    }
+      if (saved) await loadGroups();
+    });
   });
-  document.getElementById('mergeBtn').addEventListener('click', async function () {
-    if (!selectedGroupID || detailLoadingID) return;
-    var groupID = selectedGroupID, session = detailSession;
-    var sourceGroupID = document.getElementById('mergeInput').value.trim();
-    if (!sourceGroupID) { AdminUI.alert('请输入源路线组ID', 'danger'); return; }
-    if (!await AdminUI.confirm({ title: '合并路线组', message: '确认把 ' + sourceGroupID + ' 合并到 ' + groupID + '？', confirmText: '确认合并', danger: true })) return;
-    if (!isCurrentDetail(groupID, session)) return;
-    try {
-      await apiJSON('/admin/api/route-groups/' + encodeURIComponent(groupID) + '/merge', {
-        method: 'POST',
-        body: JSON.stringify({ source_group_id: sourceGroupID })
-      });
-      if (isCurrentDetail(groupID, session)) document.getElementById('mergeInput').value = '';
-      await refreshGroupAfterChange(groupID, session);
-    } catch (err) {
-      AdminUI.alert(err.message, 'danger');
-    }
-  });
-  document.getElementById('introSaveBtn').addEventListener('click', function () { writeIntroduction('draft'); });
+  document.getElementById('introSaveBtn').addEventListener('click', saveIntroduction);
   document.getElementById('introGenerateBtn').addEventListener('click', generateIntroductionDraft);
-  document.getElementById('introPublishBtn').addEventListener('click', function () { writeIntroduction('publish'); });
-  document.getElementById('introUnpublishBtn').addEventListener('click', function () { writeIntroduction('unpublish'); });
 
   async function loadDetail(groupID, requestedOffset) {
     if (!groupID || introWriting || (requestedOffset != null && detailLoadingID === groupID)) return;
@@ -436,10 +423,11 @@
       memberList.replaceChildren();
       memberOffset = memberTotal = 0;
       resetIntroduction();
-      document.getElementById('mergeInput').value = '';
       detailPanel.hidden = true;
       var cached = routeGroups.get(groupID);
-      document.getElementById('detailName').textContent = cached && cached.name || '路线组';
+      detailName.textContent = cached && cached.name || '路线组';
+      document.getElementById('detailGroupID').textContent = groupID;
+      editTitleBtn.hidden = true;
       document.getElementById('detailTrackType').textContent = '';
       renderDetailPath(cached);
     }
@@ -471,6 +459,7 @@
       if (request === detailRequest && !controller.signal.aborted) {
         if (err.status === 404) {
           detailPanel.hidden = true;
+          editTitleBtn.hidden = true;
           showDetailState(err.message, true);
         } else if (paging) {
           pageError = '翻页失败，可重试';
@@ -524,8 +513,8 @@
     cancelIntroGeneration();
     introBaseline = '';
     introFieldsModal.hide();
-    document.getElementById('introStatus').textContent = '';
-    introEditor.hidden = true;
+    introActions.hidden = true;
+    introSummary.hidden = true;
     introLoadState.hidden = true;
     showIntroError('');
   }
@@ -540,8 +529,9 @@
     try {
       var intro = await apiJSON('/admin/api/route-groups/' + encodeURIComponent(groupID) + '/introduction', { signal: controller.signal });
       if (introLoadController !== controller) return;
-      renderIntroduction(intro, groupID);
-      introEditor.hidden = false;
+      renderIntroduction(intro);
+      introActions.hidden = false;
+      introSummary.hidden = false;
       introLoadState.hidden = true;
     } catch (err) {
       if (introLoadController !== controller) return;
@@ -551,11 +541,10 @@
       if (introLoadController === controller) introLoadController = null;
     }
   }
-  function renderIntroduction(intro, groupID) {
+  function renderIntroduction(intro) {
     var zh = intro.zh || {}, en = intro.en || {};
-    document.getElementById('introZhName').value = zh.name || '';
     document.getElementById('introEnName').value = en.name || '';
-    document.getElementById('introZhSummary').value = zh.summary || '';
+    introSummary.value = zh.summary || '';
     document.getElementById('introEnSummary').value = en.summary || '';
     putLines('introZhDescription', zh.description); putLines('introEnDescription', en.description);
     putLines('introZhHighlights', zh.highlights); putLines('introEnHighlights', en.highlights);
@@ -564,18 +553,11 @@
     document.getElementById('introBestSeasons').value = (intro.best_seasons || []).join(',');
     document.getElementById('introDurationMin').value = intro.estimated_duration_min || 0;
     document.getElementById('introDurationMax').value = intro.estimated_duration_max || 0;
-    introStatus = intro.status;
-    var published = introStatus === 'published';
-    var statusText = published ? '已发布' : introStatus === 'automatic' ? '自动简介' : '草稿';
-    document.getElementById('introStatus').textContent = statusText + (intro.content_version ? ' · 第 ' + intro.content_version + ' 版' : '');
-    document.getElementById('introUnpublishBtn').hidden = !published;
-    var link = document.getElementById('introPreviewLink');
-    link.hidden = !published && introStatus !== 'automatic';
-    link.href = '/api/v1/track-map/groups/' + encodeURIComponent(groupID) + '/introduction.html' + (published ? '?v=' + intro.content_version : '');
+    introAutomatic = intro.status === 'automatic';
     introBaseline = JSON.stringify(introductionPayload());
   }
   function introductionPayload() {
-    return {zh:{name:document.getElementById('introZhName').value.trim(),summary:document.getElementById('introZhSummary').value.trim(),description:lines('introZhDescription'),highlights:lines('introZhHighlights'),tips:lines('introZhTips')},
+    return {zh:{summary:introSummary.value.trim(),description:lines('introZhDescription'),highlights:lines('introZhHighlights'),tips:lines('introZhTips')},
       en:{name:document.getElementById('introEnName').value.trim(),summary:document.getElementById('introEnSummary').value.trim(),description:lines('introEnDescription'),highlights:lines('introEnHighlights'),tips:lines('introEnTips')},
       difficulty:document.getElementById('introDifficulty').value.trim(),best_seasons:document.getElementById('introBestSeasons').value.split(',').map(function(s){return s.trim();}).filter(Boolean),
       estimated_duration_min:Number(document.getElementById('introDurationMin').value||0),estimated_duration_max:Number(document.getElementById('introDurationMax').value||0)};
@@ -592,7 +574,7 @@
   function setIntroGenerationBusy(busy) {
     var button = document.getElementById('introGenerateBtn');
     button.disabled = busy || !AdminAccess.can('route_groups', true);
-    button.textContent = busy ? '正在生成…' : 'AI 草稿';
+    button.textContent = busy ? '正在生成…' : 'AI 生成';
   }
 
   function cancelIntroGeneration() {
@@ -605,10 +587,10 @@
   async function generateIntroductionDraft() {
     if (!selectedGroupID || !introBaseline || detailLoadingID || introWriting || introAIController || !AdminAccess.can('route_groups', true)) return;
     var groupID = selectedGroupID, session = detailSession;
-    var field = document.getElementById('introZhSummary');
+    var field = introSummary;
     var previous = field.value;
-    if (previous.trim() && (introStatus !== 'automatic' || previous.trim() !== JSON.parse(introBaseline).zh.summary)) {
-      if (!await AdminUI.confirm({ title: '替换当前中文摘要？', message: 'AI 草稿会填入中文摘要，保存或发布前可以继续编辑。', confirmText: '生成草稿', waitForHidden: true })) return;
+    if (previous.trim() && (!introAutomatic || previous.trim() !== JSON.parse(introBaseline).zh.summary)) {
+      if (!await AdminUI.confirm({ title: '替换当前简介？', message: '生成的简介会填入编辑框，保存前可以继续修改。', confirmText: '生成', waitForHidden: true })) return;
     }
     if (selectedGroupID !== groupID || session !== detailSession || introAIController || introWriting || previous !== field.value) return;
     var controller = introAIController = new AbortController();
@@ -633,26 +615,18 @@
     }
   }
 
-  async function writeIntroduction(action) {
+  async function saveIntroduction() {
     if (!selectedGroupID || !introBaseline || detailLoadingID || introWriting || !AdminAccess.can('route_groups', true)) return;
-    if (action === 'unpublish' && introDirty()) {
-      showIntroError('路线介绍有未保存修改。保存草稿会同时下线，或撤销修改后再下线。');
-      return;
-    }
-    var groupID = selectedGroupID, session = detailSession;
-    if (action === 'draft' && introStatus === 'published') {
-      if (!await AdminUI.confirm({ title: '下线并保存草稿？', message: '公开页面会改为展示自动简介。', confirmText: '下线并保存', waitForHidden: true })) return;
-      if (groupID !== selectedGroupID || session !== detailSession || introWriting) return;
-    }
+    var payload = introductionPayload();
+    if (!payload.zh.summary) { showIntroError('请输入简介。'); introSummary.focus(); return; }
     cancelIntroGeneration();
-    var path = '/admin/api/route-groups/' + encodeURIComponent(groupID) + '/introduction';
-    var options = { method: action === 'draft' ? 'PUT' : 'POST' };
-    if (action !== 'unpublish') options.body = JSON.stringify(introductionPayload());
     showIntroError('');
     introWriting = introPanel.inert = true;
     try {
-      var intro = await apiJSON(path + (action === 'draft' ? '' : '/' + action), options);
-      renderIntroduction(intro, groupID);
+      var intro = await apiJSON('/admin/api/route-groups/' + encodeURIComponent(selectedGroupID) + '/introduction', {
+        method: 'PUT', body: JSON.stringify(payload)
+      });
+      renderIntroduction(intro);
     } catch (err) {
       showIntroError(err.message);
       return;
@@ -660,23 +634,18 @@
       introWriting = introPanel.inert = false;
     }
     detailModal.hide();
-    AdminUI.alert(({ draft: '草稿已保存', publish: '路线介绍已发布', unpublish: '路线介绍已下线' })[action], 'success');
-    await loadGroups();
+    AdminUI.alert('已保存', 'success');
   }
 
   function renderDetail(data) {
     var g = data.group || {};
     document.getElementById('detailGroupID').textContent = g.group_id || '';
-    document.getElementById('detailName').textContent = g.name || '未命名路线';
+    detailName.textContent = g.name || '未命名路线';
+    editTitleBtn.hidden = false;
     var cached = routeGroups.get(g.group_id);
     renderDetailPath(data.grouping ? { grouping: data.grouping } : cached);
     var meta = trackTypeMeta(g.track_type);
     document.getElementById('detailTrackType').textContent = meta ? meta.name : (g.track_type || '-');
-    var areaLink = document.getElementById('detailAreaLink');
-    var url = data.area && data.area.introduction_url || '';
-    areaLink.hidden = !url.startsWith('/api/v1/track-map/areas/');
-    if (!areaLink.hidden) areaLink.href = url;
-    document.getElementById('renameInput').value = g.name || '';
   }
 
   function renderDetailPath(group) {
@@ -750,24 +719,33 @@
   var scenicTracksPager = document.getElementById('scenicTracksPager');
   var scenicTracksPrev = document.getElementById('scenicTracksPrev');
   var scenicTracksNext = document.getElementById('scenicTracksNext');
+  var scenicInfoButton = document.getElementById('scenicMembersInfo');
 
   function openScenicMembers(bucket) {
     if (!bucket || bucket.type !== 'scenic') return;
-    scenicSelection = { location: bucket.location, query: loadedQuery };
+    scenicSelection = { name: bucket.name, location: bucket.location, query: loadedQuery };
     scenicOffset = scenicTotal = 0;
     scenicTracksList.replaceChildren();
     scenicTracksPager.hidden = true;
     document.getElementById('scenicTracksCount').textContent = '';
     document.getElementById('scenicMembersName').textContent = bucket.name;
     document.getElementById('scenicMembersPath').textContent = bucket.path.slice(0, -1).join(' / ');
-    var infoLink = document.getElementById('scenicMembersInfo');
-    var spotID = scenicSelection.location.scenicSpotID;
-    infoLink.hidden = !spotID;
-    if (spotID) infoLink.href = '/admin/scenic_spot_detail.html?spot_id=' + encodeURIComponent(spotID);
-    else infoLink.removeAttribute('href');
+    scenicInfoButton.hidden = !bucket.location.scenicSpotID;
     scenicMembersModal.show();
     loadScenicMembers(0);
   }
+
+  scenicInfoButton.addEventListener('click', function () {
+    var spotID = scenicSelection?.location.scenicSpotID;
+    if (!spotID || !scenicMembersModal.root.open || scenicInfoModal.root.open || !AdminAccess.can('scenic_spots', false)) return;
+    scenicInfoButton.focus({ preventScroll: true });
+    window.AdminScenicSpotDetail.load(spotID, scenicSelection.name);
+    scenicInfoModal.show();
+  });
+  scenicInfoModal.root.addEventListener('admin:dialog-closed', function () {
+    window.AdminScenicSpotDetail.clear();
+    if (scenicMembersModal.root.open) scenicInfoButton.focus({ preventScroll: true });
+  });
 
   async function loadScenicMembers(offset) {
     if (!scenicSelection || !scenicMembersModal.root.open) return;
@@ -850,6 +828,7 @@
   scenicTracksPrev.addEventListener('click', function () { loadScenicMembers(scenicOffset - MEMBER_PAGE_SIZE); });
   scenicTracksNext.addEventListener('click', function () { loadScenicMembers(scenicOffset + MEMBER_PAGE_SIZE); });
   scenicMembersModal.root.addEventListener('admin:dialog-closed', function () {
+    scenicInfoModal.hide();
     if (scenicController) scenicController.abort();
     scenicController = null;
     scenicSelection = null;

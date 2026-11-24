@@ -103,7 +103,7 @@ internal/admin/
 | 意见反馈管理 | `handlers.go` 中 `ListFeedbacks` / `GetFeedback` / `UpdateFeedbackStatus` / `GetFeedbackImage`，`static/feedbacks.html`、`static/feedbacks.js` |
 | 纠错配置 | `feedback_correction.go` 中配置读写 handler；`static/feedback_correction_config.js` 编辑配置；校验、快照和默认值统一在 `service/feedback_correction.go` |
 | 埋点同步摘要 | `handlers.go` 中 `ListAnalyticsSyncSummaries`，`static/analytics.html`、`static/analytics.js` |
-| 聚合路线运营 | `handlers.go` 中 `ListRouteGroups` / `GetRouteGroup` / `RenameRouteGroup` / `MergeRouteGroup` / `RemoveRouteGroupMember` / `SetRouteGroupRepresentative`，`static/route_groups.html`、`static/route_groups.js` |
+| 聚合路线运营 | `handlers.go` 中 `ListRouteGroups` / `GetRouteGroup` / `RenameRouteGroup` / `SaveRouteGroupIntroduction` / `RemoveRouteGroupMember` / `SetRouteGroupRepresentative`，`static/route_groups.html`、`static/route_groups.js` |
 | 轨迹投稿审核 | `handlers.go` 中 `ListTrackSubmissions` / `GetTrackSubmission` / `ReviewTrackSubmission`，统计复用 `GetDashboard`；页面位于 `static/track_submissions.html`、`static/track_submissions.js` |
 | 主景点目录 | `scenic_spot_handlers.go` + `ScenicSpotCatalogService`；页面 `static/scenic_spots.html`、`static/scenic_spots.js`，页面与导航显示名为「景点管理」（目录涵盖景区/公园/山系/湖泊，内部 SCP ID、API 路径与模块名 scenic_spots 不变）；目录与调用统计由 `repository.ScenicSpotRepository` 三种实现提供；自动/人工记录均直接下发客户端，归档/合并记录隐藏；确认后分批同步存量供应商资料；新建时可点击地图 POI 热点或搜索附近 POI，将资料先放入备选预览，一键代入后写入供应商来源与资料/图片；详情以弹窗编辑并可拖动排序图片 |
 | 轨迹编辑弹窗 | `static/track_editor.js` 提供共享编辑表单，轨迹管理页与景点相关轨迹列表共用；保存或删除后调用页刷新各自列表 |
@@ -245,25 +245,22 @@ GET /admin/api/users
   → GET /admin/api/route-groups/:group_id?limit=5&offset=0 查看路线组详情和该页成员轨迹
   → TrackRouteGroupService 按已存 area_id 补区域名称、类型、城市与介绍页链接
   → PUT /admin/api/route-groups/:group_id/name {name}
-  → POST /admin/api/route-groups/:group_id/merge {source_group_id}
   → DELETE /admin/api/route-groups/:group_id/members/:track_id
   → PUT /admin/api/route-groups/:group_id/representative {track_id}
-  → PUT /admin/api/route-groups/:group_id/introduction 保存中英文介绍
-  → POST /admin/api/route-groups/:group_id/introduction/generate 手动生成摘要候选
-  → POST /admin/api/route-groups/:group_id/introduction/publish 提交当前编辑内容并发布
-  → POST /admin/api/route-groups/:group_id/introduction/unpublish 下线
+  → PUT /admin/api/route-groups/:group_id/introduction 保存简介及中英文字段
+  → POST /admin/api/route-groups/:group_id/introduction/generate 手动生成简介候选
        → TrackRouteGroupService 校验运动类型、成员关系与代表轨迹
        → TrackMapRepository 更新 track_route_groups / track_route_group_members
 ```
 路线组目录先读取所有匹配的组，再分批解析有效成员的起点索引和当前主景点关联，仅返回列表所需字段。展开目录时按实际匹配的全量组数显示各地区，分支内的「显示更多路线」只控制同一分支下的路线行。一个路线组只展示一次。组内存在多个景点关联时，优先采用最近的人工关联，其次是自动关联、历史识别；同优先级采用代表轨迹，再按轨迹 ID 确定。景点按自身坐标所在区县归类，同一景点的路线可跨运动类型与出发地。无景点关联时，按代表轨迹起点归至区县，缺少代表起点时用组内有效成员的起点。按现有本地行政区索引解析坐标，无法解析区县时标为「区县未标注」。路线覆盖城市筛选沿用路线组的 `city_codes`，分组展示时使用景点或起点的归属城市。后台读取过程不访问外部供应商、不改写离线 `area_id` 或起点索引，景点关联变化后重新加载列表即可看到新分组。
 
-详情上方并排显示路线介绍和管理。标题、摘要、改名与合并直接显示，完整介绍字段使用独立编辑弹窗。成员放在详情底部，每页五条，展示预览图、距离和相似度。点整条成员打开当前页面的共享轨迹弹窗，关闭后返回当前成员页。轨迹详情和缩略图需轨迹查看权限，路线组选代表与移除需路线组操作权限。介绍读取与成员分页分别提示错误，AI 只在点击后运行。
+详情顶部使用路线组名称作为标题，授权人员可从标题旁改名。简介使用整行空间，补充字段通过独立弹窗编辑。成员放在详情底部，每页五条，展示预览图、距离和相似度。点整条成员打开当前页面的共享轨迹弹窗，关闭后返回当前成员页。轨迹详情和缩略图需轨迹查看权限，路线组选代表与移除需路线组操作权限。简介读取与成员分页分别提示错误。
 
 详情标题下方显示与目录一致的归属路径。列表、成员分页和覆盖统计均按当前实际状态读取已完成公开轨迹。下架、私密、录制中或已不存在的轨迹即使仍有历史成员关系，也会在计数和分页之前排除；没有有效成员的组从地图模式隐藏。景点弹窗合并展示归到该景点节点的轨迹，每页五条，保留单条轨迹直达所属路线组维护的入口。原始路线组编号、运动类型、代表轨迹和介绍沿用既有规则。
 
-景点弹窗的「查看景点信息」在新标签页打开 `/admin/scenic_spot_detail.html?spot_id=<id>`。链接仅在聚合归属到主景点目录且账号有景点查看权限时显示。独立页通过既有景点详情接口展示所在地、地址、分类、景区等级、简介和本站照片。
+景点轨迹弹窗的「查看景点信息」在当前地图页面打开只读详情弹窗。入口仅在聚合归属到主景点目录且账号有景点查看权限时显示。详情复用既有接口，展示所在地、地址、分类、景区等级、简介和本站照片。关闭后返回原轨迹列表和分页。
 
-路线介绍独立加载，失败可原地重试，默认显示中文标题和摘要。点击「AI 草稿」才会使用当前路线组的位置、走法与景点事实生成中文摘要候选，预算和请求记录由 AI 使用管理维护。候选填入当前表单，运营可编辑保存或发布，已发布内容下线后切回自动简介。
+简介独立加载，未维护过时按公开成员轨迹生成基础文案，失败可原地重试。点击「AI 生成」才会用路线组的位置、走法与景点事实生成候选，预算和请求记录由 AI 使用管理维护。候选填入表单，可编辑并直接保存。存量介绍继续在后台读取，随锚点轨迹参加重聚合。路线组公开页、发布接口和人工合并入口已停用。
 
 路线组使用聚合中心与 `radius_m` 表示区域，代表轨迹可供封面和运营参考。
 人工改名会把 RouteGroup 标记为 `mixed`，离线重聚合通过历史成员重合复用 GroupID 并保留该名称；不要把名称重新改为城市级默认值。离线任务先按 medoid 计算几何结果，再按“存量人工代表 > approved 投稿候选 > medoid”选择展示代表；人工代表只要仍属于重建后的组就必须保留。

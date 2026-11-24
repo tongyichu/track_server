@@ -127,7 +127,7 @@ track/create(is_running=false) 或 track upload/update 完成轨迹
   → 用内置区域目录离线匹配 medoid 中心并写入 area_id；未命中保持空字符串
   → 重建替换 track_route_groups / track_route_group_members（存量聚合结果可清空重算；MySQL 实现使用事务）
 ```
-首页地图模式客户端接口仍使用业务鉴权。区域和路线介绍为公开 H5，路线的 `introduction_url` 优先指向已发布的运营内容，其次指向按公开成员事实生成的基础简介。运营介绍用 `anchor_track_id` 保持独立存储，路线组重建后根据成员关系更新 `current_group_id`。`group_id` 标识路线组；列表和地图聚合以路线组为计数单位。协议见 [地图 API](api/track-map.md) 和 [路线组方案](../track_map.md)。
+首页地图模式客户端接口仍使用业务鉴权。区县和景区的区域介绍使用公开 H5。路线组简介留在后台地图模式，在弹窗里编辑并保存。运营介绍用 `anchor_track_id` 保持独立存储，路线组重建后根据成员关系更新 `current_group_id`。`group_id` 标识路线组；列表和地图聚合以路线组为计数单位。协议见 [地图 API](api/track-map.md) 和 [路线组方案](../track_map.md)。
 
 管理中心的列表按城市、区县、景点展示路线组，详情在「路线组管理」提供离线 `area_id` 和区域链接。客户端使用 `center` 和 `radius_m` 表示旧版聚合区域。
 

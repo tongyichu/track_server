@@ -253,14 +253,14 @@ func TestMapAreaIntroductionPage_PublicHTML(t *testing.T) {
 	}
 }
 
-func TestMapRouteIntroductionPage_PublicHTML(t *testing.T) {
+func TestMapRouteIntroductionPage_Retired(t *testing.T) {
 	mapRepo := repository.NewInMemoryTrackMapRepository(nil)
 	now := time.Now()
 	group := &models.TrackRouteGroup{GroupID: "RG.00000031", Name: "麦理浩径徒步路线", TrackType: "hiking", Status: models.TrackRouteGroupStatusActive, Distance: 10000, CreatedAt: now, UpdatedAt: now}
 	if err := mapRepo.UpsertRouteGroup(context.Background(), group); err != nil {
 		t.Fatal(err)
 	}
-	introduction := &models.TrackRouteIntroduction{AnchorTrackID: "NO.00000031", CurrentGroupID: group.GroupID, Status: models.TrackRouteIntroductionStatusPublished,
+	introduction := &models.TrackRouteIntroduction{AnchorTrackID: "NO.00000031", CurrentGroupID: group.GroupID, Status: "published",
 		Chinese: models.TrackRouteIntroductionContent{Name: group.Name, Summary: "香港经典长距离徒步路线", Highlights: []string{"万宜水库"}}, ContentVersion: 2}
 	if err := mapRepo.UpsertRouteIntroduction(context.Background(), introduction); err != nil {
 		t.Fatal(err)
@@ -268,16 +268,8 @@ func TestMapRouteIntroductionPage_PublicHTML(t *testing.T) {
 	h := server.Default()
 	handler.RegisterRoutes(h, handler.Deps{TrackMapService: service.NewTrackMapService(mapRepo, nil, nil)})
 	w := ut.PerformRequest(h.Engine, http.MethodGet, "/api/v1/track-map/groups/RG.00000031/introduction.html", nil)
-	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "麦理浩径徒步路线") || !strings.Contains(w.Body.String(), "万宜水库") {
-		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
-	}
-	introduction.Status = models.TrackRouteIntroductionStatusDraft
-	if err := mapRepo.UpsertRouteIntroduction(context.Background(), introduction); err != nil {
-		t.Fatal(err)
-	}
-	w = ut.PerformRequest(h.Engine, http.MethodGet, "/api/v1/track-map/groups/RG.00000031/introduction.html", nil)
 	if w.Code != http.StatusNotFound {
-		t.Fatalf("draft status=%d body=%s", w.Code, w.Body.String())
+		t.Fatalf("retired route status=%d body=%s", w.Code, w.Body.String())
 	}
 }
 

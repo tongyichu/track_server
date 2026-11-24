@@ -2,7 +2,6 @@ package admin
 
 import (
 	"archive/zip"
-	"bytes"
 	"context"
 	"crypto/md5"
 	"encoding/hex"
@@ -3028,7 +3027,7 @@ func (h *Handler) GetRouteGroupIntroduction(ctx context.Context, c *app.RequestC
 	}
 	introduction, err := h.routeGroupSvc.GetRouteIntroductionForEditing(ctx, c.Param("group_id"))
 	if errors.Is(err, repository.ErrNotFound) {
-		c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"status": models.TrackRouteIntroductionStatusDraft}})
+		c.JSON(http.StatusOK, utils.H{"code": 0, "data": utils.H{"status": models.TrackRouteIntroductionStatusAutomatic}})
 		return
 	}
 	if err != nil {
@@ -3055,62 +3054,6 @@ func (h *Handler) SaveRouteGroupIntroduction(ctx context.Context, c *app.Request
 		return
 	}
 	c.JSON(http.StatusOK, utils.H{"code": 0, "data": introduction})
-}
-
-func (h *Handler) PublishRouteGroupIntroduction(ctx context.Context, c *app.RequestContext) {
-	h.setRouteGroupIntroductionPublished(ctx, c, true)
-}
-
-func (h *Handler) UnpublishRouteGroupIntroduction(ctx context.Context, c *app.RequestContext) {
-	h.setRouteGroupIntroductionPublished(ctx, c, false)
-}
-
-func (h *Handler) setRouteGroupIntroductionPublished(ctx context.Context, c *app.RequestContext, published bool) {
-	if h == nil || h.routeGroupSvc == nil {
-		c.JSON(http.StatusInternalServerError, utils.H{"error": "route group service not configured"})
-		return
-	}
-	groupID := c.Param("group_id")
-	var introduction *models.TrackRouteIntroduction
-	var err error
-	if data := bytes.TrimSpace(c.Request.Body()); published && len(data) > 0 {
-		var body models.TrackRouteIntroduction
-		if json.Unmarshal(data, &body) != nil {
-			c.JSON(http.StatusBadRequest, utils.H{"error": "invalid payload"})
-			return
-		}
-		introduction, err = h.routeGroupSvc.PublishRouteIntroduction(ctx, groupID, &body)
-	} else {
-		introduction, err = h.routeGroupSvc.SetRouteIntroductionPublished(ctx, groupID, published)
-	}
-	if err != nil {
-		writeAdminRouteGroupError(c, err)
-		return
-	}
-	c.JSON(http.StatusOK, utils.H{"code": 0, "data": introduction})
-}
-
-type mergeRouteGroupBody struct {
-	SourceGroupID string `json:"source_group_id"`
-}
-
-func (h *Handler) MergeRouteGroup(ctx context.Context, c *app.RequestContext) {
-	if h == nil || h.routeGroupSvc == nil {
-		c.JSON(http.StatusInternalServerError, utils.H{"error": "route group service not configured"})
-		return
-	}
-	var body mergeRouteGroupBody
-	data, err := c.Body()
-	if err != nil || json.Unmarshal(data, &body) != nil {
-		c.JSON(http.StatusBadRequest, utils.H{"error": "invalid payload"})
-		return
-	}
-	group, err := h.routeGroupSvc.MergeRouteGroups(ctx, c.Param("group_id"), body.SourceGroupID)
-	if err != nil {
-		writeAdminRouteGroupError(c, err)
-		return
-	}
-	c.JSON(http.StatusOK, utils.H{"code": 0, "data": group})
 }
 
 func (h *Handler) RemoveRouteGroupMember(ctx context.Context, c *app.RequestContext) {

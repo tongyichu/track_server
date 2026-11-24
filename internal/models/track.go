@@ -356,12 +356,11 @@ type TrackRouteGroup struct {
 
 const (
 	TrackRouteIntroductionStatusAutomatic = "automatic" // Derived at read time.
-	TrackRouteIntroductionStatusDraft     = "draft"
-	TrackRouteIntroductionStatusPublished = "published"
+	TrackRouteIntroductionStatusSaved     = "saved"
 	TrackRouteIntroductionStatusArchived  = "archived"
 )
 
-// TrackRouteIntroductionContent is localized, structured copy rendered by the route introduction H5.
+// TrackRouteIntroductionContent holds localized route descriptions for the admin editor.
 type TrackRouteIntroductionContent struct {
 	Name        string   `json:"name" bson:"name"`
 	Summary     string   `json:"summary" bson:"summary"`
@@ -387,11 +386,6 @@ type TrackRouteIntroduction struct {
 	CreatedAt            time.Time                     `json:"created_at" bson:"created_at"`
 	UpdatedAt            time.Time                     `json:"updated_at" bson:"updated_at"`
 	PublishedAt          *time.Time                    `json:"published_at,omitempty" bson:"published_at,omitempty"`
-	ObservedDistanceMin  int                           `json:"-" bson:"-"`
-	ObservedDistanceMax  int                           `json:"-" bson:"-"`
-	ObservedElevationMin int                           `json:"-" bson:"-"`
-	ObservedElevationMax int                           `json:"-" bson:"-"`
-	ObservedSampleCount  int                           `json:"-" bson:"-"`
 }
 
 // TrackRouteGroupMember stores the many-to-many membership between groups and tracks.
@@ -472,7 +466,6 @@ type TrackMapRouteGroupItem struct {
 	Type             string              `json:"type"`
 	GroupID          string              `json:"group_id"`
 	Name             string              `json:"name"`
-	IntroductionURL  string              `json:"introduction_url,omitempty"`
 	CityCode         string              `json:"city_code"`
 	CityName         string              `json:"city_name"`
 	TrackType        string              `json:"track_type"`

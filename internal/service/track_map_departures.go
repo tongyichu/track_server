@@ -544,15 +544,11 @@ func (s *TrackMapService) departureScenic(d mapDeparture) *models.TrackMapCluste
 }
 
 func (s *TrackMapService) departureRouteItems(ctx context.Context, routes []mapDeparture) ([]*models.TrackMapRouteGroupItem, error) {
-	trackIDs, groupIDs := make([]string, 0, len(routes)), make([]string, 0, len(routes))
+	trackIDs := make([]string, 0, len(routes))
 	for _, d := range routes {
-		trackIDs, groupIDs = append(trackIDs, d.TrackID), append(groupIDs, d.GroupID)
+		trackIDs = append(trackIDs, d.TrackID)
 	}
 	tracks, err := s.tracks.FindByIDs(ctx, trackIDs)
-	if err != nil {
-		return nil, err
-	}
-	introductions, err := s.maps.ListPublishedRouteIntroductions(ctx, groupIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -580,14 +576,6 @@ func (s *TrackMapService) departureRouteItems(ctx context.Context, routes []mapD
 					item.ArrivalName = name + " " + item.ArrivalName
 				}
 			}
-		}
-		if intro := introductions[d.GroupID]; intro != nil {
-			if name := strings.TrimSpace(intro.Chinese.Name); name != "" {
-				item.Name = name
-			}
-			item.IntroductionURL = mapRouteIntroductionURL(d.GroupID, intro.ContentVersion)
-		} else {
-			item.IntroductionURL = mapRouteIntroductionURL(d.GroupID, 0)
 		}
 		items = append(items, item)
 	}

@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -169,7 +171,7 @@ func TestTrackMapServiceViewAreaDoesNotResolveMissingAreaIDOnline(t *testing.T) 
 	}
 }
 
-func TestTrackMapServiceRouteGroupIncludesPublishedIntroductionURL(t *testing.T) {
+func TestTrackMapServiceRouteGroupUsesGroupNameWithoutIntroductionURL(t *testing.T) {
 	ctx := context.Background()
 	trackRepo := repository.NewInMemoryTrackRepository()
 	mapRepo := repository.NewInMemoryTrackMapRepository(trackRepo)
@@ -184,14 +186,18 @@ func TestTrackMapServiceRouteGroupIncludesPublishedIntroductionURL(t *testing.T)
 		t.Fatal(err)
 	}
 	if err := mapRepo.UpsertRouteIntroduction(ctx, &models.TrackRouteIntroduction{AnchorTrackID: track.ID, CurrentGroupID: group.GroupID,
-		Status: models.TrackRouteIntroductionStatusPublished, Chinese: models.TrackRouteIntroductionContent{Name: group.Name, Summary: "经典路线"}, ContentVersion: 3}); err != nil {
+		Status: "published", Chinese: models.TrackRouteIntroductionContent{Name: "历史介绍标题", Summary: "经典路线"}, ContentVersion: 3}); err != nil {
 		t.Fatal(err)
 	}
 	item, err := NewTrackMapService(mapRepo, trackRepo, nil).GetGroupDetail(ctx, group.GroupID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if item.IntroductionURL != "/api/v1/track-map/groups/RG.00000011/introduction.html?v=3" {
-		t.Fatalf("introduction_url=%q", item.IntroductionURL)
+	data, err := json.Marshal(item)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if item.Name != group.Name || strings.Contains(string(data), `"introduction_url"`) {
+		t.Fatalf("unexpected route details: %s", data)
 	}
 }

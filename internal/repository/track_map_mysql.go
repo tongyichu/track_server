@@ -842,36 +842,6 @@ func (r *MySQLTrackMapRepository) FindRouteIntroductionByGroupID(ctx context.Con
 	return scanMySQLRouteIntroduction(row)
 }
 
-func (r *MySQLTrackMapRepository) ListPublishedRouteIntroductions(ctx context.Context, groupIDs []string) (map[string]*models.TrackRouteIntroduction, error) {
-	result := make(map[string]*models.TrackRouteIntroduction)
-	if len(groupIDs) == 0 {
-		return result, nil
-	}
-	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(groupIDs)), ",")
-	args := make([]interface{}, 0, len(groupIDs)+1)
-	args = append(args, models.TrackRouteIntroductionStatusPublished)
-	for _, groupID := range groupIDs {
-		args = append(args, strings.TrimSpace(groupID))
-	}
-	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, anchor_track_id, current_group_id, status, content_zh_json, content_en_json,
-		       difficulty, estimated_duration_min, estimated_duration_max, best_seasons_json,
-		       content_version, created_at, updated_at, published_at
-		FROM track_route_introductions WHERE status=? AND current_group_id IN (`+placeholders+`)`, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		introduction, err := scanMySQLRouteIntroduction(rows)
-		if err != nil {
-			return nil, err
-		}
-		result[introduction.CurrentGroupID] = introduction
-	}
-	return result, rows.Err()
-}
-
 type routeIntroductionScanner interface {
 	Scan(dest ...interface{}) error
 }

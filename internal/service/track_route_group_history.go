@@ -16,7 +16,7 @@ type routeGroupHistoryMatch struct {
 	jaccard      float64
 }
 
-func applyRouteGroupHistory(clusters []*routeGroupCluster, oldGroups []*models.TrackRouteGroup, oldMembers []*models.TrackRouteGroupMember, introductions map[string]*models.TrackRouteIntroduction, semanticNames map[int]string, areas *maparea.Catalog) {
+func applyRouteGroupHistory(clusters []*routeGroupCluster, oldGroups []*models.TrackRouteGroup, oldMembers []*models.TrackRouteGroupMember, semanticNames map[int]string, areas *maparea.Catalog) {
 	oldByID := make(map[string]*models.TrackRouteGroup, len(oldGroups))
 	oldSizes := make(map[string]int, len(oldGroups))
 	trackGroup := make(map[string]string, len(oldMembers))
@@ -77,11 +77,6 @@ func applyRouteGroupHistory(clusters []*routeGroupCluster, oldGroups []*models.T
 		if old.Source == models.TrackRouteGroupSourceManual || old.Source == models.TrackRouteGroupSourceMixed {
 			cluster.group.Name = old.Name
 			cluster.group.Source = routeGroupSourceAfterManual(old.Source)
-			protectedNames[match.clusterIndex] = true
-		}
-		if introduction := introductions[old.GroupID]; introduction != nil && strings.TrimSpace(introduction.Chinese.Name) != "" {
-			cluster.group.Name = strings.TrimSpace(introduction.Chinese.Name)
-			cluster.group.Source = routeGroupSourceAfterManual(cluster.group.Source)
 			protectedNames[match.clusterIndex] = true
 		}
 		assignedClusters[match.clusterIndex], assignedGroups[match.groupID] = true, true
