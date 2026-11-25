@@ -429,7 +429,7 @@ func (r *MongoTrackRepository) UpdatePhoto(ctx context.Context, p models.TrackPh
 	fields := bson.M{"status": p.Status, "reason": p.Reason, "revision": p.Revision, "scenic_choice": p.ScenicChoice, "inside_amap_ids": p.InsideIDs, "location_checked": p.LocationChecked}
 	update := bson.M{"$set": fields}
 	if p.Status == "removed" {
-		update["$unset"] = bson.M{"slot": "", "jpeg": "", "latitude": "", "longitude": "", "digest": ""}
+		update["$unset"] = bson.M{"slot": "", "jpeg": "", "latitude": "", "longitude": "", "digest": "", "description": ""}
 		fields["taken_at_ms"] = int64(0)
 	}
 	res, err := r.photosCollection().UpdateOne(ctx, bson.M{"_id": p.ID, "revision": old}, update)

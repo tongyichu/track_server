@@ -104,7 +104,7 @@
 | 用户服务协议 H5 | GET | `/legal/terms-of-service.html` | 否 | [legal.md](legal.md) |
 | 获取运动类型（含中英文名称及日间/夜间主题色） | GET | `/track/types` | 是 | [track.md](track.md#16-获取运动类型) |
 | 获取内置 MingCute 运动图标 | GET / HEAD | `/track/types/icons/:icon_file` | 是 | [track.md](track.md#16-获取运动类型) |
-| 提交、列出运动实拍 | POST / GET | `/track/:track_id/photos` | 是 | [运动实拍](track-photos.md) |
+| 提交、列出运动实拍（含可选描述） | POST / GET | `/track/:track_id/photos` | 是 | [运动实拍](track-photos.md) |
 | 查看运动实拍 | GET | `/track/:track_id/photos/:id/image` | 是 | [运动实拍](track-photos.md) |
 | 撤回运动实拍 | DELETE | `/track/:track_id/photos/:id` | 是 | [运动实拍](track-photos.md) |
 | 景点用户实拍（包含本人归属） | GET | `/track/discover/scenic-spots/:spot_id/user-photos` | 是 | [运动实拍](track-photos.md) |

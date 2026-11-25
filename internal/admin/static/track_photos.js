@@ -36,7 +36,7 @@
       if (p.status !== 'rejected') actions.push(button('驳回', 'btn btn-outline-danger', () => askReason([p])));
       if (p.status !== 'approved') actions.push(button('通过', 'btn btn-primary', () => review([p], 'approved')));
     }
-    const detail = [time(p), p.status === 'rejected' && p.reason].filter(Boolean).join(' · ');
+    const detail = [time(p), p.description, p.status === 'rejected' && p.reason].filter(Boolean).join(' · ');
     viewer.render({url:image(p), title:'轨迹 ' + p.track_id, detail, index, count:rows.length,
       move:preview, actions, busy:writing || loading});
   }

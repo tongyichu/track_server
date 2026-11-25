@@ -61,7 +61,7 @@
         function preview(position) {
           const p = galleryItems[position];
           viewer.render({url:base + '/' + encodeURIComponent(p.id) + '/image', title:'用户实拍',
-            detail:'轨迹 ' + p.track_id + ' · ' + WorkoutPhotos.time(p), index:position, count:galleryItems.length, move:preview});
+            detail:['轨迹 ' + p.track_id, WorkoutPhotos.time(p), p.description].filter(Boolean).join(' · '), index:position, count:galleryItems.length, move:preview});
         }
         get('scenicInfoUserPhotos').append(WorkoutPhotos.tile(base + '/' + encodeURIComponent(photo.id) + '/image',
           '查看实拍照片 ' + (index + 1), () => preview(index)));

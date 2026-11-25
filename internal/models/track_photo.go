@@ -8,6 +8,7 @@ type TrackPhoto struct {
 	TakenAt         int64    `json:"taken_at_ms" bson:"taken_at_ms"`
 	Latitude        *float64 `json:"latitude,omitempty" bson:"latitude,omitempty"`
 	Longitude       *float64 `json:"longitude,omitempty" bson:"longitude,omitempty"`
+	Description     string   `json:"description,omitempty" bson:"description,omitempty"`
 	Status          string   `json:"status" bson:"status"`
 	Reason          string   `json:"reason,omitempty" bson:"reason,omitempty"`
 	Revision        int64    `json:"revision" bson:"revision"`

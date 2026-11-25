@@ -11,7 +11,7 @@
 | GET | `/track/discover/scenic-spots/:spot_id/user-photos?cursor=…` | 已收录的用户实拍，每页最多 24 张，`is_mine` 标明当前账号是否为拍摄者 |
 | GET | `/track/discover/scenic-spots/:spot_id/user-photos/:id/image` | 复核当前景点归属后读取 JPEG |
 
-单张上传使用 `multipart/form-data`。`image` 部分直接传 JPEG 二进制，`metadata` 部分为 JSON，包含 `id`（客户端小写 UUID）、`slot`（本次录制 1–20 的固定位置）、`taken_at_ms`。有可靠定位时同时传 `latitude` 和 `longitude`。长边最大 800 px，客户端目标约 100 KiB，服务端接受最大 200 KiB 的 JPEG，解码并重编码以清除 EXIF。轨迹创建与照片上传分别确认。同一次请求重试复用原 UUID、位置和内容，冲突返回 409。撤回释放位置并移除图像数据。
+单张上传使用 `multipart/form-data`。`image` 部分直接传 JPEG 二进制，`metadata` 部分为 JSON，包含 `id`（客户端小写 UUID）、`slot`（本次录制 1–20 的固定位置）、`taken_at_ms`，可选 `description`（去除首尾空白后单行最多 20 个 Unicode 字符）。列表沿用照片可见性展示描述，空描述省略。有可靠定位时同时传 `latitude` 和 `longitude`。长边最大 800 px，客户端目标约 100 KiB，服务端接受最大 200 KiB 的 JPEG，解码并重编码以清除 EXIF。轨迹创建与照片上传分别确认。同一次请求重试复用原 UUID、位置、描述和图片内容，冲突返回 409。撤回释放位置并移除图像数据。
 
 照片初始为 `pending`。本人可以读取待审、通过及驳回照片和驳回原因。其他用户只能读取已完成、正常公开、具有轨迹文件的轨迹内 `approved` 照片。数据和图片响应均禁止缓存。照片独立存储于受保护的业务仓储，列表查询只读取元数据。
 

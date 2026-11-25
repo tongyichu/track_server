@@ -34,12 +34,13 @@ func NewTrackPhotoService(tracks repository.TrackRepository, spots repository.Sc
 }
 
 type PhotoUpload struct {
-	ID        string   `json:"id"`
-	Slot      int      `json:"slot"`
-	TakenAt   int64    `json:"taken_at_ms"`
-	Latitude  *float64 `json:"latitude"`
-	Longitude *float64 `json:"longitude"`
-	JPEG      []byte   `json:"-"`
+	ID          string   `json:"id"`
+	Slot        int      `json:"slot"`
+	TakenAt     int64    `json:"taken_at_ms"`
+	Latitude    *float64 `json:"latitude"`
+	Longitude   *float64 `json:"longitude"`
+	Description string   `json:"description"`
+	JPEG        []byte   `json:"-"`
 }
 
 func (s *TrackPhotoService) track(ctx context.Context, track string, viewer int64) (*models.Track, error) {
@@ -64,12 +65,16 @@ func (s *TrackPhotoService) Upload(ctx context.Context, track string, user int64
 	if !photoIDPattern.MatchString(in.ID) || in.Slot < 1 || in.Slot > PhotoSlots || in.TakenAt <= 0 || len(in.JPEG) > PhotoBytesLimit || (in.Latitude == nil) != (in.Longitude == nil) || in.Latitude != nil && !validLatLng(*in.Latitude, *in.Longitude) {
 		return empty, invalidArg("invalid photo metadata")
 	}
+	description := strings.TrimSpace(in.Description)
+	if !utf8.ValidString(description) || utf8.RuneCountInString(description) > 20 || strings.ContainsAny(description, "\r\n") {
+		return empty, invalidArg("invalid photo description")
+	}
 	cfg, err := jpeg.DecodeConfig(bytes.NewReader(in.JPEG))
 	if err != nil || cfg.Width > 800 || cfg.Height > 800 {
 		return empty, invalidArg("invalid JPEG size")
 	}
 	sum := sha256.Sum256(in.JPEG)
-	p := models.TrackPhoto{ID: in.ID, TrackID: track, Slot: in.Slot, TakenAt: in.TakenAt, Latitude: in.Latitude, Longitude: in.Longitude, Status: "pending", Revision: 1, Digest: hex.EncodeToString(sum[:]), LocationChecked: in.Latitude == nil}
+	p := models.TrackPhoto{ID: in.ID, TrackID: track, Slot: in.Slot, TakenAt: in.TakenAt, Latitude: in.Latitude, Longitude: in.Longitude, Description: description, Status: "pending", Revision: 1, Digest: hex.EncodeToString(sum[:]), LocationChecked: in.Latitude == nil}
 	img, err := jpeg.Decode(bytes.NewReader(in.JPEG))
 	if err != nil {
 		return empty, invalidArg("invalid JPEG")
@@ -89,7 +94,7 @@ func (s *TrackPhotoService) Upload(ctx context.Context, track string, user int64
 	}
 	if err = s.store.InsertPhoto(ctx, p, clean.Bytes()); errors.Is(err, repository.ErrAlreadyExists) {
 		existing, _, readErr := s.store.ReadPhoto(ctx, in.ID, false)
-		if readErr == nil && existing.TrackID == track && existing.Status != "removed" && existing.Slot == p.Slot && existing.Digest == p.Digest && existing.TakenAt == p.TakenAt && samePhotoCoord(existing.Latitude, p.Latitude) && samePhotoCoord(existing.Longitude, p.Longitude) {
+		if readErr == nil && existing.TrackID == track && existing.Status != "removed" && existing.Slot == p.Slot && existing.Digest == p.Digest && existing.TakenAt == p.TakenAt && existing.Description == p.Description && samePhotoCoord(existing.Latitude, p.Latitude) && samePhotoCoord(existing.Longitude, p.Longitude) {
 			return photoView(existing, true), nil
 		}
 		return empty, repository.ErrConflict

@@ -20,7 +20,7 @@ const ScenicUserPhotos = (() => {
     const actions = [];
     if (AdminAccess.can('tracks', false)) actions.push(button('来源轨迹', 'btn btn-outline-secondary', () => source(p)));
     if (canWrite()) actions.push(button(p.included ? '移出景点' : '收录到景点', p.included ? 'btn btn-outline-secondary' : 'btn btn-primary', () => decide(p)));
-    viewer.render({url:url(p) + '/image', title:state(p) + ' · 用户实拍', detail:'轨迹 ' + p.track_id + ' · ' + time(p),
+    viewer.render({url:url(p) + '/image', title:state(p) + ' · 用户实拍', detail:['轨迹 ' + p.track_id, time(p), p.description].filter(Boolean).join(' · '),
       index, count:items.length, move:preview, actions, busy:saving});
   }
   function card(p) {
