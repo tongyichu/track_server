@@ -57,7 +57,7 @@ func (h *Handler) photoReview(ctx context.Context, c *app.RequestContext) {
 	adminPhotoResponse(c, true, h.photos.Review(ctx, c.Param("id"), in))
 }
 func (h *Handler) scenicUserPhotos(ctx context.Context, c *app.RequestContext) {
-	v, err := h.photos.Scenic(ctx, c.Param("spot_id"), string(c.Query("cursor")), string(c.Query("included")) != "1")
+	v, err := h.photos.Scenic(ctx, c.Param("spot_id"), string(c.Query("cursor")), string(c.Query("included")) != "1", 0)
 	adminPhotoResponse(c, v, err)
 }
 func (h *Handler) scenicPhotoDecision(ctx context.Context, c *app.RequestContext) {

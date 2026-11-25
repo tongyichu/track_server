@@ -44,7 +44,8 @@
     gallery.hidden = !entries.length;
   }
 
-  let galleryRequest, galleryCursor;
+  const viewer = WorkoutPhotos.viewer();
+  let galleryRequest, galleryCursor, galleryItems = [];
   async function userPhotos(id, after) {
     galleryRequest?.abort();
     const controller = galleryRequest = new AbortController();
@@ -55,8 +56,15 @@
       const {data} = await res.json();
       if (controller.signal.aborted) return;
       for (const photo of data.items || []) {
-        const image = new Image(); image.loading = 'lazy'; image.alt = '用户实拍';
-        image.src = base + '/' + encodeURIComponent(photo.id) + '/image'; get('scenicInfoUserPhotos').append(image);
+        const index = galleryItems.length;
+        galleryItems.push(photo);
+        function preview(position) {
+          const p = galleryItems[position];
+          viewer.render({url:base + '/' + encodeURIComponent(p.id) + '/image', title:'用户实拍',
+            detail:'轨迹 ' + p.track_id + ' · ' + WorkoutPhotos.time(p), index:position, count:galleryItems.length, move:preview});
+        }
+        get('scenicInfoUserPhotos').append(WorkoutPhotos.tile(base + '/' + encodeURIComponent(photo.id) + '/image',
+          '查看实拍照片 ' + (index + 1), () => preview(index)));
       }
       galleryCursor = data.next_cursor;
       get('scenicInfoUserGallery').hidden = !get('scenicInfoUserPhotos').childElementCount;
@@ -80,7 +88,7 @@
   }
 
   function clear() {
-    galleryRequest?.abort(); galleryCursor=null;
+    galleryRequest?.abort(); galleryCursor=null; galleryItems = []; viewer.close();
     get('scenicInfoUserGallery').hidden=true; get('scenicInfoUserPhotos').replaceChildren();
     request?.abort();
     request = null;

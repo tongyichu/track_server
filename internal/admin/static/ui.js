@@ -5,7 +5,7 @@
     '/admin/users.html': ['用户管理', '查看用户资料并管理账号限制'],
     '/admin/tracks.html': ['轨迹管理', '查看、修正或删除用户轨迹'],
     '/admin/scenic_spots.html': ['景点管理', '维护自有景点资料、地图来源与轨迹归属'],
-    '/admin/track_submissions.html': ['投稿审核', '审核用户提交的结构化路线资料'],
+    '/admin/track_submissions.html': ['内容审核', '审核路线投稿和运动实拍照片'],
     '/admin/route_groups.html': ['地图模式', '维护地图模式中的路线组、代表轨迹和路线介绍'],
     '/admin/music.html': ['背景音乐', '管理 3D 轨迹视频的配乐'],
     '/admin/companions.html': ['与友同行', '查看同行房间、成员与活动记录'],

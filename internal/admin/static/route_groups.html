@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="/admin/static/style.css" />
   <link rel="stylesheet" href="/admin/static/track_editor.css" />
   <link rel="stylesheet" href="/admin/static/admin_stats.css" />
+  <link rel="stylesheet" href="/admin/static/workout_photos.css" />
 </head>
 <body>
   <header class="topbar">
@@ -17,7 +18,7 @@
       <a href="/admin/users.html">用户管理</a>
       <a href="/admin/tracks.html">轨迹管理</a>
       <a class="active" href="/admin/route_groups.html">地图模式</a>
-      <a href="/admin/track_submissions.html">投稿审核</a>
+      <a href="/admin/track_submissions.html">内容审核</a>
       <a href="/admin/companions.html">与友同行</a>
       <a href="/admin/feedbacks.html">意见反馈</a>
       <a href="/admin/analytics.html">埋点同步</a>
@@ -229,7 +230,7 @@
               </section>
               <section class="scenic-info-gallery" id="scenicInfoUserGallery" hidden>
                 <h3>用户实拍</h3>
-                <div class="scenic-info-photos" id="scenicInfoUserPhotos"></div>
+                <div class="photo-grid" id="scenicInfoUserPhotos"></div>
                 <button class="btn btn-link" type="button" id="scenicInfoUserMore" hidden>加载更多</button>
               </section>
             </div>
@@ -249,6 +250,7 @@
   <script src="/admin/static/place_candidates.js"></script>
   <script src="/admin/static/track_map_preview.js"></script>
   <script src="/admin/static/track_editor.js"></script>
+  <script src="/admin/static/workout_photos.js"></script>
   <script src="/admin/static/scenic_spot_detail.js"></script>
   <script src="/admin/static/route_groups.js"></script>
   <script src="/admin/static/feature_statistics.js"></script>

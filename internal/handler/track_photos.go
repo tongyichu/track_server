@@ -7,6 +7,7 @@ import (
 	"io"
 
 	"github.com/cloudwego/hertz/pkg/app"
+	"github.com/tongyichu/track_server/internal/middleware"
 	"github.com/tongyichu/track_server/internal/repository"
 	"github.com/tongyichu/track_server/internal/service"
 )
@@ -97,6 +98,10 @@ func (h photoHandler) scenicMedia(ctx context.Context, c *app.RequestContext) {
 	c.Data(200, "image/jpeg", data)
 }
 func (h photoHandler) scenic(ctx context.Context, c *app.RequestContext) {
-	v, err := h.s.Scenic(ctx, c.Param("spot_id"), string(c.Query("cursor")), false)
+	var viewer int64
+	if meta := middleware.GetRequestMeta(c); meta != nil {
+		viewer = meta.AuthUserID
+	}
+	v, err := h.s.Scenic(ctx, c.Param("spot_id"), string(c.Query("cursor")), false, viewer)
 	photoResponse(c, v, err)
 }

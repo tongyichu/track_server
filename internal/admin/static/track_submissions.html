@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="/admin/static/style.css" />
   <link rel="stylesheet" href="/admin/static/track_submissions.css" />
   <link rel="stylesheet" href="/admin/static/admin_stats.css" />
+  <link rel="stylesheet" href="/admin/static/workout_photos.css" />
 </head>
 <body>
   <header class="topbar">
@@ -21,20 +22,21 @@
     <div class="spacer"></div><div class="user"><span id="userName"></span><button id="logoutBtn">退出</button></div>
   </header>
   <main class="container wide">
-    <div class="d-flex gap-2 mb-3" aria-label="审核队列">
+    <div class="photo-queue-tabs" role="group" aria-label="审核队列">
       <button id="routesTab" class="btn btn-primary" aria-pressed="true">路线投稿 <span id="routePending"></span></button>
       <button id="photosTab" class="btn btn-outline-secondary" aria-pressed="false">轨迹照片 <span id="photoPending"></span></button>
     </div>
-    <section id="photoPanel" class="panel" hidden>
-      <div class="d-flex flex-wrap align-items-center gap-2">
+    <section id="photoPanel" class="panel photo-panel" hidden aria-label="轨迹照片">
+      <div class="photo-toolbar">
         <select id="photoFilter" class="form-select w-auto" aria-label="照片状态"><option value="pending">待审核</option><option value="approved">已通过</option><option value="rejected">已驳回</option></select>
-        <button id="photoRefresh" class="btn btn-outline-secondary">刷新</button>
-        <input id="photoReason" class="form-control w-auto" maxlength="250" placeholder="驳回原因" aria-label="驳回原因" data-admin-write="track_submissions">
-        <button id="photoApprove" class="btn btn-primary" data-admin-write="track_submissions">通过所选</button>
-        <button id="photoReject" class="btn btn-danger" data-admin-write="track_submissions">驳回所选</button>
+        <button type="button" id="photoRefresh" class="btn btn-outline-secondary">刷新</button>
       </div>
-      <p id="photoMessage" role="status"></p><div id="photoList"></div>
-      <div class="d-flex gap-2"><button id="photoPrev" class="btn btn-outline-secondary">上一页</button><button id="photoNext" class="btn btn-outline-secondary">下一页</button></div>
+      <div id="photoBulk" class="photo-bulk" hidden><span id="photoSelection"></span>
+        <button type="button" id="photoClear" class="btn btn-link">取消选择</button>
+        <div class="photo-actions"><button type="button" id="photoReject" class="btn btn-outline-danger">驳回</button><button type="button" id="photoApprove" class="btn btn-primary">通过</button></div>
+      </div>
+      <p id="photoMessage" class="photo-message" role="status"></p><div id="photoList"></div>
+      <div id="photoPager" class="photo-pagination" hidden><span id="photoPageNumber"></span><button type="button" id="photoPrev" class="btn btn-outline-secondary">上一页</button><button type="button" id="photoNext" class="btn btn-outline-secondary">下一页</button></div>
     </section>
     <div id="routesPanel">
     <div class="mb-3" aria-live="polite">
@@ -72,7 +74,12 @@
     </details>
     </div>
   </main>
-  <dialog id="photoPreview"><div class="d-flex justify-content-end"><button type="button" class="btn-close" id="photoPreviewClose" aria-label="关闭"></button></div><img id="photoPreviewImage" alt="运动实拍" style="max-width:80vw;max-height:75vh;object-fit:contain"></dialog>
+  <dialog id="photoReasonDialog" class="photo-reason" aria-labelledby="photoReasonTitle">
+    <form id="photoReasonForm"><h2 id="photoReasonTitle">驳回照片</h2>
+      <label for="photoReason">驳回原因</label><textarea id="photoReason" class="form-control" rows="3" maxlength="250" required></textarea>
+      <div class="photo-actions"><button type="button" id="cancelReason" class="btn btn-outline-secondary">取消</button><button type="submit" class="btn btn-danger">确认驳回</button></div>
+    </form>
+  </dialog>
   <dialog class="modal submission-detail-modal" id="submissionDetailModal" aria-hidden="true" aria-labelledby="detailTitle">
     <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-xl">
       <div class="modal-content">
@@ -94,6 +101,7 @@
   <script src="/admin/static/admin_stats.js"></script>
   <script src="/admin/static/ui.js"></script>
   <script src="/admin/static/track_submissions.js"></script>
+  <script src="/admin/static/workout_photos.js"></script>
   <script src="/admin/static/track_photos.js"></script>
 </body>
 </html>

@@ -104,8 +104,10 @@ func photoView(p models.TrackPhoto, owner bool) models.TrackPhoto {
 	p.InsideIDs = nil
 	p.ScenicChoice = ""
 	p.LocationChecked = false
-	if !owner {
+	if p.Status != "rejected" || !owner {
 		p.Reason = ""
+	}
+	if !owner {
 		p.Slot = 0
 	}
 	return p
@@ -203,6 +205,9 @@ func (s *TrackPhotoService) Queue(ctx context.Context, status, after string) ([]
 	})
 	for i := range items {
 		items[i].Digest = ""
+		if items[i].Status != "rejected" {
+			items[i].Reason = ""
+		}
 	}
 	return items, next, err
 }
@@ -241,7 +246,10 @@ func (s *TrackPhotoService) Review(ctx context.Context, id string, in PhotoDecis
 		}
 		p.ScenicChoice = choice
 	} else {
-		reason := strings.TrimSpace(in.Reason)
+		var reason string
+		if in.Status == "rejected" {
+			reason = strings.TrimSpace(in.Reason)
+		}
 		if in.Status != "approved" && in.Status != "rejected" || in.Status == "rejected" && reason == "" || utf8.RuneCountInString(reason) > 250 {
 			return invalidArg("invalid review decision or reason")
 		}
@@ -321,14 +329,15 @@ func (s *TrackPhotoService) ScenicMedia(ctx context.Context, spotID, id string, 
 
 type ScenicPhotoItem struct {
 	models.TrackPhoto
-	Included bool `json:"included"`
+	Included bool  `json:"included"`
+	IsMine   *bool `json:"is_mine,omitempty"`
 }
 type ScenicPhotoPage struct {
 	Items []ScenicPhotoItem `json:"items"`
 	Next  string            `json:"next_cursor,omitempty"`
 }
 
-func (s *TrackPhotoService) Scenic(ctx context.Context, id, after string, admin bool) (ScenicPhotoPage, error) {
+func (s *TrackPhotoService) Scenic(ctx context.Context, id, after string, admin bool, viewer int64) (ScenicPhotoPage, error) {
 	out := ScenicPhotoPage{Items: []ScenicPhotoItem{}}
 	spot, err := s.spots.GetScenicSpot(ctx, id)
 	if err != nil {
@@ -354,8 +363,29 @@ func (s *TrackPhotoService) Scenic(ctx context.Context, id, after string, admin 
 		photos = photos[:24]
 		out.Next = photos[23].ID
 	}
+	owners := make(map[string]int64)
+	if viewer > 0 && len(photos) > 0 {
+		ids := make([]string, 0, len(photos))
+		for _, photo := range photos {
+			ids = append(ids, photo.TrackID)
+		}
+		tracks, err := s.tracks.FindByIDs(ctx, ids)
+		if err != nil {
+			return out, err
+		}
+		for id, track := range tracks {
+			if track != nil {
+				owners[id] = track.UserID
+			}
+		}
+	}
 	for _, p := range photos {
-		out.Items = append(out.Items, ScenicPhotoItem{photoView(p, false), photoInSpot(p, spot)})
+		item := ScenicPhotoItem{TrackPhoto: photoView(p, false), Included: photoInSpot(p, spot)}
+		if owner, found := owners[p.TrackID]; found {
+			mine := owner == viewer
+			item.IsMine = &mine
+		}
+		out.Items = append(out.Items, item)
 	}
 	return out, nil
 }

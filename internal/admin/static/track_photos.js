@@ -1,86 +1,196 @@
 (() => {
   const el = id => document.getElementById(id);
-  let page = 0, cursors = [''], next = '', request, reviewing = false;
-  let rows = [];
-  function showPhotos(visible) {
-    el('routesPanel').hidden = visible;
-    el('photoPanel').hidden = !visible;
-    for (const [id, active] of [['photosTab',visible],['routesTab',!visible]]) {
-      el(id).className = active ? 'btn btn-primary' : 'btn btn-outline-secondary';
-      el(id).setAttribute('aria-pressed', String(active));
-    }
-    if (visible) load(page); else request?.abort();
+  const {node, button, tile, time} = WorkoutPhotos;
+  const viewer = WorkoutPhotos.viewer();
+  const reasonDialog = el('photoReasonDialog');
+  const selected = new Set();
+  const canWrite = () => AdminAccess.can('track_submissions', true);
+  const endpoint = '/admin/api/track-photos';
+  const image = p => endpoint + '/' + encodeURIComponent(p.id) + '/image';
+  let rows = [], cursors = [''], page = 0, next = '', currentId = '', rejection = [];
+  let request, writing = false, loading = false;
+
+  function controls() {
+    const busy = writing || loading;
+    el('photoRefresh').disabled = busy;
+    el('photoFilter').disabled = writing;
+    el('routesTab').disabled = writing;
+    el('photoBulk').hidden = !selected.size || !canWrite() || loading;
+    el('photoSelection').textContent = '已选 ' + selected.size + ' 张';
+    el('photoApprove').hidden = el('photoFilter').value === 'approved';
+    el('photoReject').hidden = el('photoFilter').value === 'rejected';
+    for (const id of ['photoApprove','photoReject','photoClear']) el(id).disabled = busy;
+    el('photoPager').hidden = !rows.length || (!page && !next);
+    el('photoPageNumber').textContent = '第 ' + (page + 1) + ' 页';
+    el('photoPrev').disabled = busy || !page;
+    el('photoNext').disabled = busy || !next;
+    el('photoPanel').toggleAttribute('data-empty', !rows.length);
   }
-  function render(items) {
+
+  function preview(index) {
+    const p = rows[index];
+    if (!p) return viewer.close();
+    currentId = p.id;
+    const actions = [];
+    if (canWrite()) {
+      if (p.status !== 'rejected') actions.push(button('驳回', 'btn btn-outline-danger', () => askReason([p])));
+      if (p.status !== 'approved') actions.push(button('通过', 'btn btn-primary', () => review([p], 'approved')));
+    }
+    const detail = [time(p), p.status === 'rejected' && p.reason].filter(Boolean).join(' · ');
+    viewer.render({url:image(p), title:'轨迹 ' + p.track_id, detail, index, count:rows.length,
+      move:preview, actions, busy:writing || loading});
+  }
+
+  function render() {
     const groups = new Map();
-    for (const p of items) {
+    for (const p of rows) {
       if (!groups.has(p.track_id)) groups.set(p.track_id, []);
       groups.get(p.track_id).push(p);
     }
     const content = document.createDocumentFragment();
     for (const [track, photos] of groups) {
-      const heading = document.createElement('h3');
-      heading.textContent = track;
-      const grid = document.createElement('div');
-      grid.className = 'd-flex flex-wrap gap-3 mb-3';
-      for (const p of photos.sort((a,b) => a.taken_at_ms - b.taken_at_ms)) {
-        const card = document.createElement('label');
-        card.className = 'd-flex flex-column gap-1';
-        const check = document.createElement('input');
-        check.type = 'checkbox'; check.value = p.id; check.setAttribute('aria-label','选择照片');
-        const link = document.createElement('a');
-        link.href = '/admin/api/track-photos/' + encodeURIComponent(p.id) + '/image';
-        link.onclick = e => { e.preventDefault(); const dialog = el('photoPreview'); el('photoPreviewImage').src = link.href; dialog.showModal(); };
-        const img = new Image(144,108); img.loading = 'lazy'; img.style.objectFit = 'cover'; img.alt = '查看大图'; img.src = link.href;
-        link.append(img);
-        const time = document.createElement('small'); time.textContent = AdminTime.dateTime(new Date(p.taken_at_ms).toISOString());
-        card.append(link,check,time);
-        if (p.reason) { const reason = document.createElement('small'); reason.textContent = p.reason; card.append(reason); }
+      const group = node('section', 'photo-group');
+      const heading = node('h3', '', '轨迹 ' + track);
+      heading.append(node('small', '', photos.length + ' 张'));
+      const grid = node('div', 'photo-grid');
+      for (const p of photos) {
+        const card = node('div', 'photo-card');
+        card.append(tile(image(p), '查看 ' + time(p) + ' 的照片', () => preview(rows.indexOf(p))));
+        if (canWrite()) {
+          const label = node('label','photo-select'), check = node('input');
+          check.type = 'checkbox';
+          check.checked = selected.has(p.id);
+          check.disabled = loading || writing;
+          check.setAttribute('aria-label', '选择 ' + time(p) + ' 的照片');
+          check.onchange = () => { if (check.checked) selected.add(p.id); else selected.delete(p.id); controls(); };
+          label.append(check); card.append(label);
+        }
+        card.append(node('div','photo-caption',AdminTime.short(p.taken_at_ms, true)));
+        if (p.status === 'rejected' && p.reason) card.append(node('div','photo-caption',p.reason));
         grid.append(card);
       }
-      content.append(heading,grid);
+      group.append(heading, grid); content.append(group);
     }
     el('photoList').replaceChildren(content);
+    controls();
   }
-  async function load(index) {
-    request?.abort(); const current = request = new AbortController();
+
+  async function load(index, continuePreview = false) {
+    request?.abort();
+    const current = request = new AbortController();
+    if (!continuePreview) viewer.close();
+    reasonDialog.close();
+    selected.clear(); rows = []; next = ''; loading = true; page = index;
+    el('photoMessage').textContent = '正在加载照片…';
+    render();
+    const status = el('photoFilter').value;
     try {
-      const params = new URLSearchParams({status: el('photoFilter').value, cursor:cursors[index] || ''});
-      const res = await fetch('/admin/api/track-photos?' + params,{signal:current.signal});
-      if (!res.ok) throw Error('照片列表加载失败');
-      const {data} = await res.json(); if (current !== request) return;
-      rows = data.items || []; page = index; next = data.next_cursor;
-      el('photoPending').textContent = data.pending; render(rows);
-      el('photoMessage').textContent = rows.length ? '' : '当前队列没有照片';
-      el('photoPrev').disabled = !page; el('photoNext').disabled = !next;
-    } catch (e) { if (!current.signal.aborted) el('photoMessage').textContent = e.message; }
+      for (;;) {
+        const params = new URLSearchParams({status, cursor:cursors[page] || ''});
+        const response = await fetch(endpoint + '?' + params, {signal:current.signal});
+        if (!response.ok) throw Error();
+        const {data} = await response.json();
+        if (current.signal.aborted) return false;
+        rows = data.items || []; next = data.next_cursor || '';
+        el('photoPending').textContent = data.pending;
+        if (rows.length || !page) break;
+        cursors.length = page--;
+      }
+      el('photoMessage').textContent = rows.length ? '' : ({pending:'暂无待审照片', approved:'暂无已通过的照片', rejected:'暂无已驳回的照片'})[status];
+      return true;
+    } catch (e) {
+      if (!current.signal.aborted) {
+        viewer.close();
+        el('photoMessage').textContent = '照片加载失败，请刷新重试';
+      }
+      return false;
+    } finally {
+      if (!current.signal.aborted) { loading = false; render(); }
+    }
   }
-  async function review(status) {
-    if (reviewing) return;
-    const ids = new Set(Array.from(el('photoList').querySelectorAll('input:checked'), input => input.value));
-    const reason = el('photoReason').value.trim();
-    if (!ids.size || status === 'rejected' && !reason) { el('photoMessage').textContent = !ids.size ? '请先选择照片' : '请填写驳回原因'; return; }
-    reviewing = true; let failed = 0;
+
+  function askReason(targets) {
+    if (writing || loading || !targets.length || !canWrite()) return;
+    rejection = targets;
+    el('photoReason').value = '';
+    el('photoReason').setCustomValidity('');
+    el('photoReasonTitle').textContent = '驳回 ' + targets.length + ' 张照片';
+    reasonDialog.showModal(); el('photoReason').focus();
+  }
+  async function review(targets, status, reason = '') {
+    if (loading || writing || !canWrite() || !targets.length || targets.some(p => !rows.includes(p))) return;
+    const index = rows.findIndex(p => p.id === currentId);
+    const successor = rows[index + 1]?.id;
+    const previous = rows[index - 1]?.id;
+    writing = true;
+    render();
+    if (viewer.open) preview(index);
+    let failed = 0;
     try {
-      for (const p of rows.filter(p => ids.has(p.id))) {
+      for (const p of targets) {
         try {
-          const response = await fetch('/admin/api/track-photos/' + encodeURIComponent(p.id) + '/review',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status,reason,revision:p.revision})});
+          const response = await fetch(endpoint + '/' + encodeURIComponent(p.id) + '/review', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({status, revision:p.revision, ...(status === 'rejected' ? {reason} : {})})
+          });
           if (!response.ok) failed++;
         } catch { failed++; }
       }
-      cursors = ['']; await load(0);
-      el('photoMessage').textContent = failed ? (ids.size - failed) + ' 张已处理，' + failed + ' 张失败，请刷新后重试' : '已处理 ' + ids.size + ' 张照片';
-      if (!failed) el('photoReason').value = '';
-    } finally { reviewing = false; }
+      const ok = await load(page, viewer.open);
+      if (!ok) return;
+      if (failed) {
+        viewer.close();
+        el('photoMessage').textContent = (targets.length - failed) + ' 张已处理，' + failed + ' 张未处理，请按最新状态重试';
+      } else if (viewer.open && rows.length) {
+        let nextIndex = rows.findIndex(p => p.id === successor);
+        if (nextIndex < 0) nextIndex = Math.min(Math.max(0, index), rows.length - 1);
+        if (!successor && rows[nextIndex]?.id === previous && next) {
+          cursors[page + 1] = next;
+          if (!await load(page + 1, true)) return;
+          nextIndex = 0;
+        }
+        if (viewer.open) preview(nextIndex);
+      } else if (!rows.length) viewer.close();
+      else el('photoMessage').textContent = '已处理 ' + targets.length + ' 张照片';
+    } finally {
+      writing = false;
+      render();
+      if (viewer.open) preview(rows.findIndex(p => p.id === currentId));
+    }
   }
-  el('photosTab').onclick = () => showPhotos(true); el('routesTab').onclick = () => showPhotos(false);
+  function tab(photos) {
+    if (writing) return;
+    request?.abort(); selected.clear(); viewer.close(); reasonDialog.close();
+    loading = false;
+    el('routesPanel').hidden = photos; el('photoPanel').hidden = !photos;
+    for (const [id, active] of [['photosTab', photos], ['routesTab', !photos]]) {
+      el(id).classList.toggle('btn-primary', active);
+      el(id).classList.toggle('btn-outline-secondary', !active);
+      el(id).setAttribute('aria-pressed', String(active));
+    }
+    if (photos) load(page);
+  }
+  const selectedRows = () => rows.filter(p => selected.has(p.id));
+  el('photosTab').onclick = () => tab(true);
+  el('routesTab').onclick = () => tab(false);
   el('photoFilter').onchange = () => { cursors = ['']; load(0); };
   el('photoRefresh').onclick = () => load(page);
-  el('photoPrev').onclick = () => load(page-1); el('photoNext').onclick = () => { cursors[page+1]=next; load(page+1); };
-  el('photoApprove').onclick = () => review('approved'); el('photoReject').onclick = () => review('rejected');
-  el('photoPreviewClose').onclick = () => el('photoPreview').close();
-  el('photoPreview').onclose = () => el('photoPreviewImage').removeAttribute('src');
-  fetch('/admin/api/track-photos?counts=1').then(response=>response.ok?response.json():null)
-    .then(body=>{ if(body?.data && !request) el('photoPending').textContent=body.data.pending; })
-    .catch(()=>{ if(!request) el('photoPending').textContent='—'; });
+  el('photoPrev').onclick = () => load(page - 1);
+  el('photoNext').onclick = () => { cursors[page + 1] = next; load(page + 1); };
+  el('photoClear').onclick = () => { selected.clear(); render(); };
+  el('photoApprove').onclick = () => review(selectedRows(), 'approved');
+  el('photoReject').onclick = () => askReason(selectedRows());
+  el('cancelReason').onclick = () => reasonDialog.close();
+  el('photoReason').oninput = () => el('photoReason').setCustomValidity('');
+  el('photoReasonForm').onsubmit = event => {
+    event.preventDefault();
+    const reason = el('photoReason').value.trim();
+    if (!reason) { el('photoReason').setCustomValidity('请填写驳回原因'); el('photoReason').reportValidity(); return; }
+    const targets = rejection;
+    reasonDialog.close(); review(targets, 'rejected', reason);
+  };
+  reasonDialog.onclose = () => { if (!reasonDialog.open) { rejection = []; el('photoReason').value = ''; } };
+  fetch(endpoint + '?counts=1').then(r => r.ok ? r.json() : null)
+    .then(body => { if (!request) el('photoPending').textContent = body?.data?.pending ?? '—'; })
+    .catch(() => { if (!request) el('photoPending').textContent = '—'; });
 })();

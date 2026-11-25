@@ -1,0 +1,51 @@
+.photo-panel[hidden], #photoBulk[hidden], #photoPager[hidden], #userScenicPhotos[hidden], #userScenicMore[hidden], .photo-panel [hidden], #routesPanel[hidden] { display: none !important; }
+.photo-queue-tabs { display: inline-flex; gap: 3px; padding: 3px; margin-bottom: 16px; background: var(--admin-bg-surface-secondary); border: 1px solid var(--admin-border-color); border-radius: 9px; }
+.photo-queue-tabs button.btn { border: 0; border-radius: 6px; background: transparent; box-shadow: none; color: var(--admin-secondary-color); }
+.photo-queue-tabs button[aria-pressed="true"] { background: var(--admin-bg-surface); color: var(--admin-body-color); box-shadow: 0 1px 3px #0002; }
+.photo-queue-tabs button span { font-variant-numeric: tabular-nums; }
+body:has(.photo-viewer[open], .photo-reason[open]) { overflow: hidden; }
+.photo-toolbar, .photo-bulk, .photo-pagination, .photo-actions, .photo-navigation { display: flex; align-items: center; gap: 8px; }
+.photo-toolbar { justify-content: space-between; }
+.photo-bulk { margin-top: 14px; padding: 8px 12px; font-size: 13px; background: var(--admin-primary-lt); border-radius: 8px; flex-wrap: wrap; }
+.photo-bulk .photo-actions, .photo-pagination button:first-of-type { margin-inline-start: auto; }
+.photo-message { margin: 12px 0 0; color: var(--admin-secondary-color); font-size: 13px; }
+.photo-message:empty { display: none; }
+.photo-panel[data-empty] .photo-message { padding: 36px 12px; text-align: center; }
+.photo-group { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--admin-border-color); }
+.photo-group h3 { display: flex; align-items: baseline; gap: 10px; margin: 0 0 10px; font-size: 14px; overflow-wrap: anywhere; }
+.photo-group h3 small, .photo-caption, .photo-source { color: var(--admin-secondary-color); font-size: 12px; font-weight: 400; }
+.photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(148px, 100%), 1fr)); gap: 16px 12px; }
+.photo-card { min-width: 0; position: relative; }
+.photo-thumb { display: block; width: 100%; padding: 0; overflow: hidden; border: 0; border-radius: 8px; aspect-ratio: 4/3; background: var(--admin-bg-surface-secondary); cursor: zoom-in; }
+.photo-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.photo-card:has(input:checked) .photo-thumb { outline: 3px solid var(--admin-primary); outline-offset: -3px; }
+.photo-select { position: absolute; top: 5px; left: 5px; display: grid; place-items: center; width: 32px; height: 32px; cursor: pointer; }
+.photo-select input { width: 18px; height: 18px; margin: 0; accent-color: var(--admin-primary); box-shadow: 0 0 0 2px white; border-radius: 3px; }
+.photo-caption { margin-top: 6px; overflow-wrap: anywhere; }
+.photo-state { font-size: 13px; font-weight: 600; }
+.photo-source { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0; border: 0; background: none; }
+button.photo-source { color: var(--admin-primary); text-decoration: underline; text-underline-offset: 2px; }
+.photo-pagination { border-top: 1px solid var(--admin-border-color); padding-top: 14px; margin-top: 18px; font-size: 13px; }
+.photo-viewer, .photo-reason { margin: auto; padding: 0; border: 1px solid var(--admin-border-color); border-radius: 12px; background: var(--admin-bg-surface, white); color: var(--admin-body-color); max-height: 92dvh; box-shadow: 0 18px 60px #0003; }
+.photo-viewer { width: min(880px, 95vw); }
+.photo-viewer::backdrop, .photo-reason::backdrop { background: rgb(15 23 42 / 55%); }
+.photo-viewer header, .photo-viewer footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; }
+.photo-viewer header div { min-width: 0; }
+.photo-viewer header strong, .photo-viewer header small { display: block; overflow-wrap: anywhere; }
+.photo-viewer header small { color: var(--admin-secondary-color); margin-top: 2px; }
+.photo-stage { height: min(58dvh, 580px); min-height: 100px; position: relative; background: #121517; }
+.photo-stage img { width: 100%; height: 100%; object-fit: contain; }
+.photo-stage span { position: absolute; inset: 46% 0 auto; text-align: center; color: white; pointer-events: none; }
+.photo-navigation button { border: 1px solid var(--admin-border-color); border-radius: 6px; background: transparent; color: inherit; font-size: 21px; width: 36px; height: 36px; line-height: 1; }
+.photo-navigation button:disabled { opacity: .35; }
+.photo-navigation span { font-variant-numeric: tabular-nums; font-size: 13px; min-width: 46px; text-align: center; }
+.photo-reason { width: min(420px, 94vw); padding: 18px; }
+.photo-reason h2 { font-size: 18px; margin: 0 0 16px; }
+.photo-reason label { display: block; margin-bottom: 6px; }
+.photo-reason .photo-actions { justify-content: flex-end; margin-top: 16px; }
+@media(max-width: 550px) {
+  .photo-grid { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px 8px; }
+  .photo-viewer footer { flex-wrap: wrap; }
+  .photo-viewer header, .photo-viewer footer { padding: 10px; }
+  .photo-viewer .photo-actions { margin-left: auto; }
+}
