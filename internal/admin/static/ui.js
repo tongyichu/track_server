@@ -324,6 +324,7 @@
   }
 
   function enhanceButton(button) {
+    if (button.matches('.admin-track-photo-pin, .admin-photo-popup-image, .admin-photo-dismiss, .photo-thumb')) return;
     if (button.matches('.admin-metric, .form-select, .route-type-option, .route-group-open, .route-member-open') || button.closest('.admin-period-tabs')) return;
     if (button.matches('.scenic-photo-picker, .region-photo-picker, .admin-photo-picker, .admin-photo-remove, .admin-photo-download')) return;
     if (button.hasAttribute('data-period') || button.hasAttribute('data-stat-period') || button.classList.contains('btn-close') || button.matches('.dropdown-item, [data-admin-menu]')) return;

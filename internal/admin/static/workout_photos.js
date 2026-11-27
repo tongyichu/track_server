@@ -17,6 +17,7 @@ const WorkoutPhotos = (() => {
   }
   function tile(url, label, open) {
     const thumb = button('', 'photo-thumb', open);
+    thumb.setAttribute('data-no-preview', '');
     thumb.setAttribute('aria-label', label);
     const img = new Image();
     img.loading = 'lazy';
@@ -27,6 +28,7 @@ const WorkoutPhotos = (() => {
   }
   function viewer() {
     const dialog = node('dialog', 'photo-viewer');
+    dialog.setAttribute('data-no-preview', '');
     dialog.setAttribute('aria-label', '照片详情');
     dialog.innerHTML = `<header><div><strong></strong><small></small></div><button type="button" class="btn-close" aria-label="关闭"></button></header>
       <div class="photo-stage"><img alt="运动实拍大图"><span role="status"></span></div>
@@ -70,5 +72,11 @@ const WorkoutPhotos = (() => {
       }
     };
   }
-  return {node, button, time, tile, viewer};
+  function review(photo, status, reason, signal) {
+    return fetch('/admin/api/track-photos/' + encodeURIComponent(photo.id) + '/review', {
+      method: 'POST', signal, headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({revision:photo.revision, status, ...(status === 'rejected' ? {reason} : {})})
+    });
+  }
+  return {node, button, time, tile, viewer, review};
 })();

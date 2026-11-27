@@ -19,7 +19,8 @@
 .admin-track-editor .admin-track-detail-side .card-body { padding: 12px; font-size: 12px; }
 .admin-track-editor .admin-track-detail-side .card-title { margin-bottom: 8px; font-size: 15px; }
 .admin-track-editor .admin-track-candidates { padding: 12px; }
-.admin-track-editor .admin-track-map { display: flex; flex-direction: column; align-self: start; grid-column: 2; grid-row: 1; padding: 12px; border: 1px solid var(--admin-border-color); border-radius: 10px; }
+.admin-track-route { border: 1px solid var(--admin-border-color); border-radius: 10px; padding: 12px; }
+.admin-track-editor .admin-track-map { display: flex; flex-direction: column; }
 .admin-track-editor .admin-track-map-body { display: flex; flex: none; flex-direction: column; min-height: 0; font-size: 12px; }
 .admin-track-editor .admin-track-map-canvas { flex: 0 0 320px; height: 320px; min-height: 0; max-height: 320px; }
 .admin-track-map-poi { position: relative; width: 280px; max-width: 70vw; padding: 14px; border: 1px solid var(--admin-border-color); border-radius: 10px; background: var(--admin-bg-surface); box-shadow: 0 6px 24px #0003; color: var(--admin-body-color); overflow-wrap: anywhere; font-size: 12px; }
@@ -29,9 +30,14 @@
 .admin-track-map-poi p { margin-bottom: 8px; }
 .admin-track-map-poi .btn { white-space: normal; }
 .admin-track-map-poi-list { display: flex; flex-wrap: wrap; gap: 6px; max-height: 140px; overflow-y: auto; }
-.admin-track-editor .admin-track-content-grid { display: grid; grid-template-columns: minmax(0, 1fr) 248px; align-items: start; gap: 16px; }
+.admin-track-editor .admin-track-content-grid { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); align-items: start; gap: 16px; }
 .admin-track-editor .admin-track-main, .admin-track-editor .admin-track-assets { min-width: 0; margin: 0; padding: 16px; border: 1px solid var(--admin-border-color); border-radius: 10px; background: var(--admin-bg-surface); }
-.admin-track-editor .admin-track-assets { padding: 12px; }
+.admin-track-editor .admin-track-assets { display: grid; grid-template-columns: minmax(72px, 96px) minmax(0, 1fr); gap: 8px 16px; align-items: start; }
+.admin-track-assets > h3, .admin-track-assets .admin-track-file { grid-column: 1 / -1; }
+.admin-track-assets .admin-track-preview-grid { grid-row: span 2; }
+.admin-track-assets .admin-track-preview-status { margin: 0; align-self: end; }
+.admin-track-assets .admin-track-file { padding-top: 12px; margin: 0; border-top: 1px solid var(--admin-border-color); }
+.admin-track-assets .admin-track-assets-actions { grid-column: 2; }
 .admin-track-file { display: flex; align-items: flex-start; gap: 8px; margin-top: 14px; font-size: 13px; }
 .admin-track-file-info { display: flex; flex: 1; flex-direction: column; gap: 3px; min-width: 0; overflow-wrap: anywhere; }
 .admin-track-file-info > .btn { align-self: flex-start; padding: 0; }
@@ -45,13 +51,9 @@
 .admin-track-preview-status > div { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 5px; }
 .admin-track-preview-status dt { font-weight: 500; }
 .admin-track-preview-status dd { margin: 0; }
-.admin-track-assets > summary { cursor:pointer; font-weight:600; }
-.admin-track-assets[open] > summary { margin-bottom:10px; }
-.admin-track-assets-actions:not(:empty) { margin-bottom:8px; }
 @media (max-width: 991px) {
   .admin-track-editor .admin-track-detail-side { grid-template-columns: minmax(0, 1fr); }
   .admin-track-editor .admin-track-content-grid { grid-template-columns: minmax(0, 1fr); }
-  .admin-track-editor .admin-track-map { grid-column: auto; grid-row: auto; }
   .admin-track-editor .admin-track-map-canvas { flex-basis: 240px; height: 240px; max-height: 240px; }
 }
 .admin-track-editor .admin-dialog-form > .full { grid-column: 1 / -1; }
@@ -92,7 +94,9 @@
 .admin-track-editor .admin-track-coordinate .form-control { width: auto; max-width: 210px; margin-top: 0; }
 .admin-track-editor .admin-track-metrics { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--admin-border-color); }
 .admin-track-editor .admin-track-metrics h3 { margin: 0 0 10px; font-size: 15px; }
-.admin-track-editor .admin-track-metrics dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0; }
+.admin-track-editor .admin-track-metrics dl { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 12px; margin: 0; }
+.admin-track-metrics dl > div { grid-column: span 3; }
+.admin-track-metrics dl > div:nth-child(-n+3) { grid-column: span 4; }
 .admin-track-editor .admin-track-metrics dt { color: var(--admin-secondary-color); font-size: 12px; font-weight: 400; }
 .admin-track-editor .admin-track-metrics dd { margin: 4px 0 0; font-size: 14px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 
@@ -102,16 +106,16 @@
 .admin-track-editor .admin-track-basic .admin-track-basic-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .admin-track-editor .admin-track-basic-fields .form-label { margin: 0; }
 .admin-track-editor .admin-track-field-wide { grid-column: 1 / -1; }
-.admin-track-editor .admin-track-record { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--admin-border-color); }
-.admin-track-editor .admin-track-record summary { color: var(--admin-secondary-color); cursor: pointer; }
-.admin-track-editor .admin-track-record .admin-track-basic-fields { margin-top: 10px; }
+.admin-track-description-heading h3 { font-size: 15px; margin: 0; }
+.admin-track-main textarea[name="description"] { min-height: 112px; }
+.admin-track-main [role="status"]:empty { display: none; }
 .admin-track-editor .admin-track-description-heading { font-size: 15px; }
 .admin-track-preview-square .admin-track-preview-image { aspect-ratio: 1; }
 .admin-track-poi-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 @media (max-width: 767px) {
-  .admin-track-editor .admin-track-detail-side > .admin-track-map { order:-1; }
   .admin-track-editor .admin-track-basic-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-track-editor .admin-track-metrics dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-track-editor .admin-track-metrics dl > div { grid-column: auto; }
 }
 @media (max-width: 480px) {
   .admin-track-editor .admin-track-basic-fields { grid-template-columns: minmax(0, 1fr); }
@@ -131,28 +135,40 @@
   --track-route-core: var(--track-sport-night, var(--track-sport-day, #aaabaf));
   --track-photo-gray: #575d64;
 }
-.admin-track-endpoint, .admin-track-photo-pin {
-  box-sizing: border-box; display: grid; place-items: center; border-radius: 50%; color: white;
-}
 .admin-track-endpoint {
+  box-sizing: border-box; display: grid; place-items: center; border-radius: 50%; color: white;
   width: 25px; height: 25px; border: 1.5px solid white; background: #4caf50;
   font: bold 11px/1 system-ui, sans-serif;
 }
 .admin-track-endpoint.is-end { background: #f44336; }
 .admin-track-isolated-point { box-sizing: border-box; display: block; width: 7px; height: 7px; background: var(--track-route-core); border: 1.5px solid var(--track-route-border); border-radius: 50%; }
-.admin-track-photo-pin {
-  width: 18px; height: 18px; padding: 0; border: 1.25px solid white; background: var(--track-photo-gray); cursor: pointer;
+.admin-track-map .admin-track-photo-pin {
+  appearance: none; display: grid; place-items: center; box-sizing: border-box;
+  width: 24px; height: 24px; min-width: 0; min-height: 0; padding: 0; margin: 0;
+  border: 0; border-radius: 50%; background: transparent; box-shadow: none; cursor: pointer;
 }
+.admin-track-photo-pin:focus-visible { outline: 2px solid var(--admin-primary); }
 .admin-track-photo-pin::after {
-  content: ''; width: 9px; height: 9px; background: center/contain no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2'%3E%3Cpath d='M3 7a1 1 0 0 1 1-1h2.586a1 1 0 0 0 .707-.293l1.414-1.414A1 1 0 0 1 9.414 4h5.172a1 1 0 0 1 .707.293l1.414 1.414a1 1 0 0 0 .707.293H20a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z'/%3E%3Ccircle cx='12' cy='12.5' r='4'/%3E%3C/svg%3E");
+  content: ''; box-sizing: border-box; width: 16px; height: 16px; border: 1px solid white; border-radius: 50%;
+  background: var(--track-photo-gray) center / 9px 9px no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2'%3E%3Cpath d='M3 7a1 1 0 0 1 1-1h2.586a1 1 0 0 0 .707-.293l1.414-1.414A1 1 0 0 1 9.414 4h5.172a1 1 0 0 1 .707.293l1.414 1.414a1 1 0 0 0 .707.293H20a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z'/%3E%3Ccircle cx='12' cy='12.5' r='4'/%3E%3C/svg%3E");
 }
-.admin-detail-photos { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--admin-border-color); }
-.admin-detail-photos h3 { margin: 0 0 8px; font-size: 15px; }
-.admin-detail-photos > div { color: var(--admin-secondary-color); font-size: 12px; }
-.admin-photo-strip { display: flex; overflow-x: auto; gap: 10px; padding-bottom: 3px; }
-.admin-photo-strip figure { flex: 0 0 108px; margin: 0; min-width: 0; }
-.admin-photo-strip figcaption { padding-top: 4px; }
-.admin-photo-description { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--admin-body-color); }
+.admin-detail-photos { min-width: 0; padding: 16px; border: 1px solid var(--admin-border-color); border-radius: 10px; }
+.admin-detail-photos h3 { margin: 0 0 12px; font-size: 15px; }
+.admin-detail-photos > div, .admin-detail-photos > p { color: var(--admin-secondary-color); font-size: 13px; }
+.admin-detail-photos > p { margin: 8px 0 0; }
+.admin-detail-photos > p:empty { display: none; }
+.admin-photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(148px, 100%), 1fr)); gap: 16px; }
+.admin-photo-grid figure { min-width: 0; margin: 0; }
+.admin-photo-grid figcaption { display: grid; gap: 4px; padding-top: 8px; overflow-wrap: anywhere; }
+.admin-photo-grid .admin-photo-state { font-size: 12px; }
+.admin-photo-grid .admin-photo-state[data-status="pending"] { color: var(--admin-body-color); font-weight: 600; }
+.admin-photo-grid .admin-photo-state[data-status="rejected"] { color: var(--admin-danger); }
+.admin-photo-description { color: var(--admin-body-color); }
+.admin-photo-review-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.admin-photo-review-actions .btn { min-height: 28px; padding: 2px 8px; font-size: 12px; }
+@media (max-width: 480px) {
+  .admin-photo-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+}
 .admin-photo-popup { box-sizing: border-box; position: relative; padding: 6px; width: 152px; background: var(--admin-bg-surface, white); color: var(--admin-body-color); border: 1px solid var(--admin-border-color); border-radius: 8px; box-shadow: 0 2px 8px #0003; }
 .admin-photo-popup-image { display: block; width: 100%; padding: 0; border: 0; background: transparent; cursor: zoom-in; }
 .admin-photo-popup-image img { display: block; width: 100%; height: 100px; object-fit: cover; border-radius: 4px; }

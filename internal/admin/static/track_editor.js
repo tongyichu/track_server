@@ -2,15 +2,13 @@
   'use strict';
 
   function trackAssets(trackID, track, signal, canClearPreviews, onSaved) {
-    const section = document.createElement('details');
+    const section = document.createElement('section');
     section.className = 'admin-track-assets';
-    section.open = !window.matchMedia('(max-width: 767px)').matches;
-    const heading = document.createElement('summary');
+    const heading = document.createElement('h3');
     heading.textContent = '客户端预览与文件';
     section.append(heading);
     const header = document.createElement('div');
     header.className = 'admin-track-assets-actions';
-    section.append(header);
     const fileRow = document.createElement('div');
     fileRow.className = 'admin-track-file';
     const assetURL = asset => '/admin/api/tracks/' + encodeURIComponent(trackID) + '/assets/' + asset;
@@ -111,12 +109,9 @@
     }
     if (canClearPreviews && slots.some(([key]) => hasPreview(key))) {
       const button = document.createElement('button');
-      const clearLabel = '清除全部 4 张预览图';
+      const clearLabel = '清空四种预览图';
       button.type = 'button'; button.className = 'btn btn-sm btn-outline-danger'; button.textContent = clearLabel;
       header.appendChild(button);
-      const note = document.createElement('p');
-      note.className = 'hint mb-2'; note.textContent = '立即清除日夜方图及横图';
-      section.appendChild(note);
       button.addEventListener('click', async function () {
         if (button.disabled || signal.aborted) return;
         button.disabled = true;
@@ -138,7 +133,7 @@
         previews = track.preview_images = {};
         renderAvailability();
         stage.textContent = '暂无预览图';
-        button.remove(); note.remove();
+        button.remove();
         window.AdminUI.alert('预览图已清空', 'success');
         if (typeof onSaved === 'function') {
           try { await onSaved(); }
@@ -148,7 +143,7 @@
     }
     figure.append(caption, stage);
     grid.appendChild(figure);
-    section.append(grid, availability, fileRow);
+    section.append(grid, availability, header, fileRow);
     return section;
   }
 
@@ -276,9 +271,8 @@
           oldGroup.replaceWith(group);
           input.setAttribute('aria-label', '路线说明');
           const heading = document.createElement('div'); heading.className = 'admin-track-description-heading';
-          const title = document.createElement('span'); title.textContent = '路线说明'; heading.appendChild(title);
+          const title = document.createElement('h3'); title.textContent = '路线说明'; heading.appendChild(title);
           const hint = document.createElement('p'); hint.className = 'text-secondary mb-0 mt-1';
-          hint.textContent = readOnly || isDeleted ? '当前已保存的路线说明。' : 'AI 建议会先展示在下方，确认后可单独代入并保存。';
           hint.setAttribute('role', 'status'); hint.setAttribute('aria-live', 'polite');
           group.append(heading, input, hint);
           if (readOnly || isDeleted) return;
@@ -441,41 +435,28 @@
               view.form.querySelectorAll('.admin-track-label-picker[open]').forEach(picker => { if (!picker.contains(event.target)) picker.open = false; });
             }, { signal: view.signal });
             if (mapPreview) mapPreview.setCoordinateControl(view.form.elements.coordinate_system.parentNode);
+            if (photoPanel) {
+              view.form.appendChild(photoPanel.section);
+              photoPanel.load();
+            }
             const layout = document.createElement('div'); layout.className = 'admin-track-content-grid full';
             const main = document.createElement('div'); main.className = 'admin-track-main';
             layout.append(main, assets); view.form.appendChild(layout);
             const basic = document.createElement('section'); basic.className = 'admin-track-basic full';
             const basicTitle = document.createElement('h3'); basicTitle.textContent = '基本信息';
             const basicFields = document.createElement('div'); basicFields.className = 'admin-track-basic-fields';
-            ['title', 'city_code', 'status', 'locate_addr'].forEach(name => {
+            ['title', 'city_code', 'status', 'locate_addr', 'user_name', 'source_tag', 'session_id'].forEach(name => {
               const group = view.form.elements[name].parentNode;
-              if (name === 'title' || name === 'locate_addr') group.classList.add('admin-track-field-wide');
+              if (['title', 'locate_addr', 'session_id'].includes(name)) group.classList.add('admin-track-field-wide');
               basicFields.appendChild(group);
             });
             basic.append(basicTitle, basicFields);
             detailContent.prepend(basic);
             setupRouteDescription(view);
             main.appendChild(view.form.elements.description.parentNode);
-            if (photoPanel) { main.appendChild(photoPanel.section); photoPanel.load(); }
-            const metrics = trackMetrics(track); main.appendChild(metrics);
-            const record = document.createElement('details');
-            record.className = 'admin-track-record';
-            const recordTitle = document.createElement('summary'); recordTitle.textContent = '更多资料';
-            const recordFields = document.createElement('div'); recordFields.className = 'admin-track-basic-fields';
-            ['user_name', 'source_tag', 'session_id'].forEach(name => recordFields.appendChild(view.form.elements[name].parentNode));
-            record.append(recordTitle, recordFields); main.appendChild(record);
             editorForm = view.form;
             savedFields = new Map(new FormData(editorForm));
-            if (assets.loadMetadata) {
-              if (assets.open) assets.loadMetadata();
-              else {
-                assets.addEventListener('toggle', function loadOnOpen() {
-                  if (!assets.open) return;
-                  assets.removeEventListener('toggle', loadOnOpen);
-                  assets.loadMetadata();
-                }, { signal: view.signal });
-              }
-            }
+            assets.loadMetadata?.();
             if (Array.isArray(options.cities)) return;
             const select = view.form.elements.city_code;
             const hint = document.createElement('span'); hint.className = 'text-secondary d-block mt-1';
@@ -568,7 +549,11 @@
               onAssigned: async function (data) { updateScenicSpot(data); await notifyScenicSpotChanged(); },
               scenicSpotID: trackPayload.scenic_spot_id, track: track, recognitionStatus: trackPayload.place_recognition_status });
             content.appendChild(placeCandidates);
-            if (mapPreview) wrapper.appendChild(mapPreview);
+            const route = document.createElement('section');
+            route.className = 'admin-track-route';
+            if (mapPreview) route.appendChild(mapPreview);
+            route.appendChild(trackMetrics(track));
+            wrapper.appendChild(route);
             return wrapper;
           })(),
           fields: [

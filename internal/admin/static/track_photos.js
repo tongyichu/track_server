@@ -129,10 +129,7 @@
     try {
       for (const p of targets) {
         try {
-          const response = await fetch(endpoint + '/' + encodeURIComponent(p.id) + '/review', {
-            method:'POST', headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({status, revision:p.revision, ...(status === 'rejected' ? {reason} : {})})
-          });
+          const response = await WorkoutPhotos.review(p, status, reason);
           if (!response.ok) failed++;
         } catch { failed++; }
       }

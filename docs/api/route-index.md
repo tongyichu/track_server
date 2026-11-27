@@ -209,8 +209,9 @@
 | 后台批量导入轨迹（逐文件结果含轨迹表格摘要） | POST | `/admin/api/tracks/import` | 轨迹操作 | [admin-tracks.md](admin-tracks.md) |
 | 后台轨迹详情（含图案/景点AI状态快照；归属和文件指标只读） | GET | `/admin/api/tracks/:track_id` | 轨迹查看 | [admin-tracks.md](admin-tracks.md) |
 | 后台轨迹预览与原始文件下载（raw支持metadata=1元信息；legacy已停用） | GET | `/admin/api/tracks/:track_id/assets/:asset` | 轨迹查看 | [admin-tracks.md](admin-tracks.md#详情资源展示与下载) |
-| 后台轨迹随拍列表与拍摄位置 | GET | `/admin/api/tracks/:track_id/photos` | 轨迹查看 | [admin-tracks.md](admin-tracks.md#详情资源展示与下载) |
+| 后台轨迹随拍列表、审核版本与拍摄位置 | GET | `/admin/api/tracks/:track_id/photos` | 轨迹查看 | [admin-tracks.md](admin-tracks.md#详情资源展示与下载) |
 | 后台轨迹随拍图片 | GET | `/admin/api/tracks/:track_id/photos/:id/image` | 轨迹查看 | [admin-tracks.md](admin-tracks.md#详情资源展示与下载) |
+| 后台逐张审核轨迹随拍 | POST | `/admin/api/track-photos/:id/review` | 内容审核操作 | [track-photos.md](track-photos.md) |
 | 后台清空单条轨迹四张预览图 | DELETE | `/admin/api/tracks/:track_id/previews` | 轨迹操作 | [admin-tracks.md](admin-tracks.md#详情资源展示与下载) |
 | 单条轨迹重新识别 | POST | `/admin/api/tracks/:track_id/place-refresh` | 轨迹操作 | [admin-tracks.md](admin-tracks.md) |
 | 地图POI / 目录选择 / 人工名称设置轨迹景点标签 | POST | `/admin/api/tracks/:track_id/scenic-spot` | 轨迹及景点操作 | [地图点选](admin-tracks.md#地图点选景点标签)、[手动录入](admin-tracks.md#手动录入景点) |

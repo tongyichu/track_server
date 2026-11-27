@@ -139,6 +139,7 @@ func (s *TrackPhotoService) listTrackPhotos(ctx context.Context, track string, o
 
 type AdminTrackPhoto struct {
 	ID          string      `json:"id"`
+	Revision    int64       `json:"revision"`
 	TakenAt     int64       `json:"taken_at_ms"`
 	Description string      `json:"description,omitempty"`
 	Status      string      `json:"status"`
@@ -160,7 +161,7 @@ func (s *TrackPhotoService) AdminTrackPhotos(ctx context.Context, track string) 
 	}
 	out := make([]AdminTrackPhoto, 0, len(items))
 	for _, p := range items {
-		item := AdminTrackPhoto{ID: p.ID, TakenAt: p.TakenAt, Status: p.Status, Description: p.Description, Reason: p.Reason}
+		item := AdminTrackPhoto{ID: p.ID, Revision: p.Revision, TakenAt: p.TakenAt, Status: p.Status, Description: p.Description, Reason: p.Reason}
 		if p.Latitude != nil && p.Longitude != nil && validLatLng(*p.Latitude, *p.Longitude) {
 			point, err := mapPointToGCJ02(models.TrackPoint{Latitude: *p.Latitude, Longitude: *p.Longitude}, "WGS84")
 			if err != nil {
