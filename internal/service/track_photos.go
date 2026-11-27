@@ -10,10 +10,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-	"time"
 	"unicode/utf8"
 
-	"github.com/tongyichu/track_server/internal/maparea"
 	"github.com/tongyichu/track_server/internal/models"
 	"github.com/tongyichu/track_server/internal/repository"
 )
@@ -74,7 +72,7 @@ func (s *TrackPhotoService) Upload(ctx context.Context, track string, user int64
 		return empty, invalidArg("invalid JPEG size")
 	}
 	sum := sha256.Sum256(in.JPEG)
-	p := models.TrackPhoto{ID: in.ID, TrackID: track, Slot: in.Slot, TakenAt: in.TakenAt, Latitude: in.Latitude, Longitude: in.Longitude, Description: description, Status: "pending", Revision: 1, Digest: hex.EncodeToString(sum[:]), LocationChecked: in.Latitude == nil}
+	p := models.TrackPhoto{ID: in.ID, TrackID: track, Slot: in.Slot, TakenAt: in.TakenAt, Latitude: in.Latitude, Longitude: in.Longitude, Description: description, Status: "pending", Revision: 1, Digest: hex.EncodeToString(sum[:])}
 	img, err := jpeg.Decode(bytes.NewReader(in.JPEG))
 	if err != nil {
 		return empty, invalidArg("invalid JPEG")
@@ -106,9 +104,7 @@ func samePhotoCoord(a, b *float64) bool {
 }
 func photoView(p models.TrackPhoto, owner bool) models.TrackPhoto {
 	p.Digest = ""
-	p.InsideIDs = nil
 	p.ScenicChoice = ""
-	p.LocationChecked = false
 	if p.Status != "rejected" || !owner {
 		p.Reason = ""
 	}
@@ -258,30 +254,14 @@ func (s *TrackPhotoService) Review(ctx context.Context, id string, in PhotoDecis
 		if in.Status != "approved" && in.Status != "rejected" || in.Status == "rejected" && reason == "" || utf8.RuneCountInString(reason) > 250 {
 			return invalidArg("invalid review decision or reason")
 		}
+		if p.Status != "approved" || in.Status != "approved" {
+			p.ScenicChoice = ""
+		}
 		p.Status = in.Status
 		p.Reason = reason
 	}
 	p.Revision++
 	return s.store.UpdatePhoto(ctx, p, in.Revision)
-}
-func photoInSpot(p models.TrackPhoto, spot *models.ScenicSpot) bool {
-	if p.ScenicChoice == spot.ID {
-		return true
-	}
-	if p.ScenicChoice == "-"+spot.ID {
-		return false
-	}
-	for _, source := range spot.Sources {
-		if source.Provider != "amap" || source.Status == "disabled" {
-			continue
-		}
-		for _, id := range p.InsideIDs {
-			if source.ProviderID == id {
-				return true
-			}
-		}
-	}
-	return false
 }
 func (s *TrackPhotoService) CheckScenicPhoto(ctx context.Context, spot, id string) error {
 	p, _, err := s.store.ReadPhoto(ctx, id, false)
@@ -326,7 +306,7 @@ func (s *TrackPhotoService) ScenicMedia(ctx context.Context, spotID, id string, 
 	if err != nil {
 		return nil, err
 	}
-	if !includeCandidates && (!scenicSpotClientVisible(spot) || !photoInSpot(p, spot)) {
+	if !includeCandidates && (!scenicSpotClientVisible(spot) || p.ScenicChoice != spotID) {
 		return nil, repository.ErrNotFound
 	}
 	return data, nil
@@ -351,15 +331,7 @@ func (s *TrackPhotoService) Scenic(ctx context.Context, id, after string, admin 
 	if !admin && !scenicSpotClientVisible(spot) {
 		return out, repository.ErrNotFound
 	}
-	f := repository.PhotoFilter{Status: "approved", After: after, Limit: 25, Spot: id}
-	if !admin {
-		f.Sources = []string{}
-		for _, source := range spot.Sources {
-			if source.Provider == "amap" && source.Status != "disabled" {
-				f.Sources = append(f.Sources, source.ProviderID)
-			}
-		}
-	}
+	f := repository.PhotoFilter{Status: "approved", After: after, Limit: 25, Spot: id, IncludedOnly: !admin}
 	photos, err := s.store.PhotoPage(ctx, f)
 	if err != nil {
 		return out, err
@@ -385,7 +357,7 @@ func (s *TrackPhotoService) Scenic(ctx context.Context, id, after string, admin 
 		}
 	}
 	for _, p := range photos {
-		item := ScenicPhotoItem{TrackPhoto: photoView(p, false), Included: photoInSpot(p, spot)}
+		item := ScenicPhotoItem{TrackPhoto: photoView(p, false), Included: p.ScenicChoice == id}
 		if owner, found := owners[p.TrackID]; found {
 			mine := owner == viewer
 			item.IsMine = &mine
@@ -393,79 +365,4 @@ func (s *TrackPhotoService) Scenic(ctx context.Context, id, after string, admin 
 		out.Items = append(out.Items, item)
 	}
 	return out, nil
-}
-
-// Called with the existing place worker's quota lease and mutex.
-func (s *TrackPhotoService) checkLocations(ctx context.Context, places *TrackPlaceService) error {
-	if places.cfg.AMapKey == "" {
-		return nil
-	}
-	var cursor string
-	if _, err := places.loadFresh(ctx, "photo_location_cursor", &cursor); err != nil {
-		return err
-	}
-	batch, err := s.store.PhotoPage(ctx, repository.PhotoFilter{Status: "approved", Unchecked: true, After: cursor, Limit: 2})
-	if err != nil {
-		return err
-	}
-	ids := make([]string, 0, len(batch))
-	for _, p := range batch {
-		ids = append(ids, p.TrackID)
-	}
-	tracks, err := s.tracks.FindByIDs(ctx, ids)
-	if err != nil {
-		return err
-	}
-	links, err := s.spots.GetTrackScenicSpotLinks(ctx, ids)
-	if err != nil {
-		return err
-	}
-	spots := []string{}
-	for _, link := range links {
-		if link.SpotID != "" {
-			spots = append(spots, link.SpotID)
-		}
-	}
-	catalog, err := s.spots.GetScenicSpots(ctx, spots)
-	if err != nil {
-		return err
-	}
-	for _, p := range batch {
-		t, link := tracks[p.TrackID], links[p.TrackID]
-		cursor = p.ID
-		if t == nil || link == nil || !scenicSpotClientVisible(catalog[link.SpotID]) {
-			continue
-		}
-		if t.Status == models.TrackStatusNormal && !t.IsRunning && t.RawTrackURL != "" {
-			if p.Latitude != nil && maparea.IsMainland(*p.Latitude, *p.Longitude) {
-				pt, err := mapPointToGCJ02(models.TrackPoint{Latitude: *p.Latitude, Longitude: *p.Longitude}, "WGS84")
-				if err != nil {
-					return err
-				}
-				evidence, err := places.providerLookup(ctx, "amap", pt)
-				if err != nil {
-					if saveErr := places.save(ctx, "photo_location_cursor", p.ID, time.Time{}, ""); saveErr != nil {
-						return saveErr
-					}
-					return err
-				}
-				for _, e := range evidence {
-					if e.Inside {
-						p.InsideIDs = append(p.InsideIDs, e.Place.ProviderID)
-					}
-				}
-			}
-			p.LocationChecked = true
-			p.Revision++
-			err = s.store.UpdatePhoto(ctx, p, p.Revision-1)
-			if err != nil && !errors.Is(err, repository.ErrConflict) {
-				return err
-			}
-		}
-		cursor = p.ID
-	}
-	if len(batch) < 2 {
-		cursor = ""
-	}
-	return places.save(ctx, "photo_location_cursor", cursor, time.Time{}, "")
 }

@@ -35,10 +35,8 @@ type PhotoFilter struct {
 	TrackIDs      []string
 	Status, After string
 	Limit         int
-	Unchecked     bool
 	Spot          string
-	// A non-nil list filters the gallery to photos admitted by a manual decision or shooting-point evidence.
-	Sources []string
+	IncludedOnly  bool
 }
 type TrackPhotoRepository interface {
 	PendingPhotos(context.Context) (int64, error)
@@ -85,25 +83,6 @@ func (r *InMemoryTrackRepository) PendingPhotos(ctx context.Context) (int64, err
 func (r *InMemoryTrackRepository) photoTrackAvailable(id string) bool {
 	t := r.tracks[id]
 	return t != nil && t.Status != models.TrackStatusDeleted
-}
-func photoMatchesSource(p models.TrackPhoto, f PhotoFilter) bool {
-	if f.Sources == nil {
-		return true
-	}
-	if p.ScenicChoice == f.Spot {
-		return true
-	}
-	if p.ScenicChoice == "-"+f.Spot {
-		return false
-	}
-	for _, id := range p.InsideIDs {
-		for _, source := range f.Sources {
-			if source == id {
-				return true
-			}
-		}
-	}
-	return false
 }
 func (r *MySQLTrackRepository) ReviewTrackIDs(ctx context.Context, status, after string, limit int) ([]string, error) {
 	rows, err := r.db.QueryContext(ctx, "SELECT DISTINCT track_id FROM track_photos WHERE status=? AND track_id>? AND "+photoSourceAvailable+" ORDER BY track_id LIMIT ?", status, after, limit)
@@ -218,11 +197,11 @@ func (r *InMemoryTrackRepository) PhotoPage(_ context.Context, f PhotoFilter) ([
 			link := r.adminScenicSpots.links[t.ID]
 			matches := link != nil && link.SpotID == f.Spot
 			r.adminScenicSpots.mu.RUnlock()
-			if !matches || !photoMatchesSource(p, f) {
+			if !matches || (f.IncludedOnly && p.ScenicChoice != f.Spot) {
 				continue
 			}
 		}
-		if p.ID <= f.After || p.Status == "removed" || f.TrackIDs != nil && !tracks[p.TrackID] || f.Status != "" && p.Status != f.Status || f.Unchecked && p.LocationChecked {
+		if p.ID <= f.After || p.Status == "removed" || f.TrackIDs != nil && !tracks[p.TrackID] || f.Status != "" && p.Status != f.Status {
 			continue
 		}
 		out = append(out, p)
@@ -284,9 +263,6 @@ func (r *MySQLTrackRepository) PhotoPage(ctx context.Context, f PhotoFilter) ([]
 		q += " AND status=?"
 		args = append(args, f.Status)
 	}
-	if f.Unchecked {
-		q += " AND JSON_EXTRACT(metadata,'$.location_checked') IS NULL"
-	}
 	if f.TrackIDs != nil {
 		if len(f.TrackIDs) == 0 {
 			return out, nil
@@ -299,20 +275,9 @@ func (r *MySQLTrackRepository) PhotoPage(ctx context.Context, f PhotoFilter) ([]
 	if f.Spot != "" {
 		q += " AND EXISTS (SELECT 1 FROM track_scenic_spot_links l JOIN track_records t ON t.id=l.track_id WHERE l.track_id=track_photos.track_id AND l.spot_id=? AND t.status=1 AND t.is_running=0 AND t.raw_track_url<>'')"
 		args = append(args, f.Spot)
-		if f.Sources != nil {
-			q += " AND (JSON_UNQUOTE(JSON_EXTRACT(metadata,'$.scenic_choice'))=?"
+		if f.IncludedOnly {
+			q += " AND JSON_UNQUOTE(JSON_EXTRACT(metadata,'$.scenic_choice'))=?"
 			args = append(args, f.Spot)
-			if len(f.Sources) > 0 {
-				q += " OR (COALESCE(JSON_UNQUOTE(JSON_EXTRACT(metadata,'$.scenic_choice')),'')<>? AND ("
-				args = append(args, "-"+f.Spot)
-				predicates := []string{}
-				for _, src := range f.Sources {
-					predicates = append(predicates, "JSON_CONTAINS(JSON_EXTRACT(metadata,'$.inside_amap_ids'),JSON_QUOTE(?))")
-					args = append(args, src)
-				}
-				q += strings.Join(predicates, " OR ") + "))"
-			}
-			q += ")"
 		}
 	}
 	rows, err := r.db.QueryContext(ctx, q+" ORDER BY id LIMIT ?", append(args, f.Limit)...)
@@ -398,8 +363,8 @@ func (r *MongoTrackRepository) photoPipeline(filter bson.M, f PhotoFilter) []bso
 	pipeline = append(pipeline, bson.M{"$match": parent})
 	if f.Spot != "" {
 		pipeline = append(pipeline, bson.M{"$lookup": bson.M{"from": "track_scenic_spot_links", "localField": "track_id", "foreignField": "_id", "as": "link"}}, bson.M{"$match": bson.M{"link.scenic_spot_id": f.Spot}})
-		if f.Sources != nil {
-			pipeline = append(pipeline, bson.M{"$match": bson.M{"$or": bson.A{bson.M{"scenic_choice": f.Spot}, bson.M{"scenic_choice": bson.M{"$ne": "-" + f.Spot}, "inside_amap_ids": bson.M{"$in": f.Sources}}}}})
+		if f.IncludedOnly {
+			pipeline = append(pipeline, bson.M{"$match": bson.M{"scenic_choice": f.Spot}})
 		}
 	}
 	return pipeline
@@ -412,9 +377,6 @@ func (r *MongoTrackRepository) PhotoPage(ctx context.Context, f PhotoFilter) ([]
 	if f.TrackIDs != nil {
 		q["track_id"] = bson.M{"$in": f.TrackIDs}
 	}
-	if f.Unchecked {
-		q["location_checked"] = bson.M{"$ne": true}
-	}
 	pipeline := append(r.photoPipeline(q, f), bson.M{"$limit": f.Limit}, bson.M{"$project": bson.M{"parent": 0, "link": 0}})
 	cur, err := r.photosCollection().Aggregate(ctx, pipeline)
 	if err != nil {
@@ -426,7 +388,7 @@ func (r *MongoTrackRepository) PhotoPage(ctx context.Context, f PhotoFilter) ([]
 	return out, err
 }
 func (r *MongoTrackRepository) UpdatePhoto(ctx context.Context, p models.TrackPhoto, old int64) error {
-	fields := bson.M{"status": p.Status, "reason": p.Reason, "revision": p.Revision, "scenic_choice": p.ScenicChoice, "inside_amap_ids": p.InsideIDs, "location_checked": p.LocationChecked}
+	fields := bson.M{"status": p.Status, "reason": p.Reason, "revision": p.Revision, "scenic_choice": p.ScenicChoice}
 	update := bson.M{"$set": fields}
 	if p.Status == "removed" {
 		update["$unset"] = bson.M{"slot": "", "jpeg": "", "latitude": "", "longitude": "", "digest": "", "description": ""}

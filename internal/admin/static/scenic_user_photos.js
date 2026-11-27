@@ -5,7 +5,7 @@ const ScenicUserPhotos = (() => {
   let spot, cursor = '', items = [], request, generation = 0, saving = false, pageCount = 0;
   const base = () => '/admin/api/scenic-spots/' + encodeURIComponent(spot) + '/user-photos';
   const url = p => base() + '/' + encodeURIComponent(p.id);
-  const state = p => p.included ? '已收录' : '待收录';
+  const state = p => p.included ? '已选入' : '待选';
   const canWrite = () => AdminAccess.can('scenic_spots', true);
   async function source(photo) {
     const wasOpen = viewer.open, version = generation;
@@ -19,7 +19,7 @@ const ScenicUserPhotos = (() => {
     if (!p) return;
     const actions = [];
     if (AdminAccess.can('tracks', false)) actions.push(button('来源轨迹', 'btn btn-outline-secondary', () => source(p)));
-    if (canWrite()) actions.push(button(p.included ? '移出景点' : '收录到景点', p.included ? 'btn btn-outline-secondary' : 'btn btn-primary', () => decide(p)));
+    if (canWrite()) actions.push(button(p.included ? '移出景点图库' : '选入景点图库', p.included ? 'btn btn-outline-secondary' : 'btn btn-primary', () => decide(p)));
     viewer.render({url:url(p) + '/image', title:state(p) + ' · 用户实拍', detail:['轨迹 ' + p.track_id, time(p), p.description].filter(Boolean).join(' · '),
       index, count:items.length, move:preview, actions, busy:saving});
   }
@@ -79,7 +79,7 @@ const ScenicUserPhotos = (() => {
       items.push(...added); pageCount += loaded; cursor = after;
       el('userScenicItems').append(...added.map(card));
       el('userScenicMore').hidden = !cursor;
-      el('userScenicMessage').textContent = items.length ? '' : '暂无已审核的用户实拍';
+      el('userScenicMessage').textContent = items.length ? '' : '暂无审核通过的用户实拍';
     } catch (e) {
       if (!current.signal.aborted) {
         if (!append) { items = []; pageCount = 0; cursor = ''; el('userScenicItems').replaceChildren(); }

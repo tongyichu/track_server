@@ -107,7 +107,7 @@
 | 提交、列出运动实拍（含可选描述） | POST / GET | `/track/:track_id/photos` | 是 | [运动实拍](track-photos.md) |
 | 查看运动实拍 | GET | `/track/:track_id/photos/:id/image` | 是 | [运动实拍](track-photos.md) |
 | 撤回运动实拍 | DELETE | `/track/:track_id/photos/:id` | 是 | [运动实拍](track-photos.md) |
-| 景点用户实拍（包含本人归属） | GET | `/track/discover/scenic-spots/:spot_id/user-photos` | 是 | [运动实拍](track-photos.md) |
+| 景点已人工选入的用户实拍（包含本人归属） | GET | `/track/discover/scenic-spots/:spot_id/user-photos` | 是 | [运动实拍](track-photos.md) |
 | 景点实拍图片 | GET | `/track/discover/scenic-spots/:spot_id/user-photos/:id/image` | 是 | [运动实拍](track-photos.md) |
 | 获取轨迹投稿选项 | GET | `/track/submission/options` | 是 | [track-submission.md](track-submission.md#1-投稿选项) |
 | 创建或重新投稿（不校验预览图，到达说明选填） | POST | `/track/:track_id/submission` | 是 | [track-submission.md](track-submission.md#2-创建或重新投稿) |

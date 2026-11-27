@@ -679,7 +679,6 @@ func main() {
 		}, trackPlaceRepo, trackMapRepo, trackRepo, trackMapIndexSvc)
 		scenicSpotCatalogSvc.SetProviderService(trackPlaceSvc)
 		trackPlaceSvc.SetScenicSpotCatalogService(scenicSpotCatalogSvc)
-		trackPlaceSvc.Photos = photoSvc
 		trackPlaceSvc.SetCompanionRepository(companionRepo)
 		trackRouteGroupSvc.SetPlaceService(trackPlaceSvc)
 		trackMapSvc.SetPlaceService(trackPlaceSvc)
