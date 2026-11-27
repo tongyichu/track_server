@@ -118,7 +118,10 @@ func (s *TrackPhotoService) List(ctx context.Context, track string, user int64) 
 	if err != nil {
 		return nil, err
 	}
-	owner := t.UserID == user
+	return s.listTrackPhotos(ctx, track, t.UserID == user)
+}
+
+func (s *TrackPhotoService) listTrackPhotos(ctx context.Context, track string, owner bool) ([]models.TrackPhoto, error) {
 	f := repository.PhotoFilter{TrackIDs: []string{track}, Limit: PhotoSlots}
 	if !owner {
 		f.Status = "approved"
@@ -133,6 +136,43 @@ func (s *TrackPhotoService) List(ctx context.Context, track string, user int64) 
 	}
 	return items, nil
 }
+
+type AdminTrackPhoto struct {
+	ID          string      `json:"id"`
+	TakenAt     int64       `json:"taken_at_ms"`
+	Description string      `json:"description,omitempty"`
+	Status      string      `json:"status"`
+	Reason      string      `json:"reason,omitempty"`
+	MapPosition *[2]float64 `json:"map_position,omitempty"`
+}
+
+func (s *TrackPhotoService) AdminTrackPhotos(ctx context.Context, track string) ([]AdminTrackPhoto, error) {
+	t, err := s.tracks.FindByID(ctx, track)
+	if err != nil {
+		return nil, err
+	}
+	if t.IsRunning || t.Status == models.TrackStatusDeleted {
+		return nil, repository.ErrNotFound
+	}
+	items, err := s.listTrackPhotos(ctx, track, true)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]AdminTrackPhoto, 0, len(items))
+	for _, p := range items {
+		item := AdminTrackPhoto{ID: p.ID, TakenAt: p.TakenAt, Status: p.Status, Description: p.Description, Reason: p.Reason}
+		if p.Latitude != nil && p.Longitude != nil && validLatLng(*p.Latitude, *p.Longitude) {
+			point, err := mapPointToGCJ02(models.TrackPoint{Latitude: *p.Latitude, Longitude: *p.Longitude}, "WGS84")
+			if err != nil {
+				return nil, err
+			}
+			item.MapPosition = &[2]float64{point.Longitude, point.Latitude}
+		}
+		out = append(out, item)
+	}
+	return out, nil
+}
+
 func (s *TrackPhotoService) Media(ctx context.Context, track, id string, user int64, admin bool) ([]byte, error) {
 	p, data, err := s.store.ReadPhoto(ctx, id, true)
 	if err != nil {

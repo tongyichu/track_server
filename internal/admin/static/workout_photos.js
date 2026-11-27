@@ -1,4 +1,4 @@
-/* Shared by the moderation queue and scenic photo gallery. */
+/* Shared by the moderation queue, track details and scenic photo gallery. */
 const WorkoutPhotos = (() => {
   function node(tag, className, text) {
     const element = document.createElement(tag);
@@ -48,6 +48,7 @@ const WorkoutPhotos = (() => {
     return {
       get open() { return dialog.open; },
       close() { if (dialog.open) dialog.close(); },
+      dispose() { if (dialog.open) dialog.close(); clearImage(); dialog.remove(); },
       render({url, title, detail, index, count, move, actions = [], busy = false}) {
         if (image.getAttribute('src') !== url) {
           message.textContent = '';

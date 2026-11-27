@@ -38,8 +38,21 @@ func (h *Handler) photoQueue(ctx context.Context, c *app.RequestContext) {
 	pending, err := h.photos.PendingCount(ctx)
 	adminPhotoResponse(c, utils.H{"items": items, "next_cursor": next, "pending": pending}, err)
 }
+func (h *Handler) trackDetailPhotos(ctx context.Context, c *app.RequestContext) {
+	items, err := h.photos.AdminTrackPhotos(ctx, c.Param("track_id"))
+	adminPhotoResponse(c, items, err)
+}
+
+func (h *Handler) trackDetailPhotoImage(ctx context.Context, c *app.RequestContext) {
+	h.serveTrackPhoto(ctx, c, c.Param("track_id"))
+}
+
 func (h *Handler) photoImage(ctx context.Context, c *app.RequestContext) {
-	data, err := h.photos.Media(ctx, "", c.Param("id"), 0, true)
+	h.serveTrackPhoto(ctx, c, "")
+}
+
+func (h *Handler) serveTrackPhoto(ctx context.Context, c *app.RequestContext, trackID string) {
+	data, err := h.photos.Media(ctx, trackID, c.Param("id"), 0, true)
 	if err != nil {
 		adminPhotoResponse(c, nil, err)
 		return

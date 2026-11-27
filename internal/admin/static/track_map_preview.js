@@ -67,6 +67,86 @@
     let placeSearch = null, selectionSequence = 0, lookupTimer = null, clickTimer = null, assigning = false;
     let lastHotspotAt = 0, selectionMarker = null, infoWindow = null;
 
+    let photos = [], photoMarkers = [], photoWindow = null, lastPhotoClick = 0;
+    let endpoints = [], routeLines = [], themeObserver = null;
+    const endpointSize = 25;
+    if (options.strokeColor) section.style.setProperty('--track-sport-day', options.strokeColor);
+    if (options.strokeColorDark) section.style.setProperty('--track-sport-night', options.strokeColorDark);
+
+    function closePhoto() {
+      if (photoWindow) { photoWindow.close(); photoWindow = null; }
+    }
+    function showPhotoPoint(group, position) {
+      lastPhotoClick = Date.now();
+      clearTimeout(clickTimer); clearTimeout(lookupTimer); selectionSequence++;
+      if (infoWindow) infoWindow.close();
+      if (selectionMarker) { map.remove(selectionMarker); selectionMarker = null; }
+      closePhoto();
+      photoWindow = new amap.InfoWindow({isCustom:true, autoMove:true, offset:new amap.Pixel(0, -12),
+        content:options.photoPanel.popup(group, closePhoto)});
+      photoWindow.open(map, position);
+    }
+    function drawPhotoPoints() {
+      if (!map || !options.photoPanel) return;
+      closePhoto();
+      if (photoMarkers.length) map.remove(photoMarkers);
+      photoMarkers = [];
+      const groups = new Map();
+      for (const photo of photos) {
+        const position = poiPosition(photo.map_position);
+        if (!position) continue;
+        const key = position.join(',');
+        if (!groups.has(key)) groups.set(key, {position, items:[]});
+        groups.get(key).items.push(photo);
+      }
+      for (const {position, items} of groups.values()) {
+        const icon = document.createElement('button');
+        icon.type = 'button'; icon.className = 'admin-track-photo-pin';
+        icon.setAttribute('aria-label', '查看此处的 ' + items.length + ' 张随拍');
+        const marker = new amap.Marker({position, content:icon, anchor:'center', offset:new amap.Pixel(0, 0), bubble:false, zIndex:120});
+        marker.on('click', () => showPhotoPoint(items, position));
+        icon.addEventListener('keydown', event => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault(); event.stopPropagation(); showPhotoPoint(items, position);
+          }
+        });
+        photoMarkers.push(marker);
+      }
+      if (photoMarkers.length) {
+        map.add(photoMarkers);
+        if (!overlays.length) fit();
+      }
+    }
+    section.setPhotos = items => { photos = items; drawPhotoPoints(); };
+
+    function routeColors() {
+      const style = getComputedStyle(section);
+      return [style.getPropertyValue('--track-route-border').trim(), style.getPropertyValue('--track-route-core').trim()];
+    }
+    function updateRouteColors() {
+      const [border, core] = routeColors();
+      for (const [outline, line] of routeLines) {
+        outline.setOptions({strokeColor:border}); line.setOptions({strokeColor:core});
+      }
+    }
+    function addEndpoint(position, end) {
+      const icon = document.createElement('span');
+      icon.className = 'admin-track-endpoint' + (end ? ' is-end' : '');
+      icon.textContent = end ? '终' : '起';
+      const marker = new amap.Marker({position, content:icon, anchor:'center', offset:new amap.Pixel(0, 0), title:end ? '终点' : '起点', zIndex:110});
+      endpoints.push({position, marker});
+      overlays.push(marker);
+    }
+    function separateEndpoints() {
+      if (!map || endpoints.length !== 2) return;
+      const [first, last] = endpoints.map(({position}) => map.lngLatToContainer(new amap.LngLat(...position)));
+      if (!first || !last) return;
+      const dx = first.getX() - last.getX(), dy = first.getY() - last.getY();
+      const shift = Math.hypot(dx, dy) < endpointSize ? (dx <= 0 ? -1 : 1) * endpointSize / 2 : 0;
+      endpoints[0].marker.setOffset(new amap.Pixel(shift, 0));
+      endpoints[1].marker.setOffset(new amap.Pixel(-shift, 0));
+    }
+
     function poiPosition(value) {
       if (!value) return null;
       if (typeof value === 'string') value = value.split(',');
@@ -83,6 +163,7 @@
       return typeof code === 'string' && /^[A-Z][A-Z0-9_]{1,79}$/.test(code) && code !== 'OK' ? '（' + code + '）' : '';
     }
     function beginSelection(title, position) {
+      closePhoto();
       const sequence = ++selectionSequence;
       clearTimeout(lookupTimer); clearTimeout(clickTimer);
       selection.replaceChildren(); selection.hidden = false;
@@ -197,6 +278,7 @@
     }
     async function searchNearby(position) {
       if (disposed || assigning || !position || !map || !options.canAssignScenicSpot) return;
+      closePhoto();
       const sequence = ++selectionSequence;
       const current = () => !disposed && sequence === selectionSequence;
       clearTimeout(lookupTimer); clearTimeout(clickTimer);
@@ -227,11 +309,14 @@
       } catch (error) { publish({ error: error.message }); }
     }
     function onHotspotClick(event) {
+      if (Date.now() - lastPhotoClick < 300) return;
       lastHotspotAt = Date.now(); clearTimeout(clickTimer);
       selectPOI(event);
     }
     function onMapClick(event) {
-      if (!options.canAssignScenicSpot || disposed || assigning || Date.now() - lastHotspotAt < 300) return;
+      if (disposed || Date.now() - lastPhotoClick < 300) return;
+      closePhoto();
+      if (!options.canAssignScenicSpot || assigning || Date.now() - lastHotspotAt < 300) return;
       const position = poiPosition(event && event.lnglat);
       if (!position) return;
       clearTimeout(clickTimer);
@@ -256,7 +341,9 @@
     function fit() {
       if (disposed || !map || !canvas.isConnected) return;
       map.resize();
-      if (overlays.length) map.setFitView(overlays, true, [64, 36, 36, 36], 17);
+      const targets = overlays.length ? overlays : photoMarkers;
+      if (targets.length) map.setFitView(targets, true, [64, 36, 36, 36], 17);
+      separateEndpoints();
     }
     function draw() {
       if (disposed) return;
@@ -265,28 +352,29 @@
       if (variants) { note.textContent = points ? '' : '当前历史坐标系不支持预览，请选择 WGS84、GCJ02 或 BD09。'; note.hidden = !!points; }
       if (!map) return;
       if (overlays.length) map.remove(overlays);
-      overlays = [];
+      overlays = []; endpoints = []; routeLines = [];
       const paths = pathsOf(points);
       if (!paths.length) return;
-      overlays = paths.filter(path => path.length > 1).map(path => new amap.Polyline({
-        path, strokeColor: options.strokeColor || '#2563eb', strokeWeight: 4, strokeOpacity: 0.9, lineJoin: 'round', lineCap: 'round', bubble: true
-      }));
-      paths.forEach((path, index) => {
-        if (path.length === 1 && index > 0 && index < paths.length - 1) {
-          overlays.push(new amap.Marker({ position: path[0], title: '轨迹点', bubble: true }));
+      const [border, core] = routeColors();
+      for (const [index, path] of paths.entries()) {
+        if (path.length === 1) {
+          if (index > 0 && index < paths.length - 1) {
+            const dot = document.createElement('span');
+            dot.className = 'admin-track-isolated-point';
+            overlays.push(new amap.Marker({position:path[0], content:dot, anchor:'center', offset:new amap.Pixel(0, 0), title:'轨迹点', bubble:true}));
+          }
+          continue;
         }
-      });
-      const start = paths[0][0];
-      const end = paths[paths.length - 1].at(-1);
-      const singlePoint = paths.length === 1 && paths[0].length === 1;
-      const longitudeScale = Math.cos(start[1] * Math.PI / 180);
-      const distanceMeters = Math.hypot((end[0] - start[0]) * longitudeScale, end[1] - start[1]) * 111_320;
-      const coincident = distanceMeters < 3;
-      overlays.push(new amap.Marker({ position: start, label: { content: !singlePoint && coincident ? '起终' : '起', direction: 'top' } }));
-      if (!coincident) {
-        overlays.push(new amap.Marker({ position: end, label: { content: '终', direction: 'top' } }));
+        const common = {path, lineJoin:'round', lineCap:'round', strokeOpacity:1, bubble:true};
+        const outline = new amap.Polyline({...common, strokeColor:border, strokeWeight:7, zIndex:50});
+        const line = new amap.Polyline({...common, strokeColor:core, strokeWeight:4, zIndex:51});
+        routeLines.push([outline, line]); overlays.push(outline, line);
       }
+      const start = paths[0][0], end = paths.at(-1).at(-1);
+      addEndpoint(start, false);
+      if (start[0] !== end[0] || start[1] !== end[1]) addEndpoint(end, true);
       map.add(overlays);
+      separateEndpoints();
       // 切换坐标系保留视野，便于比较同一路段的偏移。
       if (!fitted) { fitted = true; fit(); }
     }
@@ -316,6 +404,8 @@
     section.dispose = function () {
       disposed = true; selectionSequence++; controller.abort(); clearTimeout(fitTimer); clearTimeout(lookupTimer); clearTimeout(clickTimer);
       if (observer) observer.disconnect();
+      if (themeObserver) themeObserver.disconnect();
+      closePhoto();
       if (infoWindow) infoWindow.close();
       if (placeSearch) placeSearch.clear();
       if (map) map.destroy();
@@ -338,9 +428,15 @@
         map.addControl(new amap.Scale());
         if (options.canAssignScenicSpot) {
           map.on('hotspotclick', onHotspotClick);
-          map.on('click', onMapClick);
         }
-        draw();
+        map.on('click', onMapClick);
+        map.on('zoomend', separateEndpoints);
+        map.on('moveend', separateEndpoints);
+        themeObserver = new MutationObserver(updateRouteColors);
+        for (const element of [document.documentElement, document.body]) {
+          themeObserver.observe(element, {attributes:true, attributeFilter:['class', 'data-theme', 'data-bs-theme']});
+        }
+        draw(); drawPhotoPoints();
         fitTimer = window.setTimeout(fit, 350);
         if ('IntersectionObserver' in window) {
           observer = new IntersectionObserver(entries => {
@@ -351,7 +447,9 @@
       } catch (error) {
         clearTimeout(fitTimer);
         if (observer) { observer.disconnect(); observer = null; }
-        if (map) { map.destroy(); map = null; overlays = []; fitted = false; }
+        if (themeObserver) { themeObserver.disconnect(); themeObserver = null; }
+        closePhoto();
+        if (map) { map.destroy(); map = null; overlays = []; endpoints = []; photoMarkers = []; routeLines = []; fitted = false; }
         if (!disposed) {
           canvas.textContent = '地图暂时无法加载：' + error.message;
           retryMap.hidden = false;

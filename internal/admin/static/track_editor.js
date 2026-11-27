@@ -257,9 +257,11 @@
         async function notifyScenicSpotChanged() {
           if (!labelAbort.signal.aborted && typeof options.onSaved === 'function') await options.onSaved();
         }
+        const photoPanel = isDeleted || track.is_running ? null : AdminTrackPhotos.create(trackID, labelAbort.signal, photos => mapPreview?.setPhotos(photos));
+        const sport = (track.labels || []).find(label => label.type === 'sport');
         mapPreview = window.AdminTrackMapPreview ? window.AdminTrackMapPreview.create(trackPayload.geo, {
           trackID: trackID, coordinateSystem: track.coordinate_system,
-          strokeColor: (track.labels || []).find(label => label.type === 'sport')?.theme_color,
+          strokeColor: sport?.theme_color, strokeColorDark: sport?.theme_color_dark, photoPanel,
           scenicSpotID: trackPayload.scenic_spot_id, primaryScenicSpot: track.primary_scenic_spot,
           canAssignScenicSpot: !readOnly && !isDeleted && window.AdminAccess.can('scenic_spots', true) && typeof trackPayload.scenic_spot_id === 'string',
           onScenicSpotAssigned: async function (data) { updateScenicSpot(data); await notifyScenicSpotChanged(); },
@@ -454,6 +456,7 @@
             detailContent.prepend(basic);
             setupRouteDescription(view);
             main.appendChild(view.form.elements.description.parentNode);
+            if (photoPanel) { main.appendChild(photoPanel.section); photoPanel.load(); }
             const metrics = trackMetrics(track); main.appendChild(metrics);
             const record = document.createElement('details');
             record.className = 'admin-track-record';

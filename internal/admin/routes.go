@@ -290,6 +290,8 @@ func (m *Module) RegisterRoutes(h *server.Hertz) {
 	api.POST("/tracks/:track_id/restore", m.Handler.RestoreTrack)
 	api.POST("/tracks/:track_id/purge", m.Handler.PurgeTrack)
 	if m.Handler.photos != nil {
+		api.GET("/tracks/:track_id/photos", m.Handler.trackDetailPhotos)
+		api.GET("/tracks/:track_id/photos/:id/image", m.Handler.trackDetailPhotoImage)
 		api.GET("/track-photos", m.Handler.photoQueue)
 		api.GET("/track-photos/:id/image", m.Handler.photoImage)
 		api.POST("/track-photos/:id/review", m.Handler.photoReview)
