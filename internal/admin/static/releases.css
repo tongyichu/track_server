@@ -21,6 +21,7 @@
 .release-table th:nth-child(2) { width: 13%; }
 .release-table th:nth-child(3) { width: 13%; }
 .release-table th:nth-child(4) { width: 20%; }
+.release-table .release-version-row { cursor: pointer; }
 .release-table .release-version-link { min-height: 28px; padding: 0; font-weight: 600; }
 .release-table .release-version-meta { display: block; color: var(--admin-secondary-color); font-size: 12px; }
 .release-table .release-current-label { color: var(--admin-primary); font-weight: 600; }

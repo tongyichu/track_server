@@ -273,13 +273,19 @@
     releaseList.replaceChildren();
     items.forEach(item => {
       const row = releaseList.insertRow();
+      row.className = 'release-version-row';
       const version = row.insertCell();
       const detail = document.createElement('button');
       detail.type = 'button';
       detail.className = 'btn btn-link release-version-link';
       detail.textContent = item.version_name || '未命名版本';
       detail.setAttribute('aria-label', '查看 ' + releaseName(item) + ' 的详情');
+      detail.setAttribute('aria-haspopup', 'dialog');
       detail.addEventListener('click', () => showReleaseDetail(item, detail));
+      row.addEventListener('click', event => {
+        if (!(event.target instanceof Element) || event.target.closest('button, a, input, label')) return;
+        showReleaseDetail(item, detail);
+      });
       const meta = document.createElement('span');
       meta.className = 'release-version-meta';
       meta.textContent = '构建 ' + item.version_code + (item.package_size > 0 ? ' · ' + formatSize(item.package_size) : '');
