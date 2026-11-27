@@ -162,6 +162,11 @@ function Workbench() {
   return (
     <>
       <Header />
+      <section id="dashboardTodoSummary" className="dashboard-queue" aria-labelledby="dashboardTodoHeading" hidden>
+        <h2 id="dashboardTodoHeading">待办</h2>
+        <div className="dashboard-queue-links" data-todo-links />
+        <span className="dashboard-queue-status" data-todo-status role="status" />
+      </section>
       <p id="dashboardStatus" className="workbench-time" role="status" hidden />
       <Alert variant="destructive" id="dashboardError" className="hidden workbench-alert block" />
       <Section id="dashboardGrowth" title="本期增长" hidden>

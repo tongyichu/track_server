@@ -34,6 +34,10 @@
 .release-detail .modal-footer .btn-outline-danger { margin-inline-end: auto; }
 .release-detail-fields { margin: 0 0 16px; }
 .release-detail-fields .release-detail-wide { grid-column: 1 / -1; }
+.release-detail-policy { margin: 0 0 16px; padding: 12px; border: 1px solid var(--admin-border-color); border-radius: var(--admin-border-radius-lg); }
+.release-detail-policy h3 { margin: 0 0 10px; }
+.release-detail-policy .release-detail-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: 8px; }
+.release-policy-status { margin: 8px 0 0; font-size: 13px; }
 .release-detail-notes { padding-top: 12px; border-top: 1px solid var(--admin-border-color); }
 .release-management #clientStats > summary { cursor: pointer; font-weight: 600; }
 .release-management #clientStats[open] > summary { margin-bottom: 12px; }

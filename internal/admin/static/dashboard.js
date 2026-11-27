@@ -326,6 +326,31 @@
     deletion_records: ['注销待清理资料'],
     deletion_files: ['注销待清理文件']
   };
+  const todoSummary = document.getElementById('dashboardTodoSummary');
+  const todoStatus = todoSummary.querySelector('[data-todo-status]');
+  const todoLinks = todoSummary.querySelector('[data-todo-links]');
+  const todoCounts = new Map();
+  [
+    ['review', 'track_submissions', '投稿待审核'],
+    ['feedback', 'feedbacks', '未结反馈']
+  ].forEach(function ([key, permission, label]) {
+    const link = document.createElement('a');
+    link.href = backlogEntries[key][1];
+    link.dataset.adminRead = permission;
+    const name = document.createElement('span'), count = document.createElement('strong');
+    name.textContent = label;
+    count.textContent = '—';
+    link.append(name, count);
+    todoLinks.append(link);
+    todoCounts.set(key, count);
+  });
+  AdminAccess.apply();
+
+  function renderTodoCounts(rows) {
+    todoCounts.forEach(function (node, key) {
+      node.textContent = tableNumber(rows.find(function (row) { return row.key === key; })?.open);
+    });
+  }
 
   const managementRows = {
     cities: function (item) {
@@ -406,6 +431,7 @@
 
   async function loadManagementTable(panel, period, page = 1) {
     const key = panel.dataset.workbenchTable;
+    const managesTodo = key === 'backlog';
     tableRequests.get(panel)?.abort();
     const controller = new AbortController();
     tableRequests.set(panel, controller);
@@ -413,14 +439,20 @@
     const status = panel.querySelector('[data-table-status]');
     const previous = panel.dataset.loadedPeriod;
     status.textContent = '正在读取…';
+    if (managesTodo && !previous) todoStatus.textContent = '正在读取…';
     panel.setAttribute('aria-busy', 'true');
     try {
       const params = new URLSearchParams({ table: key, period: period });
       if (panel === cityPanel) params.set('page', page);
       const response = await fetch('/admin/api/dashboard/tables?' + params, { signal: controller.signal });
       if (controller.signal.aborted) return;
-      if (response.status === 403) {
+      if (response.status === 403 || (managesTodo && response.status === 401)) {
         panel.closest('section').hidden = true;
+        if (managesTodo) {
+          todoSummary.hidden = true;
+          renderTodoCounts([]);
+          todoStatus.textContent = '';
+        }
         return;
       }
       if (!response.ok) throw new Error('table unavailable');
@@ -432,11 +464,16 @@
       replaceManagementRows(panel, data);
       panel.dataset.loadedPeriod = data.period;
       if (panel === cityPanel) cityPage = data.pagination;
+      if (managesTodo) {
+        renderTodoCounts(data.rows);
+        todoStatus.textContent = '';
+      }
       status.textContent = panel.hasAttribute('data-workbench-period') ? dateRange(data.range.start, data.range.end) : '';
     } catch (_) {
       if (controller.signal.aborted) return;
       const previousLabel = panel.hasAttribute('data-workbench-period') ? periodLabels[previous] : '上次';
       status.textContent = previous ? '读取失败，保留' + previousLabel + '结果。' : '读取失败，请刷新重试。';
+      if (managesTodo) todoStatus.textContent = previous ? '刷新失败，显示上次数据' : '读取失败，请刷新重试';
       if (!previous) {
         const cell = panel.querySelector('tbody td');
         if (cell) cell.textContent = '数据暂不可用';
@@ -593,6 +630,7 @@
   window.addEventListener('resize', function () { Object.keys(charts).forEach(function (key) { charts[key].resize(); }); });
   const canReview = AdminAccess.can('track_submissions', false);
   const canReadFeedback = AdminAccess.can('feedbacks', false);
+  todoSummary.hidden = !canReview && !canReadFeedback;
   document.getElementById('backlogSection').hidden = ![
     'track_submissions', 'feedbacks', 'route_groups', 'users'
   ].some(function (module) { return AdminAccess.can(module, false); });

@@ -5,7 +5,7 @@
   --admin-bg-surface-secondary: #f5f5f5;
   --admin-bg-forms: var(--admin-bg-surface);
   --admin-body-color: #0a0a0a;
-  --admin-secondary-color: #737373;
+  --admin-secondary-color: #646464;
   --admin-secondary: var(--admin-secondary-color);
   --admin-primary: #171717;
   --admin-primary-rgb: 23, 23, 23;
@@ -14,7 +14,8 @@
   --admin-primary-lt: #ebebeb;
   --admin-link-color: var(--admin-primary);
   --admin-border-color: #e5e5e5;
-  --admin-ring: #a3a3a3;
+  --admin-control-border-color: #858585;
+  --admin-ring: #707070;
   --admin-border-radius: 6px;
   --admin-border-radius-lg: 9px;
   --admin-border-radius-xl: 12px;
@@ -109,11 +110,11 @@ hr { border: 0; border-top: 1px solid var(--admin-border-color); margin: 1rem 0;
 .form-hint { display: block; margin-top: 4px; color: var(--admin-secondary-color); font-size: 12px; font-weight: normal; }
 .form-control, .form-select {
   display: block; width: 100%; min-width: 0; min-height: var(--admin-control-height);
-  padding: 6px 10px; border: 1px solid var(--admin-border-color);
+  padding: 6px 10px; border: 1px solid var(--admin-control-border-color);
   border-radius: var(--admin-border-radius); background: var(--admin-bg-forms);
   font-size: 14px; font-weight: 400; line-height: 1.5; box-shadow: var(--admin-box-shadow);
 }
-.form-control::placeholder { color: var(--admin-secondary-color); opacity: .8; }
+.form-control::placeholder { color: var(--admin-secondary-color); opacity: 1; }
 .form-control:focus, .form-select:focus { outline: 2px solid var(--admin-ring); outline-offset: 1px; border-color: var(--admin-ring); }
 .form-control[readonly], .form-control:disabled, .form-select:disabled { background-color: var(--admin-bg-surface-secondary); }
 .form-control-sm, .form-select-sm { min-height: 30px; padding-block: 4px; font-size: 12px; }

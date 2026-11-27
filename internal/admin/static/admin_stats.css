@@ -89,6 +89,25 @@ button.admin-metric:hover, a.admin-metric:hover { color: inherit; background: va
 .dashboard-status { margin: 0 0 8px; }
 .dashboard-heading-actions { gap: 8px; }
 .dashboard-heading-actions .quiet-button { height: 30px; padding: 4px 10px; font-size: 12px; }
+.dashboard-queue {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px;
+  margin: 0 0 12px; padding: 4px 10px; border: 1px solid var(--admin-border-color);
+  border-radius: var(--admin-border-radius-lg); background: var(--admin-bg-surface);
+}
+.dashboard-queue:not(:has(.dashboard-queue-links a:not(.admin-permission-hidden))) { display: none; }
+.dashboard-queue h2 { margin: 0; font-size: 13px; font-weight: 650; }
+.dashboard-queue-links { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.dashboard-queue-links a {
+  display: inline-flex; align-items: center; gap: 5px; min-height: 32px; padding: 2px 8px;
+  border-radius: var(--admin-border-radius); font-size: 13px; text-underline-offset: 3px;
+}
+.dashboard-queue-links a:hover { background: var(--admin-bg-surface-secondary); }
+.dashboard-queue-links strong { font-variant-numeric: tabular-nums; }
+.dashboard-queue-status { color: var(--admin-secondary-color); font-size: 12px; }
+.dashboard-queue-status:empty { display: none; }
+@media (pointer: coarse) {
+  .dashboard-queue-links a { min-height: var(--admin-touch-target); }
+}
 .dashboard-section { margin-bottom: 14px; }
 .dashboard-section .section-heading { margin: 0 0 8px; align-items: center; }
 .dashboard-section .section-heading h2 { font-size: 14px; font-weight: 600; }

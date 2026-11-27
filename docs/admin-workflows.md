@@ -130,7 +130,7 @@ POST /admin/api/login {username,password}
        → AppReleaseService.Publish → AppReleaseRepository.Upsert
 ```
 
-当前下发版本的开关切换走 `PUT /admin/api/releases/:version_code/policy`，提交该版本保存的最低支持构建号和新的开关值。服务端在同一次持久化操作中核对最新已发布 Android 构建与切换前的策略。
+当前下发版本的强制更新只在版本详情的「升级策略」里修改，列表只显示状态。开启时先确认受影响的 Android 构建范围，取消不发请求。保存走 `PUT /admin/api/releases/:version_code/policy`，提交该版本原有的最低支持构建号和新的强制更新值。服务端在同一次持久化操作中核对最新已发布 Android 构建与切换前的策略。
 
 ### 鉴权拦截
 
@@ -153,7 +153,7 @@ POST /admin/api/login {username,password}
 
 工作台复用共享统计组件。现有增长、审核、反馈与互动图表仍随所选周期更新。「登录用户」按成功登录日志中的账号去重。「本期路线使用排行」只统计所选周期内产生的互动，按导航上报、收藏、点赞、评论次数排序，可打开公开且已完成的轨迹详情。
 
-五张管理表独立请求 `GET /admin/api/dashboard/tables?table=…`，当前周期用于城市及同行，留存、安卓版本和待办使用各自固定口径。单表失败保留该表上次成功数据。各表权限在服务端校验，待办按已授权业务裁剪。
+五张管理表独立请求 `GET /admin/api/dashboard/tables?table=…`，当前周期用于城市及同行，留存、安卓版本和待办使用各自固定口径。单表失败保留该表上次成功数据。各表权限在服务端校验，待办按已授权业务裁剪。首屏摘要和页尾详细表共用一次待办请求，分别展示已授权的投稿和反馈未结数。
 
 | 表格 | 统计口径 |
 | --- | --- |
